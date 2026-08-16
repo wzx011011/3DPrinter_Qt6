@@ -397,6 +397,41 @@ private:
 // ── AddVolumeCommand ──────────────────────────────────────────────────────
 /// Records object state before adding a text/SVG/emboss volume. On undo, removes
 /// the added volume. On redo, re-executes the add operation.
+
+// ── UpdateVolumeMeshCommand ────────────────────────────────────────────────
+// Phase 240 (GIZ-06): in-place text-volume re-generation undo (upstream
+// GLGizmoEmboss takes an UndoRedo snapshot per emboss edit). Captures the
+// volume mesh snapshot BEFORE the update; undo restores it, redo re-applies
+// the AFTER snapshot (captured post-update via setAfterSnapshot).
+class UpdateVolumeMeshCommand : public QUndoCommand
+{
+public:
+  UpdateVolumeMeshCommand(int objectIndex, int volumeIndex,
+                          const QString &volumeName,
+                          ProjectServiceMock *service,
+                          EditorViewModel *viewModel,
+                          QUndoCommand *parent = nullptr);
+
+  /// Call AFTER the update succeeded with the post-update snapshot.
+  void setAfterSnapshot(const QByteArray &after);
+  void setVolumeType(int type);
+
+  void undo() override;
+  void redo() override;
+  int id() const override { return 12; }
+
+private:
+  int m_objectIndex;
+  int m_volumeIndex;
+  QString m_volumeName;
+  int m_volumeType = 0;
+  QByteArray m_before;
+  QByteArray m_after;
+  bool m_firstRedoDone = false;
+  ProjectServiceMock *m_service;
+  EditorViewModel *m_viewModel;
+};
+
 class AddVolumeCommand : public QUndoCommand
 {
 public:

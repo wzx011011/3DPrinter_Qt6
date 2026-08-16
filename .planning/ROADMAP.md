@@ -52,7 +52,7 @@ to exactly one phase.
 - [x] **Phase 238: Preview Completion** - Ghost shells, tool marker,
   Seam/Retract/Unretract/Wipe rendering, ToolChange tick UX, honest
   statistics, configured extruder colors, software fallback preview.
-- [ ] **Phase 239: Slicing Engine Semantics** - Auto-reslice on stale preview
+- [x] **Phase 239: Slicing Engine Semantics** - Auto-reslice on stale preview
   switch, G-code reuse on re-entry, non-blocking export with surfaced
   validation warnings.
 - [ ] **Phase 240: Notification Stacking And Gizmo Interaction Depth** -

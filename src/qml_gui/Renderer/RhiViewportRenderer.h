@@ -70,6 +70,16 @@ private:
   // v5.13: connector-pin marker upload + render (AdvancedCut gizmo).
   bool uploadAdvancedCutMarkerBuffer(QRhiResourceUpdateBatch *updates);
   void renderAdvancedCutMarkers(QRhiCommandBuffer *cb);
+  // Phase 240 (GIZ-05): measure overlay line upload + render (line
+  // pipeline, GizmoMeasure only). Parses m_measureOverlayData
+  // ([int32 segmentCount][x,y,z pairs]) into GizmoVertex line soup.
+  bool uploadMeasureOverlayBuffer(QRhiResourceUpdateBatch *updates);
+  void renderMeasureOverlay(QRhiCommandBuffer *cb);
+  // Phase 240 (GIZ-03): flatten hovered-facet highlight upload + render
+  // (translucent fill pipeline, GizmoFlatten only). Parses
+  // m_flattenHoverData ([int32 vertexCount][x,y,z triples]).
+  bool uploadFlattenHoverBuffer(QRhiResourceUpdateBatch *updates);
+  void renderFlattenHover(QRhiCommandBuffer *cb);
   // Phase 121 (PAINT-03/OV-05): translucent sphere cursor that follows the
   // mouse while a paint gizmo is active. Built from buildBrushSphereVertices.
   bool uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updates);
@@ -230,6 +240,11 @@ private:
   // Phase HOLLOW: drain-hole marker disc buffer (translucent fill pipeline).
   std::unique_ptr<QRhiBuffer> m_hollowMarkerBuffer;
   std::unique_ptr<QRhiBuffer> m_advancedCutMarkerBuffer;  // v5.13
+  // Phase 240 (GIZ-05): measure overlay line buffer (line pipeline).
+  std::unique_ptr<QRhiBuffer> m_measureOverlayBuffer;
+  // Phase 240 (GIZ-03): flatten hovered-facet highlight buffer (translucent
+  // fill pipeline).
+  std::unique_ptr<QRhiBuffer> m_flattenHoverBuffer;
   // Phase 121 (PAINT-03/OV-05): brush sphere cursor buffer (translucent).
   std::unique_ptr<QRhiBuffer> m_brushCursorBuffer;
   // Phase 91 (ASMEXPLODE-02): assembly connector guide-line buffer.
@@ -252,6 +267,9 @@ private:
   // Phase HOLLOW: drain-hole marker disc upload flag.
   bool m_hollowMarkerBufferUploaded = false;
   bool m_advancedCutMarkerBufferUploaded = false;  // v5.13
+  // Phase 240 (GIZ-05/GIZ-03): overlay upload flags.
+  bool m_measureOverlayBufferUploaded = false;
+  bool m_flattenHoverBufferUploaded = false;
   bool m_assemblyConnectorBufferUploaded = false;
   bool m_assemblyMeasureLineBufferUploaded = false;
   bool m_assemblyMeasureTriBufferUploaded = false;
@@ -265,6 +283,8 @@ private:
   quint32 m_paintOverlayBufferBytes = 0;
   quint32 m_hollowMarkerBufferBytes = 0;
   quint32 m_advancedCutMarkerBufferBytes = 0;  // v5.13
+  quint32 m_measureOverlayBufferBytes = 0;   // Phase 240 (GIZ-05)
+  quint32 m_flattenHoverBufferBytes = 0;     // Phase 240 (GIZ-03)
   quint32 m_brushCursorBufferBytes = 0;
   quint32 m_assemblyConnectorBufferBytes = 0;
   quint32 m_assemblyMeasureLineBufferBytes = 0;
@@ -303,6 +323,8 @@ private:
   quint32 m_paintOverlayVertexCount = 0;
   quint32 m_hollowMarkerVertexCount = 0;
   quint32 m_advancedCutMarkerVertexCount = 0;  // v5.13
+  quint32 m_measureOverlayVertexCount = 0;   // Phase 240 (GIZ-05)
+  quint32 m_flattenHoverVertexCount = 0;     // Phase 240 (GIZ-03)
   quint32 m_brushCursorVertexCount = 0;
   quint32 m_assemblyConnectorVertexCount = 0;
   quint32 m_assemblyMeasureLineVertexCount = 0;
@@ -358,6 +380,12 @@ private:
   int m_gizmoMode = 0;          // RhiViewport::GizmoMode (0=Move, 1=Rotate, 2=Scale, 5=Cut, ...)
   int m_cutAxis = 2;            // 0=X, 1=Y, 2=Z (default Z)
   float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
+  // Phase 240 (GIZ-04): interactive cut-plane tilt (Euler XYZ degrees,
+  // upstream GLGizmoCut3D m_rotation). Applied to the plane quad around its
+  // on-axis center in uploadCutPlaneBuffers.
+  float m_cutRotationX = 0.f;
+  float m_cutRotationY = 0.f;
+  float m_cutRotationZ = 0.f;
   QVector3D m_gizmoCenter;      // midpoint of the selected batch's bounds; origin if no selection
   QVector3D m_cameraEye;        // Phase 68: camera position for gizmoScale computation
   bool m_cutPlaneDirty = true;
@@ -391,6 +419,12 @@ private:
   // v5.13: connector-pin marker byte stream from
   // EditorViewModel::advancedCutMarkerData.
   QByteArray m_advancedCutMarkerData;
+  // Phase 240 (GIZ-05): measure overlay line stream from
+  // EditorViewModel::measureOverlayData.
+  QByteArray m_measureOverlayData;
+  // Phase 240 (GIZ-03): flatten hovered-facet stream from
+  // EditorViewModel::flattenHoverData.
+  QByteArray m_flattenHoverData;
   QVariantList m_extrudersColors;
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1;     // 1=Sphere

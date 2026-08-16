@@ -323,6 +323,14 @@ public:
   void setSupportPaintGapArea(float area);
   bool supportPaintOnOverhangsOnly() const;
   void setSupportPaintOnOverhangsOnly(bool on);
+  /// Phase 240 (GIZ-02): overhang filter angle in degrees (upstream
+  /// m_highlight_by_angle_threshold_deg, GLGizmoPainterBase.hpp:280; sourced
+  /// upstream from the object's support threshold config via
+  /// get_selection_support_threshold_angle, GLGizmoFdmSupports.cpp:223-227 —
+  /// Qt6 delta: exposed as a panel property until per-object config plumbing
+  /// reaches the paint gizmo).
+  float supportPaintOverhangAngle() const;
+  void setSupportPaintOverhangAngle(float angle);
   bool supportEnable() const;
   void setSupportEnable(bool enable);
   int supportType() const;
@@ -358,6 +366,21 @@ public:
                                 int state, double brushRadius, int cursorType,
                                 int pickedSourceIndex,
                                 QVector3D rayOrigin, QVector3D rayDir);
+  /// Phase 240 (GIZ-02): smart (seed) fill pick entry. Same two-stage pick
+  /// contract as paintAtFacet, but instead of the brush cursor it drives
+  /// TriangleSelector::seed_fill_select_triangles + seed_fill_apply_on_
+  /// triangles (upstream SMART_FILL tool click, GLGizmoPainterBase.cpp:
+  /// 773-781). seedFillAngle is the region-growth threshold bound to the
+  /// supportPaintSmartFillAngle Q_PROPERTY; overhangsOnly threads the
+  /// overhang filter angle (upstream m_paint_on_overhangs_only ->
+  /// m_highlight_by_angle_threshold_deg). Returns true when a facet was hit
+  /// and the seed fill committed.
+  Q_INVOKABLE bool smartFillAtFacet(int state,
+                                    double seedFillAngle,
+                                    bool overhangsOnly,
+                                    double overhangAngle,
+                                    int pickedSourceIndex,
+                                    QVector3D rayOrigin, QVector3D rayDir);
   /// Phase 120 (PAINT-01): drop all PaintEngine selectors for one object.
   /// Called on gizmo-exit cleanup (mirrors GLGizmoPainterBase on_exit).
   Q_INVOKABLE void clearPaintOnObject(int objectIndex);
@@ -422,6 +445,21 @@ public:
   float simplifyMaxError() const;
   void setSimplifyMaxError(float error);
   Q_INVOKABLE bool simplifySelected();
+  /// Phase 240 (GIZ-06): upstream GLGizmoSimplify three-stage flow (start /
+  /// preview / apply + cancel, GLGizmoSimplify.cpp process / close / apply).
+  /// simplifyPreviewStart runs the decimation on a mesh COPY off the model
+  /// (no mutation), exposing the resulting facet count via
+  /// simplifyPreviewTriangleCount. simplifyPreviewApply commits through the
+  /// existing simplifySelected() undo path; simplifyPreviewCancel discards.
+  Q_INVOKABLE void simplifyPreviewStart();
+  Q_INVOKABLE void simplifyPreviewApply();
+  Q_INVOKABLE void simplifyPreviewCancel();
+  /// True while the preview decimation job is in flight.
+  bool simplifyPreviewRunning() const { return m_simplifyPreviewRunning; }
+  /// Facet count after the last preview decimation (-1 = no preview).
+  int simplifyPreviewTriangleCount() const { return m_simplifyPreviewTriangleCount; }
+  /// True when a preview result is staged and Apply/Cancel is offered.
+  bool simplifyPreviewValid() const { return m_simplifyPreviewTriangleCount >= 0; }
   Q_INVOKABLE int selectedObjectTriangleCount() const;
   // MMU segmentation gizmo (对齐上游 GLGizmoMmuSegmentation)
   int mmuSelectedExtruder() const;
@@ -478,6 +516,22 @@ public:
   Q_INVOKABLE void cancelEmboss();
   /// Phase 196 (FEAT-01): true while an async emboss job is in flight.
   bool embossRunning() const;
+  /// Phase 240 (GIZ-06): in-place emboss editing (upstream GLGizmoEmboss
+  /// edits the SELECTED text volume's TextConfiguration and re-generates
+  /// its mesh in place instead of adding a new volume). Reads the selected
+  /// volume's stored text configuration into the emboss* Q_PROPERTYs so the
+  /// panel populates on selection. Returns true when the selected volume is
+  /// a re-editable text volume and the configuration was loaded.
+  Q_INVOKABLE bool loadEmbossFromSelectedVolume();
+  /// Phase 240 (GIZ-06): true when the currently selected volume carries a
+  /// TextConfiguration (panel switches to re-generate mode).
+  bool embossEditingExistingVolume() const;
+  /// Phase 240 (GIZ-06): re-generate the SELECTED text volume's mesh from
+  /// the current emboss* Q_PROPERTYs (upstream GLGizmoEmboss in-place
+  /// editing). Returns true when the volume was regenerated. When the
+  /// selected volume is NOT a text volume this falls back to embossSelected
+  /// (create mode) so the panel button keeps working in both modes.
+  Q_INVOKABLE bool updateEmbossVolume();
 
   /// ── MeshBoolean gizmo properties (对齐上游 GLGizmoMeshBoolean) ──
   int booleanOperation() const; // 0=union, 1=diff, 2=intersect
@@ -528,6 +582,14 @@ public:
   float svgScale() const;
   void setSvgScale(float s);
   Q_INVOKABLE bool importSVG();
+  /// Phase 240 (GIZ-06): SVG drop workbench completion (minimal port of the
+  /// upstream GLGizmoSVG workbench). A dropped .svg creates a NEW object
+  /// whose SVG volume is placed at the given bed point (the QML side
+  /// resolves the drop position to a bed-plane point via the viewport; the
+  /// upstream exact ray-hit placement is approximated by the bed-plane
+  /// intersection). Move/rotate then go through the existing transform
+  /// panel / gizmos. Returns the new object index (>=0) or -1.
+  Q_INVOKABLE int placeSvgAtBedPoint(const QString &svgPath, float bedX, float bedY);
 
   void setObjectPosX(float v);
   void setObjectPosY(float v);
@@ -637,6 +699,7 @@ public:
   Q_INVOKABLE void mirrorSelectedObjects(int axis);
   /// 自动摆放（对齐上游 Plater::priv::on_arrange）— 委托给 GLViewport::arrangeSelected()
   /// 自动朝向（对齐上游 Plater::orient() / AutoOrienter）
+
   Q_INVOKABLE void autoOrientSelected();
   /// 拆分选中对象为独立对象（对齐上游 Plater::priv::split_object）
   Q_INVOKABLE void splitSelectedObject();
@@ -700,8 +763,69 @@ public:
   Q_INVOKABLE void exportObjectAsStl(int i);
   /// 扁平平放（对齐上游 GLGizmoFlatten）— 将选中对象最大面朝下
   Q_INVOKABLE void flattenSelected();
+  /// Phase 240 (GIZ-03): flatten face pick. Runs the stage-2 SceneRaycaster
+  /// pick over the stage-1 survivor, then rotates the object so the picked
+  /// facet's world normal faces DOWN (upstream GLGizmoFlatten::on_mouse
+  /// LeftDown -> Selection::flattening_rotate, GLGizmoFlatten.cpp:22-38 +
+  /// Selection.cpp:1293-1310). Offset is preserved (upstream keeps the
+  /// offset matrix). Pushed as one TransformCommand (undoable, mirrors the
+  /// upstream do_rotate "Gizmo-Place on Face" snapshot). Returns true when a
+  /// facet was hit and the rotation applied.
+  Q_INVOKABLE bool flattenPickFace(int pickedSourceIndex,
+                                   QVector3D worldOrigin, QVector3D worldDirection);
+  /// Phase 240 (GIZ-03): flatten hover pick. Same stage-2 pick, but instead
+  /// of rotating it refreshes the hovered-facet highlight stream
+  /// (flattenHoverData) that the renderer paints (upstream m_hover_id plane
+  /// recolor, GLGizmoFlatten.cpp:107). No-op highlight clear on miss.
+  Q_INVOKABLE void flattenHoverPick(int pickedSourceIndex,
+                                    QVector3D worldOrigin, QVector3D worldDirection);
+  /// Phase 240 (GIZ-03): hovered-facet highlight byte stream for the RHI
+  /// overlay renderer. Wire format mirrors hollowMarkerData: header
+  /// [int32 vertexCount] then vertexCount * [float x,y,z] world-space
+  /// triangle soup (9 floats per highlighted facet). Empty when no hover.
+  /// NOTIFY stateChanged (refreshed by flattenHoverPick).
+  QByteArray flattenHoverData() const;
+  /// Phase 240 (GIZ-03): pure math helper for the flatten rotation (unit
+  /// testable headless). Given the object's current Euler XYZ rotation
+  /// (degrees) and a WORLD-space facet normal, returns the new Euler XYZ
+  /// rotation (degrees) that rotates the object so the normal faces down
+  /// (-Z). Upstream math: tnormal = world normal (Selection.cpp:1299-1301);
+  /// R_new = Quaterniond().setFromTwoVectors(tnormal, -UnitZ) * R_old
+  /// (Selection.cpp:1303-1305). Implemented with QMatrix4x4/QQuaternion so
+  /// it compiles without HAS_LIBSLIC3R.
+  static QVector3D flattenRotationForNormal(const QVector3D &oldRotationDeg,
+                                            const QVector3D &worldNormal);
   /// 切割选中对象（对齐上游 GLGizmoCut）— 沿指定轴/位置切割
   Q_INVOKABLE void cutSelected(int axis, double position);
+  /// Phase 240 (GIZ-04): cut execution carrying the interactive plane
+  /// rotation (upstream GLGizmoCut3D m_rotation -> get_cut_matrix,
+  /// GLGizmoCut.cpp:3234-3253). cutRotationX/Y/Z tilt the cut plane normal
+  /// around the world X/Y axes (degrees); 0/0/0 keeps the legacy axis-
+  /// aligned cut byte-for-byte.
+  Q_INVOKABLE bool cutSelectedWithRotation();
+  /// Phase 240 (GIZ-04): interactive cut-plane tilt (upstream GLGizmoCut3D
+  /// rotation grabbers, GLGizmoCut.cpp:1635-1644). Euler XYZ degrees applied
+  /// on top of the base axis alignment when the plane is rendered + cut.
+  Q_PROPERTY(float cutRotationX READ cutRotationX WRITE setCutRotationX NOTIFY stateChanged)
+  Q_PROPERTY(float cutRotationY READ cutRotationY WRITE setCutRotationY NOTIFY stateChanged)
+  Q_PROPERTY(float cutRotationZ READ cutRotationZ WRITE setCutRotationZ NOTIFY stateChanged)
+  float cutRotationX() const { return m_cutRotationX; }
+  float cutRotationY() const { return m_cutRotationY; }
+  float cutRotationZ() const { return m_cutRotationZ; }
+  void setCutRotationX(float v) { if (!qFuzzyCompare(m_cutRotationX, v)) { m_cutRotationX = v; emit stateChanged(); } }
+  void setCutRotationY(float v) { if (!qFuzzyCompare(m_cutRotationY, v)) { m_cutRotationY = v; emit stateChanged(); } }
+  void setCutRotationZ(float v) { if (!qFuzzyCompare(m_cutRotationZ, v)) { m_cutRotationZ = v; emit stateChanged(); } }
+  /// Phase 240 (GIZ-04): same as cutRotationX/Y/Z but for the AdvancedCut
+  /// gizmo's plane (advCutPosition's sibling state).
+  Q_PROPERTY(float advCutRotationX READ advCutRotationX WRITE setAdvCutRotationX NOTIFY stateChanged)
+  Q_PROPERTY(float advCutRotationY READ advCutRotationY WRITE setAdvCutRotationY NOTIFY stateChanged)
+  Q_PROPERTY(float advCutRotationZ READ advCutRotationZ WRITE setAdvCutRotationZ NOTIFY stateChanged)
+  float advCutRotationX() const { return m_advCutRotationX; }
+  float advCutRotationY() const { return m_advCutRotationY; }
+  float advCutRotationZ() const { return m_advCutRotationZ; }
+  void setAdvCutRotationX(float v) { if (!qFuzzyCompare(m_advCutRotationX, v)) { m_advCutRotationX = v; emit stateChanged(); } }
+  void setAdvCutRotationY(float v) { if (!qFuzzyCompare(m_advCutRotationY, v)) { m_advCutRotationY = v; emit stateChanged(); } }
+  void setAdvCutRotationZ(float v) { if (!qFuzzyCompare(m_advCutRotationZ, v)) { m_advCutRotationZ = v; emit stateChanged(); } }
   /// 切割平面属性（对齐上游 GLGizmoCut 控制面板）
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis NOTIFY stateChanged)
   Q_PROPERTY(qreal cutPosition READ cutPosition WRITE setCutPosition NOTIFY stateChanged)
@@ -733,6 +857,8 @@ public:
   Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY stateChanged)
   Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
+  /// Phase 240 (GIZ-02): overhang filter angle (see supportPaintOverhangAngle).
+  Q_PROPERTY(float supportPaintOverhangAngle READ supportPaintOverhangAngle WRITE setSupportPaintOverhangAngle NOTIFY stateChanged)
   Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY stateChanged)
   Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY stateChanged)
   /// 支撑绘制数据（对齐上游 GLGizmoFdmSupports paint state）
@@ -834,6 +960,20 @@ public:
   Q_PROPERTY(float svgScale READ svgScale WRITE setSvgScale NOTIFY stateChanged)
   /// 扁平可用面数（对齐上游 GLGizmoFlatten 面）
   Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY stateChanged)
+  /// Phase 240 (GIZ-03): hovered-facet highlight stream for the renderer.
+  Q_PROPERTY(QByteArray flattenHoverData READ flattenHoverData NOTIFY stateChanged)
+  /// Phase 240 (GIZ-06): simplify preview state (upstream GLGizmoSimplify
+  /// three-stage start/preview/apply).
+  Q_PROPERTY(bool simplifyPreviewRunning READ simplifyPreviewRunning NOTIFY stateChanged)
+  Q_PROPERTY(int simplifyPreviewTriangleCount READ simplifyPreviewTriangleCount NOTIFY stateChanged)
+  Q_PROPERTY(bool simplifyPreviewValid READ simplifyPreviewValid NOTIFY stateChanged)
+  /// Phase 240 (GIZ-06): true when the selected volume carries a
+  /// TextConfiguration (emboss panel switches to in-place re-generate mode).
+  Q_PROPERTY(bool embossEditingExistingVolume READ embossEditingExistingVolume NOTIFY stateChanged)
+  /// Phase 240 (GIZ-05): in-scene measure overlay line stream + projected
+  /// 2D annotation anchors.
+  Q_PROPERTY(QByteArray measureOverlayData READ measureOverlayData NOTIFY measureReadoutChanged)
+  Q_PROPERTY(QVariantList measureOverlayLabels READ measureOverlayLabels NOTIFY measureReadoutChanged)
   /// 翻转切割平面（对齐上游 GLGizmoCut::flip_cut_plane）
   Q_INVOKABLE void flipCutPlane();
   /// 居中切割位置到选中对象中心
@@ -1289,6 +1429,20 @@ public:
   { return m_measureReadout.perpendicularDistance; }
   float measureDirectDistance() const { return m_measureReadout.directDistance; }
   QVector3D measureDistanceXyz() const { return m_measureReadout.distanceXyz; }
+  /// Phase 240 (GIZ-05): in-scene measure overlay geometry (world-space
+  /// line stream for the RHI renderer, gated on GizmoMeasure). Wire format:
+  /// header [int32 segmentCount] then segmentCount * 2 * [float x,y,z]
+  /// segments. Segments: from-anchor -> current/hover anchor (the dimension
+  /// line) + a short cross marker at each anchor (upstream renders 3D lines
+  /// + dashed dimension line, GLGizmoMeasure.cpp render dimensioning).
+  /// Empty when no valid measurement + no hover anchor.
+  QByteArray measureOverlayData() const;
+  /// Phase 240 (GIZ-05): 2D annotation anchors projected from the 3D
+  /// measurement points. Each element is a QVariantMap {x,y,z, label} in
+  /// world space; QML positions the label via RhiViewport::
+  /// projectWorldToScreen (2D overlay projected from 3D anchor points is
+  /// the accepted upstream delta -- the RHI renderer has no text pipeline).
+  QVariantList measureOverlayLabels() const;
   /// Phase 114 (MEASURE-03): drive a measurement readout from a Phase 113
   /// SceneRaycaster hit + an optional second hit. Computes the picked
   /// feature(s) via MeasureEngine (Measure::Measuring on the per-volume ITS,
@@ -1455,6 +1609,12 @@ private:
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
   void rebuildObjectEntriesFromService();
+  /// Phase 240 (GIZ-02): shared paint commit path. Mirrors the painted
+  /// TriangleSelector into the Qt data layer (setTriangleSupportState),
+  /// writes the FacetsAnnotation back to the ModelVolume (so the slice
+  /// consumes the paint) and pushes a PaintCommand (undoable). Used by both
+  /// paintAtFacet (brush) and smartFillAtFacet (seed fill).
+  void commitPaintedSelector(int objectIndex, int volumeIndex, int facetIdx, int state);
   bool deleteSelectedVolumesBySource();
   void ensureValidObjectSelection(bool preferFirstVisible);
   void clearContextState();
@@ -1563,6 +1723,12 @@ private:
   int m_cutAxis = 2;              ///< 0=X, 1=Y, 2=Z (默认沿 Z 轴切割)
   qreal m_cutPosition = 0.0;
   int m_cutKeepMode = 0;          ///< 0=全部保留, 1=保留上半, 2=保留下半
+  /// Phase 240 (GIZ-03/GIZ-04): flatten hover highlight payload + interactive
+  /// cut-plane tilt (upstream GLGizmoCut3D m_rotation).
+  QByteArray m_flattenHoverData;
+  float m_cutRotationX = 0.0f;    ///< degrees, tilt around world X
+  float m_cutRotationY = 0.0f;    ///< degrees, tilt around world Y
+  float m_cutRotationZ = 0.0f;    ///< degrees, spin around the plane normal
   // Cut connector (对齐上游 GLGizmoCut connector settings)
   int m_cutMode = 0;              ///< 0=Planar, 1=TongueAndGroove
   int m_connectorType = 0;        ///< 0=Plug, 1=Dowel, 2=Snap
@@ -1619,6 +1785,7 @@ private:
   float m_supportPaintSmartFillAngle = 30.0f; ///< Smart fill angle threshold
   float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
+  float m_supportPaintOverhangAngle = 0.0f;   ///< GIZ-02 overhang filter angle (deg)
   bool m_supportEnable = false;            ///< Support enabled flag
   int m_supportType = 0;                   ///< 0=normal, 1=tree
   QList<OWzx::ObjectPaintData> m_paintData;  ///< 对齐上游 per-volume paint data
@@ -1680,6 +1847,14 @@ private:
   float m_advCutPosition = 0.0f;
   bool m_advCutKeepBoth = true;
   bool m_advCutConnectors = false;
+  /// Phase 240 (GIZ-04): interactive plane tilt for the AdvancedCut plane.
+  float m_advCutRotationX = 0.0f;
+  float m_advCutRotationY = 0.0f;
+  float m_advCutRotationZ = 0.0f;
+  // Phase 240 (GIZ-06): simplify three-stage preview state (upstream
+  // GLGizmoSimplify m_state running/success + preview triangle count).
+  bool m_simplifyPreviewRunning = false;
+  int m_simplifyPreviewTriangleCount = -1;
   // FaceDetector (对齐上游 GLGizmoFaceDetector)
   float m_faceDetectorAngle = 5.0f;
   int m_faceDetectorResultCount = 0;  ///< v5.12: faces found by detectFlatFaces
@@ -1765,11 +1940,10 @@ private:
   // (no libslic3r SurfaceFeature -- pitfall 6). The volume world transform
   // is stored as its translation/rotation/scale decomposition so the C++
   // side can rebuild the Eigen Transform3d (Eigen types cannot be Q_PROPERTY
-  // members and cannot cross QML).
-  bool m_measureFromFeatureValid = false;
+  // members and cannot cross QML). The valid flag + world point moved
+  // outside the guard (Phase 240 GIZ-05 overlay getters).
   int m_measureFromObjectIndex = -1;
   int m_measureFromVolumeIndex = -1;
-  QVector3D m_measureFromWorldPoint;
   QVector3D m_measureFromVolumeTranslation;
   QVector3D m_measureFromVolumeRotationRad;
   QVector3D m_measureFromVolumeScale{1.0f, 1.0f, 1.0f};
@@ -1789,6 +1963,13 @@ private:
   // per-volume owner (replaces the flat placeholder, CONTEXT.md gap 3).
   std::unique_ptr<OWzx::PaintEngine> m_paintEngine;
 #endif
+  // Phase 114 (MEASURE-03) + Phase 240 (GIZ-05): the "from" anchor flag +
+  // world point live OUTSIDE the HAS_LIBSLIC3R guard so the overlay getters
+  // (measureOverlayData/Labels) compile unconditionally with a defined
+  // (false/origin) value when libslic3r is off (same pattern as
+  // m_measureHoverWorldPosition below).
+  bool m_measureFromFeatureValid = false;
+  QVector3D m_measureFromWorldPoint;
   // Phase 115 (MEASURE-04): the most recently picked feature kind + world
   // position (drives the gizmo overlay highlight). Reset to Undef/origin by
   // clearMeasureReadout() (mirrors WTREAD-02 / FMAP-01 always-emit pattern).

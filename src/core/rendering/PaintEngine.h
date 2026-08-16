@@ -137,6 +137,12 @@ public:
   // trafo:       mesh->world transform WITHOUT translation (select_patch's
   //              trafo_no_translate, TriangleSelector.hpp:309). The caller
   //              strips translation upstream.
+  // highlightByAngleDeg: Phase 240 (GIZ-02) overhang filter. Upstream
+  //              GLGizmoPainterBase threads
+  //              m_paint_on_overhangs_only ? m_highlight_by_angle_threshold_deg : 0.f
+  //              into every select_patch call (GLGizmoPainterBase.cpp:800-805);
+  //              a non-zero value restricts painting to facets whose slope
+  //              exceeds the threshold.
   //
   // Returns true if the selector exists (or was built) AND select_patch ran.
   // Returns false if the mesh source had no mesh for the (object, volume).
@@ -144,7 +150,26 @@ public:
                const Slic3r::Vec3f &meshLocalHit,
                float brushRadius, PaintCursorType cursor,
                Slic3r::EnforcerBlockerType state,
-               const Slic3r::Transform3d &trafo);
+               const Slic3r::Transform3d &trafo,
+               float highlightByAngleDeg = 0.f);
+
+  // Phase 240 (GIZ-02): smart (seed) fill. Mirrors the upstream SMART_FILL
+  // tool click path (GLGizmoPainterBase.cpp:773-781): seed_fill_select_
+  // triangles grows a selection from the hit facet bounded by
+  // seedFillAngle (the maximal angle between two facets painted by the same
+  // color) + the optional overhang filter, then seed_fill_apply_on_
+  // triangles commits the selected region with `state`.
+  //
+  // seedFillAngle:      region-growth angle threshold in degrees
+  //                     (upstream m_smart_fill_angle).
+  // highlightByAngleDeg: overhang filter angle in degrees, 0 = off
+  //                     (upstream m_paint_on_overhangs_only ?
+  //                     m_highlight_by_angle_threshold_deg : 0.f).
+  bool smartFillAt(int objectIndex, int volumeIndex, int facetIdx,
+                   const Slic3r::Vec3f &meshLocalHit,
+                   float seedFillAngle, float highlightByAngleDeg,
+                   Slic3r::EnforcerBlockerType state,
+                   const Slic3r::Transform3d &trafo);
 
   // Read the facets currently marked with `state` as an indexed_triangle_set.
   // Wraps TriangleSelector::get_facets (TriangleSelector.hpp:333). Returns a
@@ -242,7 +267,19 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
                           float brushRadius, PaintCursorType cursor,
                           Slic3r::EnforcerBlockerType state,
                           const Slic3r::Transform3d &trafo,
-                          const Slic3r::Vec3f &cameraPosMeshLocal);
+                          const Slic3r::Vec3f &cameraPosMeshLocal,
+                          float highlightByAngleDeg = 0.f);
+
+// Phase 240 (GIZ-02): pure smart-fill helper extracted for unit testing
+// (same TS-08 pattern as applyPaintToSelector). Drives the upstream
+// seed_fill_select_triangles + seed_fill_apply_on_triangles pair exactly as
+// PaintEngine::smartFillAt does in production. No Model / renderer needed.
+void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
+                              int facetIdx,
+                              const Slic3r::Vec3f &meshLocalHit,
+                              float seedFillAngle, float highlightByAngleDeg,
+                              Slic3r::EnforcerBlockerType state,
+                              const Slic3r::Transform3d &trafo);
 
 } // namespace OWzx
 #endif // HAS_LIBSLIC3R

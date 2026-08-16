@@ -566,6 +566,21 @@ void RhiViewport::setCutPosition(float value)
   update();
 }
 
+// Phase 240 (GIZ-05): measure overlay byte-pipe setter (same pattern as
+// setPaintOverlayData).
+void RhiViewport::setMeasureOverlayData(const QByteArray &data)
+{
+  m_measureOverlayData = data;
+  update();
+}
+
+// Phase 240 (GIZ-03): flatten hover highlight byte-pipe setter.
+void RhiViewport::setFlattenHoverData(const QByteArray &data)
+{
+  m_flattenHoverData = data;
+  update();
+}
+
 // Phase 121 (PAINT-02/OV-02): reverse-channel setter. Stores the flattened
 // paint-facet byte stream (from EditorViewModel::paintOverlayData) and triggers
 // update() so synchronize() pulls it into the renderer. No equality short-circuit:
@@ -861,6 +876,48 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     return;
   }
 
+  // Phase 240 (GIZ-04): interactive cut-plane grab. The plane body drags the
+  // cut position along the axis; the border grabbers tilt the plane normal
+  // (upstream GLGizmoCut3D use_grabbers, GLGizmoCut.cpp:271-345).
+  if (event->button() == Qt::LeftButton &&
+      (m_gizmoMode == GizmoCut || m_gizmoMode == GizmoAdvancedCut))
+  {
+    const int grab = pickCutPlaneAt(event->position());
+    if (grab != 0)
+    {
+      m_cutPlaneGrab = grab;
+      m_dragButton = Qt::LeftButton;
+      const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+      const float aspect = float(viewSize.width()) / float(viewSize.height());
+      const QVector3D center = cutPlaneCenter();
+      const QVector3D axisDir = (m_cutAxis == 0) ? QVector3D(1.f, 0.f, 0.f)
+                                 : (m_cutAxis == 1) ? QVector3D(0.f, 1.f, 0.f)
+                                                    : QVector3D(0.f, 0.f, 1.f);
+      auto [orig, dir] = GizmoMath::computeRay(
+          float(event->position().x()), float(event->position().y()),
+          viewSize, m_camera.projMatrix(aspect), m_camera.viewMatrix());
+      if (grab == 1)
+        m_cutPlaneDragStartT = GizmoMath::rayToAxisT(orig, dir, axisDir, center);
+      else
+        m_cutPlaneRotateStartAngle = GizmoMath::computeRotateAngle(
+            float(event->position().x()), float(event->position().y()),
+            /*axis=*/grab - 1 /* 2->X(1), 3->Y(2) */, viewSize,
+            m_camera.projMatrix(aspect), m_camera.viewMatrix(), center,
+            m_cutPlaneRotateStartAngle);
+      event->accept();
+      return;
+    }
+  }
+
+  // Phase 240 (GIZ-03): flatten face pick. A left click on the mesh rotates
+  // the object so the picked facet's normal faces down (upstream
+  // GLGizmoFlatten::on_mouse LeftDown, GLGizmoFlatten.cpp:22-38).
+  if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoFlatten) {
+    emitFlattenPickIfActive(event->position(), /*click=*/true);
+    event->accept();
+    return;
+  }
+
   // Phase 120 (PAINT-01): a paint-gizmo left click drives the TriangleSelector
   // brush. Emit paintPickRequested so the ViewModel runs the stage-2 pick +
   // PaintEngine::paintAt (select_patch). Mirrors upstream
@@ -872,7 +929,11 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
     updateBrushCursorState(event->position(), 1 /*left*/);
+    // Phase 240 (GIZ-02): smart fill fires on PRESS only (a shift-drag keeps
+    // the erase-brush path).
+    m_paintClickPress = true;
     emitPaintPickIfActive(event->position(), event->modifiers());
+    m_paintClickPress = false;
     event->accept();
     return;
   }
@@ -942,6 +1003,52 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
     event->accept();
     return;
   }
+  // Phase 240 (GIZ-04): active cut-plane drag. Grab 1 moves the plane along
+  // the cut axis (position delta from the ray-to-axis projection); grabs 2/3
+  // tilt the plane normal around the world X/Y axes (circular drag angle
+  // delta, same computeRotateAngle the rotate gizmo uses).
+  if (m_cutPlaneGrab != 0 && m_dragButton == Qt::LeftButton)
+  {
+    const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+    const float aspect = float(std::max(1, viewSize.width())) / float(std::max(1, viewSize.height()));
+    const QVector3D center = cutPlaneCenter();
+    if (center.isNull())
+    {
+      m_cutPlaneGrab = 0;
+      event->accept();
+      return;
+    }
+    const QVector3D axisDir = (m_cutAxis == 0) ? QVector3D(1.f, 0.f, 0.f)
+                           : (m_cutAxis == 1) ? QVector3D(0.f, 1.f, 0.f)
+                                              : QVector3D(0.f, 0.f, 1.f);
+    auto [orig, dir] = GizmoMath::computeRay(
+        float(event->position().x()), float(event->position().y()), viewSize,
+        m_camera.projMatrix(aspect), m_camera.viewMatrix());
+    if (m_cutPlaneGrab == 1)
+    {
+      const float curT = GizmoMath::rayToAxisT(orig, dir, axisDir, center);
+      const float deltaT = curT - m_cutPlaneDragStartT;
+      m_cutPlaneDragStartT = curT;
+      emit cutPlaneDragRequested(m_cutPosition + deltaT);
+    }
+    else
+    {
+      const int rotateAxis = m_cutPlaneGrab - 1; // 2->X(1), 3->Y(2)
+      const float currentAngle = GizmoMath::computeRotateAngle(
+          float(event->position().x()), float(event->position().y()),
+          rotateAxis, viewSize, m_camera.projMatrix(aspect),
+          m_camera.viewMatrix(), center, m_cutPlaneRotateStartAngle);
+      const float deltaAngle = currentAngle - m_cutPlaneRotateStartAngle;
+      m_cutPlaneRotateStartAngle = currentAngle;
+      emit cutPlaneRotateRequested(
+          rotateAxis,
+          float(deltaAngle * 180.0 / M_PI));
+    }
+    m_lastMousePosition = event->position();
+    event->accept();
+    return;
+  }
+
   // Phase 69: active gizmo drag translates the selected object along the
   // picked axis. Phase 70 extends the same consumed drag path to rotate/scale.
   if (m_gizmoDragging && m_dragButton == Qt::LeftButton)
@@ -1066,6 +1173,16 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     return;
   }
 
+  // Phase 240 (GIZ-04): end the cut-plane grab (upstream on_stop_dragging
+  // takes the "Move/Rotate cut plane" snapshot).
+  if (m_cutPlaneGrab != 0 && event->button() == Qt::LeftButton)
+  {
+    m_cutPlaneGrab = 0;
+    m_dragButton = Qt::NoButton;
+    event->accept();
+    return;
+  }
+
   if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex >= 0) {
     const QPointF releaseDelta = event->position() - m_pressPosition;
     const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
@@ -1094,6 +1211,10 @@ void RhiViewport::hoverMoveEvent(QHoverEvent *event)
   // gizmo is active. The ViewModel runs the two-stage pick + getFeature and
   // updates the readout live. Mirrors upstream GLGizmoMeasure on_mouse move.
   emitMeasurePickIfActive(event->position(), event->modifiers());
+  // Phase 240 (GIZ-03): drive the flatten hover highlight on mouse-move
+  // (upstream GLGizmoFlatten hover recolors the hovered plane,
+  // GLGizmoFlatten.cpp:107).
+  emitFlattenPickIfActive(event->position(), /*click=*/false);
   // Phase 121 (PAINT-03/OV-05): track the brush-cursor position on hover so
   // the sphere cursor follows the mouse before a click (hover -> black cursor).
   updateBrushCursorState(event->position(), 0 /*hover*/);
@@ -1107,6 +1228,10 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
   // the viewport so no stale highlight lingers off-mesh.
   if (m_gizmoMode == GizmoMeasure)
     emit measureHoverLeft();
+  // Phase 240 (GIZ-03): clear the flatten hover highlight when the cursor
+  // leaves the viewport (pickedSourceIndex -1 clears it in the ViewModel).
+  if (m_gizmoMode == GizmoFlatten)
+    emitFlattenPickIfActive(event->position(), /*click=*/false);
   // Phase 121 (PAINT-03): hide the brush cursor when the mouse leaves.
   updateBrushCursorState(event->position(), -1 /*hide*/);
   event->accept();
@@ -1504,23 +1629,231 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
       viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
 
-  // Phase 121 (PAINT-03/OV-02): brush params now come from the Q_PROPERTYs the
-  // UI controls set (radius slider, cursor-type toggle, tool selector). This
-  // replaces the Phase 120 conservative defaults (2.0/1/1). Shift still toggles
-  // to the erase state for the Support/Seam gizmos (mirrors upstream
-  // Shift-to-erase in GLGizmoPainterBase) -- when Shift is held, paintState is
-  // forced to Blocker (2) regardless of the Q_PROPERTY so Shift-erase works
-  // even when the tool selector shows Enforcer.
+  // Phase 240 (GIZ-02): when the SmartFill tool is active OR Shift is held on
+  // CLICK, the pick routes to the smart-fill path instead (upstream
+  // ToolType::SMART_FILL seed fill; Phase 240 spec maps Shift+click to smart
+  // fill). Smart fill only fires on press -- a shift-DRAG keeps the brush
+  // path so a drag does not spam seed fills (upstream SMART_FILL is
+  // click-driven).
   const double brushRadius = double(m_brushRadius);
   const int    cursorType  = m_brushCursorType;
   const bool   shiftHeld   = (modifiers & Qt::ShiftModifier) != 0;
   // EnforcerBlockerType: 1=Enforcer, 2=Blocker (TriangleSelector.hpp:13-38).
   const int    paintState  = shiftHeld ? 2 : m_paintState;
+  const bool   smartFill   = (shiftHeld || m_paintToolType == 2) && m_paintClickPress;
+
+  if (smartFill) {
+    emit smartFillPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
+                                paintState, double(m_smartFillAngle),
+                                m_paintOnOverhangsOnly,
+                                double(m_paintOverhangAngle));
+    return;
+  }
 
   // Forward to QML opaquely (no ray math in QML -- same contract as
   // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
   emit paintPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
-                          brushRadius, cursorType, paintState);
+                          brushRadius, cursorType, paintState,
+                          /*smartFill=*/0);
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-03): flatten gizmo pick wiring (hover highlight + click)
+// ===========================================================================
+void RhiViewport::emitFlattenPickIfActive(const QPointF &position, bool click)
+{
+  // Only the Flatten gizmo drives this path.
+  if (m_gizmoMode != GizmoFlatten)
+    return;
+
+  // Stage-1: cheap ray->AABB prefilter (same pickSourceObjectAt the measure
+  // path uses). -1 = miss (hover clears the highlight).
+  const int pickedSourceIndex = pickSourceObjectAt(position);
+
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()),
+      viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+
+  if (click)
+    emit flattenPickRequested(rayOrigin, rayDirection, pickedSourceIndex);
+  else
+    emit flattenHoverRequested(rayOrigin, rayDirection, pickedSourceIndex);
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-04): interactive cut-plane pick + drag helpers
+// ===========================================================================
+QVector3D RhiViewport::cutPlaneCenter() const
+{
+  // The plane sits on the cut axis at cutPosition inside the selected
+  // object's bounds; the renderer builds the quad from the same bounds.
+  // Rebuild them from the picking scene batches (same data source the
+  // renderer's uploadCutPlaneBuffers uses).
+  const_cast<RhiViewport *>(this)->updatePickingScene();
+  const int selected = m_selectedSourceObjectIndex;
+  if (selected < 0)
+    return {};
+  bool found = false;
+  float minX = 0.f, minY = 0.f, minZ = 0.f, maxX = 0.f, maxY = 0.f, maxZ = 0.f;
+  for (const PrepareSceneData::ModelBatch &batch : m_pickScene.modelBatches()) {
+    if (batch.sourceObjectIndex != selected)
+      continue;
+    if (!found) {
+      minX = batch.bounds.minX; minY = batch.bounds.minY; minZ = batch.bounds.minZ;
+      maxX = batch.bounds.maxX; maxY = batch.bounds.maxY; maxZ = batch.bounds.maxZ;
+      found = true;
+      continue;
+    }
+    minX = std::min(minX, batch.bounds.minX);
+    minY = std::min(minY, batch.bounds.minY);
+    minZ = std::min(minZ, batch.bounds.minZ);
+    maxX = std::max(maxX, batch.bounds.maxX);
+    maxY = std::max(maxY, batch.bounds.maxY);
+    maxZ = std::max(maxZ, batch.bounds.maxZ);
+  }
+  if (!found)
+    return {};
+  switch (m_cutAxis) {
+  case 0: return QVector3D(m_cutPosition, (minY + maxY) * 0.5f, (minZ + maxZ) * 0.5f);
+  case 1: return QVector3D((minX + maxX) * 0.5f, m_cutPosition, (minZ + maxZ) * 0.5f);
+  default: return QVector3D((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, m_cutPosition);
+  }
+}
+
+int RhiViewport::pickCutPlaneAt(const QPointF &position)
+{
+  if (m_gizmoMode != GizmoCut && m_gizmoMode != GizmoAdvancedCut)
+    return 0;
+  if (m_selectedSourceObjectIndex < 0)
+    return 0;
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return 0;
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  const QMatrix4x4 proj = m_camera.projMatrix(aspect);
+  const QMatrix4x4 view = m_camera.viewMatrix();
+
+  const QVector3D center = cutPlaneCenter();
+  if (center.isNull())
+    return 0;
+
+  // Grabber screen hit test (upstream GLGizmoCut3D rotation grabbers sit on
+  // the plane border). Two tilt grabbers: one on +X side of the plane (tilt
+  // around world X), one on +Y side (tilt around world Y). 14px hit radius
+  // matches the gizmo axis hit tolerance.
+  const QVector3D axisX = QVector3D(1.f, 0.f, 0.f);
+  const QVector3D axisY = QVector3D(0.f, 1.f, 0.f);
+  // Plane-local frame: the two axes perpendicular to the cut axis.
+  QVector3D u, v;
+  switch (m_cutAxis) {
+  case 0: u = QVector3D(0.f, 1.f, 0.f); v = QVector3D(0.f, 0.f, 1.f); break;
+  case 1: u = QVector3D(1.f, 0.f, 0.f); v = QVector3D(0.f, 0.f, 1.f); break;
+  default: u = QVector3D(1.f, 0.f, 0.f); v = QVector3D(0.f, 1.f, 0.f); break;
+  }
+  auto projectToScreen = [&](const QVector3D &world) -> QVector2D {
+    const QVector4D clip = proj * view * QVector4D(world, 1.f);
+    if (qFuzzyIsNull(clip.w()))
+      return {};
+    const QVector3D ndc = clip.toVector3D() / clip.w();
+    return QVector2D((ndc.x() * 0.5f + 0.5f) * float(viewSize.width()),
+                     (1.f - (ndc.y() * 0.5f + 0.5f)) * float(viewSize.height()));
+  };
+  // Grabber extent: a small world-space offset along the plane axes so the
+  // handles sit on the plane border area; the plane tilt rotates the
+  // offsets so the pick stays glued to the rendered grabbers.
+  QMatrix4x4 grabRot;
+  grabRot.rotate(m_cutRotationX, 1.f, 0.f, 0.f);   // world X -> scene X
+  grabRot.rotate(m_cutRotationY, 0.f, 0.f, 1.f);   // world Y -> scene Z
+  grabRot.rotate(m_cutRotationZ, 0.f, 1.f, 0.f);   // world Z -> scene Y
+  const QVector3D g1 = center + grabRot.mapVector(u * 6.f);
+  const QVector3D g2 = center + grabRot.mapVector(v * 6.f);
+  const QVector2D s1 = projectToScreen(g1);
+  const QVector2D s2 = projectToScreen(g2);
+  const QVector2D cursor(float(position.x()), float(position.y()));
+  const float grabRadius = 14.f;
+  if ((cursor - s1).length() <= grabRadius)
+    return 2; // tilt around world X
+  if ((cursor - s2).length() <= grabRadius)
+    return 3; // tilt around world Y
+
+  // Plane body: project the cursor ray onto the cut axis parameter and
+  // accept when the ray's closest approach to the plane center is within the
+  // object's half-diagonal (coarse plane hit; upstream unprojects onto the
+  // cut plane).
+  auto [orig, dir] = GizmoMath::computeRay(
+      float(position.x()), float(position.y()), viewSize, proj, view);
+  const QVector3D axisDir =
+      (m_cutAxis == 0) ? axisX : (m_cutAxis == 1) ? axisY : QVector3D(0.f, 0.f, 1.f);
+  const float t = GizmoMath::rayToAxisT(orig, dir, axisDir, center);
+  if (t <= -1e6f)
+    return 0; // ray parallel to axis -- treat as miss
+  // Closest point on the ray to the plane center (perpendicular distance to
+  // the plane quad, coarse).
+  const QVector3D onAxis = center + axisDir * t;
+  const QVector3D toRay = orig + dir * 1.f - onAxis;
+  Q_UNUSED(toRay);
+  // Accept the drag when the cursor is near the plane's on-axis position
+  // (within 1/3 screen height of the projected center, matching the coarse
+  // gizmo hit tolerance).
+  const QVector2D centerScreen = projectToScreen(center);
+  const QVector2D onAxisScreen = projectToScreen(onAxis);
+  if ((centerScreen - onAxisScreen).length() <= float(viewSize.height()) * 0.2f)
+    return 1;
+  return 0;
+}
+
+void RhiViewport::updateCutPlane()
+{
+  // Rotation changes must re-upload the rotated plane quad. The renderer
+  // keys off m_cutPlaneDirty via synchronize(); there is no direct handle
+  // from the item, so bump the picking scene generation which the renderer
+  // treats as a scene change (mirrors how cutAxis/cutPosition setters work
+  // through the synchronize pull).
+  ++m_pickModelGeneration;
+  update();
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-05/GIZ-06): world<->screen helpers
+// ===========================================================================
+QPointF RhiViewport::projectWorldToScreen(float worldX, float worldY,
+                                          float worldZ) const
+{
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return {};
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  const QVector4D clip = m_camera.projMatrix(aspect) * m_camera.viewMatrix()
+                             * QVector4D(worldX, worldY, worldZ, 1.f);
+  if (qFuzzyIsNull(clip.w()))
+    return {};
+  const QVector3D ndc = clip.toVector3D() / clip.w();
+  return QPointF(double((ndc.x() * 0.5f + 0.5f) * float(viewSize.width())),
+                 double((1.f - (ndc.y() * 0.5f + 0.5f)) * float(viewSize.height())));
+}
+
+QPointF RhiViewport::screenToBedPoint(qreal screenX, qreal screenY) const
+{
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  if (viewSize.width() <= 1 || viewSize.height() <= 1)
+    return QPointF();
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  auto [orig, dir] = GizmoMath::computeRay(
+      float(screenX), float(screenY), viewSize,
+      m_camera.projMatrix(aspect), m_camera.viewMatrix());
+  // Intersect with the Z=0 bed plane.
+  if (qFuzzyIsNull(dir.z()))
+    return QPointF();
+  const float t = -orig.z() / dir.z();
+  if (t < 0.f)
+    return QPointF();
+  const QVector3D hit = orig + dir * t;
+  return QPointF(double(hit.x()), double(hit.y()));
 }
 
 // Phase 121 (PAINT-03/OV-05): track the mouse screen position + button state so

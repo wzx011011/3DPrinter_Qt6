@@ -72,7 +72,8 @@ bool PaintEngine::paintAt(int objectIndex, int volumeIndex, int facetIdx,
                           const Slic3r::Vec3f &meshLocalHit,
                           float brushRadius, PaintCursorType cursor,
                           Slic3r::EnforcerBlockerType state,
-                          const Slic3r::Transform3d &trafo)
+                          const Slic3r::Transform3d &trafo,
+                          float highlightByAngleDeg)
 {
   Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
   if (!selector)
@@ -82,7 +83,23 @@ bool PaintEngine::paintAt(int objectIndex, int volumeIndex, int facetIdx,
   // does not depend on a real camera position for the TS-08 unit-test path).
   // Phase 121 (brush UI) will thread the real camera position through here.
   applyPaintToSelector(*selector, facetIdx, meshLocalHit, brushRadius, cursor,
-                        state, trafo, /*cameraPosMeshLocal=*/meshLocalHit);
+                        state, trafo, /*cameraPosMeshLocal=*/meshLocalHit,
+                        highlightByAngleDeg);
+  return true;
+}
+
+bool PaintEngine::smartFillAt(int objectIndex, int volumeIndex, int facetIdx,
+                              const Slic3r::Vec3f &meshLocalHit,
+                              float seedFillAngle, float highlightByAngleDeg,
+                              Slic3r::EnforcerBlockerType state,
+                              const Slic3r::Transform3d &trafo)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  if (!selector)
+    return false; // mesh source had no mesh for the pair
+
+  applySmartFillToSelector(*selector, facetIdx, meshLocalHit, seedFillAngle,
+                           highlightByAngleDeg, state, trafo);
   return true;
 }
 
@@ -172,7 +189,8 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
                           float brushRadius, PaintCursorType cursor,
                           Slic3r::EnforcerBlockerType state,
                           const Slic3r::Transform3d &trafo,
-                          const Slic3r::Vec3f &cameraPosMeshLocal)
+                          const Slic3r::Vec3f &cameraPosMeshLocal,
+                          float highlightByAngleDeg)
 {
   // Map the Qt enum back to the upstream CursorType (TriangleSelector.hpp:52).
   const Slic3r::TriangleSelector::CursorType cursorType =
@@ -195,11 +213,39 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
   // select_patch (TriangleSelector.hpp:306-312): facet_start = the hit facet,
   // cursor = the brush, new_state = the paint state, trafo_no_translate =
   // mesh->world without translation, triangle_splitting = true (subdivide
-  // inside the brush for a clean paint edge).
+  // inside the brush for a clean paint edge). highlight_by_angle_deg is the
+  // Phase 240 (GIZ-02) overhang filter (upstream threads
+  // m_paint_on_overhangs_only ? m_highlight_by_angle_threshold_deg : 0.f,
+  // GLGizmoPainterBase.cpp:805).
   selector.select_patch(/*facet_start=*/facetIdx, std::move(cursorPtr),
                         /*new_state=*/state,
                         /*trafo_no_translate=*/trafo,
-                        /*triangle_splitting=*/true);
+                        /*triangle_splitting=*/true,
+                        /*highlight_by_angle_deg=*/highlightByAngleDeg);
+}
+
+// applySmartFillToSelector -- pure helper (Phase 240 GIZ-02). Unit-testable
+// without a Model. Mirrors the upstream SMART_FILL click sequence
+// (GLGizmoPainterBase.cpp:773-781): seed_fill_select_triangles computes the
+// region (angle-bounded growth from the seed facet + optional overhang
+// filter, force_reselection=true so re-clicking the same facet re-paints),
+// then seed_fill_apply_on_triangles commits it with `state`.
+void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
+                              int facetIdx,
+                              const Slic3r::Vec3f &meshLocalHit,
+                              float seedFillAngle, float highlightByAngleDeg,
+                              Slic3r::EnforcerBlockerType state,
+                              const Slic3r::Transform3d &trafo)
+{
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
+  selector.seed_fill_select_triangles(/*hit=*/meshLocalHit,
+                                      /*facet_start=*/facetIdx,
+                                      /*trafo_no_translate=*/trafo,
+                                      /*clp=*/clippingPlane,
+                                      /*seed_fill_angle=*/seedFillAngle,
+                                      /*highlight_by_angle_deg=*/highlightByAngleDeg,
+                                      /*force_reselection=*/true);
+  selector.seed_fill_apply_on_triangles(/*new_state=*/state);
 }
 
 } // namespace OWzx

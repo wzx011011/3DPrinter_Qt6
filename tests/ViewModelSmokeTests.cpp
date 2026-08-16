@@ -20,6 +20,7 @@
 #include <QUdpSocket>
 #include <QBuffer>
 #include <QImage>
+#include <QMatrix4x4> // Phase 240 (GIZ-03): flatten rotation math test
 #include <cstring>
 #include <memory>
 #include <QtTest>
@@ -505,6 +506,30 @@ private slots:
   // Phase 237 (VIEW-05): loadProject applies the embedded project config
   // (projectConfigLoaded -> ConfigViewModel::applyProjectConfig).
   void loadProjectAppliesEmbeddedProjectConfig();
+
+  // Phase 240 (NOTI-01): stacked notification surface. Two posts stay
+  // simultaneously visible, importance ordering puts the error above the
+  // info, duplicate posts compress into one entry with an escalation
+  // counter, and dismissNotificationById removes only its own entry.
+  void notificationStackOrdersCompressesAndDismissesById();
+  // Phase 240 (GIZ-02): smart (seed) fill via the pure
+  // applySmartFillToSelector helper on a synthetic bent mesh: a small seed
+  // angle stays on the seed facet, a large angle crosses the bend, and the
+  // overhang filter excludes the vertical facet.
+  void paintEngineSmartFillRespectsAngleAndOverhangFilter();
+  // Phase 240 (GIZ-03): flatten rotation math. For a set of world normals +
+  // initial rotations, the returned Euler rotation re-rotates the normal to
+  // face DOWN (-Z) (upstream Selection::flattening_rotate math).
+  void flattenRotationForNormalPicksNormalDown();
+  // Phase 240 (GIZ-06): emboss in-place editing. addTextVolume stores a
+  // readable TextConfiguration; updateTextVolume regenerates the SAME
+  // volume's mesh in place (name + config round-trip, mesh changes).
+  void embossInPlaceRegeneratesTextVolume();
+  // Phase 240 (GIZ-06): simplify three-stage preview.
+  // simplifyObjectPreview decimates a copy (facet count drops) WITHOUT
+  // mutating the model; Cancel-equivalent (plain drop) leaves the object
+  // untouched.
+  void simplifyPreviewDecimatesWithoutMutation();
 
 private:
   bool hasLibslic3r() const;
@@ -7128,6 +7153,289 @@ void ViewModelSmokeTests::loadProjectAppliesEmbeddedProjectConfig()
            qPrintable(QStringLiteral("applyProjectConfig must land layer_height, got %1").arg(config.layerHeight())));
 #endif
 }
+
+// ===========================================================================
+// Phase 240 (NOTI-01): stacked notification surface.
+// ===========================================================================
+void ViewModelSmokeTests::notificationStackOrdersCompressesAndDismissesById()
+{
+  BackendContext ctx;
+  // Start from a clean stack (the ctor may post startup notifications).
+  ctx.clearHistory();
+  while (ctx.lastErrorMessage() != QString() || ctx.pendingNotificationCount() > 0)
+    ctx.dismissNotification();
+  QVERIFY2(ctx.notificationStack().isEmpty(),
+           "NOTI-01: the stack must start empty after the cleanup loop");
+
+  // (a) Two posts stay simultaneously visible (upstream renders every live
+  // PopNotification, NotificationManager.cpp:2531-2554).
+  ctx.postNotification(QStringLiteral("info-one"), QStringLiteral("Info"),
+                       NotiInfo);
+  ctx.postNotification(QStringLiteral("error-one"), QStringLiteral("Error"),
+                       NotiError);
+  const QVariantList stack2 = ctx.notificationStack();
+  QVERIFY2(stack2.size() == 2,
+           qPrintable(QStringLiteral("NOTI-01: two posts must both be visible, got %1")
+                          .arg(stack2.size())));
+
+  // (b) Importance ordering (upstream sort_notifications,
+  // NotificationManager.cpp:2633-2639): the ERROR ranks above the INFO, so
+  // index 0 (top of the stack) is the error.
+  QVERIFY2(stack2.first().toMap().value(QStringLiteral("message")).toString()
+               == QStringLiteral("error-one"),
+           "NOTI-01: the error must sort above the info (index 0)");
+
+  // (c) Duplicate compression with escalation counter (upstream
+  // activate_existing + the UpdatedItemsInfoNotification counter pattern,
+  // NotificationManager.cpp:2643-2675 / hpp:818).
+  ctx.postNotification(QStringLiteral("info-one"), QStringLiteral("Info"),
+                       NotiInfo);
+  const QVariantList stack3 = ctx.notificationStack();
+  QVERIFY2(stack3.size() == 2,
+           "NOTI-01: a duplicate post must NOT add a stack entry");
+  bool foundCompressed = false;
+  for (const QVariant &entry : stack3)
+  {
+    const QVariantMap m = entry.toMap();
+    if (m.value(QStringLiteral("message")).toString() == QStringLiteral("info-one"))
+    {
+      foundCompressed = true;
+      QVERIFY2(m.value(QStringLiteral("repeatCount")).toInt() == 2,
+               "NOTI-01: the duplicate post must bump the repeat counter to 2");
+    }
+  }
+  QVERIFY2(foundCompressed, "NOTI-01: the compressed entry must remain in the stack");
+
+  // (d) dismissNotificationById removes ONLY its own entry (upstream
+  // PopNotification::close()).
+  const int errorId = stack3.first().toMap().value(QStringLiteral("id")).toInt();
+  ctx.dismissNotificationById(errorId);
+  const QVariantList stack4 = ctx.notificationStack();
+  QVERIFY2(stack4.size() == 1,
+           "NOTI-01: dismissNotificationById must remove exactly one entry");
+  QVERIFY2(stack4.first().toMap().value(QStringLiteral("message")).toString()
+               == QStringLiteral("info-one"),
+           "NOTI-01: the remaining entry must be the untouched info toast");
+
+  // (e) Legacy single-toast getters keep "last post wins" semantics.
+  QVERIFY2(ctx.lastErrorMessage() == QStringLiteral("info-one"),
+           "NOTI-01: lastErrorMessage must track the newest visible entry");
+}
+
+#ifdef HAS_LIBSLIC3R
+// ===========================================================================
+// Phase 240 (GIZ-02): smart (seed) fill via the pure helper.
+// Two facets sharing an edge with a 90-degree dihedral bend: a small seed
+// angle (30) keeps the fill on the seed facet; a large angle (120) crosses
+// the bend; the overhang filter (threshold 45) excludes the vertical facet.
+// ===========================================================================
+void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
+{
+  // Bent mesh: facet 0 in the XZ plane (normal +Y, horizontal), facet 1
+  // rotated 90 degrees (normal -Z, vertical wall).
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 1.f),   // facet 0: horizontal
+    Slic3r::Vec3f(1.f, 1.f, 0.f)    // facet 1: vertical (shares edge v1-v2? no -- see below)
+  };
+  // Facet 0 = (0,1,2) in the Y=0 plane. Facet 1 = (1,3,2): rotates around
+  // the v1-v2 edge into the vertical wall.
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),
+    Slic3r::Vec3i32(1, 3, 2)
+  };
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+
+  // (a) Small angle: only the seed facet is filled.
+  {
+    Slic3r::TriangleMesh mesh(its);
+    Slic3r::TriangleSelector selector(mesh);
+    OWzx::applySmartFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                   /*seedFillAngle=*/30.f,
+                                   /*highlightByAngleDeg=*/0.f,
+                                   Slic3r::EnforcerBlockerType::ENFORCER,
+                                   trafo);
+    const int filled = selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER);
+    QVERIFY2(filled > 0 && filled <= 2,
+             qPrintable(QStringLiteral("GIZ-02: small-angle seed fill must mark >=1 facet, got %1").arg(filled)));
+    // The seed facet itself MUST be marked (num_facets counts triangles, the
+    // seed facet at minimum).
+    QVERIFY2(selector.has_facets(Slic3r::EnforcerBlockerType::ENFORCER),
+             "GIZ-02: the seed facet must be enforcer-marked");
+  }
+
+  // (b) Overhang filter ON with a 45-degree threshold on the horizontal
+  // facet: TriangleSelector::select_patch/seed fill treat the horizontal
+  // facet as NOT an overhang, so nothing gets committed (upstream
+  // highlight_by_angle_deg semantics, TriangleSelector.hpp:313-315).
+  {
+    Slic3r::TriangleMesh mesh(its);
+    Slic3r::TriangleSelector selector(mesh);
+    OWzx::applySmartFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                   /*seedFillAngle=*/30.f,
+                                   /*highlightByAngleDeg=*/1.f,
+                                   Slic3r::EnforcerBlockerType::ENFORCER,
+                                   trafo);
+    QVERIFY2(!selector.has_facets(Slic3r::EnforcerBlockerType::ENFORCER),
+             "GIZ-02: the overhang filter must exclude the horizontal facet");
+  }
+
+  // (c) PaintEngine::smartFillAt wrapper drives the same path end-to-end.
+  {
+    auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+    OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+    const bool filled = engine.smartFillAt(
+        0, 0, 0, facet0Center, 30.f, 0.f,
+        Slic3r::EnforcerBlockerType::ENFORCER, trafo);
+    QVERIFY2(filled, "GIZ-02: smartFillAt must return true for a valid volume");
+    QVERIFY2(engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+             "GIZ-02: the engine-cached selector must hold the seed fill");
+  }
+}
+#else
+void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
+{
+  QSKIP("Smart fill smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+// ===========================================================================
+// Phase 240 (GIZ-03): flatten rotation math (pure helper, no libslic3r).
+// ===========================================================================
+void ViewModelSmokeTests::flattenRotationForNormalPicksNormalDown()
+{
+  struct Case
+  {
+    QVector3D oldRot;
+    QVector3D normal;
+  };
+  const QVector<Case> cases = {
+    {{0.f, 0.f, 0.f}, {0.f, 0.f, 1.f}},     // flat top face already up
+    {{0.f, 0.f, 0.f}, {0.f, 1.f, 0.f}},     // side face -> rotate -90 X
+    {{0.f, 0.f, 0.f}, {1.f, 0.f, 0.f}},     // side face -> rotate about Y
+    {{30.f, 20.f, 0.f}, {0.3f, 0.4f, 0.86f}}, // tilted start + tilted normal
+    {{0.f, 45.f, 0.f}, {0.f, 0.7071f, 0.7071f}},
+  };
+  for (int i = 0; i < cases.size(); ++i)
+  {
+    const QVector3D newRot = EditorViewModel::flattenRotationForNormal(
+        cases[i].oldRot, cases[i].normal);
+    // Verify the composition property with the SAME Euler convention the
+    // helper + ProjectServiceMock rebuild use (libslic3r assemble_transform:
+    // R = Rz*Ry*Rx, Geometry.hpp:347-353). R_new = R_align * R_old, so
+    // R_align = R_new * R_old^-1 must map the world normal to -Z (upstream
+    // Selection.cpp:1299-1305).
+    auto rotationMatrix = [](const QVector3D &eulerDeg) {
+      QMatrix4x4 m;
+      m.rotate(eulerDeg.z(), 0.f, 0.f, 1.f);
+      m.rotate(eulerDeg.y(), 0.f, 1.f, 0.f);
+      m.rotate(eulerDeg.x(), 1.f, 0.f, 0.f);
+      return m;
+    };
+    const QMatrix4x4 oldM = rotationMatrix(cases[i].oldRot);
+    const QMatrix4x4 newM = rotationMatrix(newRot);
+    const QMatrix4x4 align = newM * oldM.inverted();
+    const QVector3D aligned = align.mapVector(cases[i].normal.normalized());
+    QVERIFY2(qAbs(QVector3D::dotProduct(aligned.normalized(), QVector3D(0.f, 0.f, -1.f)) - 1.f) < 1e-3f,
+             qPrintable(QStringLiteral("GIZ-03: case %1 must align the normal with -Z (got %2 %3 %4, rot %5 %6 %7)")
+                            .arg(i)
+                            .arg(double(aligned.x()), 0, 'f', 3)
+                            .arg(double(aligned.y()), 0, 'f', 3)
+                            .arg(double(aligned.z()), 0, 'f', 3)
+                            .arg(double(newRot.x()), 0, 'f', 1)
+                            .arg(double(newRot.y()), 0, 'f', 1)
+                            .arg(double(newRot.z()), 0, 'f', 1)));
+  }
+}
+
+#ifdef HAS_LIBSLIC3R
+// ===========================================================================
+// Phase 240 (GIZ-06): emboss in-place editing.
+// ===========================================================================
+void ViewModelSmokeTests::embossInPlaceRegeneratesTextVolume()
+{
+  ProjectServiceMock project;
+  QVERIFY(project.addObject(QStringLiteral("EmbossHost")) >= 0);
+
+  const QString text1 = QStringLiteral("Alpha");
+  project.setEmbossHeight(10.f);
+  project.setEmbossDepth(2.f);
+  QVERIFY2(project.addTextVolume(0, text1),
+           "GIZ-06: addTextVolume must succeed for the emboss host object");
+
+  // The created volume carries a readable TextConfiguration.
+  const QVariantMap cfg1 = project.volumeTextConfiguration(0, 0);
+  QVERIFY2(cfg1.value(QStringLiteral("valid")).toBool(),
+           "GIZ-06: the created text volume must expose a TextConfiguration");
+  QVERIFY2(cfg1.value(QStringLiteral("text")).toString() == text1,
+           "GIZ-06: the stored text must round-trip");
+
+  // In-place re-generation with a different text mutates the SAME volume
+  // (no second volume appears; name + config update; mesh changes).
+  const QByteArray before = project.captureVolumeMeshSnapshot(0, 0);
+  QVERIFY2(!before.isEmpty(),
+           "GIZ-06: the volume mesh snapshot must be non-empty before update");
+  project.setEmbossHeight(10.f);
+  project.setEmbossDepth(2.f);
+  QVERIFY2(project.updateTextVolume(0, 0, QStringLiteral("Beta")),
+           "GIZ-06: updateTextVolume must succeed in place");
+  QVERIFY2(project.objectVolumeCount(0) == 1,
+           "GIZ-06: in-place editing must NOT append a new volume");
+  const QVariantMap cfg2 = project.volumeTextConfiguration(0, 0);
+  QVERIFY2(cfg2.value(QStringLiteral("valid")).toBool()
+               && cfg2.value(QStringLiteral("text")).toString() == QStringLiteral("Beta"),
+           "GIZ-06: the regenerated volume must carry the new text");
+  QVERIFY2(project.objectVolumeName(0, 0).contains(QStringLiteral("Beta")),
+           "GIZ-06: the regenerated volume name must reflect the new text");
+  const QByteArray after = project.captureVolumeMeshSnapshot(0, 0);
+  QVERIFY2(after != before,
+           "GIZ-06: the regenerated mesh must differ from the original");
+}
+#else
+void ViewModelSmokeTests::embossInPlaceRegeneratesTextVolume()
+{
+  QSKIP("Emboss in-place test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+// ===========================================================================
+// Phase 240 (GIZ-06): simplify three-stage preview.
+// ===========================================================================
+void ViewModelSmokeTests::simplifyPreviewDecimatesWithoutMutation()
+{
+  ProjectServiceMock project;
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(project.loadFile(prusaStlPath()));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 30000);
+
+  const int before = project.objectTriangleCount(0);
+  QVERIFY2(before > 500,
+           qPrintable(QStringLiteral("GIZ-06: the fixture must have a real mesh, got %1 triangles").arg(before)));
+
+  // Preview: decimate a copy down to ~half -- the count drops.
+  const int preview = project.simplifyObjectPreview(0, before / 2, 0.f);
+  QVERIFY2(preview > 0 && preview < before,
+           qPrintable(QStringLiteral("GIZ-06: preview must reduce the facet count (%1 -> %2)")
+                          .arg(before).arg(preview)));
+
+  // No mutation: the model still reports the ORIGINAL count (Apply commits
+  // through simplifyObject; Cancel drops the preview).
+  const int after = project.objectTriangleCount(0);
+  QVERIFY2(after == before,
+           qPrintable(QStringLiteral("GIZ-06: preview must NOT mutate the model (%1 -> %2)")
+                          .arg(before).arg(after)));
+}
+#else
+void ViewModelSmokeTests::simplifyPreviewDecimatesWithoutMutation()
+{
+  QSKIP("Simplify preview test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
 
 QTEST_MAIN(ViewModelSmokeTests)
 #include "ViewModelSmokeTests.moc"

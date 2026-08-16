@@ -469,6 +469,32 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (m_advancedCutMarkerData != prevAdvCutMarker)
     m_advancedCutMarkerBufferUploaded = false;
 
+  // Phase 240 (GIZ-05): measure overlay line stream (same pipe pattern).
+  const QByteArray prevMeasureOverlay = m_measureOverlayData;
+  m_measureOverlayData = viewport->m_measureOverlayData;
+  if (m_measureOverlayData != prevMeasureOverlay)
+    m_measureOverlayBufferUploaded = false;
+
+  // Phase 240 (GIZ-03): flatten hover facet stream (same pipe pattern).
+  const QByteArray prevFlattenHover = m_flattenHoverData;
+  m_flattenHoverData = viewport->m_flattenHoverData;
+  if (m_flattenHoverData != prevFlattenHover)
+    m_flattenHoverBufferUploaded = false;
+
+  // Phase 240 (GIZ-04): cut-plane tilt + gizmo-mode rotation state. A change
+  // to either rotation or the plane grab state marks the cut plane dirty so
+  // the rotated quad re-uploads.
+  const float prevCutRotX = m_cutRotationX;
+  const float prevCutRotY = m_cutRotationY;
+  const float prevCutRotZ = m_cutRotationZ;
+  m_cutRotationX = viewport->m_cutRotationX;
+  m_cutRotationY = viewport->m_cutRotationY;
+  m_cutRotationZ = viewport->m_cutRotationZ;
+  if (!qFuzzyCompare(prevCutRotX, m_cutRotationX)
+      || !qFuzzyCompare(prevCutRotY, m_cutRotationY)
+      || !qFuzzyCompare(prevCutRotZ, m_cutRotationZ))
+    m_cutPlaneDirty = true;
+
   // Render-side per-role visibility mask (no repack). The viewport carries a
   // 20-element QVariantList of bools indexed by canonical libvgcode role; convert
   // to QVector<bool> for the draw-range skip check. Missing entries default visible.
@@ -558,7 +584,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                    !m_paintOverlayBufferUploaded ||
                                    !m_brushCursorBufferUploaded ||
                                    !m_hollowMarkerBufferUploaded ||
-                                   !m_advancedCutMarkerBufferUploaded)) {
+                                   !m_advancedCutMarkerBufferUploaded ||
+                                   !m_measureOverlayBufferUploaded ||
+                                   !m_flattenHoverBufferUploaded)) {
       updates = rhi()->nextResourceUpdateBatch();
       if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
           !uploadWipeTowerBuffer(updates))
@@ -576,6 +604,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         uploadBrushCursorBuffer(updates);
         uploadHollowMarkerBuffer(updates);
         uploadAdvancedCutMarkerBuffer(updates);
+        // Phase 240 (GIZ-05/GIZ-03): measure overlay + flatten hover streams.
+        uploadMeasureOverlayBuffer(updates);
+        uploadFlattenHoverBuffer(updates);
       }
     }
   }
@@ -714,6 +745,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Gated to GizmoHollow (8); drawn after paint overlay, before highlight.
     renderHollowMarkers(cb);
     renderAdvancedCutMarkers(cb);
+    // Phase 240 (GIZ-05/GIZ-03): measure dimension lines (GizmoMeasure=3)
+    // and the flatten hovered-facet highlight (GizmoFlatten=4). Both draw
+    // after the mesh with their own gizmo gating inside the render helpers.
+    renderMeasureOverlay(cb);
+    renderFlattenHover(cb);
   if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // Highlight is translucent: test depth but do not write it, so it does
       // not occlude opaque geometry drawn in subsequent frames/passes.
@@ -2136,6 +2172,84 @@ bool RhiViewportRenderer::uploadCutPlaneBuffers(QRhiResourceUpdateBatch *updates
                                                           m_cutAxis, m_cutPosition);
       outlineVertices = GizmoGeometry::buildCutPlaneOutlineVertices(boundsMin, boundsMax,
                                                                      m_cutAxis, m_cutPosition);
+
+      // Phase 240 (GIZ-04): interactive plane tilt (upstream GLGizmoCut3D
+      // m_rotation). Rotate the plane quad around its on-axis center point.
+      // The world (libslic3r X,Y,Z) Euler maps to the scene frame as
+      // X->X, Y->Z, Z->Y (the renderer applies the same swap per vertex).
+      // The quad is pre-expanded by sqrt(2) so the rotated plane still spans
+      // the object's bounding box diagonal.
+      if (!qFuzzyIsNull(m_cutRotationX) || !qFuzzyIsNull(m_cutRotationY)
+          || !qFuzzyIsNull(m_cutRotationZ))
+      {
+        QVector3D center = (boundsMin + boundsMax) * 0.5f;
+        if (m_cutAxis == 0)
+          center.setX(m_cutPosition);
+        else if (m_cutAxis == 1)
+          center.setY(m_cutPosition);
+        else
+          center.setZ(m_cutPosition);
+        QMatrix4x4 rot;
+        rot.rotate(m_cutRotationX, 1.f, 0.f, 0.f);   // world X -> scene X
+        rot.rotate(m_cutRotationY, 0.f, 0.f, 1.f);   // world Y -> scene Z
+        rot.rotate(m_cutRotationZ, 0.f, 1.f, 0.f);   // world Z -> scene Y
+        const float expand = 1.41421362f;            // sqrt(2) diagonal cover
+        auto tiltVertex = [&, this](Vertex &v) {
+          QVector3D p(v.x, v.y, v.z);
+          p = center + (p - center) * expand;
+          p = center + rot.mapVector(p - center);
+          v.x = p.x();
+          v.y = p.y();
+          v.z = p.z();
+        };
+        for (Vertex &v : fillVertices)
+          tiltVertex(v);
+        for (Vertex &v : outlineVertices)
+          tiltVertex(v);
+      }
+
+      // Phase 240 (GIZ-04): rotation grabbers (upstream GLGizmoCut3D renders
+      // rotation grabbers on the plane border, GLGizmoCut.cpp render_grabber).
+      // Two small spheres mark the tilt handles (world-X tilt / world-Y tilt);
+      // pickCutPlaneAt hit-tests the SAME positions (+/- 14px).
+      {
+        QVector3D center = (boundsMin + boundsMax) * 0.5f;
+        if (m_cutAxis == 0)
+          center.setX(m_cutPosition);
+        else if (m_cutAxis == 1)
+          center.setY(m_cutPosition);
+        else
+          center.setZ(m_cutPosition);
+        QVector3D u, v;
+        switch (m_cutAxis) {
+        case 0: u = QVector3D(0.f, 1.f, 0.f); v = QVector3D(0.f, 0.f, 1.f); break;
+        case 1: u = QVector3D(1.f, 0.f, 0.f); v = QVector3D(0.f, 0.f, 1.f); break;
+        default: u = QVector3D(1.f, 0.f, 0.f); v = QVector3D(0.f, 1.f, 0.f); break;
+        }
+        QMatrix4x4 grabRot;
+        grabRot.rotate(m_cutRotationX, 1.f, 0.f, 0.f);
+        grabRot.rotate(m_cutRotationY, 0.f, 0.f, 1.f);
+        grabRot.rotate(m_cutRotationZ, 0.f, 1.f, 0.f);
+        const float grabberColor1[4] = {0.118f, 0.565f, 1.0f, 1.0f};  // X tilt: blue
+        const float grabberColor2[4] = {0.2f, 0.8f, 0.4f, 1.0f};      // Y tilt: green
+        const float grabRadius = std::max(
+            1.2f, (boundsMax - boundsMin).length() * 0.012f);
+        const QVector<GizmoVertex> g1 = GizmoGeometry::buildBrushSphereVertices(
+            center + grabRot.mapVector(u * 6.f), grabRadius, grabberColor1);
+        const QVector<GizmoVertex> g2 = GizmoGeometry::buildBrushSphereVertices(
+            center + grabRot.mapVector(v * 6.f), grabRadius, grabberColor2);
+        for (const GizmoVertex &gv : g1 + g2) {
+          Vertex out;
+          out.x = gv.x;
+          out.y = gv.y;
+          out.z = gv.z;
+          out.r = gv.r;
+          out.g = gv.g;
+          out.b = gv.b;
+          out.a = gv.a;
+          fillVertices.append(out);
+        }
+      }
     }
   }
 
@@ -3398,6 +3512,151 @@ void RhiViewportRenderer::renderAdvancedCutMarkers(QRhiCommandBuffer *cb)
   const QRhiCommandBuffer::VertexInput binding(m_advancedCutMarkerBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_advancedCutMarkerVertexCount);
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-05): measure overlay lines. Parses the
+// [int32 segmentCount][x,y,z pair]* stream from
+// EditorViewModel::measureOverlayData into a GizmoVertex line soup (white,
+// matching the assembly-measure dimension line color) and renders it with the
+// shared line pipeline while gizmoMode == GizmoMeasure (3).
+// ===========================================================================
+bool RhiViewportRenderer::uploadMeasureOverlayBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_measureOverlayBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  if (m_measureOverlayData.size() >= 4) {
+    qint32 segmentCount = 0;
+    std::memcpy(&segmentCount, m_measureOverlayData.constData(), 4);
+    const qint64 expected = 4 + qint64(segmentCount) * 6 * qint64(sizeof(float));
+    if (segmentCount > 0 && m_measureOverlayData.size() >= expected) {
+      const auto *coords = reinterpret_cast<const float *>(
+          m_measureOverlayData.constData() + 4);
+      vertices.reserve(segmentCount * 2);
+      for (qint32 s = 0; s < segmentCount; ++s) {
+        for (int e = 0; e < 2; ++e) {
+          const float *c = coords + (qint64(s) * 2 + e) * 3;
+          Vertex v;
+          // libslic3r world (X,Y,Z) -> scene (X,Z,Y).
+          v.x = c[0];
+          v.y = c[2];
+          v.z = c[1];
+          v.r = 1.f;
+          v.g = 1.f;
+          v.b = 1.f;
+          v.a = 1.f;
+          vertices.append(v);
+        }
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_measureOverlayBuffer, byteSize, m_measureOverlayBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_measureOverlayVertexCount = quint32(vertices.size());
+  if (m_measureOverlayBuffer && byteSize > 0) {
+    updates->uploadStaticBuffer(m_measureOverlayBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_measureOverlayBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderMeasureOverlay(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // Gate to the Measure gizmo only (mode 3).
+  if (m_gizmoMode != 3)
+    return;
+  if (m_linePipeline == nullptr || m_measureOverlayBuffer == nullptr ||
+      m_measureOverlayVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  cb->setGraphicsPipeline(m_linePipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_measureOverlayBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_measureOverlayVertexCount);
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-03): flatten hovered-facet highlight. Parses the
+// [int32 vertexCount][x,y,z triple]* stream from
+// EditorViewModel::flattenHoverData and renders the hovered facet as a
+// translucent highlight (upstream recolors the hovered flatten plane,
+// GLGizmoFlatten.cpp:107) while gizmoMode == GizmoFlatten (4).
+// ===========================================================================
+bool RhiViewportRenderer::uploadFlattenHoverBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_flattenHoverBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  if (m_flattenHoverData.size() >= 4) {
+    qint32 vertexCount = 0;
+    std::memcpy(&vertexCount, m_flattenHoverData.constData(), 4);
+    const qint64 expected = 4 + qint64(vertexCount) * 3 * qint64(sizeof(float));
+    if (vertexCount > 0 && m_flattenHoverData.size() >= expected) {
+      const auto *coords = reinterpret_cast<const float *>(
+          m_flattenHoverData.constData() + 4);
+      vertices.reserve(vertexCount);
+      for (qint32 i = 0; i < vertexCount; ++i) {
+        const float *c = coords + qint64(i) * 3;
+        Vertex v;
+        // libslic3r world (X,Y,Z) -> scene (X,Z,Y).
+        v.x = c[0];
+        v.y = c[2];
+        v.z = c[1];
+        // Hover color: upstream FLATTEN_HOVER_COLOR is a strong cyan/blue.
+        v.r = 0.118f;
+        v.g = 0.565f;
+        v.b = 1.0f;
+        v.a = 0.55f;
+        vertices.append(v);
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_flattenHoverBuffer, byteSize, m_flattenHoverBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_flattenHoverVertexCount = quint32(vertices.size());
+  if (m_flattenHoverBuffer && byteSize > 0) {
+    updates->uploadStaticBuffer(m_flattenHoverBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_flattenHoverBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderFlattenHover(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // Gate to the Flatten gizmo only (mode 4).
+  if (m_gizmoMode != 4)
+    return;
+  if (m_translucentFillPipeline == nullptr || m_flattenHoverBuffer == nullptr ||
+      m_flattenHoverVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_flattenHoverBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_flattenHoverVertexCount);
 }
 
 // ===========================================================================

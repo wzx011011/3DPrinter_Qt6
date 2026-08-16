@@ -36,11 +36,26 @@
 #include <QDir>
 #include <QUrl>
 #include <QVector4D>
+#include <QMatrix4x4> // Phase 240 (GIZ-03): flatten rotation math
+#include <QQuaternion> // Phase 240 (GIZ-03): QQuaternion::rotationTo
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QCoreApplication>
 #include <QEventLoop>
+#include <QtConcurrent/QtConcurrentRun> // Phase 240 (GIZ-06): simplify preview job
 #include <algorithm>
+
+#ifdef HAS_LIBSLIC3R
+namespace
+{
+// Forward declaration -- the definition lives in the anonymous namespace
+// before computeMeasureReadoutFromHit. The Phase 240 flatten pick paths sit
+// earlier in the file and need it (GIZ-03/GIZ-02).
+Slic3r::Transform3d rebuildWorldTransform(QVector3D translation,
+                                          QVector3D rotationRad,
+                                          QVector3D scale);
+}
+#endif
 #include <limits>
 #include <QSet>
 #include <QTimer>
@@ -1206,6 +1221,18 @@ void EditorViewModel::setSupportPaintOnOverhangsOnly(bool on)
   }
 }
 
+// Phase 240 (GIZ-02): overhang filter angle (upstream
+// m_highlight_by_angle_threshold_deg, GLGizmoPainterBase.hpp:280).
+float EditorViewModel::supportPaintOverhangAngle() const { return m_supportPaintOverhangAngle; }
+void EditorViewModel::setSupportPaintOverhangAngle(float angle)
+{
+  if (!qFuzzyCompare(m_supportPaintOverhangAngle, angle))
+  {
+    m_supportPaintOverhangAngle = angle;
+    emit stateChanged();
+  }
+}
+
 bool EditorViewModel::supportEnable() const { return m_supportEnable; }
 void EditorViewModel::setSupportEnable(bool enable)
 {
@@ -2024,6 +2051,157 @@ bool EditorViewModel::embossRunning() const
   return m_embossRunning;
 }
 
+// ===========================================================================
+// Phase 240 (GIZ-06): emboss in-place editing (upstream GLGizmoEmboss edits
+// the SELECTED text volume's TextConfiguration and re-generates its mesh in
+// place instead of appending a new volume).
+// ===========================================================================
+bool EditorViewModel::embossEditingExistingVolume() const
+{
+  if (!projectService_ || m_selectedVolumeObjectSourceIndex < 0 || m_selectedVolumeIndex < 0)
+    return false;
+  const QVariantMap cfg = projectService_->volumeTextConfiguration(
+      m_selectedVolumeObjectSourceIndex, m_selectedVolumeIndex);
+  return cfg.value(QStringLiteral("valid")).toBool();
+}
+
+bool EditorViewModel::loadEmbossFromSelectedVolume()
+{
+  if (!projectService_ || m_selectedVolumeObjectSourceIndex < 0 || m_selectedVolumeIndex < 0)
+    return false;
+  const QVariantMap cfg = projectService_->volumeTextConfiguration(
+      m_selectedVolumeObjectSourceIndex, m_selectedVolumeIndex);
+  if (!cfg.value(QStringLiteral("valid")).toBool())
+    return false;
+
+  // Populate the emboss panel from the stored TextConfiguration (upstream
+  // GLGizmoEmboss on_activate loads the volume's text configuration).
+  m_embossText = cfg.value(QStringLiteral("text")).toString();
+  m_embossFontPath = cfg.value(QStringLiteral("fontPath")).toString();
+  m_embossHeight = float(cfg.value(QStringLiteral("height")).toDouble());
+  m_embossDepth = float(cfg.value(QStringLiteral("depth")).toDouble());
+  m_embossBoldness = float(cfg.value(QStringLiteral("boldness")).toDouble());
+  m_embossItalic = cfg.value(QStringLiteral("italic")).toBool();
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::updateEmbossVolume()
+{
+  if (!projectService_)
+    return false;
+
+  // Create-mode fallback: when the selected volume is not a text volume,
+  // keep the legacy add-volume behavior (the panel button works in both
+  // modes).
+  if (!embossEditingExistingVolume())
+    return embossSelected();
+
+  const int obj = m_selectedVolumeObjectSourceIndex;
+  const int vol = m_selectedVolumeIndex;
+  if (obj < 0 || vol < 0 || m_embossText.isEmpty())
+    return false;
+
+  // Forward the current panel state to the service (same snapshot the
+  // create path takes).
+  projectService_->setEmbossFont(m_embossFontPath);
+  projectService_->setEmbossHeight(m_embossHeight);
+  projectService_->setEmbossDepth(m_embossDepth);
+  projectService_->setEmbossBoldness(m_embossBoldness);
+  projectService_->setEmbossItalic(m_embossItalic);
+  projectService_->setEmbossUseSurface(m_embossUseSurface);
+  projectService_->setEmbossCurveProjection(m_embossCurveProjection);
+
+  const bool ok = projectService_->updateTextVolume(obj, vol, m_embossText);
+  if (ok)
+  {
+    // v5.16 undo pattern (Phase 240 GIZ-06): the BEFORE snapshot was captured
+    // in the command constructor; record the AFTER snapshot so redo
+    // reproduces the regenerated mesh (upstream takes an UndoRedo snapshot
+    // per emboss edit).
+    if (m_undoManager)
+    {
+      const QString volName = projectService_->objectVolumeName(obj, vol);
+      auto *cmd = new UpdateVolumeMeshCommand(obj, vol, volName,
+                                              projectService_, this);
+      cmd->setVolumeType(projectService_->objectVolumeType(obj, vol));
+      cmd->setAfterSnapshot(projectService_->captureVolumeMeshSnapshot(obj, vol));
+      m_undoManager->push(cmd);
+    }
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
+    invalidateSliceResultsForCurrentPlate();
+    statusText_ = tr("Text volume updated");
+  }
+  else
+  {
+    statusText_ = projectService_->lastError();
+  }
+  emit stateChanged();
+  return ok;
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-06): simplify three-stage preview (upstream GLGizmoSimplify
+// start/preview/apply + cancel). The preview runs the decimation on a mesh
+// COPY (no model mutation); Apply commits through simplifySelected() (which
+// pushes the SimplifyCommand undo entry); Cancel just drops the count.
+// ===========================================================================
+void EditorViewModel::simplifyPreviewStart()
+{
+  if (!projectService_ || m_simplifyPreviewRunning)
+    return;
+  const int idx = selectedSourceObjectIndex();
+  if (idx < 0)
+    return;
+
+  m_simplifyPreviewRunning = true;
+  m_simplifyPreviewTriangleCount = -1;
+  emit stateChanged();
+
+  // Run the preview decimation off the GUI thread (pure compute on a mesh
+  // copy; same QtConcurrent pattern as addTextVolumeAsync). The result is
+  // marshalled back via a queued lambda on this QObject.
+  (void)QtConcurrent::run([this, idx]() {
+    ProjectServiceMock *svc = projectService_;
+    if (!svc)
+      return -1;
+    return svc->simplifyObjectPreview(idx, m_simplifyWantedCount,
+                                      m_simplifyMaxError);
+  }).then(this, [this](int result) {
+    m_simplifyPreviewRunning = false;
+    m_simplifyPreviewTriangleCount = result;
+    statusText_ = result >= 0
+                      ? tr("Simplify preview: %1 triangles").arg(result)
+                      : tr("Simplify preview failed");
+    emit stateChanged();
+  });
+}
+
+void EditorViewModel::simplifyPreviewApply()
+{
+  if (!simplifyPreviewValid())
+    return;
+  // Commit through the existing undoable path.
+  if (simplifySelected())
+  {
+    m_simplifyPreviewTriangleCount = -1;
+    emit stateChanged();
+  }
+}
+
+void EditorViewModel::simplifyPreviewCancel()
+{
+  // Upstream Cancel restores the original mesh -- the preview never mutated
+  // it (decimation ran on a copy), so dropping the staged count is enough.
+  if (m_simplifyPreviewTriangleCount >= 0 || m_simplifyPreviewRunning)
+  {
+    m_simplifyPreviewTriangleCount = -1;
+    m_simplifyPreviewRunning = false;
+    emit stateChanged();
+  }
+}
+
 // ── MeshBoolean gizmo (对齐上游 GLGizmoMeshBoolean) ──
 
 int EditorViewModel::booleanOperation() const { return m_booleanOperation; }
@@ -2408,6 +2586,96 @@ bool EditorViewModel::importSVG()
   return ok;
 }
 
+// Phase 240 (GIZ-06): SVG drop workbench (minimal port of upstream
+// GLGizmoSVG). A dropped .svg creates a NEW object placed at the bed point
+// (QML resolved the drop position via the viewport's screen->bed
+// intersection; upstream drops at the exact ray hit -- documented delta).
+// Undo: one AddObjectCommand (create + SVG volume). Returns the new object
+// index or -1.
+int EditorViewModel::placeSvgAtBedPoint(const QString &svgPath, float bedX, float bedY)
+{
+  if (!projectService_ || svgPath.isEmpty())
+    return -1;
+
+  const int newIdx = projectService_->addObject(QStringLiteral("SVG"));
+  if (newIdx < 0)
+    return -1;
+
+  auto *cmd = new AddObjectCommand(newIdx, QStringLiteral("SVG"),
+                                   projectService_);
+  if (!projectService_->addSvgVolume(newIdx, svgPath, m_svgDepthModifier))
+  {
+    // Roll the shell object back off the model so a failed SVG read leaves
+    // no empty object behind (upstream load failure drops the object).
+    projectService_->deleteObject(newIdx);
+    delete cmd;
+    statusText_ = tr("SVG import failed");
+    emit stateChanged();
+    return -1;
+  }
+  projectService_->setObjectPosition(newIdx, bedX, bedY, 0.f);
+  if (m_undoManager)
+    m_undoManager->push(cmd);
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(newIdx);
+  m_primarySelectedSourceIndex = newIdx;
+  m_svgFilePath = svgPath;
+  statusText_ = tr("SVG placed on bed");
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+  return newIdx;
+}
+
+// Phase 240 (GIZ-04): cut execution carrying the interactive plane rotation
+// (upstream GLGizmoCut3D rotated plane -> Cut::perform_with_plane with
+// get_cut_matrix's rotated m_rotation_m, GLGizmoCut.cpp:3234-3253).
+bool EditorViewModel::cutSelectedWithRotation()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  if (m_selectedSourceIndices.size() != 1)
+  {
+    statusText_ = tr("Cut requires exactly one selected object");
+    emit stateChanged();
+    return false;
+  }
+  const int srcIdx = *m_selectedSourceIndices.constBegin();
+  auto *cmd = new CutCommand(srcIdx, m_cutAxis, m_cutPosition, m_cutKeepMode,
+                             projectService_, this);
+  const int cutNewIdx = projectService_->cutObjectWithRotation(
+      srcIdx, m_cutAxis, m_cutPosition, m_cutRotationX, m_cutRotationY,
+      m_cutRotationZ, m_cutKeepMode);
+  if (cutNewIdx < 0)
+  {
+    delete cmd;
+    statusText_ = projectService_->lastError().isEmpty()
+                      ? tr("Cut failed")
+                      : projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  cmd->setResult(cutNewIdx, projectService_->objectNames().value(cutNewIdx));
+  if (m_undoManager)
+    m_undoManager->push(cmd);
+  projectService_->syncTransformsFromModel();
+  m_selectedSourceIndices.clear();
+  if (m_cutKeepMode != 2)
+  {
+    m_selectedSourceIndices.insert(srcIdx);
+    m_selectedSourceIndices.insert(cutNewIdx);
+  }
+  else
+  {
+    m_selectedSourceIndices.insert(srcIdx);
+  }
+  statusText_ = tr("Object cut");
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+  return true;
+}
+
 void EditorViewModel::flipCutPlane()
 {
   // 翻转切割位置到对称侧 (对齐上游 GLGizmoCut::flip_cut_plane)
@@ -2455,6 +2723,257 @@ void EditorViewModel::flattenSelected()
     refreshMeshCacheAndFitHint();
   }
   emit stateChanged();
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-03): flatten face pick + hover highlight.
+// Upstream: GLGizmoFlatten::on_mouse LeftDown (GLGizmoFlatten.cpp:22-38) ->
+// Selection::flattening_rotate(normal) (Selection.cpp:1293-1310):
+//   tnormal = world-space facet normal;
+//   R_new   = Quaterniond().setFromTwoVectors(tnormal, -UnitZ) * R_old;
+//   offset preserved. do_rotate takes the undo snapshot.
+// ===========================================================================
+QVector3D EditorViewModel::flattenRotationForNormal(const QVector3D &oldRotationDeg,
+                                                    const QVector3D &worldNormal)
+{
+  // Pure-Qt port of the upstream Eigen math (Selection.cpp:1299-1305) so it
+  // is unit-testable without HAS_LIBSLIC3R. QQuaternion::rotationTo is the
+  // Qt equivalent of Eigen Quaterniond().setFromTwoVectors.
+  //
+  // Euler convention: libslic3r Geometry::assemble_transform composes
+  // rotate X, then Y, then Z (Geometry.hpp:347-353), i.e. R = Rz*Ry*Rx --
+  // the same convention ProjectServiceMock::setObjectRotation rebuilds the
+  // instance transform with, so the returned angles round-trip through the
+  // service byte-for-byte.
+  const QVector3D n = worldNormal.normalized();
+  if (qFuzzyIsNull(n.lengthSquared()))
+    return oldRotationDeg;
+
+  auto rotationMatrix = [](const QVector3D &eulerDeg) {
+    QMatrix4x4 m;
+    // Post-multiplication order Z,Y,X yields Rz*Ry*Rx (assemble_transform).
+    m.rotate(eulerDeg.z(), 0.f, 0.f, 1.f);
+    m.rotate(eulerDeg.y(), 0.f, 1.f, 0.f);
+    m.rotate(eulerDeg.x(), 1.f, 0.f, 0.f);
+    return m;
+  };
+
+  const QMatrix4x4 oldRot = rotationMatrix(oldRotationDeg);
+
+  // Rotation aligning the world normal with the DOWN vector (-Z).
+  const QQuaternion align = QQuaternion::rotationTo(n, QVector3D(0.f, 0.f, -1.f));
+  QMatrix4x4 alignM;
+  alignM.rotate(align);
+
+  // R_new = R_align * R_old (upstream: rotation_matrix * old_inst_trafo).
+  const QMatrix4x4 newRot = alignM * oldRot;
+
+  // Extract Euler XYZ with the Rz*Ry*Rx convention (see above). Elements:
+  // R20 = -sin(b); R10/R00 -> gamma(z); R21/R22 -> alpha(x).
+  const float r20 = newRot(2, 0);
+  const float b = std::asin(std::clamp(-r20, -1.f, 1.f));
+  const float cb = std::cos(b);
+  float a = 0.f, g = 0.f;
+  if (std::abs(cb) > 1e-4f)
+  {
+    g = std::atan2(newRot(1, 0), newRot(0, 0));
+    a = std::atan2(newRot(2, 1), newRot(2, 2));
+  }
+  else
+  {
+    // Gimbal lock: b = +/-90 deg, alpha collapses into gamma.
+    g = std::atan2(-newRot(0, 1), newRot(1, 1));
+    a = 0.f;
+  }
+  const float kRadToDeg = 180.f / float(M_PI);
+  return QVector3D(a * kRadToDeg, b * kRadToDeg, g * kRadToDeg);
+}
+
+QByteArray EditorViewModel::flattenHoverData() const { return m_flattenHoverData; }
+
+#ifdef HAS_LIBSLIC3R
+// Shared stage-2 raycast for the flatten pick paths. Returns the closest hit
+// over the picked object's volumes (same two-stage contract as the paint /
+// measure paths). hasHit=false when the ray misses.
+namespace {
+struct FlattenPickResult
+{
+  bool hasHit = false;
+  OWzx::SceneRaycasterHit hit{};
+};
+} // namespace
+
+static FlattenPickResult flattenRaycast(ProjectServiceMock *service,
+                                        OWzx::SceneRaycaster *raycaster,
+                                        int pickedSourceIndex,
+                                        QVector3D rayOrigin, QVector3D rayDir)
+{
+  FlattenPickResult out;
+  if (!service || !raycaster || pickedSourceIndex < 0)
+    return out;
+  const QVector3D translation = service->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = service->objectRotation(pickedSourceIndex);
+  const QVector3D scale = service->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = service->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  out.hit = raycaster->hitTest(origin, dir, candidates);
+  out.hasHit = out.hit.hit;
+  return out;
+}
+#endif
+
+void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
+                                       QVector3D worldOrigin,
+                                       QVector3D worldDirection)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!projectService_ || pickedSourceIndex < 0)
+  {
+    if (!m_flattenHoverData.isEmpty())
+    {
+      m_flattenHoverData.clear();
+      emit stateChanged();
+    }
+    return;
+  }
+  if (!m_sceneRaycaster)
+  {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+  const FlattenPickResult pick = flattenRaycast(projectService_,
+                                                m_sceneRaycaster.get(),
+                                                pickedSourceIndex,
+                                                worldOrigin, worldDirection);
+  if (!pick.hasHit)
+  {
+    if (!m_flattenHoverData.isEmpty())
+    {
+      m_flattenHoverData.clear();
+      emit stateChanged();
+    }
+    return;
+  }
+
+  // Rebuild the highlighted facet as a world-space triangle stream:
+  // [int32 vertexCount][float x,y,z]* — the hovered ITS facet transformed
+  // by the volume's world matrix (upstream recolors the hovered flatten
+  // plane, GLGizmoFlatten.cpp:107).
+  const auto its = projectService_->volumeMeshIts(pick.hit.objectIndex,
+                                                  pick.hit.volumeIndex);
+  if (!its || pick.hit.facetIdx >= its->indices.size())
+    return;
+  const QVector3D translation =
+      projectService_->objectPosition(pick.hit.objectIndex);
+  const QVector3D rotationDeg =
+      projectService_->objectRotation(pick.hit.objectIndex);
+  const QVector3D scale = projectService_->objectScale(pick.hit.objectIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  const Slic3r::Vec3i32 idx = its->indices[pick.hit.facetIdx];
+  const Slic3r::Vec3f local[3] = {its->vertices[size_t(idx(0))],
+                                  its->vertices[size_t(idx(1))],
+                                  its->vertices[size_t(idx(2))]};
+  QByteArray bytes;
+  const int vertexCount = 3;
+  bytes.reserve(int(sizeof(int)) + vertexCount * 3 * int(sizeof(float)));
+  bytes.append(reinterpret_cast<const char *>(&vertexCount), int(sizeof(int)));
+  for (const Slic3r::Vec3f &v : local)
+  {
+    const Slic3r::Vec3d w = worldTransform * v.cast<double>();
+    const float coords[3] = {float(w.x()), float(w.y()), float(w.z())};
+    bytes.append(reinterpret_cast<const char *>(coords), 3 * int(sizeof(float)));
+  }
+  if (m_flattenHoverData != bytes)
+  {
+    m_flattenHoverData = bytes;
+    emit stateChanged();
+  }
+#else
+  Q_UNUSED(pickedSourceIndex);
+  Q_UNUSED(worldOrigin);
+  Q_UNUSED(worldDirection);
+#endif
+}
+
+bool EditorViewModel::flattenPickFace(int pickedSourceIndex,
+                                      QVector3D worldOrigin,
+                                      QVector3D worldDirection)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!projectService_ || m_selectedSourceIndices.isEmpty() || pickedSourceIndex < 0)
+    return false;
+  if (!m_sceneRaycaster)
+  {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+  const FlattenPickResult pick = flattenRaycast(projectService_,
+                                                m_sceneRaycaster.get(),
+                                                pickedSourceIndex,
+                                                worldOrigin, worldDirection);
+  if (!pick.hasHit)
+    return false;
+
+  const int idx = *m_selectedSourceIndices.constBegin();
+  const QVector3D oldPos = projectService_->objectPosition(idx);
+  const QVector3D oldRot = projectService_->objectRotation(idx);
+  const QVector3D oldScale = projectService_->objectScale(idx);
+
+  // Upstream math (Selection.cpp:1299-1305): rotate so the picked world
+  // normal faces DOWN; the offset is preserved.
+  const QVector3D newRot = flattenRotationForNormal(
+      oldRot, QVector3D(float(pick.hit.worldNormal.x()),
+                        float(pick.hit.worldNormal.y()),
+                        float(pick.hit.worldNormal.z())));
+  projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
+  if (m_undoManager)
+  {
+    auto *cmd = new TransformCommand(idx, oldPos, oldRot, oldScale,
+                                     projectService_);
+    cmd->setNewTransform(oldPos, newRot, oldScale);
+    m_undoManager->push(cmd);
+  }
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("Placed on face (Gizmo)");
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+  return true;
+#else
+  Q_UNUSED(pickedSourceIndex);
+  Q_UNUSED(worldOrigin);
+  Q_UNUSED(worldDirection);
+  return false;
+#endif
 }
 
 void EditorViewModel::cutSelected(int axis, double position)
@@ -3192,6 +3711,86 @@ QString EditorViewModel::measureDistanceXyzText() const
       .arg(v.z(), 0, 'f', 3);
 }
 
+// Phase 240 (GIZ-05): in-scene measure overlay. Upstream renders the
+// dimension line + anchors as 3D lines (GLGizmoMeasure render). The Qt6 RHI
+// renderer draws the segment stream from this byte pipe; the numeric label
+// is a 2D overlay projected from the 3D anchors (measureOverlayLabels +
+// RhiViewport::projectWorldToScreen) because the RHI renderer has no text
+// pipeline (documented upstream delta).
+QByteArray EditorViewModel::measureOverlayData() const
+{
+  const QVector3D from = m_measureFromWorldPoint;
+  const QVector3D to = m_measureHoverWorldPosition;
+  // The dimension line exists when a "from" feature is stashed; a hover
+  // anchor alone gets its cross marker.
+  const bool hasFrom = m_measureFromFeatureValid;
+  const bool hasTo = to.lengthSquared() > 1e-12f;
+  if (!hasFrom && !hasTo)
+    return {};
+
+  // Segment soup: [int32 segmentCount] then N * 2 * [float x,y,z].
+  QVector<float> pts;
+  auto appendSegment = [&pts](const QVector3D &a, const QVector3D &b) {
+    pts << a.x() << a.y() << a.z() << b.x() << b.y() << b.z();
+  };
+  auto appendCross = [&pts](const QVector3D &c) {
+    // Small 3-axis cross marker around the anchor (screen-constant size is
+    // not derivable here; 1mm world-size marker matches the assembly
+    // overlay anchor scale).
+    pts << c.x() - 1.f << c.y() << c.z() << c.x() + 1.f << c.y() << c.z();
+    pts << c.x() << c.y() - 1.f << c.z() << c.x() << c.y() + 1.f << c.z();
+    pts << c.x() << c.y() << c.z() - 1.f << c.x() << c.y() << c.z() + 1.f;
+  };
+  if (hasFrom)
+    appendCross(from);
+  if (hasTo)
+    appendCross(to);
+  if (hasFrom && hasTo)
+    appendSegment(from, to);
+
+  QByteArray bytes;
+  const int segmentCount = pts.size() / 6;
+  bytes.reserve(int(sizeof(int)) + pts.size() * int(sizeof(float)));
+  bytes.append(reinterpret_cast<const char *>(&segmentCount), int(sizeof(int)));
+  if (!pts.isEmpty())
+    bytes.append(reinterpret_cast<const char *>(pts.constData()),
+                 pts.size() * int(sizeof(float)));
+  return bytes;
+}
+
+QVariantList EditorViewModel::measureOverlayLabels() const
+{
+  QVariantList labels;
+  const QVector3D from = m_measureFromWorldPoint;
+  const QVector3D to = m_measureHoverWorldPosition;
+  const bool hasFrom = m_measureFromFeatureValid;
+  const bool hasTo = to.lengthSquared() > 1e-12f;
+
+  // Midpoint annotation for a valid distance readout (upstream draws the
+  // value on the dimension line, GLGizmoMeasure.cpp dimension rendering).
+  if (hasFrom && hasTo && m_measureReadout.valid && m_measureReadout.hasDirectDistance)
+  {
+    QVariantMap m;
+    const QVector3D mid = (from + to) * 0.5f;
+    m.insert(QStringLiteral("x"), double(mid.x()));
+    m.insert(QStringLiteral("y"), double(mid.y()));
+    m.insert(QStringLiteral("z"), double(mid.z()));
+    m.insert(QStringLiteral("label"), measureDirectDistanceText());
+    labels.append(m);
+  }
+  if (hasFrom && hasTo && m_measureReadout.valid && m_measureReadout.hasAngle)
+  {
+    QVariantMap m;
+    const QVector3D mid = (from + to) * 0.5f + QVector3D(0.f, 4.f, 0.f);
+    m.insert(QStringLiteral("x"), double(mid.x()));
+    m.insert(QStringLiteral("y"), double(mid.y()));
+    m.insert(QStringLiteral("z"), double(mid.z()));
+    m.insert(QStringLiteral("label"), measureAngleText());
+    labels.append(m);
+  }
+  return labels;
+}
+
 int EditorViewModel::measureEngineCachedCount() const
 {
 #ifdef HAS_LIBSLIC3R
@@ -3623,6 +4222,10 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
   // Drive PaintEngine.paintAt on the hit volume. The mesh-local hit point
   // (TS-02 meshLocalPosition, preserved by SceneRaycaster) is the cursor
   // center; facetIdx from the ray is select_patch's facet_start.
+  // Phase 240 (GIZ-02): the overhang filter angle threads through when
+  // paint-on-overhangs-only is enabled (upstream threads
+  // m_paint_on_overhangs_only ? m_highlight_by_angle_threshold_deg : 0.f
+  // into every select_patch, GLGizmoPainterBase.cpp:805).
   const OWzx::PaintCursorType cursor =
       (cursorType == int(OWzx::PaintCursorType::Sphere))
           ? OWzx::PaintCursorType::Sphere
@@ -3631,53 +4234,150 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
       static_cast<Slic3r::EnforcerBlockerType>(state);
   const bool painted = m_paintEngine->paintAt(
       hit.objectIndex, hit.volumeIndex, int(hit.facetIdx),
-      hit.meshLocalPosition, float(brushRadius), cursor, ebt, trafoNoTranslate);
+      hit.meshLocalPosition, float(brushRadius), cursor, ebt, trafoNoTranslate,
+      m_supportPaintOnOverhangsOnly ? m_supportPaintOverhangAngle : 0.f);
 
-  // Mirror the (obj, vol, facetIdx) the caller passed through the Qt data
-  // layer (back-compat with m_paintData / setTriangleSupportState consumers).
-  // The authoritative paint state lives in PaintEngine now; this is a thin
-  // enum mirror so existing QML that reads paintDataChanged still refreshes.
-  if (painted) {
-    setTriangleSupportState(hit.objectIndex, int(hit.facetIdx), state);
-
-    // Phase 122/123 (PAINT-04/05): write the painted TriangleSelector back to
-    // the ModelVolume FacetsAnnotation member so the slice consumes the paint.
-    // Mirrors upstream update_model_object (GLGizmoFdmSupports.cpp:577 etc).
-    // The selector is the authoritative source; FacetsAnnotation::set serializes
-    // it + touch() (re-slice). cloneCurrentPlateModel deep-copies FacetsAnnotation
-    // so the next slice flows the paint to PrintObject automatically.
-#ifdef HAS_LIBSLIC3R
-    const Slic3r::TriangleSelector *selector =
-        m_paintEngine ? m_paintEngine->cachedSelectorForVolume(
-                            hit.objectIndex, hit.volumeIndex)
-                      : nullptr;
-    if (selector) {
-      const int kindInt =
-          (m_activePaintKind < 0 || m_activePaintKind > 2) ? 0 : m_activePaintKind;
-      const PaintKind kind = static_cast<PaintKind>(kindInt);
-      // v5.16 (UNDO-04): capture the annotation before/after the write so the
-      // stroke enters the undo stack (upstream Plater::_take_snapshot(
-      // GizmoAction) per GLGizmoPainterBase stroke; consecutive strokes on
-      // the same volume merge via PaintCommand::mergeWith).
-      const QByteArray paintBefore = projectService_->capturePaintSnapshot(
-          hit.objectIndex, hit.volumeIndex, kindInt);
-      projectService_->writePaintToModelVolume(
-          hit.objectIndex, hit.volumeIndex, kind, *selector);
-      if (!paintBefore.isEmpty() && m_undoManager) {
-        auto *cmd = new PaintCommand(hit.objectIndex, hit.volumeIndex, kindInt,
-                                     paintBefore, projectService_, this);
-        cmd->setNewResult(projectService_->capturePaintSnapshot(
-            hit.objectIndex, hit.volumeIndex, kindInt));
-        m_undoManager->push(cmd);
-      }
-    }
-#endif
-  }
+  if (painted)
+    commitPaintedSelector(hit.objectIndex, hit.volumeIndex,
+                          int(hit.facetIdx), state);
   // hitX/hitY/hitZ are carried for future overlay anchoring (Phase 121) but
   // are not consumed here -- the authoritative hit is hit.meshLocalPosition.
   (void)hitX; (void)hitY; (void)hitZ;
   return painted;
 }
+
+void EditorViewModel::commitPaintedSelector(int objectIndex, int volumeIndex,
+                                            int facetIdx, int state)
+{
+  // Mirror the (obj, vol, facetIdx) through the Qt data layer (back-compat
+  // with m_paintData / setTriangleSupportState consumers). The authoritative
+  // paint state lives in PaintEngine; this is a thin enum mirror so existing
+  // QML that reads paintDataChanged still refreshes.
+  setTriangleSupportState(objectIndex, facetIdx, state);
+
+  // Phase 122/123 (PAINT-04/05): write the painted TriangleSelector back to
+  // the ModelVolume FacetsAnnotation member so the slice consumes the paint.
+  // Mirrors upstream update_model_object (GLGizmoFdmSupports.cpp:577 etc).
+  // The selector is the authoritative source; FacetsAnnotation::set serializes
+  // it + touch() (re-slice). cloneCurrentPlateModel deep-copies FacetsAnnotation
+  // so the next slice flows the paint to PrintObject automatically.
+#ifdef HAS_LIBSLIC3R
+  const Slic3r::TriangleSelector *selector =
+      m_paintEngine ? m_paintEngine->cachedSelectorForVolume(objectIndex,
+                                                             volumeIndex)
+                    : nullptr;
+  if (selector)
+  {
+    const int kindInt =
+        (m_activePaintKind < 0 || m_activePaintKind > 2) ? 0 : m_activePaintKind;
+    const PaintKind kind = static_cast<PaintKind>(kindInt);
+    // v5.16 (UNDO-04): capture the annotation before/after the write so the
+    // stroke enters the undo stack (upstream Plater::_take_snapshot(
+    // GizmoAction) per GLGizmoPainterBase stroke; consecutive strokes on
+    // the same volume merge via PaintCommand::mergeWith).
+    const QByteArray paintBefore = projectService_->capturePaintSnapshot(
+        objectIndex, volumeIndex, kindInt);
+    projectService_->writePaintToModelVolume(objectIndex, volumeIndex, kind,
+                                             *selector);
+    if (!paintBefore.isEmpty() && m_undoManager)
+    {
+      auto *cmd = new PaintCommand(objectIndex, volumeIndex, kindInt,
+                                   paintBefore, projectService_, this);
+      cmd->setNewResult(projectService_->capturePaintSnapshot(
+          objectIndex, volumeIndex, kindInt));
+      m_undoManager->push(cmd);
+    }
+  }
+#endif
+  emit paintDataChanged();
+}
+
+// ===========================================================================
+// Phase 240 (GIZ-02): smart (seed) fill pick entry. Mirrors the upstream
+// SMART_FILL tool click (GLGizmoPainterBase.cpp:773-781): the stage-2 hit
+// seeds TriangleSelector::seed_fill_select_triangles (region growth bounded
+// by the smart-fill angle + optional overhang filter), then
+// seed_fill_apply_on_triangles commits the region. Same two-stage pick
+// contract as paintAtFacet.
+// ===========================================================================
+#ifdef HAS_LIBSLIC3R
+bool EditorViewModel::smartFillAtFacet(int state,
+                                       double seedFillAngle,
+                                       bool overhangsOnly,
+                                       double overhangAngle,
+                                       int pickedSourceIndex,
+                                       QVector3D rayOrigin, QVector3D rayDir)
+{
+  if (!projectService_ || pickedSourceIndex < 0)
+    return false;
+
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+  if (!m_paintEngine) {
+    m_paintEngine = std::make_unique<OWzx::PaintEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const Slic3r::TriangleMesh> {
+          return svc ? svc->volumeMeshTriangleMesh(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  const OWzx::SceneRaycasterHit hit =
+      m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit)
+    return false;
+
+  const Slic3r::Transform3d trafoNoTranslate =
+      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+
+  const Slic3r::EnforcerBlockerType ebt =
+      static_cast<Slic3r::EnforcerBlockerType>(state);
+  const bool filled = m_paintEngine->smartFillAt(
+      hit.objectIndex, hit.volumeIndex, int(hit.facetIdx),
+      hit.meshLocalPosition, float(seedFillAngle),
+      overhangsOnly ? float(overhangAngle) : 0.f, ebt, trafoNoTranslate);
+
+  if (filled)
+    commitPaintedSelector(hit.objectIndex, hit.volumeIndex,
+                          int(hit.facetIdx), state);
+  return filled;
+}
+#else
+bool EditorViewModel::smartFillAtFacet(int, double, bool, double, int,
+                                       QVector3D, QVector3D)
+{
+  // HAS_LIBSLIC3R off: no TriangleSelector. No smart fill.
+  return false;
+}
+#endif
 
 void EditorViewModel::clearPaintOnObject(int objectIndex)
 {

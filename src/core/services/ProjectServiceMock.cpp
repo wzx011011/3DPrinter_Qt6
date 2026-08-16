@@ -3526,6 +3526,190 @@ bool ProjectServiceMock::simplifyObject(int objectIndex, int wantedCount, float 
 #endif
 }
 
+// Phase 240 (GIZ-06): preview-only decimation. Runs the same
+// its_quadric_edge_collapse as simplifyObject on a COPY and reports the
+// resulting facet count without mutating the model (Apply commits through
+// simplifyObject; Cancel just drops the count).
+int ProjectServiceMock::simplifyObjectPreview(int objectIndex, int wantedCount,
+                                              float maxError) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return -1;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  try
+  {
+    // Preview counts the whole object's triangles after decimating every
+    // volume copy (mirrors simplifyObject's per-volume loop).
+    int totalAfter = 0;
+    for (const auto *vol : obj->volumes)
+    {
+      if (!vol || vol->mesh().its.vertices.empty())
+        continue;
+      auto itsCopy = vol->mesh().its;
+      const uint32_t targetCount = (wantedCount > 0) ? uint32_t(wantedCount) : 0;
+      float errorVal = (maxError > 0.0f) ? maxError : std::numeric_limits<float>::max();
+      Slic3r::its_quadric_edge_collapse(itsCopy, targetCount, &errorVal);
+      totalAfter += int(itsCopy.indices.size());
+    }
+    return totalAfter;
+  }
+  catch (const std::exception &)
+  {
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(wantedCount); Q_UNUSED(maxError);
+  return -1;
+#endif
+}
+
+// Phase 240 (GIZ-06): read a volume's TextConfiguration (upstream
+// ModelVolume::text_configuration, Model.hpp:876) back for in-place editing.
+QVariantMap ProjectServiceMock::volumeTextConfiguration(int objectIndex,
+                                                        int volumeIndex) const
+{
+  QVariantMap out;
+  out.insert(QStringLiteral("valid"), false);
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+    return out;
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return out;
+  const Slic3r::ModelVolume *vol = obj->volumes[size_t(volumeIndex)];
+  if (!vol || !vol->text_configuration.has_value())
+    return out;
+
+  const Slic3r::TextConfiguration &cfg = *vol->text_configuration;
+  out.insert(QStringLiteral("valid"), true);
+  out.insert(QStringLiteral("text"), QString::fromStdString(cfg.text));
+  out.insert(QStringLiteral("fontPath"), QString::fromStdString(cfg.style.path));
+  out.insert(QStringLiteral("height"), double(cfg.style.prop.size_in_mm));
+  // Depth is a projection property upstream (round-trips via the mesh Z
+  // extent); report the current emboss-depth state as the best available
+  // approximation.
+  out.insert(QStringLiteral("depth"), double(m_embossDepth));
+  out.insert(QStringLiteral("boldness"),
+             double(cfg.style.prop.boldness.value_or(0.f)));
+  // Upstream skew (italic, optional<float>) maps back to a boolean
+  // (absent/0 = off).
+  out.insert(QStringLiteral("italic"),
+             cfg.style.prop.skew.has_value() && std::abs(*cfg.style.prop.skew) > 1e-6f);
+  return out;
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(volumeIndex);
+  return out;
+#endif
+}
+
+// Phase 240 (GIZ-06): re-generate an existing text volume's mesh in place
+// (upstream GLGizmoEmboss in-place editing). Same text2shapes + polygons2model
+// pipeline as performEmbossVolumeAdd, but the resulting mesh REPLACES the
+// target volume's mesh instead of appending a new volume.
+bool ProjectServiceMock::updateTextVolume(int objectIndex, int volumeIndex,
+                                          const QString &text)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("Text volume update failed: invalid object index");
+    return false;
+  }
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  if (volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+  {
+    lastError_ = tr("Text volume update failed: invalid volume index");
+    return false;
+  }
+  Slic3r::ModelVolume *vol = obj->volumes[size_t(volumeIndex)];
+  if (!vol)
+  {
+    lastError_ = tr("Text volume update failed: null volume");
+    return false;
+  }
+  if (text.isEmpty())
+  {
+    lastError_ = tr("Text volume update failed: empty text");
+    return false;
+  }
+  try
+  {
+    const std::string fontPath = m_embossFontPath.empty()
+        ? (
+#ifdef _WIN32
+            "C:/Windows/Fonts/arial.ttf"
+#else
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+#endif
+        )
+        : m_embossFontPath;
+    auto font_file = Slic3r::Emboss::create_font_file(fontPath.c_str());
+    if (!font_file)
+    {
+      lastError_ = tr("Text volume update failed: cannot load font");
+      return false;
+    }
+    Slic3r::Emboss::FontFileWithCache font_cache(std::move(font_file));
+
+    Slic3r::FontProp font_prop;
+    font_prop.size_in_mm = static_cast<double>(m_embossHeight > 0.0f ? m_embossHeight : 10.0f);
+    font_prop.boldness = m_embossBoldness;
+    if (m_embossItalic)
+      font_prop.skew = 0.4;
+
+    auto shapes = Slic3r::Emboss::text2shapes(font_cache,
+                                              text.toLocal8Bit().constData(),
+                                              font_prop);
+    if (shapes.expolygons.empty())
+    {
+      lastError_ = tr("Text volume update failed: font rendering returned empty result");
+      return false;
+    }
+    const double depth = static_cast<double>(m_embossDepth > 0.0f ? m_embossDepth : 2.0);
+    Slic3r::Emboss::ProjectZ projection(depth);
+    auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
+    if (its.vertices.empty())
+    {
+      lastError_ = tr("Text volume update failed: mesh generation failed");
+      return false;
+    }
+
+    // In-place mesh replacement (upstream keeps the volume identity).
+    vol->set_mesh(std::move(its));
+    const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
+    vol->name = volName.toStdString();
+    attachEmbossMetadata(vol, text, fontPath, m_embossHeight, m_embossDepth,
+                         m_embossBoldness, m_embossItalic);
+    obj->invalidate_bounding_box();
+
+    // Keep the Qt-side mock entry in lockstep.
+    auto it = m_mockVolumes.find(objectIndex);
+    if (it != m_mockVolumes.end() && volumeIndex < it->size())
+    {
+      (*it)[volumeIndex].name = volName;
+      (*it)[volumeIndex].type = MockVolumeType::TextEmboss;
+    }
+
+    lastError_.clear();
+    emit projectChanged();
+    return true;
+  }
+  catch (const std::exception &e)
+  {
+    lastError_ = QString::fromUtf8(e.what());
+    return false;
+  }
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(volumeIndex); Q_UNUSED(text);
+  lastError_ = tr("Text volume update requires libslic3r");
+  return false;
+#endif
+}
+
 bool ProjectServiceMock::orientObject(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
@@ -3534,7 +3718,6 @@ bool ProjectServiceMock::orientObject(int objectIndex)
   auto *obj = model_->objects[size_t(objectIndex)];
   if (!obj)
     return false;
-
   try
   {
     Slic3r::orientation::orient(obj);
@@ -6747,6 +6930,103 @@ int ProjectServiceMock::cutObjectWithConnectors(int objectIndex, int axis, doubl
 #else
   Q_UNUSED(objectIndex); Q_UNUSED(axis); Q_UNUSED(position); Q_UNUSED(keepMode);
   lastError_ = tr("Connector cut requires libslic3r");
+  return -1;
+#endif
+}
+
+// Phase 240 (GIZ-04): plane cut with an interactively rotated cut plane.
+// Upstream GLGizmoCut3D::get_cut_matrix (GLGizmoCut.cpp:3234-3253) composes
+// translation(cut_center_offset) * m_rotation_m, where m_rotation_m is the
+// user-rotated plane rotation. This port keeps the existing base axis
+// alignment (axis -> +Z plane normal) and pre-multiplies the Euler XYZ tilt
+// around the WORLD axes, so 0/0/0 reproduces the plain axis-aligned cut.
+int ProjectServiceMock::cutObjectWithRotation(int objectIndex, int axis,
+                                              double position,
+                                              float rotX, float rotY, float rotZ,
+                                              int keepMode)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
+      || !model_->objects[size_t(objectIndex)]) {
+    lastError_ = tr("Invalid cut target");
+    return -1;
+  }
+  Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  try {
+    // Base axis alignment (same as cutObjectWithConnectors).
+    Slic3r::Transform3d rotation_m = Slic3r::Transform3d::Identity();
+    Slic3r::Vec3d cut_translation = Slic3r::Vec3d::Zero();
+    if (axis == 0) {
+      rotation_m = Eigen::AngleAxisd(-M_PI / 2.0, Slic3r::Vec3d::UnitY()) * Slic3r::Transform3d::Identity();
+      cut_translation = Slic3r::Vec3d(position, 0.0, 0.0);
+    } else if (axis == 1) {
+      rotation_m = Eigen::AngleAxisd(M_PI / 2.0, Slic3r::Vec3d::UnitX()) * Slic3r::Transform3d::Identity();
+      cut_translation = Slic3r::Vec3d(0.0, position, 0.0);
+    } else {
+      cut_translation = Slic3r::Vec3d(0.0, 0.0, position);
+    }
+
+    // User tilt (Euler XYZ degrees around the world axes, upstream
+    // m_rotation_m from the rotation grabbers).
+    const float degToRad = float(M_PI) / 180.0f;
+    Slic3r::Transform3d tilt = Slic3r::Transform3d::Identity();
+    tilt *= Eigen::AngleAxisd(double(rotX * degToRad), Slic3r::Vec3d::UnitX());
+    tilt *= Eigen::AngleAxisd(double(rotY * degToRad), Slic3r::Vec3d::UnitY());
+    tilt *= Eigen::AngleAxisd(double(rotZ * degToRad), Slic3r::Vec3d::UnitZ());
+    // rotation_m is Transform3d in this codebase's pattern (AngleAxis *
+    // Identity), so compose via matrix product.
+    const Slic3r::Transform3d plane_rotation = tilt * rotation_m;
+    Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * plane_rotation;
+
+    using MCA = Slic3r::ModelObjectCutAttribute;
+    Slic3r::ModelObjectCutAttributes attributes =
+        Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
+        Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
+        MCA::KeepAsParts;
+
+    const int instance_idx = 0;
+    Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
+    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_plane();
+    if (new_objects.empty())
+      return -1;
+
+    // Result backfill mirrors cutObjectWithConnectors: first result replaces
+    // the original object, the rest append as new objects.
+    bool firstResult = true;
+    int newObjectIdx = -1;
+    for (auto *newObj : new_objects) {
+      if (!newObj || newObj->volumes.empty())
+        continue;
+      if (firstResult) {
+        obj->clear_volumes();
+        for (auto *vol : newObj->volumes)
+          obj->add_volume(*vol);
+        obj->invalidate_bounding_box();
+        obj->ensure_on_bed();
+        newObjectIdx = objectIndex;
+        firstResult = false;
+      } else {
+        auto *added = model_->add_object(*newObj);
+        if (added) {
+          added->ensure_on_bed();
+          newObjectIdx = int(model_->objects.size()) - 1;
+        }
+      }
+    }
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    if (m_plateList)
+      emit plateDataLoaded(m_plateList->plateCount());
+    return newObjectIdx;
+  } catch (const std::exception &exception) {
+    lastError_ = QString::fromLatin1(exception.what());
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex); Q_UNUSED(axis); Q_UNUSED(position);
+  Q_UNUSED(rotX); Q_UNUSED(rotY); Q_UNUSED(rotZ); Q_UNUSED(keepMode);
+  lastError_ = tr("Rotated cut requires libslic3r");
   return -1;
 #endif
 }

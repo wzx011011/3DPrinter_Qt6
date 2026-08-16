@@ -1528,9 +1528,70 @@ Item {
                     // down/drag) to the ViewModel. Same opaque-forward contract
                     // as onMeasurePickRequested -- no picking or geometry-hit
                     // logic in QML. Parameter names mirror the C++ signal.
-                    onPaintPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, brushRadius, cursorType, paintState) {
-                        if (root.editorVm)
+                    // Phase 240 (GIZ-02): smart-fill picks arrive on the
+                    // dedicated smartFillPickRequested signal (brush picks keep
+                    // this one; the trailing smartFill flag is always 0 here).
+                    onPaintPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
+                        if (root.editorVm && !smartFill)
                             root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection)
+                    }
+                    // Phase 240 (GIZ-02): smart (seed) fill pick -- routed to
+                    // EditorViewModel::smartFillAtFacet (upstream SMART_FILL
+                    // tool: seed_fill_select_triangles + seed_fill_apply_on_
+                    // triangles). Opaque-forward contract as above.
+                    onSmartFillPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, paintState, smartFillAngle, overhangsOnly, overhangAngle) {
+                        if (root.editorVm)
+                            root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection)
+                    }
+                    // Phase 240 (GIZ-03): flatten hover highlight + click-to-
+                    // place. The ViewModel runs the stage-2 pick; hover updates
+                    // the highlight stream, click rotates the picked facet down.
+                    onFlattenHoverRequested: function(worldOrigin, worldDirection, pickedSourceIndex) {
+                        if (root.editorVm)
+                            root.editorVm.flattenHoverPick(pickedSourceIndex, worldOrigin, worldDirection)
+                    }
+                    onFlattenPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex) {
+                        if (root.editorVm)
+                            root.editorVm.flattenPickFace(pickedSourceIndex, worldOrigin, worldDirection)
+                    }
+                    // Phase 240 (GIZ-04): interactive cut-plane drag (position
+                    // along the axis) + rotation grabbers (plane tilt). Both
+                    // write the editorVm cut state; the render plane follows.
+                    // AdvancedCut mirrors the position into advCutPosition
+                    // (its executor) while the displayed plane tracks
+                    // cutPosition (pre-existing render binding).
+                    onCutPlaneDragRequested: function(position) {
+                        if (!root.editorVm)
+                            return
+                        root.editorVm.cutPosition = position
+                        if (viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut)
+                            root.editorVm.advCutPosition = position
+                    }
+                    onCutPlaneRotateRequested: function(rotationAxis, deltaDegrees) {
+                        if (!root.editorVm)
+                            return
+                        if (viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut) {
+                            if (rotationAxis === 1)
+                                root.editorVm.advCutRotationX = root.editorVm.advCutRotationX + deltaDegrees
+                            else if (rotationAxis === 2)
+                                root.editorVm.advCutRotationY = root.editorVm.advCutRotationY + deltaDegrees
+                            else
+                                root.editorVm.advCutRotationZ = root.editorVm.advCutRotationZ + deltaDegrees
+                            // The displayed plane follows the plain cut state.
+                            if (rotationAxis === 1)
+                                root.editorVm.cutRotationX = root.editorVm.cutRotationX + deltaDegrees
+                            else if (rotationAxis === 2)
+                                root.editorVm.cutRotationY = root.editorVm.cutRotationY + deltaDegrees
+                            else
+                                root.editorVm.cutRotationZ = root.editorVm.cutRotationZ + deltaDegrees
+                        } else {
+                            if (rotationAxis === 1)
+                                root.editorVm.cutRotationX = root.editorVm.cutRotationX + deltaDegrees
+                            else if (rotationAxis === 2)
+                                root.editorVm.cutRotationY = root.editorVm.cutRotationY + deltaDegrees
+                            else
+                                root.editorVm.cutRotationZ = root.editorVm.cutRotationZ + deltaDegrees
+                        }
                     }
                     // Phase HOLLOW: forward the hollow-gizmo click to the
                     // ViewModel, which runs the stage-2 surface hit test and
@@ -1549,6 +1610,19 @@ Item {
                     }
                     cutAxis: root.editorVm ? root.editorVm.cutAxis : 2
                     cutPosition: root.editorVm ? root.editorVm.cutPosition : 0.0
+                    // Phase 240 (GIZ-04): interactive plane tilt state.
+                    cutRotationX: root.editorVm ? root.editorVm.cutRotationX : 0
+                    cutRotationY: root.editorVm ? root.editorVm.cutRotationY : 0
+                    cutRotationZ: root.editorVm ? root.editorVm.cutRotationZ : 0
+                    // Phase 240 (GIZ-05): measure overlay line stream + the
+                    // flatten hover facet stream (same byte-pipe pattern).
+                    measureOverlayData: root.editorVm ? root.editorVm.measureOverlayData : null
+                    flattenHoverData: root.editorVm ? root.editorVm.flattenHoverData : null
+                    // Phase 240 (GIZ-02): smart-fill params for the paint path.
+                    paintToolType: root.editorVm ? root.editorVm.supportPaintToolType : 0
+                    smartFillAngle: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                    paintOnOverhangsOnly: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
+                    paintOverhangAngle: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
 
                     // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
                     Shortcut {
@@ -1578,8 +1652,25 @@ Item {
                         anchors.fill: parent
                         keys: ["text/uri-list"]
                         onDropped: (drop) => {
-                            if (drop.hasUrls && drop.urls.length > 0 && root.editorVm)
-                                root.editorVm.loadFile(drop.urls[0].toString())
+                            if (drop.hasUrls && drop.urls.length > 0 && root.editorVm) {
+                                // Phase 240 (GIZ-06): a dropped .svg goes through
+                                // the SVG workbench (upstream GLGizmoSVG): the
+                                // drop point resolves to a bed point and the SVG
+                                // object is placed there. Other files keep the
+                                // model-import path.
+                                const url = drop.urls[0].toString()
+                                if (url.toLowerCase().endsWith(".svg")) {
+                                    var bed = viewport3d.screenToBedPoint(drop.x, drop.y)
+                                    if (!isNaN(bed.x) && !isNaN(bed.y)
+                                            && root.editorVm.placeSvgAtBedPoint(url, bed.x, bed.y) >= 0) {
+                                        return
+                                    }
+                                    root.editorVm.setSvgFilePath(url)
+                                    root.editorVm.loadFile(url)
+                                    return
+                                }
+                                root.editorVm.loadFile(url)
+                            }
                         }
 
                         Rectangle {
@@ -1668,6 +1759,22 @@ Item {
                 anchors.centerIn: parent
                 spacing: 12
 
+                // Phase 240 (GIZ-01): editable numeric transform input
+                // (upstream GizmoObjectManipulation on_change -> change_*
+                // _value, GizmoObjectManipulation.cpp:380-394). Commit fires
+                // on editing finished only (upstream FieldsOnEnterMA commits
+                // on focus loss / Enter -- NOT per keystroke). Each commit
+                // routes through editorVm.setObjectPos/Rot/ScaleX..Z which
+                // push a TransformCommand (undoable, mirrors upstream
+                // m_glcanvas.do_move/do_rotate/do_scale snapshots).
+                //
+                // Upstream delta (documented, not faked): upstream exposes a
+                // World/Local coordinate selector (GizmoObjectManipulation
+                // ECoordinatesType, GizmoObjectManipulation.hpp:114). The Qt6
+                // transform API (ProjectServiceMock::setObjectPosition/
+                // Rotation/Scale) stores a single instance-space transform,
+                // so the world/local distinction is not representable here
+                // and the panel intentionally stays single-space.
                 Text {
                     text: viewport3d.gizmoMode === GLViewport.GizmoMove
                           ? qsTr("Move")
@@ -1679,32 +1786,65 @@ Item {
                     font.bold: true
                 }
 
-                TransformMetric {
+                TransformMetricField {
                     axisName: "X"
                     accentColor: "#e066a0"
-                    valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
-                               ? root.editorVm.objectPosX.toFixed(1)
-                               : viewport3d.gizmoMode === GLViewport.GizmoRotate
-                                 ? root.editorVm.objectRotX.toFixed(1)
-                                 : root.editorVm.objectScaleX.toFixed(2)
+                    decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
+                    value: viewport3d.gizmoMode === GLViewport.GizmoMove
+                           ? root.editorVm.objectPosX
+                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                             ? root.editorVm.objectRotX
+                             : root.editorVm.objectScaleX
+                    onCommitValue: function(v) {
+                        if (!root.editorVm)
+                            return
+                        if (viewport3d.gizmoMode === GLViewport.GizmoMove)
+                            root.editorVm.objectPosX = v
+                        else if (viewport3d.gizmoMode === GLViewport.GizmoRotate)
+                            root.editorVm.objectRotX = v
+                        else
+                            root.editorVm.objectScaleX = v
+                    }
                 }
-                TransformMetric {
+                TransformMetricField {
                     axisName: "Y"
                     accentColor: Theme.textTertiary
-                    valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
-                               ? root.editorVm.objectPosY.toFixed(1)
-                               : viewport3d.gizmoMode === GLViewport.GizmoRotate
-                                 ? root.editorVm.objectRotY.toFixed(1)
-                                 : root.editorVm.objectScaleY.toFixed(2)
+                    decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
+                    value: viewport3d.gizmoMode === GLViewport.GizmoMove
+                           ? root.editorVm.objectPosY
+                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                             ? root.editorVm.objectRotY
+                             : root.editorVm.objectScaleY
+                    onCommitValue: function(v) {
+                        if (!root.editorVm)
+                            return
+                        if (viewport3d.gizmoMode === GLViewport.GizmoMove)
+                            root.editorVm.objectPosY = v
+                        else if (viewport3d.gizmoMode === GLViewport.GizmoRotate)
+                            root.editorVm.objectRotY = v
+                        else
+                            root.editorVm.objectScaleY = v
+                    }
                 }
-                TransformMetric {
+                TransformMetricField {
                     axisName: "Z"
                     accentColor: Theme.statusInfo
-                    valueText: viewport3d.gizmoMode === GLViewport.GizmoMove
-                               ? root.editorVm.objectPosZ.toFixed(1)
-                               : viewport3d.gizmoMode === GLViewport.GizmoRotate
-                                 ? root.editorVm.objectRotZ.toFixed(1)
-                                 : root.editorVm.objectScaleZ.toFixed(2)
+                    decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
+                    value: viewport3d.gizmoMode === GLViewport.GizmoMove
+                           ? root.editorVm.objectPosZ
+                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
+                             ? root.editorVm.objectRotZ
+                             : root.editorVm.objectScaleZ
+                    onCommitValue: function(v) {
+                        if (!root.editorVm)
+                            return
+                        if (viewport3d.gizmoMode === GLViewport.GizmoMove)
+                            root.editorVm.objectPosZ = v
+                        else if (viewport3d.gizmoMode === GLViewport.GizmoRotate)
+                            root.editorVm.objectRotZ = v
+                        else
+                            root.editorVm.objectScaleZ = v
+                    }
                 }
             }
         }
@@ -1782,7 +1922,87 @@ Item {
                     }
                 }
 
-                // Cursor radius (对齐上游 brush radius slider).
+                // Tool type selector (Phase 240 GIZ-02, upstream
+                // GLGizmoPainterBase ToolType): 0=Brush, 2=SmartFill. Selecting
+                // SmartFill makes clicks seed-fill (Shift+click also triggers a
+                // seed fill regardless of the tool).
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 76; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintToolType = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // Smart-fill angle threshold (upstream m_smart_fill_angle; the
+                // maximal angle between two facets painted by the same fill).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.supportPaintToolType === 2
+                    Text { text: qsTr("填充角度:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 1; to: 90; stepSize: 1
+                        value: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintSmartFillAngle = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30).toFixed(0) + "°"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                }
+
+                // Overhang-only filter (upstream m_paint_on_overhangs_only +
+                // m_highlight_by_angle_threshold_deg, GLGizmoPainterBase.hpp:
+                // 279-280): restricts painting/filling to facets steeper than
+                // the threshold angle.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    CxCheckBox {
+                        text: qsTr("仅悬垂面")
+                        checked: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
+                        onToggled: if (root.editorVm) root.editorVm.supportPaintOnOverhangsOnly = checked
+                    }
+                    CxSlider {
+                        visible: root.editorVm && root.editorVm.supportPaintOnOverhangsOnly
+                        from: 0; to: 90; stepSize: 1
+                        value: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
+                        implicitWidth: 70
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintOverhangAngle = value
+                    }
+                    Text {
+                        visible: root.editorVm && root.editorVm.supportPaintOnOverhangsOnly
+                        text: (root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0).toFixed(0) + "°"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                }
+
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
@@ -1857,6 +2077,35 @@ Item {
                         }
                     }
                 }
+            }
+        }
+
+        // Phase 240 (GIZ-05): 2D measure annotation overlay projected from the
+        // 3D anchor points (upstream renders the value on the 3D dimension
+        // line; the RHI renderer has no text pipeline, so the label is a QML
+        // Text projected via viewport3d.projectWorldToScreen -- documented
+        // upstream delta, position follows the camera each frame).
+        Repeater {
+            model: root.editorVm && viewport3d.gizmoMode === GLViewport.GizmoMeasure
+                   ? root.editorVm.measureOverlayLabels : []
+            delegate: Text {
+                required property var modelData
+                x: {
+                    var p = viewport3d.projectWorldToScreen(modelData.x, modelData.y, modelData.z)
+                    return p.x + 8
+                }
+                y: {
+                    var p = viewport3d.projectWorldToScreen(modelData.x, modelData.y, modelData.z)
+                    return p.y - 10
+                }
+                text: modelData.label
+                color: Theme.statusInfo
+                font.pixelSize: Theme.fontSizeXS
+                font.bold: true
+                font.family: "Consolas, monospace"
+                style: Text.Outline
+                styleColor: Theme.bgPanel
+                z: 150
             }
         }
 
@@ -2327,6 +2576,44 @@ Item {
                     }
                 }
 
+                // Phase 240 (GIZ-04): interactive plane tilt readout (upstream
+                // GLGizmoCut3D rotation grabbers). The plane is dragged/rotated
+                // directly in the viewport; the panel shows + resets the tilt.
+                RowLayout {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("旋转:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    Text {
+                        text: root.editorVm
+                              ? root.editorVm.cutRotationX.toFixed(0) + "° / "
+                                + root.editorVm.cutRotationY.toFixed(0) + "° / "
+                                + root.editorVm.cutRotationZ.toFixed(0) + "°"
+                              : "0° / 0° / 0°"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                    }
+                    Rectangle {
+                        width: 44; height: 20; radius: 4
+                        color: Theme.bgElevated
+                        border.color: Theme.borderDefault; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("重置")
+                            color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) {
+                                root.editorVm.cutRotationX = 0
+                                root.editorVm.cutRotationY = 0
+                                root.editorVm.cutRotationZ = 0
+                            }
+                        }
+                    }
+                }
+
                 // 保留模式
                 Row {
                     spacing: 4
@@ -2404,8 +2691,17 @@ Item {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                if (root.editorVm)
-                                    root.editorVm.cutSelected(root.editorVm.cutAxis, root.editorVm.cutPosition)
+                                // Phase 240 (GIZ-04): rotated plane goes through
+                                // cutSelectedWithRotation; a 0/0/0 tilt keeps the
+                                // legacy axis-aligned path byte-for-byte.
+                                if (root.editorVm) {
+                                    if (root.editorVm.cutRotationX !== 0
+                                            || root.editorVm.cutRotationY !== 0
+                                            || root.editorVm.cutRotationZ !== 0)
+                                        root.editorVm.cutSelectedWithRotation()
+                                    else
+                                        root.editorVm.cutSelected(root.editorVm.cutAxis, root.editorVm.cutPosition)
+                                }
                             }
                         }
                     }
@@ -2726,23 +3022,79 @@ Item {
                     }
                 }
 
-                // 执行简化按钮（对齐上游 GLGizmoSimplify apply）
-                Rectangle {
+                // Phase 240 (GIZ-06): three-stage preview flow (upstream
+                // GLGizmoSimplify start/preview/apply + cancel). Preview runs
+                // the decimation on a copy (no model mutation) and reports the
+                // resulting facet count; Apply commits (undoable); Cancel
+                // drops the preview.
+                RowLayout {
+                    spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    width: 100; height: 24; radius: 4
-                    color: Theme.accent
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("执行简化")
-                        color: "white"
-                        font.pixelSize: Theme.fontSizeXS
-                        font.bold: true
+                    Rectangle {
+                        width: 76; height: 24; radius: 4
+                        color: Theme.bgElevated
+                        border.color: Theme.borderDefault; border.width: 1
+                        opacity: root.editorVm && root.editorVm.simplifyPreviewRunning ? 0.5 : 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.editorVm && root.editorVm.simplifyPreviewRunning
+                                  ? qsTr("计算中…") : qsTr("预览简化")
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: !(root.editorVm && root.editorVm.simplifyPreviewRunning)
+                            onClicked: if (root.editorVm) root.editorVm.simplifyPreviewStart()
+                        }
                     }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.editorVm) root.editorVm.simplifySelected()
+                    Rectangle {
+                        visible: root.editorVm && root.editorVm.simplifyPreviewValid
+                        width: 76; height: 24; radius: 4
+                        color: Theme.accent
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("应用")
+                            color: "white"
+                            font.pixelSize: Theme.fontSizeXS
+                            font.bold: true
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.simplifyPreviewApply()
+                        }
                     }
+                    Rectangle {
+                        visible: root.editorVm && root.editorVm.simplifyPreviewValid
+                        width: 76; height: 24; radius: 4
+                        color: Theme.bgElevated
+                        border.color: Theme.borderDefault; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: qsTr("取消")
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.editorVm) root.editorVm.simplifyPreviewCancel()
+                        }
+                    }
+                }
+
+                // Phase 240 (GIZ-06): preview facet-count readout.
+                Text {
+                    visible: root.editorVm && root.editorVm.simplifyPreviewValid
+                    text: root.editorVm
+                          ? qsTr("预览面数: %1").arg(root.editorVm.simplifyPreviewTriangleCount.toLocaleString())
+                          : ""
+                    color: Theme.statusInfo
+                    font.pixelSize: Theme.fontSizeXS
+                    font.family: "Consolas, monospace"
+                    Layout.alignment: Qt.AlignHCenter
                 }
             }
         }
@@ -3071,6 +3423,27 @@ Item {
 
                 Text { text: qsTr("文字浮雕"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
+                // Phase 240 (GIZ-06): in-place editing. Entering the emboss
+                // gizmo with a text volume selected populates the panel from
+                // that volume's TextConfiguration (upstream GLGizmoEmboss
+                // on_activate loads the selected volume's configuration); the
+                // button then re-generates the SAME volume instead of adding
+                // a new one.
+                Connections {
+                    target: viewport3d
+                    function onGizmoModeChanged() {
+                        if (viewport3d.gizmoMode === GLViewport.GizmoEmboss && root.editorVm)
+                            root.editorVm.loadEmbossFromSelectedVolume()
+                    }
+                }
+                Text {
+                    visible: root.editorVm && root.editorVm.embossEditingExistingVolume
+                    text: qsTr("（正在编辑所选文字体积）")
+                    color: Theme.statusInfo
+                    font.pixelSize: Theme.fontSizeXS
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
                 Text { text: qsTr("文本"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: Theme.fontSizeXS; text: root.editorVm ? root.editorVm.embossText : ""; onEditingFinished: if (root.editorVm) root.editorVm.embossText = text }
 
@@ -3147,12 +3520,21 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     spacing: Theme.spacingSM
                     // Phase 173 (CL-03): 同步执行 migrated from pseudo-button to CxButton.
+                    // Phase 240 (GIZ-06): when a text volume is selected this
+                    // re-generates it in place (updateEmbossVolume falls back to
+                    // embossSelected in create mode).
                     CxButton {
                         Layout.preferredWidth: 70
-                        text: qsTr("执行")
+                        text: root.editorVm && root.editorVm.embossEditingExistingVolume
+                              ? qsTr("重新生成") : qsTr("执行")
                         compact: true
                         cxStyle: CxButton.Style.Secondary
-                        onClicked: if (root.editorVm) root.editorVm.embossSelected()
+                        onClicked: if (root.editorVm) {
+                            if (root.editorVm.embossEditingExistingVolume)
+                                root.editorVm.updateEmbossVolume()
+                            else
+                                root.editorVm.embossSelected()
+                        }
                     }
                     // Phase 145 (EMB-03): async 执行 — 长文本不阻塞 UI.
                     // Phase 173 (CL-03): migrated from pseudo-button to CxButton (Primary).
@@ -3846,27 +4228,67 @@ Item {
 
     }
 
-    component TransformMetric: Row {
+    // Phase 240 (GIZ-01): editable transform metric field. Replaces the
+    // read-only TransformMetric Text stub. The display syncs from the
+    // viewmodel while the field has no active focus; when focused, the user
+    // edit is preserved. Commit (signal commitValue) fires on editing
+    // finished only -- per-keystroke writes would spam the undo stack with
+    // one TransformCommand per character.
+    component TransformMetricField: Row {
+        id: field
         property string axisName: ""
-        property string valueText: ""
+        property real value: 0
+        property int decimals: 1
         property color accentColor: Theme.textSecondary
+        signal commitValue(real v)
 
         spacing: 4
 
         Text {
-            text: axisName
-            color: accentColor
+            text: field.axisName
+            color: field.accentColor
             font.pixelSize: Theme.fontSizeXS
             font.bold: true
             anchors.verticalCenter: parent.verticalCenter
         }
 
-        Text {
-            text: valueText
-            color: Theme.textPrimary
+        CxTextField {
+            id: valueInput
+            width: 52
+            implicitHeight: 22
             font.pixelSize: Theme.fontSizeXS
             font.family: "Consolas, monospace"
-            anchors.verticalCenter: parent.verticalCenter
+            horizontalAlignment: TextInput.AlignHCenter
+            padding: 2
+            leftPadding: 2
+            rightPadding: 2
+            // Display text follows the viewmodel value while NOT editing;
+            // while editing the typed text wins (upstream ObjectManipulation
+            // FieldsOnEnterMA behavior).
+            text: activeFocus ? internal.editText
+                 : field.value.toFixed(field.decimals)
+            selectByMouse: true
+            validator: DoubleValidator {
+                locale: "C"
+                decimals: 2
+                notation: DoubleValidator.StandardNotation
+            }
+
+            // Editing scratch buffer: keeps the typed text stable across
+            // viewmodel refreshes while the field holds focus.
+            QtObject {
+                id: internal
+                property string editText: ""
+            }
+
+            onTextEdited: internal.editText = text
+
+            onEditingFinished: {
+                const parsed = parseFloat(text)
+                if (!isNaN(parsed) && parsed !== field.value)
+                    field.commitValue(parsed)
+                internal.editText = ""
+            }
         }
     }
 }

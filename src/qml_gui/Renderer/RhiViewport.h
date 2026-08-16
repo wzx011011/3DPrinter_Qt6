@@ -105,6 +105,21 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QVariantList roleVisibility READ roleVisibility WRITE setRoleVisibility NOTIFY roleVisibilityChanged)
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis)
   Q_PROPERTY(float cutPosition READ cutPosition WRITE setCutPosition)
+  // Phase 240 (GIZ-04): interactive cut-plane tilt (upstream GLGizmoCut3D
+  // rotation grabbers). The renderer rotates the plane quad around its
+  // on-axis center point by these Euler XYZ degrees.
+  Q_PROPERTY(float cutRotationX READ cutRotationX WRITE setCutRotationX)
+  Q_PROPERTY(float cutRotationY READ cutRotationY WRITE setCutRotationY)
+  Q_PROPERTY(float cutRotationZ READ cutRotationZ WRITE setCutRotationZ)
+  // Phase 240 (GIZ-05): in-scene measure overlay line stream (see
+  // EditorViewModel::measureOverlayData for the wire format). Rendered with
+  // the shared line pipeline while gizmoMode == GizmoMeasure.
+  Q_PROPERTY(QByteArray measureOverlayData READ measureOverlayData WRITE setMeasureOverlayData)
+  // Phase 240 (GIZ-03): hovered-facet highlight stream for the flatten
+  // gizmo (see EditorViewModel::flattenHoverData for the wire format).
+  // Rendered with the translucent fill pipeline while gizmoMode ==
+  // GizmoFlatten.
+  Q_PROPERTY(QByteArray flattenHoverData READ flattenHoverData WRITE setFlattenHoverData)
   Q_PROPERTY(QString lastThumbnailData READ lastThumbnailData NOTIFY thumbnailCaptured)
   // Phase 121 (PAINT-02/OV-02): reverse-channel Q_PROPERTY. The ViewModel
   // flattens the selected object's painted facets into a world-transformed byte
@@ -134,6 +149,17 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float brushRadius READ brushRadius WRITE setBrushRadius)
   Q_PROPERTY(int brushCursorType READ brushCursorType WRITE setBrushCursorType)
   Q_PROPERTY(int paintState READ paintState WRITE setPaintState)
+  // Phase 240 (GIZ-02): smart-fill params. paintToolType mirrors
+  // EditorViewModel::supportPaintToolType (0=Brush, 1=BucketFill,
+  // 2=SmartFill, 3=GapFill); smartFillAngle is the seed-fill angle
+  // threshold (deg); paintOnOverhangsOnly + paintOverhangAngle drive the
+  // overhang filter (upstream m_paint_on_overhangs_only +
+  // m_highlight_by_angle_threshold_deg). emitPaintPickIfActive forwards
+  // these so the ViewModel picks the brush vs smart-fill path.
+  Q_PROPERTY(int paintToolType READ paintToolType WRITE setPaintToolType)
+  Q_PROPERTY(float smartFillAngle READ smartFillAngle WRITE setSmartFillAngle)
+  Q_PROPERTY(bool paintOnOverhangsOnly READ paintOnOverhangsOnly WRITE setPaintOnOverhangsOnly)
+  Q_PROPERTY(float paintOverhangAngle READ paintOverhangAngle WRITE setPaintOverhangAngle)
   Q_PROPERTY(float brushMouseScreenX READ brushMouseScreenX WRITE setBrushMouseScreenX)
   Q_PROPERTY(float brushMouseScreenY READ brushMouseScreenY WRITE setBrushMouseScreenY)
   Q_PROPERTY(int brushButtonState READ brushButtonState WRITE setBrushButtonState)
@@ -336,6 +362,22 @@ public:
   float cutPosition() const { return m_cutPosition; }
   void setCutPosition(float value);
 
+  // Phase 240 (GIZ-04): cut-plane rotation getters/setters.
+  float cutRotationX() const { return m_cutRotationX; }
+  void setCutRotationX(float v) { m_cutRotationX = v; updateCutPlane(); }
+  float cutRotationY() const { return m_cutRotationY; }
+  void setCutRotationY(float v) { m_cutRotationY = v; updateCutPlane(); }
+  float cutRotationZ() const { return m_cutRotationZ; }
+  void setCutRotationZ(float v) { m_cutRotationZ = v; updateCutPlane(); }
+
+  // Phase 240 (GIZ-05): measure overlay byte-pipe getter/setter.
+  QByteArray measureOverlayData() const { return m_measureOverlayData; }
+  void setMeasureOverlayData(const QByteArray &data);
+
+  // Phase 240 (GIZ-03): flatten hover highlight byte-pipe getter/setter.
+  QByteArray flattenHoverData() const { return m_flattenHoverData; }
+  void setFlattenHoverData(const QByteArray &data);
+
   QString lastThumbnailData() const { return m_lastThumbnailData; }
 
   // Phase 121 (PAINT-02/OV-02): paint overlay reverse-channel getter/setter.
@@ -359,6 +401,15 @@ public:
   void setBrushMouseScreenY(float y);
   int brushButtonState() const { return m_brushButtonState; }
   void setBrushButtonState(int s);
+  // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
+  int paintToolType() const { return m_paintToolType; }
+  void setPaintToolType(int t) { m_paintToolType = t; }
+  float smartFillAngle() const { return m_smartFillAngle; }
+  void setSmartFillAngle(float a) { m_smartFillAngle = a; }
+  bool paintOnOverhangsOnly() const { return m_paintOnOverhangsOnly; }
+  void setPaintOnOverhangsOnly(bool b) { m_paintOnOverhangsOnly = b; }
+  float paintOverhangAngle() const { return m_paintOverhangAngle; }
+  void setPaintOverhangAngle(float a) { m_paintOverhangAngle = a; }
   // v5.12 camera preferences
   bool reverseZoom() const { return m_reverseZoom; }
   void setReverseZoom(bool r) { m_reverseZoom = r; update(); }
@@ -389,6 +440,18 @@ public:
   // v5.16 (CIRC-01): undo()/redo()/clearHistory() repaint-only no-ops removed.
   // History actions live on EditorViewModel (QUndoStack) and BackendContext.
   Q_INVOKABLE void mirrorSelection(int axis);
+  // Phase 240 (GIZ-05): project a world-space point to viewport pixel
+  // coordinates (for the 2D measure annotation overlay projected from 3D
+  // anchor points). Y follows Qt item coordinates (origin top-left). The
+  // mapping uses the same proj/view matrices the renderer uploads each
+  // frame, so it stays in lockstep with the 3D overlay geometry.
+  Q_INVOKABLE QPointF projectWorldToScreen(float worldX, float worldY, float worldZ) const;
+  // Phase 240 (GIZ-06): intersect the pick ray for a screen position with
+  // the bed plane (Z=0). Returns the bed point in world mm; an invalid
+  // QPointF when the ray is parallel to the bed / points away. Used by the
+  // SVG drop flow to place the dropped SVG at the drop point (upstream
+  // GLGizmoSVG workbench, minimal port).
+  Q_INVOKABLE QPointF screenToBedPoint(qreal screenX, qreal screenY) const;
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
   Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128);
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot the renderer targets via
@@ -489,7 +552,34 @@ signals:
                           int pickedSourceIndex,
                           double brushRadius,
                           int cursorType,
-                          int paintState);
+                          int paintState,
+                          int smartFill);
+  // Phase 240 (GIZ-02): smart-fill pick variant. Emitted instead of
+  // paintPickRequested when the SmartFill tool is active or Shift is held on
+  // click (Phase 240 spec: Shift+click = smart fill). Carries the seed-fill
+  // angle + overhang filter state.
+  void smartFillPickRequested(QVector3D worldOrigin,
+                              QVector3D worldDirection,
+                              int pickedSourceIndex,
+                              int paintState,
+                              double smartFillAngle,
+                              bool overhangsOnly,
+                              double overhangAngle);
+  // Phase 240 (GIZ-03): flatten gizmo pick/hover. The hover variant feeds
+  // the hovered-facet highlight; the click variant rotates the object so the
+  // picked facet's normal faces down (upstream GLGizmoFlatten::on_mouse).
+  void flattenHoverRequested(QVector3D worldOrigin,
+                             QVector3D worldDirection,
+                             int pickedSourceIndex);
+  void flattenPickRequested(QVector3D worldOrigin,
+                            QVector3D worldDirection,
+                            int pickedSourceIndex);
+  // Phase 240 (GIZ-04): interactive cut-plane manipulation (upstream
+  // GLGizmoCut3D grabbers). The drag signal carries the new plane position
+  // along the cut axis (mm); the rotate signal carries the axis index
+  // (0=X, 1=Y, 2=Z) + the delta angle (degrees) accumulated during the drag.
+  void cutPlaneDragRequested(float position);
+  void cutPlaneRotateRequested(int rotationAxis, float deltaDegrees);
 
 private:
   friend class RhiViewportRenderer;
@@ -539,6 +629,21 @@ private:
   // (screen-space position + button state) so renderBrushCursor can draw the
   // sphere cursor at the mouse. No-op when no paint gizmo is active.
   void updateBrushCursorState(const QPointF &position, int buttonState);
+  // Phase 240 (GIZ-03): emit flattenHoverRequested / flattenPickRequested
+  // for the active GizmoFlatten mode. Stage-1 pick + world ray, same
+  // contract as emitMeasurePickIfActive.
+  void emitFlattenPickIfActive(const QPointF &position, bool click);
+  // Phase 240 (GIZ-04): hit-test the interactive cut plane at the press
+  // position. Returns 0 = miss, 1 = plane body (drag along axis), 2/3 =
+  // rotation grabber (tilt around world X / Y). Uses the selected object's
+  // bounds + the current cutAxis/cutPosition/rotation state.
+  int pickCutPlaneAt(const QPointF &position);
+  // Phase 240 (GIZ-04): the cut plane's world-space center + the two plane
+  // axes (for the drag projection + grabber placement).
+  QVector3D cutPlaneCenter() const;
+  // Phase 240 (GIZ-04): push the current cut plane state to the renderer
+  // (rotation changes mark the plane dirty).
+  void updateCutPlane();
 
   int m_canvasType = CanvasView3D;
   // Phase 91 (ASMEXPLODE-01): explosion ratio mirroring upstream m_explosion_ratio
@@ -607,6 +712,17 @@ private:
   QVariantList m_roleVisibility;
   int m_cutAxis = 2;
   float m_cutPosition = 0.f;
+  // Phase 240 (GIZ-04): interactive cut-plane tilt + drag state.
+  float m_cutRotationX = 0.f;
+  float m_cutRotationY = 0.f;
+  float m_cutRotationZ = 0.f;
+  int m_cutPlaneGrab = 0;          ///< 0=none, 1=plane body, 2=X grabber, 3=Y grabber
+  float m_cutPlaneDragStartT = 0.f;
+  float m_cutPlaneRotateStartAngle = 0.f;
+  // Phase 240 (GIZ-05): measure overlay line stream.
+  QByteArray m_measureOverlayData;
+  // Phase 240 (GIZ-03): flatten hover facet stream.
+  QByteArray m_flattenHoverData;
   QString m_lastThumbnailData;
   // Phase 121 (PAINT-02/OV-02): painted-facet overlay reverse-channel payload.
   // Flattened by EditorViewModel::paintOverlayData (world-transformed bytes).
@@ -621,6 +737,14 @@ private:
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1; // 1=Sphere (PaintCursorType::Sphere)
   int m_paintState = 1;      // EnforcerBlockerType: 1=Enforcer
+  // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
+  int m_paintToolType = 0;   // 0=Brush, 2=SmartFill
+  float m_smartFillAngle = 30.f;
+  bool m_paintOnOverhangsOnly = false;
+  float m_paintOverhangAngle = 0.f;
+  /// Phase 240 (GIZ-02): true while the current pick originates from a
+  /// press event (smart fill is click-driven; drags keep the brush path).
+  bool m_paintClickPress = false;
   float m_brushMouseScreenX = 0.f;
   float m_brushMouseScreenY = 0.f;
   int m_brushButtonState = 0; // 0=hover, 1=left, 2=right

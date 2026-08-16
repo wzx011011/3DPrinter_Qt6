@@ -58,6 +58,14 @@ private slots:
   void mainWindowDefaultsToFramelessMaximizedShell();
   // Phase 51-03 (SHELL-04): the 3 notification surfaces keep non-overlapping placement.
   void notificationSurfacesStayNonOverlapping();
+  // Phase 240 (NOTI-01 + GIZ-01..06): gizmo interaction depth + stacked
+  // notification surface source audit. Locks: the stacked notification
+  // property + the per-toast dismiss path, the editable transform fields
+  // (no read-only stub), the smart-fill UI + seed-fill routing tokens, the
+  // flatten hover/click wiring, the cut grabber wiring + rotated-cut path,
+  // the measure overlay anchor projection, and the emboss re-generate +
+  // simplify Apply/Cancel tokens.
+  void gizmoDepthAndNotificationSourceAudit();
   // Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings are
   // present and there is no silent dead UI or empty handler.
   void leftSidebarPresetControlsAreWiredAndHonest();
@@ -2571,6 +2579,137 @@ void QmlUiAuditTests::notificationSurfacesStayNonOverlapping()
            "main.qml must mount ErrorToast");
   QVERIFY2(mainQml.contains(QStringLiteral("NotificationCenter {")),
            "main.qml must mount NotificationCenter");
+}
+
+// Phase 240 (NOTI-01 + GIZ-01..06): gizmo interaction depth + stacked
+// notification surface source audit. Every check is a source-text lock on the
+// wiring the runtime slots in ViewModelSmokeTests exercise headless; mirrors
+// the shellActionsBindToBackendContextGates source-grep pattern.
+void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
+{
+  const QString backendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString backendCpp = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  const QString errorToast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString vmHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString paintEngineHeader = readSource(QStringLiteral("src/core/rendering/PaintEngine.h"));
+  const QString paintEngineCpp = readSource(QStringLiteral("src/core/rendering/PaintEngine.cpp"));
+  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(!backendHeader.isEmpty(), "Unable to read BackendContext.h");
+  QVERIFY2(!backendCpp.isEmpty(), "Unable to read BackendContext.cpp");
+  QVERIFY2(!errorToast.isEmpty(), "Unable to read ErrorToast.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!rhiHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiCpp.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!vmHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!vmCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!paintEngineHeader.isEmpty(), "Unable to read PaintEngine.h");
+  QVERIFY2(!paintEngineCpp.isEmpty(), "Unable to read PaintEngine.cpp");
+  QVERIFY2(!serviceHeader.isEmpty(), "Unable to read ProjectServiceMock.h");
+
+  // ── NOTI-01: stacked notification surface ────────────────────────────
+  QVERIFY2(backendHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList notificationStack")),
+           "NOTI-01: BackendContext must expose the stacked notificationStack property");
+  QVERIFY2(backendCpp.contains(QStringLiteral("notificationImportanceRank")),
+           "NOTI-01: the importance ordering helper (upstream sort_notifications) must exist");
+  QVERIFY2(backendCpp.contains(QStringLiteral("repeatCount += 1")),
+           "NOTI-01: duplicate compression must escalate the repeat counter (upstream activate_existing)");
+  QVERIFY2(backendHeader.contains(QStringLiteral("dismissNotificationById")),
+           "NOTI-01: per-entry dismissal must exist for stacked toasts");
+  QVERIFY2(errorToast.contains(QStringLiteral("backend.notificationStack")),
+           "NOTI-01: the toast container must render the stack, not a single slot");
+  QVERIFY2(errorToast.contains(QStringLiteral("dismissNotificationById")),
+           "NOTI-01: each toast delegate must dismiss only itself");
+  QVERIFY2(errorToast.contains(QStringLiteral("repeatCount")),
+           "NOTI-01: the xN escalation badge must bind repeatCount");
+  QVERIFY2(backendCpp.contains(QStringLiteral("m_notificationHistory.prepend")),
+           "NOTI-01: dismissed entries must keep entering the history panel");
+
+  // ── GIZ-01: editable transform numeric input ──────────────────────────
+  QVERIFY2(preparePage.contains(QStringLiteral("TransformMetricField")),
+           "GIZ-01: the transform mini panel must use the editable field component");
+  QVERIFY2(preparePage.contains(QStringLiteral("onEditingFinished")),
+           "GIZ-01: transform fields must commit on editing finished (not per keystroke)");
+  QVERIFY2(preparePage.contains(QStringLiteral("editorVm.objectPosX = v")),
+           "GIZ-01: the X field must write through setObjectPosX (undoable setter)");
+  QVERIFY2(vmCpp.contains(QStringLiteral("TransformCommand")),
+           "GIZ-01: the VM setters must keep pushing TransformCommand (undo)");
+  QVERIFY2(!preparePage.contains(QStringLiteral("component TransformMetric: Row")),
+           "GIZ-01: the read-only TransformMetric stub must be gone");
+
+  // ── GIZ-02: painter smart fill + filters ──────────────────────────────
+  QVERIFY2(paintEngineCpp.contains(QStringLiteral("seed_fill_select_triangles")),
+           "GIZ-02: PaintEngine must drive the upstream seed fill");
+  QVERIFY2(paintEngineCpp.contains(QStringLiteral("seed_fill_apply_on_triangles")),
+           "GIZ-02: PaintEngine must commit the seed-fill region");
+  QVERIFY2(vmHeader.contains(QStringLiteral("smartFillAtFacet")),
+           "GIZ-02: the ViewModel must expose the smart-fill pick entry");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("smartFillPickRequested")),
+           "GIZ-02: RhiViewport must emit the smart-fill pick signal");
+  QVERIFY2(preparePage.contains(QStringLiteral("smartFillAtFacet")),
+           "GIZ-02: QML must route smart fills to the ViewModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("supportPaintSmartFillAngle = value")),
+           "GIZ-02: the smart-fill angle input must bind the existing property");
+  QVERIFY2(preparePage.contains(QStringLiteral("仅悬垂面")),
+           "GIZ-02: the overhang-only filter toggle must be present");
+  QVERIFY2(preparePage.contains(QStringLiteral("supportPaintOnOverhangsOnly = checked")),
+           "GIZ-02: the overhang-only toggle must write the existing property");
+
+  // ── GIZ-03: flatten face pick ─────────────────────────────────────────
+  QVERIFY2(vmHeader.contains(QStringLiteral("flattenPickFace")),
+           "GIZ-03: the ViewModel must expose the flatten face pick");
+  QVERIFY2(vmHeader.contains(QStringLiteral("flattenRotationForNormal")),
+           "GIZ-03: the flatten rotation math helper must be exposed for tests");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("flattenPickRequested")),
+           "GIZ-03: RhiViewport must emit the flatten pick signal");
+  QVERIFY2(preparePage.contains(QStringLiteral("flattenPickFace"),
+                                Qt::CaseSensitive),
+           "GIZ-03: QML must route the flatten click to the ViewModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("flattenHoverPick")),
+           "GIZ-03: QML must route the flatten hover to the highlight stream");
+
+  // ── GIZ-04: cut plane 3D drag/rotate ──────────────────────────────────
+  QVERIFY2(rhiHeader.contains(QStringLiteral("cutPlaneDragRequested")),
+           "GIZ-04: RhiViewport must emit the plane-drag signal");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("cutPlaneRotateRequested")),
+           "GIZ-04: RhiViewport must emit the plane-rotate signal");
+  QVERIFY2(preparePage.contains(QStringLiteral("onCutPlaneDragRequested")),
+           "GIZ-04: QML must route plane drags into editorVm.cutPosition");
+  QVERIFY2(preparePage.contains(QStringLiteral("cutSelectedWithRotation")),
+           "GIZ-04: the cut panel must execute through the rotated-cut path");
+  QVERIFY2(serviceHeader.contains(QStringLiteral("cutObjectWithRotation")),
+           "GIZ-04: the service must perform the rotated plane cut");
+
+  // ── GIZ-05: measure 3D overlay ────────────────────────────────────────
+  QVERIFY2(vmHeader.contains(QStringLiteral("measureOverlayData")),
+           "GIZ-05: the ViewModel must expose the measure overlay stream");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("projectWorldToScreen")),
+           "GIZ-05: the viewport must project 3D anchors to screen for the 2D labels");
+  QVERIFY2(preparePage.contains(QStringLiteral("measureOverlayLabels")),
+           "GIZ-05: QML must render the projected annotation labels");
+
+  // ── GIZ-06: emboss in-place + simplify preview + SVG drop ─────────────
+  QVERIFY2(serviceHeader.contains(QStringLiteral("volumeTextConfiguration")),
+           "GIZ-06: the service must read back a volume's TextConfiguration");
+  QVERIFY2(serviceHeader.contains(QStringLiteral("updateTextVolume")),
+           "GIZ-06: the service must regenerate a text volume in place");
+  QVERIFY2(preparePage.contains(QStringLiteral("loadEmbossFromSelectedVolume")),
+           "GIZ-06: entering the emboss gizmo must populate the panel from the selection");
+  QVERIFY2(preparePage.contains(QStringLiteral("updateEmbossVolume")),
+           "GIZ-06: the emboss panel must re-generate the selected text volume");
+  QVERIFY2(vmHeader.contains(QStringLiteral("simplifyPreviewStart")),
+           "GIZ-06: the ViewModel must expose the three-stage simplify preview");
+  QVERIFY2(serviceHeader.contains(QStringLiteral("simplifyObjectPreview")),
+           "GIZ-06: the service must decimate a copy for the preview count");
+  QVERIFY2(preparePage.contains(QStringLiteral("simplifyPreviewApply")),
+           "GIZ-06: the simplify panel must offer Apply");
+  QVERIFY2(preparePage.contains(QStringLiteral("simplifyPreviewCancel")),
+           "GIZ-06: the simplify panel must offer Cancel");
+  QVERIFY2(preparePage.contains(QStringLiteral("placeSvgAtBedPoint")),
+           "GIZ-06: a dropped SVG must go through the SVG workbench placement");
 }
 
 // Phase 52-03 (PREPSB-01..04): LeftSidebar + FilamentSlot bindings audit.

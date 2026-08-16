@@ -794,6 +794,62 @@ void AddVolumeCommand::undo()
     QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
 }
 
+// ── UpdateVolumeMeshCommand ────────────────────────────────────────────────
+// Phase 240 (GIZ-06): in-place text-volume re-generation undo. The BEFORE
+// snapshot is captured in the constructor (pre-update state); setAfterSnapshot
+// records the post-update mesh so redo reproduces the regenerated volume.
+UpdateVolumeMeshCommand::UpdateVolumeMeshCommand(int objectIndex, int volumeIndex,
+                                                 const QString &volumeName,
+                                                 ProjectServiceMock *service,
+                                                 EditorViewModel *viewModel,
+                                                 QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Update Text Volume")),
+      m_objectIndex(objectIndex), m_volumeIndex(volumeIndex),
+      m_volumeName(volumeName), m_service(service), m_viewModel(viewModel)
+{
+  Q_UNUSED(parent)
+  if (m_service)
+    m_before = m_service->captureVolumeMeshSnapshot(objectIndex, volumeIndex);
+}
+
+void UpdateVolumeMeshCommand::setAfterSnapshot(const QByteArray &after)
+{
+  m_after = after;
+}
+
+void UpdateVolumeMeshCommand::setVolumeType(int type)
+{
+  m_volumeType = type;
+}
+
+void UpdateVolumeMeshCommand::undo()
+{
+  if (!m_service || m_before.isEmpty())
+    return;
+  m_service->restoreVolumeSnapshot(m_objectIndex, m_volumeIndex, m_before,
+                                   m_volumeName, m_volumeType);
+  if (m_viewModel)
+    QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
+}
+
+void UpdateVolumeMeshCommand::redo()
+{
+  if (!m_service || m_after.isEmpty())
+    return;
+  // QUndoStack::push() invokes redo() once while the update is already
+  // applied -- skip that first call (same pattern as PaintCommand).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  m_service->restoreVolumeSnapshot(m_objectIndex, m_volumeIndex, m_after,
+                                   m_volumeName, m_volumeType);
+  if (m_viewModel)
+    QMetaObject::invokeMethod(m_viewModel, "rebuildAndNotify", Qt::QueuedConnection);
+}
+
+
 void AddVolumeCommand::redo()
 {
   // The initial redo is a no-op (volume was already added before push).

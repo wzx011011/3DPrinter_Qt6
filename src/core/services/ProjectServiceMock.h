@@ -354,6 +354,18 @@ public:
   /// Emboss::get_font_list_by_enumeration (Windows) or get_font_list_by_folder.
   /// Returns a list of {family name, font file path} pairs for QML.
   QVariantList embossFontList() const;
+  /// Phase 240 (GIZ-06): read a volume's stored TextConfiguration (upstream
+  /// ModelVolume::text_configuration, Model.hpp:876) back into a QVariantMap
+  /// {valid, text, fontPath, height, depth, boldness, italic}. valid=false
+  /// when the volume carries no text configuration (not a re-editable text
+  /// volume).
+  Q_INVOKABLE QVariantMap volumeTextConfiguration(int objectIndex, int volumeIndex) const;
+  /// Phase 240 (GIZ-06): re-generate an existing text volume's mesh IN PLACE
+  /// from the current emboss state (upstream GLGizmoEmboss in-place editing:
+  /// edit text -> text2shapes -> polygons2model -> same volume). Keeps the
+  /// volume identity, updates the name + TextConfiguration, refreshes the
+  /// mock entry. Returns false on failure / no text configuration.
+  Q_INVOKABLE bool updateTextVolume(int objectIndex, int volumeIndex, const QString &text);
   /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
   /// Mock 模式：创建 SvgEmboss 类型 volume
   /// Phase 158 (EMBO-F02): depthModifier scales the imported mesh's Z extent
@@ -362,6 +374,12 @@ public:
   /// 简化对象网格（对齐上游 GLGizmoSimplify → its_quadric_edge_collapse）
   /// wantedCount: 目标三角面数 (0=不限制), maxError: 最大误差 (0=不限制)
   Q_INVOKABLE bool simplifyObject(int objectIndex, int wantedCount, float maxError);
+  /// Phase 240 (GIZ-06): preview-only decimation (upstream GLGizmoSimplify
+  /// three-stage start/preview/apply). Runs its_quadric_edge_collapse on a
+  /// COPY of the object's mesh and returns the resulting facet count WITHOUT
+  /// touching the model (Apply goes through simplifyObject). Returns -1 on
+  /// failure / without libslic3r.
+  Q_INVOKABLE int simplifyObjectPreview(int objectIndex, int wantedCount, float maxError) const;
   /// 自动朝向指定对象（对齐上游 Slic3r::orientation::orient(ModelObject*)）
   /// HAS_LIBSLIC3R: 调用真实 orient API；Mock: 返回 false
   Q_INVOKABLE bool orientObject(int objectIndex);
@@ -402,6 +420,15 @@ public:
   /// 走 Cut::perform_with_plane 的平面切（与 cutObject 的裸 cut_mesh 不同，
   /// 该路径消费连接器体积）。返回新对象索引（≥0 成功）。
   Q_INVOKABLE int cutObjectWithConnectors(int objectIndex, int axis, double position, int keepMode);
+  /// Phase 240 (GIZ-04): plane cut with an interactively rotated cut plane
+  /// (upstream GLGizmoCut3D get_cut_matrix, GLGizmoCut.cpp:3234-3253: the
+  /// matrix is translation(cut_center_offset) * m_rotation_m). rotX/rotY/
+  /// rotZ are Euler XYZ degrees tilting the plane normal around the world
+  /// axes on top of the base axis alignment; 0/0/0 reproduces the plain
+  /// axis-aligned plane. Returns the new object index (>=0 on success).
+  Q_INVOKABLE int cutObjectWithRotation(int objectIndex, int axis, double position,
+                                        float rotX, float rotY, float rotZ,
+                                        int keepMode);
   /// 镜像对象（对齐上游 ModelInstance::set_mirror）
   Q_INVOKABLE bool mirrorObject(int objectIndex, int axis);
   /// 布尔运算（对齐上游 GLGizmoMeshBoolean::execute_mesh_boolean）

@@ -5,6 +5,8 @@
 #include <QTranslator>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QVariant>
+#include <QVariantList>
 #include <QVector>
 #include <QQueue>
 #include <QDateTime>
@@ -127,6 +129,14 @@ class BackendContext final : public QObject
   Q_PROPERTY(int lastErrorSeverity READ lastErrorSeverity NOTIFY errorChanged)
   Q_PROPERTY(QString lastErrorTitle READ lastErrorTitle NOTIFY errorChanged)
   Q_PROPERTY(int pendingNotificationCount READ pendingNotificationCount NOTIFY errorChanged)
+  // Phase 240 (NOTI-01): stacked notification surface. Upstream
+  // NotificationManager renders every live PopNotification at once
+  // (NotificationManager.cpp:2531-2554 render_notifications), importance
+  // ordered (NotificationManager.cpp:2633-2639 sort_notifications). This list
+  // mirrors it for QML: index 0 is the MOST important entry (top of the
+  // stack), matching upstream ErrorNotificationLevel at the "Top most
+  // position" (NotificationManager.hpp:158-180).
+  Q_PROPERTY(QVariantList notificationStack READ notificationStack NOTIFY errorChanged)
   /// Progress value for the currently displayed notification.
   Q_PROPERTY(int currentNotificationProgress READ currentNotificationProgress NOTIFY errorChanged)
   Q_PROPERTY(bool currentNotificationHasProgress READ currentNotificationHasProgress NOTIFY errorChanged)
@@ -325,6 +335,10 @@ public:
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
   Q_INVOKABLE void clearError();
   Q_INVOKABLE void dismissNotification();
+  /// Phase 240 (NOTI-01): dismiss one stacked notification by its id (the
+  /// QML toast delegates call this from their per-entry close button /
+  /// auto-dismiss timer). Upstream equivalent: PopNotification::close().
+  Q_INVOKABLE void dismissNotificationById(int id);
 
   /// Convenience notification helpers aligned with upstream NotificationManager.
   Q_INVOKABLE void postSlicingProgress(int percent, const QString &stage = {});
@@ -421,6 +435,13 @@ public:
   Q_INVOKABLE QString historyTime(int index) const;
   Q_INVOKABLE void clearHistory();
   Q_INVOKABLE void markHistoryRead();
+  /// Phase 240 (NOTI-01): the visible notification stack, most important
+  /// first (see the notificationStack Q_PROPERTY). Each element is a
+  /// QVariantMap: id/message/title/severity/type/persistent/hasProgress/
+  /// progressValue/repeatCount/showExportButton/showPreviewButton.
+  QVariantList notificationStack() const;
+  /// Phase 240 (NOTI-01): number of simultaneously visible notifications.
+  int visibleNotificationCount() const { return m_activeNotifications.size(); }
   bool notificationsEnabled() const { return m_notificationsEnabled; }
   void setNotificationsEnabled(bool v);
   bool hintsEnabled() const { return m_hintsEnabled; }
@@ -536,6 +557,17 @@ private:
 
   struct NotificationEntry
   {
+    /// Phase 240 (NOTI-01): unique id so a stacked toast delegate can dismiss
+    /// exactly its own entry (mirrors upstream NotificationIDProvider ids,
+    /// NotificationManager.hpp:302-322).
+    int id = 0;
+    /// Phase 240 (NOTI-01): duplicate-compression counter. Upstream keeps a
+    /// per-type counter on UpdatedItemsInfoNotification (m_types_and_counts,
+    /// NotificationManager.hpp:818) and escalates repeated texts by updating
+    /// the existing entry instead of pushing a new one (activate_existing,
+    /// NotificationManager.cpp:2643-2675). repeatCount >= 2 makes the UI show
+    /// an "xN" escalation badge.
+    int repeatCount = 1;
     QString message;
     QString title;
     int severity = 0;                 ///< NotificationLevel
@@ -555,11 +587,39 @@ private:
     bool hintHasNext = false;
     bool hintHasPrev = false;
   };
+  // Phase 240 (NOTI-01): the visible stack. Upstream keeps every live
+  // notification in m_pop_notifications (NotificationManager.hpp:303) and
+  // renders them all at once; the previous Qt6 single-slot queue showed only
+  // one at a time. Entries beyond kMaxVisibleNotifications park in
+  // m_notificationQueue until a slot frees (screen-space bound, same reason
+  // upstream clamps the ImGui stack to the canvas height).
+  static constexpr int kMaxVisibleNotifications = 6;
+  QVector<NotificationEntry> m_activeNotifications;
+  int m_nextNotificationId = 1;
   QQueue<NotificationEntry> m_notificationQueue;
-  NotificationEntry m_currentNotification; ///< Currently displayed notification entry.
+  NotificationEntry m_currentNotification; ///< Newest entry (compat view for the legacy single-toast API).
   QVector<NotificationEntry> m_notificationHistory; ///< Dismissed notification history.
   int m_unreadHistoryCount = 0;
   void showNextNotification();
+  /// Phase 240 (NOTI-01): single push path for every post* helper. Performs
+  /// duplicate compression (activate_existing semantics), importance
+  /// ordering (sort_notifications semantics), overflow queueing, and the
+  /// legacy current/lastError* sync. Emits errorChanged (+historyChanged
+  /// when a duplicate escalated entry refreshes the history side data).
+  void pushNotificationEntry(NotificationEntry entry, bool dedupByTypeOnly);
+  /// Phase 240 (NOTI-01): upstream NotificationLevel ordering
+  /// (NotificationManager.hpp:158-180) projected onto the Qt NotiLevel enum:
+  /// progress < hint < regular < printInfo < printInfoShort < important
+  /// (persistent) < warning < seriousWarning < error. Higher = more
+  /// important = rendered closer to the top of the stack.
+  static int notificationImportanceRank(const NotificationEntry &e);
+  /// Phase 240 (NOTI-01): sync m_currentNotification + lastError* to the
+  /// newest active entry (insertion order, NOT importance order) so the
+  /// legacy single-toast getters keep their "last post wins" meaning.
+  void syncCurrentNotificationFromStack();
+  /// Phase 240 (NOTI-01): move one entry into the history ring (cap 100,
+  /// same as before) + unread counter.
+  void archiveNotification(const NotificationEntry &entry);
   /// Update the active notification progress value.
   Q_INVOKABLE void updateNotificationProgress(int value);
   /// Confirm the active notification.

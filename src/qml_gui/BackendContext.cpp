@@ -973,24 +973,14 @@ void BackendContext::postError(const QString &message, int severity)
   if (!m_notificationsEnabled)
     return;
 
-  // 将旧的当前通知移入历史
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
-  {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
-  }
-
-  lastErrorMessage_ = message;
-  lastErrorSeverity_ = severity;
-  lastErrorTitle_.clear();
-  m_currentNotification.message = message;
-  m_currentNotification.title.clear();
-  m_currentNotification.severity = severity;
-  m_currentNotification.timestamp = QDateTime::currentDateTime();
-  emit errorChanged();
+  // Phase 240 (NOTI-01): errors join the stacked surface instead of
+  // replacing the current toast (upstream pushes a new PopNotification and
+  // keeps the old ones visible, NotificationManager.cpp:2479-2505).
+  NotificationEntry entry;
+  entry.message = message;
+  entry.severity = severity;
+  entry.timestamp = QDateTime::currentDateTime();
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/false);
 }
 
 void BackendContext::postNotification(const QString &message, const QString &title, int severity)
@@ -1003,40 +993,160 @@ void BackendContext::postNotification(const QString &message, const QString &tit
   entry.title = title;
   entry.severity = severity;
   entry.timestamp = QDateTime::currentDateTime();
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/false);
+}
 
-  if (lastErrorMessage_.isEmpty())
+int BackendContext::notificationImportanceRank(const NotificationEntry &e)
+{
+  // Upstream NotificationLevel (NotificationManager.hpp:158-180) is sorted by
+  // importance: ProgressBar(1) < Hint(2) < Regular(3) < PrintInfo(4) <
+  // PrintInfoShort(5) < Important(6) < Warning(7) < SeriousWarning(8) <
+  // Error(9). Map the Qt NotiLevel enum onto that ladder.
+  switch (e.severity)
   {
-    lastErrorMessage_ = message;
-    lastErrorSeverity_ = severity;
-    lastErrorTitle_ = title;
-    m_currentNotification = entry;
+  case NotiProgress:
+  case NotiSlicingProgress:
+    return 1; // ProgressBarNotificationLevel
+  case NotiHint:
+    return 2; // HintNotificationLevel
+  case NotiPrintInfo:
+    return 4; // PrintInfoNotificationLevel
+  case NotiPrintInfoShort:
+    return 5; // PrintInfoShortNotificationLevel
+  case NotiWarning:
+    return 7; // WarningNotificationLevel
+  case NotiSeriousWarning:
+    return 8; // SeriousWarningNotificationLevel
+  case NotiError:
+    return 9; // ErrorNotificationLevel
+  case NotiSuccess:
+  case NotiInfo:
+  default:
+    // Persistent info (export/arrange ongoing) behaves like upstream
+    // ImportantNotificationLevel (no fade-out); everything else is Regular.
+    return e.persistent ? 6 : 3;
+  }
+}
+
+void BackendContext::archiveNotification(const NotificationEntry &entry)
+{
+  m_notificationHistory.prepend(entry);
+  ++m_unreadHistoryCount;
+  if (m_notificationHistory.size() > 100)
+    m_notificationHistory.removeLast();
+  emit historyChanged();
+}
+
+void BackendContext::pushNotificationEntry(NotificationEntry entry, bool dedupByTypeOnly)
+{
+  // Duplicate compression (upstream activate_existing, NotificationManager.
+  // cpp:2643-2675): a matching live entry is UPDATED in place instead of a
+  // second toast stacking on top. Progress-family types (slicing progress /
+  // export ongoing / arrange ongoing / hint) dedup on type alone because
+  // their message text changes on every tick; everything else dedups on
+  // type + message + title (the upstream multiple-types rule: "multiple of
+  // one type allowed, but must have different text").
+  for (int i = 0; i < m_activeNotifications.size(); ++i)
+  {
+    NotificationEntry &live = m_activeNotifications[i];
+    const bool sameType = (live.type == entry.type);
+    const bool sameText = (live.message == entry.message && live.title == entry.title);
+    if (!sameType || (!dedupByTypeOnly && !sameText))
+      continue;
+    // Escalation counter (upstream UpdatedItemsInfoNotification counter
+    // pattern, NotificationManager.hpp:818): repeated identical posts bump
+    // the xN badge instead of spamming the stack.
+    if (sameText || dedupByTypeOnly)
+      live.repeatCount += 1;
+    live.message = entry.message;
+    live.title = entry.title;
+    live.severity = entry.severity;
+    live.persistent = entry.persistent;
+    live.hasProgress = entry.hasProgress;
+    live.progressValue = entry.progressValue;
+    live.progressMin = entry.progressMin;
+    live.progressMax = entry.progressMax;
+    live.requiresConfirm = entry.requiresConfirm;
+    live.showExportButton = entry.showExportButton;
+    live.showPreviewButton = entry.showPreviewButton;
+    live.timestamp = entry.timestamp;
+    syncCurrentNotificationFromStack();
     emit errorChanged();
+    return;
+  }
+
+  entry.id = m_nextNotificationId++;
+  if (m_activeNotifications.size() < kMaxVisibleNotifications)
+    m_activeNotifications.append(entry);
+  else
+    m_notificationQueue.enqueue(entry);
+
+  // Importance ordering (upstream sort_notifications, NotificationManager.
+  // cpp:2633-2639): stable sort so equal-importance entries keep insertion
+  // order. The list is MOST important first so the QML column renders errors
+  // at the top (upstream renders bottom-up with Error at the "Top most
+  // position").
+  std::stable_sort(m_activeNotifications.begin(), m_activeNotifications.end(),
+                   [](const NotificationEntry &a, const NotificationEntry &b)
+                   { return notificationImportanceRank(a) > notificationImportanceRank(b); });
+
+  syncCurrentNotificationFromStack();
+  emit errorChanged();
+}
+
+void BackendContext::syncCurrentNotificationFromStack()
+{
+  // Legacy single-toast view: the NEWEST entry (last in insertion order)
+  // keeps driving lastError*/currentNotification* so all pre-Phase-240
+  // callers and tests see "last post wins" semantics.
+  if (!m_activeNotifications.isEmpty())
+  {
+    // Find the newest by id (ids are monotonic; the sort reordered the list).
+    int newestIdx = 0;
+    for (int i = 1; i < m_activeNotifications.size(); ++i)
+      if (m_activeNotifications[i].id > m_activeNotifications[newestIdx].id)
+        newestIdx = i;
+    m_currentNotification = m_activeNotifications[newestIdx];
+    lastErrorMessage_ = m_currentNotification.message;
+    lastErrorSeverity_ = m_currentNotification.severity;
+    lastErrorTitle_ = m_currentNotification.title;
   }
   else
   {
-    m_notificationQueue.enqueue(entry);
-    emit errorChanged();
+    m_currentNotification = {};
+    lastErrorMessage_.clear();
+    lastErrorTitle_.clear();
+    lastErrorSeverity_ = -1;
   }
 }
 
 void BackendContext::dismissNotification()
 {
-  // 将当前通知移入历史（对齐上游 notification_manager 历史记录）
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
+  // Dismiss the NEWEST entry (legacy single-toast behavior: the visible
+  // toast being closed was the current one).
+  if (!m_activeNotifications.isEmpty())
   {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    // 保留最近 100 条历史
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
+    int newestIdx = 0;
+    for (int i = 1; i < m_activeNotifications.size(); ++i)
+      if (m_activeNotifications[i].id > m_activeNotifications[newestIdx].id)
+        newestIdx = i;
+    const NotificationEntry dismissed = m_activeNotifications.takeAt(newestIdx);
+    archiveNotification(dismissed);
   }
-
-  lastErrorMessage_.clear();
-  lastErrorTitle_.clear();
-  lastErrorSeverity_ = -1;
-  m_currentNotification = {};
   showNextNotification();
+}
+
+void BackendContext::dismissNotificationById(int id)
+{
+  for (int i = 0; i < m_activeNotifications.size(); ++i)
+  {
+    if (m_activeNotifications[i].id != id)
+      continue;
+    const NotificationEntry dismissed = m_activeNotifications.takeAt(i);
+    archiveNotification(dismissed);
+    showNextNotification();
+    return;
+  }
 }
 
 void BackendContext::clearError()
@@ -1046,15 +1156,42 @@ void BackendContext::clearError()
 
 void BackendContext::showNextNotification()
 {
-  if (!m_notificationQueue.isEmpty())
+  // Pull one queued entry into the freed visible slot (upstream pops from
+  // m_pop_notifications only on finish; the overflow queue is the Qt6
+  // screen-space bound).
+  if (m_activeNotifications.size() < kMaxVisibleNotifications && !m_notificationQueue.isEmpty())
   {
     const auto entry = m_notificationQueue.dequeue();
-    lastErrorMessage_ = entry.message;
-    lastErrorSeverity_ = entry.severity;
-    lastErrorTitle_ = entry.title;
-    m_currentNotification = entry;
+    m_activeNotifications.append(entry);
+    std::stable_sort(m_activeNotifications.begin(), m_activeNotifications.end(),
+                     [](const NotificationEntry &a, const NotificationEntry &b)
+                     { return notificationImportanceRank(a) > notificationImportanceRank(b); });
   }
+  syncCurrentNotificationFromStack();
   emit errorChanged();
+}
+
+QVariantList BackendContext::notificationStack() const
+{
+  QVariantList list;
+  list.reserve(m_activeNotifications.size());
+  for (const NotificationEntry &e : m_activeNotifications)
+  {
+    QVariantMap m;
+    m.insert(QStringLiteral("id"), e.id);
+    m.insert(QStringLiteral("message"), e.message);
+    m.insert(QStringLiteral("title"), e.title);
+    m.insert(QStringLiteral("severity"), e.severity);
+    m.insert(QStringLiteral("type"), e.type);
+    m.insert(QStringLiteral("persistent"), e.persistent);
+    m.insert(QStringLiteral("hasProgress"), e.hasProgress);
+    m.insert(QStringLiteral("progressValue"), e.progressValue);
+    m.insert(QStringLiteral("repeatCount"), e.repeatCount);
+    m.insert(QStringLiteral("showExportButton"), e.showExportButton);
+    m.insert(QStringLiteral("showPreviewButton"), e.showPreviewButton);
+    list.append(m);
+  }
+  return list;
 }
 
 int BackendContext::pendingNotificationCount() const
@@ -1079,10 +1216,20 @@ bool BackendContext::currentNotificationPersistent() const
 
 void BackendContext::updateNotificationProgress(int value)
 {
+  // Update the progress on the newest entry AND its stacked twin so the
+  // visible toast and the legacy getter stay in lockstep.
   m_currentNotification.progressValue = qBound(
     m_currentNotification.progressMin,
     value,
     m_currentNotification.progressMax);
+  for (NotificationEntry &e : m_activeNotifications)
+  {
+    if (e.id == m_currentNotification.id)
+    {
+      e.progressValue = m_currentNotification.progressValue;
+      break;
+    }
+  }
   emit errorChanged();
 }
 
@@ -1091,6 +1238,15 @@ void BackendContext::confirmCurrentNotification()
   // 对齐上游 notification_manager::confirm
   m_currentNotification.persistent = false;
   m_currentNotification.requiresConfirm = false;
+  for (NotificationEntry &e : m_activeNotifications)
+  {
+    if (e.id == m_currentNotification.id)
+    {
+      e.persistent = false;
+      e.requiresConfirm = false;
+      break;
+    }
+  }
   dismissNotification();
 }
 
@@ -1098,6 +1254,15 @@ void BackendContext::cancelCurrentNotification()
 {
   m_currentNotification.persistent = false;
   m_currentNotification.requiresConfirm = false;
+  for (NotificationEntry &e : m_activeNotifications)
+  {
+    if (e.id == m_currentNotification.id)
+    {
+      e.persistent = false;
+      e.requiresConfirm = false;
+      break;
+    }
+  }
   dismissNotification();
 }
 
@@ -1135,31 +1300,11 @@ void BackendContext::postSlicingProgress(int percent, const QString &stage)
       : tr("%1... %2%").arg(stage, QString::number(percent));
   entry.timestamp = QDateTime::currentDateTime();
 
-  // 如果当前通知也是切片进度，就地更新（不排队）
-  if (m_currentNotification.type == NotiTypeSlicingProgress && !lastErrorMessage_.isEmpty())
-  {
-    m_currentNotification.progressValue = entry.progressValue;
-    m_currentNotification.message = entry.message;
-    m_currentNotification.title = entry.title;
-    emit errorChanged();
-    return;
-  }
-
-  // 关闭旧通知并存入历史
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
-  {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
-  }
-
-  lastErrorMessage_ = entry.message;
-  lastErrorSeverity_ = entry.severity;
-  lastErrorTitle_ = entry.title;
-  m_currentNotification = entry;
-  emit errorChanged();
+  // Phase 240 (NOTI-01): progress notifications update the LIVE slicing
+  // entry in place (upstream SlicingProgressNotification updates the same
+  // PopNotification, NotificationManager.cpp:2248) via the type-only dedup
+  // in pushNotificationEntry.
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
 }
 
 void BackendContext::postSlicingComplete()
@@ -1178,21 +1323,8 @@ void BackendContext::postSlicingComplete()
   entry.showPreviewButton = true;
   entry.timestamp = QDateTime::currentDateTime();
 
-  // 替换切片进度通知
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
-  {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
-  }
-
-  lastErrorMessage_ = entry.message;
-  lastErrorSeverity_ = entry.severity;
-  lastErrorTitle_ = entry.title;
-  m_currentNotification = entry;
-  emit errorChanged();
+  // Replaces the slicing progress entry (same type-only dedup).
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
 }
 
 void BackendContext::postExportFinished(const QString &filePath)
@@ -1211,27 +1343,9 @@ void BackendContext::postExportOngoing(const QString &stage)
   entry.persistent = true;
   entry.timestamp = QDateTime::currentDateTime();
 
-  if (m_currentNotification.type == NotiTypeExportOngoing && !lastErrorMessage_.isEmpty())
-  {
-    m_currentNotification.message = entry.message;
-    emit errorChanged();
-    return;
-  }
-
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
-  {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
-  }
-
-  lastErrorMessage_ = entry.message;
-  lastErrorSeverity_ = entry.severity;
-  lastErrorTitle_ = entry.title;
-  m_currentNotification = entry;
-  emit errorChanged();
+  // Phase 240 (NOTI-01): type-only dedup updates the live export-ongoing
+  // entry in place (upstream ExportOngoing updates the same notification).
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
 }
 
 void BackendContext::postPlaterWarning(const QString &message)
@@ -1259,6 +1373,8 @@ void BackendContext::postValidateWarning(const QString &message)
 
 void BackendContext::postArrangeOngoing(int percent)
 {
+  if (!m_notificationsEnabled)
+    return;
   NotificationEntry entry;
   entry.type = NotiTypeArrangeOngoing;
   entry.severity = NotiInfo;
@@ -1267,27 +1383,8 @@ void BackendContext::postArrangeOngoing(int percent)
   entry.persistent = true;
   entry.timestamp = QDateTime::currentDateTime();
 
-  if (m_currentNotification.type == NotiTypeArrangeOngoing && !lastErrorMessage_.isEmpty())
-  {
-    m_currentNotification.message = entry.message;
-    emit errorChanged();
-    return;
-  }
-
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
-  {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
-  }
-
-  lastErrorMessage_ = entry.message;
-  lastErrorSeverity_ = entry.severity;
-  lastErrorTitle_ = entry.title;
-  m_currentNotification = entry;
-  emit errorChanged();
+  // Phase 240 (NOTI-01): type-only dedup updates the live arrange entry.
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
 }
 
 // ------- 提示数据库实现（对齐上游 HintDatabase） -------
@@ -1436,20 +1533,10 @@ void BackendContext::postHint()
   entry.hintHasPrev = (m_currentHintIndex > 0 || m_displayedHintIds.size() > 1);
   entry.hintHasNext = true;
 
-  if (!lastErrorMessage_.isEmpty() && m_currentNotification.timestamp.isValid())
-  {
-    m_notificationHistory.prepend(m_currentNotification);
-    ++m_unreadHistoryCount;
-    if (m_notificationHistory.size() > 100)
-      m_notificationHistory.removeLast();
-    emit historyChanged();
-  }
-
-  lastErrorMessage_ = entry.message;
-  lastErrorSeverity_ = entry.severity;
-  lastErrorTitle_ = entry.title;
-  m_currentNotification = entry;
-  emit errorChanged();
+  // Phase 240 (NOTI-01): a new hint replaces the live hint entry (upstream
+  // keeps at most one HintNotification). Non-hint notifications stay
+  // visible (stacked surface).
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
 }
 
 void BackendContext::nextHint()
@@ -1460,8 +1547,19 @@ void BackendContext::nextHint()
 
   m_currentHintIndex = idx;
   m_displayedHintIds.insert(m_hints[idx].id);
-  m_currentNotification.message = m_hints[idx].text;
-  lastErrorMessage_ = m_hints[idx].text;
+  // Phase 240 (NOTI-01): keep the stacked hint entry + the legacy getter in
+  // lockstep when navigating hints.
+  const QString text = m_hints[idx].text;
+  m_currentNotification.message = text;
+  lastErrorMessage_ = text;
+  for (NotificationEntry &e : m_activeNotifications)
+  {
+    if (e.id == m_currentNotification.id && e.type == NotiTypeDidYouKnowHint)
+    {
+      e.message = text;
+      break;
+    }
+  }
   emit errorChanged();
 }
 
@@ -1470,8 +1568,17 @@ void BackendContext::prevHint()
   if (m_hints.isEmpty() || m_currentHintIndex < 0)
     return;
   m_currentHintIndex = (m_currentHintIndex - 1 + m_hints.size()) % m_hints.size();
-  m_currentNotification.message = m_hints[m_currentHintIndex].text;
-  lastErrorMessage_ = m_hints[m_currentHintIndex].text;
+  const QString text = m_hints[m_currentHintIndex].text;
+  m_currentNotification.message = text;
+  lastErrorMessage_ = text;
+  for (NotificationEntry &e : m_activeNotifications)
+  {
+    if (e.id == m_currentNotification.id && e.type == NotiTypeDidYouKnowHint)
+    {
+      e.message = text;
+      break;
+    }
+  }
   emit errorChanged();
 }
 
