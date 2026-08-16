@@ -1662,11 +1662,32 @@ void RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
     if (count > 0 && m_bedModelMeshBytes.size() >= needed) {
       vertices.reserve(int(count));
       const float *src = reinterpret_cast<const float *>(m_bedModelMeshBytes.constData() + 4);
-      // Upstream Bed3D::update_model_offset: plate position + z = -0.41 +
-      // GROUND_Z(-0.03) below the bed plane to avoid z-fighting.
-      const float offsetX = m_bedTypePlateOffsetX;
-      const float offsetZ = m_bedTypePlateOffsetZ;
+      // Upstream Bed3D::update_model_offset: the model is CENTERED on the
+      // bed (assemble_transform at the extended bounding-box center) and
+      // sits 0.41 + GROUND_Z below the bed plane. The vendor STLs are
+      // authored around their own center (e.g. Ender-3 S1 spans
+      // [-121.5, 112.5]), so re-center onto the current plate's middle
+      // instead of using the raw coordinates (raw placement drew the plate
+      // slab across the viewport corner).
+      float rawMinX = std::numeric_limits<float>::max();
+      float rawMaxX = std::numeric_limits<float>::lowest();
+      float rawMinZ = std::numeric_limits<float>::max();
+      float rawMaxZ = std::numeric_limits<float>::lowest();
+      for (quint32 i = 0; i < count; ++i) {
+        rawMinX = std::min(rawMinX, src[0]);
+        rawMaxX = std::max(rawMaxX, src[0]);
+        rawMinZ = std::min(rawMinZ, src[2]);
+        rawMaxZ = std::max(rawMaxZ, src[2]);
+        src += 3;
+      }
+      const float plateCenterX = m_prepareScene.bedOriginX()
+          + m_prepareScene.bedWidth() * 0.5f + m_bedTypePlateOffsetX;
+      const float plateCenterZ = m_prepareScene.bedOriginY()
+          + m_prepareScene.bedDepth() * 0.5f + m_bedTypePlateOffsetZ;
+      const float offsetX = plateCenterX - (rawMinX + rawMaxX) * 0.5f;
+      const float offsetZ = plateCenterZ - (rawMinZ + rawMaxZ) * 0.5f;
       const float offsetY = -0.44f;
+      src = reinterpret_cast<const float *>(m_bedModelMeshBytes.constData() + 4);
       for (quint32 i = 0; i < count; ++i) {
         vertices.append(Vertex{src[0] + offsetX, src[1] + offsetY, src[2] + offsetZ,
                                 0.255f, 0.255f, 0.283f, 1.0f});
