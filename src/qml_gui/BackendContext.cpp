@@ -200,6 +200,13 @@ BackendContext::BackendContext(QObject *parent)
             {
               postNotification(message, tr("切片失败"), NotiError);
             });
+    // Phase 239 (ENGN-03): upstream distinguishes non-fatal Print::validate
+    // warnings from errors (Plater.cpp:13742-13759 process_validation_warning
+    // shows them as a notification while the slice continues). Errors keep
+    // flowing through sliceFailed above.
+    connect(sliceService_, &SliceService::validateWarning, this,
+            [this](const QString &message)
+            { postValidateWarning(message); });
 
     connect(sliceService_, &SliceService::exportStarted, this,
             [this](const QString &stage)
@@ -305,6 +312,7 @@ BackendContext::BackendContext(QObject *parent)
 }
 
 QObject *BackendContext::editorViewModel() const { return editorViewModel_; }
+QObject *BackendContext::sliceService() const { return sliceService_; }
 QObject *BackendContext::previewViewModel() const { return previewViewModel_; }
 QObject *BackendContext::monitorViewModel() const { return monitorViewModel_; }
 QObject *BackendContext::configViewModel() const { return configViewModel_; }

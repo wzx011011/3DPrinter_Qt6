@@ -193,6 +193,10 @@ public:
   Q_INVOKABLE void startSlice(const QString &projectName);
   Q_INVOKABLE void startSlicePlate(int plateIndex);
   Q_INVOKABLE void cancelSlice();
+  /// Phase 239 (ENGN-03): cancels an in-flight G-code export (the copy runs on
+  /// a QtConcurrent worker). Mirrors cancelSlice's flag semantics -- the worker
+  /// aborts at the next chunk boundary and reports exportFailed("...cancelled").
+  Q_INVOKABLE void cancelExport();
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
@@ -249,6 +253,12 @@ signals:
   /// computed by the engine), receivers must not surface an auto recommendation.
   void filamentMapReady(const FilamentMapResult &result);
   void sliceFailed(const QString &message);
+  /// Phase 239 (ENGN-03): emitted after a slice SUCCEEDS when Print::validate
+  /// reported a non-fatal warning (upstream fills the `warning` out-param,
+  /// Print.cpp:1063 / layered_print_cleareance_valid Print.cpp:930-934, and
+  /// the GUI shows it as a notification without aborting, Plater.cpp:13749).
+  /// Empty messages are never emitted; errors still go through sliceFailed.
+  void validateWarning(const QString &message);
   void exportStarted(const QString &stage);
   void exportFinished(const QString &filePath);
   void exportFailed(const QString &message);
@@ -269,6 +279,9 @@ private:
   QString resultCostLabel_;
   int activeTargetPlateIndex_ = -1;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
+  /// Phase 239 (ENGN-03): cancel flag for the QtConcurrent export worker
+  /// (exportSourceToPath / exportAllPlateGCodeToDirectory). Null when idle.
+  std::shared_ptr<std::atomic_bool> activeExportCancelFlag_;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
 #endif
@@ -298,5 +311,11 @@ private:
   void clearActiveTargetResult();
   void storePlateResult(int plateIndex, const PlateSliceResult &result);
   void setExportStatus(State state, int progress, const QString &label);
+  /// Phase 239 (ENGN-03): validates the source/target synchronously (so
+  /// unsafe-target rejections stay immediate) then moves the chunked copy to a
+  /// QtConcurrent worker with progress + cancel support (mirrors upstream
+  /// BackgroundSlicingProcess running the export off the GUI thread).
+  /// Returns true when the export STARTED; completion is reported through the
+  /// exportFinished / exportFailed signals.
   bool exportSourceToPath(const QString &sourcePath, const QString &targetPath, const QString &displayName);
 };

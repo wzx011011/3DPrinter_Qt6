@@ -413,6 +413,9 @@ void E2EWorkflowTests::test_export_gcode_to_path()
   const bool exported = slice.exportGCodeToPath(exportPath);
   QVERIFY2(exported, "exportGCodeToPath should succeed");
 
+  // Phase 239 (ENGN-03): the copy runs on a QtConcurrent worker, so the file
+  // materializes asynchronously (QSaveFile commits atomically at the end).
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportPath), 30000);
   const QFileInfo exportedInfo(exportPath);
   QVERIFY2(exportedInfo.exists(), "exported file should exist");
   QVERIFY2(exportedInfo.size() > 0, "exported file should have non-zero size");
@@ -480,6 +483,8 @@ void E2EWorkflowTests::test_export_gcode_rejects_unsafe_targets()
   }
   QVERIFY2(slice.exportGCodeToPath(existingTarget),
            "different existing target should be safely replaced");
+  // Phase 239 (ENGN-03): export copy is async; wait for the committed file.
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo(existingTarget).size() == sourceSize, 30000);
   QFileInfo exportedInfo(existingTarget);
   QVERIFY2(exportedInfo.exists() && exportedInfo.isFile(), "exported file should exist");
   QVERIFY2(exportedInfo.size() == sourceSize,
@@ -565,8 +570,8 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   const QString currentExportPath = exportDir.filePath(QStringLiteral("workflow_current.gcode"));
   QVERIFY2(editor.requestExportGCode(currentExportPath),
            "current-plate export should succeed after the workflow slice");
-  QVERIFY2(QFileInfo::exists(currentExportPath),
-           qPrintable(QStringLiteral("current export should exist: %1").arg(currentExportPath)));
+  // Phase 239 (ENGN-03): export copies are async (QtConcurrent worker).
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(currentExportPath), 30000);
   QVERIFY2(QFileInfo(currentExportPath).size() == QFileInfo(generatedOutput).size(),
            "current export should match the generated G-code byte size");
   QVERIFY2(QFileInfo::exists(generatedOutput),
@@ -575,8 +580,7 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   QVERIFY2(editor.requestExportAllGCode(exportDir.path(), QStringLiteral("workflow_all")),
            "all-valid-plate export should succeed for the sliced workflow result");
   const QString allExportPath = exportDir.filePath(QStringLiteral("workflow_all_plate1.gcode"));
-  QVERIFY2(QFileInfo::exists(allExportPath),
-           qPrintable(QStringLiteral("all-plate export should include plate 1: %1").arg(allExportPath)));
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(allExportPath), 30000);
   QVERIFY2(QFileInfo(allExportPath).size() == QFileInfo(generatedOutput).size(),
            "all-plate export should match the generated G-code byte size");
 
@@ -1022,9 +1026,23 @@ void E2EWorkflowTests::test_slice_affecting_bed_change_marks_current_result_stal
   QVERIFY2(editor.exportActionHint().contains(QStringLiteral("已过期")),
            qPrintable(editor.exportActionHint()));
 
+  // Phase 239 (ENGN-01): switching to preview with a stale current-plate
+  // result now kicks the auto-reslice (upstream Plater.cpp:6165-6234
+  // do_reslice) and arms the pending page switch instead of only showing the
+  // staleness hint. The switch itself completes on sliceFinished.
+  QSignalSpy previewSwitchSpy(&editor, &EditorViewModel::previewRequested);
+  QVERIFY(previewSwitchSpy.isValid());
   editor.switchToPreview();
-  QVERIFY2(editor.statusText().contains(QStringLiteral("已过期")),
-           qPrintable(editor.statusText()));
+  QVERIFY2(editor.pendingPreviewAfterSlice(),
+           "stale preview switch should arm the pending switch flag");
+  QVERIFY2(slice.slicing(),
+           "stale preview switch should start the automatic re-slice");
+  // Cancel the auto-reslice so the assertions below (and the teardown) do not
+  // race the slicing worker; a cancelled reslice must NOT switch to preview.
+  editor.cancelSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(!slice.slicing(), 30000);
+  QVERIFY2(previewSwitchSpy.count() == 0,
+           "a cancelled auto-reslice must not complete the preview switch");
 
   const QString exportPath = QDir::tempPath() + QStringLiteral("/owzx_stale_export_blocked.gcode");
   QFile::remove(exportPath);
@@ -1323,6 +1341,9 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   const QString exportedPlate0 = exportDir.filePath(QStringLiteral("allplates_plate1.gcode"));
   const QString exportedPlate1 = exportDir.filePath(QStringLiteral("allplates_plate2.gcode"));
   const QString skippedPlate2 = exportDir.filePath(QStringLiteral("allplates_plate3.gcode"));
+  // Phase 239 (ENGN-03): the batch export runs on one QtConcurrent worker --
+  // wait for the LAST plate's file to commit before asserting.
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportedPlate1), 30000);
   QVERIFY2(QFileInfo::exists(exportedPlate0),
            qPrintable(QStringLiteral("plate 0 export should exist: %1").arg(exportedPlate0)));
   QVERIFY2(QFileInfo::exists(exportedPlate1),
@@ -1648,7 +1669,8 @@ void E2EWorkflowTests::exportWhilePreviewVisibleLeavesGcodePreviewDataIntact()
   const QString exportPath = exportDir.filePath(QStringLiteral("preview_visible_export.gcode"));
   QVERIFY2(editor.requestExportGCode(exportPath),
            "current-plate export should succeed while Preview is visible");
-  QVERIFY2(QFileInfo::exists(exportPath), "exported G-code file should exist");
+  // Phase 239 (ENGN-03): the export copy is async; wait for the commit.
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportPath), 30000);
 
   const QByteArray afterExport = preview.gcodePreviewData();
   QVERIFY2(afterExport == beforeExport,

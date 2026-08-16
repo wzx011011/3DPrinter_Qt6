@@ -74,6 +74,15 @@ namespace
       QStringLiteral(QT_TESTCASE_SOURCEDIR) +
       QStringLiteral("/tests/fixtures/orca_sample.gcode"));
 
+  // Phase 239 (ENGN-01/02): the small E2E/int02 slice fixture (Prusa.stl) --
+  // known-good for a real libslic3r slice in this environment.
+  static QString prusaStlPath()
+  {
+    return QDir::cleanPath(
+        QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+        QStringLiteral("/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl"));
+  }
+
   // Phase 55-04: count of packed GCV1 segments. Mirrors the E2EWorkflowTests
   // helper so ViewModelSmokeTests can assert on the GCV1 payload shape without
   // a live slice. Returns -1 if payload doesn't start with "GCV1".
@@ -236,6 +245,22 @@ private slots:
   void appSettingsAndEditorBedShapePersistDeterministically();
   void editor_import_model_updates_state();
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
+  // v5.16 Phase 239 (ENGN-01): switching to Preview with a STALE current-plate
+  // result auto-reslices (upstream Plater.cpp:6165-6234 do_reslice) and
+  // completes the page switch on sliceFinished.
+  void editorSwitchToPreviewStaleAutoReslicesThenSwitches();
+  // v5.16 Phase 239 (ENGN-02): switching to Preview with a VALID result
+  // reuses the plate's previous G-code instead of reslicing (upstream
+  // export_gcode_from_previous_file); invalidation clears the reuse.
+  void editorPreviewSwitchReusesValidPreviousGcodeAndInvalidationClearsReuse();
+  // v5.16 Phase 239 (ENGN-03): the G-code export copy runs on a QtConcurrent
+  // worker with byte-based progress (no GUI-thread freeze), cancel support,
+  // and commits the file on completion.
+  void sliceServiceExportRunsOnWorkerWithProgressAndWritesFile();
+  // v5.16 Phase 239 (ENGN-03): a non-fatal Print::validate warning surfaces
+  // as a BackendContext notification (postValidateWarning) without entering
+  // the error state (upstream Plater.cpp:13742-13759).
+  void validateWarningRoutesToBackendNotificationWithoutErrorState();
   void monitor_refresh_updates_network_and_device();
   void config_default_and_switch_preset();
   void configEnumNullKeysMapGuards();
@@ -549,6 +574,252 @@ void ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlate
   editor.switchToPreview();
   QVERIFY2(editor.statusText().contains(QStringLiteral("尚未切片")),
            qPrintable(editor.statusText()));
+}
+
+// ── v5.16 Phase 239 (ENGN-01): stale preview switch auto-reslices ──────────
+// Upstream do_reslice (Plater.cpp:6165-6234): switching to the preview page
+// with an out-of-date result re-slices the current plate in the background
+// and lands in preview once the process completes (preview->reload_print).
+void ViewModelSmokeTests::editorSwitchToPreviewStaleAutoReslicesThenSwitches()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("Engn01StaleReslice"));
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(prusaStlPath()), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  // Seed a real result so staleness has a result to invalidate.
+  slice.setBedShape({QPointF(0, 0), QPointF(220, 0), QPointF(220, 220), QPointF(0, 220)});
+  QHash<QString, QVariant> cfg;
+  cfg.insert(QStringLiteral("printable_height"), 250.0);
+  cfg.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
+  slice.setMergedPresetConfig(cfg);
+  // Arrange onto the bed like the E2E helper; the return value is advisory
+  // (upstream multi-plate arrange can report no-fit for a valid bed).
+  project.arrangeObjects(5.0f, false, false, QStringLiteral("0,0,220,0,220,220,0,220"));
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+  slice.startSlice(QStringLiteral("engn01_seed"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+  {
+    const QString reason = failedSpy.first().at(0).toString();
+    QSKIP(QString("Seed slice failed (env-dependent): %1").arg(reason).toUtf8().constData());
+  }
+  QVERIFY2(editor.hasSliceResult(), "seeded slice should be a valid current-plate result");
+  const QString seedOutput = slice.outputPath();
+
+  // A slice-affecting bed change marks the result stale (Phase 52 PREPSB-05).
+  editor.setBedWidth(editor.bedWidth() + 1.0f);
+  QCOMPARE(editor.plateSliceResultStatus(editor.currentPlateIndex()),
+           int(EditorViewModel::SliceResultStale));
+  QVERIFY2(!editor.canPreview(), "stale results must not preview directly");
+
+  // Stale preview switch -> pending flag + auto-reslice kick.
+  QSignalSpy previewSpy(&editor, &EditorViewModel::previewRequested);
+  QVERIFY(previewSpy.isValid());
+  editor.switchToPreview();
+  QVERIFY2(editor.pendingPreviewAfterSlice(),
+           "a stale preview switch must arm the pending switch flag");
+  QVERIFY2(slice.slicing(), "a stale preview switch must start the auto-reslice");
+  QVERIFY2(previewSpy.count() == 0,
+           "the page switch must wait for sliceFinished, not fire immediately");
+  QVERIFY2(!editor.previewReusedPreviousGcode(),
+           "the stale path reslices -- it must not flag a previous-G-code reuse");
+
+  // sliceFinished completes the pending page switch.
+  QTRY_VERIFY_WITH_TIMEOUT(previewSpy.count() > 0, 120000);
+  QVERIFY2(!editor.pendingPreviewAfterSlice(), "the pending flag must clear after the switch");
+  QVERIFY2(editor.canPreview(), "the resliced plate should be previewable again");
+
+  if (QFileInfo::exists(seedOutput))
+    QFile::remove(seedOutput);
+  const QString reslicedOutput = slice.outputPath();
+  if (!reslicedOutput.isEmpty() && QFileInfo::exists(reslicedOutput))
+    QFile::remove(reslicedOutput);
+}
+
+// ── v5.16 Phase 239 (ENGN-02): valid preview switch reuses previous G-code ──
+// Upstream export_gcode_from_previous_file (BackgroundSlicingProcess.cpp
+// :199-221): when the plate's slice result is still valid, entering preview
+// re-processes the previous G-code instead of reslicing, and the reuse is
+// invalidated by the same set that marks slice results stale.
+void ViewModelSmokeTests::editorPreviewSwitchReusesValidPreviousGcodeAndInvalidationClearsReuse()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("Engn02ReuseGcode"));
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(prusaStlPath()), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  slice.setBedShape({QPointF(0, 0), QPointF(220, 0), QPointF(220, 220), QPointF(0, 220)});
+  QHash<QString, QVariant> cfg;
+  cfg.insert(QStringLiteral("printable_height"), 250.0);
+  cfg.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
+  slice.setMergedPresetConfig(cfg);
+  // Arrange onto the bed like the E2E helper; the return value is advisory.
+  project.arrangeObjects(5.0f, false, false, QStringLiteral("0,0,220,0,220,220,0,220"));
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+  slice.startSlice(QStringLiteral("engn02_seed"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+  {
+    const QString reason = failedSpy.first().at(0).toString();
+    QSKIP(QString("Seed slice failed (env-dependent): %1").arg(reason).toUtf8().constData());
+  }
+  QVERIFY2(editor.hasSliceResult(), "seeded slice should be a valid current-plate result");
+  const int plateIndex = editor.currentPlateIndex();
+  const QString previousGcode = slice.plateOutputPath(plateIndex);
+  QVERIFY2(!previousGcode.isEmpty(), "the seeded plate result should expose its G-code path");
+  QVERIFY2(QFileInfo::exists(previousGcode), "the seeded G-code file should exist");
+
+  // Valid preview switch -> previous-G-code reuse, not a reslice.
+  QSignalSpy previewSpy(&editor, &EditorViewModel::previewRequested);
+  QVERIFY(previewSpy.isValid());
+  editor.switchToPreview();
+  QVERIFY2(slice.slicing(), "a valid preview entry should parse the previous G-code off-thread");
+  QVERIFY2(editor.previewReusedPreviousGcode(),
+           "a valid preview entry must flag the previous-G-code reuse");
+  QVERIFY2(editor.pendingPreviewAfterSlice(),
+           "a valid preview entry must arm the pending switch");
+  QVERIFY2(previewSpy.count() == 0, "the page switch must wait for the reuse parse");
+
+  QTRY_VERIFY_WITH_TIMEOUT(previewSpy.count() > 0, 60000);
+  QVERIFY2(!slice.slicing(), "the reuse parse should have completed");
+  QVERIFY2(!editor.pendingPreviewAfterSlice(), "the pending flag must clear after the switch");
+  QVERIFY2(editor.canPreview(), "the reused result should stay previewable");
+  QCOMPARE(slice.plateResultSource(plateIndex), int(SliceService::ResultSource::PreviousGCode));
+
+  // Invalidation clears the reuse (same set that marks results stale), so the
+  // next preview entry reslices instead of reusing.
+  editor.setBedWidth(editor.bedWidth() + 1.0f);
+  QVERIFY2(!editor.previewReusedPreviousGcode(),
+           "slice-result invalidation must clear the previous-G-code reuse flag");
+  QCOMPARE(editor.plateSliceResultStatus(plateIndex), int(EditorViewModel::SliceResultStale));
+
+  editor.switchToPreview();
+  QVERIFY2(slice.slicing(), "the post-invalidation preview entry must auto-reslice");
+  QVERIFY2(!editor.previewReusedPreviousGcode(), "the reslice path must not re-flag a reuse");
+  editor.cancelSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(!slice.slicing(), 30000);
+
+  if (QFileInfo::exists(previousGcode))
+    QFile::remove(previousGcode);
+  const QString reslicedOutput = slice.outputPath();
+  if (!reslicedOutput.isEmpty() && QFileInfo::exists(reslicedOutput))
+    QFile::remove(reslicedOutput);
+}
+
+// ── v5.16 Phase 239 (ENGN-03): export copy runs on a worker ────────────────
+// The chunked G-code export must run off the GUI thread with byte-based
+// progress (upstream exports from the BackgroundSlicingProcess thread) and
+// commit the target file on completion. A synthetic large G-code seeded
+// through loadGCodeFromPrevious provides the export source without a full
+// slice.
+void ViewModelSmokeTests::sliceServiceExportRunsOnWorkerWithProgressAndWritesFile()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+
+  QTemporaryDir tempDir(QDir::tempPath() + QStringLiteral("/owzx_engn03_export_XXXXXX"));
+  QVERIFY2(tempDir.isValid(), "temporary export directory should be available");
+  const QString sourcePath = tempDir.filePath(QStringLiteral("engn03_synthetic.gcode"));
+  {
+    QFile seed(sourcePath);
+    QVERIFY2(seed.open(QIODevice::WriteOnly), "synthetic G-code seed should be writable");
+    seed.write("; OWzx ENGN-03 synthetic G-code\nG28\nG92 E0\n");
+    const QByteArray chunk = QByteArrayLiteral("G1 X10.000 Y10.000 E0.0123 F1500\n");
+    while (seed.size() < 4 * 1024 * 1024)
+      seed.write(chunk);
+    seed.close();
+  }
+
+  QSignalSpy reuseFinished(&slice, &SliceService::sliceFinished);
+  QSignalSpy reuseFailed(&slice, &SliceService::sliceFailed);
+  QVERIFY(reuseFinished.isValid());
+  QVERIFY(reuseFailed.isValid());
+  QVERIFY2(slice.loadGCodeFromPrevious(sourcePath), "synthetic G-code should start the reuse parse");
+  QTRY_VERIFY_WITH_TIMEOUT(reuseFinished.count() > 0 || reuseFailed.count() > 0, 60000);
+  if (reuseFailed.count() > 0)
+  {
+    const QString reason = reuseFailed.first().at(0).toString();
+    QSKIP(QString("Synthetic G-code reuse failed (env-dependent): %1").arg(reason).toUtf8().constData());
+  }
+  QVERIFY2(!slice.outputPath().isEmpty(), "the reuse parse should expose the source as output path");
+
+  const QString targetPath = tempDir.filePath(QStringLiteral("engn03_exported.gcode"));
+  QFile::remove(targetPath);
+
+  QSignalSpy startedSpy(&slice, &SliceService::exportStarted);
+  QSignalSpy finishedSpy(&slice, &SliceService::exportFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::exportFailed);
+  QSignalSpy progressSpy(&slice, &SliceService::progressUpdated);
+  QVERIFY(startedSpy.isValid());
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+  QVERIFY(progressSpy.isValid());
+
+  QVERIFY2(slice.exportGCodeToPath(targetPath), "export should start");
+  QCOMPARE(int(slice.sliceState()), int(SliceService::State::Exporting));
+  QVERIFY2(!slice.slicing(), "an export must not occupy the slicing state");
+
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 30000);
+  QVERIFY2(failedSpy.count() == 0,
+           qPrintable(failedSpy.count() > 0 ? failedSpy.first().at(0).toString() : QString()));
+  QVERIFY2(startedSpy.count() >= 1, "the worker export must announce exportStarted");
+  QVERIFY2(progressSpy.count() >= 1, "byte-based progress must be reported during the copy");
+  QCOMPARE(int(slice.sliceState()), int(SliceService::State::Completed));
+  QVERIFY2(QFileInfo::exists(targetPath), "the exported G-code file should be committed");
+  QCOMPARE(QFileInfo(targetPath).size(), QFileInfo(sourcePath).size());
+}
+
+// ── v5.16 Phase 239 (ENGN-03): validate warnings surface as notifications ──
+// Upstream distinguishes Print::validate warnings from errors
+// (Plater.cpp:13742-13759): the warning text becomes a notification while the
+// slice keeps running. Simulate the worker's warning delivery through the
+// signal BackendContext is wired to and assert the posted notification is a
+// warning (not an error) and the service never enters the error state.
+void ViewModelSmokeTests::validateWarningRoutesToBackendNotificationWithoutErrorState()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("Engn03ValidateWarning"));
+  BackendContext ctx;
+  auto *service = qobject_cast<SliceService *>(ctx.sliceService());
+  QVERIFY2(service != nullptr, "BackendContext must expose its slice service");
+  QVERIFY2(ctx.notificationsEnabled(), "notifications must be enabled for the routing test");
+
+  const QString warningText = QStringLiteral(
+      "TestObject is too close to others, there may be collisions when printing.");
+
+  // Signals are public in Qt6 -- emit the exact signal the slicing worker
+  // delivers on its non-fatal validate-warning branch.
+  emit service->validateWarning(warningText);
+
+  QCOMPARE(ctx.lastErrorMessage(), warningText);
+  QCOMPARE(ctx.lastErrorSeverity(), static_cast<int>(NotiWarning));
+  QVERIFY2(ctx.lastErrorSeverity() != static_cast<int>(NotiError),
+           "a validate warning must NOT be posted as an error");
+  QVERIFY2(int(service->sliceState()) != int(SliceService::State::Error),
+           "a validate warning must not put the service into the error state");
 }
 
 void ViewModelSmokeTests::monitor_refresh_updates_network_and_device()

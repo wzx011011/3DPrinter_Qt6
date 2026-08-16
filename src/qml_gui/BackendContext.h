@@ -96,6 +96,10 @@ class BackendContext final : public QObject
   // bed surfaces via Q_INVOKABLE. Returned as QObject* to avoid pulling
   // the PresetServiceMock header into every QML-facing include.
   Q_PROPERTY(QObject *presetServiceMock READ presetServiceMock CONSTANT)
+  // Phase 239 (ENGN-03): expose the slice engine service the same way the
+  // other services are exposed (QObject* CONSTANT). Lets QML/tests observe
+  // the engine-level validateWarning / export signals directly.
+  Q_PROPERTY(QObject *sliceService READ sliceService CONSTANT)
   // Phase 201 (v5.6 AMS Architecture Cleanup): mock->viewmodel for AMSSettingsDialog.
   Q_PROPERTY(QObject *amsMaterialsViewModel READ amsMaterialsViewModel CONSTANT)
   // Phase 202 (v5.6 Plugin Manager UI Real Backend): mock->service for
@@ -275,6 +279,7 @@ public:
   QObject *pluginService() const;
   /// Phase 199 (WIZ-01): preset data service for ConfigWizard enumeration.
   QObject *presetServiceMock() const;
+  QObject *sliceService() const;
   QObject *appSettings() const;
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }

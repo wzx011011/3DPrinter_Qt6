@@ -178,6 +178,15 @@ void EditorViewModel::invalidateSliceResultsForPlate(int plateIndex)
   if (plateIndex < 0)
     return;
 
+  // Phase 239 (ENGN-02): invalidation must also drop the previous-G-code
+  // reuse -- a stale result may not keep feeding the preview from the old
+  // file (same invalidation set as slicing itself).
+  if (m_previewReusedPreviousGcode
+      && projectService_ && plateIndex == projectService_->currentPlateIndex())
+  {
+    m_previewReusedPreviousGcode = false;
+  }
+
   const bool hadKnownResult = m_slicedPlateIndices.remove(plateIndex)
       || (sliceService_ && sliceService_->hasPlateResult(plateIndex))
       || m_sliceResultPlateIndex == plateIndex;
@@ -196,6 +205,10 @@ void EditorViewModel::invalidateSliceResultsForPlate(int plateIndex)
 
 void EditorViewModel::invalidateAllSliceResults()
 {
+  // Phase 239 (ENGN-02): the reuse flag belongs to the invalidation set --
+  // every path that marks results stale must also clear it.
+  m_previewReusedPreviousGcode = false;
+
   QSet<int> knownPlates = m_slicedPlateIndices;
   if (sliceService_ && sliceService_->resultPlateIndex() >= 0)
     knownPlates.insert(sliceService_->resultPlateIndex());
@@ -4011,6 +4024,11 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       m_sliceResultPlateIndex = -1;
       m_sliceAllQueue.clear();
       m_slicingAll = false;
+      // Phase 239 (ENGN-01): a failed auto-reslice/reuse must not strand the
+      // pending preview switch (upstream stays on the plater with the error
+      // notification visible).
+      m_pendingPreviewAfterSlice = false;
+      m_previewReusedPreviousGcode = false;
         statusText_ = message;
         emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &estimatedTime)
@@ -4040,6 +4058,16 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     {
       statusText_ = QStringLiteral("切片完成");
       emit stateChanged();
+    }
+    // Phase 239 (ENGN-01/02): complete the pending page switch that
+    // switchToPreview() armed before kicking the reslice / previous-G-code
+    // reuse (upstream reload_print lands in preview once the background
+    // process completes). Emitted LAST so every result state above is
+    // already consistent when the page flips.
+    if (m_pendingPreviewAfterSlice)
+    {
+      m_pendingPreviewAfterSlice = false;
+      emit previewRequested();
     } });
   // Phase 100 (WTREAD-01): deliver the captured-by-value wipe-tower geometry
   // (from Print::wipe_tower_data(), read in the SliceService worker) to the
@@ -7294,6 +7322,16 @@ bool EditorViewModel::canPreview() const
   return hasSliceResult();
 }
 
+bool EditorViewModel::pendingPreviewAfterSlice() const
+{
+  return m_pendingPreviewAfterSlice;
+}
+
+bool EditorViewModel::previewReusedPreviousGcode() const
+{
+  return m_previewReusedPreviousGcode;
+}
+
 bool EditorViewModel::canExportGCode() const
 {
   return hasSliceResult()
@@ -7418,6 +7456,8 @@ void EditorViewModel::requestSlice()
 
   m_sliceEstimatedTime.clear();
   m_sliceResultPlateIndex = -1;
+  // Phase 239 (ENGN-02): a fresh model slice is not a previous-G-code reuse.
+  m_previewReusedPreviousGcode = false;
   sliceService_->startSlice(projectService_->projectName());
 }
 
@@ -7458,6 +7498,10 @@ bool EditorViewModel::loadFile(const QString &filePath)
     m_sliceResultPlateIndex = -1;
     m_slicedPlateIndices.clear();
     m_stalePlateIndices.clear();
+    // Phase 239 (ENGN-01/02): new input invalidates the pending preview
+    // switch and any previous-G-code reuse.
+    m_pendingPreviewAfterSlice = false;
+    m_previewReusedPreviousGcode = false;
     statusText_ = QStringLiteral("正在加载...");
     m_collapsedGroupKeys.clear();
     m_collapsedObjectSourceIndices.clear();
@@ -7821,6 +7865,8 @@ void EditorViewModel::clearWorkspace()
   m_sliceResultPlateIndex = -1;
   m_slicedPlateIndices.clear();
   m_stalePlateIndices.clear();
+  m_pendingPreviewAfterSlice = false;
+  m_previewReusedPreviousGcode = false;
   m_slicingAll = false;
   m_sliceAllQueue.clear();
   m_fitHint = QVector4D();
@@ -7843,6 +7889,8 @@ void EditorViewModel::refreshAfterLoad()
   m_cachedMeshBatchSourceObjectIndices.clear();
   m_slicedPlateIndices.clear();
   m_stalePlateIndices.clear();
+  m_pendingPreviewAfterSlice = false;
+  m_previewReusedPreviousGcode = false;
   if (sliceService_)
     sliceService_->clearResults();
   rebuildObjectEntriesFromService();
@@ -8134,13 +8182,52 @@ QString EditorViewModel::gizmoStatusText(int gizmoMode) const
 
 void EditorViewModel::switchToPreview()
 {
-  if (!canPreview())
+  // Phase 239 (ENGN-01/02), ported from upstream Plater::priv::
+  // set_current_panel's do_reslice (Plater.cpp:6165-6234):
+  //  - result VALID  -> reload the previous G-code instead of reslicing
+  //    (upstream BackgroundSlicingProcess::process_fff finished() branch,
+  //    BackgroundSlicingProcess.cpp:199-221) and land in preview when the
+  //    parse finishes;
+  //  - result STALE  -> auto-reslice the current plate and land in preview on
+  //    sliceFinished (upstream q->reslice());
+  //  - result MISSING or slicing impossible (empty plate / loading / already
+  //    slicing) -> honest no-op with the readiness hint (upstream's
+  //    !current_has_print_instances branch resets toolpaths and does not
+  //    switch).
+  const int plateIdx = projectService_ ? projectService_->currentPlateIndex() : -1;
+
+  if (canPreview() && plateIdx >= 0)
   {
-    statusText_ = previewActionHint();
-    emit stateChanged();
+    if (sliceService_)
+    {
+      const QString previousPath = sliceService_->plateOutputPath(plateIdx);
+      if (!previousPath.isEmpty() && QFileInfo::exists(previousPath)
+          && sliceService_->loadGCodeFromPrevious(previousPath))
+      {
+        m_pendingPreviewAfterSlice = true;
+        m_previewReusedPreviousGcode = true;
+        statusText_ = tr("正在复用上一次切片结果进入预览...");
+        emit stateChanged();
+        return;
+      }
+    }
+    // Reuse could not start (e.g. already parsing): keep the manual flow.
+    emit previewRequested();
     return;
   }
-  emit previewRequested();
+
+  if (plateIdx >= 0 && m_stalePlateIndices.contains(plateIdx) && canRequestSlice())
+  {
+    m_pendingPreviewAfterSlice = true;
+    m_previewReusedPreviousGcode = false;
+    statusText_ = tr("切片结果已过期，正在重新切片并切换到预览...");
+    emit stateChanged();
+    requestSlice();
+    return;
+  }
+
+  statusText_ = previewActionHint();
+  emit stateChanged();
 }
 
 // ── Bed shape (对齐上游 BedShapeDialog / bed_shape config) ──────────────────

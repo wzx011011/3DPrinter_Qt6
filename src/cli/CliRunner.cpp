@@ -362,9 +362,33 @@ int CliRunner::runSlice()
         }
         const QString gcodeDest = outDir + QStringLiteral("/")
             + sliceService_->defaultExportGCodeFileName(plate);
+        // Phase 239 (ENGN-03): the G-code copy runs on a QtConcurrent worker
+        // (exportGCodeToPath returns once the export STARTS), so wait for the
+        // finished/failed signal in a fresh event loop -- mirrors the slice
+        // wait above.
+        int exportExitCode = CLI_SLICING_ERROR;
+        QString exportError;
+        QEventLoop exportLoop;
+        connect(sliceService_, &SliceService::exportFinished,
+                &exportLoop, [&](const QString &) {
+            exportExitCode = CLI_SUCCESS;
+            exportLoop.quit();
+        });
+        connect(sliceService_, &SliceService::exportFailed,
+                &exportLoop, [&](const QString &message) {
+            exportError = message;
+            exportLoop.quit();
+        });
         if (!sliceService_->exportGCodeToPath(gcodeDest)) {
             QTextStream err(stderr);
             err << "Error: failed to export G-code to: " << gcodeDest << "\n";
+            return CLI_SLICING_ERROR;
+        }
+        exportLoop.exec();
+        if (exportExitCode != CLI_SUCCESS) {
+            QTextStream err(stderr);
+            err << "Error: failed to export G-code to: " << gcodeDest
+                << ": " << exportError << "\n";
             return CLI_SLICING_ERROR;
         }
 

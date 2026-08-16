@@ -1041,6 +1041,17 @@ public:
   Q_PROPERTY(bool hasStaleSliceResults READ hasStaleSliceResults NOTIFY stateChanged)
   Q_PROPERTY(bool canRequestSlice READ canRequestSlice NOTIFY stateChanged)
   Q_PROPERTY(bool canPreview READ canPreview NOTIFY stateChanged)
+  /// Phase 239 (ENGN-01): true while a switch-to-preview request is waiting
+  /// for the auto-reslice (or the previous-G-code reuse parse) to finish. The
+  /// page switch completes on sliceFinished (upstream Plater.cpp:6165-6234
+  /// do_reslice keeps the user on the plater until the background process
+  /// completes, then reload_print lands in preview).
+  Q_PROPERTY(bool pendingPreviewAfterSlice READ pendingPreviewAfterSlice NOTIFY stateChanged)
+  /// Phase 239 (ENGN-02): true when the current preview entry reused the
+  /// plate's previous G-code instead of reslicing (upstream
+  /// export_gcode_from_previous_file, BackgroundSlicingProcess.cpp:199-221).
+  /// Cleared by the same invalidation set that marks slice results stale.
+  Q_PROPERTY(bool previewReusedPreviousGcode READ previewReusedPreviousGcode NOTIFY stateChanged)
   Q_PROPERTY(bool canExportGCode READ canExportGCode NOTIFY stateChanged)
   Q_PROPERTY(QString sliceReadinessReason READ sliceReadinessReason NOTIFY stateChanged)
   Q_PROPERTY(QString previewActionHint READ previewActionHint NOTIFY stateChanged)
@@ -1140,6 +1151,8 @@ public:
   Q_INVOKABLE QString extruderUsedLength(int extruderId) const;
   Q_INVOKABLE QString extruderUsedWeight(int extruderId) const;
   bool hasSliceResult() const;
+  bool pendingPreviewAfterSlice() const;
+  bool previewReusedPreviousGcode() const;
   // Phase 52 PREPSB-05: staleness surface for Preview/Export gating
   QVariantList stalePlateIndices() const;
   bool hasStaleSliceResults() const;
@@ -1580,6 +1593,13 @@ private:
   bool m_slicingAll = false;
   QSet<int> m_slicedPlateIndices; ///< tracks which plates have valid slice results
   QSet<int> m_stalePlateIndices; ///< tracks plates whose previous slice result no longer matches current inputs
+  /// Phase 239 (ENGN-01): set by switchToPreview() when the current plate's
+  /// result is stale (kick reslice) or valid (kick previous-G-code reuse);
+  /// consumed by the sliceFinished handler to complete the page switch.
+  bool m_pendingPreviewAfterSlice = false;
+  /// Phase 239 (ENGN-02): the current preview entry reused the previous
+  /// G-code; cleared by the slice-result invalidation set.
+  bool m_previewReusedPreviousGcode = false;
   // Viewport warnings (对齐上游 EWarning)
   int m_viewportWarning = 0;    ///< 0=none, 1=ObjectOutside, 2=ObjectClashed
   QString m_viewportWarningMessage;

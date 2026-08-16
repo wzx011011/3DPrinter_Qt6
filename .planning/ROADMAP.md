@@ -49,7 +49,7 @@ to exactly one phase.
 - [x] **Phase 237: Menus, Shortcuts, Drag-Drop, And Import** - View menu,
   Delete All, missing shortcuts, window drag&drop, unit inference, embedded
   config restore, .gcode.3mf export, scale-to-fit.
-- [ ] **Phase 238: Preview Completion** - Ghost shells, tool marker,
+- [x] **Phase 238: Preview Completion** - Ghost shells, tool marker,
   Seam/Retract/Unretract/Wipe rendering, ToolChange tick UX, honest
   statistics, configured extruder colors, software fallback preview.
 - [ ] **Phase 239: Slicing Engine Semantics** - Auto-reslice on stale preview

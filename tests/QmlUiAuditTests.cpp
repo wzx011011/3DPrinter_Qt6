@@ -653,6 +653,10 @@ private slots:
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
   void previewCompletionSourceAudit();
+  // Phase 239 (ENGN-01..03): slicing engine semantics source audits --
+  // stale-preview auto-reslice, previous-G-code reuse wiring, async export
+  // worker, validate-warning notification routing.
+  void engineSemanticsSourceAudit();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -9359,4 +9363,75 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
            "PREV-07: SoftwareViewport::paintScene must draw the preview segments");
   QVERIFY2(softwareVp.contains(QStringLiteral("GCV1")),
            "PREV-07: the fallback parser must validate the GCV1 wire format");
+}
+
+void QmlUiAuditTests::engineSemanticsSourceAudit()
+{
+  const QString editorVmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString sliceCpp = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  const QString backendCpp = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  QVERIFY2(!editorVmCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!sliceCpp.isEmpty(), "Unable to read SliceService.cpp");
+  QVERIFY2(!backendCpp.isEmpty(), "Unable to read BackendContext.cpp");
+
+  // Extract a function body (from its signature to the closing brace at
+  // column 0) so the assertions below bind to the exact implementation.
+  const auto functionBody = [](const QString &source, const QString &signature) {
+    const int start = source.indexOf(signature);
+    if (start < 0)
+      return QString();
+    const int end = source.indexOf(QStringLiteral("\n}"), start);
+    return end > start ? source.mid(start, end - start) : QString();
+  };
+
+  // ── ENGN-01: auto-reslice on the stale Preview switch ─────────────────
+  // Upstream do_reslice (Plater.cpp:6165-6234) re-slices when switching to
+  // preview with an out-of-date result. switchToPreview must arm the pending
+  // switch flag and kick the requestSlice path.
+  const QString switchBody = functionBody(editorVmCpp,
+      QStringLiteral("void EditorViewModel::switchToPreview()"));
+  QVERIFY2(!switchBody.isEmpty(), "ENGN-01: EditorViewModel::switchToPreview must exist");
+  QVERIFY2(switchBody.contains(QStringLiteral("m_pendingPreviewAfterSlice = true")),
+           "ENGN-01: switchToPreview must arm the pending preview-switch flag");
+  QVERIFY2(switchBody.contains(QStringLiteral("requestSlice();")),
+           "ENGN-01: switchToPreview must kick the requestSlice path for the stale plate");
+  QVERIFY2(editorVmCpp.contains(QStringLiteral("if (m_pendingPreviewAfterSlice)")),
+           "ENGN-01: the sliceFinished handler must complete the pending switch");
+  QVERIFY2(editorVmCpp.contains(QStringLiteral("previewRequested();")),
+           "ENGN-01: the completed switch must emit previewRequested");
+
+  // ── ENGN-02: previous-G-code reuse wired into the preview entry ───────
+  // Upstream export_gcode_from_previous_file (BackgroundSlicingProcess.cpp
+  // :199-221) skips slicing when the result is still valid. loadGCodeFromPrevious
+  // must have a product caller, and the invalidation set must clear the reuse.
+  QVERIFY2(switchBody.contains(QStringLiteral("loadGCodeFromPrevious(")),
+           "ENGN-02: switchToPreview must reuse the plate's previous G-code on the valid path");
+  QVERIFY2(editorVmCpp.contains(QStringLiteral("m_previewReusedPreviousGcode = false;")),
+           "ENGN-02: invalidateAllSliceResults/invalidateSliceResultsForPlate must clear the reuse flag");
+
+  // ── ENGN-03a: non-blocking export worker ──────────────────────────────
+  // The chunked copy must run inside a QtConcurrent worker with progress and
+  // cancel support (mirrors the upstream background export).
+  const QString exportBody = functionBody(sliceCpp,
+      QStringLiteral("bool SliceService::exportSourceToPath"));
+  QVERIFY2(!exportBody.isEmpty(), "ENGN-03: SliceService::exportSourceToPath must exist");
+  QVERIFY2(exportBody.contains(QStringLiteral("QtConcurrent::run")),
+           "ENGN-03: the G-code export copy must run on a QtConcurrent worker");
+  QVERIFY2(sliceCpp.contains(QStringLiteral("copyGcodeChunked(")),
+           "ENGN-03: the worker must run the shared chunked-copy core");
+  QVERIFY2(sliceCpp.contains(QStringLiteral("void SliceService::cancelExport")),
+           "ENGN-03: the export worker must be cancellable (cancelExport)");
+  QVERIFY2(exportBody.contains(QStringLiteral("activeExportCancelFlag_")),
+           "ENGN-03: the export worker must be driven by a shared cancel flag");
+
+  // ── ENGN-03b: validate warnings routed to a notification ──────────────
+  // Upstream shows Print::validate warnings as a notification without
+  // aborting (Plater.cpp:13742-13759); postValidateWarning was dead code.
+  QVERIFY2(sliceCpp.contains(QStringLiteral("print.validate(&validationWarning)")),
+           "ENGN-03: the slice worker must request the non-fatal validate warning out-param");
+  QVERIFY2(sliceCpp.contains(QStringLiteral("emit receiver->validateWarning(")),
+           "ENGN-03: the worker must deliver the warning through validateWarning");
+  QVERIFY2(backendCpp.contains(QStringLiteral("&SliceService::validateWarning"))
+               && backendCpp.contains(QStringLiteral("postValidateWarning(")),
+           "ENGN-03: BackendContext must route validateWarning to postValidateWarning");
 }

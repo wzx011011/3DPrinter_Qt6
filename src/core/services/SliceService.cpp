@@ -16,6 +16,7 @@
 #include <QThread>
 #include <QSaveFile>
 #include <QUrl>
+#include <functional>
 #include <stdexcept>
 
 #ifdef HAS_LIBSLIC3R
@@ -94,6 +95,116 @@ namespace
              sourcePath.toUtf8().constData(),
              targetPath.toUtf8().constData(),
              reason.toUtf8().constData());
+  }
+
+  /// Phase 239 (ENGN-03): outcome of the worker-side chunked G-code copy.
+  /// `cancelled` is reported separately from a plain failure so the GUI-thread
+  /// delivery can set State::Cancelled (mirrors cancelSlice).
+  struct ExportCopyOutcome
+  {
+    bool ok = false;
+    bool cancelled = false;
+    QString error;
+    QString finalPath;
+    qint64 finalBytes = 0;
+  };
+
+  /// Phase 239 (ENGN-03): the chunked 1 MiB copy that used to run inline on
+  /// the GUI thread (exportSourceToPath). Runs inside the QtConcurrent worker;
+  /// `onProgress` is invoked (on the worker thread) whenever the byte-derived
+  /// percent changes -- callers wrap it in a queued invokeMethod so only the
+  /// GUI thread touches SliceService members. Cancel aborts at the next chunk
+  /// boundary via cancelWriting() (QSaveFile removes the partial target).
+  ExportCopyOutcome copyGcodeChunked(const QString &sourceAbs,
+                                     const QString &targetAbs,
+                                     qint64 totalBytes,
+                                     const std::shared_ptr<std::atomic_bool> &cancelFlag,
+                                     const std::function<void(int)> &onProgress)
+  {
+    ExportCopyOutcome outcome;
+    outcome.finalPath = targetAbs;
+
+    QFile input(sourceAbs);
+    if (!input.open(QIODevice::ReadOnly))
+    {
+      outcome.error = QObject::tr("Failed to read G-code source file");
+      return outcome;
+    }
+
+    QSaveFile output(targetAbs);
+    if (!output.open(QIODevice::WriteOnly))
+    {
+      outcome.error = QObject::tr("Failed to open G-code export target");
+      return outcome;
+    }
+
+    constexpr qint64 kChunkSize = 1024 * 1024;
+    QByteArray buffer;
+    buffer.resize(int(kChunkSize));
+    qint64 copiedBytes = 0;
+    int lastPercent = -1;
+    while (!input.atEnd())
+    {
+      if (cancelFlag && cancelFlag->load())
+      {
+        output.cancelWriting();
+        outcome.cancelled = true;
+        outcome.error = QObject::tr("Export cancelled");
+        return outcome;
+      }
+      const qint64 readBytes = input.read(buffer.data(), buffer.size());
+      if (readBytes < 0)
+      {
+        output.cancelWriting();
+        outcome.error = QObject::tr("Failed to read G-code source file");
+        return outcome;
+      }
+      if (output.write(buffer.constData(), readBytes) != readBytes)
+      {
+        output.cancelWriting();
+        outcome.error = QObject::tr("Failed to write G-code export target");
+        return outcome;
+      }
+      copiedBytes += readBytes;
+      if (onProgress && totalBytes > 0)
+      {
+        qint64 pct64 = copiedBytes * 100 / totalBytes;
+        if (pct64 < 0)
+          pct64 = 0;
+        else if (pct64 > 100)
+          pct64 = 100;
+        const int pct = int(pct64);
+        if (pct != lastPercent)
+        {
+          lastPercent = pct;
+          onProgress(pct);
+        }
+      }
+    }
+
+    if (totalBytes > 0 && copiedBytes != totalBytes)
+    {
+      output.cancelWriting();
+      outcome.error = QObject::tr("G-code export byte count mismatch");
+      return outcome;
+    }
+
+    if (!output.commit())
+    {
+      outcome.error = QObject::tr("Failed to finalize G-code export");
+      return outcome;
+    }
+
+    const QFileInfo finalInfo(targetAbs);
+    if (!finalInfo.exists() || !finalInfo.isFile() || (totalBytes > 0 && finalInfo.size() != totalBytes))
+    {
+      outcome.error = QObject::tr("G-code export verification failed");
+      return outcome;
+    }
+
+    outcome.ok = true;
+    outcome.finalBytes = finalInfo.size();
+    return outcome;
   }
 }
 
@@ -459,6 +570,10 @@ void SliceService::startSlice(const QString &projectName)
     QString resultFilamentLabel;
     QString resultCostLabel;
     QString resultPlateLabel;
+    // Phase 239 (ENGN-03): non-fatal Print::validate warning captured by value
+    // (no libslic3r type escapes the worker). Emitted as validateWarning() on
+    // the success branch only; the cancel/error branches never surface it.
+    QString validationWarningText;
     int resultPlateIndex = -1;
     int layerCount = 0;
     // Phase 100 (WTREAD-01): captured-by-value wipe-tower geometry. Stays
@@ -633,11 +748,20 @@ void SliceService::startSlice(const QString &projectName)
         throw std::runtime_error("Slicing cancelled");
       }
 
-      // Pre-slice validation (align upstream BackgroundSlicingProcess::validate)
+      // Pre-slice validation (align upstream BackgroundSlicingProcess::validate).
+      // Phase 239 (ENGN-03): upstream Print::validate reports non-fatal
+      // findings through the `warning` out-param (Print.cpp:1063;
+      // layered_print_cleareance_valid Print.cpp:930-934 writes "too close to
+      // others" into it while returning an empty error). A non-empty RETURN
+      // value still aborts the slice; a warning does not -- it is delivered to
+      // the GUI as a notification (upstream Plater.cpp:13742-13759
+      // process_validation_warning) via the validateWarning signal.
       {
-        Slic3r::StringObjectException validationError = print.validate();
+        Slic3r::StringObjectException validationWarning;
+        Slic3r::StringObjectException validationError = print.validate(&validationWarning);
         if (!validationError.string.empty())
           throw std::runtime_error("Slice validation failed: " + validationError.string);
+        validationWarningText = QString::fromUtf8(validationWarning.string.c_str());
       }
 
       notify(25, QObject::tr("Running slice"));
@@ -774,7 +898,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, capturedGeometry, capturedFilamentMap]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap]() {
       if (!receiver)
         return;
 
@@ -849,6 +973,12 @@ void SliceService::startSlice(const QString &projectName)
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
+      // Phase 239 (ENGN-03): surface the non-fatal validate warning BEFORE
+      // sliceFinished so the notification is queued ahead of the completion
+      // handling (upstream pushes the validate-warning notification from
+      // validate_current_plate, Plater.cpp:13749).
+      if (!validationWarningText.trimmed().isEmpty())
+        emit receiver->validateWarning(validationWarningText.trimmed());
       emit receiver->sliceFinished(receiver->estimatedTimeLabel_);
       // Phase 100 (WTREAD-01): deliver the captured-by-value wipe-tower geometry
       // to the GUI thread. Emitted on the success branch only (cancel/error
@@ -902,6 +1032,13 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   const QString localPath = info.absoluteFilePath();
   const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
   activeTargetPlateIndex_ = targetPlateIndex;
+  // Phase 239 (ENGN-02): keep the previous per-plate labels (weight/filament/
+  // cost/layer count). The reuse re-reads the SAME file the metadata was
+  // computed from (upstream keeps gcode_result statistics alive on the
+  // finished() branch, BackgroundSlicingProcess.cpp:199-221), so the labels
+  // survive the re-store below; only the estimated time is re-derived fresh
+  // from the parsed file.
+  const PlateSliceResult previousMeta = plateResults_.value(targetPlateIndex);
   plateResults_.remove(targetPlateIndex);
   clearStoredResult();
   emit resultChanged();
@@ -944,9 +1081,10 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       targetPlateLabel = QObject::tr("Plate %1").arg(targetPlateIndex + 1);
   }
 
-  QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetPlateLabel]()
+  QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetPlateLabel, previousMeta]()
                     {
     QString errorText;
+    QString estimatedTimeLabel;
 
 #ifdef HAS_LIBSLIC3R
     try
@@ -954,6 +1092,10 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       Slic3r::Print print;
       Slic3r::GCodeProcessorResult result;
       print.export_gcode_from_previous_file(localPath.toStdString(), &result);
+      // Phase 239 (ENGN-02): the reused file IS the statistics source
+      // (same readback startSlice uses; the parsed time survives the reuse
+      // instead of collapsing to an empty label).
+      estimatedTimeLabel = formatDurationLabel(result.print_statistics.modes[0].time);
     }
     catch (const std::exception &ex)
     {
@@ -971,7 +1113,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, targetPlateIndex, targetPlateLabel]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetPlateLabel, previousMeta]() {
       if (!receiver)
         return;
 
@@ -1018,18 +1160,23 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       receiver->progress_ = 100;
       receiver->statusLabel_ = QObject::tr("Existing G-code reuse complete");
       receiver->outputPath_ = localPath;
+      receiver->estimatedTimeLabel_ = estimatedTimeLabel.isEmpty() ? previousMeta.estimatedTimeLabel : estimatedTimeLabel;
       receiver->resultPlateLabel_ = targetPlateLabel;
       receiver->resultPlateIndex_ = targetPlateIndex;
+      receiver->resultWeightLabel_ = previousMeta.resultWeightLabel;
+      receiver->resultFilamentLabel_ = previousMeta.resultFilamentLabel;
+      receiver->resultCostLabel_ = previousMeta.resultCostLabel;
+      receiver->resultLayerCount_ = previousMeta.resultLayerCount;
       if (targetPlateIndex >= 0)
       {
         PlateSliceResult pr;
-        pr.estimatedTimeLabel = QString{};
-        pr.resultWeightLabel = QString{};
-        pr.resultFilamentLabel = QString{};
-        pr.resultCostLabel = QString{};
+        pr.estimatedTimeLabel = receiver->estimatedTimeLabel_;
+        pr.resultWeightLabel = previousMeta.resultWeightLabel;
+        pr.resultFilamentLabel = previousMeta.resultFilamentLabel;
+        pr.resultCostLabel = previousMeta.resultCostLabel;
         pr.outputPath = localPath;
-        pr.resultLayerCount = 0;
-        pr.totalFilamentMm = 0.0;
+        pr.resultLayerCount = previousMeta.resultLayerCount;
+        pr.totalFilamentMm = previousMeta.totalFilamentMm;
         pr.source = int(ResultSource::PreviousGCode);
         receiver->storePlateResult(targetPlateIndex, pr);
       }
@@ -1037,7 +1184,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
-      emit receiver->sliceFinished(QString{});
+      emit receiver->sliceFinished(receiver->estimatedTimeLabel_);
     }, Qt::QueuedConnection); });
 
   return true;
@@ -1141,6 +1288,17 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
     return false;
   }
 
+  if (sliceState_ == State::Exporting)
+  {
+    setExportStatus(State::Completed, progress_, QObject::tr("A G-code export is already in progress"));
+    logExportFailure(QStringLiteral("all"),
+                     QString{},
+                     cleanDirectory,
+                     statusLabel_);
+    emit exportFailed(statusLabel_);
+    return false;
+  }
+
   QString stem = sanitizeFileStem(baseName);
   if (baseName.trimmed().isEmpty())
   {
@@ -1149,7 +1307,17 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
       stem = sanitizeFileStem(QFileInfo(projectService_->sourceFilePath()).completeBaseName());
   }
 
-  bool exportedAny = false;
+  // Phase 239 (ENGN-03): snapshot the plate list on the GUI thread (locked /
+  // non-printable plates and empty outputs are filtered here, reading only
+  // GUI-thread members); the worker then copies the files sequentially on the
+  // QtConcurrent thread -- one worker for the whole batch, mirroring upstream
+  // BackgroundSlicingProcess exporting plates one by one in the background.
+  struct PlateExportJob
+  {
+    QString sourceAbs;
+    QString targetAbs;
+  };
+  QList<PlateExportJob> jobs;
   qInfo("[SliceService] export all start dir=%s base=%s storedPlates=%d",
         dir.absolutePath().toUtf8().constData(),
         stem.toUtf8().constData(),
@@ -1162,13 +1330,13 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
     if (it->outputPath.isEmpty())
       continue;
 
-    const QString target = dir.filePath(ensureGcodeSuffix(QStringLiteral("%1_plate%2").arg(stem).arg(plateIndex + 1)));
-    if (!exportPlateGCodeToPath(plateIndex, target))
-      return false;
-    exportedAny = true;
+    PlateExportJob job;
+    job.sourceAbs = it->outputPath;
+    job.targetAbs = dir.filePath(ensureGcodeSuffix(QStringLiteral("%1_plate%2").arg(stem).arg(plateIndex + 1)));
+    jobs.append(job);
   }
 
-  if (!exportedAny)
+  if (jobs.isEmpty())
   {
     setExportStatus(State::Completed, progress_, QObject::tr("No sliced plates to export"));
     logExportFailure(QStringLiteral("all"),
@@ -1179,7 +1347,86 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
     return false;
   }
 
-  setExportStatus(State::Completed, 100, QObject::tr("Exported all sliced plates"));
+  activeExportCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+  const QPointer<SliceService> receiver(this);
+  const auto cancelFlag = activeExportCancelFlag_;
+  const int totalJobs = jobs.size();
+
+  setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
+  emit exportStarted(statusLabel_);
+
+  QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs]() {
+    QString failureReason;
+    QString failureSource;
+    QString failureTarget;
+    bool cancelled = false;
+    int doneJobs = 0;
+    QStringList exportedPaths;
+
+    for (const PlateExportJob &job : jobs)
+    {
+      const qint64 sourceBytes = QFileInfo(job.sourceAbs).size();
+      const auto onProgress = [receiver, doneJobs, totalJobs](int percent) {
+        if (!receiver)
+          return;
+        // Scale the per-file percent into the whole-batch range so the
+        // progress bar advances monotonically across plates.
+        const int overall = (doneJobs * 100 + percent) / totalJobs;
+        QMetaObject::invokeMethod(receiver, [receiver, overall]() {
+          if (!receiver)
+            return;
+          receiver->progress_ = overall;
+          emit receiver->progressChanged();
+          emit receiver->progressUpdated(overall, receiver->statusLabel_);
+        }, Qt::QueuedConnection);
+      };
+
+      const ExportCopyOutcome outcome = copyGcodeChunked(job.sourceAbs, job.targetAbs, sourceBytes, cancelFlag, onProgress);
+      if (outcome.cancelled)
+      {
+        cancelled = true;
+        failureReason = outcome.error;
+        failureSource = job.sourceAbs;
+        failureTarget = job.targetAbs;
+        break;
+      }
+      if (!outcome.ok)
+      {
+        failureReason = outcome.error;
+        failureSource = job.sourceAbs;
+        failureTarget = job.targetAbs;
+        break;
+      }
+      exportedPaths.append(outcome.finalPath);
+      ++doneJobs;
+    }
+
+    if (!receiver)
+      return;
+
+    QMetaObject::invokeMethod(receiver, [receiver, cancelled, failureReason, failureSource,
+                                         failureTarget, exportedPaths]() {
+      if (!receiver)
+        return;
+
+      receiver->activeExportCancelFlag_.reset();
+
+      if (cancelled || !failureReason.isEmpty())
+      {
+        receiver->setExportStatus(cancelled ? State::Cancelled : State::Completed,
+                                  receiver->progress_,
+                                  failureReason);
+        logExportFailure(QStringLiteral("all"), failureSource, failureTarget, failureReason);
+        emit receiver->exportFailed(receiver->statusLabel_);
+        return;
+      }
+
+      for (const QString &path : exportedPaths)
+        emit receiver->exportFinished(path);
+      receiver->setExportStatus(State::Completed, 100, QObject::tr("Exported all sliced plates"));
+    }, Qt::QueuedConnection);
+  });
+
   return true;
 }
 
@@ -1241,66 +1488,91 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
     return failExport(QObject::tr("Choose a different G-code export path"));
   }
 
-  QFile input(srcInfo.absoluteFilePath());
-  if (!input.open(QIODevice::ReadOnly))
+  if (sliceState_ == State::Exporting)
   {
-    return failExport(QObject::tr("Failed to read G-code source file"));
+    return failExport(QObject::tr("A G-code export is already in progress"));
   }
 
-  setExportStatus(State::Exporting, 95, QObject::tr("Exporting G-code"));
+  // Phase 239 (ENGN-03): the copy itself runs on a QtConcurrent worker so a
+  // multi-hundred-MB G-code never freezes the GUI thread (upstream runs the
+  // export inside BackgroundSlicingProcess's background thread). Progress is
+  // delivered through the queued progressUpdated signal; completion through
+  // exportFinished / exportFailed. cancelExport() flips the shared flag and
+  // the worker aborts at the next 1 MiB chunk boundary.
+  activeExportCancelFlag_ = std::make_shared<std::atomic_bool>(false);
+  const QPointer<SliceService> receiver(this);
+  const auto cancelFlag = activeExportCancelFlag_;
+  const QString sourceAbs = srcInfo.absoluteFilePath();
+  const QString targetAbs = targetInfo.absoluteFilePath();
+  const qint64 totalBytes = srcInfo.size();
+
+  setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QSaveFile output(targetInfo.absoluteFilePath());
-  if (!output.open(QIODevice::WriteOnly))
-  {
-    return failExport(QObject::tr("Failed to open G-code export target"));
-  }
+  QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes]() {
+    const auto onProgress = [receiver](int percent) {
+      if (!receiver)
+        return;
+      QMetaObject::invokeMethod(receiver, [receiver, percent]() {
+        if (!receiver)
+          return;
+        receiver->progress_ = percent;
+        emit receiver->progressChanged();
+        emit receiver->progressUpdated(percent, receiver->statusLabel_);
+      }, Qt::QueuedConnection);
+    };
 
-  constexpr qint64 kChunkSize = 1024 * 1024;
-  QByteArray buffer;
-  buffer.resize(int(kChunkSize));
-  qint64 copiedBytes = 0;
-  while (!input.atEnd())
-  {
-    const qint64 readBytes = input.read(buffer.data(), buffer.size());
-    if (readBytes < 0)
-    {
-      output.cancelWriting();
-      return failExport(QObject::tr("Failed to read G-code source file"));
-    }
-    if (output.write(buffer.constData(), readBytes) != readBytes)
-    {
-      output.cancelWriting();
-      return failExport(QObject::tr("Failed to write G-code export target"));
-    }
-    copiedBytes += readBytes;
-  }
+    const ExportCopyOutcome outcome = copyGcodeChunked(sourceAbs, targetAbs, totalBytes, cancelFlag, onProgress);
 
-  if (copiedBytes != srcInfo.size())
-  {
-    output.cancelWriting();
-    return failExport(QObject::tr("G-code export byte count mismatch"));
-  }
+    if (!receiver)
+      return;
 
-  if (!output.commit())
-  {
-    return failExport(QObject::tr("Failed to finalize G-code export"));
-  }
+    QMetaObject::invokeMethod(receiver, [receiver, outcome, sourceAbs, targetAbs, displayName]() {
+      if (!receiver)
+        return;
 
-  const QFileInfo finalInfo(targetInfo.absoluteFilePath());
-  if (!finalInfo.exists() || !finalInfo.isFile() || finalInfo.size() != srcInfo.size())
-  {
-    return failExport(QObject::tr("G-code export verification failed"));
-  }
+      receiver->activeExportCancelFlag_.reset();
 
-  const QString exportedName = finalInfo.fileName().isEmpty() ? displayName : finalInfo.fileName();
-  setExportStatus(State::Completed, 100, QObject::tr("Exported: %1").arg(exportedName));
-  qInfo("[SliceService] export finished source=%s target=%s bytes=%lld",
-        srcInfo.absoluteFilePath().toUtf8().constData(),
-        finalInfo.absoluteFilePath().toUtf8().constData(),
-        static_cast<long long>(finalInfo.size()));
-  emit exportFinished(finalInfo.absoluteFilePath());
+      if (outcome.cancelled)
+      {
+        receiver->setExportStatus(State::Cancelled, receiver->progress_, outcome.error);
+        logExportFailure(QStringLiteral("single"), sourceAbs, targetAbs, outcome.error);
+        emit receiver->exportFailed(receiver->statusLabel());
+        return;
+      }
+
+      if (!outcome.ok)
+      {
+        receiver->setExportStatus(State::Completed, receiver->progress_, outcome.error);
+        logExportFailure(QStringLiteral("single"), sourceAbs, targetAbs, outcome.error);
+        emit receiver->exportFailed(receiver->statusLabel_);
+        return;
+      }
+
+      const QFileInfo finalInfo(outcome.finalPath);
+      const QString exportedName = finalInfo.fileName().isEmpty() ? displayName : finalInfo.fileName();
+      receiver->setExportStatus(State::Completed, 100, QObject::tr("Exported: %1").arg(exportedName));
+      qInfo("[SliceService] export finished source=%s target=%s bytes=%lld",
+            sourceAbs.toUtf8().constData(),
+            outcome.finalPath.toUtf8().constData(),
+            static_cast<long long>(outcome.finalBytes));
+      emit receiver->exportFinished(outcome.finalPath);
+    }, Qt::QueuedConnection);
+  });
+
   return true;
+}
+
+void SliceService::cancelExport()
+{
+  if (sliceState_ != State::Exporting || !activeExportCancelFlag_)
+    return;
+
+  activeExportCancelFlag_->store(true);
+  statusLabel_ = QObject::tr("Cancelling G-code export");
+  emit progressChanged();
+  emit stateChanged();
+  emit sliceStateChanged();
 }
 
 bool SliceService::hasPlateResult(int plateIndex) const
