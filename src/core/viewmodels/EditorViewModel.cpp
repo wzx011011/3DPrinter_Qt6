@@ -3392,6 +3392,43 @@ void EditorViewModel::syncBedFromPrinterPreset()
     }
   }
 
+  // v5.16 (EXCLAREA): bed_exclude_area polygons (upstream coPoints,
+  // Plater.cpp:8169 -> PartPlate::set_shapes). Same comma-separated point
+  // serialization as printable_area; kept FLAT — upstream groups every 4
+  // consecutive points into one rectangle (init_exclude_bounding_box).
+  {
+    QVariantList excludeFlat;
+    const QString excludeRaw = configViewModel_->mergedConfigValues()
+        .value(QStringLiteral("bed_exclude_area")).toString();
+    if (!excludeRaw.isEmpty()) {
+      const QStringList coords = excludeRaw.split(QLatin1Char(','), Qt::SkipEmptyParts);
+      bool ok = true;
+      for (const QString &coord : coords) {
+        bool okCoord = false;
+        const double value = coord.trimmed().toDouble(&okCoord);
+        if (!okCoord || !qIsFinite(value)) {
+          ok = false;
+          break;
+        }
+        excludeFlat.append(value);
+      }
+      // Trailing points that cannot complete a rectangle are dropped
+      // (mirrors the strict index % 4 grouping upstream).
+      const int usable = (excludeFlat.size() / 8) * 8;
+      if (usable != excludeFlat.size())
+        excludeFlat.resize(usable);
+    }
+    m_bedExcludeAreas = excludeFlat;
+  }
+
+  // v5.16 (HTLIMIT): extruder_clearance_height_to_rod/_to_lid
+  // (Plater.cpp:8151-8152). Zero when the preset layer does not carry the
+  // keys — the renderer keeps the limit geometry hidden in that case.
+  m_bedHeightToRod = float(configViewModel_->mergedConfigValues()
+      .value(QStringLiteral("extruder_clearance_height_to_rod"), 0.0).toDouble());
+  m_bedHeightToLid = float(configViewModel_->mergedConfigValues()
+      .value(QStringLiteral("extruder_clearance_height_to_lid"), 0.0).toDouble());
+
   // Bed texture image: bed_custom_texture overrides the machine_model asset
   // (upstream Plater.cpp:12996 priority — custom wins when non-empty), and
   // the BBL bed-type texture system replaces both when active (the printer

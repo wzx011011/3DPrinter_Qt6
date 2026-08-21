@@ -61,7 +61,85 @@ private slots:
   void activePlateFilteringKeepsOnlyCurrentPlateSources();
   void emptyActivePlateDoesNotFallbackToAllModelBatches();
   void selectionAndHoverDoNotDirtyModelGeometry();
+  // v5.16 (EXCLAREA): upstream render_exclude_area fill per plate.
+  void bedExcludeAreasFillPerPlateWithUpstreamColors();
+  // v5.16 (HTLIMIT): upstream calc_height_limit rings + verticals.
+  void heightLimitVerticesFollowUpstreamPalette();
 };
+
+// v5.16 (EXCLAREA): one rectangle polygon must fan-fill on every plate with
+// the upstream selected/unselected grays, offset by each plate's grid stride
+// (upstream set_shape adds the plate position to every exclude point).
+void PrepareSceneDataTests::bedExcludeAreasFillPerPlateWithUpstreamColors()
+{
+  PrepareSceneData scene;
+  scene.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
+  scene.setPlateContext(0, 2, {});
+  scene.takeDirtyFlags();
+  const qsizetype baseFillCount = scene.bedFillVertices().size();
+
+  // Flat point stream (upstream coPoints): one rectangle = 8 coords.
+  QVariantList excludeFlat{10.0, 10.0, 50.0, 10.0, 50.0, 40.0, 10.0, 40.0};
+  scene.setBedExcludeAreas(excludeFlat);
+  QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyBed) != 0);
+  QCOMPARE(scene.bedExcludeAreas().size(), 8);
+
+  // Fan triangulation of a 4-point rectangle = 2 triangles = 6 vertices per
+  // plate; two plates -> +12.
+  QCOMPARE(scene.bedFillVertices().size(), baseFillCount + 12);
+
+  const float strideX = 220.0f * 1.2f;
+  auto findVertex = [&scene](float x, float y, float r, float g, float b) {
+    for (const auto &v : scene.bedFillVertices()) {
+      if (qFuzzyCompare(v.x, x) && qFuzzyCompare(v.y, y)
+          && qFuzzyCompare(v.r, r) && qFuzzyCompare(v.g, g)
+          && qFuzzyCompare(v.b, b))
+        return true;
+    }
+    return false;
+  };
+  // Plate 0 is selected: upstream render_exclude_area select gray.
+  QVERIFY(findVertex(10.0f, 10.0f, 0.765f, 0.7686f, 0.7686f));
+  // Plate 1 sits at stride X and uses the unselect gray.
+  QVERIFY(findVertex(10.0f + strideX, 10.0f, 0.9f, 0.9f, 0.9f));
+
+  // Malformed payloads are ignored: odd coordinate count and an incomplete
+  // rectangle group (< 8 coords) never reach the fill buffer.
+  scene.setBedExcludeAreas(QVariantList{1.0, 2.0, 3.0, 4.0, 5.0});
+  QCOMPARE(scene.bedFillVertices().size(), baseFillCount);
+}
+
+// v5.16 (HTLIMIT): active limits draw ground->rod verticals + rod ring in the
+// BOTTOM color and rod->lid verticals + lid ring in the TOP color per plate;
+// inactive or zero-height requests stay empty.
+void PrepareSceneDataTests::heightLimitVerticesFollowUpstreamPalette()
+{
+  PrepareSceneData scene;
+  scene.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
+  scene.takeDirtyFlags();
+
+  scene.setHeightLimit(true, 140.0f, 250.0f);
+  QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyBed) != 0);
+  // Per plate: 4 corner verticals (ground->rod) + rod ring (4 edges) +
+  // 4 corner verticals (rod->lid) + lid ring = 8+8+8+8 line vertices.
+  QCOMPARE(scene.bedLimitVertices().size(), qsizetype(32));
+
+  auto hasLineAtHeight = [&scene](float height, float r, float g, float b) {
+    for (const auto &v : scene.bedLimitVertices()) {
+      if (qFuzzyCompare(v.y, height) && qFuzzyCompare(v.r, r)
+          && qFuzzyCompare(v.g, g) && qFuzzyCompare(v.b, b))
+        return true;
+    }
+    return false;
+  };
+  QVERIFY(hasLineAtHeight(140.0f, 0.4f, 0.4f, 1.0f));
+  QVERIFY(hasLineAtHeight(250.0f, 0.6f, 0.6f, 1.0f));
+
+  // Inactive gate clears the geometry (upstream HEIGHT_LIMIT_NONE).
+  scene.takeDirtyFlags();
+  scene.setHeightLimit(false, 140.0f, 250.0f);
+  QVERIFY(scene.bedLimitVertices().isEmpty());
+}
 
 void PrepareSceneDataTests::bedGeometryUsesDimensionsAndGridIntervals()
 {

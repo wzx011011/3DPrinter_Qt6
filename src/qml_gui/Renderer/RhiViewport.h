@@ -46,6 +46,14 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl WRITE setBedTextureUrl NOTIFY bedTextureUrlChanged)
   // v5.16 (BEDMODEL): printer bed_model STL triangle stream (scene coords).
   Q_PROPERTY(QByteArray bedModelMeshData READ bedModelMeshData WRITE setBedModelMeshData)
+  // v5.16 (EXCLAREA): bed_exclude_area polygons (flat x,y point lists,
+  // upstream coPoints) rendered by PartPlate::render_exclude_area.
+  Q_PROPERTY(QVariantList bedExcludeAreas READ bedExcludeAreas WRITE setBedExcludeAreas)
+  // v5.16 (HTLIMIT): upstream render_height_limit — ByObject clearance rings
+  // at extruder_clearance_height_to_rod/_to_lid (Plater.cpp:8151-8152).
+  Q_PROPERTY(float bedHeightToRod READ bedHeightToRod WRITE setBedHeightToRod)
+  Q_PROPERTY(float bedHeightToLid READ bedHeightToLid WRITE setBedHeightToLid)
+  Q_PROPERTY(bool bedHeightLimitActive READ bedHeightLimitActive WRITE setBedHeightLimitActive)
   // v5.16 (BEDTYPE-TEX): BBL-only bed-type texture gates + assets + the
   // current plate's bed type index (Slic3r BedType).
   Q_PROPERTY(bool bedTypeTexturesActive READ bedTypeTexturesActive WRITE setBedTypeTexturesActive)
@@ -276,6 +284,14 @@ public:
   void setBedTextureUrl(const QUrl &value);
   QByteArray bedModelMeshData() const { return m_bedModelMeshData; }
   void setBedModelMeshData(const QByteArray &value);
+  QVariantList bedExcludeAreas() const { return m_bedExcludeAreas; }
+  void setBedExcludeAreas(const QVariantList &value);
+  float bedHeightToRod() const { return m_bedHeightToRod; }
+  void setBedHeightToRod(float value);
+  float bedHeightToLid() const { return m_bedHeightToLid; }
+  void setBedHeightToLid(float value);
+  bool bedHeightLimitActive() const { return m_bedHeightLimitActive; }
+  void setBedHeightLimitActive(bool value);
   bool bedTypeTexturesActive() const { return m_bedTypeTexturesActive; }
   void setBedTypeTexturesActive(bool value);
   bool bedCaliLinesActive() const { return m_bedCaliLinesActive; }
@@ -666,6 +682,10 @@ private:
   float m_bedDiameter = 220.f;
   QUrl m_bedTextureUrl;
   QByteArray m_bedModelMeshData;
+  QVariantList m_bedExcludeAreas;
+  float m_bedHeightToRod = 0.0f;
+  float m_bedHeightToLid = 0.0f;
+  bool m_bedHeightLimitActive = false;
   bool m_bedTypeTexturesActive = false;
   bool m_bedCaliLinesActive = false;
   QString m_bedTypeImagesDir;

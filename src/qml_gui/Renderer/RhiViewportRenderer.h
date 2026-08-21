@@ -164,6 +164,8 @@ private:
 
   std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
   std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
+  // v5.16 (HTLIMIT): ByObject clearance rings (upstream render_height_limit).
+  std::unique_ptr<QRhiBuffer> m_bedLimitBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
   std::unique_ptr<QRhiBuffer> m_highlightVertexBuffer;
   std::unique_ptr<QRhiBuffer> m_cameraUniformBuffer;
@@ -310,11 +312,13 @@ private:
   int m_frameCount = 0;
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
+  quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
   quint32 m_highlightVertexBufferBytes = 0;
   quint32 m_cameraUniformBufferBytes = 0;
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
+  quint32 m_bedLimitVertexCount = 0;
   quint32 m_modelVertexCount = 0;
   quint32 m_highlightVertexCount = 0;
   quint32 m_cutPlaneFillVertexCount = 0;

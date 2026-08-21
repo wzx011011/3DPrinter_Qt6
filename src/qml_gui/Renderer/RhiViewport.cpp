@@ -218,6 +218,43 @@ void RhiViewport::setBedModelMeshData(const QByteArray &value)
   update();
 }
 
+// v5.16 (EXCLAREA): exclude polygons reshape the bed fill geometry, so they
+// bump the scene generation like the other bed-shape properties.
+void RhiViewport::setBedExcludeAreas(const QVariantList &value)
+{
+  if (m_bedExcludeAreas == value)
+    return;
+  m_bedExcludeAreas = value;
+  ++m_sceneGeneration;
+  update();
+}
+
+// v5.16 (HTLIMIT): plain value + update(); the renderer diff-checks the
+// members each synchronize (same pattern as bedTypeTexturesActive).
+void RhiViewport::setBedHeightToRod(float value)
+{
+  if (qFuzzyCompare(m_bedHeightToRod, value))
+    return;
+  m_bedHeightToRod = value;
+  update();
+}
+
+void RhiViewport::setBedHeightToLid(float value)
+{
+  if (qFuzzyCompare(m_bedHeightToLid, value))
+    return;
+  m_bedHeightToLid = value;
+  update();
+}
+
+void RhiViewport::setBedHeightLimitActive(bool value)
+{
+  if (m_bedHeightLimitActive == value)
+    return;
+  m_bedHeightLimitActive = value;
+  update();
+}
+
 void RhiViewport::setBedTypeTexturesActive(bool value)
 {
   if (m_bedTypeTexturesActive == value)

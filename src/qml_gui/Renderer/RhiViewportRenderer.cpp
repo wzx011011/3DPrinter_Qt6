@@ -252,8 +252,14 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                           viewport->m_bedOriginY,
                           viewport->m_bedShapeType,
                           viewport->m_bedDiameter);
+    m_prepareScene.setBedExcludeAreas(viewport->m_bedExcludeAreas);
     m_prepareScene.setShowBed(viewport->m_showBed);
   }
+  // v5.16 (HTLIMIT): diff-checked like the bedtype gates (no scene churn).
+  m_prepareScene.setHeightLimit(viewport->m_bedHeightLimitActive
+                                    && viewport->m_bedHeightToRod > 0.0f,
+                                viewport->m_bedHeightToRod,
+                                viewport->m_bedHeightToLid);
   if (m_modelGeneration != viewport->m_modelGeneration) {
     m_modelGeneration = viewport->m_modelGeneration;
     m_prepareScene.setPlateContext(viewport->m_currentPlateIndex,
@@ -717,6 +723,15 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
+    // v5.16 (HTLIMIT): ByObject clearance rings over the grid (upstream
+    // render_height_limit runs inside PartPlate::render; preview's
+    // GCodeViewer::_render_bed does not draw them).
+    if (m_prepareScene.showBed() && m_bedLimitBuffer && m_bedLimitVertexCount > 0) {
+      cb->setGraphicsPipeline(m_linePipeline.get());
+      const QRhiCommandBuffer::VertexInput limitBinding(m_bedLimitBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &limitBinding);
+      cb->draw(m_bedLimitVertexCount);
+    }
     // v5.15 (BEDTEX): printer bed texture image drawn over the background +
     // grid, layered exactly like upstream render_logo (blended, no depth
     // writes). Drawn before the model so the mesh (which does depth-test)
@@ -1010,6 +1025,7 @@ void RhiViewportRenderer::releaseResources()
   m_highlightVertexBuffer.reset();
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
+  m_bedLimitBuffer.reset();
   m_bedFillBuffer.reset();
   resetPreviewGpuState(true);
   // Phase 238 (PREV-01/02): drop the preview ghost-shell + tool-marker GPU
@@ -1040,6 +1056,7 @@ void RhiViewportRenderer::releaseResources()
   m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
+  m_bedLimitBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
   m_highlightVertexBufferBytes = 0;
   m_cameraUniformBufferBytes = 0;
@@ -2059,15 +2076,26 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
 
   const QVector<Vertex> fillVertices = buildSceneVertices(m_prepareScene.bedFillVertices());
   const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
+  // v5.16 (HTLIMIT): ModelVertex and Vertex share the 7-float layout; the
+  // limit lines carry their height in y directly.
+  const QList<PrepareSceneData::ModelVertex> &limitSource =
+      m_prepareScene.bedLimitVertices();
+  QVector<Vertex> limitVertices;
+  limitVertices.reserve(limitSource.size());
+  for (const PrepareSceneData::ModelVertex &v : limitSource)
+    limitVertices.append(Vertex{v.x, v.y, v.z, v.r, v.g, v.b, v.a});
   const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
   const quint32 lineBytes = quint32(lineVertices.size() * int(sizeof(Vertex)));
+  const quint32 limitBytes = quint32(limitVertices.size() * int(sizeof(Vertex)));
 
   if (!ensureBuffer(m_bedFillBuffer, fillBytes, m_bedFillBufferBytes, QRhiBuffer::VertexBuffer)
-      || !ensureBuffer(m_bedLineBuffer, lineBytes, m_bedLineBufferBytes, QRhiBuffer::VertexBuffer))
+      || !ensureBuffer(m_bedLineBuffer, lineBytes, m_bedLineBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_bedLimitBuffer, limitBytes, m_bedLimitBufferBytes, QRhiBuffer::VertexBuffer))
     return false;
 
   m_bedFillVertexCount = quint32(fillVertices.size());
   m_bedLineVertexCount = quint32(lineVertices.size());
+  m_bedLimitVertexCount = quint32(limitVertices.size());
   if (m_bedFillBuffer && fillBytes > 0) {
     updates->uploadStaticBuffer(m_bedFillBuffer.get(),
                                 0,
@@ -2079,6 +2107,12 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
                                 0,
                                 lineBytes,
                                 lineVertices.constData());
+  }
+  if (m_bedLimitBuffer && limitBytes > 0) {
+    updates->uploadStaticBuffer(m_bedLimitBuffer.get(),
+                                0,
+                                limitBytes,
+                                limitVertices.constData());
   }
 
   return true;

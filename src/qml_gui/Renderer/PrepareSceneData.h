@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QVariant>
 #include <QtGlobal>
 
 class PrepareSceneData
@@ -93,6 +94,15 @@ public:
   }
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
   void setHoveredSourceObjectIndex(int sourceObjectIndex);
+  // v5.16 (EXCLAREA): bed_exclude_area FLAT point stream [x1,y1,x2,y2,...]
+  // (upstream coPoints; init_exclude_bounding_box groups every 4 points into
+  // one rectangle). Bed-relative coordinates.
+  void setBedExcludeAreas(const QVariantList &areas);
+  const QVariantList &bedExcludeAreas() const { return m_bedExcludeAreas; }
+  // v5.16 (HTLIMIT): upstream calc_height_limit/render_height_limit
+  // (PartPlate.cpp:512-561/914) — ByObject plates draw clearance rings at
+  // extruder_clearance_height_to_rod/_to_lid.
+  void setHeightLimit(bool active, float heightToRod, float heightToLid);
   void markCameraDirty();
 
   quint32 peekDirtyFlags() const;
@@ -117,6 +127,7 @@ public:
 
   const QList<Vertex> &bedFillVertices() const;
   const QList<Vertex> &bedLineVertices() const;
+  const QList<ModelVertex> &bedLimitVertices() const;
   const QList<ModelVertex> &modelVertices() const;
   const QList<ModelBatch> &modelBatches() const;
   const ModelBounds &modelBounds() const;
@@ -141,6 +152,8 @@ private:
                       float r, float g, float b, float a);
   void appendRectBorder(float left, float top, float right, float bottom,
                         float r, float g, float b);
+  void appendExcludeFills(float plateLeft, float plateTop, bool selected);
+  void rebuildHeightLimitGeometry();
 
 
   float m_bedWidth = 220.0f;
@@ -151,6 +164,11 @@ private:
   float m_bedDiameter = 220.0f;
   bool m_showBed = true;
 
+  QVariantList m_bedExcludeAreas;
+  bool m_heightLimitActive = false;
+  float m_heightToRod = 0.0f;
+  float m_heightToLid = 0.0f;
+
   int m_currentPlateIndex = 0;
   int m_plateCount = 1;
   QList<int> m_activeObjectIndices;
@@ -158,6 +176,7 @@ private:
 
   QList<Vertex> m_bedFillVertices;
   QList<Vertex> m_bedLineVertices;
+  QList<ModelVertex> m_bedLimitVertices;
   QList<ModelVertex> m_modelVertices;
   QList<ModelBatch> m_modelBatches;
   ModelBounds m_modelBounds;

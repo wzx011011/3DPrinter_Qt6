@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <QPair>
 
 namespace
 {
@@ -35,6 +36,20 @@ namespace
   constexpr float kAxisR = 0.12f;
   constexpr float kAxisG = 0.78f;
   constexpr float kAxisB = 0.37f;
+  // Upstream render_exclude_area palette (PartPlate.cpp:859-860):
+  // selected vs unselected exclude-region fill.
+  constexpr float kExclSelR = 0.765f;
+  constexpr float kExclSelG = 0.7686f;
+  constexpr float kExclSelB = 0.7686f;
+  constexpr float kExclUnsel = 0.9f;
+  // Upstream height-limit palette (PartPlate.cpp:86-87).
+  constexpr float kLimitBottomR = 0.4f;
+  constexpr float kLimitBottomG = 0.4f;
+  constexpr float kLimitBottomB = 1.0f;
+  constexpr float kLimitTopR = 0.6f;
+  constexpr float kLimitTopG = 0.6f;
+  constexpr float kLimitTopB = 1.0f;
+  constexpr float kLimitGroundZ = 0.02f;
 
   constexpr qsizetype kPackedBatchHeaderBytes = qsizetype(sizeof(qint32) * 2);
   constexpr qsizetype kPackedTrailerBytes = qsizetype(sizeof(float) * 6);
@@ -106,6 +121,30 @@ void PrepareSceneData::setShowBed(bool showBed)
 
   m_showBed = showBed;
   markDirty(DirtyVisibility | DirtyGpu);
+}
+
+void PrepareSceneData::setBedExcludeAreas(const QVariantList &areas)
+{
+  if (m_bedExcludeAreas == areas)
+    return;
+
+  m_bedExcludeAreas = areas;
+  rebuildBedGeometry();
+  markDirty(DirtyBed | DirtyGpu);
+}
+
+void PrepareSceneData::setHeightLimit(bool active, float heightToRod, float heightToLid)
+{
+  if (m_heightLimitActive == active
+      && nearlyEqual(m_heightToRod, heightToRod)
+      && nearlyEqual(m_heightToLid, heightToLid))
+    return;
+
+  m_heightLimitActive = active;
+  m_heightToRod = heightToRod;
+  m_heightToLid = heightToLid;
+  rebuildHeightLimitGeometry();
+  markDirty(DirtyBed | DirtyGpu);
 }
 
 void PrepareSceneData::setPlateContext(int currentPlateIndex,
@@ -375,6 +414,11 @@ const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedLineVertices() const
   return m_bedLineVertices;
 }
 
+const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::bedLimitVertices() const
+{
+  return m_bedLimitVertices;
+}
+
 const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::modelVertices() const
 {
   return m_modelVertices;
@@ -467,6 +511,7 @@ void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();
   m_bedLineVertices.clear();
+  m_bedLimitVertices.clear();
 
   if (!m_showBed)
     return;
@@ -499,7 +544,10 @@ void PrepareSceneData::rebuildBedGeometry()
     const float lineG = selected ? kLineSelG : kLineUnselG;
     const float lineB = selected ? kLineSelB : kLineUnselB;
 
+    // Upstream render order (PartPlate::render 2728-2765): background fill,
+    // then exclude area, then grid. Same fill buffer keeps the layering.
     appendRectFill(left, top, right, bottom, fillR, fillG, fillB, fillA);
+    appendExcludeFills(left, top, selected);
     appendRectBorder(left, top, right, bottom, lineR, lineG, lineB);
 
     for (float x = left + kFineGridMm; x < right; x += kFineGridMm) {
@@ -518,6 +566,8 @@ void PrepareSceneData::rebuildBedGeometry()
       appendLine(left, originY, right, originY, kAxisR, kAxisG, kAxisB, 0.95f);
     }
   }
+
+  rebuildHeightLimitGeometry();
 }
 
 void PrepareSceneData::clearModelGeometry()
@@ -586,4 +636,112 @@ void PrepareSceneData::appendRectBorder(float left, float top, float right, floa
   appendLine(right, top, right, bottom, r, g, b, 0.95f);
   appendLine(right, bottom, left, bottom, r, g, b, 0.95f);
   appendLine(left, bottom, left, top, r, g, b, 0.95f);
+}
+
+void PrepareSceneData::appendExcludeFills(float plateLeft, float plateTop, bool selected)
+{
+  // Upstream render_exclude_area (PartPlate.cpp:856-878): exclude polygons
+  // filled over the background with selected/unselected grays. Points are
+  // bed-relative; each plate offsets them by its grid position (upstream
+  // set_shape PartPlate.cpp:2614 adds the plate position to every point).
+  // The stream is FLAT [x,y,...]; upstream groups every 4 consecutive points
+  // into one rectangle (init_exclude_bounding_box PartPlate.cpp:373-389,
+  // index % 4 == 3), so we fan-triangulate each 4-point group.
+  if (m_bedExcludeAreas.isEmpty())
+    return;
+
+  const float r = selected ? kExclSelR : kExclUnsel;
+  const float g = selected ? kExclSelG : kExclUnsel;
+  const float b = selected ? kExclSelB : kExclUnsel;
+  const float dx = plateLeft - m_bedOriginX;
+  const float dy = plateTop - m_bedOriginY;
+
+  auto coordAt = [this](int index, float &value) -> bool {
+    bool ok = false;
+    value = m_bedExcludeAreas.at(index).toFloat(&ok);
+    return ok && std::isfinite(value);
+  };
+  const int rectCount = m_bedExcludeAreas.size() / 8;
+  for (int rect = 0; rect < rectCount; ++rect) {
+    const int base = rect * 8;
+    float px[4];
+    float py[4];
+    bool ok = true;
+    for (int p = 0; p < 4 && ok; ++p)
+      ok = coordAt(base + p * 2, px[p]) && coordAt(base + p * 2 + 1, py[p]);
+    if (!ok)
+      continue;
+    // Fan triangulation from point 0 (init_model_from_poly convex fan):
+    // triangles (p0,p1,p2) and (p0,p2,p3).
+    m_bedFillVertices.append(Vertex{px[0] + dx, py[0] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[1] + dx, py[1] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[2] + dx, py[2] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[0] + dx, py[0] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[2] + dx, py[2] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[3] + dx, py[3] + dy, r, g, b, 1.0f});
+  }
+}
+
+void PrepareSceneData::rebuildHeightLimitGeometry()
+{
+  // Upstream calc_height_limit (PartPlate.cpp:512-561) rendered by
+  // render_height_limit (:914): for each bed-shape corner a vertical from
+  // the ground to extruder_clearance_height_to_rod plus a horizontal ring
+  // at that height (BOTTOM color), then verticals rod->lid plus a ring at
+  // the lid height (TOP color). Drawn only for ByObject plates; the active
+  // flag carries that gate from the viewmodel.
+  m_bedLimitVertices.clear();
+  if (!m_showBed || !m_heightLimitActive || m_heightToRod <= 0.0f)
+    return;
+
+  const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
+  const float strideX = m_bedWidth * (1.0f + kPlateGapRatio);
+  const float strideD = m_bedDepth * (1.0f + kPlateGapRatio);
+  const int cols = computePlateColumns(plateCount);
+
+  auto appendVertical = [](QList<ModelVertex> &vertices,
+                           float x, float depth, float z0, float z1,
+                           float r, float g, float b) {
+    vertices.append(ModelVertex{x, z0, depth, r, g, b, 1.0f});
+    vertices.append(ModelVertex{x, z1, depth, r, g, b, 1.0f});
+  };
+  auto appendRing = [&](float left, float top, float right, float bottom,
+                        float height, float r, float g, float b) {
+    QList<QPair<float, float>> corners{
+        {left, top}, {right, top}, {right, bottom}, {left, bottom}};
+    for (int i = 0; i < corners.size(); ++i) {
+      const auto &a = corners.at(i);
+      const auto &bEnd = corners.at((i + 1) % corners.size());
+      m_bedLimitVertices.append(ModelVertex{a.first, height, a.second, r, g, b, 1.0f});
+      m_bedLimitVertices.append(ModelVertex{bEnd.first, height, bEnd.second, r, g, b, 1.0f});
+    }
+  };
+
+  for (int i = 0; i < plateCount; ++i) {
+    const int row = i / cols;
+    const int col = i % cols;
+    const float left = m_bedOriginX + float(col) * strideX;
+    const float top = m_bedOriginY + float(row) * strideD;
+    const float right = left + m_bedWidth;
+    const float bottom = top + m_bedDepth;
+
+    QList<QPair<float, float>> corners{
+        {left, top}, {right, top}, {right, bottom}, {left, bottom}};
+    for (const auto &corner : corners) {
+      appendVertical(m_bedLimitVertices, corner.first, corner.second,
+                     kLimitGroundZ, m_heightToRod,
+                     kLimitBottomR, kLimitBottomG, kLimitBottomB);
+      if (m_heightToLid > m_heightToRod) {
+        appendVertical(m_bedLimitVertices, corner.first, corner.second,
+                       m_heightToRod, m_heightToLid,
+                       kLimitTopR, kLimitTopG, kLimitTopB);
+      }
+    }
+    appendRing(left, top, right, bottom, m_heightToRod,
+               kLimitBottomR, kLimitBottomG, kLimitBottomB);
+    if (m_heightToLid > m_heightToRod) {
+      appendRing(left, top, right, bottom, m_heightToLid,
+                 kLimitTopR, kLimitTopG, kLimitTopB);
+    }
+  }
 }

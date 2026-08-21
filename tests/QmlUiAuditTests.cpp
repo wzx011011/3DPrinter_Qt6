@@ -663,6 +663,8 @@ private slots:
   void v56CrossWorkstreamRegressionLocked();
   // v5.15 (BEDTEX/MODELLIT): textured bed + lit model rendering contracts.
   void v515BedTextureAndModelLitWired();
+  // v5.16 (EXCLAREA/HTLIMIT): bed_exclude_area fill + ByObject height limit.
+  void v516BedExcludeAndHeightLimitWired();
   // Phase 237 (VIEW-01..06): View menu wiring, shortcut parity, drag-drop,
   // unit-inference plumbing, project-config restore routing, and sliced-file
   // export surface.
@@ -9069,6 +9071,75 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
   // Model default color: upstream GLVolume::NEUTRAL_COLOR (0.8 gray).
   QVERIFY2(sceneData.contains(QStringLiteral("GLVolume::NEUTRAL_COLOR")),
            "MODELLIT: default object color must reference upstream NEUTRAL_COLOR");
+}
+
+// v5.16 (EXCLAREA/HTLIMIT): the last two PartPlate render gaps close with
+// upstream-anchored wiring:
+//   - bed_exclude_area polygons flow printer preset -> EditorViewModel ->
+//     RhiViewport -> PrepareSceneData -> the bed fill buffer, drawn between
+//     the background fill and the grid with the render_exclude_area grays
+//     (PartPlate.cpp:856-878, coPoints grouped per 4 points).
+//   - ByObject height-limit rings at extruder_clearance_height_to_rod/_to_lid
+//     (calc_height_limit PartPlate.cpp:512-561, gate :916, Plater.cpp:8151).
+void QmlUiAuditTests::v516BedExcludeAndHeightLimitWired()
+{
+  const QString editorVmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorVm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString viewportH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewport = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString sceneDataH = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
+  const QString sceneData = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
+  const QString renderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!editorVmH.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorVm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!viewportH.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewport.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!sceneDataH.isEmpty(), "Unable to read PrepareSceneData.h");
+  QVERIFY2(!sceneData.isEmpty(), "Unable to read PrepareSceneData.cpp");
+  QVERIFY2(!renderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  // Data chain: preset parse -> viewmodel properties.
+  QVERIFY2(editorVm.contains(QStringLiteral("bed_exclude_area")),
+           "EXCLAREA: EditorViewModel must parse bed_exclude_area from the preset");
+  QVERIFY2(editorVmH.contains(QStringLiteral("Q_PROPERTY(QVariantList bedExcludeAreas")),
+           "EXCLAREA: EditorViewModel must expose bedExcludeAreas");
+  QVERIFY2(editorVm.contains(QStringLiteral("extruder_clearance_height_to_rod"))
+               && editorVm.contains(QStringLiteral("extruder_clearance_height_to_lid")),
+           "HTLIMIT: EditorViewModel must read the clearance heights (Plater.cpp:8151)");
+
+  // Viewport transport + scene data sink.
+  QVERIFY2(viewportH.contains(QStringLiteral("Q_PROPERTY(QVariantList bedExcludeAreas"))
+               && viewportH.contains(QStringLiteral("Q_PROPERTY(float bedHeightToRod"))
+               && viewportH.contains(QStringLiteral("Q_PROPERTY(bool bedHeightLimitActive")),
+           "EXCLAREA/HTLIMIT: RhiViewport must expose the exclude + limit properties");
+  QVERIFY2(viewport.contains(QStringLiteral("setBedExcludeAreas")),
+           "EXCLAREA: RhiViewport setter must bump the scene generation");
+  QVERIFY2(sceneDataH.contains(QStringLiteral("setBedExcludeAreas"))
+               && sceneData.contains(QStringLiteral("appendExcludeFills")),
+           "EXCLAREA: PrepareSceneData must build per-plate exclude fills");
+  QVERIFY2(sceneData.contains(QStringLiteral("render_exclude_area")),
+           "EXCLAREA: exclude fills must anchor to upstream render_exclude_area");
+  QVERIFY2(sceneData.contains(QStringLiteral("rebuildHeightLimitGeometry"))
+               && sceneData.contains(QStringLiteral("calc_height_limit")),
+           "HTLIMIT: limit geometry must anchor to upstream calc_height_limit");
+
+  // Renderer draw path: exclude inside the fill buffer, limits on their own
+  // line buffer drawn only on non-preview canvases.
+  QVERIFY2(renderer.contains(QStringLiteral("m_bedLimitBuffer"))
+               && renderer.contains(QStringLiteral("m_bedLimitVertexCount")),
+           "HTLIMIT: renderer must upload + draw the limit line buffer");
+  QVERIFY2(renderer.contains(QStringLiteral("GCodeViewer::_render_bed does not draw them")),
+           "HTLIMIT: preview canvas must not draw the limit rings");
+
+  // QML binding: Prepare viewport consumes both; the ByObject gate mirrors
+  // PartPlate.cpp:916 (print_sequence == ByObject, PlatePrintSequence::ByObject=2).
+  QVERIFY2(preparePage.contains(QStringLiteral("bedExcludeAreas: root.editorVm")),
+           "EXCLAREA: PreparePage must bind editorVm.bedExcludeAreas");
+  QVERIFY2(preparePage.contains(QStringLiteral("bedHeightLimitActive: root.editorVm"))
+               && preparePage.contains(QStringLiteral("platePrintSequence(root.editorVm.currentPlateIndex) === 2")),
+           "HTLIMIT: PreparePage must gate the rings on ByObject plates");
 }
 
 // v5.16 Phase 236 (DLG-01..04): dialog reachability and completion audit.

@@ -1128,6 +1128,15 @@ public:
   /// m_logo_texture_filename). READ-only + NOTIFY: the path flows from the
   /// selected printer preset via ConfigViewModel/PresetServiceMock.
   Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl NOTIFY bedShapeChanged)
+  /// v5.16 (EXCLAREA): bed_exclude_area polygons parsed from the printer
+  /// preset (upstream coPoints; Plater.cpp:8169 feeds them to PartPlate).
+  /// Each entry is a flat [x1,y1,x2,y2,...] point list for one polygon.
+  Q_PROPERTY(QVariantList bedExcludeAreas READ bedExcludeAreas NOTIFY bedShapeChanged)
+  /// v5.16 (HTLIMIT): extruder_clearance_height_to_rod/_to_lid from the
+  /// printer preset (Plater.cpp:8151-8152). The ByObject gate is applied in
+  /// QML via platePrintSequence(currentPlateIndex) == 2.
+  Q_PROPERTY(float bedHeightToRod READ bedHeightToRod NOTIFY bedShapeChanged)
+  Q_PROPERTY(float bedHeightToLid READ bedHeightToLid NOTIFY bedShapeChanged)
   /// v5.16 (BEDMODEL): the printer's bed_model STL packed as a triangle
   /// stream ([uint32 vertexCount][float x,y,z scene-space] * count).
   Q_PROPERTY(QByteArray bedModelMeshData READ bedModelMeshData NOTIFY bedShapeChanged)
@@ -1261,6 +1270,9 @@ public:
   bool bedTypeTexturesActive() const { return m_bedTypeTexturesActive; }
   bool bedCaliLinesActive() const { return m_bedCaliLinesActive; }
   QString bedTypeImagesDir() const { return m_bedTypeImagesDir; }
+  QVariantList bedExcludeAreas() const { return m_bedExcludeAreas; }
+  float bedHeightToRod() const { return m_bedHeightToRod; }
+  float bedHeightToLid() const { return m_bedHeightToLid; }
   /// v5.16: current plate's bed type (Slic3r BedType index).
   int currentPlateBedType() const;
   /// v5.15: pull printable_area + bed_texture from the selected printer
@@ -1885,6 +1897,9 @@ private:
   bool m_bedTypeTexturesActive = false;
   bool m_bedCaliLinesActive = false;
   QString m_bedTypeImagesDir;
+  QVariantList m_bedExcludeAreas;
+  float m_bedHeightToRod = 0.0f;
+  float m_bedHeightToLid = 0.0f;
   // Phase 100 (WTREAD-01): wipe-tower geometry mirrored from the SliceService
   // readback (Print::wipe_tower_data() captured by value in the worker).
   // Defaults match RhiViewport.h:304-309 (show=false, 10/10/50/100/25) so the

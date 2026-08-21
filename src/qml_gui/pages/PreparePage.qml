@@ -1390,6 +1390,15 @@ Item {
                     bedCaliLinesActive: root.editorVm ? root.editorVm.bedCaliLinesActive : false
                     bedTypeImagesDir: root.editorVm ? root.editorVm.bedTypeImagesDir : ""
                     currentPlateBedType: root.editorVm ? root.editorVm.currentPlateBedType : 0
+                    // v5.16 (EXCLAREA): printer bed_exclude_area polygons
+                    // (upstream render_exclude_area).
+                    bedExcludeAreas: root.editorVm ? root.editorVm.bedExcludeAreas : []
+                    // v5.16 (HTLIMIT): ByObject clearance rings; upstream gates
+                    // on print_sequence == ByObject (PartPlate.cpp:916).
+                    bedHeightToRod: root.editorVm ? root.editorVm.bedHeightToRod : 0
+                    bedHeightToLid: root.editorVm ? root.editorVm.bedHeightToLid : 0
+                    bedHeightLimitActive: root.editorVm
+                                          && root.editorVm.platePrintSequence(root.editorVm.currentPlateIndex) === 2
                     bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
                     bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
                     bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0
