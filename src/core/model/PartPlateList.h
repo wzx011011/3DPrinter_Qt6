@@ -146,6 +146,13 @@ class PartPlateList {
   /// or -1 if no plate holds the object.
   int plateIndexForObject(int objIdx) const;
 
+  /// Returns the plate containing an instance, or -1 when it is not assigned.
+  int findInstance(int objectIndex, int instanceIndex) const;
+  /// Returns the plate that fully contains an instance, or -1 when it is outside.
+  int findInstanceBelongs(int objectIndex, int instanceIndex) const;
+  /// Upstream naming is retained: true when at least one plate can be sliced.
+  bool isAllPlatesReadyForSlice() const;
+
   /// Distinct object indices on a plate (collapses instance pairs to object indices).
   /// Bridges the instance-level truth to the existing per-object API surface that
   /// ProjectServiceMock exposes (plateObjectIndices).

@@ -194,15 +194,43 @@ class PartPlate {
     return m_obj_to_instance_set;
   }
 
+  /// Returns instances that intersect this plate but are not fully contained.
+  const std::set<std::pair<int, int>>& instanceOutsideSet() const {
+    return m_instance_outside_set;
+  }
+
+  bool containsInstance(int objIdx, int instIdx) const {
+    return m_obj_to_instance_set.count({objIdx, instIdx}) != 0;
+  }
+
+  bool containsInstanceTotally(int objIdx, int instIdx) const {
+    return containsInstance(objIdx, instIdx)
+        && m_instance_outside_set.count({objIdx, instIdx}) == 0;
+  }
+
+  /// Updates the upstream instance_outside_set and slice-readiness state.
+  void setInstanceOutside(int objIdx, int instIdx, bool outside) {
+    const std::pair<int, int> key{objIdx, instIdx};
+    if (outside && containsInstance(objIdx, instIdx))
+      m_instance_outside_set.insert(key);
+    else
+      m_instance_outside_set.erase(key);
+    updateSliceReadiness();
+  }
+
   /// Adds (objIdx, instIdx) to the plate's instance membership.
   void addInstance(int objIdx, int instIdx) {
     m_obj_to_instance_set.insert({objIdx, instIdx});
+    updateSliceReadiness();
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
   }
 
   /// Removes (objIdx, instIdx) from the plate's instance membership.
   void removeInstance(int objIdx, int instIdx) {
-    m_obj_to_instance_set.erase({objIdx, instIdx});
+    const std::pair<int, int> key{objIdx, instIdx};
+    m_obj_to_instance_set.erase(key);
+    m_instance_outside_set.erase(key);
+    updateSliceReadiness();
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
   }
 
@@ -212,6 +240,8 @@ class PartPlate {
   /// Clears all instance membership (upstream clear()).
   void clearInstances() {
     m_obj_to_instance_set.clear();
+    m_instance_outside_set.clear();
+    updateSliceReadiness();
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
   }
 
@@ -306,6 +336,13 @@ class PartPlate {
 
   /// (objectIndex, instanceIndex) pairs — upstream obj_to_instance_set.
   std::set<std::pair<int, int>> m_obj_to_instance_set;
+  /// Subset of memberships that intersect but extend outside the plate.
+  std::set<std::pair<int, int>> m_instance_outside_set;
+
+  void updateSliceReadiness() {
+    m_ready_for_slice = m_obj_to_instance_set.empty()
+        || m_instance_outside_set.empty();
+  }
 
   /// Cached plate thumbnail (v3.2 Phase 30). Qt-native; invalidated on content
   /// change. Converted to Slic3r::ThumbnailData at the 3MF save boundary.

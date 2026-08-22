@@ -22,6 +22,7 @@
 #include "core/model/PartPlate.h"
 #include "core/model/PartPlateList.h"
 #include "core/services/ProjectServiceMock.h"
+#include "core/services/SliceService.h"
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Point.hpp>
@@ -69,6 +70,15 @@ class PartPlateTests final : public QObject {
   void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void lockedPlateExclusion() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void allLockedReturnsFalse() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
+
+  // ── P0.5.5b plate readiness and instance containment ---------------------
+  void instanceOutsideStateGatesPlateReadiness();
+  void plateListInstanceLookupAndReadinessAggregation();
+#ifdef HAS_LIBSLIC3R
+  void sliceServiceRejectsNotReadyPlate();
+#else
+  void sliceServiceRejectsNotReadyPlate() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
 
   // ── THUMB-01/02 tests (v3.2 Phase 30) ───────────────────────────────────
@@ -430,6 +440,70 @@ void PartPlateTests::allLockedReturnsFalse() {
 #endif  // HAS_LIBSLIC3R
 
 // ── THUMB-01/02 tests (v3.2 Phase 30) ───────────────────────────────────────
+
+void PartPlateTests::instanceOutsideStateGatesPlateReadiness() {
+  OWzx::PartPlate plate(0);
+  plate.addInstance(3, 1);
+  QVERIFY(plate.containsInstance(3, 1));
+  QVERIFY(plate.containsInstanceTotally(3, 1));
+  QVERIFY(plate.readyForSlice());
+  QVERIFY(plate.canSlice());
+
+  plate.setInstanceOutside(3, 1, true);
+  QVERIFY(plate.containsInstance(3, 1));
+  QVERIFY(!plate.containsInstanceTotally(3, 1));
+  QVERIFY(!plate.readyForSlice());
+  QVERIFY(!plate.canSlice());
+
+  plate.setInstanceOutside(3, 1, false);
+  QVERIFY(plate.containsInstanceTotally(3, 1));
+  QVERIFY(plate.readyForSlice());
+  QVERIFY(plate.canSlice());
+
+  plate.setInstanceOutside(3, 1, true);
+  plate.clearInstances();
+  QVERIFY(plate.instanceOutsideSet().empty());
+  QVERIFY(plate.readyForSlice());
+  QVERIFY(plate.canSlice());
+}
+
+void PartPlateTests::plateListInstanceLookupAndReadinessAggregation() {
+  OWzx::PartPlateList list;
+  QVERIFY(list.plate(0) != nullptr);
+  list.plate(0)->addInstance(1, 0);
+  list.plate(0)->setInstanceOutside(1, 0, true);
+
+  QCOMPARE(list.findInstance(1, 0), 0);
+  QCOMPARE(list.findInstanceBelongs(1, 0), -1);
+  QVERIFY(!list.plate(0)->canSlice());
+  QVERIFY(!list.isAllPlatesReadyForSlice());
+
+  QVERIFY(list.createPlate() != nullptr);
+  list.plate(1)->addInstance(2, 0);
+  QCOMPARE(list.findInstance(2, 0), 1);
+  QCOMPARE(list.findInstanceBelongs(2, 0), 1);
+  QVERIFY(list.isAllPlatesReadyForSlice());
+}
+
+#ifdef HAS_LIBSLIC3R
+void PartPlateTests::sliceServiceRejectsNotReadyPlate() {
+  ProjectServiceMock project;
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(project.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(project.plateListMut()->plate(0) != nullptr);
+  project.plateListMut()->plate(0)->setInstanceOutside(0, 0, true);
+  QVERIFY(!project.currentPlateCanSlice());
+
+  SliceService sliceService(&project);
+  QSignalSpy failedSpy(&sliceService, &SliceService::sliceFailed);
+  sliceService.startSlicePlate(0);
+
+  QCOMPARE(failedSpy.count(), 1);
+  QCOMPARE(sliceService.sliceState(), SliceService::State::Error);
+  QVERIFY(!sliceService.hasPlateResult(0));
+}
+#endif
 
 void PartPlateTests::thumbnailCacheInvalidation() {
   // PartPlate unit test (no libslic3r needed): the cached thumbnail is cleared

@@ -218,6 +218,9 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+  /// Slice readiness bridge to the PartPlate domain state machine.
+  Q_INVOKABLE bool isPlateReadyForSlice(int plateIndex) const;
+  Q_INVOKABLE bool currentPlateCanSlice() const;
 
   // v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
   // filament->extruder mapping. `mode` is the widened 4-value FilamentMapMode

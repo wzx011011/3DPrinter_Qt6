@@ -484,6 +484,16 @@ void SliceService::startSlice(const QString &projectName)
 
   const QString sourcePath = projectService_ ? projectService_->sourceFilePath() : QString{};
   const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
+  if (projectService_ && !projectService_->currentPlateCanSlice())
+  {
+    sliceState_ = State::Error;
+    statusLabel_ = QStringLiteral("Current plate is outside the printable area");
+    emit progressChanged();
+    emit stateChanged();
+    emit sliceStateChanged();
+    emit sliceFailed(statusLabel_);
+    return;
+  }
   activeTargetPlateIndex_ = targetPlateIndex;
   plateResults_.remove(targetPlateIndex);
   clearStoredResult();
@@ -1193,9 +1203,25 @@ void SliceService::startSlicePlate(int plateIndex)
 {
   if (slicing_)
     return;
-  if (projectService_)
-    projectService_->setCurrentPlateIndex(plateIndex);
-  startSlice(projectService_ ? projectService_->projectName() : QString{});
+  if (!projectService_ || !projectService_->setCurrentPlateIndex(plateIndex))
+  {
+    sliceState_ = State::Error;
+    statusLabel_ = QStringLiteral("Invalid plate selection");
+    emit stateChanged();
+    emit sliceStateChanged();
+    emit sliceFailed(statusLabel_);
+    return;
+  }
+  if (!projectService_->isPlateReadyForSlice(plateIndex))
+  {
+    sliceState_ = State::Error;
+    statusLabel_ = QStringLiteral("Selected plate is outside the printable area");
+    emit stateChanged();
+    emit sliceStateChanged();
+    emit sliceFailed(statusLabel_);
+    return;
+  }
+  startSlice(projectService_->projectName());
 }
 
 bool SliceService::exportGCodeToPath(const QString &targetPath)

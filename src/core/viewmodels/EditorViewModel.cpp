@@ -8165,6 +8165,8 @@ bool EditorViewModel::canRequestSlice() const
     return false;
   if (hasSliceResult())
     return false;
+  if (!projectService_->currentPlateCanSlice())
+    return false;
 
   return currentPlateHasPrintableObjects();
 }
@@ -8207,6 +8209,8 @@ QString EditorViewModel::sliceReadinessReason() const
     return QStringLiteral("当前平板已有有效切片结果；修改对象或参数后将重新启用切片");
   if (!currentPlateHasPrintableObjects())
     return QStringLiteral("当前平板没有可切片对象");
+  if (!projectService_->currentPlateCanSlice())
+    return QStringLiteral("当前平板有模型超出打印范围，无法切片");
   if (plateSliceResultStatus(projectService_->currentPlateIndex()) == SliceResultStale)
     return QStringLiteral("当前平板切片结果已过期，请重新切片");
   return QStringLiteral("当前平板已满足基础切片条件");
@@ -8758,7 +8762,8 @@ void EditorViewModel::requestSliceAll()
   m_sliceAllQueue.clear();
   for (int i = 0; i < projectService_->plateCount(); ++i) {
     // D-08 (Phase 17): exclude locked AND non-printable plates from slice-all.
-    if (isPlateLocked(i) || !projectService_->isPlatePrintable(i))
+    if (isPlateLocked(i) || !projectService_->isPlatePrintable(i)
+        || !projectService_->isPlateReadyForSlice(i))
       continue;
     // v5.16 (ENGN-04): skip empty plates — an empty plate fails the slice and
     // the failure handler clears the whole queue (upstream slice_all advances

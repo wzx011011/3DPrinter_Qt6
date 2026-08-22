@@ -1654,6 +1654,18 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
   return true;
 }
 
+bool ProjectServiceMock::isPlateReadyForSlice(int plateIndex) const
+{
+  if (!m_plateList) return false;
+  const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  return p && p->canSlice();
+}
+
+bool ProjectServiceMock::currentPlateCanSlice() const
+{
+  return isPlateReadyForSlice(currentPlateIndex());
+}
+
 // v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
 // filament->extruder mapping. `mode` is the widened 4-value FilamentMapMode
 // (cast to int for the Q_INVOKABLE boundary; QML/Phase 110 popup will pass the

@@ -123,6 +123,30 @@ int PartPlateList::plateIndexForObject(int objIdx) const {
   return -1;
 }
 
+int PartPlateList::findInstance(int objectIndex, int instanceIndex) const {
+  for (int i = 0; i < plateCount(); ++i) {
+    if (m_plate_list[i]->containsInstance(objectIndex, instanceIndex))
+      return i;
+  }
+  return -1;
+}
+
+int PartPlateList::findInstanceBelongs(int objectIndex, int instanceIndex) const {
+  for (int i = 0; i < plateCount(); ++i) {
+    if (m_plate_list[i]->containsInstanceTotally(objectIndex, instanceIndex))
+      return i;
+  }
+  return -1;
+}
+
+bool PartPlateList::isAllPlatesReadyForSlice() const {
+  for (const auto& plate : m_plate_list) {
+    if (plate && plate->canSlice())
+      return true;
+  }
+  return false;
+}
+
 QList<int> PartPlateList::objectIndicesOnPlate(int plateIndex) const {
   QList<int> result;
   const PartPlate* p = plate(plateIndex);
