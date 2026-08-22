@@ -10,6 +10,19 @@ Item {
     required property var settingsVm
     property var backend
 
+    // Dead-control elimination: caption state for the check-now button
+    // (backend.checkForUpdates result lands here).
+    property string updateCheckMessage: qsTr("点击“检查更新”获取最新版本信息。")
+    property bool updateCheckOk: false
+
+    Connections {
+        target: backend
+        function onUpdateCheckFinished(ok, updateAvailable, message) {
+            root.updateCheckOk = ok
+            root.updateCheckMessage = message
+        }
+    }
+
     AboutDialog {
         id: aboutDlg
     }
@@ -683,22 +696,24 @@ Item {
                         }
                     }
 
-                    // Check now button
+                    // Check now button (dead-control elimination: drives the
+                    // real backend.checkForUpdates release query).
                     Rectangle {
                         Layout.preferredWidth: 140; Layout.preferredHeight: 32; radius: 6
-                        enabled: false
+                        opacity: backend.updateCheckRunning ? 0.6 : 1.0
                         color: updateBtnMA.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                        Text { anchors.centerIn: parent; text: qsTr("检查更新"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
+                        Text { anchors.centerIn: parent; text: backend.updateCheckRunning ? qsTr("检查中…") : qsTr("检查更新"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                         MouseArea {
                             id: updateBtnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            acceptedButtons: Qt.NoButton
+                            onClicked: if (!backend.updateCheckRunning) backend.checkForUpdates()
                         }
                     }
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("当前为 Mock 模式，更新检查功能需要连接更新服务器后启用。")
-                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        text: root.updateCheckMessage
+                        color: root.updateCheckOk ? Theme.statusSuccess : Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
                     }
                 }

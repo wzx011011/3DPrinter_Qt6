@@ -618,6 +618,10 @@ ApplicationWindow {
                 onPreferencesRequested: backend.openSettings()
                 onAboutRequested: aboutDialog.open()
                 onShortcutOverviewRequested: shortcutDialog.open()
+                // Dead-control elimination: upstream Help menu entries
+                // (MainFrame.cpp:2136-2173) — daily tip popup + network test.
+                onDailyTipRequested: dailyTipDialog.open()
+                onNetworkTestRequested: topbarNetworkTestDialog.open()
                 onSliceRequested: sliceTopMenuExternal.popup()
                 onSliceSinglePlateRequested: if (backend.editorViewModel) backend.editorViewModel.requestSlice()
                 onPrintRequested: printTopMenuExternal.popup()
@@ -923,6 +927,71 @@ ApplicationWindow {
 
     // Phase 236 (DLG-03) — system information dump (Help > 系统信息).
     SysInfoDialog { id: sysInfoDialog }
+
+    // Dead-control elimination — Help > 每日提示 (upstream Show Tip of the
+    // Day, MainFrame.cpp:2149 dailytips open). Content comes from the same
+    // hints.json database the HomePage Daily Tips card reads.
+    CxDialog {
+        id: dailyTipDialog
+        modal: true
+        dialogTitle: qsTr("每日提示")
+        anchors.centerIn: parent
+        width: 420
+        padding: Theme.spacingLG
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spacingMD
+
+            Text {
+                Layout.fillWidth: true
+                text: backend.currentHintText()
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeMD
+                wrapMode: Text.WordWrap
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: backend.currentHintFollowText() !== ""
+                text: backend.currentHintFollowText()
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeSM
+                wrapMode: Text.WordWrap
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSM
+
+                CxButton {
+                    text: qsTr("上一条")
+                    compact: true
+                    onClicked: backend.prevHint()
+                }
+                CxButton {
+                    text: qsTr("下一条")
+                    compact: true
+                    onClicked: backend.nextHint()
+                }
+                Item { Layout.fillWidth: true }
+                CxButton {
+                    text: qsTr("关闭")
+                    cxStyle: CxButton.Style.Primary
+                    compact: true
+                    onClicked: dailyTipDialog.close()
+                }
+            }
+        }
+    }
+
+    // Dead-control elimination — Help > 网络测试 (upstream Open Network Test,
+    // MainFrame.cpp:2167 NetworkTestDialog). Own instance so the entry works
+    // from any page (Preferences hosts the other instance).
+    NetworkTestDialog {
+        id: topbarNetworkTestDialog
+        parent: Overlay.overlay
+        networkVm: backend.monitorViewModel
+    }
 
     // Phase 236 (DLG-03) — out-of-bed objects prompt. Opened via
     // backend.recenterPromptRequested after a load; "全部居中" routes through

@@ -1101,11 +1101,35 @@ Item {
 
         MenuSeparator {}
 
-        // Help 子菜单
+        // Help 子菜单（对齐上游 generate_help_menu，MainFrame.cpp:2136-2173）
         CxMenu {
             title: qsTr("帮助")
-            CxMenuItem { text: qsTr("Documentation"); enabled: false }
-            CxMenuItem { text: qsTr("Check for Updates"); enabled: false }
+            CxMenuItem {
+                text: qsTr("快捷键概览")
+                onTriggered: root.shortcutOverviewRequested()
+            }
+            CxMenuItem {
+                text: qsTr("设置向导")
+                onTriggered: backend.showConfigWizard()
+            }
+            MenuSeparator {}
+            CxMenuItem {
+                text: qsTr("显示配置文件夹")
+                onTriggered: backend.openConfigFolder()
+            }
+            CxMenuItem {
+                text: qsTr("每日提示")
+                onTriggered: root.dailyTipRequested()
+            }
+            CxMenuItem {
+                text: root.updateCheckRunning ? qsTr("正在检查更新…") : qsTr("检查更新")
+                enabled: !root.updateCheckRunning
+                onTriggered: backend.checkForUpdates()
+            }
+            CxMenuItem {
+                text: qsTr("网络测试")
+                onTriggered: root.networkTestRequested()
+            }
             MenuSeparator {}
             // Phase 236 (DLG-03): system information dump entry (upstream
             // Help > System Information).
@@ -1114,7 +1138,6 @@ Item {
                 onTriggered: backend.showSysInfoDialog()
             }
             CxMenuItem { text: qsTr("About"); onTriggered: root.aboutRequested() }
-            CxMenuItem { text: qsTr("Shortcut Overview"); onTriggered: root.shortcutOverviewRequested() }
         }
     }
 
@@ -1122,4 +1145,9 @@ Item {
     signal preferencesRequested()
     signal aboutRequested()
     signal shortcutOverviewRequested()
+    signal dailyTipRequested()
+    signal networkTestRequested()
+
+    // Drives the busy label on Help > 检查更新.
+    property bool updateCheckRunning: backend ? backend.updateCheckRunning : false
 }

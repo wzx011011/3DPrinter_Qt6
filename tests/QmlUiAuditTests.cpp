@@ -665,6 +665,9 @@ private slots:
   void v515BedTextureAndModelLitWired();
   // v5.16 (EXCLAREA/HTLIMIT): bed_exclude_area fill + ByObject height limit.
   void v516BedExcludeAndHeightLimitWired();
+  // Dead-control elimination: every user-facing menu item / button carries a
+  // real behavior (no enabled:false placeholders left in reachable surfaces).
+  void deadControlEliminationAudit();
   // Phase 237 (VIEW-01..06): View menu wiring, shortcut parity, drag-drop,
   // unit-inference plumbing, project-config restore routing, and sliced-file
   // export surface.
@@ -2445,8 +2448,13 @@ void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
              qPrintable(QStringLiteral("LeftSidebar runtime placeholder marker remains: %1").arg(marker)));
   }
 
-  QVERIFY2(preferences.contains(QStringLiteral("enabled: false")),
-           "Unavailable Preferences update check must be visibly disabled");
+  // Dead-control elimination: the Preferences update check is no longer an
+  // unavailable placeholder — it drives backend.checkForUpdates (upstream
+  // Help > Check for Update). The old "must be visibly disabled" honesty
+  // assertion is inverted accordingly; the wiring itself is locked by
+  // deadControlEliminationAudit.
+  QVERIFY2(preferences.contains(QStringLiteral("checkForUpdates")),
+           "Preferences update check must call backend.checkForUpdates");
 }
 
 void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
@@ -9894,4 +9902,82 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
            "CLI-02: unknown keys must error out explicitly");
   QVERIFY2(cliRunnerCpp.contains(QStringLiteral("extractConfigOverrides")),
            "CLI-02: the unregistered-override extraction path must exist");
+}
+
+// Dead-control elimination audit: the former placeholder controls must carry
+// real, backend-anchored behaviors.
+//   - BBLTopbar Help menu matches upstream generate_help_menu
+//     (MainFrame.cpp:2136-2173) with zero disabled entries.
+//   - NetworkTestDialog / PrintHostDialog / SpeedLimitDialog buttons call
+//     BackendContext probes or mutate their models (no enabled:false stubs,
+//     no Mock-only handlers).
+//   - PreferencesPage "check now" drives backend.checkForUpdates.
+void QmlUiAuditTests::deadControlEliminationAudit()
+{
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString backendCpp = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString networkDlg = readSource(QStringLiteral("src/qml_gui/dialogs/NetworkTestDialog.qml"));
+  const QString printHostDlg = readSource(QStringLiteral("src/qml_gui/dialogs/PrintHostDialog.qml"));
+  const QString speedDlg = readSource(QStringLiteral("src/qml_gui/dialogs/SpeedLimitDialog.qml"));
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!backendH.isEmpty(), "Unable to read BackendContext.h");
+  QVERIFY2(!backendCpp.isEmpty(), "Unable to read BackendContext.cpp");
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  QVERIFY2(!networkDlg.isEmpty(), "Unable to read NetworkTestDialog.qml");
+  QVERIFY2(!printHostDlg.isEmpty(), "Unable to read PrintHostDialog.qml");
+  QVERIFY2(!speedDlg.isEmpty(), "Unable to read SpeedLimitDialog.qml");
+  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+
+  // Help menu: upstream item set, no Documentation/Check-for-Updates stubs.
+  QVERIFY2(!topbar.contains(QStringLiteral("Documentation")),
+           "HELP: the non-upstream Documentation placeholder must not return");
+  QVERIFY2(topbar.contains(QStringLiteral("快捷键概览"))
+               && topbar.contains(QStringLiteral("设置向导"))
+               && topbar.contains(QStringLiteral("显示配置文件夹"))
+               && topbar.contains(QStringLiteral("每日提示"))
+               && topbar.contains(QStringLiteral("检查更新"))
+               && topbar.contains(QStringLiteral("网络测试")),
+           "HELP: Help menu must carry the upstream MainFrame.cpp:2136 item set");
+  QVERIFY2(backendH.contains(QStringLiteral("checkForUpdates"))
+               && backendH.contains(QStringLiteral("openConfigFolder"))
+               && backendH.contains(QStringLiteral("runNetworkTest"))
+               && backendH.contains(QStringLiteral("testPrintHost")),
+           "BACKEND: probe invokables must be declared");
+  QVERIFY2(backendCpp.contains(QStringLiteral("releases/latest")),
+           "BACKEND: update check must query the release API");
+  QVERIFY2(backendCpp.contains(QStringLiteral("AppDataLocation")),
+           "BACKEND: config-folder open must target AppDataLocation");
+
+  // main.qml hosts the daily-tip popup and a topbar-reachable network test.
+  QVERIFY2(mainQml.contains(QStringLiteral("dailyTipDialog"))
+               && mainQml.contains(QStringLiteral("onDailyTipRequested"))
+               && mainQml.contains(QStringLiteral("onNetworkTestRequested")),
+           "MAIN: Help-menu new signals must open real dialogs");
+
+  // Dialog buttons: no dead placeholders remain.
+  QVERIFY2(!networkDlg.contains(QStringLiteral("待实现"))
+               && !networkDlg.contains(QStringLiteral("enabled: false")),
+           "NETTEST: start button and rows must be live (no TODO placeholders)");
+  QVERIFY2(networkDlg.contains(QStringLiteral("runNetworkTest"))
+               && networkDlg.contains(QStringLiteral("onNetworkTestFinished")),
+           "NETTEST: start button must drive the backend probe");
+  QVERIFY2(!printHostDlg.contains(QStringLiteral("enabled: false")),
+           "PRINTHOST: test-connection button must be enabled");
+  QVERIFY2(printHostDlg.contains(QStringLiteral("testPrintHost"))
+               && printHostDlg.contains(QStringLiteral("onPrintHostTestFinished")),
+           "PRINTHOST: test button must drive the backend host probe");
+  QVERIFY2(!speedDlg.contains(QStringLiteral("Mock: remove item")),
+           "SPEEDLIMIT: row remove must splice the model");
+  QVERIFY2(speedDlg.contains(QStringLiteral("rows.push("))
+               && speedDlg.contains(QStringLiteral("rows.splice(")),
+           "SPEEDLIMIT: add/remove must mutate limitItems");
+
+  // PreferencesPage check-now drives the same backend entry point.
+  QVERIFY2(prefsPage.contains(QStringLiteral("checkForUpdates")),
+           "PREFS: the check-now button must call backend.checkForUpdates");
+  QVERIFY2(!prefsPage.contains(QStringLiteral("更新检查功能需要连接更新服务器后启用")),
+           "PREFS: the mock-mode excuse caption must not return");
 }

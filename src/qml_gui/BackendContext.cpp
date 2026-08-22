@@ -38,6 +38,10 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QDesktopServices>
+#include <QHostInfo>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QMetaEnum>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
@@ -1939,4 +1943,180 @@ void BackendContext::applyUiScale(int idx)
     return;
   m_uiScale = kScales[idx];
   emit uiScaleChanged();
+}
+
+// ── Dead-control elimination: real behaviors for the former placeholder
+// Help-menu items / dialog buttons (upstream MainFrame help menu,
+// NetworkTestDialog, PrintHostDialog). ──────────────────────────────────────
+
+namespace {
+// Mirrors the OWZX_VERSION compat constant generated into
+// build/libslic3r_generated/buildinfo.h (2.4.0-dev line). Kept local so the
+// QML layer does not depend on the generated include path.
+constexpr const char *kOwzxUpdateVersion = "2.4.0";
+constexpr const char *kOwzxUpdateRepoApi =
+    "https://api.github.com/repos/wzx011011/3DPrinter_Qt6/releases/latest";
+
+QVector<int> splitVersionParts(const QString &version)
+{
+  QVector<int> parts;
+  QString current;
+  for (const QChar ch : version) {
+    if (ch.isDigit()) {
+      current += ch;
+    } else if (!current.isEmpty()) {
+      parts.append(current.toInt());
+      current.clear();
+      if (parts.size() == 3)
+        break;
+    }
+  }
+  if (!current.isEmpty() && parts.size() < 3)
+    parts.append(current.toInt());
+  while (parts.size() < 3)
+    parts.append(0);
+  return parts;
+}
+
+bool remoteVersionNewer(const QString &remoteTag)
+{
+  // Strip a leading 'v'/'V' and any -suffix; compare the first three numeric
+  // components component-wise.
+  QString remote = remoteTag.trimmed();
+  if (remote.startsWith(QLatin1Char('v')) || remote.startsWith(QLatin1Char('V')))
+    remote.remove(0, 1);
+  const int dash = remote.indexOf(QLatin1Char('-'));
+  if (dash >= 0)
+    remote.truncate(dash);
+  const QVector<int> r = splitVersionParts(remote);
+  const QVector<int> l = splitVersionParts(QString::fromLatin1(kOwzxUpdateVersion));
+  for (int i = 0; i < 3; ++i) {
+    if (r[i] != l[i])
+      return r[i] > l[i];
+  }
+  return false;
+}
+}  // namespace
+
+QNetworkAccessManager *BackendContext::probeNam()
+{
+  if (!probeNam_)
+    probeNam_ = new QNetworkAccessManager(this);
+  return probeNam_;
+}
+
+void BackendContext::setUpdateCheckRunning(bool running)
+{
+  if (updateCheckRunning_ == running)
+    return;
+  updateCheckRunning_ = running;
+  emit updateCheckRunningChanged();
+}
+
+void BackendContext::checkForUpdates()
+{
+  // Upstream Help > Check for Update (MainFrame.cpp:2160): async release
+  // check with a user-visible result either way.
+  if (updateCheckRunning_)
+    return;
+  setUpdateCheckRunning(true);
+  QNetworkRequest request(QUrl(QString::fromLatin1(kOwzxUpdateRepoApi)));
+  request.setRawHeader("User-Agent", "OWzxSlicer");
+  request.setTransferTimeout(10000);
+  QNetworkReply *reply = probeNam()->get(request);
+  connect(reply, &QNetworkReply::finished, this, [this, reply] {
+    reply->deleteLater();
+    setUpdateCheckRunning(false);
+    if (reply->error() != QNetworkReply::NoError) {
+      const QString message = tr("更新检查失败：%1").arg(reply->errorString());
+      qWarning("[Backend] update check failed: %s", reply->errorString().toUtf8().constData());
+      postNotification(message, tr("检查更新"), 1);
+      emit updateCheckFinished(false, false, message);
+      return;
+    }
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
+    const QString tag = doc.object().value(QStringLiteral("tag_name")).toString();
+    if (tag.isEmpty()) {
+      const QString message = tr("更新服务器返回了无法解析的数据");
+      postNotification(message, tr("检查更新"), 1);
+      emit updateCheckFinished(false, false, message);
+      return;
+    }
+    const bool available = remoteVersionNewer(tag);
+    const QString message = available
+        ? tr("发现新版本 %1，请到项目发布页下载。").arg(tag)
+        : tr("当前已是最新版本（%1）。").arg(QString::fromLatin1(kOwzxUpdateVersion));
+    postNotification(message, tr("检查更新"), 0);
+    emit updateCheckFinished(true, available, message);
+  });
+}
+
+bool BackendContext::openConfigFolder()
+{
+  // Upstream Help > Show Configuration Folder (MainFrame.cpp:2146,
+  // desktop_open_datadir_folder).
+  const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  if (!QDir(dir).exists())
+    QDir().mkpath(dir);
+  return QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+}
+
+void BackendContext::runNetworkTest()
+{
+  // Upstream NetworkTestDialog connectivity probe: DNS resolve followed by an
+  // HTTPS GET whose round-trip time is reported as the latency.
+  QElapsedTimer dnsTimer;
+  dnsTimer.start();
+  QHostInfo::lookupHost(QStringLiteral("api.github.com"), this,
+                        [this](const QHostInfo &dns) {
+    const bool dnsOk = dns.error() == QHostInfo::NoError && !dns.addresses().isEmpty();
+    if (!dnsOk) {
+      emit networkTestFinished(false, false, -1, tr("DNS 解析失败：%1").arg(dns.errorString()));
+      return;
+    }
+    QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com")));
+    request.setRawHeader("User-Agent", "OWzxSlicer");
+    request.setTransferTimeout(8000);
+    QElapsedTimer latencyTimer;
+    latencyTimer.start();
+    QNetworkReply *reply = probeNam()->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, latencyTimer] {
+      reply->deleteLater();
+      const bool online = reply->error() == QNetworkReply::NoError
+          || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).isValid();
+      const int latencyMs = static_cast<int>(latencyTimer.elapsed());
+      const QString detail = online
+          ? tr("HTTPS 连接正常")
+          : tr("HTTPS 连接失败：%1").arg(reply->errorString());
+      emit networkTestFinished(true, online, latencyMs, detail);
+    });
+  });
+  Q_UNUSED(dnsTimer);
+}
+
+void BackendContext::testPrintHost(const QString &hostUrl)
+{
+  // Upstream PrintHostDialog "test connection": reachability GET against the
+  // configured host. Any HTTP response counts as reachable.
+  QString url = hostUrl.trimmed();
+  if (url.isEmpty()) {
+    emit printHostTestFinished(false, tr("主机地址为空"));
+    return;
+  }
+  if (!url.startsWith(QStringLiteral("http://")) && !url.startsWith(QStringLiteral("https://")))
+    url.prepend(QStringLiteral("http://"));
+  const QUrl targetUrl(url);
+  QNetworkRequest hostProbe(targetUrl);
+  hostProbe.setRawHeader("User-Agent", "OWzxSlicer");
+  hostProbe.setTransferTimeout(8000);
+  QNetworkReply *reply = probeNam()->get(hostProbe);
+  connect(reply, &QNetworkReply::finished, this, [this, reply] {
+    reply->deleteLater();
+    const QVariant status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+    const bool ok = reply->error() == QNetworkReply::NoError || status.isValid();
+    const QString detail = ok
+        ? tr("连接成功（HTTP %1）").arg(status.isValid() ? status.toString() : QStringLiteral("OK"))
+        : tr("连接失败：%1").arg(reply->errorString());
+    emit printHostTestFinished(ok, detail);
+  });
 }

@@ -66,6 +66,7 @@ CxDialog {
                     font.pixelSize: Theme.fontSizeXS
                     text: modelData.rangeMin
                     enabled: modelData.enabled
+                    onTextEdited: root.limitItems[index].rangeMin = text
                 }
 
                 CxTextField {
@@ -74,6 +75,7 @@ CxDialog {
                     font.pixelSize: Theme.fontSizeXS
                     text: modelData.rangeMax
                     enabled: modelData.enabled
+                    onTextEdited: root.limitItems[index].rangeMax = text
                 }
 
                 CxTextField {
@@ -82,6 +84,7 @@ CxDialog {
                     font.pixelSize: Theme.fontSizeXS
                     text: modelData.speedLimit
                     enabled: modelData.enabled
+                    onTextEdited: root.limitItems[index].speedLimit = text
                 }
 
                 CxTextField {
@@ -90,6 +93,7 @@ CxDialog {
                     font.pixelSize: Theme.fontSizeXS
                     text: modelData.accelLimit
                     enabled: modelData.enabled
+                    onTextEdited: root.limitItems[index].accelLimit = text
                 }
 
                 Text {
@@ -117,7 +121,11 @@ CxDialog {
                     MouseArea {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: { /* Mock: remove item */ }
+                        onClicked: {
+                            var rows = root.limitItems
+                            rows.splice(index, 1)
+                            root.limitItems = rows
+                        }
                     }
                 }
             }
@@ -148,7 +156,19 @@ CxDialog {
                 text: qsTr("添加")
                 cxStyle: CxButton.Style.Secondary
                 compact: true
-                enabled: false
+                onClicked: {
+                    var rows = root.limitItems
+                    var last = rows.length > 0 ? rows[rows.length - 1] : null
+                    rows.push({
+                        enabled: true,
+                        rangeMin: last ? last.rangeMax : "0",
+                        rangeMax: last ? String(parseInt(last.rangeMax, 10) + 50) : "50",
+                        speedLimit: last ? last.speedLimit : "200",
+                        accelLimit: last ? last.accelLimit : "3000",
+                        type: qsTr("重量")
+                    })
+                    root.limitItems = rows
+                }
             }
 
             CxButton {

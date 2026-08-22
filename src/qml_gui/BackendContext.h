@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QTranslator>
 #include <QElapsedTimer>
+class QNetworkAccessManager;
 #include <QHash>
 #include <QVariant>
 #include <QVariantList>
@@ -439,6 +440,27 @@ public:
   Q_INVOKABLE void recordLatency(const QString &operation, int elapsedMs, const QString &detail = QString());
   Q_INVOKABLE void resetLatency();
 
+  // ── Dead-control elimination: real behaviors for the former placeholder
+  // menu items / buttons (upstream MainFrame help menu + NetworkTestDialog +
+  // PrintHostDialog test). ──
+  /// Upstream Help > Check for Update (MainFrame.cpp:2160,
+  /// check_new_version_sf): async GitHub latest-release query; posts a
+  /// notification and emits updateCheckFinished with the comparison result.
+  Q_INVOKABLE void checkForUpdates();
+  /// True while a checkForUpdates round-trip is in flight (drives busy state
+  /// on the Help item and the Preferences "check now" button).
+  Q_PROPERTY(bool updateCheckRunning READ updateCheckRunning NOTIFY updateCheckRunningChanged)
+  bool updateCheckRunning() const { return updateCheckRunning_; }
+  /// Upstream Help > Show Configuration Folder (MainFrame.cpp:2146,
+  /// desktop_open_datadir_folder): opens the writable AppData folder.
+  Q_INVOKABLE bool openConfigFolder();
+  /// Upstream NetworkTestDialog connectivity probe: DNS resolve + HTTPS GET
+  /// latency. Emits networkTestFinished.
+  Q_INVOKABLE void runNetworkTest();
+  /// Upstream PrintHostDialog "test connection": HTTP GET against the
+  /// configured host. Emits printHostTestFinished.
+  Q_INVOKABLE void testPrintHost(const QString &hostUrl);
+
   QString lastErrorMessage() const;
   int lastErrorSeverity() const;
   QString lastErrorTitle() const;
@@ -531,8 +553,21 @@ signals:
   /// unitHint: 1 = meters (x1000), 2 = imperial (x25.4).
   void unitConversionPromptRequested(int objectIndex, int unitHint, const QString &objectName);
   void exportGCodeRequested();
+  /// Dead-control elimination: result of checkForUpdates (GitHub latest
+  /// release vs the running version). ok=false carries the failure reason.
+  void updateCheckFinished(bool ok, bool updateAvailable, const QString &message);
+  /// Dead-control elimination: NetworkTestDialog probe result.
+  void networkTestFinished(bool dnsOk, bool online, int latencyMs, const QString &detail);
+  /// Dead-control elimination: PrintHostDialog connection test result.
+  void printHostTestFinished(bool ok, const QString &detail);
+  void updateCheckRunningChanged();
 
 private:
+  /// Shared async helper state for the update / host / network probes.
+  QNetworkAccessManager *probeNam_ = nullptr;
+  bool updateCheckRunning_ = false;
+  QNetworkAccessManager *probeNam();
+  void setUpdateCheckRunning(bool running);
   CalibrationServiceMock *calibrationService_ = nullptr;
   SliceService *sliceService_ = nullptr;
   PresetServiceMock *presetService_ = nullptr;

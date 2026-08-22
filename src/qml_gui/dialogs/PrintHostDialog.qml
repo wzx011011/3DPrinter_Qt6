@@ -79,16 +79,24 @@ CxDialog {
                 font.pixelSize: Theme.fontSizeSM
             }
             CxTextField {
+                id: hostUrlField
                 Layout.fillWidth: true
                 implicitHeight: 24
                 font.pixelSize: Theme.fontSizeSM
                 text: root.hostUrl
+                onTextEdited: root.hostUrl = text
             }
             CxTextField {
+                id: hostPortField
                 Layout.preferredWidth: 60
                 implicitHeight: 24
                 font.pixelSize: Theme.fontSizeSM
                 text: root.hostPort.toString()
+                onTextEdited: {
+                    const port = parseInt(text, 10)
+                    if (!isNaN(port) && port > 0 && port <= 65535)
+                        root.hostPort = port
+                }
             }
         }
 
@@ -140,13 +148,26 @@ CxDialog {
                 text: qsTr("测试连接")
                 cxStyle: CxButton.Style.Secondary
                 compact: true
-                enabled: false
+                onClicked: {
+                    hostTestResult.text = qsTr("正在连接…")
+                    hostTestResult.color = Theme.textTertiary
+                    backend.testPrintHost(root.hostUrl)
+                }
             }
 
             Text {
+                id: hostTestResult
                 color: Theme.textTertiary
                 font.pixelSize: Theme.fontSizeXS
-                text: qsTr("需要有效的网络连接")
+                text: qsTr("向主机地址发起 HTTP 连接测试")
+            }
+
+            Connections {
+                target: backend
+                function onPrintHostTestFinished(ok, detail) {
+                    hostTestResult.text = detail
+                    hostTestResult.color = ok ? Theme.statusSuccess : Theme.statusError
+                }
             }
         }
 
