@@ -75,6 +75,8 @@ class PartPlateTests final : public QObject {
   // ── P0.5.5b plate readiness and instance containment ---------------------
   void instanceOutsideStateGatesPlateReadiness();
   void plateListInstanceLookupAndReadinessAggregation();
+  // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
+  void deletePlateMigratesInstancesToNeighbor();
 #ifdef HAS_LIBSLIC3R
   void sliceServiceRejectsNotReadyPlate();
 #else
@@ -483,6 +485,63 @@ void PartPlateTests::plateListInstanceLookupAndReadinessAggregation() {
   QCOMPARE(list.findInstance(2, 0), 1);
   QCOMPARE(list.findInstanceBelongs(2, 0), 1);
   QVERIFY(list.isAllPlatesReadyForSlice());
+}
+
+void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
+  // B2 (upstream delete_plate keeps instances, PartPlate.cpp:3708-3810):
+  // deleting a plate must migrate its memberships to a neighbor plate instead
+  // of orphaning them. Destination: the next plate at the same index position;
+  // deleting the last plate merges into the previous one.
+  OWzx::PartPlateList list;
+  QVERIFY(list.createPlate() != nullptr);
+  QVERIFY(list.createPlate() != nullptr);  // plates 0,1,2
+
+  list.plate(0)->addInstance(10, 0);
+  list.plate(1)->addInstance(20, 0);
+  list.plate(1)->addInstance(21, 1);
+  list.plate(2)->addInstance(30, 0);
+
+  // Delete middle plate 1: its instances move to the next plate (now at
+  // index 1). Every previously-assigned instance stays findable (no orphans).
+  QVERIFY(list.deletePlate(1));
+  QCOMPARE(list.plateCount(), 2);
+  QCOMPARE(list.findInstance(20, 0), 1);
+  QCOMPARE(list.findInstance(21, 1), 1);
+  QCOMPARE(list.findInstance(10, 0), 0);
+  QCOMPARE(list.findInstance(30, 0), 1);
+
+  // Delete the last plate: its instances merge into the previous plate.
+  QVERIFY(list.deletePlate(1));
+  QCOMPARE(list.plateCount(), 1);
+  QCOMPARE(list.findInstance(30, 0), 0);
+  QCOMPARE(list.findInstance(20, 0), 0);
+  QCOMPARE(list.findInstance(21, 1), 0);
+  QCOMPARE(list.findInstance(10, 0), 0);
+  // Grid/count bookkeeping unchanged by migration; single plate left.
+  QCOMPARE(list.plateCols(), 1);
+  QVERIFY(list.currentPlateIndex() >= 0 && list.currentPlateIndex() < list.plateCount());
+
+  // Current-plate clamping still applies when the current plate is deleted.
+  QVERIFY(list.createPlate() != nullptr);
+  QVERIFY(list.createPlate() != nullptr);  // plates 0,1,2 again
+  list.setCurrentPlateIndex(2);
+  QVERIFY(list.deletePlate(2));            // delete the current last plate
+  QCOMPARE(list.plateCount(), 2);
+  QVERIFY(list.currentPlateIndex() < list.plateCount());
+
+  // Outside flags do not survive the move: an instance flagged outside on the
+  // deleted plate re-homes totally on the destination (upstream
+  // move_instances_to iterates obj_to_instance_set only), so the destination
+  // plate stays slice-ready.
+  OWzx::PartPlateList outside;
+  QVERIFY(outside.createPlate() != nullptr);          // plates 0,1
+  outside.plate(1)->addInstance(5, 0);
+  outside.plate(1)->setInstanceOutside(5, 0, true);  // flagged outside on deleted plate
+  QVERIFY(!outside.plate(1)->canSlice());
+  QVERIFY(outside.deletePlate(1));                   // delete last plate -> merges into plate 0
+  QCOMPARE(outside.findInstance(5, 0), 0);
+  QCOMPARE(outside.findInstanceBelongs(5, 0), 0);    // re-homed totally (no outside carryover)
+  QVERIFY(outside.plate(0)->canSlice());
 }
 
 #ifdef HAS_LIBSLIC3R

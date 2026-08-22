@@ -50,7 +50,23 @@ PartPlate* PartPlateList::createPlate() {
 bool PartPlateList::deletePlate(int index) {
   if (plateCount() <= 1) return false;  // upstream invariant: keep >= 1 plate
   if (index < 0 || index >= plateCount()) return false;
+
+  // Migrate the deleted plate's instance memberships instead of dropping them.
+  // Upstream delete_plate keeps the instances ("keep its instance at origin
+  // position and add them into next plate if have", PartPlate.cpp:3708-3810;
+  // move_instances_to re-homes every obj_to_instance_set entry and carries no
+  // instance_outside_set state). Qt6 destination rule: the next plate at the
+  // same index position after erase; deleting the last plate merges into the
+  // previous one. Memberships re-home wholesale through addInstance so the
+  // destination's slice readiness is re-evaluated.
+  const std::set<std::pair<int, int>> migrated =
+      m_plate_list[index]->objToInstanceSet();
   m_plate_list.erase(m_plate_list.begin() + index);
+  const int destIndex = (index < plateCount()) ? index : index - 1;
+  for (const auto& key : migrated) {
+    m_plate_list[destIndex]->addInstance(key.first, key.second);
+  }
+
   reindex();
   // Keep current plate index valid after deletion.
   if (m_current_plate >= plateCount()) {
