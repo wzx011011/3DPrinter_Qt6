@@ -265,6 +265,10 @@ private slots:
   void appSettingsAndEditorBedShapePersistDeterministically();
   void editor_import_model_updates_state();
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
+  // 260822-x4n B1 (upstream BackgroundSlicingProcess::can_switch_print,
+  // BackgroundSlicingProcess.cpp:140-155): plate switches are refused while a
+  // slice is RUNNING and allowed once it finishes.
+  void editorPlateSwitchRefusedWhileSlicing();
   // v5.16 Phase 239 (ENGN-01): switching to Preview with a STALE current-plate
   // result auto-reslices (upstream Plater.cpp:6165-6234 do_reslice) and
   // completes the page switch on sliceFinished.
@@ -622,6 +626,54 @@ void ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlate
   editor.switchToPreview();
   QVERIFY2(editor.statusText().contains(QStringLiteral("尚未切片")),
            qPrintable(editor.statusText()));
+}
+
+// ── 260822-x4n B1: plate switch guarded while slicing ──────────────────────
+// Upstream BackgroundSlicingProcess::can_switch_print
+// (BackgroundSlicingProcess.cpp:140-155) refuses only while STATE_RUNNING;
+// Plater.cpp:13879 gates the plate/preview swap on it. Drives a real slice so
+// the RUNNING state (and the refusal + recovery) is exercised end to end.
+void ViewModelSmokeTests::editorPlateSwitchRefusedWhileSlicing()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("Requires HAS_LIBSLIC3R");
+#else
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  // Idle: switching plates is allowed (can_switch_print defaults true).
+  QVERIFY(slice.canSwitchPlate());
+  QVERIFY(editor.addPlate());
+  QVERIFY2(editor.setCurrentPlateIndex(1), "idle switches must be allowed");
+  QCOMPARE(editor.currentPlateIndex(), 1);
+  QVERIFY(editor.setCurrentPlateIndex(0));
+
+  // startSlice flips slicing_ synchronously before returning.
+  slice.startSlice(project.projectName());
+  QVERIFY2(slice.slicing(), "slice should be RUNNING right after startSlice");
+
+  // While RUNNING: predicate false and the VM guard refuses without mutating
+  // any state (no selection/fit refresh, no service call).
+  QVERIFY2(!slice.canSwitchPlate(), "canSwitchPlate must refuse while slicing");
+  const int plateBefore = editor.currentPlateIndex();
+  QVERIFY2(!editor.setCurrentPlateIndex(1),
+           "plate switch must be refused while a slice is running");
+  QCOMPARE(editor.currentPlateIndex(), plateBefore);
+  QCOMPARE(editor.statusText(), QStringLiteral("当前切片任务进行中，无法切换平板"));
+
+  // Recovery: once the slice leaves RUNNING, switching works again.
+  slice.cancelSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(!slice.slicing(), 60000);
+  QVERIFY(slice.canSwitchPlate());
+  QVERIFY2(editor.setCurrentPlateIndex(1), "post-slice switches must be allowed again");
+#endif
 }
 
 // ── v5.16 Phase 239 (ENGN-01): stale preview switch auto-reslices ──────────
@@ -7405,6 +7457,11 @@ void ViewModelSmokeTests::projectServiceExportGcode3mfProducesArchive()
     gcode.write("; test gcode\nG28\n");
   }
   const QString destPath = tempDir.filePath(QStringLiteral("out.gcode.3mf"));
+
+  // 260822-x4n B3: exportGcode3mf now requires an export-ready plate
+  // (upstream is_slice_result_ready_for_export, PartPlate.hpp:437). Mark the
+  // plate's result valid the way SliceService does on a successful slice.
+  project.setPlateSliceResultValid(0, true);
 
   bool exported = false;
   try {

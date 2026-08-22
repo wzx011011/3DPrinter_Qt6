@@ -223,6 +223,29 @@ bool SliceService::slicing() const
   return slicing_;
 }
 
+bool SliceService::canSwitchPlate() const
+{
+  // B1: upstream BackgroundSlicingProcess::can_switch_print
+  // (BackgroundSlicingProcess.cpp:140-155) refuses plate switches only while
+  // a slice is RUNNING (Plater.cpp:13879 gates the preview swap on it).
+  return !slicing_;
+}
+
+void SliceService::setDomainResultValid(int plateIndex, bool valid)
+{
+  // B3: mirror result-store changes into the PartPlate domain flag so the
+  // all-plates print/export aggregates (PartPlate.cpp:4989-5044) act on the
+  // same truth this service exposes.
+  if (projectService_)
+    projectService_->setPlateSliceResultValid(plateIndex, valid);
+}
+
+void SliceService::setAllDomainResultsValid(bool valid)
+{
+  if (projectService_)
+    projectService_->setAllSliceResultsValid(valid);
+}
+
 QString SliceService::statusLabel() const
 {
   return statusLabel_;
@@ -296,7 +319,10 @@ void SliceService::clearStoredResult()
 void SliceService::clearActiveTargetResult()
 {
   if (activeTargetPlateIndex_ >= 0)
+  {
     plateResults_.remove(activeTargetPlateIndex_);
+    setDomainResultValid(activeTargetPlateIndex_, false);
+  }
   if (resultPlateIndex_ == activeTargetPlateIndex_)
     clearStoredResult();
 }
@@ -304,7 +330,10 @@ void SliceService::clearActiveTargetResult()
 void SliceService::storePlateResult(int plateIndex, const PlateSliceResult &result)
 {
   if (plateIndex >= 0)
+  {
     plateResults_[plateIndex] = result;
+    setDomainResultValid(plateIndex, true);
+  }
 }
 
 void SliceService::clearResults()
@@ -322,6 +351,7 @@ void SliceService::clearResults()
   clearStoredResult();
   activeTargetPlateIndex_ = -1;
   plateResults_.clear();
+  setAllDomainResultsValid(false);
   emit resultChanged();
   emit sliceResultCleared();
   emit stateChanged();
@@ -496,6 +526,7 @@ void SliceService::startSlice(const QString &projectName)
   }
   activeTargetPlateIndex_ = targetPlateIndex;
   plateResults_.remove(targetPlateIndex);
+  setDomainResultValid(targetPlateIndex, false);
   clearStoredResult();
   emit resultChanged();
   emit sliceResultCleared();
@@ -1049,6 +1080,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   // from the parsed file.
   const PlateSliceResult previousMeta = plateResults_.value(targetPlateIndex);
   plateResults_.remove(targetPlateIndex);
+  setDomainResultValid(targetPlateIndex, false);
   clearStoredResult();
   emit resultChanged();
   emit sliceResultCleared();
@@ -1279,6 +1311,21 @@ bool SliceService::exportPlateGCodeToPath(int plateIndex, const QString &targetP
 
 bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, const QString &baseName)
 {
+  // B3 (upstream MainFrame.cpp:1897-1901 -> PartPlate.cpp:5022-5044): all-plate
+  // file export requires every non-empty printable plate to hold a valid slice
+  // result with printable, fully-placed instances, and at least one ready plate.
+  if (!projectService_ || !projectService_->isAllSliceResultReadyForExport())
+  {
+    setExportStatus(State::Completed, progress_,
+                    QObject::tr("Not all plates are ready for export"));
+    logExportFailure(QStringLiteral("all"),
+                     QString{},
+                     directoryPath,
+                     statusLabel_);
+    emit exportFailed(statusLabel_);
+    return false;
+  }
+
   const QString cleanDirectory = QDir::cleanPath(localPathFromDialogValue(directoryPath).trimmed());
   if (cleanDirectory.isEmpty())
   {
@@ -1710,6 +1757,7 @@ void SliceService::clearPlateResults()
 {
   clearStoredResult();
   plateResults_.clear();
+  setAllDomainResultsValid(false);
   emit resultChanged();
   emit sliceResultCleared();
   emit stateChanged();
@@ -1719,6 +1767,8 @@ void SliceService::clearPlateResults()
 void SliceService::removePlateResult(int plateIndex)
 {
   const bool removedPlateMetadata = plateResults_.remove(plateIndex) > 0;
+  if (removedPlateMetadata)
+    setDomainResultValid(plateIndex, false);
   bool clearedCurrentOutput = false;
   if (resultPlateIndex_ == plateIndex)
   {

@@ -153,6 +153,18 @@ class PartPlateList {
   /// Upstream naming is retained: true when at least one plate can be sliced.
   bool isAllPlatesReadyForSlice() const;
 
+  // -- All-plates print/export readiness aggregates (B3) --------------------
+  // Upstream PartPlate.cpp:4989-5044; consumed by the MainFrame.cpp:1372-1392
+  // style print/export gates. Loop structure mirrors upstream exactly.
+  /// Every plate's slice result is valid (PartPlate.cpp:4989).
+  bool isAllSliceResultsValid() const;
+  /// Every non-empty printable plate must be print-ready and at least one
+  /// plate ready (PartPlate.cpp:5000).
+  bool isAllSliceResultsReadyForPrint() const;
+  /// Print variant plus printable instances on every ready plate
+  /// (PartPlate.cpp:5022).
+  bool isAllSliceResultReadyForExport() const;
+
   /// Distinct object indices on a plate (collapses instance pairs to object indices).
   /// Bridges the instance-level truth to the existing per-object API surface that
   /// ProjectServiceMock exposes (plateObjectIndices).

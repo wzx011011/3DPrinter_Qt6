@@ -1666,6 +1666,38 @@ bool ProjectServiceMock::currentPlateCanSlice() const
   return isPlateReadyForSlice(currentPlateIndex());
 }
 
+// B3 all-plates aggregate readiness bridges (PartPlate.cpp:4989-5044).
+bool ProjectServiceMock::isAllSliceResultsValid() const
+{
+  return m_plateList && m_plateList->isAllSliceResultsValid();
+}
+
+bool ProjectServiceMock::isAllSliceResultsReadyForPrint() const
+{
+  return m_plateList && m_plateList->isAllSliceResultsReadyForPrint();
+}
+
+bool ProjectServiceMock::isAllSliceResultReadyForExport() const
+{
+  return m_plateList && m_plateList->isAllSliceResultReadyForExport();
+}
+
+void ProjectServiceMock::setPlateSliceResultValid(int plateIndex, bool valid)
+{
+  if (!m_plateList) return;
+  OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (p) p->setSliceResultValid(valid);
+}
+
+void ProjectServiceMock::setAllSliceResultsValid(bool valid)
+{
+  if (!m_plateList) return;
+  for (int i = 0; i < m_plateList->plateCount(); ++i) {
+    OWzx::PartPlate *p = m_plateList->plate(i);
+    if (p) p->setSliceResultValid(valid);
+  }
+}
+
 // v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
 // filament->extruder mapping. `mode` is the widened 4-value FilamentMapMode
 // (cast to int for the Q_INVOKABLE boundary; QML/Phase 110 popup will pass the
@@ -5651,6 +5683,17 @@ bool ProjectServiceMock::exportGcode3mf(int plateIndex, const QString &destPath,
   if (destPath.isEmpty())
   {
     lastError_ = tr("Export path is empty");
+    return false;
+  }
+  // B3 (upstream is_slice_result_ready_for_export, PartPlate.hpp:437): the
+  // plate must hold a valid slice result with printable, fully-placed
+  // instances before its sliced data may be exported.
+  const OWzx::PartPlate *exportPlate =
+      m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  if (!exportPlate || !exportPlate->isSliceResultReadyForExport())
+  {
+    lastError_ = tr("Plate %1 has no export-ready sliced result")
+                     .arg(plateIndex + 1);
     return false;
   }
   QFile gcodeFile(gcodeSourcePath);

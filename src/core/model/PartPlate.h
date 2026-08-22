@@ -185,6 +185,39 @@ class PartPlate {
   /// the plate is marked ready and not flagged apply-invalid.
   bool canSlice() const { return m_ready_for_slice && !m_apply_invalid; }
 
+  // -- All-plates print/export readiness predicates (B3) --------------------
+  // Upstream truth: PartPlate.hpp:426-441 + PartPlate.cpp:2435-2477, consumed
+  // by the PartPlateList aggregates is_all_slice_results_ready_for_print /
+  // is_all_slice_result_ready_for_export (PartPlate.cpp:5000-5044).
+
+  /// Upstream is_slice_result_ready_for_print (PartPlate.hpp:426) also
+  /// requires a G-code result whose toolpath stays on the bed; Qt6 models
+  /// only the validity half today, so readiness reduces to the validity flag
+  /// here. The flag is kept in sync with SliceService's result store.
+  bool isSliceResultReadyForPrint() const { return m_slice_result_valid; }
+
+  /// Plate-granularity proxy for upstream is_all_instances_unprintable
+  /// (PartPlate.cpp:2458): Qt6 carries printability at plate level instead of
+  /// per ModelInstance. True also for an empty membership, matching the
+  /// upstream loop initialization.
+  bool isAllInstancesUnprintable() const { return !m_printable; }
+
+  /// Plate-granularity proxy for upstream has_printable_instances
+  /// (PartPlate.cpp:2435): a printable plate holding at least one member
+  /// instance that is not flagged outside the bed.
+  bool hasPrintableInstances() const {
+    if (!m_printable) return false;
+    for (const auto& key : m_obj_to_instance_set) {
+      if (m_instance_outside_set.count(key) == 0) return true;
+    }
+    return false;
+  }
+
+  /// Mirrors upstream is_slice_result_ready_for_export (PartPlate.hpp:437).
+  bool isSliceResultReadyForExport() const {
+    return isSliceResultReadyForPrint() && hasPrintableInstances();
+  }
+
   int printIndex() const { return m_print_index; }
   void setPrintIndex(int idx) { m_print_index = idx; }
 

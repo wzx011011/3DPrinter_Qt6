@@ -162,6 +162,12 @@ public:
   State sliceState() const { return sliceState_; }
   explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
 
+  /// B1 plate-switch gate: mirrors upstream
+  /// BackgroundSlicingProcess::can_switch_print (BackgroundSlicingProcess.cpp:
+  /// 140-155), which refuses only while a slice is RUNNING. Consumed by
+  /// EditorViewModel::setCurrentPlateIndex before any state mutation.
+  Q_INVOKABLE bool canSwitchPlate() const;
+
   int progress() const;
   bool slicing() const;
   QString statusLabel() const;
@@ -226,6 +232,14 @@ public:
 
   void clearPlateResults();
   void removePlateResult(int plateIndex);
+
+private:
+  /// B3: keep the PartPlate domain validity flag in sync with this service's
+  /// per-plate result store so the PartPlateList aggregate gates (upstream
+  /// is_all_slice_results_valid family, PartPlate.cpp:4989-5044) see the same
+  /// truth the export paths act on.
+  void setDomainResultValid(int plateIndex, bool valid);
+  void setAllDomainResultsValid(bool valid);
 
 signals:
   void stateChanged();

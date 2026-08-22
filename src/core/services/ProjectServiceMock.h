@@ -221,6 +221,17 @@ public:
   /// Slice readiness bridge to the PartPlate domain state machine.
   Q_INVOKABLE bool isPlateReadyForSlice(int plateIndex) const;
   Q_INVOKABLE bool currentPlateCanSlice() const;
+  /// B3 all-plates aggregate readiness bridges (upstream
+  /// is_all_slice_results_valid / is_all_slice_results_ready_for_print /
+  /// is_all_slice_result_ready_for_export, PartPlate.cpp:4989-5044; consumed
+  /// by the MainFrame.cpp:1372-1392 style print/export gates).
+  Q_INVOKABLE bool isAllSliceResultsValid() const;
+  Q_INVOKABLE bool isAllSliceResultsReadyForPrint() const;
+  Q_INVOKABLE bool isAllSliceResultReadyForExport() const;
+  /// Internal bridge keeping the PartPlate domain validity flag in sync with
+  /// SliceService's per-plate result store (not exposed to QML).
+  void setPlateSliceResultValid(int plateIndex, bool valid);
+  void setAllSliceResultsValid(bool valid);
 
   // v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
   // filament->extruder mapping. `mode` is the widened 4-value FilamentMapMode

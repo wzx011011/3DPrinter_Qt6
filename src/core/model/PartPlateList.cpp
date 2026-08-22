@@ -163,6 +163,54 @@ bool PartPlateList::isAllPlatesReadyForSlice() const {
   return false;
 }
 
+// -- All-plates print/export readiness aggregates (B3) ----------------------
+// Loop structure mirrors upstream PartPlate.cpp:4989-5044 exactly.
+
+bool PartPlateList::isAllSliceResultsValid() const {
+  for (const auto& plate : m_plate_list) {
+    if (plate && !plate->sliceResultValid())
+      return false;
+  }
+  return true;
+}
+
+bool PartPlateList::isAllSliceResultsReadyForPrint() const {
+  bool res = false;
+  for (const auto& plate : m_plate_list) {
+    if (!plate) continue;
+    if (!plate->empty()) {
+      if (plate->isAllInstancesUnprintable())
+        continue;  // skipped plates impose no mandatory check
+      if (!plate->isSliceResultReadyForPrint())
+        return false;  // mandatory: a loaded printable plate must be sliced
+    }
+    if (plate->isSliceResultReadyForPrint())
+      res = true;  // at least one ready plate required
+  }
+  return res;
+}
+
+bool PartPlateList::isAllSliceResultReadyForExport() const {
+  bool res = false;
+  for (const auto& plate : m_plate_list) {
+    if (!plate) continue;
+    if (!plate->empty()) {
+      if (plate->isAllInstancesUnprintable())
+        continue;  // skipped plates impose no mandatory check
+      if (!plate->isSliceResultReadyForPrint())
+        return false;  // mandatory: a loaded printable plate must be sliced
+    }
+    if (plate->isSliceResultReadyForPrint()) {
+      // Export-only extra (PartPlate.cpp:5035-5039): a ready plate whose
+      // printable instances all stick out of the bed blocks file export.
+      if (!plate->hasPrintableInstances())
+        return false;
+      res = true;
+    }
+  }
+  return res;
+}
+
 QList<int> PartPlateList::objectIndicesOnPlate(int plateIndex) const {
   QList<int> result;
   const PartPlate* p = plate(plateIndex);
@@ -192,6 +240,9 @@ void PartPlateList::resetToSinglePlate() {
   first->setName({});
   first->setPlateIndex(0);
   first->setLocked(false);
+  // B3: a fresh load has no slice results; drop any stale validity so the
+  // all-plates print/export aggregates start fail-closed.
+  first->setSliceResultValid(false);
   m_current_plate = 0;
 }
 

@@ -1336,6 +1336,30 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
 
   QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_export_all_XXXXXX"));
   QVERIFY2(exportDir.isValid(), "temporary all-plate export directory should be available");
+  // 260822-x4n B3 (upstream is_all_slice_results_ready_for_print,
+  // PartPlate.cpp:5000-5019): locked plate 2 still HOLDS objects, so it
+  // counts as a loaded printable plate without a slice result and blocks
+  // all-plate export until it is emptied or sliced.
+  QVERIFY2(!editor.requestExportAllGCode(exportDir.path(), QStringLiteral("allplates")),
+           "an unsliced loaded plate must block all-plate export");
+
+  // Per-plate activation checks must run BEFORE plate 2 is emptied below:
+  // ProjectServiceMock::deleteObject prunes emptied plates (keep >= 1), so
+  // removing plate 2's objects deletes the plate itself.
+  QVERIFY(editor.setCurrentPlateIndex(0));
+  QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(0));
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(1));
+  QVERIFY(editor.setCurrentPlateIndex(2));
+  QVERIFY2(editor.sliceOutputPath().isEmpty(), "locked skipped plate must not activate a stale output");
+  QVERIFY2(slice.outputPath().isEmpty(), "switching to a skipped plate must clear the active service output path");
+  QVERIFY2(!editor.canPreview(), "locked skipped plate must not be previewable");
+  QVERIFY2(!editor.canExportGCode(), "locked skipped plate must not be exportable");
+
+  QVERIFY(project.removeAllOnPlate(2));
+  // Emptying the last plate's objects pruned the plate itself; its former
+  // index must now be rejected as out of range.
+  QVERIFY2(!editor.setCurrentPlateIndex(2), "a pruned plate index must refuse switching");
   QVERIFY2(editor.requestExportAllGCode(exportDir.path(), QStringLiteral("allplates")),
            "all printable valid plate results should export to a directory");
   const QString exportedPlate0 = exportDir.filePath(QStringLiteral("allplates_plate1.gcode"));
@@ -1352,16 +1376,6 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   QCOMPARE(QFileInfo(exportedPlate1).size(), QFileInfo(slice.plateOutputPath(1)).size());
   QVERIFY2(!QFileInfo::exists(skippedPlate2),
            "locked skipped plate must not create an all-plate export file");
-
-  QVERIFY(editor.setCurrentPlateIndex(0));
-  QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(0));
-  QVERIFY(editor.setCurrentPlateIndex(1));
-  QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(1));
-  QVERIFY(editor.setCurrentPlateIndex(2));
-  QVERIFY2(editor.sliceOutputPath().isEmpty(), "locked skipped plate must not activate a stale output");
-  QVERIFY2(slice.outputPath().isEmpty(), "switching to a skipped plate must clear the active service output path");
-  QVERIFY2(!editor.canPreview(), "locked skipped plate must not be previewable");
-  QVERIFY2(!editor.canExportGCode(), "locked skipped plate must not be exportable");
 
   const QString plate0Path = slice.plateOutputPath(0);
   const QString plate1Path = slice.plateOutputPath(1);

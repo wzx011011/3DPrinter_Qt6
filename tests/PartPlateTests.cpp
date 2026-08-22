@@ -77,6 +77,8 @@ class PartPlateTests final : public QObject {
   void plateListInstanceLookupAndReadinessAggregation();
   // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
   void deletePlateMigratesInstancesToNeighbor();
+  // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
+  void allPlatesAggregateReadinessTruthTables();
 #ifdef HAS_LIBSLIC3R
   void sliceServiceRejectsNotReadyPlate();
 #else
@@ -542,6 +544,87 @@ void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
   QCOMPARE(outside.findInstance(5, 0), 0);
   QCOMPARE(outside.findInstanceBelongs(5, 0), 0);    // re-homed totally (no outside carryover)
   QVERIFY(outside.plate(0)->canSlice());
+}
+
+void PartPlateTests::allPlatesAggregateReadinessTruthTables() {
+  // B3 truth tables for the upstream PartPlate.cpp:4989-5044 aggregates.
+  // Domain-only: the validity flag stands in for the service-side result
+  // store (SliceService keeps it in sync via setPlateSliceResultValid).
+  {
+    // Fresh single plate: empty membership, result invalid -> everything
+    // fail-closed (zero-ready plates cannot pass the print/export gates).
+    OWzx::PartPlateList list;
+    QVERIFY(!list.isAllSliceResultsValid());
+    QVERIFY(!list.isAllSliceResultsReadyForPrint());
+    QVERIFY(!list.isAllSliceResultReadyForExport());
+  }
+  {
+    // Single valid printable plate with members: all three aggregates pass.
+    OWzx::PartPlateList list;
+    list.plate(0)->addInstance(0, 0);
+    list.plate(0)->setSliceResultValid(true);
+    QVERIFY(list.isAllSliceResultsValid());
+    QVERIFY(list.isAllSliceResultsReadyForPrint());
+    QVERIFY(list.isAllSliceResultReadyForExport());
+  }
+  {
+    // Validity has NO empty-skip (upstream :4989 loops every plate), while
+    // the print/export gates skip empty plates entirely.
+    OWzx::PartPlateList list;
+    QVERIFY(list.createPlate() != nullptr);
+    list.plate(0)->addInstance(0, 0);
+    list.plate(0)->setSliceResultValid(true);
+    // plate 1 stays empty + invalid.
+    QVERIFY(!list.isAllSliceResultsValid());
+    QVERIFY(list.isAllSliceResultsReadyForPrint());
+    QVERIFY(list.isAllSliceResultReadyForExport());
+  }
+  {
+    // A non-empty invalid plate blocks the print/export gates outright.
+    OWzx::PartPlateList list;
+    QVERIFY(list.createPlate() != nullptr);
+    list.plate(0)->addInstance(0, 0);
+    list.plate(0)->setSliceResultValid(true);
+    list.plate(1)->addInstance(1, 0);  // loaded but never sliced
+    QVERIFY(list.isAllSliceResultsValid() == false);
+    QVERIFY(!list.isAllSliceResultsReadyForPrint());
+    QVERIFY(!list.isAllSliceResultReadyForExport());
+  }
+  {
+    // Non-empty unprintable plates are skipped (upstream
+    // is_all_instances_unprintable continue branch) and impose no check.
+    OWzx::PartPlateList list;
+    QVERIFY(list.createPlate() != nullptr);
+    list.plate(0)->addInstance(0, 0);
+    list.plate(0)->setSliceResultValid(true);
+    list.plate(1)->addInstance(1, 0);
+    list.plate(1)->setSliceResultValid(true);
+    list.plate(1)->setPrintable(false);
+    QVERIFY(list.isAllSliceResultsValid());  // validity ignores printability
+    QVERIFY(list.isAllSliceResultsReadyForPrint());
+    QVERIFY(list.isAllSliceResultReadyForExport());
+  }
+  {
+    // Zero-ready: only a skipped (unprintable) plate exists -> false.
+    OWzx::PartPlateList list;
+    list.plate(0)->addInstance(0, 0);
+    list.plate(0)->setSliceResultValid(true);
+    list.plate(0)->setPrintable(false);
+    QVERIFY(!list.isAllSliceResultsReadyForPrint());
+    QVERIFY(!list.isAllSliceResultReadyForExport());
+  }
+  {
+    // Export-only divergence (PartPlate.cpp:5035-5039): printable instances
+    // all flagged outside the bed pass the print gate but block file export
+    // (has_printable_instances excludes instance_outside_set entries).
+    OWzx::PartPlateList list;
+    list.plate(0)->addInstance(0, 0);
+    list.plate(0)->setInstanceOutside(0, 0, true);
+    list.plate(0)->setSliceResultValid(true);
+    QVERIFY(list.isAllSliceResultsValid());
+    QVERIFY(list.isAllSliceResultsReadyForPrint());
+    QVERIFY(!list.isAllSliceResultReadyForExport());
+  }
 }
 
 #ifdef HAS_LIBSLIC3R

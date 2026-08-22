@@ -7348,6 +7348,17 @@ QString EditorViewModel::objectPlateName(int i) const
 
 bool EditorViewModel::setCurrentPlateIndex(int i)
 {
+  // B1 (upstream BackgroundSlicingProcess::can_switch_print,
+  // BackgroundSlicingProcess.cpp:140-155): refuse plate switches while a slice
+  // is RUNNING. This is the single QML entry point; the programmatic
+  // ProjectServiceMock::setCurrentPlateIndex call sites stay unguarded so
+  // mid/post-slice flows keep working.
+  if (sliceService_ && !sliceService_->canSwitchPlate())
+  {
+    statusText_ = QStringLiteral("当前切片任务进行中，无法切换平板");
+    emit stateChanged();
+    return false;
+  }
   const bool ok = projectService_->setCurrentPlateIndex(i);
   if (!ok)
     return false;
