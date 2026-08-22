@@ -558,4 +558,8 @@ private:
   // Item pointer for the queued callback (QPointer survives item recreation
   // and nulls itself if the item is destroyed before the readback completes).
   QPointer<RhiViewport> m_viewportItem;
+  // Camera snapshot copied during synchronize(); render() must not call into
+  // the GUI-owned RhiViewport or its CameraController.
+  QMatrix4x4 m_thumbnailCameraMvp;
+  bool m_thumbnailCameraMvpValid = false;
 };

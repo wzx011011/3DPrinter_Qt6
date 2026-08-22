@@ -539,9 +539,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_thumbnailSize = viewport->m_thumbnailSize;
     viewport->m_thumbnailRequestPending = false;
   }
-  // Cache the item pointer for the queued QImage callback + follow-up update().
-  // QPointer survives item recreation and nulls itself if the item is destroyed
-  // before the readback completes.
+  // Copy the camera state while synchronize() owns the GUI-to-render handoff.
+  // render() must never call cameraMvp() on the GUI-owned item.
+  m_thumbnailCameraMvp = viewport->cameraMvp(1.0f);
+  m_thumbnailCameraMvpValid = true;
+
+  // Cache the item pointer only for queued GUI-thread delivery. It is never
+  // dereferenced for render-side state.
   m_viewportItem = viewport;
 }
 
@@ -940,10 +944,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Request a follow-up frame so the async readback result is polled on the
     // next render(). Without this, a single capture on an otherwise-idle
     // scene would never deliver the QImage.
-    if (m_viewportItem != nullptr) {
-      QMetaObject::invokeMethod(m_viewportItem.data(),
-                                "update",
-                                Qt::QueuedConnection);
+    const QPointer<RhiViewport> viewport = m_viewportItem;
+    if (viewport != nullptr) {
+      QMetaObject::invokeMethod(viewport.data(), "update", Qt::QueuedConnection);
     }
   }
   rhiTrace("render-exit");
@@ -968,16 +971,14 @@ void RhiViewportRenderer::releaseRenderPassDependentResources()
 
 void RhiViewportRenderer::releaseResources()
 {
-  // Phase 95 (THUMBCAP-01): release offscreen thumbnail RT + pipelines +
-  // pending readback state before the on-screen resources are torn down.
-  releaseThumbnailResources();
-  // Phase 208 (MIT-01 / Seam A): drop a deferred readback batch that never
-  // got folded into a beginPass (e.g. the capture frame was the last frame
-  // before teardown). delete returns it to QRhi's pool.
+  // Drop deferred readback commands before destroying the texture they refer
+  // to. The batch is render-thread owned and is returned to QRhi's pool here.
   if (m_pendingReadbackUpdates != nullptr) {
     delete m_pendingReadbackUpdates;
     m_pendingReadbackUpdates = nullptr;
   }
+  // Phase 95 (THUMBCAP-01): release offscreen thumbnail RT + pipelines.
+  releaseThumbnailResources();
   m_thumbnailRequestPending = false;
   m_linePipeline.reset();
   m_fillPipeline.reset();
@@ -1018,8 +1019,13 @@ void RhiViewportRenderer::releaseResources()
   m_paintOverlayBuffer.reset();   // Phase 121 (PAINT-02)
   m_hollowMarkerBuffer.reset();   // Phase HOLLOW
   m_advancedCutMarkerBuffer.reset();  // v5.13
+  m_measureOverlayBuffer.reset();
+  m_flattenHoverBuffer.reset();
   m_brushCursorBuffer.reset();    // Phase 121 (PAINT-03)
   m_assemblyConnectorBuffer.reset();  // Phase 91
+  m_assemblyMeasureLineBuffer.reset();
+  m_assemblyMeasureTriBuffer.reset();
+  m_assemblyMeasureValueBuffer.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
@@ -1051,8 +1057,13 @@ void RhiViewportRenderer::releaseResources()
   m_paintOverlayBufferUploaded = false;   // Phase 121 (PAINT-02)
   m_hollowMarkerBufferUploaded = false;   // Phase HOLLOW
   m_advancedCutMarkerBufferUploaded = false;   // v5.13
+  m_measureOverlayBufferUploaded = false;
+  m_flattenHoverBufferUploaded = false;
   m_brushCursorBufferUploaded = false;    // Phase 121 (PAINT-03)
   m_assemblyConnectorBufferUploaded = false;  // Phase 91
+  m_assemblyMeasureLineBufferUploaded = false;
+  m_assemblyMeasureTriBufferUploaded = false;
+  m_assemblyMeasureValueBufferUploaded = false;
   m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
@@ -1067,7 +1078,13 @@ void RhiViewportRenderer::releaseResources()
   m_paintOverlayBufferBytes = 0;   // Phase 121 (PAINT-02)
   m_hollowMarkerBufferBytes = 0;   // Phase HOLLOW
   m_advancedCutMarkerBufferBytes = 0;   // v5.13
+  m_measureOverlayBufferBytes = 0;
+  m_flattenHoverBufferBytes = 0;
   m_brushCursorBufferBytes = 0;    // Phase 121 (PAINT-03)
+  m_assemblyConnectorBufferBytes = 0;
+  m_assemblyMeasureLineBufferBytes = 0;
+  m_assemblyMeasureTriBufferBytes = 0;
+  m_assemblyMeasureValueBufferBytes = 0;
   m_moveGizmoOffsets = {};
   m_rotateGizmoOffsets = {};
   m_scaleGizmoOffsets = {};
@@ -1079,7 +1096,12 @@ void RhiViewportRenderer::releaseResources()
   m_cutPlaneOutlineVertexCount = 0;
   m_wipeTowerVertexCount = 0;
   m_paintOverlayVertexCount = 0;   // Phase 121 (PAINT-02)
+  m_measureOverlayVertexCount = 0;
+  m_flattenHoverVertexCount = 0;
   m_brushCursorVertexCount = 0;    // Phase 121 (PAINT-03)
+  m_assemblyMeasureLineVertexCount = 0;
+  m_assemblyMeasureTriVertexCount = 0;
+  m_assemblyMeasureValueVertexCount = 0;
   m_sceneGeneration = 0;
   m_modelGeneration = 0;
   m_cutPlaneDirty = true;
@@ -1104,13 +1126,17 @@ void RhiViewportRenderer::releaseThumbnailResources()
   m_thumbnailSrb.reset();
   m_thumbnailUniformBuffer.reset();
   m_thumbnailUniformBufferBytes = 0;
+  // The render target references this descriptor, so destroy the target before
+  // releasing the descriptor. Keep both operations on the render thread.
+  m_thumbnailRenderTarget.reset();
   if (m_thumbnailRenderPassDescriptor != nullptr) {
-    m_thumbnailRenderPassDescriptor->deleteLater();
+    delete m_thumbnailRenderPassDescriptor;
     m_thumbnailRenderPassDescriptor = nullptr;
   }
-  m_thumbnailRenderTarget.reset();
   m_thumbnailTexture.reset();
   m_thumbnailReadbackInFlight = false;
+  m_thumbnailReadbackResult = {};
+  m_thumbnailCameraMvpValid = false;
   m_thumbnailLastBuiltSize = 0;
 }
 
@@ -1238,8 +1264,8 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
   // thumbnail is square so aspect = 1.0 (no distortion). Use the item's
   // cameraMvp(1.0f) so the offscreen pass does not inherit the on-screen
   // viewport's wide aspect ratio.
-  const QMatrix4x4 thumbnailMvp = (m_viewportItem != nullptr)
-      ? m_viewportItem->cameraMvp(1.0f)
+  const QMatrix4x4 thumbnailMvp = m_thumbnailCameraMvpValid
+      ? m_thumbnailCameraMvp
       : m_cameraMvp;
 
   QRhiResourceUpdateBatch *thumbUpdates = rhi()->nextResourceUpdateBatch();

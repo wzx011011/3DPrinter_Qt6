@@ -110,6 +110,8 @@ private slots:
   void rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilter();
   void rhiViewportRendererHasGcvPackedSegmentRoleGuard();
   void rendererViewmodelSafetyRegressionAudit();
+  // Mouse interaction must not make the render thread call into the GUI item.
+  void rhiViewportThumbnailUsesSynchronizedCameraSnapshot();
   // Phase 55-05 (GCODE-04): D3D11 default + SoftwareViewport fallback-only startup
   // policy. Phase-55-tagged so a future regression that flips the default points
   // directly at the requirement (complements the existing mainRegistersRhiViewport*
@@ -3412,6 +3414,43 @@ void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
   QVERIFY2(viewportSource.contains(QStringLiteral("float jerk, pressure_advance, actual_speed, actual_flow"))
                && viewportSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 92")),
            "RhiViewport preview fitting must parse the same multi-segment 92-byte layout");
+}
+
+void QmlUiAuditTests::rhiViewportThumbnailUsesSynchronizedCameraSnapshot()
+{
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_thumbnailCameraMvp"))
+               && rendererHeader.contains(QStringLiteral("m_thumbnailCameraMvpValid")),
+           "Renderer must own a synchronized thumbnail camera snapshot");
+  const int syncStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::synchronize"));
+  const int renderStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::render("));
+  const int snapshot = rendererSource.indexOf(QStringLiteral("m_thumbnailCameraMvp = viewport->cameraMvp(1.0f)"));
+  QVERIFY2(syncStart >= 0 && renderStart > syncStart && snapshot > syncStart && snapshot < renderStart,
+           "Thumbnail camera MVP must be copied during synchronize()");
+  const int thumbnailStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::renderThumbnailPass"));
+  const int thumbnailEnd = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::issueThumbnailReadback"));
+  QVERIFY2(thumbnailStart >= 0 && thumbnailEnd > thumbnailStart,
+           "Thumbnail render function boundaries changed");
+  const QString thumbnailBody = rendererSource.mid(thumbnailStart, thumbnailEnd - thumbnailStart);
+  QVERIFY2(!thumbnailBody.contains(QStringLiteral("m_viewportItem->cameraMvp"))
+               && !thumbnailBody.contains(QStringLiteral("m_viewportItem.data()->cameraMvp")),
+           "Render thread must not call cameraMvp() on the GUI-owned viewport");
+  const int releaseStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::releaseResources()"));
+  QVERIFY2(releaseStart >= 0, "releaseResources() definition moved; update this audit");
+  const int releaseEnd = rendererSource.indexOf(QStringLiteral("RhiViewportRenderer::releaseThumbnailResources()"), releaseStart);
+  const QString releaseBody = rendererSource.mid(releaseStart,
+                                                 releaseEnd > releaseStart ? releaseEnd - releaseStart : -1);
+  QVERIFY2(releaseBody.indexOf(QStringLiteral("delete m_pendingReadbackUpdates")) >= 0
+               && releaseBody.indexOf(QStringLiteral("delete m_pendingReadbackUpdates"))
+                      < releaseBody.indexOf(QStringLiteral("releaseThumbnailResources();")),
+           "Pending thumbnail readback must be dropped before thumbnail resources");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_measureOverlayBuffer.reset()"))
+               && rendererSource.contains(QStringLiteral("m_assemblyMeasureValueBuffer.reset()")),
+           "Full renderer teardown must release all overlay buffers");
 }
 
 void QmlUiAuditTests::rendererViewmodelSafetyRegressionAudit()
