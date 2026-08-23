@@ -8,6 +8,9 @@
 #include <QQuickRhiItem>
 #include <QRectF>
 #include <QString>
+#include "core/rendering/NavigatorCube.h"
+
+class QTimer;
 #include <QVariant>
 #include <QVector3D>
 #include <QVector4D>
@@ -182,6 +185,21 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse)
   Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera)
   Q_PROPERTY(int cameraNavStyle READ cameraNavStyle WRITE setCameraNavStyle)
+  // v5.16 (NAVIGATOR): upstream show_3d_navigator (app_config, default true,
+  // AppConfig.cpp:200). Enables the bottom-left 3D navigator cube
+  // (GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate).
+  Q_PROPERTY(bool navigatorEnabled READ navigatorEnabled WRITE setNavigatorEnabled NOTIFY navigatorEnabledChanged)
+  // v5.16 (NAVIGATOR): lifts the cube above bottom overlays (the prepare
+  // plate bar). Upstream anchors to the bare canvas corner
+  // (GLCanvas3D.cpp:5721-5722) and instead reserves space for other toolbars
+  // (:7849-7857); the Qt6 plate bar overlays the viewport bottom, so the cube
+  // stacks above it with the same 128+5 reserve.
+  Q_PROPERTY(int navigatorBottomOffset READ navigatorBottomOffset WRITE setNavigatorBottomOffset)
+  // v5.16 (NAVIGATOR): label overlay anchors for the navigator cube -- three
+  // axis labels at 1.3x the axis directions plus the hovered-face label
+  // (ImGuizmo.cpp:3037 / :2942). Entries carry kind ("axis"/"face"), text,
+  // and item-pixel x/y; text stays untranslated ids so QML owns qsTr().
+  Q_PROPERTY(QVariantList navigatorLabels READ navigatorLabels NOTIFY navigatorLabelsChanged)
   // Phase 237 (VIEW-01): projection toggle for the upstream View-menu radio
   // pair "Use Perspective View" / "Use Orthogonal View"
   // (MainFrame.cpp:2604-2620, app_config use_perspective_camera). The setter
@@ -435,6 +453,12 @@ public:
   void setFreeCamera(bool f) { m_freeCamera = f; m_camera.setFreeCamera(f); update(); }
   int cameraNavStyle() const { return m_cameraNavStyle; }
   void setCameraNavStyle(int s) { m_cameraNavStyle = s; update(); }
+  // v5.16 (NAVIGATOR): bottom-left 3D navigator cube state.
+  bool navigatorEnabled() const { return m_navigatorEnabled; }
+  void setNavigatorEnabled(bool enabled);
+  int navigatorBottomOffset() const { return m_navigatorBottomOffset; }
+  void setNavigatorBottomOffset(int offset) { m_navigatorBottomOffset = offset; update(); }
+  QVariantList navigatorLabels() const;
   // Phase 237 (VIEW-01): orthographic projection toggle (see the
   // orthographicCamera Q_PROPERTY above).
   bool orthographicCamera() const { return m_camera.useOrtho(); }
@@ -483,6 +507,9 @@ signals:
   void explosionRatioChanged();
   // Phase 237 (VIEW-01): projection toggle notify (orthographicCamera).
   void cameraProjectionChanged();
+  // v5.16 (NAVIGATOR): navigator cube enable + label overlay updates.
+  void navigatorEnabledChanged();
+  void navigatorLabelsChanged();
   void assemblyMeasureSelectionChanged();
   void gizmoModeChanged();
   void wireframeModeChanged();
@@ -613,6 +640,18 @@ private:
   bool activeToolCapturesContextGesture() const;
   int pickSourceObjectAt(const QPointF &position);
   ViewportContextHit classifyContextAt(const QPointF &position);
+  // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
+  // GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate). The cube
+  // consumes left presses/drags before any scene interaction, mirrors the
+  // upstream 40-frame snap interpolation, and exposes label anchors.
+  NavigatorCube::RectF navigatorRect() const;
+  bool startNavigatorPress(const QPointF &position);
+  void navigatorDragMove(const QPointF &position);
+  void finishNavigatorPress();
+  void updateNavigatorHover(const QPointF &position, bool leave);
+  void startNavigatorSnap(int box);
+  void advanceNavigatorSnap();
+  static QString navigatorFaceName(const QVector3D &normal);
   // Phase 69/70: gizmo-axis hit test and center derivation.
   int pickGizmoAxisAt(const QPointF &position);
   QVector3D currentGizmoCenter() const;
@@ -793,6 +832,19 @@ private:
   qint64 m_pickSceneGeneration = 0;
   CameraController m_camera;
   PrepareSceneData m_pickScene;
+  // v5.16 (NAVIGATOR): bottom-left 3D navigator cube interaction state.
+  bool m_navigatorEnabled = true;      // upstream show_3d_navigator, default on
+  int m_navigatorBottomOffset = 0;     // stack above bottom overlays
+  int m_navigatorHoverBox = -1;        // ImGuizmo overBox under the cursor
+  QVector3D m_navigatorHoverFaceNormal;
+  bool m_navigatorPressActive = false;
+  bool m_navigatorDragging = false;
+  QPointF m_navigatorPressPos;
+  QPointF m_navigatorLastPos;
+  QTimer *m_navigatorSnapTimer = nullptr;  // 40-frame snap interpolation
+  QVector3D m_navigatorSnapDir;
+  QVector3D m_navigatorSnapTarget;
+  int m_navigatorSnapFramesLeft = 0;
   QPointF m_lastMousePosition;
   QPointF m_pressPosition;
   Qt::MouseButton m_dragButton = Qt::NoButton;

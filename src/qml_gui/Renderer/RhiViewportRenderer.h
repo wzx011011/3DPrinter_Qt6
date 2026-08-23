@@ -19,6 +19,7 @@
 #include "PrepareSceneData.h"
 #include "core/rendering/GizmoGeometry.h"
 #include "core/rendering/GizmoVertex.h"
+#include "core/rendering/NavigatorCube.h"
 
 #include <rhi/qrhi.h>
 #include <rhi/qshader.h>
@@ -53,7 +54,9 @@ private:
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                       QRhiGraphicsPipeline::Topology topology,
                       bool enableDepthWrite = true,
-                      bool enableBlending = false);
+                      bool enableBlending = false,
+                      QRhiShaderResourceBindings *srb = nullptr,
+                      bool enableDepthTest = true);
   bool uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
@@ -119,6 +122,12 @@ private:
                     quint32 byteSize,
                     quint32 &storedSize,
                     QRhiBuffer::UsageFlags usage);
+  // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
+  // GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate). Drawn in
+  // overlay pixel space with a dedicated ortho UBO (no depth, blended).
+  bool ensureNavigatorPipelines();
+  bool uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates);
+  void renderNavigator(QRhiCommandBuffer *cb);
 
   // ── Phase 26: Preview segment pipeline (D-26-01..04) ──
   void parsePreviewSegments();
@@ -175,6 +184,13 @@ private:
   // v5.16 (BEDBOTTOM): grid-only lines for below-horizon camera views
   // (upstream PartPlate::render_grid(true) LINE_BOTTOM_COLOR).
   std::unique_ptr<QRhiBuffer> m_bedBottomLineBuffer;
+  // v5.16 (NAVIGATOR): overlay cube buffers + dedicated ortho uniform.
+  std::unique_ptr<QRhiBuffer> m_navigatorFillBuffer;
+  std::unique_ptr<QRhiBuffer> m_navigatorLineBuffer;
+  std::unique_ptr<QRhiBuffer> m_navigatorUniformBuffer;
+  std::unique_ptr<QRhiShaderResourceBindings> m_navigatorSrb;
+  std::unique_ptr<QRhiGraphicsPipeline> m_navigatorFillPipeline;
+  std::unique_ptr<QRhiGraphicsPipeline> m_navigatorLinePipeline;
   // v5.16 (HTLIMIT): ByObject clearance rings (upstream render_height_limit).
   std::unique_ptr<QRhiBuffer> m_bedLimitBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
@@ -324,6 +340,9 @@ private:
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_bedBottomLineBufferBytes = 0;
+  quint32 m_navigatorFillBufferBytes = 0;
+  quint32 m_navigatorLineBufferBytes = 0;
+  quint32 m_navigatorUniformBufferBytes = 0;
   quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
   quint32 m_highlightVertexBufferBytes = 0;
@@ -331,6 +350,17 @@ private:
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
   quint32 m_bedBottomLineVertexCount = 0;
+  quint32 m_navigatorFillVertexCount = 0;
+  quint32 m_navigatorLineVertexCount = 0;
+  // v5.16 (NAVIGATOR): cube state mirrored from RhiViewport in synchronize().
+  bool m_navigatorEnabled = true;
+  bool m_navigatorBufferUploaded = false;
+  NavigatorCube::RectF m_navigatorRect;
+  int m_navigatorHoverBox = -1;
+  QVector3D m_navigatorHoverFaceNormal;
+  QMatrix4x4 m_navigatorLastView;   // geometry rebuild cache key
+  int m_navigatorLastHoverBox = -2;
+  QSize m_navigatorLastPixelSize;
   quint32 m_bedLimitVertexCount = 0;
   quint32 m_modelVertexCount = 0;
   quint32 m_highlightVertexCount = 0;

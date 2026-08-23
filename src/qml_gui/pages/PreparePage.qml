@@ -26,8 +26,15 @@ Item {
     readonly property int targetViewportTopInset: 58
     readonly property int targetViewportBottomInset: 50
     readonly property int preparePlateBarHeight: 44
-    readonly property int prepareBottomViewControlsBottomMargin: root.targetViewportBottomInset
+    readonly property int prepareViewportOverlayStack: root.targetViewportBottomInset
         + ((root.editorVm && root.editorVm.plateCount > 0) ? root.preparePlateBarHeight + 8 : 0)
+    // v5.16 (NAVIGATOR): the cube occupies 128 px above the bottom overlay
+    // stack, and the flat view buttons reserve 128+5 above it (upstream
+    // GLCanvas3D.cpp:7849-7857 reserves 128*scale+5 for toolbars above the
+    // navigator).
+    readonly property int prepareNavigatorReserve: (root.settingsVm && root.settingsVm.show3DNavigator) ? 128 + 5 : 0
+    readonly property int prepareBottomViewControlsBottomMargin: root.prepareViewportOverlayStack
+        + root.prepareNavigatorReserve
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
@@ -1362,6 +1369,14 @@ Item {
                 Layout.fillHeight: true
 
                 // ── Phase G4: 3D 视口工具栏 overlay ──
+                // v5.16 (NAVIGATOR): navigator cube label overlay
+                // (upstream ImGuizmo axis/face labels).
+                NavigatorLabels {
+                    anchors.fill: parent
+                    z: 99
+                    viewport: viewport3d
+                }
+
                 GLToolbars {
                     id: glToolbars
                     anchors.fill: parent
@@ -1456,6 +1471,9 @@ Item {
                     reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
                     zoomToMouse: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.zoomToMouse : true
                     freeCamera: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.freeCamera : false
+                    // v5.16 (NAVIGATOR): show_3d_navigator (default on).
+                    navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
+                    navigatorBottomOffset: root.prepareViewportOverlayStack
                     cameraNavStyle: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.cameraNavStyle : 0
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1

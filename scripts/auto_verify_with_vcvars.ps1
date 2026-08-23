@@ -323,6 +323,7 @@ Invoke-NinjaTarget 'E2EWorkflowTests'
 Invoke-NinjaTarget 'ViewModelSmokeTests'
 Invoke-NinjaTarget 'PrepareSceneDataTests'
 Invoke-NinjaTarget 'ObjectPickingTests'
+Invoke-NinjaTarget 'NavigatorCubeTests'
 Invoke-NinjaTarget 'ViewportContextMenuTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
 Invoke-NinjaTarget 'PartPlateTests'
@@ -503,6 +504,20 @@ if (Test-Path $uiAuditExe) {
   Write-Host "[UI] QML UI audit tests passed" -ForegroundColor Green
 } else {
   Write-Host "[UI] QmlUiAuditTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "`n[NavigatorCube] Running 3D navigator cube math tests..." -ForegroundColor Cyan
+$navigatorCubeExe = './NavigatorCubeTests.exe'
+if (Test-Path $navigatorCubeExe) {
+  $navigatorCubeExitCode = Invoke-QtTestReport $navigatorCubeExe 'NavigatorCubeTests.verify.txt'
+  if ($navigatorCubeExitCode -ne 0) {
+    Write-Host "[NavigatorCube] Navigator cube tests failed" -ForegroundColor Red
+    exit $navigatorCubeExitCode
+  }
+  Write-Host "[NavigatorCube] Navigator cube tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[NavigatorCube] NavigatorCubeTests.exe not found" -ForegroundColor Red
   exit 1
 }
 

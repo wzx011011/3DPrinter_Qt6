@@ -282,6 +282,24 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // v5.15 (MODELLIT): raw world->eye matrix for the gouraud lighting in
   // model_lit.vert (no clip-space correction — lighting is view-relative).
   m_cameraView = viewport->m_camera.viewMatrix();
+  // v5.16 (NAVIGATOR): mirror the bottom-left navigator cube state. The rect
+  // scales from item-logical to render-target pixels so the cube keeps its
+  // 128 logical px footprint at any device pixel ratio.
+  m_navigatorEnabled = viewport->m_navigatorEnabled;
+  {
+    const NavigatorCube::RectF itemRect = viewport->navigatorRect();
+    const float itemW = float(std::max(1.0, viewport->width()));
+    const float itemH = float(std::max(1.0, viewport->height()));
+    const QSize px = renderTarget() != nullptr ? renderTarget()->pixelSize() : QSize(int(itemW), int(itemH));
+    const float sx = float(px.width()) / itemW;
+    const float sy = float(px.height()) / itemH;
+    m_navigatorRect.x = itemRect.x * sx;
+    m_navigatorRect.y = itemRect.y * sy;
+    m_navigatorRect.w = itemRect.w * sx;
+    m_navigatorRect.h = itemRect.h * sy;
+  }
+  m_navigatorHoverBox = viewport->m_navigatorHoverBox;
+  m_navigatorHoverFaceNormal = viewport->m_navigatorHoverFaceNormal;
   // v5.15 (BEDTEX): pick up a pending bed texture path change.
   if (viewport->m_bedTextureDirty) {
     viewport->m_bedTextureDirty = false;
@@ -704,6 +722,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     rhiTrace("seamA-folded");
   }
 
+  // v5.16 (NAVIGATOR): overlay cube upload runs every frame (cached inside).
+  if (m_navigatorEnabled) {
+    if (updates == nullptr)
+      updates = rhi()->nextResourceUpdateBatch();
+    uploadNavigatorBuffer(updates);
+  }
+
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
   rhiTrace("beginPass-done");
   // v5.16 (BEDBOTTOM): upstream bottom gate for every bed surface. Computed
@@ -936,6 +961,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
           m_previewLastUploadMs, m_previewSegmentVertexCount / 2);
   }
 
+  // v5.16 (NAVIGATOR): the bottom-left 3D navigator cube draws last, over
+  // every scene layer (upstream _render_overlays runs at the end of
+  // GLCanvas3D::render, GLCanvas3D.cpp:1968/7546).
+  renderNavigator(cb);
+
   cb->endPass();
   rhiTrace("endPass-done");
 
@@ -1068,6 +1098,14 @@ void RhiViewportRenderer::releaseResources()
   m_bedBottomLineBuffer.reset();
   m_bedLimitBuffer.reset();
   m_bedFillBuffer.reset();
+  // v5.16 (NAVIGATOR): overlay cube resources.
+  m_navigatorFillBuffer.reset();
+  m_navigatorLineBuffer.reset();
+  m_navigatorFillPipeline.reset();
+  m_navigatorLinePipeline.reset();
+  m_navigatorSrb.reset();
+  m_navigatorUniformBuffer.reset();
+  m_navigatorBufferUploaded = false;
   resetPreviewGpuState(true);
   // Phase 238 (PREV-01/02): drop the preview ghost-shell + tool-marker GPU
   // buffers with the rest of the scene resources.
@@ -1103,6 +1141,9 @@ void RhiViewportRenderer::releaseResources()
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
   m_bedBottomLineBufferBytes = 0;
+  m_navigatorFillBufferBytes = 0;
+  m_navigatorLineBufferBytes = 0;
+  m_navigatorUniformBufferBytes = 0;
   m_bedLimitBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
   m_highlightVertexBufferBytes = 0;
@@ -1127,6 +1168,8 @@ void RhiViewportRenderer::releaseResources()
   m_bedFillVertexCount = 0;
   m_bedLineVertexCount = 0;
   m_bedBottomLineVertexCount = 0;
+  m_navigatorFillVertexCount = 0;
+  m_navigatorLineVertexCount = 0;
   m_modelVertexCount = 0;
   m_highlightVertexCount = 0;
   m_cutPlaneFillVertexCount = 0;
@@ -1479,11 +1522,17 @@ bool RhiViewportRenderer::ensurePipelines()
 bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                                          QRhiGraphicsPipeline::Topology topology,
                                          bool enableDepthWrite,
-                                         bool enableBlending)
+                                         bool enableBlending,
+                                         QRhiShaderResourceBindings *srb,
+                                         bool enableDepthTest)
 {
   if (pipeline)
     return true;
-  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr || m_srb == nullptr)
+  // v5.16 (NAVIGATOR): pipelines built on a dedicated overlay SRB must not
+  // depend on the scene m_srb existing yet (the navigator uploads before the
+  // scene pipeline block creates m_srb on the first frame).
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr
+      || (srb == nullptr && m_srb == nullptr))
     return false;
 
   QShader vertexShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/rhi_viewport.vert.qsb"));
@@ -1507,14 +1556,17 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
       QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
       QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
   });
-  pipeline->setShaderResourceBindings(m_srb.get());
+  // v5.16 (NAVIGATOR): callers may bind a dedicated overlay SRB (pixel-space
+  // ortho uniform instead of the scene camera).
+  pipeline->setShaderResourceBindings(srb ? srb : m_srb.get());
   pipeline->setVertexInputLayout(inputLayout);
   pipeline->setRenderPassDescriptor(m_renderPassDescriptor);
   // Depth test enabled so overlapping geometry occludes correctly instead of
   // relying purely on draw order. Requires the depth-stencil buffer that
   // QQuickRhiItem creates when sampleCount > 1 (set in RhiViewport ctor).
   // Qt 6.10 QRhi API: setDepthTest + setDepthWrite (compare op hardcoded Less).
-  pipeline->setDepthTest(true);
+  // v5.16 (NAVIGATOR): overlay passes disable the depth test entirely.
+  pipeline->setDepthTest(enableDepthTest);
   pipeline->setDepthWrite(enableDepthWrite);
   if (enableBlending)
   {
@@ -3937,6 +3989,226 @@ bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updat
   }
   m_brushCursorBufferUploaded = true;
   return true;
+}
+
+// ── v5.16 (NAVIGATOR): bottom-left 3D navigator cube pass ──
+// Upstream GLCanvas3D::_render_3d_navigator (GLCanvas3D.cpp:5669-5733) hosts
+// ImGuizmo::ViewManipulate (ImGuizmo.cpp:2779-3140). This port draws the cube
+// in overlay pixel space: a dedicated ortho uniform replaces the scene camera
+// MVP, depth testing is off, faces are blended, and only the 3 camera-facing
+// cube faces are emitted (upstream back-face culling, ImGuizmo.cpp:2878-2880).
+bool RhiViewportRenderer::ensureNavigatorPipelines()
+{
+  if (m_navigatorFillPipeline && m_navigatorLinePipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+  if (!ensureBuffer(m_navigatorUniformBuffer, 256, m_navigatorUniformBufferBytes,
+                    QRhiBuffer::UniformBuffer)) {
+    m_navigatorUniformBufferBytes = 0;
+    return false;
+  }
+  if (!m_navigatorSrb) {
+    m_navigatorSrb.reset(rhi()->newShaderResourceBindings());
+    m_navigatorSrb->setBindings({QRhiShaderResourceBinding::uniformBuffer(
+        0, QRhiShaderResourceBinding::VertexStage,
+        m_navigatorUniformBuffer.get())});
+    if (!m_navigatorSrb->create())
+      return false;
+  }
+  return ensurePipeline(m_navigatorFillPipeline, QRhiGraphicsPipeline::Triangles,
+                        /*enableDepthWrite=*/false, /*enableBlending=*/true,
+                        m_navigatorSrb.get(), /*enableDepthTest=*/false)
+      && ensurePipeline(m_navigatorLinePipeline, QRhiGraphicsPipeline::Lines,
+                        /*enableDepthWrite=*/false, /*enableBlending=*/true,
+                        m_navigatorSrb.get(), /*enableDepthTest=*/false);
+}
+
+bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (!m_navigatorEnabled) {
+    m_navigatorFillVertexCount = 0;
+    m_navigatorLineVertexCount = 0;
+    m_navigatorBufferUploaded = false;
+    return true;
+  }
+  if (renderTarget() == nullptr)
+    return false;
+
+  const QSize px = renderTarget()->pixelSize();
+  // The orthographic MVP must land in the UBO on frame 1 or the geometry
+  // cache below would skip later frames with a zero matrix (everything
+  // clipped away). The pipelines themselves are ensured at draw time
+  // (renderNavigator), after the scene pipelines exist.
+  if (!ensureBuffer(m_navigatorUniformBuffer, 256, m_navigatorUniformBufferBytes,
+                    QRhiBuffer::UniformBuffer)) {
+    m_navigatorUniformBufferBytes = 0;
+    return false;
+  }
+  {
+    QMatrix4x4 ortho;
+    ortho.ortho(0.0f, float(px.width()), 0.0f, float(px.height()), -1.0f, 1.0f);
+    // Clip-space correction is mandatory on D3D (depth range and y
+    // orientation) exactly like the camera upload in uploadCameraUniform.
+    const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * ortho;
+    updates->updateDynamicBuffer(m_navigatorUniformBuffer.get(), 0, 64, corrected.constData());
+  }
+
+  if (m_navigatorBufferUploaded && m_navigatorLastView == m_cameraView
+      && m_navigatorLastHoverBox == m_navigatorHoverBox
+      && m_navigatorLastPixelSize == px)
+    return true;
+  m_navigatorLastView = m_cameraView;
+  m_navigatorLastHoverBox = m_navigatorHoverBox;
+  m_navigatorLastPixelSize = px;
+
+  const NavigatorCube::CameraBasis basis = NavigatorCube::cameraBasis(m_cameraView);
+  const NavigatorCube::RectF rect = m_navigatorRect;
+  const float heightPx = float(px.height());
+
+  QVector<Vertex> fill;
+  QVector<Vertex> line;
+  // Overlay pixels are y-down; the ortho uniform maps y-up, so flip here.
+  const auto push = [&heightPx](QVector<Vertex> &dst, const QPointF &p,
+                                float r, float g, float b, float a) {
+    dst.append(Vertex{float(p.x()), heightPx - float(p.y()), r, g, b, a});
+  };
+
+  // Background quad (upstream AddRectFilled with 0x00101010).
+  push(fill, QPointF(rect.x, rect.y),
+       NavigatorCube::kBackgroundR, NavigatorCube::kBackgroundG,
+       NavigatorCube::kBackgroundB, NavigatorCube::kBackgroundA);
+  push(fill, QPointF(rect.x + rect.w, rect.y),
+       NavigatorCube::kBackgroundR, NavigatorCube::kBackgroundG,
+       NavigatorCube::kBackgroundB, NavigatorCube::kBackgroundA);
+  push(fill, QPointF(rect.x + rect.w, rect.y + rect.h),
+       NavigatorCube::kBackgroundR, NavigatorCube::kBackgroundG,
+       NavigatorCube::kBackgroundB, NavigatorCube::kBackgroundA);
+  push(fill, QPointF(rect.x, rect.y),
+       NavigatorCube::kBackgroundR, NavigatorCube::kBackgroundG,
+       NavigatorCube::kBackgroundB, NavigatorCube::kBackgroundA);
+  push(fill, QPointF(rect.x + rect.w, rect.y + rect.h),
+       NavigatorCube::kBackgroundR, NavigatorCube::kBackgroundG,
+       NavigatorCube::kBackgroundB, NavigatorCube::kBackgroundA);
+  push(fill, QPointF(rect.x, rect.y + rect.h),
+       NavigatorCube::kBackgroundR, NavigatorCube::kBackgroundG,
+       NavigatorCube::kBackgroundB, NavigatorCube::kBackgroundA);
+
+  // The 3 camera-facing faces, hovered one recolored (upstream FACE color /
+  // hovered-face highlight, GLCanvas3D.cpp:5686 + ImGuizmo.cpp:2923-2925).
+  const QVector3D normals[6] = {
+      QVector3D(1, 0, 0), QVector3D(-1, 0, 0), QVector3D(0, 1, 0),
+      QVector3D(0, -1, 0), QVector3D(0, 0, 1), QVector3D(0, 0, -1)};
+  const QVector3D axes[3] = {
+      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
+  for (const QVector3D &n : normals) {
+    if (QVector3D::dotProduct(n, basis.forward) >= 0.0f)
+      continue;
+    int axisIdx = 0;
+    if (qAbs(n.y()) > 0.5f) axisIdx = 1;
+    else if (qAbs(n.z()) > 0.5f) axisIdx = 2;
+    const QVector3D u = axes[(axisIdx + 1) % 3];
+    const QVector3D v = axes[(axisIdx + 2) % 3];
+    const bool hovered = m_navigatorHoverBox >= 0
+        && QVector3D::dotProduct(n, m_navigatorHoverFaceNormal) > 0.9f;
+    const float r = hovered ? NavigatorCube::kHoverColorR : NavigatorCube::kFaceColorR;
+    const float g = hovered ? NavigatorCube::kHoverColorG : NavigatorCube::kFaceColorG;
+    const float b = hovered ? NavigatorCube::kHoverColorB : NavigatorCube::kFaceColorB;
+    const float a = hovered ? NavigatorCube::kHoverColorA : NavigatorCube::kFaceColorA;
+    const QPointF c00 = NavigatorCube::projectToRect(n * 0.5f - u * 0.5f - v * 0.5f, basis, rect);
+    const QPointF c10 = NavigatorCube::projectToRect(n * 0.5f + u * 0.5f - v * 0.5f, basis, rect);
+    const QPointF c11 = NavigatorCube::projectToRect(n * 0.5f + u * 0.5f + v * 0.5f, basis, rect);
+    const QPointF c01 = NavigatorCube::projectToRect(n * 0.5f - u * 0.5f + v * 0.5f, basis, rect);
+    push(fill, c00, r, g, b, a);
+    push(fill, c10, r, g, b, a);
+    push(fill, c11, r, g, b, a);
+    push(fill, c00, r, g, b, a);
+    push(fill, c11, r, g, b, a);
+    push(fill, c01, r, g, b, a);
+  }
+
+  // Axis arrows from the shared corner, hidden axes dimmed to 30%
+  // (upstream visibility test + alpha, ImGuizmo.cpp:2988-3016).
+  const float axisColors[3][3] = {
+      {NavigatorCube::kAxisColorX[0], NavigatorCube::kAxisColorX[1], NavigatorCube::kAxisColorX[2]},
+      {NavigatorCube::kAxisColorY[0], NavigatorCube::kAxisColorY[1], NavigatorCube::kAxisColorY[2]},
+      {NavigatorCube::kAxisColorZ[0], NavigatorCube::kAxisColorZ[1], NavigatorCube::kAxisColorZ[2]}};
+  const QVector3D corner(-0.5f, -0.5f, -0.5f);
+  for (int i = 0; i < 3; ++i) {
+    const QVector3D &e = axes[i];
+    const QVector3D mid = corner + e * 0.5f;
+    bool visible = false;
+    for (int j = 1; j <= 2; ++j) {
+      const QVector3D c = mid + axes[(i + j) % 3] * 0.5f;
+      // Corner visible when it sits on the camera side (cube-view +z is
+      // -forward; upstream transforms into cubeView and dots with the eye
+      // direction, ImGuizmo.cpp:2998-3008).
+      if (QVector3D::dotProduct(c, basis.forward) < 0.0f) {
+        visible = true;
+        break;
+      }
+    }
+    const float alpha = visible ? 1.0f : 0.3f;
+    const QPointF basePx = NavigatorCube::projectToRect(corner, basis, rect);
+    const QPointF tipPx = NavigatorCube::projectToRect(corner + e, basis, rect);
+    push(line, basePx, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+    push(line, tipPx, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+    // Arrowhead triangle in pixel space (upstream AddTriangleFilled,
+    // ImGuizmo.cpp:3010-3024; arrow size scaled with the rect).
+    QPointF dir(basePx - tipPx);
+    const float len = float(std::hypot(dir.x(), dir.y()));
+    if (len > 1.0f) {
+      const float arrow = rect.w * 0.055f;
+      dir /= len;
+      dir *= arrow;
+      const QPointF orth(-dir.y(), dir.x());
+      const QPointF a = tipPx + dir;
+      push(fill, tipPx - dir, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, a + orth, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, a - orth, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+    }
+  }
+
+  const quint32 fillBytes = quint32(fill.size() * int(sizeof(Vertex)));
+  const quint32 lineBytes = quint32(line.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_navigatorFillBuffer, fillBytes, m_navigatorFillBufferBytes,
+                    QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_navigatorLineBuffer, lineBytes, m_navigatorLineBufferBytes,
+                       QRhiBuffer::VertexBuffer))
+    return false;
+  m_navigatorFillVertexCount = quint32(fill.size());
+  m_navigatorLineVertexCount = quint32(line.size());
+  if (m_navigatorFillBuffer && fillBytes > 0)
+    updates->uploadStaticBuffer(m_navigatorFillBuffer.get(), 0, fillBytes, fill.constData());
+  if (m_navigatorLineBuffer && lineBytes > 0)
+    updates->uploadStaticBuffer(m_navigatorLineBuffer.get(), 0, lineBytes, line.constData());
+  m_navigatorBufferUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderNavigator(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || !m_navigatorEnabled)
+    return;
+  if (m_navigatorFillVertexCount == 0 && m_navigatorLineVertexCount == 0)
+    return;
+  if (!ensureNavigatorPipelines())
+    return;
+  cb->setShaderResources(m_navigatorSrb.get());
+  if (m_navigatorFillVertexCount > 0) {
+    cb->setGraphicsPipeline(m_navigatorFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_navigatorFillBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_navigatorFillVertexCount);
+  }
+  if (m_navigatorLineVertexCount > 0) {
+    cb->setGraphicsPipeline(m_navigatorLinePipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_navigatorLineBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_navigatorLineVertexCount);
+  }
 }
 
 void RhiViewportRenderer::renderBrushCursor(QRhiCommandBuffer *cb)

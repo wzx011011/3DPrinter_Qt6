@@ -268,6 +268,8 @@ Item {
                     anchors.fill: parent
                     canvasType: GLViewport.CanvasPreview
                     previewData: root.previewVm.gcodePreviewData
+                    // v5.16 (NAVIGATOR): show_3d_navigator (default on).
+                    navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
                     // Phase 238 (PREV-01): ghost shells -- the preview canvas
                     // receives the SAME object mesh stream the Prepare canvas
                     // uses (upstream always loads shells at preview,
@@ -314,6 +316,13 @@ Item {
                     markerX: root.previewVm.toolX
                     markerY: root.previewVm.toolY
                     markerZ: root.previewVm.toolZ
+                }
+
+                // v5.16 (NAVIGATOR): navigator cube label overlay
+                // (upstream ImGuizmo axis/face labels).
+                Components.NavigatorLabels {
+                    anchors.fill: parent
+                    viewport: previewViewport
                 }
 
                 Rectangle {

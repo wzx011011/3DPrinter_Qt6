@@ -2,6 +2,7 @@
 #include "RhiViewportRenderer.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoMath.h"
+#include "core/rendering/NavigatorCube.h"
 #include "core/rendering/ObjectPicking.h"
 
 #include <QBuffer>
@@ -10,6 +11,7 @@
 #include <QHoverEvent>
 #include <QImage>
 #include <QMouseEvent>
+#include <QTimer>
 #include <QVector4D>
 #include <QWheelEvent>
 #include <QtGlobal>
@@ -705,6 +707,7 @@ void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
   m_cameraDirty = true;
   ++m_fitRequestCount;
   update();
+  emit navigatorLabelsChanged();
 }
 
 void RhiViewport::requestPreviewFit()
@@ -748,6 +751,7 @@ void RhiViewport::requestViewPreset(int preset)
   }
   m_cameraDirty = true;
   update();
+  emit navigatorLabelsChanged();
 }
 
 // Phase 237 (VIEW-01): upstream-named view selection (upstream
@@ -798,6 +802,7 @@ void RhiViewport::selectView(const QString &direction)
   m_viewPreset = 3; // isometric family; legacy int preset stays for GLToolbars
   m_cameraDirty = true;
   update();
+  emit navigatorLabelsChanged();
 }
 
 // Phase 237 (VIEW-01): orthographic projection toggle (upstream View-menu
@@ -867,8 +872,239 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
   emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData);
 }
 
+// ── v5.16 (NAVIGATOR): bottom-left 3D navigator cube ──
+// Upstream GLCanvas3D::_render_3d_navigator (GLCanvas3D.cpp:5669-5733) hosts
+// ImGuizmo::ViewManipulate (ImGuizmo.cpp:2779-3140): a real 3D cube pinned to
+// the canvas bottom-left corner whose orientation tracks the camera. Presses
+// and drags on the cube are consumed before any scene interaction (upstream
+// ImGui handles the ImGuizmo hit before GLCanvas3D::on_mouse), face/edge/
+// corner clicks snap the view through a 40-frame interpolation, and cube
+// drags rotate the camera with a horizon clamp.
+
+void RhiViewport::setNavigatorEnabled(bool enabled)
+{
+  if (m_navigatorEnabled == enabled)
+    return;
+  m_navigatorEnabled = enabled;
+  if (!enabled) {
+    m_navigatorHoverBox = -1;
+    m_navigatorHoverFaceNormal = {};
+    if (m_navigatorSnapTimer)
+      m_navigatorSnapTimer->stop();
+    m_navigatorSnapFramesLeft = 0;
+    m_navigatorPressActive = false;
+    m_navigatorDragging = false;
+  }
+  emit navigatorEnabledChanged();
+  emit navigatorLabelsChanged();
+  update();
+}
+
+NavigatorCube::RectF RhiViewport::navigatorRect() const
+{
+  const float size = NavigatorCube::kRectSizePx;
+  return NavigatorCube::RectF{0.0f, float(height()) - size - float(m_navigatorBottomOffset),
+                              size, size};
+}
+
+QString RhiViewport::navigatorFaceName(const QVector3D &normal)
+{
+  // ImGuizmo face labels (ImGuizmo.cpp:5686-5691 upstream in
+  // GLCanvas3D::_render_3d_navigator): Front/Back/Top/Bottom/Left/Right in the
+  // cube frame (X right, Y up, Z front). Returned untranslated so QML owns
+  // qsTr().
+  if (normal.y() > 0.5f) return QStringLiteral("top");
+  if (normal.y() < -0.5f) return QStringLiteral("bottom");
+  if (normal.x() > 0.5f) return QStringLiteral("right");
+  if (normal.x() < -0.5f) return QStringLiteral("left");
+  if (normal.z() > 0.5f) return QStringLiteral("front");
+  if (normal.z() < -0.5f) return QStringLiteral("back");
+  return QString();
+}
+
+QVariantList RhiViewport::navigatorLabels() const
+{
+  QVariantList labels;
+  if (!m_navigatorEnabled)
+    return labels;
+  const NavigatorCube::CameraBasis basis =
+      NavigatorCube::cameraBasis(m_camera.viewMatrix());
+  const NavigatorCube::RectF rect = navigatorRect();
+  const QVector3D origin(-0.5f, -0.5f, -0.5f);
+  const struct
+  {
+    const char *text;
+    QVector3D axis;
+  } axes[3] = {
+      {"x", QVector3D(1, 0, 0)},
+      {"y", QVector3D(0, 1, 0)},
+      {"z", QVector3D(0, 0, 1)},
+  };
+  for (const auto &axis : axes) {
+    // Axis label at 1.3x the axis direction (ImGuizmo.cpp:3037).
+    const QPointF p = NavigatorCube::projectToRect(origin + axis.axis * 1.3f,
+                                                   basis, rect);
+    labels.append(QVariantMap{
+        {"kind", QStringLiteral("axis")},
+        {"text", QString::fromLatin1(axis.text)},
+        {"x", p.x()},
+        {"y", p.y()}});
+  }
+  if (m_navigatorHoverBox >= 0 && !m_navigatorHoverFaceNormal.isNull()) {
+    const QString face = navigatorFaceName(m_navigatorHoverFaceNormal);
+    if (!face.isEmpty()) {
+      const QPointF p = NavigatorCube::projectToRect(
+          m_navigatorHoverFaceNormal * 0.5f, basis, rect);
+      labels.append(QVariantMap{
+          {"kind", QStringLiteral("face")},
+          {"text", face},
+          {"x", p.x()},
+          {"y", p.y()}});
+    }
+  }
+  return labels;
+}
+
+bool RhiViewport::startNavigatorPress(const QPointF &position)
+{
+  if (!m_navigatorEnabled)
+    return false;
+  const NavigatorCube::CameraBasis basis =
+      NavigatorCube::cameraBasis(m_camera.viewMatrix());
+  const NavigatorCube::Hit hit =
+      NavigatorCube::hitTest(position, basis, navigatorRect());
+  if (!hit.isValid())
+    return false;
+  m_navigatorPressActive = true;
+  m_navigatorDragging = false;
+  m_navigatorPressPos = position;
+  m_navigatorLastPos = position;
+  return true;
+}
+
+void RhiViewport::navigatorDragMove(const QPointF &position)
+{
+  const QPointF delta = position - m_navigatorLastPos;
+  // ImGuizmo cancels the click once the press moves (ImGuizmo.cpp:3060-3069).
+  if (!m_navigatorDragging
+      && std::hypot(position.x() - m_navigatorPressPos.x(),
+                    position.y() - m_navigatorPressPos.y()) > 4.0) {
+    m_navigatorDragging = true;
+    m_navigatorSnapFramesLeft = 0;
+    if (m_navigatorSnapTimer)
+      m_navigatorSnapTimer->stop();
+  }
+  if (m_navigatorDragging) {
+    const NavigatorCube::CameraBasis basis =
+        NavigatorCube::cameraBasis(m_camera.viewMatrix());
+    const QVector3D dir = NavigatorCube::dragRotateClamped(
+        basis.forward, basis.right,
+        float(delta.x()) * NavigatorCube::kDragRadiansPerPixel,
+        float(delta.y()) * NavigatorCube::kDragRadiansPerPixel);
+    float azimuth = 0.0f;
+    float elevation = 0.0f;
+    NavigatorCube::orientationForDirection(dir, azimuth, elevation);
+    if (std::isnan(azimuth))
+      azimuth = m_camera.azimuth();
+    m_camera.setOrientation(azimuth, elevation);
+    m_cameraDirty = true;
+    update();
+    emit navigatorLabelsChanged();
+  }
+  m_navigatorLastPos = position;
+  updateNavigatorHover(position, false);
+}
+
+void RhiViewport::finishNavigatorPress()
+{
+  const bool wasClick = !m_navigatorDragging;
+  m_navigatorPressActive = false;
+  m_navigatorDragging = false;
+  if (!wasClick)
+    return;
+  // Snap on click release: ImGuizmo applies overBox at release
+  // (ImGuizmo.cpp:3070-3078).
+  const NavigatorCube::CameraBasis basis =
+      NavigatorCube::cameraBasis(m_camera.viewMatrix());
+  const NavigatorCube::Hit hit =
+      NavigatorCube::hitTest(m_navigatorLastPos, basis, navigatorRect());
+  if (hit.isValid())
+    startNavigatorSnap(hit.box);
+}
+
+void RhiViewport::updateNavigatorHover(const QPointF &position, bool leave)
+{
+  int box = -1;
+  QVector3D faceNormal;
+  if (m_navigatorEnabled && !leave) {
+    const NavigatorCube::CameraBasis basis =
+        NavigatorCube::cameraBasis(m_camera.viewMatrix());
+    const NavigatorCube::Hit hit =
+        NavigatorCube::hitTest(position, basis, navigatorRect());
+    box = hit.box;
+    faceNormal = hit.faceNormal;
+  }
+  if (box != m_navigatorHoverBox) {
+    m_navigatorHoverBox = box;
+    m_navigatorHoverFaceNormal = faceNormal;
+    emit navigatorLabelsChanged();
+    update();
+  }
+}
+
+void RhiViewport::startNavigatorSnap(int box)
+{
+  const QVector3D target = NavigatorCube::snapDirectionForBox(box);
+  if (target.isNull())
+    return;
+  m_navigatorSnapTarget = target;
+  m_navigatorSnapDir =
+      NavigatorCube::cameraBasis(m_camera.viewMatrix()).forward;
+  m_navigatorSnapFramesLeft = NavigatorCube::kSnapFrameCount;
+  if (m_navigatorSnapTimer == nullptr) {
+    m_navigatorSnapTimer = new QTimer(this);
+    m_navigatorSnapTimer->setInterval(16);
+    connect(m_navigatorSnapTimer, &QTimer::timeout, this,
+            &RhiViewport::advanceNavigatorSnap);
+  }
+  m_navigatorSnapTimer->start();
+}
+
+void RhiViewport::advanceNavigatorSnap()
+{
+  if (m_navigatorSnapFramesLeft <= 0) {
+    if (m_navigatorSnapTimer)
+      m_navigatorSnapTimer->stop();
+    return;
+  }
+  m_navigatorSnapFramesLeft--;
+  // ImGuizmo.cpp:3042-3048: the direction lerps 0.2 toward the target each
+  // frame (their up-vector lerp result is immediately overwritten, so the
+  // up snaps -- mirrored by writing az/el directly).
+  m_navigatorSnapDir += (m_navigatorSnapTarget - m_navigatorSnapDir)
+                        * NavigatorCube::kSnapDirLerp;
+  m_navigatorSnapDir.normalize();
+  float azimuth = 0.0f;
+  float elevation = 0.0f;
+  NavigatorCube::orientationForDirection(m_navigatorSnapDir, azimuth,
+                                         elevation);
+  if (std::isnan(azimuth))
+    azimuth = m_camera.azimuth();
+  m_camera.setOrientation(azimuth, elevation);
+  m_cameraDirty = true;
+  update();
+  emit navigatorLabelsChanged();
+}
+
 void RhiViewport::mousePressEvent(QMouseEvent *event)
 {
+  // v5.16 (NAVIGATOR): the bottom-left cube consumes left presses before any
+  // scene interaction (upstream ImGui processes the ImGuizmo hit first).
+  if (event->button() == Qt::LeftButton
+      && startNavigatorPress(event->position())) {
+    event->accept();
+    return;
+  }
   if (event->button() == Qt::RightButton) {
     m_contextPressPosition = event->position();
     m_contextPressActive = true;
@@ -1022,6 +1258,13 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
 
 void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 {
+  // v5.16 (NAVIGATOR): an active cube press drags/rotates the camera through
+  // the navigator and never reaches the scene handlers.
+  if (m_navigatorPressActive) {
+    navigatorDragMove(event->position());
+    event->accept();
+    return;
+  }
   if (m_contextPressActive) {
     const QPointF delta = event->position() - m_contextPressPosition;
     m_contextDragExceeded = m_contextDragExceeded || std::hypot(delta.x(), delta.y()) > 4.0;
@@ -1159,6 +1402,7 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
         m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
         m_cameraDirty = true;
         update();
+        emit navigatorLabelsChanged();
       }
     } else {
       // Touchpad: left drag = pan
@@ -1176,6 +1420,7 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
       m_cameraDirty = true;
     }
     update();
+    emit navigatorLabelsChanged();
   }
   m_lastMousePosition = event->position();
   event->accept();
@@ -1183,6 +1428,13 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
 
 void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 {
+  // v5.16 (NAVIGATOR): cube release either starts the snap interpolation
+  // (click) or ends the drag; the scene handlers never see it.
+  if (event->button() == Qt::LeftButton && m_navigatorPressActive) {
+    finishNavigatorPress();
+    event->accept();
+    return;
+  }
   if (event->button() == Qt::RightButton) {
     const bool suppress = !m_contextPressActive || m_contextDragExceeded
         || m_contextLayerEditingAtPress || m_contextToolCapturedAtPress;
@@ -1245,6 +1497,9 @@ bool RhiViewport::activeToolCapturesContextGesture() const
 
 void RhiViewport::hoverMoveEvent(QHoverEvent *event)
 {
+  // v5.16 (NAVIGATOR): cube hover highlight + face label (ImGuizmo hovered
+  // face recolor, ImGuizmo.cpp:2923-2925).
+  updateNavigatorHover(event->position(), false);
   setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
   // Phase 115 (MEASURE-04): drive the snap UX on mouse-move while the measure
   // gizmo is active. The ViewModel runs the two-stage pick + getFeature and
@@ -1262,6 +1517,8 @@ void RhiViewport::hoverMoveEvent(QHoverEvent *event)
 
 void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 {
+  // v5.16 (NAVIGATOR): clear the cube hover when the cursor leaves.
+  updateNavigatorHover(event->position(), true);
   setHoveredSourceObjectIndex(-1);
   // Phase 115 (MEASURE-04): clear the hovered feature when the cursor leaves
   // the viewport so no stale highlight lingers off-mesh.
@@ -1286,6 +1543,7 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
   m_cameraDirty = true;
   event->accept();
   update();
+  emit navigatorLabelsChanged();
 }
 
 QMatrix4x4 RhiViewport::cameraMvp(float aspect) const

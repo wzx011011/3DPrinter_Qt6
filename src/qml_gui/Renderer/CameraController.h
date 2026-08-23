@@ -20,6 +20,12 @@ public:
   void pan(float dx, float dy);
   void zoom(float delta);
 
+  // v5.16 (NAVIGATOR): absolute orientation write-back for the 3D navigator
+  // cube (upstream camera.set_rotation preserves target/distance, and so does
+  // this). Elevation clamps to +-89 like orbit() to avoid the fixed-world-up
+  // lookAt degeneracy at the poles.
+  void setOrientation(float azimuthDeg, float elevationDeg);
+
   /// 加载模型后自适应视角: 将相机对准 bbox 球心，距离自动适配
   void fitView(float cx, float cy, float cz, float radius);
   /// 重置到 K1C 平台默认视角
@@ -50,6 +56,11 @@ public:
   QVector3D  eye() const;         // world-space camera position
   QVector3D  target() const;      // orbit target (look-at point)
   float      distance() const;    // camera distance from target
+  // v5.16 (NAVIGATOR): current spherical orientation (degrees); the
+  // navigator keeps the previous azimuth when snapping to a pole where the
+  // azimuth is undefined.
+  float      azimuth() const { return m_azimuth; }
+  float      elevation() const { return m_elevation; }
 
 private:
   float m_azimuth = 45.0f;    // degrees, horizontal

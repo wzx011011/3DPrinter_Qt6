@@ -180,6 +180,8 @@ if(OWZX_QML_GUI)
         src/core/rendering/GLShaderUtil.cpp
         src/core/rendering/GLShaderUtil.h
         src/core/rendering/GizmoMath.cpp
+        src/core/rendering/NavigatorCube.cpp
+        src/core/rendering/NavigatorCube.h
         src/core/rendering/GizmoMath.h
         src/core/rendering/GizmoGeometry.cpp
         src/core/rendering/GizmoGeometry.h
@@ -565,6 +567,21 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(GizmoMathTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME GizmoMathTests COMMAND GizmoMathTests)
     set_tests_properties(GizmoMathTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # v5.16 (NAVIGATOR): 3D navigator cube math tests (hit-test grid, snap
+    # directions, drag clamp, orientation mapping -- the ImGuizmo
+    # ViewManipulate port). Standalone, no live renderer.
+    qt_add_executable(NavigatorCubeTests
+        tests/NavigatorCubeTests.cpp
+        src/core/rendering/NavigatorCube.cpp
+        src/core/rendering/NavigatorCube.h
+    )
+    target_include_directories(NavigatorCubeTests PRIVATE src)
+    target_link_libraries(NavigatorCubeTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME NavigatorCubeTests COMMAND NavigatorCubeTests)
+    set_tests_properties(NavigatorCubeTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

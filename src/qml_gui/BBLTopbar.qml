@@ -935,10 +935,10 @@ Item {
 
         // View submenu -- Phase 237 (VIEW-01). Mirrors the upstream View
         // menu camera presets (MainFrame.cpp:2213-2235 add_common_view_menu_
-        // items) plus the projection radio pair and the G-code window check
-        // item from MainFrame.cpp:2601-2629. Upstream items with no Qt6
-        // consumer (Show 3D Navigator, Reset Window Layout, Show Labels
-        // Ctrl+E, Show Overhang, Show Selected Outline -- no navigator UI, no
+        // items) plus the projection radio pair, the G-code window check item
+        // and the 3D navigator check item from MainFrame.cpp:2601-2638.
+        // Upstream items with no Qt6 consumer (Reset Window Layout, Show
+        // Labels Ctrl+E, Show Overhang, Show Selected Outline -- no
         // layout-reset API, and the renderer has no label/overhang/outline
         // draw pass) are deliberately not added as fake toggles.
         CxMenu {
@@ -1020,6 +1020,18 @@ Item {
                 enabled: backend.currentPage === backend.tpPreview && backend.previewViewModel !== null
                 onTriggered: if (backend.previewViewModel)
                     backend.previewViewModel.setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)
+            }
+
+            // v5.16 (NAVIGATOR): Show 3D Navigator (upstream MainFrame.cpp:
+            // 2630-2638, app_config show_3d_navigator default on,
+            // AppConfig.cpp:200 -- "Show 3D navigator in Prepare and Preview
+            // scene"). The viewport navigatorEnabled Q_PROPERTY binds this.
+            CxMenuItem {
+                text: (backend.settingsViewModel && backend.settingsViewModel.show3DNavigator ? "✓ " : "")
+                      + qsTr("显示 3D 导航器")
+                enabled: viewMenu.viewEnabled && backend.settingsViewModel !== null
+                onTriggered: if (backend.settingsViewModel)
+                    backend.settingsViewModel.setShow3DNavigator(!backend.settingsViewModel.show3DNavigator)
             }
         }
 

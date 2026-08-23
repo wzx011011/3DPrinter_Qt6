@@ -55,6 +55,7 @@ void SettingsViewModel::loadFromSettings()
   m_zoomToMouse      = s.value("zoomToMouse", m_zoomToMouse).toBool();
   m_freeCamera       = s.value("freeCamera", m_freeCamera).toBool();
   m_reverseZoom      = s.value("reverseZoom", m_reverseZoom).toBool();
+  m_show3DNavigator  = s.value("show3DNavigator", m_show3DNavigator).toBool();
   m_autoUpload       = s.value("autoUpload", m_autoUpload).toBool();
   m_updateChannel    = s.value("updateChannel", m_updateChannel).toInt();
   m_notificationsEnabled = s.value("notificationsEnabled", m_notificationsEnabled).toBool();
@@ -166,7 +167,8 @@ void SettingsViewModel::resetPreferences()
       QStringLiteral("undoLimit"), QStringLiteral("defaultNozzleIndex"),
       QStringLiteral("defaultBedShape"), QStringLiteral("cameraNavStyle"),
       QStringLiteral("zoomToMouse"), QStringLiteral("freeCamera"),
-      QStringLiteral("reverseZoom"), QStringLiteral("autoUpload"),
+      QStringLiteral("reverseZoom"), QStringLiteral("show3DNavigator"),
+      QStringLiteral("autoUpload"),
       QStringLiteral("updateChannel"), QStringLiteral("notificationsEnabled"),
       QStringLiteral("hintsEnabled"), QStringLiteral("autoDismissSec"),
       QStringLiteral("showProgressNotifications"), QStringLiteral("developerMode"),
@@ -280,6 +282,10 @@ void SettingsViewModel::setFreeCamera(bool on)
 void SettingsViewModel::setReverseZoom(bool on)
 {
   if (m_reverseZoom != on) { m_reverseZoom = on; SAVE_SETTING("reverseZoom", on); emit settingsChanged(); }
+}
+void SettingsViewModel::setShow3DNavigator(bool on)
+{
+  if (m_show3DNavigator != on) { m_show3DNavigator = on; SAVE_SETTING("show3DNavigator", on); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoUpload(bool v)

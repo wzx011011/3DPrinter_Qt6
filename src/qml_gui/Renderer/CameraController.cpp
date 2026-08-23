@@ -39,6 +39,12 @@ void CameraController::zoom(float delta)
   m_distance = qMax(10.0f, m_distance - delta * 0.5f);
 }
 
+void CameraController::setOrientation(float azimuthDeg, float elevationDeg)
+{
+  m_azimuth = azimuthDeg;
+  m_elevation = qBound(-89.0f, elevationDeg, 89.0f);
+}
+
 QVector3D CameraController::eye() const
 {
   const float az = qDegreesToRadians(m_azimuth);

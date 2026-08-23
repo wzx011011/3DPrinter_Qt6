@@ -57,6 +57,7 @@
         <file>panels/DockableSidebar.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>
+        <file>components/NavigatorLabels.qml</file>
         <file>components/ErrorToast.qml</file>
         <file>components/ErrorBanner.qml</file>
         <file>components/CustomGcodeDialog.qml</file>

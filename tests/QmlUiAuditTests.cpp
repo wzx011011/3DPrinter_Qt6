@@ -34,6 +34,9 @@ private slots:
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
   // v5.16 (BEDBOTTOM): upstream bottom gate keeps objects visible from below.
   void rhiViewportRendererGatesBedSurfacesOnLookingDown();
+  // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
+  // _render_3d_navigator + ImGuizmo ViewManipulate).
+  void rhiViewportHostsUpstream3dNavigator();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
@@ -9090,6 +9093,99 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
                && settingsDialog.contains(QStringLiteral("id: genericTabStrip"))
                && settingsDialog.contains(QStringLiteral("id: genericOptionListComponent")),
            "Printer and Material must retain their existing hierarchy route");
+}
+
+
+// v5.16 (NAVIGATOR): upstream GLCanvas3D::_render_3d_navigator
+// (GLCanvas3D.cpp:5669-5733) hosts ImGuizmo::ViewManipulate
+// (ImGuizmo.cpp:2779-3140) in the canvas bottom-left corner: a real 3D cube
+// that tracks the camera, consumes its own presses/drags, snaps the view on
+// face/edge/corner clicks through a 40-frame interpolation, highlights the
+// hovered face, and is gated by the show_3d_navigator app_config (default
+// true, AppConfig.cpp:200; View-menu check item MainFrame.cpp:2630-2638).
+void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
+{
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString cubeHeader = readSource(QStringLiteral("src/core/rendering/NavigatorCube.h"));
+  const QString settingsHeader = readSource(QStringLiteral("src/core/viewmodels/SettingsViewModel.h"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString labels = readSource(QStringLiteral("src/qml_gui/components/NavigatorLabels.qml"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!cubeHeader.isEmpty(), "Unable to read NavigatorCube.h");
+
+  // Viewport: property surface + interaction state.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(bool navigatorEnabled"))
+               && viewportHeader.contains(QStringLiteral("navigatorLabels")),
+           "RhiViewport must expose navigatorEnabled + navigatorLabels");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("kSnapFrameCount"))
+               || viewportSource.contains(QStringLiteral("NavigatorCube::kSnapFrameCount")),
+           "snap interpolation must use the upstream 40-frame constant");
+  QVERIFY2(cubeHeader.contains(QStringLiteral("kSnapFrameCount = 40"))
+               && cubeHeader.contains(QStringLiteral("kSnapDirLerp = 0.2f"))
+               && cubeHeader.contains(QStringLiteral("kDragRadiansPerPixel = 0.01f"))
+               && cubeHeader.contains(QStringLiteral("kRectSizePx = 128.0f")),
+           "navigator constants must match upstream ImGuizmo values");
+
+  // Event priority: the navigator consumes left presses before the context
+  // and orbit handling (upstream ImGui runs before GLCanvas3D::on_mouse).
+  const qsizetype navPress = viewportSource.indexOf(QStringLiteral("startNavigatorPress(event->position())"));
+  const qsizetype contextPress = viewportSource.indexOf(QStringLiteral("m_contextPressActive = true;"));
+  QVERIFY2(navPress >= 0 && contextPress > navPress,
+           "navigator press must precede the context/orbit branches");
+  QVERIFY2(viewportSource.contains(QStringLiteral("if (m_navigatorPressActive) {")),
+           "navigator drags must be consumed in mouseMoveEvent");
+  QVERIFY2(viewportSource.contains(QStringLiteral("finishNavigatorPress();")),
+           "navigator release must run the click/drag finish path");
+  QVERIFY2(viewportSource.contains(QStringLiteral("updateNavigatorHover(event->position(), false);")),
+           "hover must drive the face highlight");
+  QVERIFY2(viewportSource.contains(QStringLiteral("m_navigatorSnapTimer")),
+           "snap interpolation must be frame-driven");
+
+  // Renderer: overlay pass with dedicated ortho uniform, drawn last.
+  QVERIFY2(rendererSource.contains(QStringLiteral("bool RhiViewportRenderer::ensureNavigatorPipelines()"))
+               && rendererSource.contains(QStringLiteral("bool RhiViewportRenderer::uploadNavigatorBuffer("))
+               && rendererSource.contains(QStringLiteral("void RhiViewportRenderer::renderNavigator(")),
+           "renderer must implement the navigator pass trio");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_navigatorSrb")),
+           "navigator pass must use a dedicated overlay uniform binding");
+  const qsizetype navDraw = rendererSource.indexOf(QStringLiteral("renderNavigator(cb);"));
+  const qsizetype endPass = rendererSource.indexOf(QStringLiteral("cb->endPass();"), navDraw);
+  QVERIFY2(navDraw >= 0 && endPass > navDraw,
+           "navigator must draw before the main pass ends (last overlay)");
+
+  // Settings + View menu (show_3d_navigator, default true).
+  QVERIFY2(settingsHeader.contains(QStringLiteral("show3DNavigator"))
+               && settingsHeader.contains(QStringLiteral("m_show3DNavigator = true")),
+           "SettingsViewModel must persist show3DNavigator with the upstream default");
+  QVERIFY2(topbar.contains(QStringLiteral("setShow3DNavigator"))
+               && topbar.contains(QStringLiteral("3D 导航器")),
+           "View menu must expose the Show 3D Navigator check item");
+
+  // Page bindings + label overlay + plate-bar stacking.
+  QVERIFY2(preparePage.contains(QStringLiteral("navigatorEnabled:"))
+               && preparePage.contains(QStringLiteral("navigatorBottomOffset:"))
+               && preparePage.contains(QStringLiteral("prepareNavigatorReserve")),
+           "PreparePage must bind the navigator and reserve space above the cube");
+  QVERIFY2(previewPage.contains(QStringLiteral("navigatorEnabled:"))
+               && previewPage.contains(QStringLiteral("Components.NavigatorLabels")),
+           "PreviewPage must bind the navigator and host the label overlay");
+  QVERIFY2(labels.contains(QStringLiteral("navigatorLabels"))
+               && labels.contains(QStringLiteral("qsTr(\"Front\")")),
+           "NavigatorLabels must render the viewport anchors with localized face text");
+  QVERIFY2(qrc.contains(QStringLiteral("components/NavigatorLabels.qml")),
+           "NavigatorLabels.qml must be registered in qml.qrc");
+
+  // The math tests must run in the canonical verifier.
+  QVERIFY2(verifyScript.contains(QStringLiteral("NavigatorCubeTests")),
+           "canonical verifier must build and run NavigatorCubeTests");
 }
 
 QTEST_MAIN(QmlUiAuditTests)
