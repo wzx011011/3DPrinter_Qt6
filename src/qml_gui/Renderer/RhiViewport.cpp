@@ -950,17 +950,24 @@ QVariantList RhiViewport::navigatorLabels() const
         {"x", p.x()},
         {"y", p.y()}});
   }
-  if (m_navigatorHoverBox >= 0 && !m_navigatorHoverFaceNormal.isNull()) {
-    const QString face = navigatorFaceName(m_navigatorHoverFaceNormal);
-    if (!face.isEmpty()) {
-      const QPointF p = NavigatorCube::projectToRect(
-          m_navigatorHoverFaceNormal * 0.5f, basis, rect);
-      labels.append(QVariantMap{
-          {"kind", QStringLiteral("face")},
-          {"text", face},
-          {"x", p.x()},
-          {"y", p.y()}});
-    }
+  // Upstream draws the face label on EVERY visible face (unconditionally in
+  // the ImGuizmo panel pass, ImGuizmo.cpp:2941-2990 -- the text vertices are
+  // warped onto the face quad), not only on hover.
+  const QVector3D normals[6] = {
+      QVector3D(1, 0, 0), QVector3D(-1, 0, 0), QVector3D(0, 1, 0),
+      QVector3D(0, -1, 0), QVector3D(0, 0, 1), QVector3D(0, 0, -1)};
+  for (const QVector3D &n : normals) {
+    if (QVector3D::dotProduct(n, basis.forward) >= 0.0f)
+      continue;
+    const QString face = navigatorFaceName(n);
+    if (face.isEmpty())
+      continue;
+    const QPointF p = NavigatorCube::projectToRect(n * 0.5f, basis, rect);
+    labels.append(QVariantMap{
+        {"kind", QStringLiteral("face")},
+        {"text", face},
+        {"x", p.x()},
+        {"y", p.y()}});
   }
   return labels;
 }

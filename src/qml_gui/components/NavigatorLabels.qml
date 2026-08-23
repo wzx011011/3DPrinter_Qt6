@@ -32,10 +32,10 @@ Item {
             x: modelData.x - width / 2
             y: modelData.y - height / 2
             text: modelData.kind === "axis" ? modelData.text : faceText
-            // Upstream TEXT color dark theme 224/255 (GLCanvas3D.cpp:5685).
-            color: modelData.kind === "axis" ? "#E0E0E0" : "#F0A060"
+            // Upstream TEXT color dark theme 224/255 (GLCanvas3D.cpp:5685);
+            // face labels render on every visible face (ImGuizmo.cpp:2941).
+            color: "#E0E0E0"
             font.pixelSize: 13
-            font.bold: modelData.kind !== "axis"
             style: Text.Outline
             styleColor: "#101010"
         }
