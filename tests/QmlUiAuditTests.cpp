@@ -9149,13 +9149,16 @@ void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
   QVERIFY2(viewportSource.contains(QStringLiteral("m_navigatorSnapTimer")),
            "snap interpolation must be frame-driven");
 
-  // Renderer: overlay pass with dedicated ortho uniform, drawn last.
-  QVERIFY2(rendererSource.contains(QStringLiteral("bool RhiViewportRenderer::ensureNavigatorPipelines()"))
-               && rendererSource.contains(QStringLiteral("bool RhiViewportRenderer::uploadNavigatorBuffer("))
+  // Renderer: overlay pass drawn through the verified scene translucent
+  // pipeline (world-space projection of the cube; the dedicated overlay
+  // SRB/UBO path produced no visible output on D3D11, see P13.6).
+  QVERIFY2(rendererSource.contains(QStringLiteral("bool RhiViewportRenderer::uploadNavigatorBuffer("))
                && rendererSource.contains(QStringLiteral("void RhiViewportRenderer::renderNavigator(")),
-           "renderer must implement the navigator pass trio");
-  QVERIFY2(rendererHeader.contains(QStringLiteral("m_navigatorSrb")),
-           "navigator pass must use a dedicated overlay uniform binding");
+           "renderer must implement the navigator pass pair");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_navigatorFillBuffer")),
+           "navigator pass must own a cube vertex buffer");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_translucentFillPipeline")),
+           "navigator must draw through the verified translucent pipeline");
   const qsizetype navDraw = rendererSource.indexOf(QStringLiteral("renderNavigator(cb);"));
   const qsizetype endPass = rendererSource.indexOf(QStringLiteral("cb->endPass();"), navDraw);
   QVERIFY2(navDraw >= 0 && endPass > navDraw,

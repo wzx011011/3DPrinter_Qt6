@@ -125,7 +125,6 @@ private:
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
   // GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate). Drawn in
   // overlay pixel space with a dedicated ortho UBO (no depth, blended).
-  bool ensureNavigatorPipelines();
   bool uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates);
   void renderNavigator(QRhiCommandBuffer *cb);
 
@@ -184,11 +183,11 @@ private:
   // v5.16 (BEDBOTTOM): grid-only lines for below-horizon camera views
   // (upstream PartPlate::render_grid(true) LINE_BOTTOM_COLOR).
   std::unique_ptr<QRhiBuffer> m_bedBottomLineBuffer;
-  // v5.16 (NAVIGATOR): overlay cube buffers + dedicated ortho uniform.
+  // v5.16 (NAVIGATOR): overlay cube buffer. The cube is projected to world
+  // space on the CPU and drawn with the verified scene translucent pipeline
+  // (dedicated overlay SRB/UBO attempts produced no visible output on the
+  // D3D11 runtime; see P13.6 in the migration tracker).
   std::unique_ptr<QRhiBuffer> m_navigatorFillBuffer;
-  std::unique_ptr<QRhiBuffer> m_navigatorUniformBuffer;
-  std::unique_ptr<QRhiShaderResourceBindings> m_navigatorSrb;
-  std::unique_ptr<QRhiGraphicsPipeline> m_navigatorFillPipeline;
   // v5.16 (HTLIMIT): ByObject clearance rings (upstream render_height_limit).
   std::unique_ptr<QRhiBuffer> m_bedLimitBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
@@ -339,7 +338,6 @@ private:
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_bedBottomLineBufferBytes = 0;
   quint32 m_navigatorFillBufferBytes = 0;
-  quint32 m_navigatorUniformBufferBytes = 0;
   quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
   quint32 m_highlightVertexBufferBytes = 0;
@@ -355,6 +353,7 @@ private:
   int m_navigatorHoverBox = -1;
   QVector3D m_navigatorHoverFaceNormal;
   QMatrix4x4 m_navigatorLastView;   // geometry rebuild cache key
+  QMatrix4x4 m_navigatorLastMvp;
   int m_navigatorLastHoverBox = -2;
   QSize m_navigatorLastPixelSize;
   quint32 m_bedLimitVertexCount = 0;
