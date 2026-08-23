@@ -1100,9 +1100,7 @@ void RhiViewportRenderer::releaseResources()
   m_bedFillBuffer.reset();
   // v5.16 (NAVIGATOR): overlay cube resources.
   m_navigatorFillBuffer.reset();
-  m_navigatorLineBuffer.reset();
   m_navigatorFillPipeline.reset();
-  m_navigatorLinePipeline.reset();
   m_navigatorSrb.reset();
   m_navigatorUniformBuffer.reset();
   m_navigatorBufferUploaded = false;
@@ -1142,7 +1140,6 @@ void RhiViewportRenderer::releaseResources()
   m_bedLineBufferBytes = 0;
   m_bedBottomLineBufferBytes = 0;
   m_navigatorFillBufferBytes = 0;
-  m_navigatorLineBufferBytes = 0;
   m_navigatorUniformBufferBytes = 0;
   m_bedLimitBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
@@ -1169,7 +1166,6 @@ void RhiViewportRenderer::releaseResources()
   m_bedLineVertexCount = 0;
   m_bedBottomLineVertexCount = 0;
   m_navigatorFillVertexCount = 0;
-  m_navigatorLineVertexCount = 0;
   m_modelVertexCount = 0;
   m_highlightVertexCount = 0;
   m_cutPlaneFillVertexCount = 0;
@@ -3999,7 +3995,7 @@ bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updat
 // cube faces are emitted (upstream back-face culling, ImGuizmo.cpp:2878-2880).
 bool RhiViewportRenderer::ensureNavigatorPipelines()
 {
-  if (m_navigatorFillPipeline && m_navigatorLinePipeline)
+  if (m_navigatorFillPipeline)
     return true;
   if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
     return false;
@@ -4016,10 +4012,10 @@ bool RhiViewportRenderer::ensureNavigatorPipelines()
     if (!m_navigatorSrb->create())
       return false;
   }
+  // v5.16 (NAVIGATOR): the axes are drawn as 3px-wide triangles in the fill
+  // path (upstream ImGuizmo draws them as AddLine with thickness 3.0,
+  // ImGuizmo.cpp:640/3016) because RHI line rasterization is 1px only.
   return ensurePipeline(m_navigatorFillPipeline, QRhiGraphicsPipeline::Triangles,
-                        /*enableDepthWrite=*/false, /*enableBlending=*/true,
-                        m_navigatorSrb.get(), /*enableDepthTest=*/false)
-      && ensurePipeline(m_navigatorLinePipeline, QRhiGraphicsPipeline::Lines,
                         /*enableDepthWrite=*/false, /*enableBlending=*/true,
                         m_navigatorSrb.get(), /*enableDepthTest=*/false);
 }
@@ -4030,7 +4026,6 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
     return false;
   if (!m_navigatorEnabled) {
     m_navigatorFillVertexCount = 0;
-    m_navigatorLineVertexCount = 0;
     m_navigatorBufferUploaded = false;
     return true;
   }
@@ -4069,7 +4064,6 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
   const float heightPx = float(px.height());
 
   QVector<Vertex> fill;
-  QVector<Vertex> line;
   // Overlay pixels are y-down; the ortho uniform maps y-up, so flip here.
   const auto push = [&heightPx](QVector<Vertex> &dst, const QPointF &p,
                                 float r, float g, float b, float a) {
@@ -4153,37 +4147,43 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
     const float alpha = visible ? 1.0f : 0.3f;
     const QPointF basePx = NavigatorCube::projectToRect(corner, basis, rect);
     const QPointF tipPx = NavigatorCube::projectToRect(corner + e, basis, rect);
-    push(line, basePx, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
-    push(line, tipPx, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
-    // Arrowhead triangle in pixel space (upstream AddTriangleFilled,
-    // ImGuizmo.cpp:3010-3024; arrow size scaled with the rect).
+    // Upstream draws the axis as AddLine with TranslationLineThickness 3.0
+    // and TranslationLineArrowSize 6.0 (ImGuizmo.cpp:640-641, :3010-3024);
+    // RHI lines are 1px, so the shaft becomes a thickness-3 quad (two
+    // triangles) and the arrowhead keeps the 6px * scale size.
     QPointF dir(basePx - tipPx);
     const float len = float(std::hypot(dir.x(), dir.y()));
     if (len > 1.0f) {
-      const float arrow = rect.w * 0.055f;
-      dir /= len;
-      dir *= arrow;
-      const QPointF orth(-dir.y(), dir.x());
-      const QPointF a = tipPx + dir;
-      push(fill, tipPx - dir, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      const float scale = rect.w / NavigatorCube::kRectSizePx;
+      const float thickness = 3.0f * scale;
+      const QPointF unit(-dir.x() / len, -dir.y() / len);
+      // unit points from base toward the tip.
+      const QPointF shaftOrt(-unit.y(), unit.x());
+      const QPointF o0(shaftOrt * (thickness * 0.5f));
+      const QPointF shaftEnd = tipPx - unit * (6.0f * scale);
+      push(fill, basePx + o0, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, basePx - o0, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, shaftEnd + o0, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, basePx + o0, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, shaftEnd + o0, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      push(fill, shaftEnd - o0, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
+      // Arrowhead triangle (upstream size 6px * scale).
+      QPointF adir(unit * (6.0f * scale));
+      const QPointF orth(-adir.y(), adir.x());
+      const QPointF a = tipPx - adir;
+      push(fill, tipPx, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
       push(fill, a + orth, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
       push(fill, a - orth, axisColors[i][0], axisColors[i][1], axisColors[i][2], alpha);
     }
   }
 
   const quint32 fillBytes = quint32(fill.size() * int(sizeof(Vertex)));
-  const quint32 lineBytes = quint32(line.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_navigatorFillBuffer, fillBytes, m_navigatorFillBufferBytes,
-                    QRhiBuffer::VertexBuffer)
-      || !ensureBuffer(m_navigatorLineBuffer, lineBytes, m_navigatorLineBufferBytes,
-                       QRhiBuffer::VertexBuffer))
+                    QRhiBuffer::VertexBuffer))
     return false;
   m_navigatorFillVertexCount = quint32(fill.size());
-  m_navigatorLineVertexCount = quint32(line.size());
   if (m_navigatorFillBuffer && fillBytes > 0)
     updates->uploadStaticBuffer(m_navigatorFillBuffer.get(), 0, fillBytes, fill.constData());
-  if (m_navigatorLineBuffer && lineBytes > 0)
-    updates->uploadStaticBuffer(m_navigatorLineBuffer.get(), 0, lineBytes, line.constData());
   m_navigatorBufferUploaded = true;
   return true;
 }
@@ -4192,23 +4192,15 @@ void RhiViewportRenderer::renderNavigator(QRhiCommandBuffer *cb)
 {
   if (cb == nullptr || !m_navigatorEnabled)
     return;
-  if (m_navigatorFillVertexCount == 0 && m_navigatorLineVertexCount == 0)
+  if (m_navigatorFillVertexCount == 0)
     return;
   if (!ensureNavigatorPipelines())
     return;
   cb->setShaderResources(m_navigatorSrb.get());
-  if (m_navigatorFillVertexCount > 0) {
-    cb->setGraphicsPipeline(m_navigatorFillPipeline.get());
-    const QRhiCommandBuffer::VertexInput binding(m_navigatorFillBuffer.get(), 0);
-    cb->setVertexInput(0, 1, &binding);
-    cb->draw(m_navigatorFillVertexCount);
-  }
-  if (m_navigatorLineVertexCount > 0) {
-    cb->setGraphicsPipeline(m_navigatorLinePipeline.get());
-    const QRhiCommandBuffer::VertexInput binding(m_navigatorLineBuffer.get(), 0);
-    cb->setVertexInput(0, 1, &binding);
-    cb->draw(m_navigatorLineVertexCount);
-  }
+  cb->setGraphicsPipeline(m_navigatorFillPipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_navigatorFillBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_navigatorFillVertexCount);
 }
 
 void RhiViewportRenderer::renderBrushCursor(QRhiCommandBuffer *cb)

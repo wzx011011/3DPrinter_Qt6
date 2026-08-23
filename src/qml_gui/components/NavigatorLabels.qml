@@ -34,7 +34,7 @@ Item {
             text: modelData.kind === "axis" ? modelData.text : faceText
             // Upstream TEXT color dark theme 224/255 (GLCanvas3D.cpp:5685).
             color: modelData.kind === "axis" ? "#E0E0E0" : "#F0A060"
-            font.pixelSize: modelData.kind === "axis" ? 11 : 12
+            font.pixelSize: 13
             font.bold: modelData.kind !== "axis"
             style: Text.Outline
             styleColor: "#101010"

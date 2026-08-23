@@ -186,11 +186,9 @@ private:
   std::unique_ptr<QRhiBuffer> m_bedBottomLineBuffer;
   // v5.16 (NAVIGATOR): overlay cube buffers + dedicated ortho uniform.
   std::unique_ptr<QRhiBuffer> m_navigatorFillBuffer;
-  std::unique_ptr<QRhiBuffer> m_navigatorLineBuffer;
   std::unique_ptr<QRhiBuffer> m_navigatorUniformBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_navigatorSrb;
   std::unique_ptr<QRhiGraphicsPipeline> m_navigatorFillPipeline;
-  std::unique_ptr<QRhiGraphicsPipeline> m_navigatorLinePipeline;
   // v5.16 (HTLIMIT): ByObject clearance rings (upstream render_height_limit).
   std::unique_ptr<QRhiBuffer> m_bedLimitBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
@@ -341,7 +339,6 @@ private:
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_bedBottomLineBufferBytes = 0;
   quint32 m_navigatorFillBufferBytes = 0;
-  quint32 m_navigatorLineBufferBytes = 0;
   quint32 m_navigatorUniformBufferBytes = 0;
   quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
@@ -351,7 +348,6 @@ private:
   quint32 m_bedLineVertexCount = 0;
   quint32 m_bedBottomLineVertexCount = 0;
   quint32 m_navigatorFillVertexCount = 0;
-  quint32 m_navigatorLineVertexCount = 0;
   // v5.16 (NAVIGATOR): cube state mirrored from RhiViewport in synchronize().
   bool m_navigatorEnabled = true;
   bool m_navigatorBufferUploaded = false;
