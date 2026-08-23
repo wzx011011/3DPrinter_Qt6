@@ -30,6 +30,12 @@ namespace
   constexpr float kLineUnselR = 0.431f;
   constexpr float kLineUnselG = 0.431f;
   constexpr float kLineUnselB = 0.463f;
+  // Upstream LINE_BOTTOM_COLOR (PartPlate.cpp:85): every plate grid drawn in
+  // this color when the camera looks from below (render_grid(true)).
+  constexpr float kLineBottomR = 0.8f;
+  constexpr float kLineBottomG = 0.8f;
+  constexpr float kLineBottomB = 0.8f;
+  constexpr float kLineBottomA = 0.4f;
   // Upstream LOGICAL_PART_PLATE_GAP = 1/5 (PartPlate.cpp:53): the stride
   // between plate origins is bed size * (1 + gap).
   constexpr float kPlateGapRatio = 1.0f / 5.0f;
@@ -414,6 +420,11 @@ const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedLineVertices() const
   return m_bedLineVertices;
 }
 
+const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedBottomLineVertices() const
+{
+  return m_bedBottomLineVertices;
+}
+
 const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::bedLimitVertices() const
 {
   return m_bedLimitVertices;
@@ -511,6 +522,7 @@ void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();
   m_bedLineVertices.clear();
+  m_bedBottomLineVertices.clear();
   m_bedLimitVertices.clear();
 
   if (!m_showBed)
@@ -550,11 +562,17 @@ void PrepareSceneData::rebuildBedGeometry()
     appendExcludeFills(left, top, selected);
     appendRectBorder(left, top, right, bottom, lineR, lineG, lineB);
 
+    // The grid lines are ALSO emitted into the bottom-view buffer in
+    // LINE_BOTTOM_COLOR: upstream render_grid(bottom=true) keeps every grid
+    // line visible from below while border/origin axes stay top-only
+    // (render_background runs under `if (!bottom)`).
     for (float x = left + kFineGridMm; x < right; x += kFineGridMm) {
       appendLine(x, top, x, bottom, lineR, lineG, lineB, 0.6f);
+      appendBottomLine(x, top, x, bottom);
     }
     for (float y = top + kFineGridMm; y < bottom; y += kFineGridMm) {
       appendLine(left, y, right, y, lineR, lineG, lineB, 0.6f);
+      appendBottomLine(left, y, right, y);
     }
 
     // Origin axes only on the selected plate (upstream draws the origin
@@ -616,6 +634,14 @@ void PrepareSceneData::appendLine(float x1, float y1, float x2, float y2, float 
 {
   m_bedLineVertices.append(Vertex{x1, y1, r, g, b, a});
   m_bedLineVertices.append(Vertex{x2, y2, r, g, b, a});
+}
+
+void PrepareSceneData::appendBottomLine(float x1, float y1, float x2, float y2)
+{
+  // v5.16 (BEDBOTTOM): LINE_BOTTOM_COLOR grid line for below-horizon views
+  // (upstream PartPlate::render_grid(true), PartPlate.cpp:85).
+  m_bedBottomLineVertices.append(Vertex{x1, y1, kLineBottomR, kLineBottomG, kLineBottomB, kLineBottomA});
+  m_bedBottomLineVertices.append(Vertex{x2, y2, kLineBottomR, kLineBottomG, kLineBottomB, kLineBottomA});
 }
 
 void PrepareSceneData::appendRectFill(float left, float top, float right, float bottom,

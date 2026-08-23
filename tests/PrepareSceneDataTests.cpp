@@ -65,6 +65,8 @@ private slots:
   void bedExcludeAreasFillPerPlateWithUpstreamColors();
   // v5.16 (HTLIMIT): upstream calc_height_limit rings + verticals.
   void heightLimitVerticesFollowUpstreamPalette();
+  // v5.16 (BEDBOTTOM): below-horizon grid in LINE_BOTTOM_COLOR.
+  void bedBottomLineGridUsesUpstreamBottomColor();
 };
 
 // v5.16 (EXCLAREA): one rectangle polygon must fan-fill on every plate with
@@ -425,6 +427,41 @@ void PrepareSceneDataTests::bedGridRendersEveryPlateWithSelectionColors()
       foundAtStride = true;
   }
   QVERIFY2(foundAtStride, "plate 2 must be laid out one stride right of plate 1");
+}
+
+// v5.16 (BEDBOTTOM): upstream PartPlate::render keeps ONLY render_grid alive
+// when viewed from below, in LINE_BOTTOM_COLOR {0.8, 0.8, 0.8, 0.4}
+// (PartPlate.cpp:85, render_grid(true)). The bottom line buffer must hold the
+// same fine grid as the top buffer but exclude the border and origin axes
+// (both live in render_background upstream, gated by `if (!bottom)`).
+void PrepareSceneDataTests::bedBottomLineGridUsesUpstreamBottomColor()
+{
+  PrepareSceneData scene;
+  scene.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
+  scene.setPlateContext(0, 1, {});
+
+  const auto &bottom = scene.bedBottomLineVertices();
+  QVERIFY2(bottom.size() > 0, "below-horizon grid must exist");
+
+  // 220mm bed with 10mm spacing: 21 vertical + 21 horizontal lines, 2 verts
+  // per line segment (the fine grid uses one segment per full line).
+  QCOMPARE(bottom.size(), qsizetype((21 + 21) * 2));
+
+  for (const auto &v : bottom) {
+    QVERIFY2(qFuzzyCompare(v.r, 0.8f) && qFuzzyCompare(v.g, 0.8f)
+                 && qFuzzyCompare(v.b, 0.8f) && qFuzzyCompare(v.a, 0.4f),
+             "every below-horizon grid vertex must use LINE_BOTTOM_COLOR");
+  }
+
+  // Border (0.95 alpha) and origin axes (0.12/0.78/0.37) never leak into the
+  // bottom set: upstream renders them inside the bottom-gated
+  // render_background.
+  for (const auto &v : bottom) {
+    QVERIFY2(!qFuzzyCompare(v.a, 0.95f), "plate border must stay top-view only");
+    QVERIFY2(!(qFuzzyCompare(v.r, 0.12f) && qFuzzyCompare(v.g, 0.78f)
+               && qFuzzyCompare(v.b, 0.37f)),
+             "origin axes must stay top-view only");
+  }
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

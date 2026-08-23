@@ -706,6 +706,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
   rhiTrace("beginPass-done");
+  // v5.16 (BEDBOTTOM): upstream bottom gate for every bed surface. Computed
+  // once per frame from the synchronized view matrix.
+  const bool lookingDown = cameraLookingDown();
   // Phase 90: CanvasAssembleView shares the View3D mesh draw block (bed +
   // model vertex buffer) so the AssembleView canvas is not empty at runtime.
   // Guard widened to != CanvasPreview; the CanvasPreview draw block below
@@ -715,17 +718,31 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                  float(renderTarget()->pixelSize().height())));
     cb->setShaderResources(m_srb.get());
     rhiTrace("setShaderResources-done");
-    if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
+    // Upstream PartPlate::render skips render_background (plate fill +
+    // exclude areas) entirely when viewed from below (`if (!bottom)`), so the
+    // opaque fill never occludes the model from below-horizon angles.
+    if (m_prepareScene.showBed() && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
       cb->setGraphicsPipeline(m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
-    if (m_prepareScene.showBed() && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    if (m_prepareScene.showBed() && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
       cb->setGraphicsPipeline(m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
+    }
+    // v5.16 (BEDBOTTOM): from below the grid keeps drawing, but in
+    // LINE_BOTTOM_COLOR through the blended line pipeline (upstream
+    // render_grid(true), PartPlate.cpp:846-861); border and origin axes stay
+    // top-only because upstream renders them inside render_background.
+    if (m_prepareScene.showBed() && !lookingDown
+        && m_bedBottomLineBuffer && m_bedBottomLineVertexCount > 0) {
+      cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+      const QRhiCommandBuffer::VertexInput bottomLineBinding(m_bedBottomLineBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &bottomLineBinding);
+      cb->draw(m_bedBottomLineVertexCount);
     }
     // v5.16 (HTLIMIT): ByObject clearance rings over the grid (upstream
     // render_height_limit runs inside PartPlate::render; preview's
@@ -741,15 +758,20 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // writes). Drawn before the model so the mesh (which does depth-test)
     // still occludes it from below-camera angles. For BBL vendors the
     // bed-type overlay parts replace the single image (upstream
-    // PartPlate::render_logo bedtype branch).
-    if (m_prepareScene.showBed()) {
+    // PartPlate::render_logo bedtype branch). v5.16 (BEDBOTTOM): upstream
+    // gates render_logo with `!bottom && m_selected`, so from below the logo
+    // is skipped too.
+    if (m_prepareScene.showBed() && lookingDown) {
       if (m_bedTypeActive)
         renderBedTypeParts(cb);
       else
         renderBedTexture(cb);
     }
     // v5.16 (BEDMODEL): printer frame STL under the working mesh.
-    renderBedModel(cb);
+    // v5.16 (BEDBOTTOM): upstream Bed3D::render_system draws the bed model
+    // only when !bottom (3DBed.cpp render_system), skipped from below.
+    if (lookingDown)
+      renderBedModel(cb);
     if (m_modelVertexBuffer && m_modelVertexCount > 0) {
       // v5.15 (MODELLIT): lit draw path (two-light gouraud) with the parallel
       // per-face normal buffer. Falls back to the flat vertex-color pipeline
@@ -831,26 +853,38 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     cb->setShaderResources(m_srb.get());
     // v5.15 (BEDTEX): upstream Preview also renders the print bed
     // (GCodeViewer -> _render_bed) behind the toolpath segments, including
-    // the bed texture image.
-    if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
+    // the bed texture image. v5.16 (BEDBOTTOM): the CanvasPreview bed render
+    // goes through the same _render_bed/_render_platelist bottom gate
+    // (GLCanvas3D.cpp:1922-1923): plate fill, lines, logo and bed model are
+    // skipped from below-horizon angles, keeping the toolpaths visible; the
+    // grid alone remains through the bottom-line buffer.
+    if (m_prepareScene.showBed() && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
       cb->setGraphicsPipeline(m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
-    if (m_prepareScene.showBed() && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    if (m_prepareScene.showBed() && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
       cb->setGraphicsPipeline(m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
-    if (m_prepareScene.showBed()) {
+    if (m_prepareScene.showBed() && !lookingDown
+        && m_bedBottomLineBuffer && m_bedBottomLineVertexCount > 0) {
+      cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+      const QRhiCommandBuffer::VertexInput bottomLineBinding(m_bedBottomLineBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &bottomLineBinding);
+      cb->draw(m_bedBottomLineVertexCount);
+    }
+    if (m_prepareScene.showBed() && lookingDown) {
       if (m_bedTypeActive)
         renderBedTypeParts(cb);
       else
         renderBedTexture(cb);
     }
-    renderBedModel(cb);
+    if (lookingDown)
+      renderBedModel(cb);
 
     // Phase 238 (PREV-01): ghost object shells BEHIND the toolpaths
     // (upstream render_shells, GCodeViewer.cpp:4023, drawn before
@@ -1031,6 +1065,7 @@ void RhiViewportRenderer::releaseResources()
   m_highlightVertexBuffer.reset();
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
+  m_bedBottomLineBuffer.reset();
   m_bedLimitBuffer.reset();
   m_bedFillBuffer.reset();
   resetPreviewGpuState(true);
@@ -1067,6 +1102,7 @@ void RhiViewportRenderer::releaseResources()
   m_gizmoPipelineCreated = false;            // Phase 68
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
+  m_bedBottomLineBufferBytes = 0;
   m_bedLimitBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
   m_highlightVertexBufferBytes = 0;
@@ -1090,6 +1126,7 @@ void RhiViewportRenderer::releaseResources()
   m_scaleGizmoOffsets = {};
   m_bedFillVertexCount = 0;
   m_bedLineVertexCount = 0;
+  m_bedBottomLineVertexCount = 0;
   m_modelVertexCount = 0;
   m_highlightVertexCount = 0;
   m_cutPlaneFillVertexCount = 0;
@@ -1380,6 +1417,21 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
     m_cachedPreviewRanges.clear();
   }
 }
+
+// v5.16 (BEDBOTTOM): upstream is_looking_downward() (Camera.hpp:152) tests
+// get_dir_forward().dot(worldUp) < 0. The view matrix maps world to eye space
+// and the camera looks along -Z_eye, so mapping the eye-space forward back
+// through the inverse view matrix recovers the world forward. This renderer
+// is Y-up (CameraController::eye uses +Y as the world up axis), and the
+// strict `< 0` matches upstream: a horizon-level camera (el == 0) counts as
+// NOT looking down, hiding the bed surfaces exactly like upstream does.
+bool RhiViewportRenderer::cameraLookingDown() const
+{
+  const QMatrix4x4 inverseView = m_cameraView.inverted();
+  const QVector4D worldForward = inverseView.map(QVector4D(0.0f, 0.0f, -1.0f, 0.0f));
+  return worldForward.y() < 0.0f;
+}
+
 
 bool RhiViewportRenderer::ensurePipelines()
 {
@@ -2102,6 +2154,8 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
 
   const QVector<Vertex> fillVertices = buildSceneVertices(m_prepareScene.bedFillVertices());
   const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
+  // v5.16 (BEDBOTTOM): grid-only line set for below-horizon views.
+  const QVector<Vertex> bottomLineVertices = buildSceneVertices(m_prepareScene.bedBottomLineVertices());
   // v5.16 (HTLIMIT): ModelVertex and Vertex share the 7-float layout; the
   // limit lines carry their height in y directly.
   const QList<PrepareSceneData::ModelVertex> &limitSource =
@@ -2112,15 +2166,18 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
     limitVertices.append(Vertex{v.x, v.y, v.z, v.r, v.g, v.b, v.a});
   const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
   const quint32 lineBytes = quint32(lineVertices.size() * int(sizeof(Vertex)));
+  const quint32 bottomLineBytes = quint32(bottomLineVertices.size() * int(sizeof(Vertex)));
   const quint32 limitBytes = quint32(limitVertices.size() * int(sizeof(Vertex)));
 
   if (!ensureBuffer(m_bedFillBuffer, fillBytes, m_bedFillBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedLineBuffer, lineBytes, m_bedLineBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_bedBottomLineBuffer, bottomLineBytes, m_bedBottomLineBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedLimitBuffer, limitBytes, m_bedLimitBufferBytes, QRhiBuffer::VertexBuffer))
     return false;
 
   m_bedFillVertexCount = quint32(fillVertices.size());
   m_bedLineVertexCount = quint32(lineVertices.size());
+  m_bedBottomLineVertexCount = quint32(bottomLineVertices.size());
   m_bedLimitVertexCount = quint32(limitVertices.size());
   if (m_bedFillBuffer && fillBytes > 0) {
     updates->uploadStaticBuffer(m_bedFillBuffer.get(),
@@ -2133,6 +2190,12 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
                                 0,
                                 lineBytes,
                                 lineVertices.constData());
+  }
+  if (m_bedBottomLineBuffer && bottomLineBytes > 0) {
+    updates->uploadStaticBuffer(m_bedBottomLineBuffer.get(),
+                                0,
+                                bottomLineBytes,
+                                bottomLineVertices.constData());
   }
   if (m_bedLimitBuffer && limitBytes > 0) {
     updates->uploadStaticBuffer(m_bedLimitBuffer.get(),

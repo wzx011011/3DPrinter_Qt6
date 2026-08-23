@@ -146,6 +146,14 @@ private:
   QVector<Vertex> buildModelVertices(const QList<PrepareSceneData::ModelVertex> &source) const;
   QVector<Vertex> buildHighlightVertices() const;
   QShader loadShader(const QString &path) const;
+  // v5.16 (BEDBOTTOM): upstream bed/plate bottom gate. GLCanvas3D passes
+  // bottom = !camera.is_looking_downward() into _render_bed/_render_platelist
+  // (GLCanvas3D.cpp:1912/1922); when the camera looks from below (or exactly
+  // horizontal) the plate background, exclude areas, logo texture and bed
+  // model are skipped so objects stay visible (PartPlate::render `if (!bottom)`,
+  // Bed3D::render_system `if (!bottom)`). Only the grid remains, in
+  // LINE_BOTTOM_COLOR (render_grid(true)).
+  bool cameraLookingDown() const;
 
   // ── Phase 95 (THUMBCAP-01/02/03): offscreen thumbnail capture ──
   // Real QRhi texture readback replacing the solid-color stub. The thumbnail
@@ -164,6 +172,9 @@ private:
 
   std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
   std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
+  // v5.16 (BEDBOTTOM): grid-only lines for below-horizon camera views
+  // (upstream PartPlate::render_grid(true) LINE_BOTTOM_COLOR).
+  std::unique_ptr<QRhiBuffer> m_bedBottomLineBuffer;
   // v5.16 (HTLIMIT): ByObject clearance rings (upstream render_height_limit).
   std::unique_ptr<QRhiBuffer> m_bedLimitBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
@@ -312,12 +323,14 @@ private:
   int m_frameCount = 0;
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
+  quint32 m_bedBottomLineBufferBytes = 0;
   quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
   quint32 m_highlightVertexBufferBytes = 0;
   quint32 m_cameraUniformBufferBytes = 0;
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
+  quint32 m_bedBottomLineVertexCount = 0;
   quint32 m_bedLimitVertexCount = 0;
   quint32 m_modelVertexCount = 0;
   quint32 m_highlightVertexCount = 0;

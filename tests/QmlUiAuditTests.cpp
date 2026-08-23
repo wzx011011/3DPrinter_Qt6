@@ -32,6 +32,8 @@ private slots:
   void exportUiUsesSaveDialogAndAvoidsSourcePathTarget();
   void importEntryPointsAdvertiseConsistentModelFormats();
   void rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads();
+  // v5.16 (BEDBOTTOM): upstream bottom gate keeps objects visible from below.
+  void rhiViewportRendererGatesBedSurfacesOnLookingDown();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
@@ -1200,6 +1202,62 @@ void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
            "Renderer must upload fill and line buffers explicitly");
   QVERIFY2(!rendererSource.contains(QStringLiteral("kDiagnosticVertices")),
            "Prepare QRhi path must not remain diagnostic-triangle only");
+}
+
+// v5.16 (BEDBOTTOM): upstream GLCanvas3D passes bottom = !is_looking_downward()
+// into _render_bed/_render_platelist (GLCanvas3D.cpp:1912/1922); from below the
+// plate background, exclude fills, logo texture and bed model are skipped
+// (PartPlate::render `if (!bottom)`, Bed3D::render_system) so the mesh stays
+// visible, and only the grid remains via render_grid(true) LINE_BOTTOM_COLOR.
+// The Qt6 renderer must reproduce that gate in BOTH the View3D/AssembleView
+// draw block and the CanvasPreview draw block.
+void QmlUiAuditTests::rhiViewportRendererGatesBedSurfacesOnLookingDown()
+{
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString sceneHeader = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
+  const QString sceneSource = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!sceneSource.isEmpty(), "Unable to read PrepareSceneData.cpp");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("cameraLookingDown")),
+           "Renderer must derive the upstream is_looking_downward gate");
+  QVERIFY2(rendererSource.contains(QStringLiteral("bool RhiViewportRenderer::cameraLookingDown() const")),
+           "cameraLookingDown must be implemented in the renderer");
+
+  // Both bed draw blocks (View3D/AssembleView + CanvasPreview) gate the fill,
+  // line, texture and bed-model draws on lookingDown, and fall back to the
+  // bottom grid buffer when viewed from below.
+  const qsizetype firstBlock = rendererSource.indexOf(
+      QStringLiteral("m_canvasType != RhiViewport::CanvasPreview && ensurePipelines()"));
+  const qsizetype previewBlock = rendererSource.indexOf(
+      QStringLiteral("m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()"));
+  QVERIFY2(firstBlock >= 0 && previewBlock > firstBlock,
+           "both View3D and CanvasPreview bed draw blocks must exist");
+  const QString view3dBlock = rendererSource.mid(firstBlock, previewBlock - firstBlock);
+  const QString previewSection = rendererSource.mid(previewBlock, 4000);
+
+  QVERIFY2(view3dBlock.contains(QStringLiteral("lookingDown && m_bedFillBuffer")),
+           "View3D bed fill must be skipped when the camera looks from below");
+  QVERIFY2(view3dBlock.contains(QStringLiteral("lookingDown && m_bedLineBuffer")),
+           "View3D top-view grid must be skipped when the camera looks from below");
+  QVERIFY2(view3dBlock.contains(QStringLiteral("!lookingDown")
+               ) && view3dBlock.contains(QStringLiteral("m_bedBottomLineBuffer")),
+           "View3D must draw the LINE_BOTTOM_COLOR grid from below");
+  QVERIFY2(view3dBlock.count(QStringLiteral("if (lookingDown)\n      renderBedModel(cb);")) >= 1,
+           "View3D bed model must be skipped when the camera looks from below");
+  QVERIFY2(previewSection.contains(QStringLiteral("lookingDown && m_bedFillBuffer")),
+           "CanvasPreview bed fill must be skipped when the camera looks from below");
+  QVERIFY2(previewSection.contains(QStringLiteral("m_bedBottomLineBuffer")),
+           "CanvasPreview must draw the bottom grid from below");
+
+  // The scene data bakes the bottom grid in the upstream LINE_BOTTOM_COLOR.
+  QVERIFY2(sceneHeader.contains(QStringLiteral("bedBottomLineVertices")),
+           "PrepareSceneData must expose the bottom-view grid buffer");
+  QVERIFY2(sceneSource.contains(QStringLiteral("kLineBottomR = 0.8f"))
+               && sceneSource.contains(QStringLiteral("kLineBottomA = 0.4f")),
+           "bottom grid must use upstream LINE_BOTTOM_COLOR {0.8,0.8,0.8,0.4}");
 }
 
 void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()

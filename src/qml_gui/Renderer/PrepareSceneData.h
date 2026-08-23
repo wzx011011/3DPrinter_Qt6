@@ -127,6 +127,10 @@ public:
 
   const QList<Vertex> &bedFillVertices() const;
   const QList<Vertex> &bedLineVertices() const;
+  // v5.16 (BEDBOTTOM): grid-only line set for below-horizon camera views
+  // (upstream PartPlate::render_grid(true) draws the grid in
+  // LINE_BOTTOM_COLOR while render_background/render_logo are skipped).
+  const QList<Vertex> &bedBottomLineVertices() const;
   const QList<ModelVertex> &bedLimitVertices() const;
   const QList<ModelVertex> &modelVertices() const;
   const QList<ModelBatch> &modelBatches() const;
@@ -148,6 +152,7 @@ private:
   static bool activeSourceContains(const QList<int> &activeSourceObjectIndices, int sourceObjectIndex);
   static quint32 colorForSourceObject(int sourceObjectIndex, float &r, float &g, float &b);
   void appendLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a);
+  void appendBottomLine(float x1, float y1, float x2, float y2);
   void appendRectFill(float left, float top, float right, float bottom,
                       float r, float g, float b, float a);
   void appendRectBorder(float left, float top, float right, float bottom,
@@ -176,6 +181,7 @@ private:
 
   QList<Vertex> m_bedFillVertices;
   QList<Vertex> m_bedLineVertices;
+  QList<Vertex> m_bedBottomLineVertices;
   QList<ModelVertex> m_bedLimitVertices;
   QList<ModelVertex> m_modelVertices;
   QList<ModelBatch> m_modelBatches;
