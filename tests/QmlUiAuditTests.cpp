@@ -3052,7 +3052,6 @@ void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
     QStringLiteral("readonly property int gizmoToolbarWidth: 36"),
     QStringLiteral("id: viewportActionToolbar"),
     QStringLiteral("id: viewportGizmoToolbar"),
-    QStringLiteral("id: viewportViewControls"),
     QStringLiteral("iconSource: iconForTool(toolId)")
   };
   for (const QString &token : toolbarTokens) {
@@ -3189,10 +3188,9 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QStringLiteral("readonly property int targetActionToolbarTop: 22"),
     QStringLiteral("readonly property int targetActionToolbarLeft: 10"),
     QStringLiteral("readonly property real gizmoRailTopRatio: 0.22"),
-    QStringLiteral("readonly property int targetViewControlsBottom: 42"),
+    QStringLiteral("readonly property int targetActionToolbarTop: 22"),
     QStringLiteral("id: prepareTopActionToolbar"),
     QStringLiteral("id: prepareRightGizmoToolbar"),
-    QStringLiteral("id: prepareBottomViewControls"),
     QStringLiteral("buttonSize: root.targetToolbarButtonSize")
   };
   for (const QString &token : toolbarTokens) {
@@ -3228,11 +3226,12 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
   QVERIFY2(topbar.contains(QStringLiteral("anchors.topMargin: 36"))
               && topbar.contains(QStringLiteral("height: 34")),
            "BBLTopbar workflowBar must remain below the 36px title row");
-  QVERIFY2(preparePage.contains(QStringLiteral("readonly property int prepareBottomViewControlsBottomMargin"))
-              && preparePage.contains(QStringLiteral("viewControlsBottomMargin: root.prepareBottomViewControlsBottomMargin"))
-              && glToolbars.contains(QStringLiteral("property int viewControlsBottomMargin"))
-              && glToolbars.contains(QStringLiteral("anchors.bottomMargin: root.viewControlsBottomMargin")),
-           "Prepare lower-left view controls must use a caller-provided safe bottom margin instead of overlapping plate thumbnails");
+  // v5.16 (NAVIGATOR): the flat bottom-left view-button row was replaced by
+  // the 3D navigator cube and must not return.
+  QVERIFY2(!glToolbars.contains(QStringLiteral("prepareBottomViewControls"))
+               && !glToolbars.contains(QStringLiteral("ViewToolButton"))
+               && !glToolbars.contains(QStringLiteral("fitViewRequested")),
+           "the flat bottom-left view buttons must stay removed (navigator cube replaced them)");
   QVERIFY2(preparePage.contains(QStringLiteral("data.indexOf(\"data:image/\") === 0 ? data"))
               && !preparePage.contains(QStringLiteral("\"data:image/png;base64,\" + glThumb")),
            "Prepare plate thumbnails must not prepend a data URL prefix when GL already returned a data URL");
@@ -3364,9 +3363,10 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
               && sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
            "SliceProgress must keep backend-gated primary and slice-all controls");
   QVERIFY2(glToolbars.contains(QStringLiteral("id: viewportActionToolbar"))
-              && glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar"))
-              && glToolbars.contains(QStringLiteral("id: viewportViewControls")),
-           "GLToolbars must keep the restored top, right, and lower-left toolbar groups");
+              && glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar")),
+           "GLToolbars must keep the restored top and right toolbar groups");
+  // v5.16 (NAVIGATOR): the lower-left group is the 3D navigator cube now;
+  // the flat viewportViewControls row was removed with it.
 
   const QStringList removedViewportTokens = {
     QStringLiteral("id: sliceButton"),
@@ -9174,9 +9174,8 @@ void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
 
   // Page bindings + label overlay + plate-bar stacking.
   QVERIFY2(preparePage.contains(QStringLiteral("navigatorEnabled:"))
-               && preparePage.contains(QStringLiteral("navigatorBottomOffset:"))
-               && preparePage.contains(QStringLiteral("prepareNavigatorReserve")),
-           "PreparePage must bind the navigator and reserve space above the cube");
+               && preparePage.contains(QStringLiteral("navigatorBottomOffset:")),
+           "PreparePage must bind the navigator above the bottom overlay stack");
   QVERIFY2(previewPage.contains(QStringLiteral("navigatorEnabled:"))
                && previewPage.contains(QStringLiteral("Components.NavigatorLabels")),
            "PreviewPage must bind the navigator and host the label overlay");

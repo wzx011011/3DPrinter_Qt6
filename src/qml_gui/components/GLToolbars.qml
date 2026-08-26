@@ -26,14 +26,11 @@ Item {
     readonly property real gizmoRailTopRatio: 0.22
     readonly property int gizmoRailRightMargin: 14
     property bool gizmoRailExpanded: false
-    readonly property int targetViewControlsBottom: 42
-    property int viewControlsBottomMargin: root.targetViewControlsBottom
     readonly property color targetToolbarSurface: Theme.bgFloating
     readonly property color targetToolbarBorder: Theme.borderSubtle
     readonly property string iconBase: "qrc:/qml/assets/icons/"
 
     signal addModelRequested()
-    signal fitViewRequested()
     signal sliceRequested()
 
     function canUseGizmo(mode) {
@@ -328,61 +325,6 @@ Item {
         }
     }
 
-    Item {
-        id: prepareBottomViewControls
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
-        anchors.leftMargin: 20
-        anchors.bottomMargin: root.viewControlsBottomMargin
-        width: viewRow.implicitWidth + 10
-        height: root.viewportToolbarHeight
-
-        Rectangle {
-            id: viewportViewControls
-            anchors.fill: parent
-            radius: 4
-            color: root.targetToolbarSurface
-            border.width: 1
-            border.color: root.targetToolbarBorder
-
-            RowLayout {
-                id: viewRow
-                anchors.centerIn: parent
-                spacing: root.toolbarGap
-
-                ViewToolButton {
-                    iconName: "box.svg"
-                    toolTipText: qsTr("Top view")
-                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(0)
-                }
-
-                ViewToolButton {
-                    iconName: "layout-grid.svg"
-                    toolTipText: qsTr("Front view")
-                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(1)
-                }
-
-                ViewToolButton {
-                    iconName: "layout-sidebar-right.svg"
-                    toolTipText: qsTr("Right view")
-                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(2)
-                }
-
-                ViewToolButton {
-                    iconName: "box.svg"
-                    toolTipText: qsTr("Isometric view")
-                    onClicked: if (root.viewport3d) root.viewport3d.requestViewPreset(3)
-                }
-
-                ViewToolButton {
-                    iconName: "maximize.svg"
-                    toolTipText: qsTr("Fit view")
-                    onClicked: root.fitViewRequested()
-                }
-            }
-        }
-    }
-
     component ToolbarSeparator: Rectangle {
         property bool vertical: false
         Layout.preferredWidth: vertical ? 1 : 24
@@ -399,14 +341,6 @@ Item {
         iconSource: root.iconBase + iconName
     }
 
-    component ViewToolButton: CxIconButton {
-        property string iconName: ""
-
-        cxStyle: CxIconButton.Style.Ghost
-        buttonSize: root.targetToolbarButtonSize
-        iconSize: 16
-        iconSource: root.iconBase + iconName
-    }
 
     component GizmoToolButton: CxIconButton {
         property int toolId: -1

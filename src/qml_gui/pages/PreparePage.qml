@@ -28,13 +28,9 @@ Item {
     readonly property int preparePlateBarHeight: 44
     readonly property int prepareViewportOverlayStack: root.targetViewportBottomInset
         + ((root.editorVm && root.editorVm.plateCount > 0) ? root.preparePlateBarHeight + 8 : 0)
-    // v5.16 (NAVIGATOR): the cube occupies 128 px above the bottom overlay
-    // stack, and the flat view buttons reserve 128+5 above it (upstream
-    // GLCanvas3D.cpp:7849-7857 reserves 128*scale+5 for toolbars above the
-    // navigator).
-    readonly property int prepareNavigatorReserve: (root.settingsVm && root.settingsVm.show3DNavigator) ? 128 + 5 : 0
-    readonly property int prepareBottomViewControlsBottomMargin: root.prepareViewportOverlayStack
-        + root.prepareNavigatorReserve
+    // v5.16 (NAVIGATOR): the cube replaces the old flat view-button row at
+    // the viewport's bottom-left corner; only the plate-bar stack remains
+    // below it.
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
@@ -1383,9 +1379,7 @@ Item {
                     z: 100
                     editorVm: root.editorVm
                     viewport3d: viewport3d
-                    viewControlsBottomMargin: root.prepareBottomViewControlsBottomMargin
                     onAddModelRequested: openFileDlg.open()
-                    onFitViewRequested: root.applyFitHintIfReady()
                     onSliceRequested: if (root.editorVm) root.editorVm.requestSlice()
                 }
                 GLViewport {

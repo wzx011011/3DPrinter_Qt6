@@ -4071,13 +4071,13 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
       QVector3D(0, -1, 0), QVector3D(0, 0, 1), QVector3D(0, 0, -1)};
   const QVector3D axes[3] = {
       QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
-  constexpr float kOwzxFaceR = 0.55f;
-  constexpr float kOwzxFaceG = 0.55f;
-  constexpr float kOwzxFaceB = 0.55f;
+  constexpr float kOwzxFaceR = 0.66f;
+  constexpr float kOwzxFaceG = 0.66f;
+  constexpr float kOwzxFaceB = 0.68f;
   constexpr float kOwzxFaceA = 0.92f;
-  constexpr float kOwxEdgeR = 0.18f;
-  constexpr float kOwxEdgeG = 0.18f;
-  constexpr float kOwxEdgeB = 0.18f;
+  constexpr float kOwxEdgeR = 0.13f;
+  constexpr float kOwxEdgeG = 0.14f;
+  constexpr float kOwxEdgeB = 0.17f;
   for (const QVector3D &n : normals) {
     if (QVector3D::dotProduct(n, basis.forward) >= 0.0f)
       continue;
@@ -4088,9 +4088,16 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
     const QVector3D v = axes[(axisIdx + 2) % 3];
     const bool hovered = m_navigatorHoverBox >= 0
         && QVector3D::dotProduct(n, m_navigatorHoverFaceNormal) > 0.9f;
-    const float fr = hovered ? NavigatorCube::kHoverColorR : kOwzxFaceR;
-    const float fg = hovered ? NavigatorCube::kHoverColorG : kOwzxFaceG;
-    const float fb = hovered ? NavigatorCube::kHoverColorB : kOwzxFaceB;
+    // v5.16 OWzx readability decision: a fixed key light from the upper
+    // front gives each visible face its own brightness so the cube reads as
+    // a solid instead of a flat decal (upstream ImGuizmo fills all faces
+    // with one flat color, which reads muddy on our mid-gray background).
+    const QVector3D lightDir(0.30f, 0.88f, 0.36f);
+    const float shade = 0.60f + 0.40f * std::max(0.0f,
+        QVector3D::dotProduct(n, lightDir));
+    const float fr = hovered ? NavigatorCube::kHoverColorR : kOwzxFaceR * shade;
+    const float fg = hovered ? NavigatorCube::kHoverColorG : kOwzxFaceG * shade;
+    const float fb = hovered ? NavigatorCube::kHoverColorB : kOwzxFaceB * shade;
     const float fa = hovered ? NavigatorCube::kHoverColorA : kOwzxFaceA;
     const QPointF c00 = NavigatorCube::projectToRect(n * 0.5f - u * 0.5f - v * 0.5f, basis, rect);
     const QPointF c10 = NavigatorCube::projectToRect(n * 0.5f + u * 0.5f - v * 0.5f, basis, rect);
@@ -4103,7 +4110,7 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
     push(c11, fr, fg, fb, fa);
     push(c01, fr, fg, fb, fa);
     // Face outline (quad strip of ~1.5px thickness, drawn as triangles).
-    const float edge = 1.5f * rect.w / NavigatorCube::kRectSizePx;
+    const float edge = 2.0f * rect.w / NavigatorCube::kRectSizePx;
     const QPointF pts[4] = {c00, c10, c11, c01};
     for (int e = 0; e < 4; ++e) {
       const QPointF &a = pts[e];
