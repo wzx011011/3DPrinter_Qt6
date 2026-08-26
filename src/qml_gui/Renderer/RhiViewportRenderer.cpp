@@ -4021,9 +4021,14 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
   // feeds ImGuizmo positions through the same canvas the scene uses.
   const QMatrix4x4 full = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
   const QMatrix4x4 inv = full.inverted();
+  // NOTE: the clip Y here uses the D3D-style top-down convention (py=0 ->
+  // +1) WITHOUT a manual flip -- inv(full) already contains
+  // clipSpaceCorrMatrix, and the swapchain adds one more presentation flip
+  // that cancels it; flipping here as well mirrors the cube to the top edge
+  // (observed at runtime).
   const auto toWorld = [&inv, &px](const QPointF &p) {
     QVector4D clip(float(p.x()) / float(std::max(1, px.width())) * 2.0f - 1.0f,
-                   1.0f - float(p.y()) / float(std::max(1, px.height())) * 2.0f,
+                   float(p.y()) / float(std::max(1, px.height())) * 2.0f - 1.0f,
                    0.5f, 1.0f);
     const QVector4D w = inv * clip;
     return QVector3D(w.x() / w.w(), w.y() / w.w(), w.z() / w.w());
