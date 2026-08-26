@@ -194,7 +194,7 @@ class RhiViewport : public QQuickRhiItem
   // (GLCanvas3D.cpp:5721-5722) and instead reserves space for other toolbars
   // (:7849-7857); the Qt6 plate bar overlays the viewport bottom, so the cube
   // stacks above it with the same 128+5 reserve.
-  Q_PROPERTY(int navigatorBottomOffset READ navigatorBottomOffset WRITE setNavigatorBottomOffset)
+  Q_PROPERTY(int navigatorBottomOffset READ navigatorBottomOffset WRITE setNavigatorBottomOffset NOTIFY navigatorLabelsChanged)
   // v5.16 (NAVIGATOR): label overlay anchors for the navigator cube -- three
   // axis labels at 1.3x the axis directions plus the hovered-face label
   // (ImGuizmo.cpp:3037 / :2942). Entries carry kind ("axis"/"face"), text,
@@ -457,7 +457,15 @@ public:
   bool navigatorEnabled() const { return m_navigatorEnabled; }
   void setNavigatorEnabled(bool enabled);
   int navigatorBottomOffset() const { return m_navigatorBottomOffset; }
-  void setNavigatorBottomOffset(int offset) { m_navigatorBottomOffset = offset; update(); }
+  void setNavigatorBottomOffset(int offset)
+  {
+    if (m_navigatorBottomOffset == offset)
+      return;
+    m_navigatorBottomOffset = offset;
+    // Label anchors shift with the inset, so notify through the label signal.
+    emit navigatorLabelsChanged();
+    update();
+  }
   QVariantList navigatorLabels() const;
   // Phase 237 (VIEW-01): orthographic projection toggle (see the
   // orthographicCamera Q_PROPERTY above).

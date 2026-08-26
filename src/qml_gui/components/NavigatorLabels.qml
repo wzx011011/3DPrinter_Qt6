@@ -3,7 +3,7 @@ import ".."
 
 // v5.16 (NAVIGATOR): label overlay for the bottom-left 3D navigator cube.
 // Upstream ImGuizmo renders the axis labels ("x"/"y"/"z") at 1.3x the axis
-// direction plus a label on the hovered face (ImGuizmo.cpp:2942/3037,
+// direction plus a label on every visible face (ImGuizmo.cpp:2942/3037,
 // GLCanvas3D.cpp:5688-5691). The viewport owns the geometry (navigatorLabels
 // property, item-pixel anchors); this component only renders text.
 Item {
@@ -14,9 +14,24 @@ Item {
     anchors.fill: parent
 
     Repeater {
-        model: root.viewport ? root.viewport.navigatorLabels : []
+        id: labelRepeater
+        // Read the viewport size before the anchors so this binding also
+        // depends on the QQuickItem width/height notify. The item is bound
+        // before layout settles (height is still the pre-layout value), and
+        // the C++ geometryChange re-emit path proved unreliable on
+        // QQuickRhiItem; the size notify is the dependable refresh trigger.
+        model: {
+            if (!root.viewport)
+                return []
+            const w = root.viewport.width
+            const h = root.viewport.height
+            return root.viewport.navigatorLabels
+        }
 
         delegate: Text {
+            // Qt6: explicit required injection avoids the QVariantMap
+            // modelData scope ambiguity that silently yields NaN coordinates.
+            required property var modelData
             property string faceText: {
                 const map = {
                     front: qsTr("Front"),

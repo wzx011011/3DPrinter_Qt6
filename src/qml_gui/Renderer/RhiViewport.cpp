@@ -881,6 +881,13 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
 // corner clicks snap the view through a 40-frame interpolation, and cube
 // drags rotate the camera with a horizon clamp.
 
+// v5.16 (NAVIGATOR): label anchors are computed from navigatorRect(), which
+// depends on the laid-out item height. QML binds them before layout completes
+// (height is still the pre-layout value); the label model binding in
+// NavigatorLabels.qml reads the viewport size first, so the QQuickItem
+// width/height notify refreshes the anchors when layout settles. Camera
+// rotation and hover re-emit navigatorLabelsChanged() directly below.
+
 void RhiViewport::setNavigatorEnabled(bool enabled)
 {
   if (m_navigatorEnabled == enabled)
