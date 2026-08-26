@@ -54,6 +54,9 @@ RhiViewport::RhiViewport(QQuickItem *parent)
   m_roleVisibility.reserve(20);
   for (int i = 0; i < 20; ++i)
     m_roleVisibility.append(true);
+  // P14 (CAM-PARITY): seed the camera scene box from the member defaults so
+  // the zoom bounds and target validation hold before QML binds the bed.
+  updateSceneExtent();
 }
 
 QQuickRhiItemRenderer *RhiViewport::createRenderer()
@@ -153,6 +156,7 @@ void RhiViewport::setBedWidth(float value)
   m_bedWidth = value;
   ++m_sceneGeneration;
   update();
+  updateSceneExtent();
 }
 
 void RhiViewport::setBedDepth(float value)
@@ -162,6 +166,7 @@ void RhiViewport::setBedDepth(float value)
   m_bedDepth = value;
   ++m_sceneGeneration;
   update();
+  updateSceneExtent();
 }
 
 void RhiViewport::setBedOriginX(float value)
@@ -189,6 +194,7 @@ void RhiViewport::setBedShapeType(int value)
   m_bedShapeType = value;
   ++m_sceneGeneration;
   update();
+  updateSceneExtent();
 }
 
 void RhiViewport::setBedDiameter(float value)
@@ -198,6 +204,7 @@ void RhiViewport::setBedDiameter(float value)
   m_bedDiameter = value;
   ++m_sceneGeneration;
   update();
+  updateSceneExtent();
 }
 
 void RhiViewport::setBedTextureUrl(const QUrl &value)
@@ -247,6 +254,7 @@ void RhiViewport::setBedHeightToLid(float value)
     return;
   m_bedHeightToLid = value;
   update();
+  updateSceneExtent();
 }
 
 void RhiViewport::setBedHeightLimitActive(bool value)
@@ -1133,6 +1141,21 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   m_pressPosition = event->position();
   m_dragButton = event->button();
   m_pressPickedSourceObjectIndex = -1;
+  // Upstream GLCanvas3D.cpp:4310-4317: Ctrl+drag orbits around the canvas
+  // center unprojected onto the bed plane (m_rotation_center), cached once
+  // per press.
+  m_ctrlRotationCenterActive = false;
+  if (event->button() == Qt::LeftButton
+      && (event->modifiers() & Qt::ControlModifier)) {
+    QVector3D hit;
+    const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
+    if (CameraController::groundPointOnPlane(
+            cameraMvp(aspect), QSizeF(width(), height()),
+            QPointF(width() * 0.5, height() * 0.5), &hit)) {
+      m_ctrlRotationCenterActive = true;
+      m_ctrlRotationCenter = hit;
+    }
+  }
   if (m_gizmoDragging)
     emit gizmoDragEnd();
   resetGizmoDragState();
@@ -1412,36 +1435,100 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
       }
     }
     if (leftIsOrbit) {
-      if (m_pressPickedSourceObjectIndex < 0) {
-        m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
-        m_cameraDirty = true;
-        update();
-        emit navigatorLabelsChanged();
-      }
+      if (m_pressPickedSourceObjectIndex < 0)
+        applyCameraOrbit(float(delta.x()), -float(delta.y()));
     } else {
       // Touchpad: left drag = pan
-      m_camera.pan(float(delta.x()), float(delta.y()));
-      m_cameraDirty = true;
-      update();
+      applyCameraPan();
     }
   } else if (m_dragButton == Qt::MiddleButton) {
     if (touchpad) {
       // Touchpad: middle drag = orbit
-      m_camera.orbit(float(delta.x()) * 0.5f, -float(delta.y()) * 0.5f);
-      m_cameraDirty = true;
+      applyCameraOrbit(float(delta.x()), -float(delta.y()));
     } else {
-      m_camera.pan(float(delta.x()), float(delta.y()));
-      m_cameraDirty = true;
+      applyCameraPan();
     }
-    update();
-    emit navigatorLabelsChanged();
   }
   m_lastMousePosition = event->position();
   event->accept();
 }
 
+// P14 (CAM-PARITY): shared constrained/free orbit routing mirroring the
+// upstream left-drag block (GLCanvas3D.cpp:4275-4332).
+void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
+{
+  // Upstream sensitivity (GLCanvas3D.cpp:4276, TRACKBALLSIZE=0.8 at :80):
+  // both the constrained sphere orbit and the free trackball use 0.8
+  // degrees per pixel.
+  if (m_freeCamera) {
+    // Upstream GLCanvas3D.cpp:4288-4290: free camera = virtual trackball
+    // (rotate_local_around_target), no angle limits.
+    const float radiansPerPixel = float(M_PI) * 0.8f / 180.0f;
+    m_camera.rotateLocalAroundTarget(dyPx * radiansPerPixel,
+                                     dxPx * radiansPerPixel);
+  } else {
+    // Upstream GLCanvas3D.cpp:4308: recover_from_free_camera before every
+    // constrained rotation so the horizon stays level.
+    m_camera.recoverFromFreeCamera();
+    QVector3D pivot;
+    bool hasPivot = false;
+    if (m_ctrlRotationCenterActive) {
+      // Upstream GLCanvas3D.cpp:4310-4317: Ctrl pivots on the cached
+      // canvas-center ground pick.
+      pivot = m_ctrlRotationCenter;
+      hasPivot = true;
+    } else if (m_rotationCenterHint.canConvert<QVector3D>()) {
+      // Upstream GLCanvas3D.cpp:4318-4327: pivot on the selection / volumes
+      // bbox center when one exists.
+      pivot = m_rotationCenterHint.value<QVector3D>();
+      hasPivot = true;
+    }
+    if (hasPivot)
+      m_camera.orbitAround(dxPx * 0.8f, dyPx * 0.8f, pivot);
+    else
+      m_camera.orbit(dxPx * 0.8f, dyPx * 0.8f);
+  }
+  m_cameraDirty = true;
+  update();
+  emit navigatorLabelsChanged();
+}
+
+// P14 (CAM-PARITY): pick-based pan (upstream is_camera_pan block,
+// GLCanvas3D.cpp:4353-4359): unproject the press position and the cursor
+// onto the bed plane and translate the target by the world delta so the
+// picked ground point follows the cursor.
+void RhiViewport::applyCameraPan()
+{
+  const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
+  const QMatrix4x4 mvp = cameraMvp(aspect);
+  const QSizeF vp(width(), height());
+  QVector3D pressGround;
+  QVector3D currentGround;
+  if (CameraController::groundPointOnPlane(mvp, vp, m_pressPosition, &pressGround)
+      && CameraController::groundPointOnPlane(mvp, vp, m_lastMousePosition,
+                                              &currentGround)) {
+    m_camera.translateWorld(pressGround - currentGround);
+    m_cameraDirty = true;
+    update();
+  }
+}
+
+// P14 (CAM-PARITY): the camera scene box follows the live bed footprint and
+// height (upstream Camera::set_scene_box; drives the zoom bounds and the
+// target validation in CameraController).
+void RhiViewport::updateSceneExtent()
+{
+  const bool roundBed = m_bedShapeType == 1;
+  const float width = roundBed ? m_bedDiameter : m_bedWidth;
+  const float depth = roundBed ? m_bedDiameter : m_bedDepth;
+  const float height = m_bedHeightToLid > 0.0f ? m_bedHeightToLid : 100.0f;
+  m_camera.setSceneExtent(width, depth, height);
+  m_cameraDirty = true;
+}
+
 void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 {
+  m_ctrlRotationCenterActive = false;
   // v5.16 (NAVIGATOR): cube release either starts the snap interpolation
   // (click) or ends the drag; the scene handlers never see it.
   if (event->button() == Qt::LeftButton && m_navigatorPressActive) {
@@ -1549,11 +1636,44 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 
 void RhiViewport::wheelEvent(QWheelEvent *event)
 {
-  // v5.12 gap-closure: reverseZoom inverts the wheel direction.
-  float delta = float(event->angleDelta().y());
+  // v5.12 gap-closure: reverseZoom inverts the wheel direction (upstream
+  // reverse_mouse_wheel_zoom, GLCanvas3D.cpp:3765). One notch = +-1 like the
+  // upstream GetWheelRotation/GetWheelDelta ratio.
+  float delta = float(event->angleDelta().y()) / 120.0f;
   if (m_reverseZoom)
     delta = -delta;
-  m_camera.zoom(delta);
+  if (!m_zoomToMouse) {
+    // Upstream GLCanvas3D.cpp:3768: plain center zoom.
+    m_camera.zoom(delta);
+  } else {
+    // Upstream zoom_to_mouse (GLCanvas3D.cpp:3770-3783): translate by the
+    // cursor-vs-canvas-center ground displacement, zoom, then translate back
+    // scaled by the zoom ratio so the ground point under the cursor stays.
+    const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
+    const QMatrix4x4 mvp = cameraMvp(aspect);
+    const QSizeF vp(width(), height());
+    QVector3D centerGround;
+    QVector3D mouseGround;
+    if (CameraController::groundPointOnPlane(
+            mvp, vp, QPointF(width() * 0.5, height() * 0.5), &centerGround)
+        && CameraController::groundPointOnPlane(mvp, vp, event->position(),
+                                                &mouseGround)) {
+      const QVector3D displacement = mouseGround - centerGround;
+      m_camera.translateWorld(displacement);
+      const float distanceBefore = m_camera.distance();
+      m_camera.zoom(delta);
+      const float distanceAfter = m_camera.distance();
+      if (distanceAfter > 1e-5f) {
+        // Upstream: translate(-displacement / (new_zoom / origin_zoom));
+        // zoom ~ 1/distance puts distanceAfter/distanceBefore in the
+        // denominator position.
+        m_camera.translateWorld(-displacement
+                                * (distanceAfter / distanceBefore));
+      }
+    } else {
+      m_camera.zoom(delta);
+    }
+  }
   m_cameraDirty = true;
   event->accept();
   update();

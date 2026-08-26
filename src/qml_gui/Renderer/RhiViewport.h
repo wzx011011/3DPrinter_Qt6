@@ -185,6 +185,11 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse)
   Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera)
   Q_PROPERTY(int cameraNavStyle READ cameraNavStyle WRITE setCameraNavStyle)
+  // P14 (CAM-PARITY): orbit pivot hint from EditorViewModel.rotationCenter
+  // (selection bbox center -> model bbox center, GL world coords; null when
+  // no objects). Upstream pivots the constrained rotation on the selection /
+  // volumes bbox center (GLCanvas3D.cpp:4309-4327).
+  Q_PROPERTY(QVariant rotationCenterHint READ rotationCenterHint WRITE setRotationCenterHint)
   // v5.16 (NAVIGATOR): upstream show_3d_navigator (app_config, default true,
   // AppConfig.cpp:200). Enables the bottom-left 3D navigator cube
   // (GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate).
@@ -453,6 +458,13 @@ public:
   void setFreeCamera(bool f) { m_freeCamera = f; m_camera.setFreeCamera(f); update(); }
   int cameraNavStyle() const { return m_cameraNavStyle; }
   void setCameraNavStyle(int s) { m_cameraNavStyle = s; update(); }
+  // P14 (CAM-PARITY): orbit pivot hint (selection/model bbox center).
+  QVariant rotationCenterHint() const { return m_rotationCenterHint; }
+  void setRotationCenterHint(const QVariant &hint)
+  {
+    m_rotationCenterHint = hint;
+    update();
+  }
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube state.
   bool navigatorEnabled() const { return m_navigatorEnabled; }
   void setNavigatorEnabled(bool enabled);
@@ -821,6 +833,20 @@ private:
   bool m_zoomToMouse = true;
   bool m_freeCamera = false;
   int m_cameraNavStyle = 0;  // 0=Default, 1=Touchpad
+  // P14 (CAM-PARITY): constrained-orbit pivot (GLCanvas3D.cpp:4309-4327).
+  QVariant m_rotationCenterHint;
+  // Ctrl+drag rotation center: viewport center unprojected onto the bed
+  // plane, cached at press (upstream m_rotation_center,
+  // GLCanvas3D.cpp:4310-4317).
+  bool m_ctrlRotationCenterActive = false;
+  QVector3D m_ctrlRotationCenter;
+  // Camera-routing helpers shared by the left/middle drag branches.
+  void applyCameraOrbit(float dxPx, float dyPx);
+  void applyCameraPan();
+  // P14 (CAM-PARITY): refresh the camera scene box from the live bed
+  // properties (upstream Camera::set_scene_box; drives the zoom bounds and
+  // the target validation).
+  void updateSceneExtent();
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors (hex strings).
   QVariantList m_extrudersColors;
   int m_fitRequestCount = 0;

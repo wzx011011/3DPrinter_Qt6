@@ -103,6 +103,12 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY stateChanged)
+  // Upstream GLCanvas3D.cpp:4309-4327: the constrained camera orbit pivots
+  // on the selection bbox center, else the whole-model bbox center (GL world
+  // coords, via ProjectServiceMock::selectionWorldBoundingBox). Null when no
+  // objects exist -- the orbit then pivots on the camera target like the
+  // upstream rotate_on_sphere fallback.
+  Q_PROPERTY(QVariant rotationCenter READ rotationCenter NOTIFY stateChanged)
   /// Phase 198 (PHASE198): currently selected single volume index for the
   /// per-object settings / layer-range dialogs. Exposed so QML dialogs bound
   /// to `editorVm.selectedVolumeIndex` resolve (previously undefined).
@@ -626,6 +632,7 @@ public:
   int selectedObjectIndex() const;
   int selectedSourceObjectIndex() const;
   int selectedObjectCount() const;
+  QVariant rotationCenter() const;
   /// Phase 198 (PHASE198): getter backing the selectedVolumeIndex Q_PROPERTY.
   int selectedVolumeIndex() const;
   int contextMenuFamily() const;

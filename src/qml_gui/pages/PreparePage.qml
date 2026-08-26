@@ -1465,6 +1465,10 @@ Item {
                     reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
                     zoomToMouse: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.zoomToMouse : true
                     freeCamera: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.freeCamera : false
+                    // P14 (CAM-PARITY): constrained orbit pivots on the
+                    // selection / model bbox center (upstream
+                    // GLCanvas3D.cpp:4309-4327 rotate_target).
+                    rotationCenterHint: root.editorVm ? root.editorVm.rotationCenter : null
                     // v5.16 (NAVIGATOR): show_3d_navigator (default on).
                     navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
                     navigatorBottomOffset: root.prepareViewportOverlayStack

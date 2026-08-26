@@ -170,13 +170,14 @@ void NavigatorCubeTests::orientationForDirectionMatchesCameraControllerConventio
   QCOMPARE(az, 90.0f);
   QCOMPARE(el, 0.0f);
 
-  // Up -> elevation clamps to +89 (lookAt world-up degeneracy guard).
+  // Up -> exact +90: the quaternion camera has no pole degeneracy, so the
+  // snap reaches the exact top view (P14 CAM-PARITY, upstream select_view).
   NavigatorCube::orientationForDirection(QVector3D(0, 1, 0), az, el);
   QVERIFY(std::isnan(az)); // azimuth undefined; caller preserves it
-  QCOMPARE(el, 89.0f);
+  QCOMPARE(el, 90.0f);
 
   NavigatorCube::orientationForDirection(QVector3D(0, -1, 0), az, el);
-  QCOMPARE(el, -89.0f);
+  QCOMPARE(el, -90.0f);
 
   // Isometric direction ~ az 45 / el 35.
   NavigatorCube::orientationForDirection(

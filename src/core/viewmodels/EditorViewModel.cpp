@@ -5290,6 +5290,43 @@ int EditorViewModel::selectedSourceObjectIndex() const
 
 int EditorViewModel::selectedObjectCount() const { return m_selectedSourceIndices.size(); }
 
+QVariant EditorViewModel::rotationCenter() const
+{
+  // Upstream GLCanvas3D.cpp:4309-4327: the constrained camera orbit pivots
+  // on the selection bbox center, else the whole-model bbox center. The
+  // preview canvas pivots on the plate center, which equals the orbit
+  // target, so it needs no hint (upstream uses the plate bbox center only
+  // because its target may differ).
+  if (!projectService_)
+    return {};
+  QList<int> sources = m_selectedSourceIndices.values();
+  if (sources.isEmpty()) {
+    const int count = objectCount();
+    sources.reserve(count);
+    for (int i = 0; i < count; ++i) {
+      const int sourceIndex = mapFilteredToSourceIndex(i);
+      if (sourceIndex >= 0)
+        sources.append(sourceIndex);
+    }
+  }
+  if (sources.isEmpty())
+    return {};
+  const QVariantMap box = projectService_->selectionWorldBoundingBox(sources);
+  if (box.isEmpty() || !box.contains(QStringLiteral("minX")))
+    return {};
+  // selectionWorldBoundingBox already maps libslic3r Z-up into GL Y-up.
+  return QVariant::fromValue(QVector3D(
+      float((box.value(QStringLiteral("minX")).toDouble()
+             + box.value(QStringLiteral("maxX")).toDouble())
+            * 0.5),
+      float((box.value(QStringLiteral("minY")).toDouble()
+             + box.value(QStringLiteral("maxY")).toDouble())
+            * 0.5),
+      float((box.value(QStringLiteral("minZ")).toDouble()
+             + box.value(QStringLiteral("maxZ")).toDouble())
+            * 0.5)));
+}
+
 int EditorViewModel::contextMenuFamily() const
 {
   return int(m_contextMenuFamily);

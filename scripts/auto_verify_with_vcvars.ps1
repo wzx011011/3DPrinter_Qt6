@@ -324,6 +324,7 @@ Invoke-NinjaTarget 'ViewModelSmokeTests'
 Invoke-NinjaTarget 'PrepareSceneDataTests'
 Invoke-NinjaTarget 'ObjectPickingTests'
 Invoke-NinjaTarget 'NavigatorCubeTests'
+Invoke-NinjaTarget 'CameraParityTests'
 Invoke-NinjaTarget 'ViewportContextMenuTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
 Invoke-NinjaTarget 'PartPlateTests'
@@ -518,6 +519,20 @@ if (Test-Path $navigatorCubeExe) {
   Write-Host "[NavigatorCube] Navigator cube tests passed" -ForegroundColor Green
 } else {
   Write-Host "[NavigatorCube] NavigatorCubeTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "`n[CameraParity] Running upstream camera parity tests..." -ForegroundColor Cyan
+$cameraParityExe = './CameraParityTests.exe'
+if (Test-Path $cameraParityExe) {
+  $cameraParityExitCode = Invoke-QtTestReport $cameraParityExe 'CameraParityTests.verify.txt'
+  if ($cameraParityExitCode -ne 0) {
+    Write-Host "[CameraParity] Camera parity tests failed" -ForegroundColor Red
+    exit $cameraParityExitCode
+  }
+  Write-Host "[CameraParity] Camera parity tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[CameraParity] CameraParityTests.exe not found" -ForegroundColor Red
   exit 1
 }
 

@@ -169,13 +169,16 @@ void orientationForDirection(const QVector3D &dir, float &azimuthDeg,
     // Pure vertical: azimuth is undefined; keep the current value by
     // signaling with NaN and letting the caller preserve it.
     azimuthDeg = std::numeric_limits<float>::quiet_NaN();
-    elevationDeg = d.y() > 0.0f ? 89.0f : -89.0f;
+    elevationDeg = d.y() > 0.0f ? 90.0f : -90.0f;
     return;
   }
   azimuthDeg = qRadiansToDegrees(float(qAtan2(double(d.x()), double(d.z()))));
   elevationDeg = qRadiansToDegrees(
       float(qAsin(double(std::clamp(d.y(), -1.0f, 1.0f)))));
-  elevationDeg = std::clamp(elevationDeg, -89.0f, 89.0f);
+  // P14 (CAM-PARITY): the quaternion camera has no pole singularity, so the
+  // snap reaches the exact +-90 top/bottom views (upstream select_view,
+  // Camera.cpp:94-97).
+  elevationDeg = std::clamp(elevationDeg, -90.0f, 90.0f);
 }
 
 } // namespace NavigatorCube

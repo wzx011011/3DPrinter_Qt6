@@ -585,6 +585,21 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # P14 (CAM-PARITY): upstream camera behavior lock (quaternion
+    # orientation, +-90 zenit clamp, free trackball, orbit pivot, pick pan,
+    # zoom bounds, target validation). Standalone, no live renderer.
+    qt_add_executable(CameraParityTests
+        tests/CameraParityTests.cpp
+        src/qml_gui/Renderer/CameraController.cpp
+        src/qml_gui/Renderer/CameraController.h
+    )
+    target_include_directories(CameraParityTests PRIVATE src)
+    target_link_libraries(CameraParityTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
+    add_test(NAME CameraParityTests COMMAND CameraParityTests)
+    set_tests_properties(CameraParityTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
     # Phase 72: precise object picking tests. Standalone target that exercises
     # the source-truth screen ray -> ray-AABB -> Moller triangle path without a
     # live QRhi/OpenGL renderer.
