@@ -354,6 +354,10 @@ void AppToolTests::transformDuplicateDeleteRoundTrip() {
   QCOMPARE(project_->modelCount(), countBefore + 1);
   registry_->execute(QStringLiteral("redo"), {});  // restore cleaned state
 
+  const OWzx::AppToolResult arranged = registry_->execute(
+      QStringLiteral("arrange_objects"),
+      QJsonObject{{QStringLiteral("spacingMm"), 10.0}});
+  QVERIFY2(arranged.ok, "arrange_objects must succeed through the bed-shape path");
 }
 
 void AppToolTests::sliceGatesRejectInvalidRequests() {

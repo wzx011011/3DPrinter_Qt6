@@ -203,6 +203,18 @@ class Harness:
             }
         }
         return ClaudeAgentOptions(
+            # This is an in-app controller, not a general coding agent. Keep
+            # Claude's filesystem/shell/browser tool surface out of the model
+            # context; all application actions must use OWzx MCP tools.
+            tools=[],
+            allowed_tools=["mcp__owzx__*"],
+            system_prompt=(
+                "You are the OWzx Slicer in-app assistant. For every request "
+                "about the slicer, project, models, plates, settings, UI, "
+                "slicing, or export, use only the available mcp__owzx__ tools. "
+                "Never use filesystem, shell, browser, or other Claude tools. "
+                "Inspect state before mutating it and report the tool result."
+            ),
             mcp_servers=mcp,
             strict_mcp_config=True,
             setting_sources=[],  # do not read user/project Claude settings
