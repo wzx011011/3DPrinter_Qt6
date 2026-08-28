@@ -159,10 +159,21 @@ void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectSer
 
 bool E2EWorkflowTests::ensureModelOnBed(ProjectServiceMock &project) const
 {
-  // Explicitly arrange onto a 220x220 bed. arrangeObjects accepts a flat
-  // "x1,y1,x2,y2,..." polygon coordinate string.
-  const QString printableArea = QStringLiteral("0,0,220,0,220,220,0,220");
-  return project.arrangeObjects(5.0f, false, false, printableArea);
+  // Position every object's instance directly inside the 220x220 test bed
+  // (Qt x/y/z maps to the slic3r instance offset (x, z, y), so (110, 0, 110)
+  // writes slic3r offset (110, 110, 0) — the import position, bed-centered).
+  // The previous implementation ran a whole-model arrangeObjects() here, but
+  // arrange now re-nests every instance onto bed 0 and recycles the emptied
+  // trailing plates (rebuildPlatesAfterArrangement), which destroyed the
+  // multi-plate fixtures these tests build via clonePlate(). Direct
+  // positioning leaves plate membership untouched while keeping the objects
+  // inside the printable area for the slice gate.
+  for (int i = 0; i < project.modelCount(); ++i)
+  {
+    if (!project.setObjectPosition(i, 110.0f, 0.0f, 110.0f))
+      return false;
+  }
+  return true;
 }
 
 void E2EWorkflowTests::initTestCase()
