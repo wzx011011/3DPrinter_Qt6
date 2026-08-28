@@ -101,6 +101,12 @@ QJsonArray AppToolRegistry::toolDefinitions() const {
     d.insert(QStringLiteral("name"), tool.name);
     d.insert(QStringLiteral("description"), tool.description);
     d.insert(QStringLiteral("inputSchema"), tool.inputSchema);
+    // MCP-standard annotations: the sidecar auto-allows read-only tools and
+    // only routes destructive ones to the user confirmation card.
+    QJsonObject annotations;
+    annotations.insert(QStringLiteral("readOnlyHint"), !tool.destructive);
+    annotations.insert(QStringLiteral("destructiveHint"), tool.destructive);
+    d.insert(QStringLiteral("annotations"), annotations);
     defs.append(d);
   }
   return defs;
@@ -542,8 +548,8 @@ void AppToolRegistry::buildTools() {
                      "applied value."),
       objSchema(
           {{QStringLiteral("key"), stringProp(QStringLiteral("Config key, e.g. wall_loops / sparse_infill_density / nozzle_temp"))},
-           {QStringLiteral("value"), prop(QStringLiteral("string|number|boolean"),
-                                          QStringLiteral("New value; format must match list_config_keys currentValue"))}},
+           {QStringLiteral("value"), prop(QStringLiteral("string"),
+                                          QStringLiteral("New value as a string (\"4\", \"true\", \"15%\", \"0.2mm\"); format must match list_config_keys currentValue"))}},
           {QStringLiteral("key"), QStringLiteral("value")}),
       false,
       [this](const QJsonObject &args) -> AppToolResult {
@@ -698,8 +704,8 @@ void AppToolRegistry::buildTools() {
       QStringLiteral("Switch the visible UI page. Pages: 0 home, 1 prepare, "
                      "3 monitor, 8 preferences (name or index accepted)."),
       objSchema(
-          {{QStringLiteral("page"), prop(QStringLiteral("string|integer"),
-                                        QStringLiteral("Page name (home|prepare|monitor|preferences) or index 0-8"))}},
+          {{QStringLiteral("page"), prop(QStringLiteral("string"),
+                                        QStringLiteral("Page name (home|prepare|monitor|preferences) or numeric index \"0\"-\"8\" as string"))}},
           {QStringLiteral("page")}),
       false,
       [this](const QJsonObject &args) -> AppToolResult {
@@ -714,8 +720,15 @@ void AppToolRegistry::buildTools() {
           else if (name == QLatin1String("preview")) page = 1;
           else if (name == QLatin1String("monitor")) page = 3;
           else if (name == QLatin1String("preferences")) page = 8;
-          else return AppToolResult::failure(
-              QStringLiteral("Unknown page name '%1'").arg(name));
+          else {
+            bool numOk = false;
+            const int asIndex = name.toInt(&numOk);
+            if (numOk)
+              page = asIndex;
+            else
+              return AppToolResult::failure(
+                  QStringLiteral("Unknown page name '%1'").arg(name));
+          }
         } else {
           page = v.toInt(-1);
         }

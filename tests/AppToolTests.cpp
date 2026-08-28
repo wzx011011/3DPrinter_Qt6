@@ -12,9 +12,11 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
+#include <QSet>
 #include <QSignalSpy>
 #include <QTcpSocket>
 #include <QTimer>
+#include <functional>
 
 #include "core/ai/AppToolRegistry.h"
 #include "core/ai/McpHttpServer.h"
@@ -171,6 +173,28 @@ void AppToolTests::toolDefinitionsExposeSchemaForEveryTool() {
     QCOMPARE(schema.value(QStringLiteral("type")).toString(), QStringLiteral("object"));
     QVERIFY2(schema.contains(QStringLiteral("properties")),
              "inputSchema must declare properties");
+
+    // GLM's Anthropic-compatible endpoint rejects union type strings such as
+    // "string|number" with API error 1210 (claude.exe forwards our schemas
+    // verbatim). Every declared property type must be a concrete JSON-Schema
+    // simple type, recursively into nested objects.
+    static const QSet<QString> kValidTypes = {
+        QStringLiteral("object"), QStringLiteral("string"),
+        QStringLiteral("number"), QStringLiteral("integer"),
+        QStringLiteral("boolean"), QStringLiteral("array")};
+    std::function<void(const QJsonObject &)> checkProps = [&](const QJsonObject &props) {
+      for (auto it = props.begin(); it != props.end(); ++it) {
+        const QJsonObject p = it.value().toObject();
+        const QString t = p.value(QStringLiteral("type")).toString();
+        QVERIFY2(!t.contains(QLatin1Char('|')),
+                 qPrintable(QStringLiteral("union type in %1.%2: %3").arg(name, it.key(), t)));
+        QVERIFY2(kValidTypes.contains(t),
+                 qPrintable(QStringLiteral("invalid type in %1.%2: %3").arg(name, it.key(), t)));
+        if (t == QLatin1String("object"))
+          checkProps(p.value(QStringLiteral("properties")).toObject());
+      }
+    };
+    checkProps(schema.value(QStringLiteral("properties")).toObject());
   }
   // Core coverage: visible + invisible control both present.
   for (const char *expected :

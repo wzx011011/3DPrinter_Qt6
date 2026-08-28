@@ -83,6 +83,31 @@ agent.py。首次运行需网络（python.org + PyPI），之后离线缓存。
      `set_config_value` 新旧值，侧栏设置面板同步变化；
    - 破坏性确认："清空工作区" → 确认卡出现，拒绝后 AI 停止。
 
+## 真机验收记录（2026-08-28，GLM Coding Plan key，glm-5.3-flash）
+
+三场景全部通过（应用内嵌 sidecar + 桌面 UI 实测）：
+
+1. 读状态：侧栏输入"当前应用在哪个页面？有几个模型？" →
+   `get_app_state`/`get_scene` 工具卡（绿勾）→ 回复"首页，0 个模型"；
+2. 自然语言调参："把壁厚循环数(wall_loops)设置为4" →
+   `list_config_keys`(filter) → `set_config_value`（旧值 2 → 新值 4）→
+   再读确认，回复带新旧值对照表；
+3. 破坏性确认：`clear_project` → 确认卡（允许/拒绝）→ 允许后执行。
+
+期间发现并修复的三个问题（均已加回归锁定）：
+
+- **SDK 消息解析**：claude-agent-sdk 0.2.147 的消息是 dataclass 实例而非
+  dict，`run_turn` 按 dict 取值在首个真实回合崩溃；解析提取为
+  `_emit_message_events` 并入 `--selftest`。
+- **智谱端点 schema 严格性**：`tools` 中出现联合类型
+  `"type": "string|number|boolean"` 会被端点以错误码 1210 拒绝
+  （Anthropic 原生端点则容忍）。全部工具 schema 收敛为单一具体类型，
+  `AppToolTests` 递归校验属性类型合法性。
+- **确认卡粒度**：最初所有工具调用都弹确认卡；按既定决策改为
+  MCP annotations（`readOnlyHint`/`destructiveHint`）标注，
+  sidecar 启动时拉取 tools/list，只读工具自动放行，
+  仅 destructive 工具（delete_object/clear_project）走确认卡。
+
 ## 相关文件
 
 | 层 | 文件 |

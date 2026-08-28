@@ -66,6 +66,58 @@ def _tool_summary(content) -> str:
 # ── harness ──────────────────────────────────────────────────────────────────
 
 
+def _emit_message_events(msg, emit_fn) -> None:
+    """Translate one SDK receive_response() message into host NDJSON events.
+
+    claude-agent-sdk 0.2.147 yields dataclass instances (AssistantMessage with
+    .content blocks being TextBlock/ToolUseBlock objects, UserMessage carrying
+    ToolResultBlock objects, ResultMessage with cost/usage fields) -- NOT dicts.
+    Parsing lives at module level so the offline selftest can exercise it with
+    constructed instances (a dict-style .get() crash here once escaped the
+    selftest because no live turn had ever run).
+    """
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ResultMessage,
+        TextBlock,
+        ToolResultBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
+
+    if isinstance(msg, AssistantMessage):
+        for block in (msg.content or []):
+            if isinstance(block, TextBlock):
+                if block.text:
+                    emit_fn({"type": "assistant_text", "text": block.text})
+            elif isinstance(block, ToolUseBlock):
+                emit_fn({
+                    "type": "tool_use",
+                    "id": block.id or "",
+                    "name": block.name or "",
+                    "input": block.input or {},
+                })
+    elif isinstance(msg, UserMessage):
+        content = msg.content
+        blocks = content if isinstance(content, list) else []
+        for block in blocks:
+            if isinstance(block, ToolResultBlock):
+                emit_fn({
+                    "type": "tool_result",
+                    "id": block.tool_use_id or "",
+                    "ok": not block.is_error,
+                    "summary": _tool_summary(block.content),
+                })
+    elif isinstance(msg, ResultMessage):
+        emit_fn({
+            "type": "turn_done",
+            "isError": bool(msg.is_error),
+            "durationMs": int(msg.duration_ms or 0),
+            "sessionId": msg.session_id or "",
+            "result": msg.result or "",
+        })
+
+
 class Harness:
     def __init__(self) -> None:
         self.mcp_url = os.environ.get("OWZX_MCP_URL", "")
@@ -77,10 +129,44 @@ class Harness:
         self._perm_futures: dict[int, asyncio.Future] = {}
         self._perm_counter = 0
         self._loop: asyncio.AbstractEventLoop | None = None
+        # tool name -> readOnlyHint from the app's MCP tools/list annotations.
+        # Read-only tools are auto-allowed; only destructive tools (per the
+        # approved plan) interrupt the user with a confirmation card.
+        self._readonly_tools: set[str] = set()
+
+    def _refresh_readonly_tools(self) -> None:
+        """Fetch MCP annotations so can_use_tool can auto-allow read-only tools."""
+        import urllib.request
+
+        try:
+            req = urllib.request.Request(
+                self.mcp_url,
+                data=json.dumps({"jsonrpc": "2.0", "id": 900, "method": "tools/list"}).encode(),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.mcp_token}",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+            for tool in payload.get("result", {}).get("tools", []):
+                ann = tool.get("annotations") or {}
+                if ann.get("readOnlyHint"):
+                    self._readonly_tools.add(tool.get("name", ""))
+        except Exception as exc:  # noqa: BLE001 -- safe fallback: ask for everything
+            emit({"type": "error", "message": f"tools/list annotations unavailable: {exc}"})
 
     # -- permission bridge: SDK callback -> host card -> stdin answer --------
     async def can_use_tool(self, tool_name, tool_input, context):  # noqa: ANN001
         from claude_agent_sdk import PermissionResultAllow, PermissionResultDeny
+
+        if tool_name in self._readonly_tools:
+            return PermissionResultAllow(behavior="allow")
+        # The SDK presents MCP tools as mcp__<server>__<name> while the
+        # server's tools/list returns bare names -- match both forms.
+        if tool_name.startswith("mcp__") and tool_name.split("__", 2)[-1] in self._readonly_tools:
+            return PermissionResultAllow(behavior="allow")
 
         self._perm_counter += 1
         call_id = self._perm_counter
@@ -128,6 +214,7 @@ class Harness:
     async def connect(self) -> None:
         from claude_agent_sdk import ClaudeSDKClient
 
+        self._refresh_readonly_tools()
         self.client = ClaudeSDKClient(self._build_options())
         await self.client.connect()
 
@@ -145,49 +232,10 @@ class Harness:
 
     # -- one user turn --------------------------------------------------------
     async def run_turn(self, text: str) -> None:
-        from claude_agent_sdk import (
-            AssistantMessage,
-            ResultMessage,
-            ToolResultBlock,
-            ToolUseBlock,
-            UserMessage,
-        )
-
         try:
             await self.client.query(text)
             async for msg in self.client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.get("content", []):
-                        if not isinstance(block, dict):
-                            continue
-                        if block.get("type") == "text" and block.get("text"):
-                            emit({"type": "assistant_text", "text": block["text"]})
-                        elif block.get("type") == "tool_use":
-                            emit({
-                                "type": "tool_use",
-                                "id": block.get("id", ""),
-                                "name": block.get("name", ""),
-                                "input": block.get("input", {}),
-                            })
-                elif isinstance(msg, UserMessage):
-                    content = msg.get("content")
-                    blocks = content if isinstance(content, list) else []
-                    for block in blocks:
-                        if isinstance(block, dict) and block.get("type") == "tool_result":
-                            emit({
-                                "type": "tool_result",
-                                "id": block.get("tool_use_id", ""),
-                                "ok": not block.get("is_error", False),
-                                "summary": _tool_summary(block.get("content")),
-                            })
-                elif isinstance(msg, ResultMessage):
-                    emit({
-                        "type": "turn_done",
-                        "isError": bool(msg.get("is_error")),
-                        "durationMs": int(msg.get("duration_ms", 0)),
-                        "sessionId": msg.get("session_id", ""),
-                        "result": msg.get("result") or "",
-                    })
+                _emit_message_events(msg, emit)
         except asyncio.CancelledError:
             emit({"type": "turn_done", "isError": False, "cancelled": True})
         except Exception as exc:  # turn-level failure is recoverable
@@ -285,9 +333,68 @@ def selftest() -> int:
     harness.answer_permission(7, True)
     assert loop.run_until_complete(fut) is True
 
+    # Permission gating: read-only tools auto-allow without a card; only
+    # destructive tools wait for the host's answer_permission. The SDK
+    # presents MCP tools with an mcp__<server>__ prefix -- both forms must
+    # auto-allow.
+    harness._readonly_tools = {"get_app_state"}
+    harness._perm_counter = 0
+    allow = loop.run_until_complete(
+        harness.can_use_tool("mcp__owzx__get_app_state", {}, None))
+    assert type(allow).__name__ == "PermissionResultAllow", allow
+    allow = loop.run_until_complete(
+        harness.can_use_tool("get_app_state", {}, None))
+    assert type(allow).__name__ == "PermissionResultAllow", allow
+    assert harness._perm_counter == 0, "read-only tool must not request a card"
+    pending = loop.create_task(
+        harness.can_use_tool("mcp__owzx__clear_project", {}, None))
+    loop.run_until_complete(asyncio.sleep(0))
+    assert harness._perm_counter == 1, "destructive tool must request a card"
+    harness.answer_permission(1, False)
+    deny = loop.run_until_complete(pending)
+    assert type(deny).__name__ == "PermissionResultDeny", deny
+
     # NDJSON emit smoke (captured via replace_stdout is overkill; just format)
     line = json.dumps({"type": "ready", "sdk": _sdk_version()}, ensure_ascii=False)
     assert json.loads(line)["type"] == "ready"
+
+    # Message parsing: 0.2.147 yields dataclass instances, not dicts. This is
+    # the regression lock for the 'AssistantMessage' object has no attribute
+    # 'get' crash that only surfaced on the first live GLM turn.
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ResultMessage,
+        TextBlock,
+        ToolResultBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
+
+    events: list[dict] = []
+    _emit_message_events(
+        AssistantMessage(
+            model="glm-5.3-flash",
+            content=[TextBlock(text="hello"), ToolUseBlock(id="t1", name="get_app_state", input={})],
+        ),
+        events.append,
+    )
+    _emit_message_events(
+        UserMessage(content=[ToolResultBlock(tool_use_id="t1", content="ok", is_error=False)]),
+        events.append,
+    )
+    _emit_message_events(
+        ResultMessage(
+            subtype="success", duration_ms=5, duration_api_ms=4,
+            is_error=False, num_turns=1, session_id="s1", result="done",
+        ),
+        events.append,
+    )
+    assert events == [
+        {"type": "assistant_text", "text": "hello"},
+        {"type": "tool_use", "id": "t1", "name": "get_app_state", "input": {}},
+        {"type": "tool_result", "id": "t1", "ok": True, "summary": "ok"},
+        {"type": "turn_done", "isError": False, "durationMs": 5, "sessionId": "s1", "result": "done"},
+    ], events
 
     print(f"selftest ok: sdk={_sdk_version()} python={sys.version.split()[0]}")
     return 0
