@@ -328,6 +328,7 @@ Invoke-NinjaTarget 'CameraParityTests'
 Invoke-NinjaTarget 'ViewportContextMenuTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
 Invoke-NinjaTarget 'PartPlateTests'
+Invoke-NinjaTarget 'AppToolTests'
 # Phase 55-01: PreviewParserTests target (parser/role/mode coverage scaffold).
 Invoke-NinjaTarget 'PreviewParserTests'
 Invoke-NinjaTarget 'owzx-cli'
@@ -463,6 +464,20 @@ if (Test-Path $partPlateExe) {
   Write-Host "[PartPlate] PartPlate tests passed" -ForegroundColor Green
 } else {
   Write-Host "[PartPlate] PartPlateTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+Write-Host "`n[AppTool] Running AI control surface tests (OWzx-only, docs/ai-control.md)..." -ForegroundColor Cyan
+$appToolExe = './AppToolTests.exe'
+if (Test-Path $appToolExe) {
+  $appToolExitCode = Invoke-QtTestReport $appToolExe 'AppToolTests.verify.txt'
+  if ($appToolExitCode -ne 0) {
+    Write-Host "[AppTool] AI control surface tests failed" -ForegroundColor Red
+    exit $appToolExitCode
+  }
+  Write-Host "[AppTool] AI control surface tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[AppTool] AppToolTests.exe not found" -ForegroundColor Red
   exit 1
 }
 

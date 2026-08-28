@@ -1,0 +1,4 @@
+# OWzx AI sidecar pinned dependencies (OWzx-only feature, docs/ai-control.md).
+# claude-agent-sdk bundles its claude.exe CLI (~230 MB) — the sidecar ships as
+# an OPTIONAL component, never in the base installer.
+claude-agent-sdk==0.2.147

@@ -24,6 +24,10 @@
 #include "core/viewmodels/ModelMallViewModel.h"
 #include "core/viewmodels/MultiMachineViewModel.h"
 #include "core/viewmodels/AmsMaterialsViewModel.h"
+#include "core/viewmodels/AiViewModel.h"
+#include "core/ai/AiAgentService.h"
+#include "core/ai/AppToolRegistry.h"
+#include "core/ai/McpHttpServer.h"
 
 #include <QByteArray>
 #include <QGuiApplication>
@@ -153,6 +157,22 @@ BackendContext::BackendContext(QObject *parent)
   // Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry + mock
   // install/enable state with QSettings persistence under plugins/*.
   pluginService_ = new PluginService(this);
+
+  // AI 助手（OWzx-only，docs/ai-control.md）：工具注册表把整个应用暴露为
+  // JSON-Schema 工具；MCP 服务器在 127.0.0.1 上提供 tools/list + tools/call；
+  // sidecar harness（Claude Agent SDK → GLM 智谱兼容端点）经 QProcess 接入。
+  // BackendContext 本体实现 AppToolUiProvider 的三个 UI 动作。
+  aiRegistry_ = new OWzx::AppToolRegistry(projectService_, sliceService_,
+                                          configViewModel_, editorViewModel_,
+                                          this);
+  aiMcp_ = new OWzx::McpHttpServer(aiRegistry_, this);
+  aiAgentService_ = new AiAgentService(this);
+  aiViewModel_ = new AiViewModel(aiAgentService_, this);
+  // Preferences drive start/stop; re-apply on every settings change so the
+  // sidebar reacts immediately to enable/key/model/port edits.
+  connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
+          &BackendContext::applyAiSettings);
+  applyAiSettings();
 
   // 初始化提示数据库（对齐上游 HintDatabase::init）
   initHintDatabase();
@@ -354,6 +374,76 @@ BackendContext::BackendContext(QObject *parent)
 
 QObject *BackendContext::editorViewModel() const { return editorViewModel_; }
 QObject *BackendContext::sliceService() const { return sliceService_; }
+
+QObject *BackendContext::aiViewModel() const { return aiViewModel_; }
+
+void BackendContext::applyAiSettings()
+{
+  const bool enabled = settingsViewModel_->aiEnabled()
+      && !settingsViewModel_->aiApiKey().isEmpty();
+
+  if (!enabled) {
+    aiAgentService_->stop();
+    aiMcp_->stop();
+    if (aiControlActive_) {
+      aiControlActive_ = false;
+      emit stateChanged();
+    }
+    return;
+  }
+
+  // Loopback MCP server first (the sidecar connects to it at startup).
+  if (!aiMcp_->isActive()) {
+    if (!aiMcp_->start(quint16(settingsViewModel_->aiPort()),
+                       settingsViewModel_->aiControlToken())) {
+      aiAgentService_->stop();
+      postError(QStringLiteral("AI MCP 服务器启动失败（端口被占用？）"),
+                /*severity=*/2);
+      if (aiControlActive_) {
+        aiControlActive_ = false;
+        emit stateChanged();
+      }
+      return;
+    }
+  }
+
+  // Sidecar layout: <appDir>/ai_sidecar/{agent.py, python/python.exe}
+  // (assembled by scripts/package_ai_sidecar.ps1; optional component).
+  const QString appDir = QCoreApplication::applicationDirPath();
+  const QString sidecarDir = QDir(appDir).filePath(QStringLiteral("ai_sidecar"));
+  AiAgentService::Config cfg;
+  cfg.sidecarScriptPath = QDir(sidecarDir).filePath(QStringLiteral("agent.py"));
+  cfg.pythonPath = QDir(sidecarDir).filePath(QStringLiteral("python/python.exe"));
+  cfg.mcpUrl = QStringLiteral("http://127.0.0.1:%1/mcp")
+                   .arg(aiMcp_->port());
+  cfg.mcpToken = settingsViewModel_->aiControlToken();
+  cfg.model = settingsViewModel_->aiModel();
+  cfg.anthropicBaseUrl = settingsViewModel_->aiBaseUrl();
+  cfg.apiKey = settingsViewModel_->aiApiKey();
+  aiAgentService_->configure(cfg);
+  if (!aiAgentService_->running())
+    aiAgentService_->start();
+
+  aiViewModel_->setEnabled(true);
+  if (!aiControlActive_) {
+    aiControlActive_ = true;
+    emit stateChanged();
+  }
+}
+
+bool BackendContext::switchPage(int position)
+{
+  if (position < 0 || position > 8)
+    return false;
+  requestSelectTab(position);
+  return true;
+}
+
+bool BackendContext::toggleSidebar()
+{
+  requestToggleSidebar();
+  return true;
+}
 QObject *BackendContext::previewViewModel() const { return previewViewModel_; }
 QObject *BackendContext::monitorViewModel() const { return monitorViewModel_; }
 QObject *BackendContext::configViewModel() const { return configViewModel_; }

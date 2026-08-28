@@ -64,6 +64,14 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool glDebugContext READ glDebugContext WRITE setGlDebugContext NOTIFY settingsChanged)
   /// 最大日志大小 MB（对齐上游 log rotation size）
   Q_PROPERTY(int maxLogSizeMb READ maxLogSizeMb WRITE setMaxLogSizeMb NOTIFY settingsChanged)
+  /// AI 助手（OWzx-only 决策，docs/ai-control.md）：内嵌 Claude Agent SDK
+  /// sidecar + GLM（智谱 Anthropic 兼容端点）。默认整体关闭。
+  Q_PROPERTY(bool aiEnabled READ aiEnabled WRITE setAiEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(QString aiApiKey READ aiApiKey WRITE setAiApiKey NOTIFY settingsChanged)
+  Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY settingsChanged)
+  Q_PROPERTY(QString aiBaseUrl READ aiBaseUrl WRITE setAiBaseUrl NOTIFY settingsChanged)
+  Q_PROPERTY(int aiPort READ aiPort WRITE setAiPort NOTIFY settingsChanged)
+  Q_PROPERTY(QString aiControlToken READ aiControlToken CONSTANT)
   Q_PROPERTY(QStringList presetNames READ presetNames NOTIFY presetsChanged)
   Q_PROPERTY(QString currentPreset READ currentPreset WRITE setCurrentPreset NOTIFY presetsChanged)
   Q_PROPERTY(double layerHeight READ layerHeight WRITE setLayerHeight NOTIFY configChanged)
@@ -118,6 +126,15 @@ public:
   bool verboseGcode() const { return m_verboseGcode; }
   bool glDebugContext() const { return m_glDebugContext; }
   int maxLogSizeMb() const { return m_maxLogSizeMb; }
+  bool aiEnabled() const { return m_aiEnabled; }
+  QString aiApiKey() const { return m_aiApiKey; }
+  QString aiModel() const { return m_aiModel; }
+  QString aiBaseUrl() const { return m_aiBaseUrl; }
+  int aiPort() const { return m_aiPort; }
+  /// Loopback MCP auth token. Generated once, persisted in QSettings under a
+  /// dedicated group; CONSTANT because regenerating would break a connected
+  /// harness session (a future "regenerate" action would restart the server).
+  QString aiControlToken() const;
   QStringList presetNames() const { return m_presetNames; }
   QString currentPreset() const { return m_currentPreset; }
   double layerHeight() const { return m_layerHeight; }
@@ -167,6 +184,11 @@ public slots:
   void setVerboseGcode(bool v);
   void setGlDebugContext(bool v);
   void setMaxLogSizeMb(int v);
+  void setAiEnabled(bool v);
+  void setAiApiKey(const QString &v);
+  void setAiModel(const QString &v);
+  void setAiBaseUrl(const QString &v);
+  void setAiPort(int v);
   void setCurrentPreset(const QString &preset);
   void setLayerHeight(double h);
   Q_INVOKABLE void resetPreferences();
@@ -213,4 +235,10 @@ private:
   bool m_verboseGcode = false;
   bool m_glDebugContext = false;
   int m_maxLogSizeMb = 50;
+  // AI 助手（OWzx-only，docs/ai-control.md）
+  bool m_aiEnabled = false;
+  QString m_aiApiKey;
+  QString m_aiModel = QStringLiteral("glm-5.3-flash");
+  QString m_aiBaseUrl = QStringLiteral("https://open.bigmodel.cn/api/anthropic");
+  int m_aiPort = 27417;
 };

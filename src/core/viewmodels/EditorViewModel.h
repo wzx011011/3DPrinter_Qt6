@@ -1391,6 +1391,12 @@ public:
   Q_INVOKABLE void clearWorkspace();
   /// JSON 项目加载后刷新 UI 状态（供 BackendContext 调用）
   void refreshAfterLoad();
+  /// AI/automation refresh hook (OWzx-only, docs/ai-control.md): rebuild the
+  /// VM mirrors (object entries, mesh cache, slice-result staleness) after a
+  /// scene mutation performed directly on ProjectServiceMock by an external
+  /// actor (AI tools / scripts). Mirrors the refresh sequence the in-VM
+  /// mutation flows run (e.g. duplicateSelectedObjects).
+  void refreshAfterExternalSceneChange();
   /// Phase 52 PREPSB-05: invalidate slice/preview/export results for ALL
   /// plates (a preset/scope/option change affects every plate's result). Made
   /// public so the composition root (BackendContext) can call it on

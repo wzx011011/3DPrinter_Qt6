@@ -13,6 +13,8 @@ class QNetworkAccessManager;
 #include <QDateTime>
 #include <QSettings>
 
+#include "core/ai/AppToolRegistry.h"
+
 class SliceService;
 class PresetServiceMock;
 class DeviceServiceMock;
@@ -34,6 +36,9 @@ class CalibrationViewModel;
 class ModelMallViewModel;
 class MultiMachineViewModel;
 class AmsMaterialsViewModel;
+class AiAgentService;
+class AiViewModel;
+namespace OWzx { class McpHttpServer; }
 
 /// Notification severity exposed to QML.
 enum NotificationLevel {
@@ -81,7 +86,7 @@ struct HintData {
   QString callbackTarget;      ///< URL or settings key.
 };
 
-class BackendContext final : public QObject
+class BackendContext final : public QObject, public OWzx::AppToolUiProvider
 {
   Q_OBJECT
   Q_PROPERTY(QObject *editorViewModel READ editorViewModel CONSTANT)
@@ -110,6 +115,10 @@ class BackendContext final : public QObject
   // state. installPlugin is a mock (no real download source).
   Q_PROPERTY(QObject *pluginService READ pluginService CONSTANT)
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
+  // AI 助手（OWzx-only，docs/ai-control.md）：聊天侧栏 ViewModel + 控制面
+  // 活跃状态（MCP 服务器 + sidecar 是否已按偏好设置启动）。
+  Q_PROPERTY(QObject *aiViewModel READ aiViewModel CONSTANT)
+  Q_PROPERTY(bool aiControlActive READ aiControlActive NOTIFY stateChanged)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
   // Phase 51: shell-level action gate properties (SHELL-03) - forward to EditorViewModel/PreviewViewModel.
   Q_PROPERTY(bool canImport READ canImport NOTIFY stateChanged)
@@ -299,7 +308,17 @@ public:
   CameraServiceMock *cameraService() const { return cameraService_; }
   bool visualCompareMode() const;
 
-  int currentPage() const;
+  // AI 助手（OWzx-only，docs/ai-control.md）
+  QObject *aiViewModel() const;
+  bool aiControlActive() const { return aiControlActive_; }
+  /// (Re)applies the AI preferences: starts/stops the loopback MCP server and
+  /// the sidecar harness. Called from the constructor and on
+  /// SettingsViewModel::settingsChanged.
+  void applyAiSettings();
+  // ── OWzx::AppToolUiProvider (drives the registry's UI tools) ─────────────
+  bool switchPage(int position) override;
+  bool toggleSidebar() override;
+  int currentPage() const;  // also implements AppToolUiProvider::currentPage
   // Phase 51: shell action gates (forward to EditorViewModel/PreviewViewModel)
   bool canImport() const;
   bool canSlice() const;
@@ -579,8 +598,19 @@ private:
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
   /// Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry +
-  /// persisted enable/install state. Mock data; installPlugin is a state flip.
+  /// persisted install/enable state. Mock data; installPlugin is a state flip.
   PluginService *pluginService_ = nullptr;
+
+  // AI 助手（OWzx-only，docs/ai-control.md）
+  /// AppToolRegistry: whole-app tool surface over the VMs/services above.
+  OWzx::AppToolRegistry *aiRegistry_ = nullptr;
+  /// Loopback MCP server exposing the registry (started per preferences).
+  OWzx::McpHttpServer *aiMcp_ = nullptr;
+  /// Sidecar harness host (Python + Claude Agent SDK + GLM).
+  AiAgentService *aiAgentService_ = nullptr;
+  AiViewModel *aiViewModel_ = nullptr;
+  bool aiControlActive_ = false;
+
 
   EditorViewModel *editorViewModel_ = nullptr;
   PreviewViewModel *previewViewModel_ = nullptr;

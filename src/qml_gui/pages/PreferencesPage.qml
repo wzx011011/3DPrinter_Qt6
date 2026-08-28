@@ -47,7 +47,7 @@ Item {
     Connections {
         target: root.settingsVm
         function onPrefCategoryChanged() {
-            if (root.settingsVm.prefCategory === 9)
+            if (root.settingsVm.prefCategory === 10)
                 aboutDlg.open()
         }
     }
@@ -76,6 +76,7 @@ Item {
                         { icon: "📦", name: qsTr("更新") },
                         { icon: "🛠", name: qsTr("高级") },
                         { icon: "🐛", name: qsTr("开发者") },
+                        { icon: "🤖", name: qsTr("AI 助手") },
                         { icon: "❓", name: qsTr("关于") }
                     ]
                     delegate: Rectangle {
@@ -947,6 +948,102 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
                         Layout.preferredWidth: 400
+                    }
+                }
+
+                // ── AI 助手设置（OWzx-only 决策，docs/ai-control.md, index=9）──
+                ColumnLayout {
+                    visible: root.settingsVm.prefCategory === 9
+                    Layout.fillWidth: true; spacing: 16
+
+                    Text {
+                        text: qsTr("AI 助手")
+                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("内嵌 Agent harness（Claude Agent SDK sidecar）+ GLM，可通过聊天控制整个软件（可见与不可见功能）。破坏性操作会在聊天中弹出确认卡。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                        Layout.bottomMargin: 8
+                    }
+
+                    // Enable toggle
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("启用 AI 助手"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxSwitch {
+                            checked: root.settingsVm.aiEnabled
+                            onToggled: root.settingsVm.setAiEnabled(checked)
+                        }
+                    }
+
+                    // API Key
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("API Key"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxTextField {
+                            Layout.preferredWidth: 320
+                            placeholderText: qsTr("智谱开放平台 API Key")
+                            echoMode: TextInput.Password
+                            text: root.settingsVm.aiApiKey
+                            onEditingFinished: root.settingsVm.setAiApiKey(text)
+                        }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("仅在本地保存（QSettings），用于直连智谱 Anthropic 兼容端点；软件本身不中转、不上传。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                    }
+
+                    // Model
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("模型"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxTextField {
+                            Layout.preferredWidth: 320
+                            placeholderText: "glm-5.3-flash"
+                            text: root.settingsVm.aiModel
+                            onEditingFinished: root.settingsVm.setAiModel(text)
+                        }
+                    }
+
+                    // Base URL
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("API 端点"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxTextField {
+                            Layout.preferredWidth: 320
+                            placeholderText: "https://open.bigmodel.cn/api/anthropic"
+                            text: root.settingsVm.aiBaseUrl
+                            onEditingFinished: root.settingsVm.setAiBaseUrl(text)
+                        }
+                    }
+
+                    // MCP port
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("本地控制端口"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxSpinBox {
+                            from: 1024; to: 65535
+                            value: root.settingsVm.aiPort
+                            onValueModified: root.settingsVm.setAiPort(value)
+                        }
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("AI 通过 127.0.0.1 上的 MCP 服务器控制软件，仅监听本机并使用随机 Token 鉴权。修改端口后需重新启用。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("还需要安装 AI 组件（ai_sidecar 目录，约 350MB 可选包）：运行 scripts/package_ai_sidecar.ps1 或从发布页下载。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
                     }
                 }
 

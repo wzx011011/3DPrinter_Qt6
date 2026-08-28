@@ -1,6 +1,7 @@
 #include "SettingsViewModel.h"
 #include <QCoreApplication>
 #include <QSettings>
+#include <QUuid>
 
 // Helper: save a setting value and sync
 #define SAVE_SETTING(key, val) do { QSettings s; s.setValue(key, val); } while(0)
@@ -17,6 +18,7 @@ static QStringList categoryTitles()
       SettingsViewModel::tr("更新"),
       SettingsViewModel::tr("高级"),
       SettingsViewModel::tr("开发者"),
+      SettingsViewModel::tr("AI 助手"),
       SettingsViewModel::tr("关于")};
 }
 
@@ -68,6 +70,26 @@ void SettingsViewModel::loadFromSettings()
   m_verboseGcode     = s.value("verboseGcode", m_verboseGcode).toBool();
   m_glDebugContext   = s.value("glDebugContext", m_glDebugContext).toBool();
   m_maxLogSizeMb     = s.value("maxLogSizeMb", m_maxLogSizeMb).toInt();
+  // AI 助手（OWzx-only，docs/ai-control.md）
+  m_aiEnabled        = s.value("aiEnabled", m_aiEnabled).toBool();
+  m_aiApiKey         = s.value("aiApiKey", m_aiApiKey).toString();
+  m_aiModel          = s.value("aiModel", m_aiModel).toString();
+  m_aiBaseUrl        = s.value("aiBaseUrl", m_aiBaseUrl).toString();
+  m_aiPort           = s.value("aiPort", m_aiPort).toInt();
+}
+
+QString SettingsViewModel::aiControlToken() const
+{
+  // Dedicated QSettings group so resetPreferences never wipes it (a rotating
+  // token would silently break an already-connected harness/sidecar session).
+  QSettings s;
+  s.beginGroup(QStringLiteral("aiControl"));
+  QString token = s.value(QStringLiteral("token")).toString();
+  if (token.isEmpty()) {
+    token = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    s.setValue(QStringLiteral("token"), token);
+  }
+  return token;
 }
 
 QString SettingsViewModel::prefCategoryTitle() const
@@ -174,7 +196,12 @@ void SettingsViewModel::resetPreferences()
       QStringLiteral("showProgressNotifications"), QStringLiteral("developerMode"),
       QStringLiteral("showDebugOverlay"), QStringLiteral("logLevel"),
       QStringLiteral("verboseGcode"), QStringLiteral("glDebugContext"),
-      QStringLiteral("maxLogSizeMb")};
+      QStringLiteral("maxLogSizeMb"),
+      // AI 助手 reset — deliberately EXCLUDES aiApiKey (credential: resetting
+      // preferences should not silently discard the user's GLM key) and the
+      // aiControl token group (rotating it would break connected sessions).
+      QStringLiteral("aiEnabled"), QStringLiteral("aiModel"),
+      QStringLiteral("aiBaseUrl"), QStringLiteral("aiPort")};
   for (const QString &key : keys)
     s.remove(key);
   s.sync();
@@ -210,6 +237,10 @@ void SettingsViewModel::resetPreferences()
   setVerboseGcode(false);
   setGlDebugContext(false);
   setMaxLogSizeMb(50);
+  setAiEnabled(false);
+  setAiModel(QStringLiteral("glm-5.3-flash"));
+  setAiBaseUrl(QStringLiteral("https://open.bigmodel.cn/api/anthropic"));
+  setAiPort(27417);
 }
 
 void SettingsViewModel::setShowHomePage(bool v)
@@ -346,6 +377,35 @@ void SettingsViewModel::setGlDebugContext(bool v)
 void SettingsViewModel::setMaxLogSizeMb(int v)
 {
   if (m_maxLogSizeMb != v) { m_maxLogSizeMb = v; SAVE_SETTING("maxLogSizeMb", v); emit settingsChanged(); }
+}
+
+// AI 助手（OWzx-only，docs/ai-control.md）
+void SettingsViewModel::setAiEnabled(bool v)
+{
+  if (m_aiEnabled != v) { m_aiEnabled = v; SAVE_SETTING("aiEnabled", v); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAiApiKey(const QString &v)
+{
+  if (m_aiApiKey != v) { m_aiApiKey = v; SAVE_SETTING("aiApiKey", v); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAiModel(const QString &v)
+{
+  const QString trimmed = v.trimmed();
+  if (!trimmed.isEmpty() && m_aiModel != trimmed) { m_aiModel = trimmed; SAVE_SETTING("aiModel", trimmed); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAiBaseUrl(const QString &v)
+{
+  const QString trimmed = v.trimmed();
+  if (!trimmed.isEmpty() && m_aiBaseUrl != trimmed) { m_aiBaseUrl = trimmed; SAVE_SETTING("aiBaseUrl", trimmed); emit settingsChanged(); }
+}
+
+void SettingsViewModel::setAiPort(int v)
+{
+  const int clamped = qBound(1024, v, 65535);
+  if (m_aiPort != clamped) { m_aiPort = clamped; SAVE_SETTING("aiPort", clamped); emit settingsChanged(); }
 }
 
 // Phase 241 (PAGE-04): mm <-> inch display conversion (upstream

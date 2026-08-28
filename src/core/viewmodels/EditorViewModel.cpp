@@ -8802,6 +8802,17 @@ void EditorViewModel::refreshAfterLoad()
   emit stateChanged();
 }
 
+void EditorViewModel::refreshAfterExternalSceneChange()
+{
+  // Same refresh sequence the in-VM mutation flows run (duplicateSelectedObjects):
+  // entry list rebuild -> mesh cache -> current-plate slice staleness -> state.
+  // Selection is NOT cleared (the external actor may select next via tools).
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  emit stateChanged();
+}
+
 void EditorViewModel::requestSliceAll()
 {
   if (!projectService_ || projectService_->plateCount() <= 0)

@@ -55,6 +55,7 @@
         <file>panels/SliceProgress.qml</file>
         <file>panels/LeftSidebar.qml</file>
         <file>panels/DockableSidebar.qml</file>
+        <file>panels/ChatSidebar.qml</file>
         <!-- Components -->
         <file>components/StatusBar.qml</file>
         <file>components/NavigatorLabels.qml</file>

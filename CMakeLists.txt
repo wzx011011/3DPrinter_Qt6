@@ -299,6 +299,21 @@ if(OWZX_QML_GUI)
         src/core/services/FtpUploader.h
         src/core/services/FtpUploader.cpp
     )
+    # AI 助手（OWzx-only 决策，docs/ai-control.md）：
+    # AppToolRegistry 把应用操作暴露为 JSON-Schema 工具；
+    # McpHttpServer 在 127.0.0.1 上以 MCP Streamable HTTP 子集对外提供，
+    # 供内嵌 Claude Agent SDK sidecar（及可选外部 MCP 客户端）调用；
+    # AiAgentService 托管 sidecar 进程（NDJSON 桥），AiViewModel 驱动聊天侧栏。
+    target_sources(owzx_app_core PRIVATE
+        src/core/ai/AppToolRegistry.h
+        src/core/ai/AppToolRegistry.cpp
+        src/core/ai/McpHttpServer.h
+        src/core/ai/McpHttpServer.cpp
+        src/core/ai/AiAgentService.h
+        src/core/ai/AiAgentService.cpp
+        src/core/viewmodels/AiViewModel.h
+        src/core/viewmodels/AiViewModel.cpp
+    )
     # 链接 libcurl 静态库（DEPS_PREFIX/lib/libcurl.lib）
     # CURL_STATICLIB 必须定义，否则 curl.h 用 __declspec(dllimport) 声明符号
     # （静态库不提供 __imp_ 存根 → 链接错误 __imp_curl_easy_*）
@@ -509,6 +524,22 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     add_test(NAME ViewModelSmokeTests COMMAND ViewModelSmokeTests)
     set_tests_properties(ViewModelSmokeTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # AI 控制面回归（OWzx-only，docs/ai-control.md）：headless 服务栈 +
+    # AppToolRegistry + McpHttpServer（本地 socket 全链路）。
+    qt_add_executable(AppToolTests tests/AppToolTests.cpp)
+    target_link_libraries(AppToolTests PRIVATE owzx_app_core
+        Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    target_compile_definitions(AppToolTests PRIVATE
+        QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+    )
+    target_link_options(AppToolTests PRIVATE /FORCE:MULTIPLE)
+    add_test(NAME AppToolTests COMMAND AppToolTests)
+    set_tests_properties(AppToolTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+        TIMEOUT 120
     )
 
     qt_add_executable(QmlUiAuditTests tests/QmlUiAuditTests.cpp)
@@ -797,6 +828,20 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
             TIMEOUT 300
         )
     endif()
+endif()
+
+# AI sidecar（OWzx-only，docs/ai-control.md）：可选打包目标。
+# 首次运行需要网络；产出 build/ai_sidecar/（嵌入式 Python + SDK ~350MB）。
+# 显式构建：cmake --build build --target ai_sidecar
+option(OWZX_AI_SIDECAR "Package the optional AI sidecar component" OFF)
+if(OWZX_AI_SIDECAR)
+    add_custom_target(ai_sidecar
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                -File ${CMAKE_SOURCE_DIR}/scripts/package_ai_sidecar.ps1
+                -BuildDir ${CMAKE_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Packaging optional AI sidecar (network on first run)"
+        VERBATIM)
 endif()
 
 # I2 -- i18n 翻译文件

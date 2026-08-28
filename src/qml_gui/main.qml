@@ -14,6 +14,7 @@ import "controls"
 import "pages"
 import "components"
 import "dialogs"
+import "panels"
 
 ApplicationWindow {
     id: root
@@ -29,6 +30,8 @@ ApplicationWindow {
     minimumHeight: 700
 
     readonly property int resizeMargin: 6
+    // AI 助手聊天侧栏开关（OWzx-only，docs/ai-control.md）
+    property bool aiChatOpen: false
     // Frame margin is 0 by default: the shell fills the whole window so the
     // app content goes edge-to-edge (matching the OrcaSlicer screenshot).
     readonly property int frameMargin: 0
@@ -825,6 +828,50 @@ ApplicationWindow {
 
         // Floating Info toast (severity=0), z-stacked over shell content
         ErrorToast { }
+
+        // ── AI 助手聊天侧栏（OWzx-only，docs/ai-control.md）──────────────────
+        // 右缘常驻窄条（仅 AI 启用时可见）+ 360px 覆盖式面板；状态与动作全部
+        // 走 backend.aiViewModel（AiViewModel），此处纯呈现。
+        Rectangle {
+            id: aiChatEdgeTab
+            visible: backend && backend.aiControlActive && !root.aiChatOpen
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: 22
+            height: 96
+            radius: 8
+            color: aiEdgeMa.containsMouse ? Theme.accent : Theme.bgPanel
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            Text {
+                anchors.centerIn: parent
+                text: qsTr("AI")
+                color: aiEdgeMa.containsMouse ? "#FFFFFF" : Theme.textPrimary
+                font.pixelSize: Theme.fontSizeSM
+                font.bold: true
+            }
+            MouseArea {
+                id: aiEdgeMa
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.aiChatOpen = true
+            }
+        }
+
+        ChatSidebar {
+            id: aiChatPanel
+            visible: root.aiChatOpen
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.topMargin: root.prepareChromeHeight
+            width: 360
+            z: 50
+            aiVm: backend ? backend.aiViewModel : null
+            onClosed: root.aiChatOpen = false
+        }
     }
 
     // P8.1 — First-run ConfigWizard
