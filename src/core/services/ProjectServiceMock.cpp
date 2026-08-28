@@ -7321,6 +7321,10 @@ bool ProjectServiceMock::addFilesToPlate(int plateIndex, const QStringList &file
   }
 
   modelCount_ = objectNames_.size();
+  // Keep the source path in sync with addFilesToPlate(). SliceService uses
+  // this field as the real-model gate before cloning the current plate.
+  if (!filePaths.isEmpty())
+    sourceFilePath_ = QFileInfo(filePaths.first()).absoluteFilePath();
   syncTransformsFromModel();
   lastError_.clear();
   emit projectChanged();
