@@ -8163,6 +8163,20 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
       }
     }
 
+    // Register the clone's instances on the current plate. Mirrors the
+    // non-lib branch below and upstream paste_objects_from_clipboard: a
+    // duplicated object lands on the plate it was duplicated from. Without
+    // this, plate membership drifts (selectSourceObject/plate views lose the
+    // clone until the next full membership rebuild).
+    if (m_plateList) {
+      OWzx::PartPlate *cur = m_plateList->currentPlate();
+      if (cur) {
+        const int cloneIndex = int(model_->objects.size()) - 1;
+        for (size_t j = 0; j < newObj->instances.size(); ++j)
+          cur->addInstance(cloneIndex, int(j));
+      }
+    }
+
     const int newIndex = int(model_->objects.size()) - 1;
 #else
     Q_UNUSED(sourceIndex);

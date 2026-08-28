@@ -242,6 +242,8 @@ private:
   int m_sourceIndex;
   int m_clonedIndex;
   ProjectServiceMock *m_service;
+  /// Skip-first-redo flag: the clone ran before push() (see redo()).
+  bool m_firstRedoDone = false;
 };
 
 // ── VolumeDeleteCommand ─────────────────────────────────────────────────────

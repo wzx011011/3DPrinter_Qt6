@@ -464,7 +464,18 @@ void CloneCommand::undo()
 
 void CloneCommand::redo()
 {
-  if (m_service && m_sourceIndex >= 0)
+  if (!m_service)
+    return;
+  // QUndoStack::push() invokes redo() once while the clone already exists
+  // (duplicateSelectedObjects duplicated before pushing) — skip that first
+  // call (same skip-first pattern as Delete/AddObjectCommand). Without it,
+  // every UI/AI duplicate created TWO clones.
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  if (m_sourceIndex >= 0)
     m_service->duplicateObject(m_sourceIndex);
 }
 
