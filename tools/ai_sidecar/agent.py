@@ -207,7 +207,13 @@ class Harness:
             # Claude's filesystem/shell/browser tool surface out of the model
             # context; all application actions must use OWzx MCP tools.
             tools=[],
-            allowed_tools=["mcp__owzx__*"],
+            # NOTE: allowed_tools must stay EMPTY. SDK patterns listed there are
+            # pre-approved WITHOUT prompting, which bypasses can_use_tool and
+            # silently auto-allowed destructive tools (delete_object executed
+            # with no confirmation card). Gating lives entirely in can_use_tool:
+            # annotations auto-allow read-only tools; destructive tools wait for
+            # the in-app confirmation card.
+            allowed_tools=[],
             system_prompt=(
                 "You are the OWzx Slicer in-app assistant. For every request "
                 "about the slicer, project, models, plates, settings, UI, "

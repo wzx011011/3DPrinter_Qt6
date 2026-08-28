@@ -108,6 +108,33 @@ agent.py。首次运行需网络（python.org + PyPI），之后离线缓存。
   sidecar 启动时拉取 tools/list，只读工具自动放行，
   仅 destructive 工具（delete_object/clear_project）走确认卡。
 
+## 全量 UI 验收补充（2026-08-28 晚，重装 sidecar 包后）
+
+重建 `build/ai_sidecar` 可选包后，经真实 ChatSidebar 逐项复核：
+load_model / duplicate_object / orient_objects / set_object_transform /
+select_object / switch_page(preview→currentPage=2) / arrange_objects /
+select_preset / slice_plate / slice_all_plates / export_gcode /
+save_project / undo / redo / get_app_state / get_scene 全部经 GLM 真实
+回合执行成功；产物 `build/ai_ui_export.gcode`（约 480KB）与
+`build/ai_ui_project.3mf` 非空。
+
+期间发现并修复第四个问题：
+
+- **`allowed_tools` 预授权绕过确认卡（安全回归）**：为修正工具路由而加入的
+  `allowed_tools=["mcp__owzx__*"]` 在 SDK 语义中是"免提示预授权"，
+  会使 `can_use_tool` 完全不被调用——实测 `delete_object` 在无任何
+  确认卡交互的情况下直接执行（objectCount 1→0）。修复：`allowed_tools`
+  恒为空，门控完全收敛到 `can_use_tool`（annotations 自动放行只读工具，
+  destructive 工具等待确认卡）。修复后实测：delete_object 发起后
+  objectCount 保持 1、聊天输入框禁用、确认卡（允许/拒绝）出现，
+  点击"允许"后 objectCount 才变为 0。
+
+`cancel_slice` 说明：测试模型切片约 2 秒完成，快于 GLM 回合延迟，
+聊天内"切片中取消"竞态在真实 UI 下无法稳定复现；工具空闲时返回
+`{"ok":true}`（幂等无操作），真实取消语义由 E2E
+`test_cancelled_slice_clears_active_result_and_blocks_preview_export`
+锁定（同一 SliceService::cancelSlice 路径）。
+
 ## 相关文件
 
 | 层 | 文件 |
