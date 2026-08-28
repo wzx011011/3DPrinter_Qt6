@@ -433,6 +433,9 @@ async def _main() -> None:
             except json.JSONDecodeError:
                 continue
             loop.call_soon_threadsafe(harness.handle_command, cmd)
+        # Host pipe closed (app killed without a graceful shutdown): exit now
+        # instead of idling forever and leaking a python+claude.exe pair.
+        loop.call_soon_threadsafe(lambda: os._exit(0))
 
     threading.Thread(target=_reader, daemon=True).start()
 

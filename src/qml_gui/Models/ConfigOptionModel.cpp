@@ -848,6 +848,22 @@ namespace
       const auto *v = def->get_default_value<Slic3r::ConfigOptionStrings>();
       return v->values.empty() ? QVariant() : QString::fromStdString(v->values[0]);
     }
+    case Slic3r::coPoints:
+    {
+      // Bed polygons (printable_area / bed_exclude_area): serialize as
+      // "x1,y1,x2,y2,..." — the format EditorViewModel's bed-sync and
+      // ProjectServiceMock::arrangeObjects printableArea parsing expect.
+      const auto *v = def->get_default_value<Slic3r::ConfigOptionPoints>();
+      QString serialized;
+      for (const auto &pt : v->values)
+      {
+        if (!serialized.isEmpty())
+          serialized += QLatin1Char(',');
+        serialized += QString::number(pt.x(), 'f', 1) + QLatin1Char(',') +
+                      QString::number(pt.y(), 'f', 1);
+      }
+      return serialized;
+    }
     default:
       return {};
     }

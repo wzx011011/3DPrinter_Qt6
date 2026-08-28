@@ -85,6 +85,26 @@ QJsonArray intListToJson(const QList<int> &list) {
   return a;
 }
 
+QString normalizePrintableArea(const QVariant &value) {
+  QString serialized;
+  if (value.typeId() == QMetaType::QVariantList) {
+    const QVariantList points = value.toList();
+    QStringList parts;
+    parts.reserve(points.size());
+    for (const QVariant &point : points)
+      parts.append(point.toString());
+    serialized = parts.join(QLatin1Char(','));
+  } else if (value.typeId() == QMetaType::QStringList) {
+    serialized = value.toStringList().join(QLatin1Char(','));
+  } else {
+    serialized = value.toString();
+  }
+
+  // Preset imports historically serialize points as "0x0,300x0,..." while
+  // arrangeObjects consumes flat coordinate pairs separated by commas.
+  return serialized.replace(QLatin1Char('x'), QLatin1Char(','));
+}
+
 }  // namespace
 
 AppToolRegistry::AppToolRegistry(ProjectServiceMock *project, SliceService *slice,
@@ -512,7 +532,15 @@ void AppToolRegistry::buildTools() {
       [this](const QJsonObject &args) -> AppToolResult {
         const float spacing = float(args.value(QStringLiteral("spacingMm")).toDouble(10.0));
         const bool rotation = args.value(QStringLiteral("allowRotation")).toBool(false);
-        if (!project_->arrangeObjects(spacing, rotation, /*alignY=*/false))
+        // Mirror EditorViewModel::arrangeAll(): arrange needs the real bed
+        // shape from the printer preset. Without it the service falls back
+        // to InfiniteBed, which returns false whenever the plate grid
+        // assigns objects beyond bed 0 (observed live: "arrange failed").
+        QString printableArea;
+        if (config_)
+          printableArea = normalizePrintableArea(
+              config_->mergedConfigValues().value(QStringLiteral("printable_area")));
+        if (!project_->arrangeObjects(spacing, rotation, /*alignY=*/false, printableArea))
           return AppToolResult::failure(QStringLiteral("arrange failed (all plates locked?)"));
         editor_->refreshAfterExternalSceneChange();
         return AppToolResult::success();
@@ -702,7 +730,8 @@ void AppToolRegistry::buildTools() {
   tools_.push_back(AppTool{
       QStringLiteral("switch_page"),
       QStringLiteral("Switch the visible UI page. Pages: 0 home, 1 prepare, "
-                     "3 monitor, 8 preferences (name or index accepted)."),
+                     "2 preview, 3 device, 8 preferences (name or index "
+                     "accepted)."),
       objSchema(
           {{QStringLiteral("page"), prop(QStringLiteral("string"),
                                         QStringLiteral("Page name (home|prepare|monitor|preferences) or numeric index \"0\"-\"8\" as string"))}},
@@ -717,7 +746,7 @@ void AppToolRegistry::buildTools() {
           const QString name = v.toString();
           if (name == QLatin1String("home")) page = 0;
           else if (name == QLatin1String("prepare")) page = 1;
-          else if (name == QLatin1String("preview")) page = 1;
+          else if (name == QLatin1String("preview")) page = 2;
           else if (name == QLatin1String("monitor")) page = 3;
           else if (name == QLatin1String("preferences")) page = 8;
           else {

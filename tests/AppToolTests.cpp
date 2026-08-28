@@ -353,6 +353,7 @@ void AppToolTests::transformDuplicateDeleteRoundTrip() {
   QVERIFY2(undo.ok, "undo must succeed");
   QCOMPARE(project_->modelCount(), countBefore + 1);
   registry_->execute(QStringLiteral("redo"), {});  // restore cleaned state
+
 }
 
 void AppToolTests::sliceGatesRejectInvalidRequests() {

@@ -3822,7 +3822,7 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
   try
   {
     Slic3r::ArrangeParams params;
-    params.min_obj_distance = static_cast<coord_t>(spacing * 1000.0); // mm → μm
+    params.min_obj_distance = static_cast<coord_t>(scale_(spacing));
     params.allow_rotations = allowRotation;
     params.align_to_y_axis = alignY;
     params.parallel = false; // Run synchronously in Qt thread
@@ -3844,21 +3844,20 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
       for (int i = 0; i + 1 < coords.size(); i += 2)
       {
         bool okX = false, okY = false;
-        const coord_t x = static_cast<coord_t>(coords[i].trimmed().toDouble(&okX) * 1000.0); // mm → μm
-        const coord_t y = static_cast<coord_t>(coords[i + 1].trimmed().toDouble(&okY) * 1000.0);
+        const coord_t x = static_cast<coord_t>(scale_(coords[i].trimmed().toDouble(&okX)));
+        const coord_t y = static_cast<coord_t>(scale_(coords[i + 1].trimmed().toDouble(&okY)));
         if (okX && okY)
           bed_shape.emplace_back(x, y);
       }
       if (bed_shape.size() >= 3)
       {
         Slic3r::BoundingBox bed_bb(bed_shape);
-        // D-29-3 (RESEARCH §5): derive plate width/depth from the SAME bed_bb
-        // arrange uses (μm→mm via /1000.0), so the grid decode (computePlateIndex)
-        // and the arrange coordinate space are identical — zero drift.
+        // Derive plate width/depth from the same bed bounding box used by arrange.
+        // Keep grid decoding in the same unscaled millimeter space.
         if (m_plateList)
         {
-          const double width_mm = bed_bb.size().x() / 1000.0;
-          const double depth_mm = bed_bb.size().y() / 1000.0;
+          const double width_mm = unscale_(bed_bb.size().x());
+          const double depth_mm = unscale_(bed_bb.size().y());
           m_plateList->setModel(model_);  // backref for rebuildPlatesAfterArrangement
           m_plateList->setPlateSize(static_cast<int>(width_mm), static_cast<int>(depth_mm), 0);
         }

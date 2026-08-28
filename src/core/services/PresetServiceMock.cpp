@@ -966,13 +966,22 @@ void PresetServiceMock::loadUpstreamSchemaDefaults()
     }
     case Slic3r::coPoints:
     {
+      // Serialize as "x1,y1,x2,y2,..." — the single format consumed by
+      // EditorViewModel bed-sync and ProjectServiceMock::arrangeObjects
+      // printableArea parsing (the former "0x0,300x0" style was unparseable
+      // by those sites, leaving arrange without a bed shape).
       const auto *v = static_cast<const Slic3r::ConfigOptionPoints *>(optDef.default_value.get());
       if (!v->values.empty())
       {
-        QStringList parts;
+        QString serialized;
         for (const auto &p : v->values)
-          parts << QStringLiteral("%1x%2").arg(p.x()).arg(p.y());
-        upstreamDefaults[key] = parts.join(",");
+        {
+          if (!serialized.isEmpty())
+            serialized += QLatin1Char(',');
+          serialized += QString::number(p.x(), 'f', 1) + QLatin1Char(',') +
+                        QString::number(p.y(), 'f', 1);
+        }
+        upstreamDefaults[key] = serialized;
       }
       break;
     }
