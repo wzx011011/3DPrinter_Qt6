@@ -870,6 +870,8 @@ ApplicationWindow {
             width: 360
             z: 50
             aiVm: backend ? backend.aiViewModel : null
+            sidecarInstalled: backend && backend.aiViewModel
+                               ? backend.aiViewModel.installed : false
             onClosed: root.aiChatOpen = false
         }
     }
