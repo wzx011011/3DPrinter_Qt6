@@ -3819,6 +3819,24 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
   if (!model_ || model_->objects.empty())
     return false;
 
+  // Preserve the upstream all-locked contract: no instance may be moved
+  // when every existing plate is locked.
+  if (m_plateList && m_plateList->plateCount() > 0)
+  {
+    bool allLocked = true;
+    for (int i = 0; i < m_plateList->plateCount(); ++i)
+    {
+      const OWzx::PartPlate *plate = m_plateList->plate(i);
+      if (!plate || !plate->isLocked())
+      {
+        allLocked = false;
+        break;
+      }
+    }
+    if (allLocked)
+      return false;
+  }
+
   try
   {
     Slic3r::ArrangeParams params;
