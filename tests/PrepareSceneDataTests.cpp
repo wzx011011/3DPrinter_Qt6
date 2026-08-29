@@ -55,6 +55,8 @@ private slots:
   void plateContextDirtyFlagsOnlyChangeOnPlateDifferences();
   void invalidBedDimensionsDoNotGenerateUnboundedBuffers();
   void modelBatchesParsePackedMeshWithSourceIndices();
+  // P15.1/15.2 (COLOR): upstream volume coloring lock.
+  void modelColorsFollowUpstreamVolumeSemantics();
   void modelBatchesRejectMalformedPayloads();
   void modelBatchesRejectMisalignedIdentityMetadata();
   void currentPlateFootprintClassifiesRectangleAndCircle();
@@ -462,6 +464,84 @@ void PrepareSceneDataTests::bedBottomLineGridUsesUpstreamBottomColor()
                && qFuzzyCompare(v.b, 0.37f)),
              "origin axes must stay top-view only");
   }
+}
+
+
+// P15.1/15.2 (COLOR): locks the upstream model coloring semantics --
+// color_from_model_volume (3DScene.cpp:306-334) for the special volume
+// types, update_colors_by_extruder (:1184-1235) filament colors for parts
+// with the extruder index clamped to 0, UNPRINTABLE_COLOR, and
+// adjust_color_for_rendering (black lift / fully-transparent fix).
+void PrepareSceneDataTests::modelColorsFollowUpstreamVolumeSemantics()
+{
+  const float kTri[9] = {0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 10.0f, 0.0f};
+  const QList<float> triangle{kTri, kTri + 9};
+  const QByteArray mesh = packedMeshWithBatches(
+      QList<int>{1, 2, 3, 4, 5, 6, 7},
+      QList<QList<float>>{triangle, triangle, triangle, triangle,
+                          triangle, triangle, triangle});
+  // Batches: 0=part extruder2, 1=part extruder out-of-range (clamp to 1),
+  // 2=negative, 3=modifier, 4=blocker, 5=enforcer, 6=unprintable part.
+  const QList<int> types{0, 0, 1, 2, 3, 4, 0};
+  const QList<int> extruders{2, 99, 1, 1, 1, 1, 1};
+  const QList<int> printable{1, 1, 1, 1, 1, 1, 0};
+  // Filament colors: extruder1 = near-black (0.05), extruder2 = red.
+  const QList<QVector4D> colors{
+      QVector4D(0.05f, 0.05f, 0.05f, 1.0f),
+      QVector4D(1.0f, 0.0f, 0.0f, 1.0f),
+  };
+
+  PrepareSceneData scene;
+  scene.setModelMeshData(mesh, QList<int>{0, 1, 2, 3, 4, 5, 6},
+                         QList<int>{0, 1, 2, 3, 4, 5, 6},
+                         QList<int>{0, 1, 2, 3, 4, 5, 6},
+                         QList<int>{0, 1, 2, 3, 4, 5, 6},
+                         types, extruders, printable, colors);
+
+  const auto &batches = scene.modelBatches();
+  QCOMPARE(batches.size(), 7);
+  // Part with extruder 2 -> filament color 2 (red), opaque.
+  QCOMPARE(batches.at(0).translucent, false);
+  QCOMPARE(batches.at(0).firstVertex, 0);
+  QCOMPARE(scene.modelVertices().at(0).r, 1.0f);
+  QCOMPARE(scene.modelVertices().at(0).g, 0.0f);
+  QCOMPARE(scene.modelVertices().at(0).b, 0.0f);
+  QCOMPARE(scene.modelVertices().at(0).a, 1.0f);
+  // Out-of-range extruder clamps to color 0; near-black lifts to 0.2
+  // (adjust_color_for_rendering).
+  QCOMPARE(scene.modelVertices().at(3).r, 0.2f);
+  QCOMPARE(scene.modelVertices().at(3).g, 0.2f);
+  QCOMPARE(scene.modelVertices().at(3).b, 0.2f);
+  // Negative volume: (0.3,0.3,0.3,0.4), translucent pass.
+  QCOMPARE(batches.at(2).translucent, true);
+  QCOMPARE(scene.modelVertices().at(6).r, 0.3f);
+  QCOMPARE(scene.modelVertices().at(6).a, 0.4f);
+  // Modifier: (1,1,0,0.6).
+  QCOMPARE(batches.at(3).translucent, true);
+  QCOMPARE(scene.modelVertices().at(9).g, 1.0f);
+  QCOMPARE(scene.modelVertices().at(9).b, 0.0f);
+  QCOMPARE(scene.modelVertices().at(9).a, 0.6f);
+  // Blocker: (1,0.3,0.3,0.4). Enforcer: (0.3,0.3,1,0.4).
+  QCOMPARE(scene.modelVertices().at(12).r, 1.0f);
+  QCOMPARE(scene.modelVertices().at(12).a, 0.4f);
+  QCOMPARE(scene.modelVertices().at(15).b, 1.0f);
+  QCOMPARE(scene.modelVertices().at(15).a, 0.4f);
+  // Unprintable part: (0,0,0,0.5) -> adjust lifts to 0.2 gray @0.5.
+  QCOMPARE(batches.at(6).translucent, true);
+  QCOMPARE(scene.modelVertices().at(18).r, 0.2f);
+  QCOMPARE(scene.modelVertices().at(18).g, 0.2f);
+  QCOMPARE(scene.modelVertices().at(18).a, 0.5f);
+
+  // Without render channels (the picking scene form) the neutral fallback
+  // keeps every batch opaque.
+  PrepareSceneData neutral;
+  neutral.setModelMeshData(mesh, QList<int>{0, 1, 2, 3, 4, 5, 6},
+                           QList<int>{0, 1, 2, 3, 4, 5, 6},
+                           QList<int>{0, 1, 2, 3, 4, 5, 6},
+                           QList<int>{0, 1, 2, 3, 4, 5, 6});
+  QCOMPARE(neutral.modelVertices().at(0).r, 0.8f);
+  QCOMPARE(neutral.modelVertices().at(0).a, 1.0f);
+  QCOMPARE(neutral.modelBatches().at(0).translucent, false);
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

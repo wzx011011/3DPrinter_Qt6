@@ -412,6 +412,14 @@ namespace
     int objectIndex = -1;
     int volumeIndex = -1;
     int instanceIndex = -1;
+    // P15.1/15.2 (COLOR): upstream render-channel metadata, one entry per
+    // mesh batch. volumeType mirrors ProjectVolumeType (Part=0, Negative=1,
+    // Modifier=2, Blocker=3, Enforcer=4, Text=5, Svg=6); extruderId is the
+    // upstream ModelVolume::extruder_id() (volume config -> object config ->
+    // 1, all 1-based); printable is ModelInstance::printable.
+    int volumeType = 0;
+    int extruderId = 1;
+    bool printable = true;
   };
 
   bool hasRenderableTriangle(const Slic3r::ModelVolume *volume)
@@ -446,10 +454,20 @@ namespace
       for (int instanceIndex = 0; instanceIndex < instanceCount; ++instanceIndex) {
         if (!object->instances.empty() && !object->instances[size_t(instanceIndex)])
           continue;
-        for (int volumeIndex = 0; volumeIndex < int(object->volumes.size()); ++volumeIndex) {
-          if (hasRenderableTriangle(object->volumes[size_t(volumeIndex)]))
-            identities.append(MeshBatchIdentity{objectIndex, volumeIndex, instanceIndex});
+      for (int volumeIndex = 0; volumeIndex < int(object->volumes.size()); ++volumeIndex) {
+        const Slic3r::ModelVolume *volume = object->volumes[size_t(volumeIndex)];
+        if (hasRenderableTriangle(volume)) {
+          MeshBatchIdentity identity;
+          identity.objectIndex = objectIndex;
+          identity.volumeIndex = volumeIndex;
+          identity.instanceIndex = instanceIndex;
+          identity.volumeType = int(volume->type());
+          identity.extruderId = volume->extruder_id();
+          if (!object->instances.empty())
+            identity.printable = object->instances[size_t(instanceIndex)]->printable;
+          identities.append(identity);
         }
+      }
       }
     }
     return identities;
@@ -495,6 +513,50 @@ QList<int> ProjectServiceMock::meshBatchInstanceIndices() const
   for (const MeshBatchIdentity &identity : identities)
     indices.append(identity.instanceIndex);
   return indices;
+#else
+  return {};
+#endif
+}
+
+// P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
+// meshBatchSourceObjectIndices (same collectMeshBatchIdentities walk).
+QList<int> ProjectServiceMock::meshBatchVolumeTypes() const
+{
+#ifdef HAS_LIBSLIC3R
+  QList<int> values;
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  values.reserve(identities.size());
+  for (const MeshBatchIdentity &identity : identities)
+    values.append(identity.volumeType);
+  return values;
+#else
+  return {};
+#endif
+}
+
+QList<int> ProjectServiceMock::meshBatchExtruderIds() const
+{
+#ifdef HAS_LIBSLIC3R
+  QList<int> values;
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  values.reserve(identities.size());
+  for (const MeshBatchIdentity &identity : identities)
+    values.append(identity.extruderId);
+  return values;
+#else
+  return {};
+#endif
+}
+
+QList<int> ProjectServiceMock::meshBatchPrintableFlags() const
+{
+#ifdef HAS_LIBSLIC3R
+  QList<int> values;
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  values.reserve(identities.size());
+  for (const MeshBatchIdentity &identity : identities)
+    values.append(identity.printable ? 1 : 0);
+  return values;
 #else
   return {};
 #endif

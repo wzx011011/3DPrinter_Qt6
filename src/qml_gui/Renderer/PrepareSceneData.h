@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QList>
 #include <QVariant>
+#include <QVector4D>
 #include <QtGlobal>
 
 class PrepareSceneData
@@ -50,6 +51,10 @@ public:
     int firstVertex = 0;
     int vertexCount = 0;
     ModelBounds bounds;
+    // P15.2 (COLOR): alpha < 1 batches render in the second, depth-sorted
+    // translucent pass (upstream _render_objects(Transparent)). Declared
+    // after bounds so historical aggregate initializers keep compiling.
+    bool translucent = false;
   };
 
   enum DirtyFlag : quint32
@@ -78,11 +83,30 @@ public:
   static int computePlateColumns(int plateCount);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
+  // P15.1/15.2 (COLOR): full render-channel form. batchVolumeTypes values are
+  // ProjectVolumeType ints; extruderIds are upstream ModelVolume::extruder_id()
+  // (1-based); extruderColors are the parsed filament_colour entries
+  // (rgba 0..1, index 0 = extruder 1).
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
                         const QList<int> &batchVolumeIndices,
                         const QList<int> &batchInstanceIndices,
-                        const QList<int> &activeSourceObjectIndices);
+                        const QList<int> &activeSourceObjectIndices,
+                        const QList<int> &batchVolumeTypes,
+                        const QList<int> &batchExtruderIds,
+                        const QList<int> &batchPrintableFlags,
+                        const QList<QVector4D> &extruderColors);
+  void setModelMeshData(const QByteArray &meshData,
+                        const QList<int> &batchSourceObjectIndices,
+                        const QList<int> &batchVolumeIndices,
+                        const QList<int> &batchInstanceIndices,
+                        const QList<int> &activeSourceObjectIndices)
+  {
+    setModelMeshData(meshData, batchSourceObjectIndices, batchVolumeIndices,
+                     batchInstanceIndices, activeSourceObjectIndices,
+                     QList<int>(), QList<int>(), QList<int>(),
+                     QList<QVector4D>());
+  }
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
                         const QList<int> &activeSourceObjectIndices)

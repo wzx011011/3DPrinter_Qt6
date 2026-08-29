@@ -191,18 +191,28 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchSourceObjectIndices,
                                         const QList<int> &batchVolumeIndices,
                                         const QList<int> &batchInstanceIndices,
-                                        const QList<int> &activeSourceObjectIndices)
+                                        const QList<int> &activeSourceObjectIndices,
+                                        const QList<int> &batchVolumeTypes,
+                                        const QList<int> &batchExtruderIds,
+                                        const QList<int> &batchPrintableFlags,
+                                        const QList<QVector4D> &extruderColors)
 {
   clearModelGeometry();
 
   qint32 objectCount = 0;
   qsizetype offset = 0;
+  // P15.1 (COLOR): the render-channel arrays are optional (the picking scene
+  // passes none); when present they must cover every batch.
   bool valid = readValue(meshData, offset, objectCount)
       && objectCount >= 0
       && objectCount <= kMaxPackedObjects
       && batchSourceObjectIndices.size() == objectCount
       && batchVolumeIndices.size() == objectCount
-      && batchInstanceIndices.size() == objectCount;
+      && batchInstanceIndices.size() == objectCount
+      && (batchVolumeTypes.isEmpty()
+          || (batchVolumeTypes.size() == objectCount
+              && batchExtruderIds.size() == objectCount
+              && batchPrintableFlags.size() == objectCount));
 
   if (valid) {
     m_modelVertices.reserve(std::min<qsizetype>(meshData.size() / kPackedVertexBytes, 1000000));
@@ -241,10 +251,51 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     batch.firstVertex = m_modelVertices.size();
     batch.vertexCount = int(vertexCount);
     bool batchHasBounds = false;
-    float r = 0.0f;
-    float g = 0.0f;
-    float b = 0.0f;
-    colorForSourceObject(sourceObjectIndex, r, g, b);
+    // P15.1/15.2 (COLOR): upstream model coloring — color_from_model_volume
+    // (3DScene.cpp:306-334) for the special volume types, then
+    // update_colors_by_extruder (:1184-1235, filament_colour[extruder-1]
+    // with the index clamped to 0) for model parts; NEUTRAL_COLOR fallback
+    // when no filament colors are available.
+    float r = 0.8f;
+    float g = 0.8f;
+    float b = 0.8f;
+    float a = 1.0f;
+    if (!batchVolumeTypes.isEmpty()) {
+      const int volumeType = batchVolumeTypes.at(objectIndex);
+      const int extruderId = batchExtruderIds.at(objectIndex);
+      const bool printable = batchPrintableFlags.at(objectIndex) != 0;
+      switch (volumeType) {
+      case 1: r = 0.3f; g = 0.3f; b = 0.3f; a = 0.4f; break; // MODEL_NEGTIVE_COL
+      case 2: r = 1.0f; g = 1.0f; b = 0.0f; a = 0.6f; break; // MODEL_MIDIFIER_COL
+      case 3: r = 1.0f; g = 0.3f; b = 0.3f; a = 0.4f; break; // SUPPORT_BLOCKER_COL
+      case 4: r = 0.3f; g = 0.3f; b = 1.0f; a = 0.4f; break; // SUPPORT_ENFORCER_COL
+      default: {
+        if (!extruderColors.isEmpty()) {
+          int colorIndex = extruderId - 1;
+          if (colorIndex < 0 || colorIndex >= extruderColors.size())
+            colorIndex = 0;
+          const QVector4D color = extruderColors.at(colorIndex);
+          r = color.x();
+          g = color.y();
+          b = color.z();
+          a = color.w() > 0.0f ? color.w() : 1.0f;
+        }
+        if (!printable) { // UNPRINTABLE_COLOR (3DScene.cpp:170)
+          r = 0.0f; g = 0.0f; b = 0.0f; a = 0.5f;
+        }
+        break;
+      }
+      }
+      // adjust_color_for_rendering (3DScene.cpp:93-103): fully transparent
+      // materials render white @0.3 alpha, near-black lifts to 0.2 so black
+      // filament stays visible on the dark theme.
+      if (a < 0.1f) {
+        r = 1.0f; g = 1.0f; b = 1.0f; a = 0.3f;
+      } else if (r < 0.2f && g < 0.2f && b < 0.2f) {
+        r = 0.2f; g = 0.2f; b = 0.2f;
+      }
+    }
+    batch.translucent = a < 0.999f;
 
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
       float x = 0.0f;
@@ -262,7 +313,7 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       if (!active)
         continue;
 
-      const ModelVertex vertex{x, y, z, r, g, b, 1.0f};
+      const ModelVertex vertex{x, y, z, r, g, b, a};
       m_modelVertices.append(vertex);
       if (!batchHasBounds) {
         batch.bounds = ModelBounds{x, y, z, x, y, z};

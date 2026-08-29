@@ -1482,6 +1482,11 @@ Item {
                     meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
                     meshBatchVolumeIndices: root.editorVm ? root.editorVm.meshBatchVolumeIndices : []
                     meshBatchInstanceIndices: root.editorVm ? root.editorVm.meshBatchInstanceIndices : []
+                    // P15.1/15.2 (COLOR): per-batch render channels for the upstream
+                    // model coloring (filament color / translucent modifiers / printable).
+                    meshBatchVolumeTypes: root.editorVm ? root.editorVm.meshBatchVolumeTypes : []
+                    meshBatchExtruderIds: root.editorVm ? root.editorVm.meshBatchExtruderIds : []
+                    meshBatchPrintableFlags: root.editorVm ? root.editorVm.meshBatchPrintableFlags : []
                     selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
                     onObjectPickedSource: function(sourceIndex) {
                         if (root.editorVm)

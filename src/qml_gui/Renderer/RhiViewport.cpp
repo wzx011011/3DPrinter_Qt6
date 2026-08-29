@@ -357,6 +357,37 @@ void RhiViewport::setMeshBatchInstanceIndices(const QVariantList &value)
   update();
 }
 
+// P15.1/15.2 (COLOR): per-batch render-channel metadata.
+void RhiViewport::setMeshBatchVolumeTypes(const QVariantList &value)
+{
+  if (m_meshBatchVolumeTypes == value)
+    return;
+  m_meshBatchVolumeTypes = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+
+void RhiViewport::setMeshBatchExtruderIds(const QVariantList &value)
+{
+  if (m_meshBatchExtruderIds == value)
+    return;
+  m_meshBatchExtruderIds = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+
+void RhiViewport::setMeshBatchPrintableFlags(const QVariantList &value)
+{
+  if (m_meshBatchPrintableFlags == value)
+    return;
+  m_meshBatchPrintableFlags = value;
+  ++m_sceneGeneration;
+  ++m_modelGeneration;
+  update();
+}
+
 void RhiViewport::setLayerEditingInputActive(bool value)
 {
   m_layerEditingInputActive = value;

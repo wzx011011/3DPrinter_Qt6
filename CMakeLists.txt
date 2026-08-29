@@ -574,7 +574,7 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         src/qml_gui/Renderer/ViewportContextHit.h
     )
     target_include_directories(PrepareSceneDataTests PRIVATE src)
-    target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core)
+    target_link_libraries(PrepareSceneDataTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
     add_test(NAME PrepareSceneDataTests COMMAND PrepareSceneDataTests)
     set_tests_properties(PrepareSceneDataTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"

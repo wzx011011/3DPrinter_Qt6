@@ -568,6 +568,13 @@ public:
   QList<int> meshBatchSourceObjectIndices() const;
   QList<int> meshBatchVolumeIndices() const;
   QList<int> meshBatchInstanceIndices() const;
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
+  // meshBatchSourceObjectIndices. volumeType = ProjectVolumeType int,
+  // extruderId = upstream ModelVolume::extruder_id() (1-based),
+  // printableFlags = ModelInstance::printable.
+  QList<int> meshBatchVolumeTypes() const;
+  QList<int> meshBatchExtruderIds() const;
+  QList<int> meshBatchPrintableFlags() const;
 
   bool setObjectInstanceCount(int objectIndex, int count);
   bool exportObjects(const QList<int> &objectIndices,

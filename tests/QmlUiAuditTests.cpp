@@ -1083,6 +1083,43 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
            "PreparePage must not filter renderer batch source metadata in QML");
   QVERIFY2(!preparePage.contains(QStringLiteral("meshBatchSourceObjectIndices.map")),
            "PreparePage must not transform renderer batch source metadata in QML");
+
+  // P15.1/15.2 (COLOR): the upstream volume coloring chain must stay wired:
+  // service metadata -> viewmodel properties -> viewport properties ->
+  // renderer translucent pass, with both pages binding the arrays.
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString sceneHeader = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
+  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(serviceHeader.contains(QStringLiteral("meshBatchVolumeTypes"))
+               && serviceHeader.contains(QStringLiteral("meshBatchExtruderIds"))
+               && serviceHeader.contains(QStringLiteral("meshBatchPrintableFlags")),
+           "ProjectServiceMock must expose the per-batch render-channel metadata");
+  QVERIFY2(editorHeader.contains(QStringLiteral("meshBatchVolumeTypes"))
+               && editorHeader.contains(QStringLiteral("meshBatchExtruderIds")),
+           "EditorViewModel must expose the per-batch render-channel metadata");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("meshBatchVolumeTypes"))
+               && rhiViewportHeader.contains(QStringLiteral("meshBatchPrintableFlags")),
+           "RhiViewport must mirror the per-batch render-channel metadata");
+  QVERIFY2(sceneHeader.contains(QStringLiteral("batchVolumeTypes"))
+               && sceneHeader.contains(QStringLiteral("extruderColors"))
+               && sceneHeader.contains(QStringLiteral("bool translucent")),
+           "PrepareSceneData must carry the render channels and the translucent batch flag");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_modelLitBlendPipeline"))
+               && rendererHeader.contains(QStringLiteral("m_modelTranslucentBatches")),
+           "RhiViewportRenderer must own the translucent model pass resources");
+  const QString sceneSource = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
+  QVERIFY2(sceneSource.contains(QStringLiteral("MODEL_MIDIFIER_COL"))
+               && sceneSource.contains(QStringLiteral("adjust_color_for_rendering"))
+               && sceneSource.contains(QStringLiteral("UNPRINTABLE_COLOR")),
+           "PrepareSceneData must implement the upstream volume color semantics");
+  QVERIFY2(rendererSource.contains(QStringLiteral("renderModelTranslucentPass"))
+               && rendererSource.contains(QStringLiteral("ensureModelLitBlendPipeline")),
+           "RhiViewportRenderer must implement the translucent volumes pass");
+  QVERIFY2(preparePage.contains(QStringLiteral("meshBatchVolumeTypes:"))
+               && previewPage.contains(QStringLiteral("meshBatchVolumeTypes:")),
+           "Both canvas pages must bind the render-channel arrays");
 }
 
 void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()

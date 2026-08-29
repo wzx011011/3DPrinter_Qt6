@@ -250,6 +250,9 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   m_cachedMeshBatchSourceObjectIndices = projectService_->meshBatchSourceObjectIndices();
   m_cachedMeshBatchVolumeIndices = projectService_->meshBatchVolumeIndices();
   m_cachedMeshBatchInstanceIndices = projectService_->meshBatchInstanceIndices();
+  m_cachedMeshBatchVolumeTypes = projectService_->meshBatchVolumeTypes();
+  m_cachedMeshBatchExtruderIds = projectService_->meshBatchExtruderIds();
+  m_cachedMeshBatchPrintableFlags = projectService_->meshBatchPrintableFlags();
   m_fitHint = QVector4D();
   // Any project mesh refresh invalidates both staged and in-flight previews.
   simplifyPreviewCancel();
@@ -5079,9 +5082,38 @@ QVariantList EditorViewModel::meshBatchInstanceIndices() const
 {
   QVariantList indices;
   indices.reserve(m_cachedMeshBatchInstanceIndices.size());
-  for (int instanceIndex : m_cachedMeshBatchInstanceIndices)
+  for (const int instanceIndex : m_cachedMeshBatchInstanceIndices)
     indices.append(instanceIndex);
   return indices;
+}
+
+// P15.1/15.2 (COLOR): per-batch render-channel metadata, parallel to
+// meshBatchSourceObjectIndices.
+QVariantList EditorViewModel::meshBatchVolumeTypes() const
+{
+  QVariantList values;
+  values.reserve(m_cachedMeshBatchVolumeTypes.size());
+  for (const int type : m_cachedMeshBatchVolumeTypes)
+    values.append(type);
+  return values;
+}
+
+QVariantList EditorViewModel::meshBatchExtruderIds() const
+{
+  QVariantList values;
+  values.reserve(m_cachedMeshBatchExtruderIds.size());
+  for (const int id : m_cachedMeshBatchExtruderIds)
+    values.append(id);
+  return values;
+}
+
+QVariantList EditorViewModel::meshBatchPrintableFlags() const
+{
+  QVariantList values;
+  values.reserve(m_cachedMeshBatchPrintableFlags.size());
+  for (const int flag : m_cachedMeshBatchPrintableFlags)
+    values.append(flag);
+  return values;
 }
 
 // Phase 138 (ASM-01): per-source-object assemble offset list (GL X,Y,Z). One

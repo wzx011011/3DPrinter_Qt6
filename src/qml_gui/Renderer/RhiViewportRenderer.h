@@ -107,6 +107,10 @@ private:
   void uploadBedTexture(QRhiResourceUpdateBatch *updates);
   void renderBedTexture(QRhiCommandBuffer *cb);
   bool ensureModelLitPipeline();
+  // P15.2 (COLOR): blended clone of the lit pipeline for the translucent
+  // model pass (blend on, depth write off).
+  bool ensureModelLitBlendPipeline();
+  void renderModelTranslucentPass(QRhiCommandBuffer *cb);
   // v5.16 (BEDMODEL/BEDTYPE-TEX)
   void uploadBedModelMesh(QRhiResourceUpdateBatch *updates);
   void renderBedModel(QRhiCommandBuffer *cb);
@@ -223,6 +227,24 @@ private:
   std::unique_ptr<QRhiBuffer> m_modelNormalBuffer;
   quint32 m_modelNormalBufferBytes = 0;
   bool m_modelLitEnabled = true;
+  // P15.2 (COLOR): upstream _render_objects(Transparent) — translucent
+  // modifier/negative volumes drawn after the opaque pass and the bed/plate,
+  // depth-tested without depth writes, far-to-near by view-space depth
+  // (3DScene.cpp:852-887). Same lit shaders; blend enabled, depth write off.
+  std::unique_ptr<QRhiGraphicsPipeline> m_modelLitBlendPipeline;
+  std::unique_ptr<QRhiBuffer> m_modelTranslucentBuffer;
+  std::unique_ptr<QRhiBuffer> m_modelTranslucentNormalBuffer;
+  quint32 m_modelTranslucentBufferBytes = 0;
+  quint32 m_modelTranslucentNormalBufferBytes = 0;
+  quint32 m_modelTranslucentVertexCount = 0;
+  struct TranslucentBatchRange
+  {
+    quint32 firstVertex = 0;
+    quint32 vertexCount = 0;
+    QVector3D center;
+  };
+  QVector<TranslucentBatchRange> m_modelTranslucentBatches;
+  QString m_extrudersColorsSignature;
   // v5.16 (BEDMODEL): printer bed_model STL drawn with the lit pipeline in
   // DEFAULT_MODEL_COLOR_DARK (upstream Bed3D::render_model).
   std::unique_ptr<QRhiBuffer> m_bedModelVertexBuffer;

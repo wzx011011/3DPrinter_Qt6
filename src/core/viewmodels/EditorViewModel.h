@@ -53,6 +53,13 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices NOTIFY stateChanged)
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
+  // meshBatchSourceObjectIndices. Drives the upstream model coloring
+  // (filament_colour by extruder, translucent modifier volumes, unprintable
+  // black) in PrepareSceneData.
+  Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags NOTIFY stateChanged)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
   // per source object index, paralleling meshBatchSourceObjectIndices. Consumed
   // by RhiViewport on the CanvasAssembleView path so assembled volumes render at
@@ -227,6 +234,10 @@ public:
   QVariantList meshBatchSourceObjectIndices() const;
   QVariantList meshBatchVolumeIndices() const;
   QVariantList meshBatchInstanceIndices() const;
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata.
+  QVariantList meshBatchVolumeTypes() const;
+  QVariantList meshBatchExtruderIds() const;
+  QVariantList meshBatchPrintableFlags() const;
   // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
   // per source object index). Mirrors meshBatchSourceObjectIndices indexing.
   QVariantList assembleOffsets() const;
@@ -1774,6 +1785,10 @@ private:
   QList<int> m_cachedMeshBatchSourceObjectIndices;
   QList<int> m_cachedMeshBatchVolumeIndices;
   QList<int> m_cachedMeshBatchInstanceIndices;
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata caches.
+  QList<int> m_cachedMeshBatchVolumeTypes;
+  QList<int> m_cachedMeshBatchExtruderIds;
+  QList<int> m_cachedMeshBatchPrintableFlags;
   ContextMenuFamily m_contextMenuFamily = ContextMenuNone;
   int m_contextSourceObjectIndex = -1;
   int m_contextVolumeIndex = -1;

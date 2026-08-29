@@ -260,16 +260,54 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     && viewport->m_bedHeightToRod > 0.0f,
                                 viewport->m_bedHeightToRod,
                                 viewport->m_bedHeightToLid);
+  // P15.1 (COLOR): an extruder-color change alone must re-tint the mesh even
+  // when the model data itself did not change; a signature mismatch forces
+  // the setModelMeshData re-run below.
+  {
+    QString signature;
+    for (const QVariant &color : viewport->m_extrudersColors)
+      signature += color.toString();
+    if (signature != m_extrudersColorsSignature) {
+      m_extrudersColorsSignature = signature;
+      m_modelGeneration = -1;
+    }
+  }
   if (m_modelGeneration != viewport->m_modelGeneration) {
     m_modelGeneration = viewport->m_modelGeneration;
     m_prepareScene.setPlateContext(viewport->m_currentPlateIndex,
                                    viewport->m_plateCount,
                                    activeObjectIndices);
+    // P15.1/15.2 (COLOR): render-channel arrays + parsed filament colours
+    // drive the upstream volume coloring in PrepareSceneData.
+    QList<int> batchVolumeTypes;
+    batchVolumeTypes.reserve(viewport->m_meshBatchVolumeTypes.size());
+    for (const QVariant &value : viewport->m_meshBatchVolumeTypes)
+      batchVolumeTypes.append(value.toInt());
+    QList<int> batchExtruderIds;
+    batchExtruderIds.reserve(viewport->m_meshBatchExtruderIds.size());
+    for (const QVariant &value : viewport->m_meshBatchExtruderIds)
+      batchExtruderIds.append(value.toInt());
+    QList<int> batchPrintableFlags;
+    batchPrintableFlags.reserve(viewport->m_meshBatchPrintableFlags.size());
+    for (const QVariant &value : viewport->m_meshBatchPrintableFlags)
+      batchPrintableFlags.append(value.toInt());
+    QList<QVector4D> extruderColors;
+    extruderColors.reserve(viewport->m_extrudersColors.size());
+    for (const QVariant &value : viewport->m_extrudersColors) {
+      const QColor color(value.toString());
+      if (color.isValid())
+        extruderColors.append(QVector4D(
+            float(color.redF()), float(color.greenF()), float(color.blueF()), 1.0f));
+    }
     m_prepareScene.setModelMeshData(viewport->m_meshData,
                                     batchSourceObjectIndices,
                                     batchVolumeIndices,
                                     batchInstanceIndices,
-                                    activeObjectIndices);
+                                    activeObjectIndices,
+                                    batchVolumeTypes,
+                                    batchExtruderIds,
+                                    batchPrintableFlags,
+                                    extruderColors);
   }
   const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
@@ -815,6 +853,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       }
       cb->draw(m_modelVertexCount);
     }
+    // P15.2 (COLOR): upstream draws the translucent volumes after the plate
+    // pass (_render_objects(Transparent), GLCanvas3D.cpp:1915); here it sits
+    // after the opaque model + bed so depth state covers both.
+    renderModelTranslucentPass(cb);
     // Phase 121 (PAINT-02/OV-03): render the painted-facet overlay after the
     // model mesh, before highlight. Reuses m_fillPipeline (opaque vertex-color
     // fill). Gated to the three paint gizmos (Support=6, Seam=7, MMU=10).
@@ -1024,6 +1066,7 @@ void RhiViewportRenderer::releaseRenderPassDependentResources()
   m_translucentLinePipeline.reset();
   m_bedTexturePipeline.reset();
   m_modelLitPipeline.reset();
+  m_modelLitBlendPipeline.reset();
   m_gizmoLinePipeline.reset();
   m_gizmoTriPipeline.reset();
   m_gizmoPipelineCreated = false;
@@ -1062,8 +1105,16 @@ void RhiViewportRenderer::releaseResources()
   m_bedTextureVertexBytes = 0;
   m_bedTextureVertexCount = 0;
   m_modelLitPipeline.reset();
+  m_modelLitBlendPipeline.reset();
   m_modelNormalBuffer.reset();
   m_modelNormalBufferBytes = 0;
+  // P15.2 (COLOR): translucent model pass buffers.
+  m_modelTranslucentBuffer.reset();
+  m_modelTranslucentNormalBuffer.reset();
+  m_modelTranslucentBufferBytes = 0;
+  m_modelTranslucentNormalBufferBytes = 0;
+  m_modelTranslucentVertexCount = 0;
+  m_modelTranslucentBatches.clear();
   // v5.16 (BEDMODEL/BEDTYPE-TEX)
   m_bedModelVertexBuffer.reset();
   m_bedModelNormalBuffer.reset();
@@ -2142,6 +2193,101 @@ bool RhiViewportRenderer::ensureModelLitPipeline()
   return true;
 }
 
+// P15.2 (COLOR): blended clone of the lit pipeline — same shaders, SRB and
+// vertex layout as ensureModelLitPipeline, but source-alpha blended with the
+// depth write disabled (upstream transparent volumes pass).
+bool RhiViewportRenderer::ensureModelLitBlendPipeline()
+{
+  if (m_modelLitBlendPipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr || m_srb == nullptr)
+    return false;
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_lit.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_lit.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),
+      QRhiVertexInputBinding(3 * sizeof(float)),
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+      QRhiVertexInputAttribute(1, 2, QRhiVertexInputAttribute::Float3, 0),
+  });
+
+  m_modelLitBlendPipeline.reset(rhi()->newGraphicsPipeline());
+  m_modelLitBlendPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_modelLitBlendPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_modelLitBlendPipeline->setShaderResourceBindings(m_srb.get());
+  m_modelLitBlendPipeline->setVertexInputLayout(inputLayout);
+  m_modelLitBlendPipeline->setRenderPassDescriptor(
+      renderTarget()->renderPassDescriptor());
+  m_modelLitBlendPipeline->setDepthTest(true);
+  m_modelLitBlendPipeline->setDepthWrite(false);
+  QRhiGraphicsPipeline::TargetBlend blend;
+  blend.enable = true;
+  m_modelLitBlendPipeline->setTargetBlends({blend});
+  if (!m_modelLitBlendPipeline->create()) {
+    m_modelLitBlendPipeline.reset();
+    return false;
+  }
+  return true;
+}
+
+// P15.2 (COLOR): the transparent volumes pass. Batches draw far-to-near by
+// view-space depth (upstream 3DScene.cpp:871-879 sorts the volume collection
+// the same way before blending).
+void RhiViewportRenderer::renderModelTranslucentPass(QRhiCommandBuffer *cb)
+{
+  if (m_modelTranslucentVertexCount == 0 || m_modelTranslucentBatches.isEmpty())
+    return;
+  if (cb == nullptr || m_modelTranslucentBuffer == nullptr)
+    return;
+  if (!ensureModelLitBlendPipeline() || m_modelTranslucentNormalBuffer == nullptr) {
+    // Fallback: unlit translucent fill keeps the volumes visible even when
+    // the lit pipeline cannot be built.
+    if (m_translucentFillPipeline == nullptr)
+      return;
+    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_modelTranslucentBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_modelTranslucentVertexCount);
+    return;
+  }
+  QVector<QPair<float, const TranslucentBatchRange *>> drawOrder;
+  drawOrder.reserve(m_modelTranslucentBatches.size());
+  for (const TranslucentBatchRange &range : m_modelTranslucentBatches) {
+    // View-space depth: eye looks down -z, so farther = smaller z.
+    const QVector3D eye = m_cameraView * range.center;
+    drawOrder.append({eye.z(), &range});
+  }
+  std::sort(drawOrder.begin(), drawOrder.end(),
+            [](const QPair<float, const TranslucentBatchRange *> &a,
+               const QPair<float, const TranslucentBatchRange *> &b) {
+              return a.first < b.first; // far (small z) first
+            });
+  cb->setGraphicsPipeline(m_modelLitBlendPipeline.get());
+  const QRhiCommandBuffer::VertexInput bindings[2] = {
+      QRhiCommandBuffer::VertexInput(m_modelTranslucentBuffer.get(), 0),
+      QRhiCommandBuffer::VertexInput(m_modelTranslucentNormalBuffer.get(), 1),
+  };
+  cb->setVertexInput(0, 2, bindings);
+  cb->setShaderResources(m_srb.get());
+  for (const auto &entry : drawOrder) {
+    if (entry.second->vertexCount > 0)
+      cb->draw(entry.second->vertexCount, 1, entry.second->firstVertex, 0);
+  }
+}
+
 bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
 {
   rhiTrace("uploadSceneBuffers-enter");
@@ -2264,7 +2410,41 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   if (!uploadModel)
     return true;
 
-  const QVector<Vertex> modelVertices = buildModelVertices(m_prepareScene.modelVertices());
+  // P15.2 (COLOR): split the scene vertices into the opaque pass buffer and
+  // the translucent modifier pass buffer (upstream _render_objects Opaque /
+  // Transparent, 3DScene.cpp:852-887). Translucent batches keep their ranges
+  // for the per-frame far-to-near sorted draws.
+  const QVector<PrepareSceneData::ModelVertex> &sceneVertices =
+      m_prepareScene.modelVertices();
+  const QList<PrepareSceneData::ModelBatch> &sceneBatches =
+      m_prepareScene.modelBatches();
+  const QVector<Vertex> allVertices = buildModelVertices(sceneVertices);
+  QVector<Vertex> modelVertices;
+  QVector<Vertex> translucentVertices;
+  m_modelTranslucentBatches.clear();
+  m_modelTranslucentVertexCount = 0;
+  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
+    if (batch.firstVertex < 0
+        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
+      continue;
+    if (!batch.translucent) {
+      for (int i = 0; i < batch.vertexCount; ++i)
+        modelVertices.append(allVertices.at(batch.firstVertex + i));
+      continue;
+    }
+    TranslucentBatchRange range;
+    range.firstVertex = quint32(translucentVertices.size());
+    for (int i = 0; i < batch.vertexCount; ++i)
+      translucentVertices.append(allVertices.at(batch.firstVertex + i));
+    range.vertexCount = quint32(batch.vertexCount);
+    range.center = QVector3D(
+        (batch.bounds.minX + batch.bounds.maxX) * 0.5f,
+        (batch.bounds.minY + batch.bounds.maxY) * 0.5f,
+        (batch.bounds.minZ + batch.bounds.maxZ) * 0.5f);
+    m_modelTranslucentBatches.append(range);
+  }
+  m_modelTranslucentVertexCount = quint32(translucentVertices.size());
+
   const quint32 modelBytes = quint32(modelVertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_modelVertexBuffer, modelBytes, m_modelVertexBufferBytes, QRhiBuffer::VertexBuffer))
     return false;
@@ -2277,15 +2457,24 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
                                 modelVertices.constData());
   }
 
-  // v5.15 (MODELLIT): parallel per-face normal array (one normal per model
-  // vertex, i.e. three identical normals per triangle) for the lit pipeline.
-  // Computed here so the normal buffer always matches the position buffer
-  // even when the mesh stream rebuilds.
-  {
+  const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_modelTranslucentBuffer, translucentBytes,
+                    m_modelTranslucentBufferBytes, QRhiBuffer::VertexBuffer))
+    return false;
+  if (m_modelTranslucentBuffer && translucentBytes > 0) {
+    updates->uploadStaticBuffer(m_modelTranslucentBuffer.get(),
+                                0,
+                                translucentBytes,
+                                translucentVertices.constData());
+  }
+
+  // Helper shared by both normal arrays (one normal per vertex, three
+  // identical normals per triangle) for the lit pipelines.
+  const auto buildNormals = [](const QVector<Vertex> &verts) {
     QVector<float> normals;
-    normals.reserve(modelVertices.size() * 3);
-    const int triCount = modelVertices.size() / 3;
-    const Vertex *v = modelVertices.constData();
+    normals.reserve(verts.size() * 3);
+    const int triCount = verts.size() / 3;
+    const Vertex *v = verts.constData();
     for (int t = 0; t < triCount; ++t) {
       const Vertex &a = v[t * 3 + 0];
       const Vertex &b = v[t * 3 + 1];
@@ -2307,10 +2496,30 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
         normals.append(nz);
       }
     }
+    return normals;
+  };
+
+  // v5.15 (MODELLIT): parallel per-face normal array for the lit pipeline.
+  // Computed here so the normal buffer always matches the position buffer
+  // even when the mesh stream rebuilds.
+  {
+    const QVector<float> normals = buildNormals(modelVertices);
     const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
     if (ensureBuffer(m_modelNormalBuffer, normalBytes, m_modelNormalBufferBytes, QRhiBuffer::VertexBuffer)
         && m_modelNormalBuffer && normalBytes > 0) {
       updates->uploadStaticBuffer(m_modelNormalBuffer.get(), 0, normalBytes, normals.constData());
+    }
+  }
+  // P15.2 (COLOR): the translucent pass shares the lit shader, so it needs
+  // its own matching normal array.
+  {
+    const QVector<float> normals = buildNormals(translucentVertices);
+    const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
+    if (ensureBuffer(m_modelTranslucentNormalBuffer, normalBytes,
+                     m_modelTranslucentNormalBufferBytes, QRhiBuffer::VertexBuffer)
+        && m_modelTranslucentNormalBuffer && normalBytes > 0) {
+      updates->uploadStaticBuffer(m_modelTranslucentNormalBuffer.get(),
+                                  0, normalBytes, normals.constData());
     }
   }
 

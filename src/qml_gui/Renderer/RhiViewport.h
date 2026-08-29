@@ -69,6 +69,11 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices WRITE setMeshBatchSourceObjectIndices)
   Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices WRITE setMeshBatchVolumeIndices)
   Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices WRITE setMeshBatchInstanceIndices)
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata (volume type,
+  // extruder id, printable flag) paralleling meshBatchSourceObjectIndices.
+  Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes WRITE setMeshBatchVolumeTypes)
+  Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds WRITE setMeshBatchExtruderIds)
+  Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags WRITE setMeshBatchPrintableFlags)
   Q_PROPERTY(bool layerEditingInputActive READ layerEditingInputActive WRITE setLayerEditingInputActive)
   Q_PROPERTY(bool contextToolInputCaptured READ contextToolInputCaptured WRITE setContextToolInputCaptured)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
@@ -334,7 +339,14 @@ public:
   QVariantList meshBatchVolumeIndices() const { return m_meshBatchVolumeIndices; }
   void setMeshBatchVolumeIndices(const QVariantList &value);
   QVariantList meshBatchInstanceIndices() const { return m_meshBatchInstanceIndices; }
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata.
+  QVariantList meshBatchVolumeTypes() const { return m_meshBatchVolumeTypes; }
+  QVariantList meshBatchExtruderIds() const { return m_meshBatchExtruderIds; }
+  QVariantList meshBatchPrintableFlags() const { return m_meshBatchPrintableFlags; }
   void setMeshBatchInstanceIndices(const QVariantList &value);
+  void setMeshBatchVolumeTypes(const QVariantList &value);
+  void setMeshBatchExtruderIds(const QVariantList &value);
+  void setMeshBatchPrintableFlags(const QVariantList &value);
   bool layerEditingInputActive() const { return m_layerEditingInputActive; }
   void setLayerEditingInputActive(bool value);
   bool contextToolInputCaptured() const { return m_contextToolInputCaptured; }
@@ -755,6 +767,10 @@ private:
   QVariantList m_meshBatchSourceObjectIndices;
   QVariantList m_meshBatchVolumeIndices;
   QVariantList m_meshBatchInstanceIndices;
+  // P15.1/15.2 (COLOR): per-batch render-channel metadata.
+  QVariantList m_meshBatchVolumeTypes;
+  QVariantList m_meshBatchExtruderIds;
+  QVariantList m_meshBatchPrintableFlags;
   bool m_layerEditingInputActive = false;
   bool m_contextToolInputCaptured = false;
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z).
