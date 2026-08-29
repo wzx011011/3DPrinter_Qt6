@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <QHash>
 #include <QPair>
 
 namespace
@@ -39,9 +40,35 @@ namespace
   // Upstream LOGICAL_PART_PLATE_GAP = 1/5 (PartPlate.cpp:53): the stride
   // between plate origins is bed size * (1 + gap).
   constexpr float kPlateGapRatio = 1.0f / 5.0f;
-  constexpr float kAxisR = 0.12f;
-  constexpr float kAxisG = 0.78f;
-  constexpr float kAxisB = 0.37f;
+  // P15.8 (BOLDGRID): upstream calc_gridlines bolds every 5th grid line
+  // (PartPlate.cpp:483/496 count % 5) and render_grid draws the bold set a
+  // second time with glLineWidth(2) (PartPlate.cpp:909). QRhi has no line
+  // width, so the bold lines are flat quads ~0.5mm wide (2px at the typical
+  // bed-view zoom).
+  constexpr int kBoldEveryNth = 5;
+  constexpr float kBoldHalfWidthMm = 0.25f;
+  // P15.5 (SINK): upstream GLVolume::SinkingContours (3DScene.cpp:108-161).
+  constexpr float kSinkingHalfWidth = 0.25f;     // SinkingContours::HalfWidth (3DScene.cpp:108)
+  constexpr float kSinkingZLift = 0.015f;        // anti z-fight lift (3DScene.cpp:150)
+  constexpr float kSinkingThreshold = -0.001f;   // SINKING_Z_THRESHOLD (Model.hpp:1709)
+  // P15.3 (OUTOFBED): BuildVolume::SceneEpsilon (BuildVolume.hpp:79,
+  // libslic3r.h:52) used by the print volume inflation / state tests.
+  constexpr float kSceneEpsilon = 1e-4f;
+  // P15.7 (AXES): Bed3D::Axes constants (3DBed.cpp:183-186, :30).
+  constexpr float kAxesGroundZ = -0.04f;         // GROUND_Z (3DBed.cpp:30)
+  constexpr float kArrowStemRadius = 0.5f;       // Axes::DefaultStemRadius (3DBed.cpp:183)
+  constexpr float kArrowTipRadius = 1.25f;       // 2.5 * DefaultStemRadius (3DBed.cpp:185)
+  constexpr float kArrowTipLength = 5.0f;        // Axes::DefaultTipLength (3DBed.cpp:186)
+  // AXIS_X/Y/Z_COLOR = ColorRGBA::X()/Y()/Z() (3DBed.cpp:188-190,
+  // Color.hpp:143-145).
+  constexpr float kAxisXR = 0.75f;
+  constexpr float kAxisYG = 0.75f;
+  constexpr float kAxisZB = 0.75f;
+  // P15.6 (CIRCLEBED): boundary polygon segment count for circular plates
+  // (upstream fills/clips the circle bed-shape polygon, PartPlate
+  // calc_triangles/calc_gridlines).
+  constexpr int kCircleSegments = 48;
+  constexpr float kPi = 3.14159265358979f;
   // Upstream render_exclude_area palette (PartPlate.cpp:859-860):
   // selected vs unselected exclude-region fill.
   constexpr float kExclSelR = 0.765f;
@@ -150,6 +177,20 @@ void PrepareSceneData::setHeightLimit(bool active, float heightToRod, float heig
   m_heightToRod = heightToRod;
   m_heightToLid = heightToLid;
   rebuildHeightLimitGeometry();
+  markDirty(DirtyBed | DirtyGpu);
+}
+
+void PrepareSceneData::setPrintableHeight(float height)
+{
+  // P15.3 (OUTOFBED): upstream print_volume z_data.y = printable_height
+  // (GLCanvas3D.cpp:7183/7189). 0 or negative = unbounded (feature not yet
+  // plumbed from the viewmodel).
+  const float normalized = height > 0.0f && std::isfinite(height) ? height : 0.0f;
+  if (nearlyEqual(m_printableHeight, normalized))
+    return;
+  m_printableHeight = normalized;
+  updatePrintVolume();
+  recomputeOutsideState();
   markDirty(DirtyBed | DirtyGpu);
 }
 
@@ -296,6 +337,9 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       }
     }
     batch.translucent = a < 0.999f;
+    // P15.3 (OUTOFBED): ProjectVolumeType for the outside-state gate.
+    batch.volumeType = batchVolumeTypes.isEmpty() ? 0
+                                                  : batchVolumeTypes.at(objectIndex);
 
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
       float x = 0.0f;
@@ -341,6 +385,27 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       valid = false;
     else
       offset += kPackedTrailerBytes;
+  }
+
+  // P15.3 (OUTOFBED)/P15.5 (SINK): derived per-batch state. Only computed
+  // from a fully valid payload so a malformed stream cannot leave stale
+  // outside flags behind.
+  if (valid) {
+    // P15.5 (SINK): contour bands for sinking batches (bbox dips under the
+    // bed plane without being fully below it — upstream is_sinking,
+    // 3DScene.cpp:614-620 with SINKING_Z_THRESHOLD = -0.001,
+    // Model.hpp:1709).
+    for (const ModelBatch &batch : m_modelBatches) {
+      if (batch.bounds.minY < kSinkingThreshold
+          && batch.bounds.maxY >= kSinkingThreshold)
+        appendSinkingContours(batch);
+    }
+    updatePrintVolume();
+    recomputeOutsideState();
+  } else {
+    m_sinkingContourVertices.clear();
+    m_sinkingContourRanges.clear();
+    m_anyVolumeOutside = false;
   }
 
   if (!valid) {
@@ -476,6 +541,32 @@ const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedBottomLineVertices()
   return m_bedBottomLineVertices;
 }
 
+const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedBoldLineVertices() const
+{
+  // P15.8 (BOLDGRID): every-5th grid line as ~2px quads
+  // (upstream render_grid second bolder draw, PartPlate.cpp:909-911).
+  return m_bedBoldLineVertices;
+}
+
+const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::sinkingContourVertices() const
+{
+  // P15.5 (SINK): white bed-plane contour bands
+  // (upstream GLVolume::SinkingContours, 3DScene.cpp:108-161).
+  return m_sinkingContourVertices;
+}
+
+const QList<PrepareSceneData::SinkingContourRange> &PrepareSceneData::sinkingContourRanges() const
+{
+  return m_sinkingContourRanges;
+}
+
+const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::bedAxesVertices() const
+{
+  // P15.7 (AXES): X/Y/Z origin arrows
+  // (upstream Bed3D::Axes::render, 3DBed.cpp:183-245).
+  return m_bedAxesVertices;
+}
+
 const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::bedLimitVertices() const
 {
   return m_bedLimitVertices;
@@ -509,6 +600,16 @@ int PrepareSceneData::selectedSourceObjectIndex() const
 int PrepareSceneData::hoveredSourceObjectIndex() const
 {
   return m_hoveredSourceObjectIndex;
+}
+
+const PrepareSceneData::PrintVolume &PrepareSceneData::printVolume() const
+{
+  return m_printVolume;
+}
+
+bool PrepareSceneData::anyVolumeOutside() const
+{
+  return m_anyVolumeOutside;
 }
 
 bool PrepareSceneData::containsCurrentPlatePoint(float x, float z) const
@@ -574,10 +675,14 @@ void PrepareSceneData::rebuildBedGeometry()
   m_bedFillVertices.clear();
   m_bedLineVertices.clear();
   m_bedBottomLineVertices.clear();
+  m_bedBoldLineVertices.clear();
   m_bedLimitVertices.clear();
+  m_bedAxesVertices.clear();
 
-  if (!m_showBed)
+  if (!m_showBed) {
+    updatePrintVolume();
     return;
+  }
 
   // Source-truth mapping: upstream PartPlateList renders EVERY plate in a
   // grid — cols = ceil(sqrt(count)) (PartPlate.hpp:38 compute_colum_count),
@@ -595,48 +700,125 @@ void PrepareSceneData::rebuildBedGeometry()
     const int col = i % cols;
     const float left = m_bedOriginX + float(col) * strideX;
     const float top = m_bedOriginY + float(row) * strideD;
-    const float right = left + m_bedWidth;
-    const float bottom = top + m_bedDepth;
     const bool selected = (m_plateCount <= 0) || (i == m_currentPlateIndex);
+    rebuildPlateGeometry(row, col, left, top, selected);
+  }
 
-    const float fillR = selected ? kFillSelR : kFillUnselR;
-    const float fillG = selected ? kFillSelG : kFillUnselG;
-    const float fillB = selected ? kFillSelB : kFillUnselB;
-    const float fillA = selected ? kFillSelA : kFillUnselA;
-    const float lineR = selected ? kLineSelR : kLineUnselR;
-    const float lineG = selected ? kLineSelG : kLineUnselG;
-    const float lineB = selected ? kLineSelB : kLineUnselB;
+  rebuildAxesGeometry();
+  updatePrintVolume();
+  rebuildHeightLimitGeometry();
+}
 
-    // Upstream render order (PartPlate::render 2728-2765): background fill,
-    // then exclude area, then grid. Same fill buffer keeps the layering.
-    appendRectFill(left, top, right, bottom, fillR, fillG, fillB, fillA);
-    appendExcludeFills(left, top, selected);
-    appendRectBorder(left, top, right, bottom, lineR, lineG, lineB);
+void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
+                                            float left, float top, bool selected)
+{
+  Q_UNUSED(plateRow);
+  Q_UNUSED(plateCol);
+  const float right = left + m_bedWidth;
+  const float bottom = top + m_bedDepth;
 
-    // The grid lines are ALSO emitted into the bottom-view buffer in
-    // LINE_BOTTOM_COLOR: upstream render_grid(bottom=true) keeps every grid
-    // line visible from below while border/origin axes stay top-only
-    // (render_background runs under `if (!bottom)`).
-    for (float x = left + kFineGridMm; x < right; x += kFineGridMm) {
+  const float fillR = selected ? kFillSelR : kFillUnselR;
+  const float fillG = selected ? kFillSelG : kFillUnselG;
+  const float fillB = selected ? kFillSelB : kFillUnselB;
+  const float fillA = selected ? kFillSelA : kFillUnselA;
+  const float lineR = selected ? kLineSelR : kLineUnselR;
+  const float lineG = selected ? kLineSelG : kLineUnselG;
+  const float lineB = selected ? kLineSelB : kLineUnselB;
+
+  // Upstream render order (PartPlate::render 2728-2765): background fill,
+  // then exclude area, then grid. Same fill buffer keeps the layering.
+  if (m_bedShapeType == 1) {
+    // P15.6 (CIRCLEBED): circular plate — fan-triangulated boundary polygon
+    // fill (upstream init_model_from_poly convex fan over the circle bed
+    // shape) + boundary chords clipped to the circle (upstream
+    // calc_gridlines intersection_pl with the plate polygon).
+    const float cx = left + m_bedWidth * 0.5f;
+    const float cz = top + m_bedDepth * 0.5f;
+    const float radius = m_bedDiameter * 0.5f;
+    for (int s = 0; s < kCircleSegments; ++s) {
+      const float a0 = 2.0f * kPi * float(s) / float(kCircleSegments);
+      const float a1 = 2.0f * kPi * float(s + 1) / float(kCircleSegments);
+      const float x0 = cx + radius * std::cos(a0);
+      const float z0 = cz + radius * std::sin(a0);
+      const float x1 = cx + radius * std::cos(a1);
+      const float z1 = cz + radius * std::sin(a1);
+      // fan triangle center -> s -> s+1
+      m_bedFillVertices.append(Vertex{cx, cz, fillR, fillG, fillB, fillA});
+      m_bedFillVertices.append(Vertex{x0, z0, fillR, fillG, fillB, fillA});
+      m_bedFillVertices.append(Vertex{x1, z1, fillR, fillG, fillB, fillA});
+      // boundary chord (upstream appends the bed contour lines to the
+      // gridline set, PartPlate.cpp:507-509)
+      appendLine(x0, z0, x1, z1, lineR, lineG, lineB, 0.95f);
+      appendBottomLine(x0, z0, x1, z1);
+    }
+
+    // Fine grid clipped to the circle: straight lines every 10mm with the
+    // chord endpoints computed from the circle (upstream clips the same
+    // straight lines against the circle polygon, PartPlate.cpp:504-505).
+    // Bolder every 5th line (PartPlate.cpp:483/496), x exclusive / y
+    // inclusive like calc_gridlines.
+    for (int k = 1; ; ++k) {
+      const float x = left + float(k) * kFineGridMm;
+      if (x >= right)
+        break;
+      const float dx = x - cx;
+      if (std::abs(dx) >= radius)
+        continue;
+      const float half = std::sqrt(radius * radius - dx * dx);
+      const bool bold = (k % kBoldEveryNth) == 0;
+      if (bold) {
+        appendBoldLine(x, cz - half, x, cz + half, lineR, lineG, lineB);
+      } else {
+        appendLine(x, cz - half, x, cz + half, lineR, lineG, lineB, 0.6f);
+        appendBottomLine(x, cz - half, x, cz + half);
+      }
+    }
+    for (int k = 1; ; ++k) {
+      const float y = top + float(k) * kFineGridMm;
+      if (y >= bottom)
+        break;
+      const float dy = y - cz;
+      if (std::abs(dy) >= radius)
+        continue;
+      const float half = std::sqrt(radius * radius - dy * dy);
+      const bool bold = (k % kBoldEveryNth) == 0;
+      appendLine(cx - half, y, cx + half, y, lineR, lineG, lineB, 0.6f);
+      appendBottomLine(cx - half, y, cx + half, y);
+      if (bold)
+        appendBoldLine(cx - half, y, cx + half, y, lineR, lineG, lineB);
+    }
+    return;
+  }
+
+  appendRectFill(left, top, right, bottom, fillR, fillG, fillB, fillA);
+  appendExcludeFills(left, top, selected);
+  appendRectBorder(left, top, right, bottom, lineR, lineG, lineB);
+
+  // The grid lines are ALSO emitted into the bottom-view buffer in
+  // LINE_BOTTOM_COLOR: upstream render_grid(bottom=true) keeps every grid
+  // line visible from below while border/origin axes stay top-only
+  // (render_background runs under `if (!bottom)`).
+  // P15.8 (BOLDGRID): every 5th line moves to the ~2px bolder set
+  // (PartPlate.cpp:483/496 count % 5, :909-911 second draw). Upstream
+  // calc_gridlines counts from the plate edge: bold lines sit at multiples
+  // of 5 * 10mm from it. X bold lines are exclusive to the bolder set;
+  // Y bold lines stay in the fine set too (PartPlate.cpp:483-500).
+  int gridIndex = 1; // first inner line sits one spacing from the edge
+  for (float x = left + kFineGridMm; x < right; x += kFineGridMm, ++gridIndex) {
+    if (gridIndex % kBoldEveryNth == 0) {
+      appendBoldLine(x, top, x, bottom, lineR, lineG, lineB);
+    } else {
       appendLine(x, top, x, bottom, lineR, lineG, lineB, 0.6f);
       appendBottomLine(x, top, x, bottom);
     }
-    for (float y = top + kFineGridMm; y < bottom; y += kFineGridMm) {
-      appendLine(left, y, right, y, lineR, lineG, lineB, 0.6f);
-      appendBottomLine(left, y, right, y);
-    }
-
-    // Origin axes only on the selected plate (upstream draws the origin
-    // cross per plate shape; the selected plate is the working surface).
-    if (selected) {
-      const float originX = std::clamp(m_bedOriginX, left, right);
-      const float originY = std::clamp(m_bedOriginY, top, bottom);
-      appendLine(originX, top, originX, bottom, kAxisR, kAxisG, kAxisB, 0.95f);
-      appendLine(left, originY, right, originY, kAxisR, kAxisG, kAxisB, 0.95f);
-    }
   }
-
-  rebuildHeightLimitGeometry();
+  gridIndex = 1;
+  for (float y = top + kFineGridMm; y < bottom; y += kFineGridMm, ++gridIndex) {
+    appendLine(left, y, right, y, lineR, lineG, lineB, 0.6f);
+    appendBottomLine(left, y, right, y);
+    if (gridIndex % kBoldEveryNth == 0)
+      appendBoldLine(left, y, right, y, lineR, lineG, lineB);
+  }
 }
 
 void PrepareSceneData::clearModelGeometry()
@@ -645,6 +827,10 @@ void PrepareSceneData::clearModelGeometry()
   m_modelBatches.clear();
   m_modelBounds = ModelBounds{};
   m_hasModelBounds = false;
+  // P15.5 (SINK)/P15.3 (OUTOFBED): derived state follows the batches.
+  m_sinkingContourVertices.clear();
+  m_sinkingContourRanges.clear();
+  m_anyVolumeOutside = false;
 }
 
 void PrepareSceneData::updateModelBounds(const ModelVertex &vertex)
@@ -693,6 +879,37 @@ void PrepareSceneData::appendBottomLine(float x1, float y1, float x2, float y2)
   // (upstream PartPlate::render_grid(true), PartPlate.cpp:85).
   m_bedBottomLineVertices.append(Vertex{x1, y1, kLineBottomR, kLineBottomG, kLineBottomB, kLineBottomA});
   m_bedBottomLineVertices.append(Vertex{x2, y2, kLineBottomR, kLineBottomG, kLineBottomB, kLineBottomA});
+}
+
+void PrepareSceneData::appendBoldLine(float x1, float y1, float x2, float y2, float r, float g, float b)
+{
+  // P15.8 (BOLDGRID): upstream draws the every-5th-line set a second time
+  // with glLineWidth(2.0f * scale) (PartPlate.cpp:909-911). QRhi pipelines
+  // have no line width, so the bolder line is a flat 0.5mm quad (two
+  // triangles) perpendicular to the line direction — ~2px at the typical
+  // bed-view zoom. The bottom-view twin uses two parallel 1px lines in
+  // LINE_BOTTOM_COLOR (render_grid draws the same bolder set from below).
+  const float dx = x2 - x1;
+  const float dy = y2 - y1;
+  const float len = std::sqrt(dx * dx + dy * dy);
+  if (len <= 1e-6f)
+    return;
+  const float nx = -dy / len * kBoldHalfWidthMm;
+  const float ny = dx / len * kBoldHalfWidthMm;
+  const float a1x = x1 + nx, a1y = y1 + ny;
+  const float a2x = x2 + nx, a2y = y2 + ny;
+  const float b1x = x1 - nx, b1y = y1 - ny;
+  const float b2x = x2 - nx, b2y = y2 - ny;
+  m_bedBoldLineVertices.append(Vertex{a1x, a1y, r, g, b, 1.0f});
+  m_bedBoldLineVertices.append(Vertex{a2x, a2y, r, g, b, 1.0f});
+  m_bedBoldLineVertices.append(Vertex{b2x, b2y, r, g, b, 1.0f});
+  m_bedBoldLineVertices.append(Vertex{a1x, a1y, r, g, b, 1.0f});
+  m_bedBoldLineVertices.append(Vertex{b2x, b2y, r, g, b, 1.0f});
+  m_bedBoldLineVertices.append(Vertex{b1x, b1y, r, g, b, 1.0f});
+  // Bottom view: same bolder hierarchy in LINE_BOTTOM_COLOR as two parallel
+  // 1px lines offset by the quad half width.
+  appendBottomLine(a1x, a1y, a2x, a2y);
+  appendBottomLine(b1x, b1y, b2x, b2y);
 }
 
 void PrepareSceneData::appendRectFill(float left, float top, float right, float bottom,
@@ -757,6 +974,307 @@ void PrepareSceneData::appendExcludeFills(float plateLeft, float plateTop, bool 
     m_bedFillVertices.append(Vertex{px[2] + dx, py[2] + dy, r, g, b, 1.0f});
     m_bedFillVertices.append(Vertex{px[3] + dx, py[3] + dy, r, g, b, 1.0f});
   }
+}
+
+// P15.7 (AXES): origin coordinate arrows on the selected plate, replacing
+// the former invented green cross. Upstream Bed3D::Axes::render
+// (3DBed.cpp:183-245): three stilized arrows — X (AXIS_X_COLOR), Y
+// (AXIS_Y_COLOR), Z (AXIS_Z_COLOR) — with stem length 0.1x the bed size
+// (3DBed.cpp:326), rooted at the plate origin at GROUND_Z (-0.04,
+// 3DBed.cpp:30/325). Colors are ColorRGBA::X()/Y()/Z() = 0.75 on their
+// channel (Color.hpp:143-145). Upstream world axes map to Qt scene axes as
+// X->X, Y->Z (depth), Z->Y (height); each arrow is generated along the
+// upstream +Z frame (GLModel.cpp:850-932 stilized_arrow) and remapped.
+void PrepareSceneData::rebuildAxesGeometry()
+{
+  m_bedAxesVertices.clear();
+  if (!m_showBed)
+    return;
+
+  const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
+  const bool validPlate = m_currentPlateIndex >= 0 && m_currentPlateIndex < plateCount;
+  const int current = validPlate ? m_currentPlateIndex : 0;
+  const float strideX = m_bedWidth * (1.0f + kPlateGapRatio);
+  const float strideD = m_bedDepth * (1.0f + kPlateGapRatio);
+  const int cols = computePlateColumns(plateCount);
+  const float left = m_bedOriginX + float(current % cols) * strideX;
+  const float top = m_bedOriginY + float(current / cols) * strideD;
+  // Bed3D::set_shape: stem length = 0.1 * bounding_volume max size
+  // (3DBed.cpp:326); printable height is not tracked here, so the max uses
+  // the plate footprint.
+  const float stemLength = 0.1f * std::max(m_bedWidth, m_bedDepth);
+  const float origin[3] = {left, kAxesGroundZ, top};
+
+  // x axis (upstream assemble_transform(origin, {0, 0.5*PI, 0}), 3DBed.cpp:232)
+  const float dirX[3] = {1.0f, 0.0f, 0.0f};
+  appendArrow(origin, dirX, stemLength, kAxisXR, 0.0f, 0.0f);
+  // y axis (upstream {-0.5*PI, 0, 0}, 3DBed.cpp:236); lands on Qt +Z.
+  const float dirZ[3] = {0.0f, 0.0f, 1.0f};
+  appendArrow(origin, dirZ, stemLength, 0.0f, kAxisYG, 0.0f);
+  // z axis (upstream identity, 3DBed.cpp:240); = Qt +Y (height).
+  const float dirY[3] = {0.0f, 1.0f, 0.0f};
+  appendArrow(origin, dirY, stemLength, 0.0f, 0.0f, kAxisZB);
+}
+
+// stilized_arrow port (GLModel.cpp:850-932): triangle soup generated along
+// upstream +Z (tip at z = stemLength + tipHeight), rotated onto `dir`,
+// remapped to Qt scene axes and translated to `origin`. Per-face normals
+// are recomputed by the renderer from the winding; the lit shader is
+// winding-agnostic, so the handedness of the axis remap is irrelevant.
+void PrepareSceneData::appendArrow(const float origin[3], const float dir[3],
+                                   float stemLength, float r, float g, float b)
+{
+  const int resolution = 16;
+  const float tipRadius = kArrowTipRadius;
+  const float tipHeight = kArrowTipLength;
+  const float stemRadius = kArrowStemRadius;
+  const float stemHeight = stemLength;
+  const float totalHeight = tipHeight + stemHeight;
+
+  float cosines[resolution];
+  float sines[resolution];
+  for (int i = 0; i < resolution; ++i) {
+    const float angle = 2.0f * kPi * float(i) / float(resolution);
+    cosines[i] = std::cos(angle);
+    sines[i] = -std::sin(angle);
+  }
+
+  // Emit in the upstream frame; the branch below applies the upstream axis
+  // rotation and the (X,Y,Z)upstream -> (X,Z,Y)qt remap in one step.
+  auto emitVertex = [&](float x, float y, float z) {
+    float qx, qy, qz;
+    if (dir[1] > 0.5f) {
+      // upstream +Z arrow (identity): (x,y,z) -> (x, z, y)
+      qx = x; qy = z; qz = y;
+    } else if (dir[0] > 0.5f) {
+      // upstream +X arrow (rotY +90deg): (x,y,z) -> (z, y, -x) -> qt
+      qx = z; qy = y; qz = -x;
+    } else {
+      // upstream +Y arrow (rotX -90deg): (x,y,z) -> (x, z, -y) -> qt
+      qx = x; qy = -y; qz = -z;
+    }
+    m_bedAxesVertices.append(ModelVertex{origin[0] + qx, origin[1] + qy,
+                                         origin[2] + qz, r, g, b, 1.0f});
+  };
+
+  // tip: apex (index 0) + ring (GLModel.cpp:871-881)
+  const int ringBase = 1;
+  {
+    float vx[resolution + 1];
+    float vy[resolution + 1];
+    float vz[resolution + 1];
+    vx[0] = 0.0f; vy[0] = 0.0f; vz[0] = totalHeight;
+    for (int i = 0; i < resolution; ++i) {
+      vx[ringBase + i] = tipRadius * sines[i];
+      vy[ringBase + i] = tipRadius * cosines[i];
+      vz[ringBase + i] = stemHeight;
+    }
+    for (int i = 0; i < resolution; ++i) {
+      const int v3 = (i < resolution - 1) ? ringBase + i + 1 : ringBase;
+      emitVertex(vx[0], vy[0], vz[0]);
+      emitVertex(vx[ringBase + i], vy[ringBase + i], vz[ringBase + i]);
+      emitVertex(vx[v3], vy[v3], vz[v3]);
+    }
+  }
+  // stem side + bottom cap (GLModel.cpp:901-929). The tip cap faces into
+  // the cone joint and is omitted (invisible at render scale).
+  for (int i = 0; i < resolution; ++i) {
+    const int j = (i < resolution - 1) ? i + 1 : 0;
+    const float ax = stemRadius * sines[i], ay = stemRadius * cosines[i];
+    const float bx = stemRadius * sines[j], by = stemRadius * cosines[j];
+    // side quad
+    emitVertex(ax, ay, stemHeight);
+    emitVertex(bx, by, stemHeight);
+    emitVertex(bx, by, 0.0f);
+    emitVertex(ax, ay, stemHeight);
+    emitVertex(bx, by, 0.0f);
+    emitVertex(ax, ay, 0.0f);
+    // bottom cap fan wedge
+    emitVertex(0.0f, 0.0f, 0.0f);
+    emitVertex(bx, by, 0.0f);
+    emitVertex(ax, ay, 0.0f);
+  }
+}
+
+// P15.3 (OUTOFBED): current-plate print volume in Qt scene coordinates for
+// the model_lit fragment test. Mirrors GLCanvas3D.cpp:7177-7205: the
+// rectangle volume is the plate bounds inflated by BuildVolume::SceneEpsilon
+// (:7180), the circle volume carries center/radius+SceneEpsilon (:7188) and
+// printable_height (+SceneEpsilon) (:7189).
+void PrepareSceneData::updatePrintVolume()
+{
+  if (m_bedShapeType == 1) {
+    m_printVolume.type = 1;
+    const float cx = m_bedOriginX + m_bedWidth * 0.5f;
+    const float cz = m_bedOriginY + m_bedDepth * 0.5f;
+    const float radius = m_bedDiameter * 0.5f + kSceneEpsilon;
+    m_printVolume.xyData = QVector4D(cx, cz, radius, 0.0f);
+    m_printVolume.zMin = 0.0f;
+    m_printVolume.zMax = m_printableHeight > 0.0f
+        ? m_printableHeight + kSceneEpsilon
+        : std::numeric_limits<float>::max();
+  } else {
+    m_printVolume.type = 0;
+    m_printVolume.xyData = QVector4D(m_bedOriginX - kSceneEpsilon,
+                                     m_bedOriginY - kSceneEpsilon,
+                                     m_bedOriginX + m_bedWidth + kSceneEpsilon,
+                                     m_bedOriginY + m_bedDepth + kSceneEpsilon);
+    m_printVolume.zMin = 0.0f;
+    m_printVolume.zMax = m_printableHeight > 0.0f
+        ? m_printableHeight
+        : std::numeric_limits<float>::max();
+  }
+}
+
+// P15.3 (OUTOFBED): upstream GLVolumeCollection::check_outside_state
+// (3DScene.cpp:1043-1171) classifies every model-part instance
+// Inside / Partly / Fully outside / Below; _render_background then turns
+// the viewport red when any volume is not Inside
+// (GLCanvas3D.cpp:7069-7090 _is_any_volume_outside). QRhi works on the
+// baked per-batch bounds, so the classification runs on the per-instance
+// union bbox with volume_state_bbox semantics (BuildVolume.cpp:308-320:
+// Below when max z <= -SceneEpsilon, Inside when contained, Colliding when
+// intersecting, Outside otherwise). The circle variant approximates the
+// convex-hull vertex test (BuildVolume::object_state, BuildVolume.cpp:291)
+// with the bbox corners. Only model-part batches participate
+// (shader_outside_printer_detection_enabled = is_model_part,
+// 3DScene.cpp:728).
+void PrepareSceneData::recomputeOutsideState()
+{
+  m_anyVolumeOutside = false;
+  if (m_modelBatches.isEmpty())
+    return;
+
+  struct InstanceBounds
+  {
+    ModelBounds box;
+    bool valid = false;
+  };
+  QHash<qint64, InstanceBounds> instances;
+  for (const ModelBatch &batch : m_modelBatches) {
+    if (batch.volumeType != 0)
+      continue;
+    const qint64 key = (qint64(batch.sourceObjectIndex) << 32)
+        | quint32(batch.instanceIndex);
+    InstanceBounds &slot = instances[key];
+    if (!slot.valid) {
+      slot.box = batch.bounds;
+      slot.valid = true;
+    } else {
+      slot.box.minX = std::min(slot.box.minX, batch.bounds.minX);
+      slot.box.minY = std::min(slot.box.minY, batch.bounds.minY);
+      slot.box.minZ = std::min(slot.box.minZ, batch.bounds.minZ);
+      slot.box.maxX = std::max(slot.box.maxX, batch.bounds.maxX);
+      slot.box.maxY = std::max(slot.box.maxY, batch.bounds.maxY);
+      slot.box.maxZ = std::max(slot.box.maxZ, batch.bounds.maxZ);
+    }
+  }
+
+  for (auto it = instances.constBegin(); it != instances.constEnd(); ++it) {
+    const InstanceBounds &inst = it.value();
+    // Below the print bed (volume_state_bbox first clause).
+    if (inst.box.maxY <= -kSceneEpsilon) {
+      m_anyVolumeOutside = true;
+      break;
+    }
+    if (m_printVolume.type == 1) {
+      const float cx = m_printVolume.xyData.x();
+      const float cz = m_printVolume.xyData.y();
+      const float r = m_printVolume.xyData.z();
+      const float cornersX[4] = {inst.box.minX, inst.box.maxX, inst.box.minX, inst.box.maxX};
+      const float cornersZ[4] = {inst.box.minZ, inst.box.minZ, inst.box.maxZ, inst.box.maxZ};
+      bool allInside = true;
+      for (int c = 0; c < 4 && allInside; ++c) {
+        const float d2 = (cornersX[c] - cx) * (cornersX[c] - cx)
+            + (cornersZ[c] - cz) * (cornersZ[c] - cz);
+        allInside = d2 <= r * r;
+      }
+      const bool heightOk = inst.box.maxY < m_printVolume.zMax + kSceneEpsilon;
+      // Inside only when contained; Colliding and Outside both count as
+      // "not inside" for the error background.
+      if (!(allInside && heightOk)) {
+        m_anyVolumeOutside = true;
+        break;
+      }
+    } else {
+      const bool insideRect =
+          inst.box.minX >= m_printVolume.xyData.x()
+          && inst.box.minZ >= m_printVolume.xyData.y()
+          && inst.box.maxX <= m_printVolume.xyData.z()
+          && inst.box.maxZ <= m_printVolume.xyData.w()
+          && inst.box.maxY <= m_printVolume.zMax;
+      if (!insideRect) {
+        m_anyVolumeOutside = true;
+        break;
+      }
+    }
+  }
+}
+
+// P15.5 (SINK): bed-plane contour band of one sinking batch (upstream
+// GLVolume::SinkingContours::update, 3DScene.cpp:124-161): slice the batch
+// triangles with the bed plane (upstream slice_mesh at 0.0, :144), build
+// the 0.5mm-wide white band around the contour (expand/shrink by HalfWidth
+// 0.25, :108/:145) and lift it by 0.015 against z-fighting (:150). The
+// clipper polygon offsetting is approximated per slice segment with a
+// perpendicular quad of the same total width; upstream unions the slice
+// polygons first, so self-overlapping contours may double-draw where the
+// clipper path would not.
+void PrepareSceneData::appendSinkingContours(const ModelBatch &batch)
+{
+  const int end = static_cast<int>(std::min<qsizetype>(
+      batch.firstVertex + batch.vertexCount, m_modelVertices.size()));
+  SinkingContourRange range;
+  range.sourceObjectIndex = batch.sourceObjectIndex;
+  range.firstVertex = m_sinkingContourVertices.size();
+  for (int i = std::max(0, batch.firstVertex); i + 2 < end; i += 3) {
+    const ModelVertex &a = m_modelVertices.at(i);
+    const ModelVertex &b = m_modelVertices.at(i + 1);
+    const ModelVertex &c = m_modelVertices.at(i + 2);
+    const float py[3] = {a.y, b.y, c.y};
+    const float px[3] = {a.x, b.x, c.x};
+    const float pz[3] = {a.z, b.z, c.z};
+    // Edge crossings with the y = 0 bed plane (2 for a real intersection).
+    float sx[2];
+    float sz[2];
+    int crossings = 0;
+    for (int e = 0; e < 3 && crossings < 2; ++e) {
+      const int f = (e + 1) % 3;
+      const bool eAbove = py[e] > 0.0f;
+      const bool fAbove = py[f] > 0.0f;
+      if (eAbove == fAbove)
+        continue;
+      const float t = py[e] / (py[e] - py[f]);
+      sx[crossings] = px[e] + (px[f] - px[e]) * t;
+      sz[crossings] = pz[e] + (pz[f] - pz[e]) * t;
+      ++crossings;
+    }
+    if (crossings < 2)
+      continue;
+    float dx = sx[1] - sx[0];
+    float dz = sz[1] - sz[0];
+    const float len = std::sqrt(dx * dx + dz * dz);
+    if (len <= 1e-6f)
+      continue;
+    dx /= len;
+    dz /= len;
+    const float nx = -dz * kSinkingHalfWidth;
+    const float nz = dx * kSinkingHalfWidth;
+    const float y = kSinkingZLift;
+    const float ax = sx[0] + nx, az = sz[0] + nz;
+    const float bx = sx[1] + nx, bz = sz[1] + nz;
+    const float cx2 = sx[1] - nx, cz2 = sz[1] - nz;
+    const float dx2 = sx[0] - nx, dz2 = sz[0] - nz;
+    m_sinkingContourVertices.append(ModelVertex{ax, y, az, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{bx, y, bz, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{cx2, y, cz2, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{ax, y, az, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{cx2, y, cz2, 1.0f, 1.0f, 1.0f, 1.0f});
+    m_sinkingContourVertices.append(ModelVertex{dx2, y, dz2, 1.0f, 1.0f, 1.0f, 1.0f});
+  }
+  range.vertexCount = m_sinkingContourVertices.size() - range.firstVertex;
+  if (range.vertexCount > 0)
+    m_sinkingContourRanges.append(range);
 }
 
 void PrepareSceneData::rebuildHeightLimitGeometry()

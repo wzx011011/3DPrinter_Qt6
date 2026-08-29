@@ -26,13 +26,13 @@ struct GcvPackedSegment
 {
   float x1, y1, z1, x2, y2, z2;
   float r, g, b;
-  float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  float feedrate, fan_speed, temperature, width, height, layer_time, acceleration;
   float jerk, pressure_advance, actual_speed, actual_flow;
   int extruder_id, layer, move;
   int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
-static_assert(sizeof(GcvPackedSegment) == 92,
-              "GcvPackedSegment must be 92 bytes (19 floats + 4 ints)");
+static_assert(sizeof(GcvPackedSegment) == 96,
+              "GcvPackedSegment must be 96 bytes (20 floats + 4 ints)");
 
 static const QVector3D kGizmoAxes[3] = {
     QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};

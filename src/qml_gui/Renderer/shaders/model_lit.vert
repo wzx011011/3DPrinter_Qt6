@@ -6,6 +6,12 @@
 // shininess, front light diffuse. Lighting runs in eye space; winding-
 // agnostic diffuse (max of N and -N terms) because the mesh byte stream
 // does not guarantee consistent triangle winding.
+// P15.3 (OUTOFBED): the world-space position is forwarded to the fragment
+// stage for the upstream print-volume boundary test (gouraud.fs:154-171).
+// The CPU bake in ProjectServiceMock::meshData stores world coordinates in
+// the vertex buffer, so `position` IS the upstream world_pos (gouraud.vs:72
+// computes world_pos = volume_world_matrix * position; here the matrix is
+// already applied on the CPU).
 
 layout(location = 0) in vec3 position;
 layout(location = 1) in vec4 color;
@@ -19,6 +25,8 @@ layout(std140, binding = 0) uniform CameraBlock
 };
 
 layout(location = 0) out vec4 vColor;
+// P15.3 (OUTOFBED): world position for the fragment-stage print-volume test.
+layout(location = 1) out vec3 vWorldPos;
 
 const vec3 LIGHT_TOP_DIR = vec3(-0.4574957, 0.4574957, 0.7624929);
 const vec3 LIGHT_FRONT_DIR = vec3(0.6985074, 0.1397015, 0.6985074);
@@ -36,6 +44,7 @@ out gl_PerVertex
 void main()
 {
   gl_Position = mvp * vec4(position, 1.0);
+  vWorldPos = position;
 
   const vec3 eyeNormal = normalize(mat3(view) * normal);
   const vec4 eyePos = view * vec4(position, 1.0);

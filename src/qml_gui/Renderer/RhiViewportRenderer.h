@@ -36,6 +36,8 @@ public:
   {
     quint32 firstVertex = 0;
     quint32 vertexCount = 0;
+    // P17.2: true = extrusion prism spans (triangle topology), false = lines.
+    bool triangles = false;
   };
 
   RhiViewportRenderer();
@@ -114,6 +116,11 @@ private:
   // v5.16 (BEDMODEL/BEDTYPE-TEX)
   void uploadBedModelMesh(QRhiResourceUpdateBatch *updates);
   void renderBedModel(QRhiCommandBuffer *cb);
+  // P15.7 (AXES): origin arrows through the lit pipeline.
+  void renderAxes(QRhiCommandBuffer *cb);
+  // P15.5 (SINK): sinking-contour bands; hovered/displaced ranges draw
+  // depth-unconditional (upstream glDepthFunc(GL_ALWAYS), 3DScene.cpp:1018).
+  void renderSinkingContours(QRhiCommandBuffer *cb);
   void releaseBedTypeParts();
   void prepareBedTypeParts(QRhiResourceUpdateBatch *updates);
   void renderBedTypeParts(QRhiCommandBuffer *cb);
@@ -135,6 +142,7 @@ private:
   // ── Phase 26: Preview segment pipeline (D-26-01..04) ──
   void parsePreviewSegments();
   bool uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates);
+  void rebuildPreviewCap();  // P17.7: sequential-range cap quad
   QVector<PreviewDrawRange> computePreviewDrawRanges() const;
   quint64 computePreviewRangeCacheKey() const;
 
@@ -187,6 +195,20 @@ private:
   // v5.16 (BEDBOTTOM): grid-only lines for below-horizon camera views
   // (upstream PartPlate::render_grid(true) LINE_BOTTOM_COLOR).
   std::unique_ptr<QRhiBuffer> m_bedBottomLineBuffer;
+  // P15.8 (BOLDGRID): every-5th grid line as ~2px flat quads (upstream
+  // render_grid second bolder draw, PartPlate.cpp:909-911).
+  std::unique_ptr<QRhiBuffer> m_bedBoldFillBuffer;
+  // P15.5 (SINK): white bed-plane contour bands of sinking batches
+  // (upstream GLVolume::SinkingContours, 3DScene.cpp:108-161).
+  std::unique_ptr<QRhiBuffer> m_sinkingContourBuffer;
+  // P15.7 (AXES): origin arrows (upstream Bed3D::Axes::render,
+  // 3DBed.cpp:183-245) drawn with the lit pipeline + face normals.
+  std::unique_ptr<QRhiBuffer> m_bedAxesVertexBuffer;
+  std::unique_ptr<QRhiBuffer> m_bedAxesNormalBuffer;
+  // P15.5 (SINK): depth-test-off clone of the fill pipeline for the
+  // hovered/displaced contour ranges (glDepthFunc(GL_ALWAYS),
+  // 3DScene.cpp:1018-1034).
+  std::unique_ptr<QRhiGraphicsPipeline> m_sinkingAlwaysPipeline;
   // v5.16 (NAVIGATOR): overlay cube buffer. The cube is projected to world
   // space on the CPU and drawn with the verified scene translucent pipeline
   // (dedicated overlay SRB/UBO attempts produced no visible output on the
@@ -245,6 +267,10 @@ private:
   };
   QVector<TranslucentBatchRange> m_modelTranslucentBatches;
   QString m_extrudersColorsSignature;
+  // Parsed filament colours (rgba 0..1, index 0 = extruder 1) mirrored from
+  // RhiViewport::m_extrudersColors; consumed by the P15.1 tint and the
+  // P17.5 ghost-shell tint.
+  QList<QVector4D> m_extrudersColorsParsed;
   // v5.16 (BEDMODEL): printer bed_model STL drawn with the lit pipeline in
   // DEFAULT_MODEL_COLOR_DARK (upstream Bed3D::render_model).
   std::unique_ptr<QRhiBuffer> m_bedModelVertexBuffer;
@@ -359,6 +385,11 @@ private:
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_bedBottomLineBufferBytes = 0;
+  // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES): derived bed geometry buffers.
+  quint32 m_bedBoldFillBufferBytes = 0;
+  quint32 m_sinkingContourBufferBytes = 0;
+  quint32 m_bedAxesVertexBufferBytes = 0;
+  quint32 m_bedAxesNormalBufferBytes = 0;
   quint32 m_navigatorFillBufferBytes = 0;
   quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
@@ -367,6 +398,17 @@ private:
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
   quint32 m_bedBottomLineVertexCount = 0;
+  quint32 m_bedBoldFillVertexCount = 0;
+  quint32 m_sinkingContourVertexCount = 0;
+  quint32 m_bedAxesVertexCount = 0;
+  // P15.5 (SINK): upload gates for the derived bed buffers.
+  bool m_bedBoldFillBufferUploaded = false;
+  bool m_sinkingContourBufferUploaded = false;
+  bool m_bedAxesBuffersUploaded = false;
+  // P15.4 (SELBOX): gizmo-drag state mirrored from RhiViewport in
+  // synchronize(); upstream suppresses the selection outline while a gizmo
+  // runs (if (!m_gizmos.is_running()), GLCanvas3D.cpp:7367).
+  bool m_gizmoDragging = false;
   quint32 m_navigatorFillVertexCount = 0;
   // v5.16 (NAVIGATOR): cube state mirrored from RhiViewport in synchronize().
   bool m_navigatorEnabled = true;
@@ -514,15 +556,28 @@ private:
   bool m_showTravelMoves = true;
   int m_gcodeViewMode = 0;
   QVector<bool> m_roleVisibility;  ///< Per-role extrusion mask from RhiViewport (render-side skip).
-  QVector<Vertex> m_previewVertices;     // expanded Line vertices (CPU staging)
+  QVector<Vertex> m_previewVertices;     // expanded preview vertices (CPU staging)
   struct PreviewDrawSpan {
     int layer;
     int move;
     quint32 vertexOffset;
     quint32 vertexCount;
     int role;  ///< Canonical libvgcode EGCodeExtrusionRole index for render-side filtering.
+    // P17.2: true for extrusion segments expanded into the solid prism
+    // (triangle topology, translucent fill pipeline), false for the 2-vertex
+    // line segments (travel/retract/marker, line pipeline).
+    bool triangles = false;
   };
   QVector<PreviewDrawSpan> m_previewDrawSpans;
+  // P17.7: sequential-range cap (upstream SequentialRangeCap, GCodeViewer.hpp:
+  // 509-520 / :3618-3690) — a quad capping the toolpath end at the current
+  // move position while dragging. Rebuilt when moveEnd changes.
+  QVector<Vertex> m_previewCapVertices;
+  int m_previewCapMoveEnd = -1;
+  std::unique_ptr<QRhiBuffer> m_previewCapBuffer;
+  quint32 m_previewCapBufferBytes = 0;
+  quint32 m_previewCapVertexCount = 0;
+  bool m_previewCapUploadPending = false;
   std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;

@@ -1009,3 +1009,189 @@ bool PaintCommand::mergeWith(const QUndoCommand *other)
   m_after = otherCmd->m_after;
   return true;
 }
+
+// ── MirrorCommand (P16.8) ──────────────────────────────────────────────────
+
+MirrorCommand::MirrorCommand(int objectIndex,
+                             const QVector3D &oldMirror, const QVector3D &newMirror,
+                             ProjectServiceMock *service,
+                             QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Mirror")), m_objectIndex(objectIndex),
+      m_oldMirror(oldMirror), m_newMirror(newMirror), m_service(service)
+{
+  Q_UNUSED(parent)
+}
+
+void MirrorCommand::undo()
+{
+  if (m_service && m_objectIndex >= 0)
+    m_service->setObjectMirror(m_objectIndex, m_oldMirror.x(), m_oldMirror.y(), m_oldMirror.z());
+}
+
+void MirrorCommand::redo()
+{
+  if (m_service && m_objectIndex >= 0)
+    m_service->setObjectMirror(m_objectIndex, m_newMirror.x(), m_newMirror.y(), m_newMirror.z());
+}
+
+// ── SceneSnapshotCommand (P16.8) ───────────────────────────────────────────
+
+SceneSnapshotCommand::SceneSnapshotCommand(const QString &text,
+                                           ProjectServiceMock *service,
+                                           QUndoCommand *parent)
+    : QUndoCommand(text), m_service(service)
+{
+  Q_UNUSED(parent)
+  if (m_service)
+    m_before = m_service->capturePlateListSnapshot(/*deepObjects=*/true);
+}
+
+void SceneSnapshotCommand::setAfterState()
+{
+  if (m_service)
+    m_after = m_service->capturePlateListSnapshot(/*deepObjects=*/true);
+}
+
+void SceneSnapshotCommand::undo()
+{
+  if (m_service && !m_before.isEmpty())
+    m_service->restorePlateListSnapshot(m_before);
+}
+
+void SceneSnapshotCommand::redo()
+{
+  if (!m_service || m_after.isEmpty())
+    return;
+  // QUndoStack::push() invokes redo() once while the structural operation's
+  // result is already applied — skip that first call (Qt skip-first pattern).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  m_service->restorePlateListSnapshot(m_after);
+}
+
+// ── PrintableCommand (P16.8 / P16.11) ──────────────────────────────────────
+
+PrintableCommand::PrintableCommand(int objectIndex, int instanceIndex,
+                                   bool oldPrintable, bool newPrintable,
+                                   ProjectServiceMock *service,
+                                   QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Set Printable")), m_objectIndex(objectIndex),
+      m_instanceIndex(instanceIndex), m_oldPrintable(oldPrintable),
+      m_newPrintable(newPrintable), m_service(service)
+{
+  Q_UNUSED(parent)
+}
+
+void PrintableCommand::undo()
+{
+  if (!m_service || m_objectIndex < 0)
+    return;
+  if (m_instanceIndex < 0)
+    m_service->setObjectPrintable(m_objectIndex, m_oldPrintable);
+  else
+    m_service->setInstancePrintable(m_objectIndex, m_instanceIndex, m_oldPrintable);
+}
+
+void PrintableCommand::redo()
+{
+  if (!m_service || m_objectIndex < 0)
+    return;
+  if (m_instanceIndex < 0)
+    m_service->setObjectPrintable(m_objectIndex, m_newPrintable);
+  else
+    m_service->setInstancePrintable(m_objectIndex, m_instanceIndex, m_newPrintable);
+}
+
+// ── ObjectSnapshotCommand (P16.8) ──────────────────────────────────────────
+
+ObjectSnapshotCommand::ObjectSnapshotCommand(int objectIndex, const QString &text,
+                                             ProjectServiceMock *service,
+                                             QUndoCommand *parent)
+    : QUndoCommand(text), m_objectIndex(objectIndex), m_service(service)
+{
+  Q_UNUSED(parent)
+  if (!m_service)
+    return;
+  m_before.name = m_service->objectNames().value(m_objectIndex);
+  m_before.printable = m_service->objectPrintable(m_objectIndex);
+  m_before.visible = m_service->objectVisible(m_objectIndex);
+  m_before.plateIndex = m_service->plateIndexForObject(m_objectIndex);
+  m_before.full3mf = m_service->captureFullObjectSnapshot(m_objectIndex);
+}
+
+void ObjectSnapshotCommand::setAfterState()
+{
+  if (!m_service)
+    return;
+  m_after.name = m_service->objectNames().value(m_objectIndex);
+  m_after.printable = m_service->objectPrintable(m_objectIndex);
+  m_after.visible = m_service->objectVisible(m_objectIndex);
+  m_after.plateIndex = m_service->plateIndexForObject(m_objectIndex);
+  m_after.full3mf = m_service->captureFullObjectSnapshot(m_objectIndex);
+  m_hasAfter = true;
+}
+
+void ObjectSnapshotCommand::undo()
+{
+  if (!m_service || m_before.full3mf.isEmpty() || m_objectIndex < 0)
+    return;
+  // The replacement kept the object index stable (convert_units swaps the
+  // object in place), so delete + restore-at-index rebuilds the old state.
+  if (m_objectIndex < m_service->objectNames().size())
+    m_service->deleteObject(m_objectIndex);
+  const int restored = m_service->restoreFullObjectSnapshot(
+      m_before.full3mf, m_objectIndex, m_before.name,
+      m_before.printable, m_before.visible, m_before.plateIndex);
+  if (restored >= 0 && restored != m_objectIndex)
+  {
+    // Index drifted (object list changed since capture): still correct —
+    // the restored object is the closest legal slot for the snapshot.
+    m_objectIndex = restored;
+  }
+}
+
+void ObjectSnapshotCommand::redo()
+{
+  if (!m_hasAfter || m_after.full3mf.isEmpty() || m_objectIndex < 0)
+    return;
+  // QUndoStack::push() invokes redo() once while the replacement is already
+  // applied — skip that first call (Qt skip-first pattern).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  if (m_objectIndex < m_service->objectNames().size())
+    m_service->deleteObject(m_objectIndex);
+  const int restored = m_service->restoreFullObjectSnapshot(
+      m_after.full3mf, m_objectIndex, m_after.name,
+      m_after.printable, m_after.visible, m_after.plateIndex);
+  if (restored >= 0 && restored != m_objectIndex)
+    m_objectIndex = restored;
+}
+
+// ── InstanceCountCommand (P16.8) ───────────────────────────────────────────
+
+InstanceCountCommand::InstanceCountCommand(int objectIndex, int oldCount, int newCount,
+                                           ProjectServiceMock *service,
+                                           QUndoCommand *parent)
+    : QUndoCommand(QObject::tr("Set Number of Instances")), m_objectIndex(objectIndex),
+      m_oldCount(oldCount), m_newCount(newCount), m_service(service)
+{
+  Q_UNUSED(parent)
+}
+
+void InstanceCountCommand::undo()
+{
+  if (m_service && m_objectIndex >= 0 && m_oldCount >= 1)
+    m_service->setObjectInstanceCount(m_objectIndex, m_oldCount);
+}
+
+void InstanceCountCommand::redo()
+{
+  if (m_service && m_objectIndex >= 0 && m_newCount >= 1)
+    m_service->setObjectInstanceCount(m_objectIndex, m_newCount);
+}

@@ -11,6 +11,25 @@ Item {
     readonly property int legendType: root.previewVm ? root.previewVm.legendType : 0
     implicitHeight: legendLayout.implicitHeight
 
+    // P17.3: gradient stop color lookup by index into the VM's 10-step list.
+    function stopColor(index) {
+        if (!root.previewVm)
+            return Theme.chromeBorder
+        const stops = root.previewVm.legendGradientStops
+        if (!stops || index >= stops.length)
+            return Theme.chromeBorder
+        return stops[index].color
+    }
+
+    function stopValue(index) {
+        if (!root.previewVm)
+            return "--"
+        const stops = root.previewVm.legendGradientStops
+        if (!stops || index >= stops.length)
+            return "--"
+        return stops[index].value
+    }
+
     ColumnLayout {
         id: legendLayout
         anchors.left: parent.left
@@ -49,22 +68,49 @@ Item {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 16
                         radius: 4
+                        // P17.3: the 10 upstream Range_Color stops come from
+                        // the ViewModel (legendGradientStops), replacing the
+                        // earlier Theme-token approximation.
+                        // P17.3: the 10 upstream Range_Color stops come from
+                        // the ViewModel (legendGradientStops); Gradient is not
+                        // an Item, so the stops are explicit bindings.
                         gradient: Gradient {
-                            GradientStop { position: 0.0; color: Theme.chromeBorder }
-                            GradientStop { position: 0.12; color: Theme.scrollBarHoverColor }
-                            GradientStop { position: 0.24; color: Theme.scrollBarHoverColor }
-                            GradientStop { position: 0.36; color: Theme.accentDark }
-                            GradientStop { position: 0.48; color: Theme.accentDark }
-                            GradientStop { position: 0.6; color: "#7db828" }
-                            GradientStop { position: 0.72; color: Theme.statusWarning }
-                            GradientStop { position: 0.82; color: Theme.statusWarning }
-                            GradientStop { position: 0.91; color: Theme.statusError }
-                            GradientStop { position: 1.0; color: Theme.chromeDangerPressed }
+                            GradientStop { position: 0.0; color: root.stopColor(0) }
+                            GradientStop { position: 0.11; color: root.stopColor(1) }
+                            GradientStop { position: 0.22; color: root.stopColor(2) }
+                            GradientStop { position: 0.33; color: root.stopColor(3) }
+                            GradientStop { position: 0.44; color: root.stopColor(4) }
+                            GradientStop { position: 0.55; color: root.stopColor(5) }
+                            GradientStop { position: 0.66; color: root.stopColor(6) }
+                            GradientStop { position: 0.77; color: root.stopColor(7) }
+                            GradientStop { position: 0.88; color: root.stopColor(8) }
+                            GradientStop { position: 1.0; color: root.stopColor(9) }
                         }
                         border.width: 1
                         border.color: Theme.borderSubtle
                     }
 
+                    // P17.3: per-step value labels (upstream append_range rows).
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Repeater {
+                            model: root.previewVm ? root.previewVm.legendGradientStops : []
+                            delegate: Text {
+                                required property int index
+                                Layout.fillWidth: true
+                                horizontalAlignment: index === 0 ? Text.AlignLeft
+                                    : (index === 9 ? Text.AlignRight : Text.AlignHCenter)
+                                text: root.stopValue(index)
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeXS - 1
+                                font.family: Theme.fontMono
+                            }
+                        }
+                    }
+
+                    // P17.3: the upstream min/max endpoints (legendGradient*
+                    // Labels) remain bound for the collapsed two-value readout.
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
@@ -130,6 +176,73 @@ Item {
                     text: qsTr("暂无图例数据")
                     color: Theme.textTertiary
                     font.pixelSize: Theme.fontSizeSM
+                }
+
+                // P17.4: FeatureType per-role Time / Percent / Used-filament
+                // columns (upstream FeatureType legend rows,
+                // GCodeViewer.cpp:4808-4845 + roles_times).
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    visible: root.legendType === 0
+                             && root.previewVm
+                             && root.previewVm.legendRoleColumns.length > 0
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text { Layout.preferredWidth: 84; text: qsTr("类型"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+                        Text { Layout.preferredWidth: 64; text: qsTr("时间"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+                        Text { Layout.preferredWidth: 48; text: qsTr("%"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+                        Text { Layout.fillWidth: true; text: qsTr("耗材"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
+                    }
+                    Repeater {
+                        model: root.previewVm ? root.previewVm.legendRoleColumns : []
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Text { Layout.preferredWidth: 84; text: modelData.label; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS; elide: Text.ElideRight }
+                            Text { Layout.preferredWidth: 64; text: modelData.time; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
+                            Text { Layout.preferredWidth: 48; text: modelData.percent; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
+                            Text { Layout.fillWidth: true; text: modelData.filament; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
+                        }
+                    }
+                }
+
+                // P17.6: ColorPrint extras — filament-change count, Prepare
+                // time, and the custom g-code overview table (upstream
+                // GCodeViewer.cpp:5156-5159, :5479-5545, prepare_time).
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    visible: root.legendType === 2 && root.previewVm
+
+                    Text {
+                        text: qsTr("换色次数: %1").arg(root.previewVm ? root.previewVm.colorChangeCount : 0)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                    }
+                    Text {
+                        text: qsTr("准备时间: %1").arg(root.previewVm ? root.previewVm.prepareTime : "--")
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                    }
+
+                    Text {
+                        visible: root.previewVm && root.previewVm.customGcodeRows.length > 0
+                        text: qsTr("自定义 G-code")
+                        color: Theme.textTertiary
+                        font.pixelSize: Theme.fontSizeXS
+                    }
+                    Repeater {
+                        model: root.previewVm ? root.previewVm.customGcodeRows : []
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Text { Layout.preferredWidth: 80; text: modelData.type; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS; elide: Text.ElideRight }
+                            Text { Layout.preferredWidth: 48; text: qsTr("层 %1").arg(modelData.layer); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
+                            Text { Layout.fillWidth: true; text: modelData.time; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS }
+                        }
+                    }
                 }
             }
         }

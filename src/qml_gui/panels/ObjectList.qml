@@ -232,6 +232,9 @@ Item {
             readonly property string groupLabel: root.editorVm ? root.editorVm.objectGroupLabel(row.index) : ""
             readonly property bool groupExpanded: root.editorVm ? root.editorVm.objectGroupExpanded(row.index) : true
             readonly property int volumeCount: root.editorVm ? root.editorVm.objectVolumeCount(row.index) : 0
+            // P16.11: instance child rows appear like the upstream itInstance
+            // nodes (only when the object holds several instances).
+            readonly property int instanceCount: root.editorVm ? root.editorVm.objectInstanceCount(row.index) : 0
             // Phase 198 (PHASE198): read-only layer-range count for this
             // object, surfaced as a badge + the "Layer Ranges..." menu label.
             // Backend is the Phase 175 objectLayerRangeCount proxy.
@@ -1219,6 +1222,94 @@ Item {
                                                 1, root.editorVm.selectedSourceObjectIndex,
                                                 index, 0, row.plateIndex)
                                     volumeMenu.popup()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── P16.11: per-instance printable rows (对齐上游 itInstance
+                // children + toggle_printable_state, GUI_ObjectList.cpp:5817) ──
+                Repeater {
+                    model: childColumn.visible && row.instanceCount > 1 ? row.instanceCount : 0
+
+                    delegate: Rectangle {
+                        id: instanceRow
+                        required property int index
+                        readonly property bool instPrintable: root.editorVm
+                                                             && root.editorVm.instancePrintable(row.index, index)
+                        width: childColumn.width - childColumn.leftPadding - childColumn.rightPadding
+                        height: root.volumeRowHeight
+                        radius: root.rowRadius
+                        color: "transparent"
+
+                        CxMenu {
+                            id: instanceMenu
+                            CxMenuItem {
+                                text: instanceRow.instPrintable ? qsTr("设为不参与打印") : qsTr("设为可打印")
+                                enabled: !!root.editorVm
+                                onTriggered: {
+                                    if (root.editorVm)
+                                        root.editorVm.toggleInstancePrintable(row.index, instanceRow.index)
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 9
+                            anchors.rightMargin: 6
+                            spacing: 6
+
+                            Rectangle {
+                                width: 5
+                                height: 5
+                                radius: 3
+                                color: instanceRow.instPrintable ? Theme.accent : Theme.textDisabled
+                                ToolTip.visible: instanceToggleMA.containsMouse
+                                ToolTip.text: instanceRow.instPrintable
+                                              ? qsTr("参与打印（点击禁用）")
+                                              : qsTr("不参与打印（点击启用）")
+                                MouseArea {
+                                    id: instanceToggleMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (root.editorVm)
+                                            root.editorVm.toggleInstancePrintable(row.index, instanceRow.index)
+                                    }
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: qsTr("实例 %1").arg(instanceRow.index + 1)
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeXS
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                visible: !instanceRow.instPrintable
+                                text: qsTr("不参与打印")
+                                color: Theme.textDisabled
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            acceptedButtons: Qt.RightButton
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: function(mouse) {
+                                if (mouse.button === Qt.RightButton) {
+                                    if (!root.editorVm)
+                                        return
+                                    root.editorVm.synchronizeViewportContext(
+                                                0, root.editorVm.selectedSourceObjectIndex,
+                                                -1, instanceRow.index, row.plateIndex)
+                                    instanceMenu.popup()
                                 }
                             }
                         }

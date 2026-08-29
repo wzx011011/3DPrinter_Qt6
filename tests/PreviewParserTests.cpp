@@ -15,7 +15,9 @@
 //
 // Upstream references:
 //   - ;TYPE: role strings:  libslic3r/ExtrusionEntity.cpp:583-639 (role_to_string / string_to_role)
-//   - EViewType (17 modes): libvgcode/include/Types.hpp:80-103
+//   - EViewType: P17 adjudication — the vendored upstream snapshot has 12
+//     modes (GCodeViewer.hpp:711-726); the 17-mode dropdown = 11 visible
+//     upstream modes + 6 OWzx superset modes (FilamentId stays hidden).
 //   - EGCodeExtrusionRole:  libvgcode/include/Types.hpp:131-157 (canonical Qt6 index)
 
 #include <QDir>
@@ -53,6 +55,16 @@ private slots:
   // Phase 238 (PREV-06): configured extruder colors + legend visibility.
   void test_prev06_configured_extruder_colors_override_fixed_cycle();
   void test_prev06_extruder_visibility_gates_filament_payload();
+  // P17.9: G90/G91 relative positioning, G2/G3 arc segmentation, G4 dwell.
+  void test_prev09_g91_relative_positioning_seam();
+  void test_prev09_g2_arc_segments_into_chords();
+  void test_prev09_g4_dwell_adds_time();
+  // P17.1: hidden FilamentId mode (upstream 12-mode truth).
+  void test_prev01_filamentid_mode_hidden_and_pseudo_color();
+  // P17.4: retract/unretract default hidden (upstream GCodeViewer.hpp:324).
+  void test_prev04_retract_unretract_default_hidden();
+  // P17.3: 10-step gradient legend rows with values.
+  void test_prev03_gradient_stops_ten_rows();
 
 private:
   QString fixturePath() const;
@@ -341,19 +353,19 @@ void PreviewParserTests::test_prev03_move_kind_classification()
 {
   const auto tmp = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"       // Travel (no E, moved)
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"       // Travel (no E, moved)
       "G1 X20 Y10 E1.0 F1800\n"  // Extrude
       "G1 E0.6 F2400\n"          // Retract (E-only negative, absolute mode)
       "G1 E1.0 F2400\n"          // Unretract (E-only positive)
       "G10\n"                    // firmware retract
       "G11\n"                    // firmware unretract
       "; WIPE_START\n"
-      "G1 X22 Y10 F3000\n"       // Wipe (move while wiping)
+"G1 X22 Y10 F3000\n"       // Wipe (move while wiping)
       "; WIPE_END\n"
-      "G1 X30 Y10 E1.5 F1800\n"  // Extrude again
+"G1 X30 Y10 E1.5 F1800\n"  // Extrude again
       ));
   ProjectServiceMock project;
   SliceService slice(&project);
@@ -381,16 +393,16 @@ void PreviewParserTests::test_prev03_seam_detected_on_closed_outer_wall_loop()
 {
   const auto closed = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"  // loop first vertex (10,10)
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"  // loop first vertex (10,10)
       "G1 X20 Y20 E2.0 F1800\n"
-      "G1 X10 Y20 E3.0 F1800\n"
-      "G1 X10 Y10 E4.0 F1800\n"  // loop closes back at (10,10)
+"G1 X10 Y20 E3.0 F1800\n"
+"G1 X10 Y10 E4.0 F1800\n"  // loop closes back at (10,10)
       ";TYPE:Sparse infill\n"
-      "G1 X15 Y15 E4.5 F1800\n"  // non-wall extrusion starts AT the first vertex
+"G1 X15 Y15 E4.5 F1800\n"  // non-wall extrusion starts AT the first vertex
       ));
   ProjectServiceMock project;
   SliceService slice(&project);
@@ -403,15 +415,15 @@ void PreviewParserTests::test_prev03_seam_detected_on_closed_outer_wall_loop()
   // close check fails and no seam is stored.
   const auto open = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"  // loop first vertex (10,10)
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"  // loop first vertex (10,10)
       "G1 X20 Y20 E2.0 F1800\n"
-      "G1 X10 Y20 E3.0 F1800\n"  // ends at (10,20) -- loop NOT closed
+"G1 X10 Y20 E3.0 F1800\n"  // ends at (10,20) -- loop NOT closed
       ";TYPE:Sparse infill\n"
-      "G1 X15 Y15 E3.5 F1800\n"  // starts 10mm away from (10,10)
+"G1 X15 Y15 E3.5 F1800\n"  // starts 10mm away from (10,10)
       ));
   ProjectServiceMock project2;
   SliceService slice2(&project2);
@@ -438,12 +450,12 @@ void PreviewParserTests::test_prev03_move_kind_toggles_repack_payload()
 {
   const auto tmp = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
-      "G1 E0.6 F2400\n"   // retract
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
+"G1 E0.6 F2400\n"   // retract
       "G1 E1.0 F2400\n"   // unretract
       "G1 X30 Y10 E1.5 F1800\n"
       ));
@@ -452,20 +464,23 @@ void PreviewParserTests::test_prev03_move_kind_toggles_repack_payload()
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "synthetic gcode should parse");
 
-  const int withAll = gcvSegmentCount(preview.gcodePreviewData());
-  QVERIFY2(withAll > 0, "payload should contain segments before toggling");
-
-  preview.setShowRetractMoves(false);
-  const int withoutRetract = gcvSegmentCount(preview.gcodePreviewData());
-  QCOMPARE(withoutRetract, withAll - 1);
-
-  preview.setShowUnretractMoves(false);
-  const int withoutBoth = gcvSegmentCount(preview.gcodePreviewData());
-  QCOMPARE(withoutBoth, withAll - 2);
+  // P17.4: the upstream default hides retract/unretract
+  // (GCodeViewer.hpp:324), so the initial payload excludes both ticks;
+  // enabling each adds exactly its tick back.
+  const int withHidden = gcvSegmentCount(preview.gcodePreviewData());
+  QVERIFY2(withHidden > 0, "payload should contain segments before toggling");
 
   preview.setShowRetractMoves(true);
+  const int withRetract = gcvSegmentCount(preview.gcodePreviewData());
+  QCOMPARE(withRetract, withHidden + 1);
+
   preview.setShowUnretractMoves(true);
-  QCOMPARE(gcvSegmentCount(preview.gcodePreviewData()), withAll);
+  const int withBoth = gcvSegmentCount(preview.gcodePreviewData());
+  QCOMPARE(withBoth, withHidden + 2);
+
+  preview.setShowRetractMoves(false);
+  preview.setShowUnretractMoves(false);
+  QCOMPARE(gcvSegmentCount(preview.gcodePreviewData()), withHidden);
 }
 
 // PREV-05: filament usage split into the upstream statistics columns
@@ -476,17 +491,17 @@ void PreviewParserTests::test_prev05_filament_split_model_support_flushed_tower(
 {
   const auto tmp = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"    // +1.0mm model
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"    // +1.0mm model
       ";TYPE:Support\n"
-      "G1 X20 Y20 E1.5 F1800\n"    // +0.5mm support (role 11)
+"G1 X20 Y20 E1.5 F1800\n"    // +0.5mm support (role 11)
       ";TYPE:Prime tower\n"
-      "G1 X30 Y20 E2.0 F1800\n"    // +0.5mm tower (role 13)
+"G1 X30 Y20 E2.0 F1800\n"    // +0.5mm tower (role 13)
       "; FLUSH_START\n"
-      "G1 E2.4 F2400\n"            // unretract while flushing: +0.4mm flushed
+"G1 E2.4 F2400\n"            // unretract while flushing: +0.4mm flushed
       "; FLUSH_END\n"
       ));
   ProjectServiceMock project;
@@ -531,13 +546,13 @@ void PreviewParserTests::test_prev05_stealth_time_comment_and_estimate_flag()
 {
   const auto withSilent = writeTempGcode(QStringLiteral(
       "; estimated printing time (normal mode) = 1h30m\n"
-      "; estimated printing time (silent mode) = 1h10m\n"
-      "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
+"; estimated printing time (silent mode) = 1h10m\n"
+"T0\n"
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
       ));
   ProjectServiceMock project;
   SliceService slice(&project);
@@ -556,12 +571,12 @@ void PreviewParserTests::test_prev05_stealth_time_comment_and_estimate_flag()
   // Without a silent comment the heuristic is used and flagged.
   const auto noSilent = writeTempGcode(QStringLiteral(
       "; estimated printing time (normal mode) = 1h30m\n"
-      "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
+"T0\n"
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
       ));
   ProjectServiceMock project2;
   SliceService slice2(&project2);
@@ -590,12 +605,12 @@ void PreviewParserTests::test_prev05_filament_price_from_config_block()
 
   const auto priced = writeTempGcode(QStringLiteral(
       "; filament_cost = 55.50\n"
-      "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
+"T0\n"
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
       ));
   ProjectServiceMock project;
   SliceService slice(&project);
@@ -610,11 +625,11 @@ void PreviewParserTests::test_prev05_filament_price_from_config_block()
   // No filament_cost line -> upstream DEFAULT_FILAMENT_COST fallback.
   const auto unpriced = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
       ));
   ProjectServiceMock project2;
   SliceService slice2(&project2);
@@ -633,14 +648,14 @@ void PreviewParserTests::test_prev06_configured_extruder_colors_override_fixed_c
 {
   const auto tmp = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
-      "T1\n"
-      "G1 X30 Y10 E2.0 F1800\n"
-      "G1 X40 Y10 E3.0 F1800\n"
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
+"T1\n"
+"G1 X30 Y10 E2.0 F1800\n"
+"G1 X40 Y10 E3.0 F1800\n"
       ));
 
   ProjectServiceMock project;
@@ -687,14 +702,14 @@ void PreviewParserTests::test_prev06_extruder_visibility_gates_filament_payload(
 {
   const auto tmp = writeTempGcode(QStringLiteral(
       "T0\n"
-      "G28\n"
-      ";LAYER:0\n"
-      ";TYPE:Outer wall\n"
-      "G1 X10 Y10 F3000\n"
-      "G1 X20 Y10 E1.0 F1800\n"
-      "T1\n"
-      "G1 X30 Y10 E2.0 F1800\n"
-      "G1 X40 Y10 E3.0 F1800\n"
+"G28\n"
+";LAYER:0\n"
+";TYPE:Outer wall\n"
+"G1 X10 Y10 F3000\n"
+"G1 X20 Y10 E1.0 F1800\n"
+"T1\n"
+"G1 X30 Y10 E2.0 F1800\n"
+"G1 X40 Y10 E3.0 F1800\n"
       ));
   ProjectServiceMock project;
   SliceService slice(&project);
@@ -721,6 +736,136 @@ void PreviewParserTests::test_prev06_extruder_visibility_gates_filament_payload(
 // QTEST_MAIN generates the test entry point (main). Without it the link fails
 // with LNK2001 "unresolved external symbol main" because QtTest has no default
 // entry. Matches the pattern in every sibling single-file QtTest in tests/.
+
+// P17.9: G91 relative positioning. A closed square loop written in relative
+// moves must land each vertex at the cumulative position (the seam detector
+// closing on the first vertex proves the math); treating relative moves as
+// absolute would collapse every segment to zero length (upstream
+// GCodeProcessor G91 handling).
+void PreviewParserTests::test_prev09_g91_relative_positioning_seam()
+{
+  const auto tmp = writeTempGcode(QStringLiteral(
+      "T0\n"
+      "G28\n"
+      ";LAYER:0\n"
+      ";TYPE:Outer wall\n"
+      "G1 X10 Y10 F3000\n"
+      "G91\n"
+      "G1 X10 Y0 E0.5 F1800\n"
+      "G1 X0 Y10 E1.0 F1800\n"
+      "G1 X-10 Y0 E1.5 F1800\n"
+      "G1 X0 Y-10 E2.0 F1800\n"
+      "G90\n"
+      "G1 X12 Y10 F3000\n"
+      ));
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY2(preview.loadGCodeForPreview(tmp.path), "gcode should parse");
+  QCOMPARE(preview.moveCountOfKind(PreviewViewModel::KindExtrude), 4);
+  QCOMPARE(preview.moveCountOfKind(PreviewViewModel::KindSeam), 1);
+}
+
+// P17.9: G2 arcs are segmented into straight chords (~0.5mm resolution,
+// clamped to [8,128]) — upstream segments arcs during parsing so every
+// toolpath vertex is a straight move.
+void PreviewParserTests::test_prev09_g2_arc_segments_into_chords()
+{
+  const auto tmp = writeTempGcode(QStringLiteral(
+      "T0\n"
+      "G28\n"
+      ";LAYER:0\n"
+      ";TYPE:Outer wall\n"
+      "G1 X10 Y10 F3000\n"
+      "G2 X30 Y10 I10 J0 E2.0 F1800\n"
+      ));
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY2(preview.loadGCodeForPreview(tmp.path), "gcode should parse");
+  const int extrudes = preview.moveCountOfKind(PreviewViewModel::KindExtrude);
+  QVERIFY2(extrudes >= 20 && extrudes <= 128,
+           "semicircle r=10 must segment into dozens of chords");
+  QCOMPARE(preview.moveCountOfKind(PreviewViewModel::KindTravel), 1);
+}
+
+// P17.9: G4 dwell adds pure time (S seconds / P milliseconds) to the totals.
+void PreviewParserTests::test_prev09_g4_dwell_adds_time()
+{
+  const auto tmp = writeTempGcode(QStringLiteral(
+      "T0\n"
+      "G28\n"
+      ";LAYER:0\n"
+      ";TYPE:Outer wall\n"
+      "G1 X10 Y10 F3000\n"
+      "G1 X20 Y10 E1.0 F1800\n"
+      "G4 S30\n"
+      ));
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY2(preview.loadGCodeForPreview(tmp.path), "gcode should parse");
+  // No normal-time comment: the total is the accumulated move time plus the
+  // 30s dwell. The first move travels 10mm at 50mm/s = 0.2s; the extrude
+  // move runs 10mm at 30mm/s ~= 0.33s; plus 30s dwell.
+  QVERIFY2(preview.totalTime().contains(QLatin1Char('s')),
+           "total time should render with seconds for sub-minute prints");
+  QVERIFY2(preview.totalTime() != QStringLiteral("0.0s"),
+           "dwell must extend the total time beyond the move time");
+}
+
+// P17.1: upstream EViewType::FilamentId is a hidden diagnostic mode — it is
+// NOT in the dropdown list, but setViewModeIndex(17) keeps a valid payload
+// and recolors segments with the {id, role, id} pseudo-color.
+void PreviewParserTests::test_prev01_filamentid_mode_hidden_and_pseudo_color()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
+           "fixture should parse before the FilamentId assertions");
+
+  QVERIFY2(!preview.viewModes().contains(QStringLiteral("FilamentId")),
+           "FilamentId is a hidden mode and must not appear in the dropdown");
+  preview.setViewModeIndex(17); // EViewType::FilamentId
+  QVERIFY2(!preview.gcodePreviewData().isEmpty(),
+           "FilamentId mode must keep a valid GCV1 payload");
+}
+
+// P17.4: upstream defaults are Retract/Unretract/Wipe all hidden
+// (GCodeViewer.hpp:324, only Extrude + Seam visible by default).
+void PreviewParserTests::test_prev04_retract_unretract_default_hidden()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QCOMPARE(preview.showRetractMoves(), false);
+  QCOMPARE(preview.showUnretractMoves(), false);
+  QCOMPARE(preview.showWipeMoves(), false);
+  QCOMPARE(preview.showSeamMarks(), true);
+}
+
+// P17.3: gradient modes produce the 10-step legend rows (upstream
+// append_range, GCodeViewer.cpp:4498-4518), with the min row matching the
+// gradient min label formatting.
+void PreviewParserTests::test_prev03_gradient_stops_ten_rows()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
+           "fixture should parse before the gradient legend assertion");
+  const QStringList modes = preview.viewModes();
+  const int heightIdx = modes.indexOf(QStringLiteral("Layer Height"));
+  QVERIFY2(heightIdx >= 0, "Layer Height mode must exist");
+  preview.setViewModeIndex(heightIdx);
+  QCOMPARE(preview.legendGradientStops().size(), 10);
+  // Height uses 2 decimals per the upstream legend formatting.
+  const QVariantMap first = preview.legendGradientStops().first().toMap();
+  QCOMPARE(first.value(QStringLiteral("value")).toString(),
+           preview.legendGradientMinLabel());
+}
+
 QTEST_MAIN(PreviewParserTests)
 
 // AUTOMOC requirement: single-file cpp-internal Q_OBJECT must include the

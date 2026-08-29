@@ -46,6 +46,14 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QString legendGradientMaxLabel READ legendGradientMaxLabel NOTIFY stateChanged)
   Q_PROPERTY(QString legendGradientMinColor READ legendGradientMinColor NOTIFY stateChanged)
   Q_PROPERTY(QString legendGradientMaxColor READ legendGradientMaxColor NOTIFY stateChanged)
+  // P17.3/P17.6: 10-step gradient legend rows (position/color/value,
+  // upstream append_range), FeatureType extra columns, ColorPrint extras,
+  // and the upstream Prepare time (elapsed before the first extrusion).
+  Q_PROPERTY(QVariantList legendGradientStops READ legendGradientStops NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList legendRoleColumns READ legendRoleColumns NOTIFY stateChanged)
+  Q_PROPERTY(int colorChangeCount READ colorChangeCount NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList customGcodeRows READ customGcodeRows NOTIFY stateChanged)
+  Q_PROPERTY(QString prepareTime READ prepareTime NOTIFY stateChanged)
   Q_PROPERTY(QString totalTime READ totalTime NOTIFY stateChanged)
   Q_PROPERTY(QString filamentUsed READ filamentUsed NOTIFY stateChanged)
   Q_PROPERTY(QString filamentWeight READ filamentWeight NOTIFY stateChanged)
@@ -167,6 +175,11 @@ public:
   QString legendGradientMaxLabel() const { return m_legendGradMaxLabel; }
   QString legendGradientMinColor() const { return m_legendGradMinColor; }
   QString legendGradientMaxColor() const { return m_legendGradMaxColor; }
+  QVariantList legendGradientStops() const;
+  QVariantList legendRoleColumns() const;
+  int colorChangeCount() const;
+  QVariantList customGcodeRows() const;
+  QString prepareTime() const;
   QString totalTime() const { return totalTime_; }
   QString filamentUsed() const { return filamentUsed_; }
   QString filamentWeight() const { return filamentWeight_; }
@@ -383,6 +396,13 @@ private:
   QString m_legendGradMaxLabel;
   QString m_legendGradMinColor;
   QString m_legendGradMaxColor;
+  QVariantList m_legendGradientStops;
+  QVariantList m_legendRoleColumns;
+  // P17.4/P17.10: per-role filament length (mm) and the prepare time
+  // (elapsed before the first extrusion move).
+  QHash<int, double> m_roleFilamentLength;
+  float prepareTimeSeconds_ = 0.f;
+  bool prepareTimeCaptured_ = false;
   QString totalTime_ = QStringLiteral("--:--:--");
   QString filamentUsed_ = QStringLiteral("--");
   QString filamentWeight_ = QStringLiteral("--");
@@ -420,10 +440,11 @@ private:
   bool showBed_ = true;          ///< Bed-grid visibility aligned with upstream GCodeViewer.
   bool showMarker_ = true;       ///< Tool-marker visibility aligned with upstream GCodeViewer.
   // Phase 238 (PREV-03): move-type visibility flags (see the Q_PROPERTY
-  // block). Wipe defaults false to match the upstream Travels/Wipes
-  // hidden-after-first-view default; retract/unretract/seam default true.
-  bool showRetractMoves_ = true;
-  bool showUnretractMoves_ = true;
+  // block). P17.4: upstream defaults are Retract/Unretract/Wipe all hidden
+  // (GCodeViewer.hpp:324 visible=false; only Extrude+Seam visible by
+  // default), so retract/unretract default false here too.
+  bool showRetractMoves_ = false;
+  bool showUnretractMoves_ = false;
   bool showWipeMoves_ = false;
   bool showSeamMarks_ = true;
   QTimer *playTimer_ = nullptr;

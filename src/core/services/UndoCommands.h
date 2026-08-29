@@ -541,3 +541,149 @@ private:
   ProjectServiceMock *m_service;
   EditorViewModel *m_viewModel;
 };
+
+// ── MirrorCommand (P16.8) ──────────────────────────────────────────────────
+/// Per-object mirror undo (upstream Plater::mirror -> Selection::mirror takes
+/// a snapshot; GUI_Factories.cpp:1109-1125 menu). Stored separately from
+/// TransformCommand so the gizmo drag coalescing (id 1) never touches the
+/// mirror vector. undo restores the old mirror, redo re-applies the new one.
+class MirrorCommand : public QUndoCommand
+{
+public:
+  /// Captures old/new mirror vectors; push after the mirror was applied.
+  MirrorCommand(int objectIndex,
+                const QVector3D &oldMirror, const QVector3D &newMirror,
+                ProjectServiceMock *service,
+                QUndoCommand *parent = nullptr);
+
+  void undo() override;
+  void redo() override;
+  int id() const override { return 13; }
+
+private:
+  int m_objectIndex;
+  QVector3D m_oldMirror;
+  QVector3D m_newMirror;
+  ProjectServiceMock *m_service;
+};
+
+// ── SceneSnapshotCommand (P16.8) ───────────────────────────────────────────
+/// Whole-scene structural undo for Assemble / Merge-to-single / Split to
+/// objects / Split to parts. Upstream truth: those flows each take a
+/// whole-model snapshot (Plater::TakeSnapshot "Assemble", GUI_ObjectList.cpp:
+/// 2674; "Merge parts to an object", :2799; Plater::priv::split_object) because
+/// object indices shift wholesale. Qt6 equivalent: capture the deep
+/// plate-list snapshot (capturePlateListSnapshot(deep=true), the same
+/// fidelity DeletePlate undo uses) before the operation and swap the two
+/// snapshots on undo/redo.
+class SceneSnapshotCommand : public QUndoCommand
+{
+public:
+  /// Captures the BEFORE deep snapshot. Construct BEFORE the structural
+  /// operation runs. \a text is the undo history label ("Assemble", ...).
+  SceneSnapshotCommand(const QString &text, ProjectServiceMock *service,
+                       QUndoCommand *parent = nullptr);
+
+  /// Captures the AFTER snapshot. Call after the operation succeeded, before
+  /// push() (two-phase construction, same as TransformCommand/PlateCommand).
+  void setAfterState();
+
+  void undo() override;
+  void redo() override;
+
+private:
+  QByteArray m_before;
+  QByteArray m_after;
+  /// QUndoStack::push() invokes redo() once while the operation result is
+  /// already applied — skip that first call (Qt skip-first pattern).
+  bool m_firstRedoDone = false;
+  ProjectServiceMock *m_service;
+};
+
+// ── PrintableCommand (P16.8 / P16.11) ──────────────────────────────────────
+/// Per-object or per-instance printable undo. Upstream truth:
+/// toggle_printable_state / set_printable take a snapshot
+/// (GUI_ObjectList.cpp:5830, Selection.cpp:519). instanceIndex < 0 targets
+/// every instance of the object (itObject branch), otherwise the single
+/// itInstance row (GUI_ObjectList.cpp:5843-5846).
+class PrintableCommand : public QUndoCommand
+{
+public:
+  PrintableCommand(int objectIndex, int instanceIndex,
+                   bool oldPrintable, bool newPrintable,
+                   ProjectServiceMock *service,
+                   QUndoCommand *parent = nullptr);
+
+  void undo() override;
+  void redo() override;
+
+private:
+  int m_objectIndex;
+  int m_instanceIndex;  ///< -1 = whole object (all instances)
+  bool m_oldPrintable;
+  bool m_newPrintable;
+  ProjectServiceMock *m_service;
+};
+
+// ── ObjectSnapshotCommand (P16.8) ──────────────────────────────────────────
+/// In-place single-object mesh/config replacement undo, used by unit
+/// conversion (ModelObject::convert_units, GUI_ObjectList convert-unit menu)
+/// and Reload from disk (Plater::reload_from_disk). Upstream takes a snapshot
+/// before both (Plater::TakeSnapshot in convert_unit / reload paths). Qt6
+/// equivalent: capture a single-object 3MF snapshot before, run the in-place
+/// replacement, capture again, and swap by delete+restore-at-index.
+class ObjectSnapshotCommand : public QUndoCommand
+{
+public:
+  /// Captures the BEFORE snapshot. Construct BEFORE the replacement runs.
+  ObjectSnapshotCommand(int objectIndex, const QString &text,
+                        ProjectServiceMock *service,
+                        QUndoCommand *parent = nullptr);
+
+  /// Captures the AFTER snapshot. Call after the replacement succeeded,
+  /// before push().
+  void setAfterState();
+
+  void undo() override;
+  void redo() override;
+
+private:
+  struct Entry {
+    QString name;
+    bool printable = true;
+    bool visible = true;
+    int plateIndex = -1;
+    QByteArray full3mf;
+  };
+  int m_objectIndex;
+  Entry m_before;
+  Entry m_after;
+  bool m_hasAfter = false;
+  /// QUndoStack::push() invokes redo() once while the replacement is already
+  /// applied — skip that first call (Qt skip-first pattern).
+  bool m_firstRedoDone = false;
+  ProjectServiceMock *m_service;
+};
+
+// ── InstanceCountCommand (P16.8) ───────────────────────────────────────────
+/// "Set number of instances" undo (upstream instances manipulations take a
+/// snapshot via Plater::TakeSnapshot, GUI_ObjectList instance handlers).
+/// undo restores the old count, redo re-applies the new count. Position
+/// changes caused by the follow-up arrange ride along as sibling
+/// TransformCommand entries inside the caller's macro.
+class InstanceCountCommand : public QUndoCommand
+{
+public:
+  InstanceCountCommand(int objectIndex, int oldCount, int newCount,
+                       ProjectServiceMock *service,
+                       QUndoCommand *parent = nullptr);
+
+  void undo() override;
+  void redo() override;
+
+private:
+  int m_objectIndex;
+  int m_oldCount;
+  int m_newCount;
+  ProjectServiceMock *m_service;
+};

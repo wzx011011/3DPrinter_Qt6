@@ -25,8 +25,12 @@ Rectangle {
     WebEngineView {
         id: webView
         anchors.fill: parent
-        url: "qrc:/web/chat/index.html"
+        // webChannel MUST be assigned before url: the page navigation starts
+        // on the url assignment, and Chromium only injects the
+        // qt.webChannelTransport bootstrap for navigations that begin after
+        // the channel is attached (document-order property assignment).
         webChannel: chatChannel
+        url: "qrc:/web/chat/index.html"
         backgroundColor: "transparent"
         settings.showScrollBars: false
         settings.focusOnNavigationEnabled: true

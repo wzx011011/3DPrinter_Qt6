@@ -65,6 +65,7 @@ namespace
     float fan_speed;
     float temperature;
     float width;
+    float height;           // P17.2: extrusion height for the solid-prism render
     float layer_time;
     float acceleration;
     float jerk;              // v5.11: M205 jerk (mm/s)
@@ -80,7 +81,7 @@ namespace
   // the static_assert previously existed only on the renderer side). PackedSegment
   // must be byte-identical to GcvPackedSegment in RhiViewportRenderer.cpp; a
   // layout drift here would silently corrupt the GCV1 preview blob at runtime.
-  static_assert(sizeof(PackedSegment) == 92, "PackedSegment must be 92 bytes (19 floats + 4 ints, matches GcvPackedSegment)");
+  static_assert(sizeof(PackedSegment) == 96, "PackedSegment must be 96 bytes (20 floats + 4 ints, matches GcvPackedSegment)");
 
   // Upstream-matched gradient: 10-color Range_Colors from CrealityPrint GCodeViewer
   struct ColorResult { float r, g, b; };
@@ -375,7 +376,11 @@ namespace
     VT_FanSpeed = 13,        // gradient on fan_speed
     VT_Temperature = 14,     // gradient on temperature
     VT_PressureAdvance = 15, // uniform (data unavailable)
-    VT_Tool = 16             // per-extruder palette
+    VT_Tool = 16,            // per-extruder palette
+    // P17.1: upstream EViewType::FilamentId (GCodeViewer.hpp:711-726, 12th
+    // entry). Hidden diagnostic mode — pseudo-color {id, role, id}, no
+    // legend (GCodeViewer.cpp:910-911 gates it out of the dropdown).
+    VT_FilamentId = 17
   };
 
   // One-time log guard for the modes whose underlying field is unavailable in
@@ -559,6 +564,14 @@ PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceServ
   // (upstream app_config show_gcode_window; default true).
   QSettings settings;
   showGcodeWindow_ = settings.value(QStringLiteral("preview/showGcodeWindow"), true).toBool();
+  // P17.10: persist the option visibility flags like upstream
+  // get/set_options_visibility_from_flags (GCodeViewer.cpp:1816-1838,
+  // app_config options: travel/seams/retracts/unretracts/wipes visibility).
+  showTravelMoves_ = settings.value(QStringLiteral("preview/showTravelMoves"), showTravelMoves_).toBool();
+  showRetractMoves_ = settings.value(QStringLiteral("preview/showRetractMoves"), showRetractMoves_).toBool();
+  showUnretractMoves_ = settings.value(QStringLiteral("preview/showUnretractMoves"), showUnretractMoves_).toBool();
+  showWipeMoves_ = settings.value(QStringLiteral("preview/showWipeMoves"), showWipeMoves_).toBool();
+  showSeamMarks_ = settings.value(QStringLiteral("preview/showSeamMarks"), showSeamMarks_).toBool();
   playTimer_ = new QTimer(this);
   playTimer_->setInterval(24);
   connect(playTimer_, &QTimer::timeout, this, [this]()
@@ -958,6 +971,9 @@ void PreviewViewModel::setShowTravelMoves(bool enabled)
   if (showTravelMoves_ == enabled)
     return;
   showTravelMoves_ = enabled;
+  // P17.10: persist like upstream set_options_visibility_from_flags.
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showTravelMoves"), enabled);
   recolorAndPackSegments();
   emit stateChanged();
 }
@@ -1003,6 +1019,9 @@ void PreviewViewModel::setShowRetractMoves(bool enabled)
   if (showRetractMoves_ == enabled)
     return;
   showRetractMoves_ = enabled;
+  // P17.10: persist like upstream set_options_visibility_from_flags.
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showRetractMoves"), enabled);
   recolorAndPackSegments();
   emit stateChanged();
 }
@@ -1012,6 +1031,9 @@ void PreviewViewModel::setShowUnretractMoves(bool enabled)
   if (showUnretractMoves_ == enabled)
     return;
   showUnretractMoves_ = enabled;
+  // P17.10: persist like upstream set_options_visibility_from_flags.
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showUnretractMoves"), enabled);
   recolorAndPackSegments();
   emit stateChanged();
 }
@@ -1021,6 +1043,9 @@ void PreviewViewModel::setShowWipeMoves(bool enabled)
   if (showWipeMoves_ == enabled)
     return;
   showWipeMoves_ = enabled;
+  // P17.10: persist like upstream set_options_visibility_from_flags.
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showWipeMoves"), enabled);
   recolorAndPackSegments();
   emit stateChanged();
 }
@@ -1030,6 +1055,9 @@ void PreviewViewModel::setShowSeamMarks(bool enabled)
   if (showSeamMarks_ == enabled)
     return;
   showSeamMarks_ = enabled;
+  // P17.10: persist like upstream set_options_visibility_from_flags.
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showSeamMarks"), enabled);
   recolorAndPackSegments();
   emit stateChanged();
 }
@@ -1199,6 +1227,68 @@ QVariantList PreviewViewModel::roleVisibilityMask() const
   return mask;
 }
 
+QVariantList PreviewViewModel::legendGradientStops() const
+{
+  return m_legendGradientStops;
+}
+
+QVariantList PreviewViewModel::legendRoleColumns() const
+{
+  return m_legendRoleColumns;
+}
+
+// P17.6: number of color-change ticks (upstream "Filament change times",
+// GCodeViewer.cpp:5156-5159).
+int PreviewViewModel::colorChangeCount() const
+{
+  int count = 0;
+  for (const auto &tc : tickMarks_)
+    if (tc.type == OWzx::TickType::ColorChange)
+      ++count;
+  return count;
+}
+
+// P17.6: custom g-code overview rows (upstream custom_gcode_times and the
+// Custom g-code overview table, GCodeViewer.cpp:5479-5545) — one row per
+// tick with its layer and the accumulated time at that layer.
+QVariantList PreviewViewModel::customGcodeRows() const
+{
+  QVariantList rows;
+  for (const auto &tc : tickMarks_)
+  {
+    QVariantMap row;
+    row.insert(QStringLiteral("type"),
+               [tc]() {
+                 switch (tc.type)
+                 {
+                 case OWzx::TickType::PausePrint: return QStringLiteral("Pause");
+                 case OWzx::TickType::CustomGcode: return QStringLiteral("Custom");
+                 case OWzx::TickType::Template: return QStringLiteral("Template");
+                 case OWzx::TickType::ToolChange: return QStringLiteral("Tool change");
+                 case OWzx::TickType::ColorChange: return QStringLiteral("Color change");
+                 default: return QStringLiteral("Custom");
+                 }
+               }());
+    row.insert(QStringLiteral("layer"), tc.tick);
+    row.insert(QStringLiteral("color"), tc.color);
+    row.insert(QStringLiteral("extra"), tc.extra);
+    row.insert(QStringLiteral("time"),
+               tc.tick >= 0 && tc.tick < int(m_layerTimes.size())
+                   ? formatTime(m_layerTimes.at(tc.tick))
+                   : QStringLiteral("--"));
+    rows.append(row);
+  }
+  return rows;
+}
+
+// P17.10: upstream Prepare time — elapsed time before the first extrusion
+// (heating / priming moves, GCodeProcessor prepare_time).
+QString PreviewViewModel::prepareTime() const
+{
+  return prepareTimeCaptured_ ? formatTime(prepareTimeSeconds_)
+                              : QStringLiteral("--:--:--");
+}
+
 QVariantMap PreviewViewModel::legendItem(const QString &label, const QString &color, int count) const
 {
   QVariantMap item;
@@ -1222,7 +1312,10 @@ void PreviewViewModel::resetPreviewState()
   m_extruderUsedLength.clear();
   m_extruderUsedWeight.clear();
   m_roleTimes.clear();
+  m_roleFilamentLength.clear();
   m_moveAccumulatedTime.clear();
+  prepareTimeSeconds_ = 0.f;
+  prepareTimeCaptured_ = false;
   const bool hadTicks = !tickMarks_.isEmpty();
   tickMarks_.clear();
   m_maxLayerTime = 0.f;
@@ -1313,6 +1406,10 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   float currentPA = 0.f;            // M900 K value / SET_PRESSURE_ADVANCE ADVANCE
   int currentExtruder = 0;
   bool relativeExtrusion = false;
+  // P17.9 (PARSER): G90/G91 absolute XYZ positioning state and G4 dwell
+  // accumulation (pure time advance folded into the total).
+  bool absolutePositioning = true;
+  float dwellSeconds = 0.f;
   float currentWidth = 0.f;
   float currentHeight = 0.f;
   float elapsedTime = 0.f;
@@ -1596,6 +1693,40 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
     }
 
+    // P17.9 (PARSER): G90/G91 set the absolute/relative positioning mode for
+    // XYZ (E keeps its own M82/M83 state). Upstream GCodeProcessor tracks the
+    // same state (GCodeProcessor.cpp G90/G91 handling).
+    if (upper == QStringLiteral("G90") || upper.startsWith(QStringLiteral("G90 ")))
+    {
+      absolutePositioning = true;
+      continue;
+    }
+
+    if (upper == QStringLiteral("G91") || upper.startsWith(QStringLiteral("G91 ")))
+    {
+      absolutePositioning = false;
+      continue;
+    }
+
+    // P17.9 (PARSER): G4 dwell — pure time advance (S seconds or P
+    // milliseconds) folded into the dwell accumulator.
+    if (upper == QStringLiteral("G4") || upper.startsWith(QStringLiteral("G4 ")))
+    {
+      float seconds = 0.f;
+      const int sIdx = upper.indexOf(QLatin1Char('S'));
+      if (sIdx >= 0)
+        seconds = upper.mid(sIdx + 1).toFloat();
+      if (seconds <= 0.f)
+      {
+        const int pIdx = upper.indexOf(QLatin1Char('P'));
+        if (pIdx >= 0)
+          seconds = upper.mid(pIdx + 1).toFloat() / 1000.f;
+      }
+      if (seconds > 0.f)
+        dwellSeconds += seconds;
+      continue;
+    }
+
     if (upper.startsWith(QStringLiteral("G92")))
     {
       float resetE = e;
@@ -1679,41 +1810,15 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
     }
 
-    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
-    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
-    if (!isG0 && !isG1)
-      continue;
-
-    const float lineF = parseFValue(upper);
-    if (lineF > 0.f)
-      currentFeedrate = lineF;
-
-    float nx = x;
-    float ny = y;
-    float nz = z;
-    float ne = e;
-    parseAxis(upper, 'X', nx);
-    parseAxis(upper, 'Y', ny);
-    parseAxis(upper, 'Z', nz);
-
-    float parsedE = 0.f;
-    float extrusionDelta = 0.f;
-    const bool hasE = parseAxis(upper, 'E', parsedE);
-    if (hasE)
-    {
-      if (relativeExtrusion)
-      {
-        extrusionDelta = parsedE;
-        ne = e + parsedE;
-      }
-      else
-      {
-        ne = parsedE;
-        extrusionDelta = ne - e;
-      }
-    }
-
-    const bool xyMoved = (nx != x) || (ny != y);
+    // P17.9 (PARSER): the per-move processing shared by G0/G1 lines and
+    // the G2/G3 arc chords (upstream processes arcs by segmenting them
+    // into straight moves before classification).
+    const auto processStraightMove = [&](float nx, float ny, float nz,
+                                        float ne, bool hasE) {
+        // P17.9: works for both E modes — the caller converts relative E
+        // into an absolute ne before calling.
+        const float extrusionDelta = hasE ? ne - e : 0.f;
+        const bool xyMoved = (nx != x) || (ny != y);
     const bool zMoved = (nz != z);
     // Phase 238 (PREV-03): upstream move classification. E-only lines are
     // no longer dropped: dE<0 without movement = Retract, dE>0 without XY
@@ -1724,7 +1829,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       x = nx;
       y = ny;
       z = nz;
-      continue;
+      return;
     }
     const int kind = classifyMoveKind(extrusionDelta, xyMoved, zMoved, wiping);
     if (kind < 0)
@@ -1734,7 +1839,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       z = nz;
       if (hasE)
         e = ne;
-      continue;
+      return;
     }
     const bool extruding = (kind == KindExtrude) && extrusionDelta > 0.00001f;
 
@@ -1833,6 +1938,18 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       // Track filament usage per extruder, aligned with upstream PrintEstimatedStatistics.
       m_extruderUsedLength[currentExtruder] += extrusionDelta;
       accumulateRoleTime(currentType, dx, dy, dz, currentFeedrate);
+      // P17.4: per-role filament length for the FeatureType legend column
+      // (upstream legend shows Used filament per role).
+      m_roleFilamentLength[roleForTypeImpl(currentType)] += extrusionDelta;
+      // P17.10: upstream Prepare time = elapsed before the first extrusion
+      // (heating/priming, GCodeProcessor prepare_time).
+      if (!prepareTimeCaptured_)
+      {
+        prepareTimeSeconds_ = m_moveAccumulatedTime.empty()
+            ? 0.f
+            : m_moveAccumulatedTime.back();
+        prepareTimeCaptured_ = true;
+      }
     }
     else if (kind == KindUnretract && flushing)
     {
@@ -1888,12 +2005,31 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     else
     {
       // Phase 238 (PREV-03): travel/retract/unretract/wipe use the upstream
-      // Travel_Colors[0]/Options_Colors/Wipe_Color base colors
+      // Travel_Colors/Options_Colors/Wipe_Color base colors
       // (GCodeViewer.cpp:718-751).
       const float *kc = kindBaseColor(kind);
       seg.baseR = kc[0];
       seg.baseG = kc[1];
       seg.baseB = kc[2];
+      // P17.4: upstream travel_color(path) tri-state by delta_extruder
+      // (GCodeViewer.cpp:3234-3236): <0 Retract / >0 Extrude / else Move.
+      if (kind == KindTravel)
+      {
+        static const float kTravelExtrude[3] = {0.112f, 0.422f, 0.103f};
+        static const float kTravelRetract[3] = {0.505f, 0.064f, 0.028f};
+        if (extrusionDelta < 0.f)
+        {
+          seg.baseR = kTravelRetract[0];
+          seg.baseG = kTravelRetract[1];
+          seg.baseB = kTravelRetract[2];
+        }
+        else if (extrusionDelta > 0.f)
+        {
+          seg.baseR = kTravelExtrude[0];
+          seg.baseG = kTravelExtrude[1];
+          seg.baseB = kTravelExtrude[2];
+        }
+      }
     }
     seg.feedrate = currentFeedrate;
     seg.fan_speed = currentFanSpeed;
@@ -1934,6 +2070,113 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     if (hasE)
       e = ne;
     ++moveIndex;
+    };
+
+    // P17.9 (PARSER): G2/G3 arcs — segmented into straight chords that run
+    // through the same per-move processing (upstream segments arcs during
+    // parsing so every toolpath vertex is a straight move). E is distributed
+    // proportionally to chord length; feedrate carries over. I/J form uses
+    // the center offset; R form solves the center on the perpendicular
+    // bisector (minor arc for the given direction).
+    if (upper.startsWith(QStringLiteral("G2")) || upper.startsWith(QStringLiteral("G3")))
+    {
+      const bool clockwise = upper.startsWith(QStringLiteral("G2"));
+      float targetX = x, targetY = y;
+      float iOffset = 0.f, jOffset = 0.f, radius = 0.f;
+      parseAxis(upper, 'X', targetX);
+      parseAxis(upper, 'Y', targetY);
+      parseAxis(upper, 'I', iOffset);
+      parseAxis(upper, 'J', jOffset);
+      parseAxis(upper, 'R', radius);
+      const float lineF = parseFValue(upper);
+      if (lineF > 0.f)
+        currentFeedrate = lineF;
+      float parsedEArc = 0.f;
+      const bool hasEArc = parseAxis(upper, 'E', parsedEArc);
+      const float arcE = hasEArc ? (relativeExtrusion ? parsedEArc
+                                                      : parsedEArc - e) : 0.f;
+
+      float centerX = x + iOffset;
+      float centerY = y + jOffset;
+      float startAngle = std::atan2(y - centerY, x - centerX);
+      float endAngle = std::atan2(targetY - centerY, targetX - centerX);
+      if (iOffset == 0.f && jOffset == 0.f)
+      {
+        // R form: center on the perpendicular bisector at distance h from
+        // the chord midpoint; pick the side that yields the minor arc.
+        const float mx = (x + targetX) * 0.5f;
+        const float my = (y + targetY) * 0.5f;
+        const float chordDx = targetX - x;
+        const float chordDy = targetY - y;
+        const float chordLen = std::sqrt(chordDx * chordDx + chordDy * chordDy);
+        if (chordLen < 1e-6f)
+          continue;
+        const float h2 = radius * radius - chordLen * chordLen * 0.25f;
+        const float h = std::sqrt(std::max(0.f, h2));
+        const float side = clockwise ? 1.f : -1.f;
+        centerX = mx + side * h * chordDy / chordLen;
+        centerY = my - side * h * chordDx / chordLen;
+        startAngle = std::atan2(y - centerY, x - centerX);
+        endAngle = std::atan2(targetY - centerY, targetX - centerX);
+      }
+      float sweep = endAngle - startAngle;
+      if (clockwise && sweep > 0.f)
+        sweep -= 2.f * float(M_PI);
+      else if (!clockwise && sweep < 0.f)
+        sweep += 2.f * float(M_PI);
+
+      // Chords: ~0.5mm resolution, clamped to [8, 128] segments.
+      const float arcRadius = std::sqrt((x - centerX) * (x - centerX)
+                                        + (y - centerY) * (y - centerY));
+      const int chordCount = qBound(8, int(std::abs(sweep) * arcRadius / 0.5f) + 1, 128);
+      for (int chord = 1; chord <= chordCount; ++chord)
+      {
+        const float angle = startAngle + sweep * float(chord) / float(chordCount);
+        const float chordX = centerX + arcRadius * std::cos(angle);
+        const float chordY = centerY + arcRadius * std::sin(angle);
+        const float chordE = e + arcE * float(chord) / float(chordCount);
+        processStraightMove(chordX, chordY, z, chordE, hasEArc);
+      }
+      continue;
+    }
+
+    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
+    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
+    if (!isG0 && !isG1)
+      continue;
+
+    const float lineF = parseFValue(upper);
+    if (lineF > 0.f)
+      currentFeedrate = lineF;
+
+    float nx = x;
+    float ny = y;
+    float nz = z;
+    float ne = e;
+    parseAxis(upper, 'X', nx);
+    parseAxis(upper, 'Y', ny);
+    parseAxis(upper, 'Z', nz);
+    // P17.9 (PARSER): G91 makes XYZ moves relative to the current position
+    // (upstream GCodeProcessor G91 handling); E keeps the M82/M83 state.
+    if (!absolutePositioning)
+    {
+      nx = x + nx;
+      ny = y + ny;
+      nz = z + nz;
+    }
+
+    float parsedE = 0.f;
+    const bool hasE = parseAxis(upper, 'E', parsedE);
+    if (hasE)
+    {
+      if (relativeExtrusion)
+        ne = e + parsedE;
+      else
+        ne = parsedE;
+    }
+
+
+    processStraightMove(nx, ny, nz, ne, hasE);
   }
 
   moveCount_ = moveIndex;
@@ -2045,6 +2288,17 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   {
     estimatedTime_ = formatTime(m_normalTimeSecs);
     totalTime_ = estimatedTime_;
+  }
+  // P17.9 (PARSER): G4 dwell adds pure time to the totals (upstream
+  // GCodeProcessor accumulates dwell into the estimated print time).
+  if (dwellSeconds > 0.f)
+  {
+    if (!estimatedTime_.contains(QStringLiteral("--")))
+    {
+      const float withDwell = parseTimeSecs(estimatedTime_) + dwellSeconds;
+      estimatedTime_ = formatTime(withDwell);
+    }
+    totalTime_ = formatTime(parseTimeSecs(totalTime_) + dwellSeconds);
   }
   if (stealthMode_)
   {
@@ -2310,6 +2564,7 @@ void PreviewViewModel::recolorAndPackSegments()
     p.fan_speed = s.fan_speed;
     p.temperature = s.temperature;
     p.width = s.width;
+    p.height = s.height;  // P17.2: carried for the solid-prism preview render
     p.layer_time = s.layer_time;
     p.acceleration = s.acceleration;
     p.jerk = s.jerk;
@@ -2355,6 +2610,15 @@ void PreviewViewModel::recolorAndPackSegments()
       // Summary: statistics only; segments still draw in their baked role color.
       p.r = s.baseR; p.g = s.baseG; p.b = s.baseB;
     }
+    else if (mode == VT_FilamentId)
+    {
+      // P17.1: upstream EViewType::FilamentId pseudo-color {id, role, id}
+      // (GCodeViewer.cpp:3221-3226) — extruder id on R and B, role on G.
+      // Hidden diagnostic mode (no legend entry).
+      p.r = qBound(0, s.extruder_id * 32, 255) / 255.0f;
+      p.g = qBound(0, s.role * 12, 255) / 255.0f;
+      p.b = p.r;
+    }
     else
     {
       float value = 0.f;
@@ -2395,6 +2659,7 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
   m_legendGradMaxLabel.clear();
   m_legendGradMinColor.clear();
   m_legendGradMaxColor.clear();
+  m_legendGradientStops.clear();
 
   if (mode == VT_Summary)
   {
@@ -2405,6 +2670,36 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
 
   if (mode == VT_LineType)
   {
+    // P17.4: per-role legend columns — Time / Percent / Used filament —
+    // aligned with the upstream FeatureType legend rows
+    // (GCodeViewer.cpp:4808-4845, roles_times + filaments per role).
+    m_legendRoleColumns.clear();
+    auto roleIndexFromLabel = [](const QString &label) {
+      for (int r = 0; r < 20; ++r)
+        if (QString::fromUtf8(kRoleLabels[r]) == label)
+          return r;
+      return -1;
+    };
+    double roleTimeTotal = 0.0;
+    for (const auto &entry : m_roleTimes)
+      roleTimeTotal += entry.timeSecs;
+    for (const auto &entry : m_roleTimes)
+    {
+      QVariantMap row;
+      row.insert(QStringLiteral("label"), entry.name);
+      row.insert(QStringLiteral("time"), formatTime(entry.timeSecs));
+      row.insert(QStringLiteral("percent"),
+                 roleTimeTotal > 0.0
+                     ? QString::number(entry.timeSecs / roleTimeTotal * 100.0, 'f', 1)
+                     : QStringLiteral("0.0"));
+      const double lengthMm = m_roleFilamentLength.value(
+          roleIndexFromLabel(entry.name), 0.0);
+      row.insert(QStringLiteral("filament"),
+                 lengthMm > 0.0 ? QStringLiteral("%1 mm").arg(lengthMm, 0, 'f', 0)
+                                : QStringLiteral("--"));
+      m_legendRoleColumns.append(row);
+    }
+
     // FeatureType legend (discrete): per-role swatches indexed by the canonical
     // libvgcode role present in the parsed segments.
     for (auto it = featureCount_.cbegin(); it != featureCount_.cend(); ++it)
@@ -2487,8 +2782,22 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     default: label = viewModes().value(mode); break;
     }
 
-    const QString minStr = (minV <= FLT_MAX) ? QString::number(minV, 'f', 1) : QStringLiteral("--");
-    const QString maxStr = (maxV >= -FLT_MAX) ? QString::number(maxV, 'f', 1) : QStringLiteral("--");
+    // P17.3: per-mode decimals — Height/Width/Flow use 2 decimals (upstream
+    // GCodeViewer.cpp:4847-4853, :4861), the rest use 0.
+    int decimals = 0;
+    switch (mode) {
+    case VT_Height:
+    case VT_Width:
+    case VT_Flow:
+      decimals = 2;
+      break;
+    default:
+      decimals = 0;
+      break;
+    }
+
+    const QString minStr = (minV <= FLT_MAX) ? QString::number(minV, 'f', decimals) : QStringLiteral("--");
+    const QString maxStr = (maxV >= -FLT_MAX) ? QString::number(maxV, 'f', decimals) : QStringLiteral("--");
 
     // Upstream Range_Colors endpoints: #0b2c7a (bluish) to #942616 (reddish).
     static const QColor kGradStart(11, 44, 122);
@@ -2504,6 +2813,23 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
         .arg(kGradEnd.red(), 2, 16, QLatin1Char('0'))
         .arg(kGradEnd.green(), 2, 16, QLatin1Char('0'))
         .arg(kGradEnd.blue(), 2, 16, QLatin1Char('0'));
+
+    // P17.3: the 10-step legend value list (upstream append_range,
+    // GCodeViewer.cpp:4498-4518) — one row per Range_Color with the
+    // interpolated value at that step, rendered as the gradient bar stops.
+    m_legendGradientStops.clear();
+    for (int step = 0; step < kRangeColorCount; ++step)
+    {
+      const float t = float(step) / float(kRangeColorCount - 1);
+      const float value = minV + (maxV - minV) * t;
+      QVariantMap stop;
+      stop.insert(QStringLiteral("position"), t);
+      stop.insert(QStringLiteral("color"), colorHex({kRangeColors[step][0],
+                                                     kRangeColors[step][1],
+                                                     kRangeColors[step][2]}));
+      stop.insert(QStringLiteral("value"), QString::number(value, 'f', decimals));
+      m_legendGradientStops.append(stop);
+    }
 
     // Still populate legendItems_ with min/max for backward compat
     legendItems_.append(legendItem(minStr, m_legendGradMinColor, 0));

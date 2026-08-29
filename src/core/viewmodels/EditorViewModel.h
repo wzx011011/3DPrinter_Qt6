@@ -686,7 +686,7 @@ public:
   /// 从外部文件导入 volume（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）
   Q_INVOKABLE bool addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType);
   /// 添加原始体 volume（对齐上游 create_mesh + add_volume）
-  Q_INVOKABLE bool addPrimitive(int objectIndex, int primitiveType);
+  Q_INVOKABLE bool addPrimitive(int objectIndex, int primitiveType, int volumeType = 0);
   /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
   Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
   /// 添加 SVG 浮雕 volume（对齐上游 GLGizmoSVG）
@@ -739,6 +739,28 @@ public:
   Q_INVOKABLE bool reloadAllOnPlate(int plateIndex);
   /// 合并选中对象为单一多部件对象（对齐上游 GUI_ObjectList::assemble）
   Q_INVOKABLE bool assembleSelectedObjects();
+  /// P16.2: merge all parts of the selected object into one mesh object
+  /// (对齐上游 ObjectList::merge(false), GUI_ObjectList.cpp:2792-2810).
+  Q_INVOKABLE bool mergeSelectedPartsToSingleObject();
+  /// P16.4: Change Filament submenu (upstream MenuFactory::
+  /// append_menu_item_change_filament GUI_Factories.cpp:1879-1961 +
+  /// ObjectList::set_extruder_for_selected_items GUI_ObjectList.cpp:5622).
+  /// extruder 0 = "Default"; 1..n = Filament n.
+  Q_INVOKABLE int configFilamentCount() const;
+  Q_INVOKABLE int objectExtruderId(int objectIndex) const;
+  Q_INVOKABLE void setExtruderForSelectedItems(int extruder);
+  /// P16.9: Flush Options submenu (upstream append_menu_items_flush_options,
+  /// GUI_Factories.cpp:937-1028). optionIndex: 0=infill, 1=object, 2=support.
+  Q_INVOKABLE bool flushOptionValue(int optionIndex) const;
+  Q_INVOKABLE bool toggleFlushOption(int optionIndex);
+  /// P16.9: Invalidate cut info (upstream has_selected_cut_object /
+  /// invalidate_cut_info_for_selection, GUI_ObjectList.cpp:3033-3076).
+  Q_INVOKABLE bool anySelectedObjectHasCutInfo() const;
+  Q_INVOKABLE bool invalidateSelectedCutInfo();
+  /// P16.11: per-instance printable (upstream itInstance toggle,
+  /// ObjectList::toggle_printable_state GUI_ObjectList.cpp:5817-5866).
+  Q_INVOKABLE bool instancePrintable(int objectIndex, int instanceIndex) const;
+  Q_INVOKABLE void toggleInstancePrintable(int objectIndex, int instanceIndex);
   /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）
   Q_INVOKABLE bool instanceToObject(int instIdx);
   Q_INVOKABLE bool setSelectedInstanceCount(int count);

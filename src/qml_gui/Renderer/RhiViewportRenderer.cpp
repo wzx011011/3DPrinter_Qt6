@@ -41,29 +41,47 @@ void rhiTrace(const char *milestone)
 // source when binding the SRB against a buffer with three pending uploads).
 //
 // std140 layout (matches the existing inline comment in uploadCameraUniform):
-//   offset 0:  mat4 mvp        (64 bytes; QMatrix4x4 is 16 contiguous floats)
-//   offset 64: vec3 gizmoCenter (12 bytes; QVector3D is 3 contiguous floats)
-//   offset 76: float gizmoScale (4 bytes; packs into the vec3's std140 tail)
-//   offset 80: mat4 view        (64 bytes; v5.15 MODELLIT eye-space lighting)
-// Total = 144 bytes. The first 80 bytes are bit-identical to the mesh/gizmo
+//   offset 0:   mat4 mvp        (64 bytes; QMatrix4x4 is 16 contiguous floats)
+//   offset 64:  vec3 gizmoCenter (12 bytes; QVector3D is 3 contiguous floats)
+//   offset 76:  float gizmoScale (4 bytes; packs into the vec3's std140 tail)
+//   offset 80:  mat4 view        (64 bytes; v5.15 MODELLIT eye-space lighting)
+//   offset 144: float printVolumeType       (P15.3 OUTOFBED; 0 rect, 1 circle,
+//                                           <0 disabled -- gouraud.fs:13)
+//   offset 160: vec4 printVolumeXyData     (rect: minX/minZ/maxX/maxZ Qt scene;
+//                                           circle: cx, cz, radius, 0)
+//   offset 176: vec2 printVolumeZData     (height bounds on the Qt Y axis)
+// Total = 192 bytes. The first 80 bytes are bit-identical to the mesh/gizmo
 // std140 CameraBlock; the v5.15 lit/bed shaders extend the block with the
 // raw view matrix at offset 80 (declared as vec4 gizmoCenter + mat4 view,
-// which reads the same bytes at [64,80)). The 256-byte backing buffer is
-// allocated elsewhere (D3D12 cbuffer alignment); only the first 144 bytes
+// which reads the same bytes at [64,80)); the P15.3 model_lit fragment stage
+// appends the print volume at [144,192). The 256-byte backing buffer is
+// allocated elsewhere (D3D12 cbuffer alignment); only the first 192 bytes
 // are written.
 struct CameraBlockPacked {
-  QMatrix4x4 mvp;        // offset 0,  64 bytes
-  QVector3D gizmoCenter; // offset 64, 12 bytes
-  float gizmoScale;      // offset 76, 4 bytes
-  QMatrix4x4 view;       // offset 80, 64 bytes (v5.15 MODELLIT)
+  // P15.3 (OUTOFBED): explicit float arrays keep the std140 offsets stable
+  // (QVector3D/QVector4D carry 16-byte ABI alignment that shifts the fields).
+  float mvp[16];          // offset 0,   64 bytes
+  float gizmoCenter[3];   // offset 64,  12 bytes
+  float gizmoScale;       // offset 76,  4 bytes
+  float view[16];         // offset 80,  64 bytes (v5.15 MODELLIT)
+  float printVolumeType;  // offset 144, 4 bytes (P15.3 OUTOFBED)
+  float printVolumePad[3];
+  float printVolumeXy[4]; // offset 160
+  float printVolumeZ[4];  // offset 176 (vec2 in GLSL reads xy)
 };
 // QMatrix4x4 (float[16]) and QVector3D (float[3]) may carry ABI alignment
 // padding on some compilers, so the C++ struct can be larger than the std140
-// layout. Only the first 144 bytes are uploaded; the assert checks the lower
-// bound.
-static_assert(sizeof(CameraBlockPacked) >= 144,
-              "CameraBlockPacked must be at least 144 bytes to hold the GLSL "
-              "std140 CameraBlock layout (mat4 + vec4 + mat4).");
+// layout. Only the first 192 bytes are uploaded; the asserts pin the fields
+// to their GLSL offsets.
+static_assert(sizeof(CameraBlockPacked) >= 192,
+              "CameraBlockPacked must be at least 192 bytes to hold the GLSL "
+              "std140 CameraBlock layout (mat4 + vec4 + mat4 + PrintVolume).");
+static_assert(offsetof(CameraBlockPacked, printVolumeType) == 144,
+              "printVolumeType must land at the std140 offset 144");
+static_assert(offsetof(CameraBlockPacked, printVolumeXy) == 160,
+              "printVolumeXyData must land at the std140 offset 160");
+static_assert(offsetof(CameraBlockPacked, printVolumeZ) == 176,
+              "printVolumeZData must land at the std140 offset 176");
 
 RhiViewportRenderer::RhiViewportRenderer() = default;
 
@@ -129,6 +147,11 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   // Phase 238 (PREV-01/02): ghost shells + tool marker re-upload on rebuild.
   m_ghostShellBufferUploaded = false;
   m_toolMarkerBufferUploaded = false;
+  // P15.5 (SINK)/P15.7 (AXES)/P15.8 (BOLDGRID): derived bed buffers follow
+  // the same swapchain-rebuild re-upload rule as the scene buffers.
+  m_bedBoldFillBufferUploaded = false;
+  m_sinkingContourBufferUploaded = false;
+  m_bedAxesBuffersUploaded = false;
   // Reset the first-N-frames force window so the new swapchain gets a
   // guaranteed camera UBO upload on its first render() (see render()).
   m_frameCount = 0;
@@ -291,14 +314,15 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     batchPrintableFlags.reserve(viewport->m_meshBatchPrintableFlags.size());
     for (const QVariant &value : viewport->m_meshBatchPrintableFlags)
       batchPrintableFlags.append(value.toInt());
-    QList<QVector4D> extruderColors;
-    extruderColors.reserve(viewport->m_extrudersColors.size());
+    m_extrudersColorsParsed.clear();
+    m_extrudersColorsParsed.reserve(viewport->m_extrudersColors.size());
     for (const QVariant &value : viewport->m_extrudersColors) {
       const QColor color(value.toString());
       if (color.isValid())
-        extruderColors.append(QVector4D(
+        m_extrudersColorsParsed.append(QVector4D(
             float(color.redF()), float(color.greenF()), float(color.blueF()), 1.0f));
     }
+    const QList<QVector4D> &extruderColors = m_extrudersColorsParsed;
     m_prepareScene.setModelMeshData(viewport->m_meshData,
                                     batchSourceObjectIndices,
                                     batchVolumeIndices,
@@ -312,6 +336,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
   m_prepareScene.setHoveredSourceObjectIndex(viewport->m_hoveredSourceObjectIndex);
+  // P15.4 (SELBOX): mirror the gizmo-drag flag. Upstream skips the selection
+  // outline while a gizmo runs (if (!m_gizmos.is_running()),
+  // GLCanvas3D.cpp:7367); a flag change re-uploads the outline buffer.
+  const bool prevGizmoDragging = m_gizmoDragging;
+  m_gizmoDragging = viewport->m_gizmoDragging;
+  if (m_gizmoDragging != prevGizmoDragging)
+    m_highlightVertexBufferUploaded = false;
   const QSize pixelSize = renderTarget() ? renderTarget()->pixelSize() : QSize(int(viewport->width()), int(viewport->height()));
   const float aspect = pixelSize.height() > 0
       ? float(std::max(1, pixelSize.width())) / float(std::max(1, pixelSize.height()))
@@ -389,9 +420,18 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_prepareScene.markCameraDirty();
     viewport->m_cameraDirty = false;
   }
-  m_clearColor = (m_canvasType == RhiViewport::CanvasPreview)
-      ? QColor(8, 12, 20)
-      : QColor(86, 87, 93);
+  // P15.3 (OUTOFBED): upstream _render_background swaps the background to
+  // ERROR_BG_LIGHT_COLOR {0.753, 0.192, 0.039} while any model-part volume
+  // sits outside the print volume (GLCanvas3D.cpp:7069-7097, _is_any_volume_outside;
+  // error color defined at :84-85, identical in the dark theme). The preview
+  // canvas keeps its fixed dark clear (upstream preview uses its own
+  // background path).
+  if (m_canvasType == RhiViewport::CanvasPreview)
+    m_clearColor = QColor(8, 12, 20);
+  else if (m_prepareScene.anyVolumeOutside())
+    m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
+  else
+    m_clearColor = QColor(86, 87, 93);
 
   // ── Phase 26: Preview segment pipeline — store preview data + control props ──
   if (m_previewData != viewport->m_previewData) {
@@ -406,6 +446,8 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_layerMin = viewport->m_layerMin;
   m_layerMax = viewport->m_layerMax;
   m_moveEnd = viewport->m_moveEnd;
+  // P17.7: a moveEnd change re-caps the toolpath end on the next frame.
+  m_previewCapUploadPending = true;
   m_showTravelMoves = viewport->m_showTravelMoves;
   m_gcodeViewMode = viewport->m_gcodeViewMode;
 
@@ -760,6 +802,26 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     rhiTrace("seamA-folded");
   }
 
+  // P17.7: sequential-range cap — rebuild the geometry when moveEnd changed
+  // and upload through this frame's pre-pass batch (the draw itself happens
+  // inside the pass below).
+  if (m_moveEnd > 0 && (m_previewCapMoveEnd != m_moveEnd
+                        || m_previewCapUploadPending)) {
+    rebuildPreviewCap();
+    if (!m_previewCapVertices.isEmpty()
+        && ensureBuffer(m_previewCapBuffer,
+                        quint32(m_previewCapVertices.size()) * sizeof(Vertex),
+                        m_previewCapBufferBytes, QRhiBuffer::VertexBuffer)) {
+      if (updates == nullptr)
+        updates = rhi()->nextResourceUpdateBatch();
+      updates->uploadStaticBuffer(m_previewCapBuffer.get(), 0,
+                                  quint32(m_previewCapVertices.size()) * sizeof(Vertex),
+                                  m_previewCapVertices.constData());
+      m_previewCapVertexCount = quint32(m_previewCapVertices.size());
+      m_previewCapUploadPending = false;
+    }
+  }
+
   // v5.16 (NAVIGATOR): overlay cube upload runs every frame (cached inside).
   if (m_navigatorEnabled) {
     if (updates == nullptr)
@@ -772,6 +834,12 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   // v5.16 (BEDBOTTOM): upstream bottom gate for every bed surface. Computed
   // once per frame from the synchronized view matrix.
   const bool lookingDown = cameraLookingDown();
+  // P15.11: upstream no_partplate — the paint gizmos (FdmSupports/Seam/
+  // MMU segmentation) render without the plate surfaces
+  // (GLCanvas3D.cpp:1901-1902, no_partplate flag consumed at :1912-1914).
+  const bool paintGizmoHidesPlate =
+      m_gizmoMode == 6 /*GizmoSupportPaint*/ || m_gizmoMode == 7 /*GizmoSeamPaint*/
+      || m_gizmoMode == 10 /*GizmoMmuSegmentation*/;
   // Phase 90: CanvasAssembleView shares the View3D mesh draw block (bed +
   // model vertex buffer) so the AssembleView canvas is not empty at runtime.
   // Guard widened to != CanvasPreview; the CanvasPreview draw block below
@@ -784,23 +852,33 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Upstream PartPlate::render skips render_background (plate fill +
     // exclude areas) entirely when viewed from below (`if (!bottom)`), so the
     // opaque fill never occludes the model from below-horizon angles.
-    if (m_prepareScene.showBed() && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
       cb->setGraphicsPipeline(m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
-    if (m_prepareScene.showBed() && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
       cb->setGraphicsPipeline(m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
+    // P15.8 (BOLDGRID): the every-5th-line bolder set draws after the fine
+    // grid, mirroring the upstream render_grid second pass
+    // (PartPlate.cpp:892-912: 1px fine then 2px bolder, same line color).
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown
+        && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0) {
+      cb->setGraphicsPipeline(m_fillPipeline.get());
+      const QRhiCommandBuffer::VertexInput boldBinding(m_bedBoldFillBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &boldBinding);
+      cb->draw(m_bedBoldFillVertexCount);
+    }
     // v5.16 (BEDBOTTOM): from below the grid keeps drawing, but in
     // LINE_BOTTOM_COLOR through the blended line pipeline (upstream
     // render_grid(true), PartPlate.cpp:846-861); border and origin axes stay
     // top-only because upstream renders them inside render_background.
-    if (m_prepareScene.showBed() && !lookingDown
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && !lookingDown
         && m_bedBottomLineBuffer && m_bedBottomLineVertexCount > 0) {
       cb->setGraphicsPipeline(m_translucentLinePipeline.get());
       const QRhiCommandBuffer::VertexInput bottomLineBinding(m_bedBottomLineBuffer.get(), 0);
@@ -824,7 +902,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // PartPlate::render_logo bedtype branch). v5.16 (BEDBOTTOM): upstream
     // gates render_logo with `!bottom && m_selected`, so from below the logo
     // is skipped too.
-    if (m_prepareScene.showBed() && lookingDown) {
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown) {
       if (m_bedTypeActive)
         renderBedTypeParts(cb);
       else
@@ -835,6 +913,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // only when !bottom (3DBed.cpp render_system), skipped from below.
     if (lookingDown)
       renderBedModel(cb);
+    // P15.7 (AXES): X/Y/Z origin arrows after the bed texture/model so the
+    // no-depth-test texture pass cannot paint over them (upstream
+    // Bed3D::Axes::render runs inside the bed render with depth test).
+    renderAxes(cb);
     if (m_modelVertexBuffer && m_modelVertexCount > 0) {
       // v5.15 (MODELLIT): lit draw path (two-light gouraud) with the parallel
       // per-face normal buffer. Falls back to the flat vertex-color pipeline
@@ -857,6 +939,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // pass (_render_objects(Transparent), GLCanvas3D.cpp:1915); here it sits
     // after the opaque model + bed so depth state covers both.
     renderModelTranslucentPass(cb);
+    // P15.5 (SINK): white bed-plane contour bands of sinking objects,
+    // non-hovered with normal depth and hovered/displaced ranges drawn
+    // depth-unconditional (3DScene.cpp:936-947 / :1018-1034).
+    renderSinkingContours(cb);
     // Phase 121 (PAINT-02/OV-03): render the painted-facet overlay after the
     // model mesh, before highlight. Reuses m_fillPipeline (opaque vertex-color
     // fill). Gated to the three paint gizmos (Support=6, Seam=7, MMU=10).
@@ -871,9 +957,12 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     renderMeasureOverlay(cb);
     renderFlattenHover(cb);
   if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
-      // Highlight is translucent: test depth but do not write it, so it does
-      // not occlude opaque geometry drawn in subsequent frames/passes.
-      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      // P15.4 (SELBOX): the selection highlight is now the upstream white
+      // corner-box outline (Selection.cpp:1939-1949 + render_bounding_box
+      // :2558-2654): line topology through the opaque line pipeline with
+      // depth test+write, exactly like the upstream "flat" shader draw.
+      // (The previous yellow/cyan full-volume tint was an OWzx invention.)
+      cb->setGraphicsPipeline(m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput highlightBinding(m_highlightVertexBuffer.get(), 0);
       cb->setVertexInput(0, 1, &highlightBinding);
       cb->draw(m_highlightVertexCount);
@@ -925,7 +1014,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // (GLCanvas3D.cpp:1922-1923): plate fill, lines, logo and bed model are
     // skipped from below-horizon angles, keeping the toolpaths visible; the
     // grid alone remains through the bottom-line buffer.
-    if (m_prepareScene.showBed() && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
       cb->setGraphicsPipeline(m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
@@ -936,6 +1025,15 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
+    }
+    // P15.8 (BOLDGRID): bolder grid hierarchy in the preview bed too
+    // (upstream GCodeViewer::_render_bed renders the same PartPlate grid).
+    if (m_prepareScene.showBed() && lookingDown
+        && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0) {
+      cb->setGraphicsPipeline(m_fillPipeline.get());
+      const QRhiCommandBuffer::VertexInput boldBinding(m_bedBoldFillBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &boldBinding);
+      cb->draw(m_bedBoldFillVertexCount);
     }
     if (m_prepareScene.showBed() && !lookingDown
         && m_bedBottomLineBuffer && m_bedBottomLineVertexCount > 0) {
@@ -952,6 +1050,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
     if (lookingDown)
       renderBedModel(cb);
+    // P15.7 (AXES): upstream Bed3D::render_internal gates the axes on
+    // show_axes only, not on the bottom flag (3DBed.cpp:377/458-462).
+    renderAxes(cb);
 
     // Phase 238 (PREV-01): ghost object shells BEHIND the toolpaths
     // (upstream render_shells, GCodeViewer.cpp:4023, drawn before
@@ -965,18 +1066,41 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->draw(m_ghostShellVertexCount);
     }
 
-    cb->setGraphicsPipeline(m_linePipeline.get());
-
+    // P17.2: spans carry their topology — extrusion prisms draw through the
+    // no-depth-write translucent fill pipeline (lit shading, matching the
+    // upstream toolpath gouraud_light look), lines through the line
+    // pipeline. One shared vertex buffer, two pipelines, span-ordered.
     if (m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
       const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
       if (!drawRanges.isEmpty()) {
         const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
-        cb->setVertexInput(0, 1, &segBinding);
+        QRhiGraphicsPipeline *currentPipeline = nullptr;
         for (const PreviewDrawRange &range : drawRanges) {
-          if (range.vertexCount > 0)
-            cb->draw(range.vertexCount, 1, range.firstVertex);
+          if (range.vertexCount <= 0)
+            continue;
+          QRhiGraphicsPipeline *wanted =
+              range.triangles ? m_translucentFillPipeline.get() : m_linePipeline.get();
+          if (wanted != currentPipeline) {
+            cb->setGraphicsPipeline(wanted);
+            cb->setVertexInput(0, 1, &segBinding);
+            currentPipeline = wanted;
+          }
+          cb->draw(range.vertexCount, 1, range.firstVertex);
         }
       }
+    }
+
+    // P17.7: sequential-range cap while dragging (upstream
+    // render_sequential_range_cap, GCodeViewer.cpp:3965-4019): a dark-gray
+    // quad at the toolpath end, only when a partial move position is active.
+    // Geometry rebuilds in synchronize(); the upload rides the pre-pass
+    // updates batch (see the m_previewCapUploadPending arm above beginPass).
+    if (m_moveEnd > 0 && m_moveEnd < m_previewDrawSpans.size()
+        && m_previewCapBuffer && m_previewCapVertexCount > 0) {
+      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      const QRhiCommandBuffer::VertexInput capBinding(m_previewCapBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &capBinding);
+      cb->draw(m_previewCapVertexCount);
     }
 
     // Phase 238 (PREV-02): 3D tool-position marker, drawn after the segments
@@ -1064,6 +1188,8 @@ void RhiViewportRenderer::releaseRenderPassDependentResources()
   m_fillPipeline.reset();
   m_translucentFillPipeline.reset();
   m_translucentLinePipeline.reset();
+  // P15.5 (SINK): depth-test-off contour clone.
+  m_sinkingAlwaysPipeline.reset();
   m_bedTexturePipeline.reset();
   m_modelLitPipeline.reset();
   m_modelLitBlendPipeline.reset();
@@ -1091,6 +1217,8 @@ void RhiViewportRenderer::releaseResources()
   m_fillPipeline.reset();
   m_translucentFillPipeline.reset();
   m_translucentLinePipeline.reset();
+  // P15.5 (SINK): depth-test-off contour clone.
+  m_sinkingAlwaysPipeline.reset();
   // v5.15 (BEDTEX/MODELLIT): bed texture + lit model resources.
   m_bedTexturePipeline.reset();
   m_bedTextureSrb.reset();
@@ -1147,6 +1275,11 @@ void RhiViewportRenderer::releaseResources()
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
   m_bedBottomLineBuffer.reset();
+  // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES): derived bed buffers.
+  m_bedBoldFillBuffer.reset();
+  m_sinkingContourBuffer.reset();
+  m_bedAxesVertexBuffer.reset();
+  m_bedAxesNormalBuffer.reset();
   m_bedLimitBuffer.reset();
   m_bedFillBuffer.reset();
   // v5.16 (NAVIGATOR): overlay cube buffer.
@@ -1187,6 +1320,17 @@ void RhiViewportRenderer::releaseResources()
   m_bedFillBufferBytes = 0;
   m_bedLineBufferBytes = 0;
   m_bedBottomLineBufferBytes = 0;
+  // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES)
+  m_bedBoldFillBufferBytes = 0;
+  m_sinkingContourBufferBytes = 0;
+  m_bedAxesVertexBufferBytes = 0;
+  m_bedAxesNormalBufferBytes = 0;
+  m_bedBoldFillVertexCount = 0;
+  m_sinkingContourVertexCount = 0;
+  m_bedAxesVertexCount = 0;
+  m_bedBoldFillBufferUploaded = false;
+  m_sinkingContourBufferUploaded = false;
+  m_bedAxesBuffersUploaded = false;
   m_navigatorFillBufferBytes = 0;
   m_bedLimitBufferBytes = 0;
   m_modelVertexBufferBytes = 0;
@@ -1490,6 +1634,11 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
   m_previewSegmentBuffer.reset();
   m_previewSegmentBufferBytes = 0;
   m_previewSegmentBufferUploaded = false;
+  // P17.7: sequential-range cap buffer.
+  m_previewCapBuffer.reset();
+  m_previewCapBufferBytes = 0;
+  m_previewCapVertices.clear();
+  m_previewCapMoveEnd = -1;
   m_previewLastUploadMs = -1;
   m_previewLastFrameMs = -1;
   m_previewFirstFrameMs = -1;
@@ -1540,10 +1689,13 @@ bool RhiViewportRenderer::ensurePipelines()
 
   if (!m_srb)
   {
+    // P15.3 (OUTOFBED): the model_lit FRAGMENT stage reads the camera UBO
+    // (print volume test), so binding 0 must expose both stages.
     m_srb.reset(rhi()->newShaderResourceBindings());
     m_srb->setBindings({
         QRhiShaderResourceBinding::uniformBuffer(0,
-                                                 QRhiShaderResourceBinding::VertexStage,
+                                                 QRhiShaderResourceBinding::VertexStage
+                                                     | QRhiShaderResourceBinding::FragmentStage,
                                                  m_cameraUniformBuffer.get())
     });
     if (!m_srb->create()) {
@@ -1551,6 +1703,17 @@ bool RhiViewportRenderer::ensurePipelines()
       return false;
     }
   }
+
+  // P15.5 (SINK): depth-test-off fill clone for hovered/displaced sinking
+  // contours (glDepthFunc(GL_ALWAYS), 3DScene.cpp:1018-1034). Depth writes
+  // stay off so the overlay cannot corrupt later depth-tested draws.
+  if (!m_sinkingAlwaysPipeline
+      && !ensurePipeline(m_sinkingAlwaysPipeline, QRhiGraphicsPipeline::Triangles,
+                         /*enableDepthWrite=*/false,
+                         /*enableBlending=*/false,
+                         /*srb=*/nullptr,
+                         /*enableDepthTest=*/false))
+    return false;
 
   return ensurePipeline(m_fillPipeline, QRhiGraphicsPipeline::Triangles)
       && ensurePipeline(m_linePipeline, QRhiGraphicsPipeline::Lines)
@@ -1986,6 +2149,75 @@ void RhiViewportRenderer::renderBedModel(QRhiCommandBuffer *cb)
 }
 
 // ── v5.16 (BEDTYPE-TEX): BBL bed-type overlay parts ────────────────────────
+// P15.7 (AXES): origin arrows through the lit pipeline (upstream
+// Bed3D::Axes::render uses gouraud_light with emission 0; the QRhi lit
+// pipeline implements the same two-light model). Depth test+write on like
+// upstream (3DBed.cpp:225/244), so the arrows occlude against the model.
+void RhiViewportRenderer::renderAxes(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || !m_prepareScene.showBed())
+    return;
+  if (m_bedAxesVertexBuffer == nullptr || m_bedAxesVertexCount == 0)
+    return;
+  if (m_bedAxesNormalBuffer == nullptr)
+    return;
+  if (!m_modelLitEnabled || !ensureModelLitPipeline()) {
+    // Fallback: flat unlit arrows keep the orientation cue visible.
+    if (m_fillPipeline == nullptr)
+      return;
+    cb->setGraphicsPipeline(m_fillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_bedAxesVertexBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_bedAxesVertexCount);
+    return;
+  }
+  cb->setGraphicsPipeline(m_modelLitPipeline.get());
+  const QRhiCommandBuffer::VertexInput bindings[2] = {
+      QRhiCommandBuffer::VertexInput(m_bedAxesVertexBuffer.get(), 0),
+      QRhiCommandBuffer::VertexInput(m_bedAxesNormalBuffer.get(), 1),
+  };
+  cb->setVertexInput(0, 2, bindings);
+  cb->setShaderResources(m_srb.get());
+  cb->draw(m_bedAxesVertexCount);
+}
+
+// P15.5 (SINK): sinking-contour bands (upstream GLVolume::SinkingContours,
+// 3DScene.cpp:108-161). Ranges whose object is hovered/displaced draw with
+// the depth-test-off pipeline — the GL_ALWAYS branch of
+// GLVolumeCollection::render (3DScene.cpp:1018-1034) — the rest depth-test
+// normally (:936-947).
+void RhiViewportRenderer::renderSinkingContours(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_sinkingContourBuffer == nullptr
+      || m_sinkingContourVertexCount == 0)
+    return;
+  const QList<PrepareSceneData::SinkingContourRange> &ranges =
+      m_prepareScene.sinkingContourRanges();
+  if (ranges.isEmpty())
+    return;
+  const int hovered = m_prepareScene.hoveredSourceObjectIndex();
+
+  auto drawRange = [cb](QRhiGraphicsPipeline *pipeline, QRhiBuffer *buffer,
+                        quint32 firstVertex, quint32 vertexCount) {
+    cb->setGraphicsPipeline(pipeline);
+    const QRhiCommandBuffer::VertexInput binding(buffer, 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(vertexCount, 1, firstVertex, 0);
+  };
+
+  for (const PrepareSceneData::SinkingContourRange &range : ranges) {
+    if (range.vertexCount <= 0)
+      continue;
+    if (range.sourceObjectIndex == hovered && m_sinkingAlwaysPipeline) {
+      drawRange(m_sinkingAlwaysPipeline.get(), m_sinkingContourBuffer.get(),
+                quint32(range.firstVertex), quint32(range.vertexCount));
+    } else if (m_fillPipeline) {
+      drawRange(m_fillPipeline.get(), m_sinkingContourBuffer.get(),
+                quint32(range.firstVertex), quint32(range.vertexCount));
+    }
+  }
+}
+
 void RhiViewportRenderer::releaseBedTypeParts()
 {
   qDeleteAll(m_bedTypePartGpu);
@@ -2335,7 +2567,11 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
       || (dirtyFlags & (PrepareSceneData::DirtyBed
                         | PrepareSceneData::DirtyPlate
                         | PrepareSceneData::DirtyGpu)) != 0;
-  if (!uploadScene)
+  // P15.5 (SINK): the contour bands follow the model mesh, not the bed.
+  const bool uploadSinking = !m_sinkingContourBufferUploaded
+      || (dirtyFlags & (PrepareSceneData::DirtyMesh
+                        | PrepareSceneData::DirtyGpu)) != 0;
+  if (!uploadScene && !uploadSinking)
     return true;
 
   // v5.15 (BEDTEX): the texture quad follows the bed rect, so a bed
@@ -2346,6 +2582,8 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
   // v5.16 (BEDBOTTOM): grid-only line set for below-horizon views.
   const QVector<Vertex> bottomLineVertices = buildSceneVertices(m_prepareScene.bedBottomLineVertices());
+  // P15.8 (BOLDGRID): every-5th grid line as ~2px quads.
+  const QVector<Vertex> boldVertices = buildSceneVertices(m_prepareScene.bedBoldLineVertices());
   // v5.16 (HTLIMIT): ModelVertex and Vertex share the 7-float layout; the
   // limit lines carry their height in y directly.
   const QList<PrepareSceneData::ModelVertex> &limitSource =
@@ -2354,20 +2592,42 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   limitVertices.reserve(limitSource.size());
   for (const PrepareSceneData::ModelVertex &v : limitSource)
     limitVertices.append(Vertex{v.x, v.y, v.z, v.r, v.g, v.b, v.a});
+  // P15.5 (SINK) + P15.7 (AXES): ModelVertex triangle soup conversion.
+  const QList<PrepareSceneData::ModelVertex> &sinkingSource =
+      m_prepareScene.sinkingContourVertices();
+  QVector<Vertex> sinkingVertices;
+  sinkingVertices.reserve(sinkingSource.size());
+  for (const PrepareSceneData::ModelVertex &v : sinkingSource)
+    sinkingVertices.append(Vertex{v.x, v.y, v.z, v.r, v.g, v.b, v.a});
+  const QList<PrepareSceneData::ModelVertex> &axesSource =
+      m_prepareScene.bedAxesVertices();
+  QVector<Vertex> axesVertices;
+  axesVertices.reserve(axesSource.size());
+  for (const PrepareSceneData::ModelVertex &v : axesSource)
+    axesVertices.append(Vertex{v.x, v.y, v.z, v.r, v.g, v.b, v.a});
   const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
   const quint32 lineBytes = quint32(lineVertices.size() * int(sizeof(Vertex)));
   const quint32 bottomLineBytes = quint32(bottomLineVertices.size() * int(sizeof(Vertex)));
+  const quint32 boldBytes = quint32(boldVertices.size() * int(sizeof(Vertex)));
+  const quint32 sinkingBytes = quint32(sinkingVertices.size() * int(sizeof(Vertex)));
+  const quint32 axesBytes = quint32(axesVertices.size() * int(sizeof(Vertex)));
   const quint32 limitBytes = quint32(limitVertices.size() * int(sizeof(Vertex)));
 
   if (!ensureBuffer(m_bedFillBuffer, fillBytes, m_bedFillBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedLineBuffer, lineBytes, m_bedLineBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedBottomLineBuffer, bottomLineBytes, m_bedBottomLineBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_bedBoldFillBuffer, boldBytes, m_bedBoldFillBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_sinkingContourBuffer, sinkingBytes, m_sinkingContourBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_bedAxesVertexBuffer, axesBytes, m_bedAxesVertexBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedLimitBuffer, limitBytes, m_bedLimitBufferBytes, QRhiBuffer::VertexBuffer))
     return false;
 
   m_bedFillVertexCount = quint32(fillVertices.size());
   m_bedLineVertexCount = quint32(lineVertices.size());
   m_bedBottomLineVertexCount = quint32(bottomLineVertices.size());
+  m_bedBoldFillVertexCount = quint32(boldVertices.size());
+  m_sinkingContourVertexCount = quint32(sinkingVertices.size());
+  m_bedAxesVertexCount = quint32(axesVertices.size());
   m_bedLimitVertexCount = quint32(limitVertices.size());
   if (m_bedFillBuffer && fillBytes > 0) {
     updates->uploadStaticBuffer(m_bedFillBuffer.get(),
@@ -2387,6 +2647,24 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
                                 bottomLineBytes,
                                 bottomLineVertices.constData());
   }
+  if (m_bedBoldFillBuffer && boldBytes > 0) {
+    updates->uploadStaticBuffer(m_bedBoldFillBuffer.get(),
+                                0,
+                                boldBytes,
+                                boldVertices.constData());
+  }
+  if (m_sinkingContourBuffer && sinkingBytes > 0) {
+    updates->uploadStaticBuffer(m_sinkingContourBuffer.get(),
+                                0,
+                                sinkingBytes,
+                                sinkingVertices.constData());
+  }
+  if (m_bedAxesVertexBuffer && axesBytes > 0) {
+    updates->uploadStaticBuffer(m_bedAxesVertexBuffer.get(),
+                                0,
+                                axesBytes,
+                                axesVertices.constData());
+  }
   if (m_bedLimitBuffer && limitBytes > 0) {
     updates->uploadStaticBuffer(m_bedLimitBuffer.get(),
                                 0,
@@ -2394,6 +2672,48 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
                                 limitVertices.constData());
   }
 
+  // P15.7 (AXES): parallel per-face normal array so the arrows can reuse
+  // the lit pipeline (same layout as the model mesh buffers).
+  if (axesBytes > 0) {
+    QVector<float> axesNormals;
+    axesNormals.reserve(axesVertices.size() * 3);
+    const int triCount = axesVertices.size() / 3;
+    for (int t = 0; t < triCount; ++t) {
+      const Vertex &a = axesVertices[t * 3 + 0];
+      const Vertex &b = axesVertices[t * 3 + 1];
+      const Vertex &c = axesVertices[t * 3 + 2];
+      const float ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
+      const float wx = c.x - a.x, wy = c.y - a.y, wz = c.z - a.z;
+      float nx = uy * wz - uz * wy;
+      float ny = uz * wx - ux * wz;
+      float nz = ux * wy - uy * wx;
+      const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+      if (len > 1e-9f) {
+        nx /= len; ny /= len; nz /= len;
+      } else {
+        nx = 0.f; ny = 1.f; nz = 0.f;
+      }
+      for (int k = 0; k < 3; ++k) {
+        axesNormals.append(nx);
+        axesNormals.append(ny);
+        axesNormals.append(nz);
+      }
+    }
+    const quint32 normalBytes = quint32(axesNormals.size() * int(sizeof(float)));
+    if (ensureBuffer(m_bedAxesNormalBuffer, normalBytes, m_bedAxesNormalBufferBytes,
+                     QRhiBuffer::VertexBuffer)
+        && m_bedAxesNormalBuffer && normalBytes > 0) {
+      updates->uploadStaticBuffer(m_bedAxesNormalBuffer.get(), 0, normalBytes,
+                                  axesNormals.constData());
+    }
+  } else {
+    m_bedAxesNormalBuffer.reset();
+    m_bedAxesNormalBufferBytes = 0;
+  }
+
+  m_bedBoldFillBufferUploaded = true;
+  m_sinkingContourBufferUploaded = true;
+  m_bedAxesBuffersUploaded = true;
   return true;
 }
 
@@ -3097,11 +3417,15 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   const bool uploadCamera = !m_cameraUniformBufferUploaded
       || (dirtyFlags & (PrepareSceneData::DirtyCamera
                         | PrepareSceneData::DirtyGpu
-                        | PrepareSceneData::DirtySelection)) != 0;
+                        | PrepareSceneData::DirtySelection
+                        | PrepareSceneData::DirtyBed)) != 0;
   // Phase 68: DirtySelection is included because gizmoCenter (packed into
   // this uniform buffer) tracks the selected object's AABB. Without this, a
   // selection change would update m_gizmoCenter in synchronize() but the GPU
   // uniform would keep the stale value.
+  // P15.3 (OUTOFBED): DirtyBed is included because the print volume fields
+  // (offsets 144..192) track the current plate bounds and must refresh with
+  // the bed shape.
   if (!uploadCamera)
     return true;
 
@@ -3127,12 +3451,26 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   // same way as before (distance-based, clamped to >= 5).
   const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
   CameraBlockPacked packed;
-  packed.mvp = corrected;
-  packed.gizmoCenter = m_gizmoCenter;
+  std::memcpy(packed.mvp, corrected.constData(), 16 * sizeof(float));
+  packed.gizmoCenter[0] = m_gizmoCenter.x();
+  packed.gizmoCenter[1] = m_gizmoCenter.y();
+  packed.gizmoCenter[2] = m_gizmoCenter.z();
   packed.gizmoScale = gizmoScale;
-  packed.view = m_cameraView;
+  std::memcpy(packed.view, m_cameraView.constData(), 16 * sizeof(float));
+  // P15.3 (OUTOFBED): print volume uniforms in Qt scene coordinates
+  // (PrepareSceneData::updatePrintVolume mirrors GLCanvas3D.cpp:7177-7205).
+  const PrepareSceneData::PrintVolume &pv = m_prepareScene.printVolume();
+  packed.printVolumeType = float(pv.type);
+  packed.printVolumeXy[0] = pv.xyData.x();
+  packed.printVolumeXy[1] = pv.xyData.y();
+  packed.printVolumeXy[2] = pv.xyData.z();
+  packed.printVolumeXy[3] = pv.xyData.w();
+  packed.printVolumeZ[0] = pv.zMin;
+  packed.printVolumeZ[1] = pv.zMax;
+  packed.printVolumeZ[2] = 0.0f;
+  packed.printVolumeZ[3] = 0.0f;
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0,
-                               144, &packed);
+                               192, &packed);
   rhiTrace("seamB-packed");
 
   m_cameraUniformBufferUploaded = true;
@@ -3340,35 +3678,85 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildModelVertices(con
   return vertices;
 }
 
+// P15.4 (SELBOX): the upstream selection highlight — a white 2px corner-box
+// outline around the cumulative bounding box of the selected volumes
+// (Selection::render, Selection.cpp:1939-1949, built by render_bounding_box
+// :2558-2637: 48 line vertices, 3 inside-pointing corner ticks of length
+// 0.2 * box.size() per corner). Replaces the previous OWzx-invented
+// yellow/cyan full-volume tint. Suppressed while a gizmo drag runs
+// (if (!m_gizmos.is_running()), GLCanvas3D.cpp:7367). Upstream renders the
+// world-axis-aligned box in the world reference system; the QRhi mesh bake
+// already stores world coordinates, so the union of the selected batches'
+// bounds is that same box.
 QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildHighlightVertices() const
 {
   QVector<Vertex> vertices;
+  if (m_gizmoDragging)
+    return vertices;
   const int selectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
-  const int hoveredSourceObjectIndex = m_prepareScene.hoveredSourceObjectIndex();
-  if (selectedSourceObjectIndex < 0 && hoveredSourceObjectIndex < 0)
+  if (selectedSourceObjectIndex < 0)
     return vertices;
 
-  const QList<PrepareSceneData::ModelVertex> &source = m_prepareScene.modelVertices();
+  // Cumulative bounds of every batch of the selected object.
+  PrepareSceneData::ModelBounds box;
+  bool hasBox = false;
   for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
-    const bool selected = batch.sourceObjectIndex == selectedSourceObjectIndex;
-    const bool hovered = batch.sourceObjectIndex == hoveredSourceObjectIndex;
-    if (!selected && !hovered)
+    if (batch.sourceObjectIndex != selectedSourceObjectIndex || batch.vertexCount <= 0)
       continue;
+    if (!hasBox) {
+      box = batch.bounds;
+      hasBox = true;
+      continue;
+    }
+    box.minX = std::min(box.minX, batch.bounds.minX);
+    box.minY = std::min(box.minY, batch.bounds.minY);
+    box.minZ = std::min(box.minZ, batch.bounds.minZ);
+    box.maxX = std::max(box.maxX, batch.bounds.maxX);
+    box.maxY = std::max(box.maxY, batch.bounds.maxY);
+    box.maxZ = std::max(box.maxZ, batch.bounds.maxZ);
+  }
+  if (!hasBox)
+    return vertices;
 
-    const float r = selected ? 1.0f : 0.35f;
-    const float g = selected ? 0.78f : 0.75f;
-    const float b = selected ? 0.22f : 1.0f;
-    const float a = selected ? 0.62f : 0.38f;
-    const int endVertex = std::min(batch.firstVertex + batch.vertexCount, int(source.size()));
-    for (int i = std::max(0, batch.firstVertex); i < endVertex; ++i) {
-      const PrepareSceneData::ModelVertex &sourceVertex = source.at(i);
-      vertices.append(Vertex{sourceVertex.x,
-                             sourceVertex.y,
-                             sourceVertex.z,
-                             r,
-                             g,
-                             b,
-                             a});
+  // Corner ticks: length 0.2 * box size (Selection.cpp:2567).
+  const float sx = 0.2f * (box.maxX - box.minX);
+  const float sy = 0.2f * (box.maxY - box.minY);
+  const float sz = 0.2f * (box.maxZ - box.minZ);
+  struct CornerDirs
+  {
+    float x, y, z;   // corner position
+    float dx, dy, dz; // tick directions (sign per axis)
+  };
+  const CornerDirs corners[8] = {
+      {box.minX, box.minY, box.minZ, +1.0f, +1.0f, +1.0f},
+      {box.maxX, box.minY, box.minZ, -1.0f, +1.0f, +1.0f},
+      {box.maxX, box.maxY, box.minZ, -1.0f, -1.0f, +1.0f},
+      {box.minX, box.maxY, box.minZ, +1.0f, -1.0f, +1.0f},
+      {box.minX, box.minY, box.maxZ, +1.0f, +1.0f, -1.0f},
+      {box.maxX, box.minY, box.maxZ, -1.0f, +1.0f, -1.0f},
+      {box.maxX, box.maxY, box.maxZ, -1.0f, -1.0f, -1.0f},
+      {box.minX, box.maxY, box.maxZ, +1.0f, -1.0f, -1.0f},
+  };
+  // Upstream line color: ColorRGB::WHITE() (Selection.cpp:1947).
+  constexpr float kWhiteR = 1.0f;
+  constexpr float kWhiteG = 1.0f;
+  constexpr float kWhiteB = 1.0f;
+  constexpr float kWhiteA = 1.0f;
+  vertices.reserve(8 * 6);
+  for (const CornerDirs &corner : corners) {
+    const float ticks[3][2] = {
+        {corner.x, corner.x + corner.dx * sx},
+        {corner.y, corner.y + corner.dy * sy},
+        {corner.z, corner.z + corner.dz * sz},
+    };
+    for (int axis = 0; axis < 3; ++axis) {
+      float ax = corner.x, ay = corner.y, az = corner.z;
+      float bx = corner.x, by = corner.y, bz = corner.z;
+      if (axis == 0) { ax = ticks[0][0]; bx = ticks[0][1]; }
+      else if (axis == 1) { ay = ticks[1][0]; by = ticks[1][1]; }
+      else { az = ticks[2][0]; bz = ticks[2][1]; }
+      vertices.append(Vertex{ax, ay, az, kWhiteR, kWhiteG, kWhiteB, kWhiteA});
+      vertices.append(Vertex{bx, by, bz, kWhiteR, kWhiteG, kWhiteB, kWhiteA});
     }
   }
 
@@ -4436,14 +4824,14 @@ struct GcvPackedSegment
 {
   float x1, y1, z1, x2, y2, z2;
   float r, g, b;
-  float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  float feedrate, fan_speed, temperature, width, height, layer_time, acceleration;
   float jerk, pressure_advance, actual_speed, actual_flow;  // v5.11: 4 extra fields
   int extruder_id, layer, move;
   int role;  // must match PackedSegment layout exactly (canonical libvgcode index).
 };
 // Wire-format lock-step guard: PackedSegment and GcvPackedSegment carry the
-// identical 92-byte layout (19 floats + 4 ints) so the GCV1 blob memcpy is safe.
-static_assert(sizeof(GcvPackedSegment) == 92, "GcvPackedSegment must be 92 bytes (19 floats + 4 ints)");
+// identical 96-byte layout (20 floats + 4 ints) so the GCV1 blob memcpy is safe.
+static_assert(sizeof(GcvPackedSegment) == 96, "GcvPackedSegment must be 96 bytes (20 floats + 4 ints)");
 } // namespace
 
 void RhiViewportRenderer::parsePreviewSegments()
@@ -4486,11 +4874,109 @@ void RhiViewportRenderer::parsePreviewSegments()
     b.y = seg[i].z2;
     b.z = seg[i].y2;
 
+    // P17.2: extrusion segments expand into the solid triangular prism
+    // (upstream renders each extrusion move as an 8-vertex prism with the
+    // move's width x height, GCodeViewer.cpp:817-822 / GCodeViewer.hpp:336);
+    // travel/options stay 2-vertex line segments. Zero-length moves (the
+    // retract/unretract/seam tick stand-ins) keep the line form.
+    const float gdx = seg[i].x2 - seg[i].x1;
+    const float gdy = seg[i].y2 - seg[i].y1;
+    const float gdz = seg[i].z2 - seg[i].z1;
+    const float lengthSq = gdx * gdx + gdy * gdy + gdz * gdz;
+    const bool extrusion = lengthSq > 1e-9f && seg[i].width > 0.01f
+        && seg[i].height > 0.005f;
+    if (extrusion)
+    {
+      // Prism cross-section: equilateral-ish triangle of the given width in
+      // the bed plane, apex up (upstream TriangleBuilder shape). The height
+      // offsets the flat base above the layer Z.
+      const float length = std::sqrt(lengthSq);
+      const float ux = gdx / length;
+      const float uy = gdy / length; // GCode y
+      const float uz = gdz / length;
+      // In-plane perpendicular (bed normal = GCode z): perp = n x dir.
+      float px = -uy;
+      float py = ux;
+      const float pLen = std::sqrt(px * px + py * py);
+      if (pLen < 1e-6f)
+      {
+        px = 1.0f;
+        py = 0.0f;
+      } else
+      {
+        px /= pLen;
+        py /= pLen;
+      }
+      const float halfW = seg[i].width * 0.5f;
+      const float h = seg[i].height;
+      // Cross-section corners in GCode space (base-left, base-right, apex).
+      const float bx1 = seg[i].x1 + px * halfW;
+      const float by1 = seg[i].y1 + py * halfW;
+      const float bx2 = seg[i].x1 - px * halfW;
+      const float by2 = seg[i].y1 - py * halfW;
+      const float ax1 = seg[i].x1;
+      const float ay1 = seg[i].y1;
+      const float az1 = seg[i].z1 + h;
+      const float bx1e = seg[i].x2 + px * halfW;
+      const float by1e = seg[i].y2 + py * halfW;
+      const float bx2e = seg[i].x2 - px * halfW;
+      const float by2e = seg[i].y2 - py * halfW;
+      const float ax2 = seg[i].x2;
+      const float ay2 = seg[i].y2;
+      const float az2 = seg[i].z2 + h;
+
+      // 8 triangles x 3 vertices: bottom quad (2), top ridge edges (2),
+      // both side quads (2+2). Winding chosen for outward normals under the
+      // winding-agnostic lit shader (it maxes N and -N terms).
+      const quint32 spanStart = quint32(m_previewVertices.size());
+      const float r = seg[i].r, g = seg[i].g, bb = seg[i].b;
+      const auto tri = [&](const Vertex &v0, const Vertex &v1, const Vertex &v2) {
+        m_previewVertices.append(v0);
+        m_previewVertices.append(v1);
+        m_previewVertices.append(v2);
+      };
+      const auto gv = [&](float gx, float gy, float gz) {
+        Vertex v;
+        v.x = gx;
+        v.y = gz;  // axis swap: GCode z -> scene y
+        v.z = gy;  // GCode y -> scene z
+        v.r = r;
+        v.g = g;
+        v.b = bb;
+        v.a = 1.0f;
+        return v;
+      };
+      const Vertex base1a = gv(bx1, by1, seg[i].z1);
+      const Vertex base1b = gv(bx2, by2, seg[i].z1);
+      const Vertex apex1 = gv(ax1, ay1, az1);
+      const Vertex base2a = gv(bx1e, by1e, seg[i].z2);
+      const Vertex base2b = gv(bx2e, by2e, seg[i].z2);
+      const Vertex apex2 = gv(ax2, ay2, az2);
+      // Bottom face (two triangles).
+      tri(base1a, base1b, base2b);
+      tri(base1a, base2b, base2a);
+      // Left side quad (base1a..base2a .. apex line).
+      tri(base1a, base2a, apex2);
+      tri(base1a, apex2, apex1);
+      // Right side quad.
+      tri(base2b, base1b, apex1);
+      tri(base2b, apex1, apex2);
+      // End caps.
+      tri(base1b, base1a, apex1);
+      tri(base2a, base2b, apex2);
+
+      const quint32 vertexOffset = spanStart;
+      m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset,
+                                 quint32(m_previewVertices.size()) - spanStart,
+                                 seg[i].role, true});
+      continue;
+    }
+
     m_previewVertices.append(a);
     m_previewVertices.append(b);
 
     const quint32 vertexOffset = quint32(m_previewVertices.size() - 2);
-    m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2, seg[i].role});
+    m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2, seg[i].role, false});
   }
 
   m_previewSegmentVertexCount = quint32(m_previewVertices.size());
@@ -4500,6 +4986,53 @@ void RhiViewportRenderer::parsePreviewSegments()
   // computePreviewDrawRanges call will repopulate the cache.
   m_previewRangeCacheKey = 0;
   m_cachedPreviewRanges.clear();
+}
+
+// P17.7: the sequential-range cap (upstream SequentialRangeCap generation,
+// GCodeViewer.cpp:3618-3690) — a quad closing the toolpath tube at the last
+// drawn move while the move slider drags. Rebuilt lazily in the render pass
+// whenever moveEnd changed; the cap sits at the endpoint of the span whose
+// move == moveEnd - 1 and orients along that move direction (Neutral_Color
+// dark-gray face like the upstream top_layer_only neutral, GCodeViewer.cpp:750).
+void RhiViewportRenderer::rebuildPreviewCap()
+{
+  m_previewCapVertices.clear();
+  if (m_moveEnd <= 0 || m_moveEnd >= m_previewDrawSpans.size())
+    return;
+  const PreviewDrawSpan *capSpan = nullptr;
+  for (const auto &span : m_previewDrawSpans)
+  {
+    if (span.move == m_moveEnd - 1)
+      capSpan = &span;
+    if (span.move >= m_moveEnd)
+      break;
+  }
+  if (capSpan == nullptr || capSpan->vertexCount < 2
+      || capSpan->vertexOffset + 1 >= quint32(m_previewVertices.size()))
+    return;
+  const Vertex &v0 = m_previewVertices.at(capSpan->vertexOffset);
+  const Vertex &v1 = m_previewVertices.at(capSpan->vertexOffset + 1);
+  // Direction in scene space; half-width across the bed-plane perpendicular.
+  float dx = v1.x - v0.x, dy = v1.y - v0.y, dz = v1.z - v0.z;
+  const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+  if (len < 1e-6f)
+    return;
+  dx /= len; dy /= len; dz /= len;
+  // perp = dir x sceneUp(0,0,1)
+  float px = dy;
+  float py = -dx;
+  const float plen = std::sqrt(px * px + py * py);
+  if (plen < 1e-6f)
+    return;
+  px /= plen;
+  py /= plen;
+  const float half = 0.15f; // ~0.3mm cap width matching a typical extrusion
+  const Vertex c0{v1.x - px * half, v1.y - py * half, v1.z, 0.18f, 0.18f, 0.18f, 1.0f};
+  const Vertex c1{v1.x + px * half, v1.y + py * half, v1.z, 0.18f, 0.18f, 0.18f, 1.0f};
+  const Vertex c2{c1.x, c1.y, c1.z - 2.f * half, 0.18f, 0.18f, 0.18f, 1.0f};
+  const Vertex c3{c0.x, c0.y, c0.z - 2.f * half, 0.18f, 0.18f, 0.18f, 1.0f};
+  m_previewCapVertices = {c0, c1, c2, c0, c2, c3};
+  m_previewCapMoveEnd = m_moveEnd;
 }
 
 bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates)
@@ -4549,14 +5082,25 @@ bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *update
   }
 
   // Ghost alpha override (upstream renders the shell volumes in Transparent
-  // mode so toolpaths stay readable on top).
-  constexpr float kGhostAlpha = 0.35f;
+  // mode so toolpaths stay readable on top; shell_transparency 0.15,
+  // GCodeViewer.cpp:3076-3186 m_shells.alpha).
+  constexpr float kGhostAlpha = 0.15f;
+  // P17.5: tint the shell with the extruder-1 configured color (upstream
+  // update_colors_by_extruder tints per volume; the Qt6 ghost is one merged
+  // mesh, so extruder 1 — the default part color source — applies).
+  float tintR = 0.8f, tintG = 0.8f, tintB = 0.8f;
+  if (!m_extrudersColorsParsed.isEmpty())
+  {
+    tintR = m_extrudersColorsParsed.first().x();
+    tintG = m_extrudersColorsParsed.first().y();
+    tintB = m_extrudersColorsParsed.first().z();
+  }
   QVector<Vertex> ghost;
   ghost.resize(source.size());
   for (int i = 0; i < source.size(); ++i)
   {
     const Vertex &v = source[i];
-    ghost[i] = Vertex{v.x, v.y, v.z, v.r, v.g, v.b, kGhostAlpha};
+    ghost[i] = Vertex{v.x, v.y, v.z, tintR, tintG, tintB, kGhostAlpha};
   }
 
   const quint32 byteSize = quint32(ghost.size()) * sizeof(Vertex);
@@ -4688,9 +5232,13 @@ QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePrevi
       continue;
     }
 
-    if (!hasOpenRange) {
+    // P17.2: spans of different topology never merge — the draw loop picks
+    // the pipeline per range.
+    if (!hasOpenRange || openRange.triangles != span.triangles) {
+      flushOpenRange();
       openRange.firstVertex = span.vertexOffset;
       openRange.vertexCount = span.vertexCount;
+      openRange.triangles = span.triangles;
       hasOpenRange = true;
       continue;
     }

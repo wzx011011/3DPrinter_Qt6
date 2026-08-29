@@ -34,20 +34,20 @@ QColor objectColor(int index)
 }
 
 // Phase 238 (PREV-07): wire-format mirror of PreviewViewModel::PackedSegment
-// / RhiViewportRenderer::GcvPackedSegment (20 floats + 4 ints = 92 bytes).
-// Both producers static_assert the same layout; this local copy keeps the
-// software fallback free of the RHI headers.
+// / RhiViewportRenderer::GcvPackedSegment (21 floats + 4 ints = 96 bytes,
+// P17.2 added `height`). Both producers static_assert the same layout; this
+// local copy keeps the software fallback free of the RHI headers.
 struct GcvSegmentWire
 {
   float x1, y1, z1, x2, y2, z2;
   float r, g, b;
-  float feedrate, fan_speed, temperature, width, layer_time, acceleration;
+  float feedrate, fan_speed, temperature, width, height, layer_time, acceleration;
   float jerk, pressure_advance, actual_speed, actual_flow;
   int extruder_id, layer, move;
   int role;
 };
-static_assert(sizeof(GcvSegmentWire) == 92,
-              "GcvSegmentWire must be 92 bytes (GCV1 wire format lockstep)");
+static_assert(sizeof(GcvSegmentWire) == 96,
+              "GcvSegmentWire must be 96 bytes (GCV1 wire format lockstep)");
 }
 
 SoftwareViewport::SoftwareViewport(QQuickItem *parent)

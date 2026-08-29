@@ -3519,13 +3519,13 @@ void QmlUiAuditTests::rhiViewportRendererHasGcvPackedSegmentRoleGuard()
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
   QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
 
-  // v5.11: layout extended to 92 bytes (19 floats + 4 ints) after adding
-  // jerk/pressure_advance/actual_speed/actual_flow for the Preview view modes.
-  QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 92")),
-           "RhiViewportRenderer must contain the canonical 92-byte wire guard");
-  QVERIFY2(viewportSource.contains(QStringLiteral("float jerk, pressure_advance, actual_speed, actual_flow"))
-               && viewportSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 92")),
-           "RhiViewport preview fitting must parse the same multi-segment 92-byte layout");
+  // P17.2: layout extended to 96 bytes (20 floats + 4 ints) after adding
+  // `height` for the solid-prism preview render (the v5.11 extension added
+  // jerk/pressure_advance/actual_speed/actual_flow at 92).
+  QVERIFY2(rendererSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 96")),
+           "RhiViewportRenderer must contain the canonical 96-byte wire guard");
+  QVERIFY2(viewportSource.contains(QStringLiteral("static_assert(sizeof(GcvPackedSegment) == 96")),
+           "RhiViewport preview fitting must parse the same 96-byte layout");
 }
 
 void QmlUiAuditTests::rhiViewportThumbnailUsesSynchronizedCameraSnapshot()

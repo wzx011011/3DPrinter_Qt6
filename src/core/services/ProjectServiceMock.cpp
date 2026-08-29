@@ -2151,6 +2151,95 @@ bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
   return true;
 }
 
+bool ProjectServiceMock::instancePrintable(int objectIndex, int instanceIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
+      !model_->objects[size_t(objectIndex)])
+    return false;
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (instanceIndex < 0 || size_t(instanceIndex) >= obj->instances.size() || !obj->instances[size_t(instanceIndex)])
+    return false;
+  return obj->instances[size_t(instanceIndex)]->printable;
+#else
+  if (instanceIndex != 0)
+    return false;
+  return objectPrintable(objectIndex);
+#endif
+}
+
+bool ProjectServiceMock::setInstancePrintable(int objectIndex, int instanceIndex, bool printable)
+{
+  if (loading_)
+    return false;
+
+  // P16.11: single ModelInstance::printable write — the itInstance row toggle
+  // (upstream ObjectList::toggle_printable_state instance branch,
+  // GUI_ObjectList.cpp:5843-5846).
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
+      !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("更新失败：模型对象无效");
+    return false;
+  }
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (instanceIndex < 0 || size_t(instanceIndex) >= obj->instances.size() || !obj->instances[size_t(instanceIndex)])
+  {
+    lastError_ = tr("更新失败：实例索引无效");
+    return false;
+  }
+  obj->instances[size_t(instanceIndex)]->printable = printable;
+  if (instanceIndex == 0)
+  {
+    // Keep the object-level mirror authoritative for instance 0 so existing
+    // objectPrintable() consumers agree with the first instance.
+    if (objectIndex < objectPrintableStates_.size())
+      objectPrintableStates_[objectIndex] = printable;
+  }
+  lastError_.clear();
+  emit projectChanged();
+  return true;
+#else
+  if (instanceIndex != 0)
+    return false;
+  return setObjectPrintable(objectIndex, printable);
+#endif
+}
+
+QVector3D ProjectServiceMock::objectMirror(int index) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+      return QVector3D(static_cast<float>(inst->get_mirror(Slic3r::X)),
+                       static_cast<float>(inst->get_mirror(Slic3r::Y)),
+                       static_cast<float>(inst->get_mirror(Slic3r::Z)));
+  }
+#endif
+  return QVector3D(1, 1, 1);
+}
+
+bool ProjectServiceMock::setObjectMirror(int index, float x, float y, float z)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    auto *inst = model_->objects[size_t(index)]->instances.front();
+    if (inst)
+      inst->set_mirror(Slic3r::Vec3d(x, y, z));
+  }
+#endif
+  emit projectChanged();
+  return true;
+}
+
 bool ProjectServiceMock::objectVisible(int index) const
 {
   if (index < 0 || index >= objectVisibleStates_.size())
@@ -2311,6 +2400,92 @@ int ProjectServiceMock::objectVolumeType(int objectIndex, int volumeIndex) const
   if (it == m_mockVolumes.constEnd() || volumeIndex < 0 || volumeIndex >= it->size())
     return 0;
   return static_cast<int>(it->at(volumeIndex).type);
+#endif
+}
+
+// ── P16.9: Flush Options (对齐上游 append_menu_items_flush_options) ────────
+// Upstream keys come from FREQ_SETTINGS_BUNDLE_FFF["Flush options"]
+// (GUI_Factories.cpp:69): flush_into_infill / flush_into_objects /
+// flush_into_support, stored on the OBJECT config. Reads fall back to the
+// global print preset upstream; the Qt6 per-plate DynamicPrintConfig is the
+// matching scope (ProjectServiceMock D-04).
+
+static const char *kFlushOptionKeys[] = {
+    "flush_into_infill", "flush_into_objects", "flush_into_support"};
+
+bool ProjectServiceMock::objectFlushOption(int objectIndex, int optionIndex) const
+{
+  if (optionIndex < 0 || optionIndex > 2)
+    return false;
+  const QString key = QString::fromLatin1(kFlushOptionKeys[optionIndex]);
+  const int plateIndex = plateIndexForObject(objectIndex);
+  const QVariant fallback = plateScopedOptionValue(plateIndex, key, QVariant(false));
+  return scopedOptionValue(objectIndex, -1, key, fallback).toBool();
+}
+
+bool ProjectServiceMock::setObjectFlushOption(int objectIndex, int optionIndex, bool value)
+{
+  if (optionIndex < 0 || optionIndex > 2)
+  {
+    lastError_ = tr("Flush Options：选项索引无效");
+    return false;
+  }
+  // Upstream writes the flipped bool onto the object config
+  // (GUI_Factories.cpp:966-975) — setScopedOptionValue(-1) targets the object.
+  return setScopedOptionValue(objectIndex, -1,
+                              QString::fromLatin1(kFlushOptionKeys[optionIndex]), value);
+}
+
+// ── P16.9: Invalidate cut info (对齐上游 has_selected_cut_object /
+// invalidate_cut_info_for_selection, GUI_ObjectList.cpp:3033-3076) ──
+
+bool ProjectServiceMock::objectHasCutInfo(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
+      !model_->objects[size_t(objectIndex)])
+    return false;
+  return model_->objects[size_t(objectIndex)]->is_cut();
+#else
+  Q_UNUSED(objectIndex);
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::invalidateCutInfo(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
+      !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("失效切割信息失败：对象索引无效");
+    return false;
+  }
+  auto *initObj = model_->objects[size_t(objectIndex)];
+  if (!initObj->is_cut())
+    return false;
+  // Invalidate cut info for every object sharing the cut id
+  // (upstream invalidate_cut_info_for_object, GUI_ObjectList.cpp:3061-3076).
+  // CutObjectBase::is_equal is a non-const member (ObjectID.hpp:178).
+  Slic3r::CutObjectBase cutId = initObj->cut_id;
+  bool anyInvalidated = false;
+  for (auto *obj : model_->objects)
+  {
+    if (obj && obj->cut_id.is_equal(cutId))
+    {
+      obj->invalidate_cut();
+      anyInvalidated = true;
+    }
+  }
+  if (anyInvalidated)
+  {
+    lastError_.clear();
+    emit projectChanged();
+  }
+  return anyInvalidated;
+#else
+  Q_UNUSED(objectIndex);
+  return false;
 #endif
 }
 
@@ -2883,13 +3058,6 @@ bool ProjectServiceMock::setVolumeExtruderId(int objectIndex, int volumeIndex, i
     return false;
   }
 
-  auto it = m_mockVolumes.find(objectIndex);
-  if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
-  {
-    lastError_ = tr("设置耗材失败：部件索引无效");
-    return false;
-  }
-
   // -1 means inherit from object, 0+ means specific extruder
   if (extruderId < -1)
   {
@@ -2897,25 +3065,53 @@ bool ProjectServiceMock::setVolumeExtruderId(int objectIndex, int volumeIndex, i
     return false;
   }
 
+  // P16.4: a real ModelVolume is a valid write target on its own (volumes of
+  // file-loaded objects have no m_mockVolumes mirror). The mock entry is
+  // updated when present but is no longer required to exist.
+  const bool hasRealVolume =
+#ifdef HAS_LIBSLIC3R
+      model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)] &&
+      size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size();
+#else
+      false;
+#endif
+  auto it = m_mockVolumes.find(objectIndex);
+  const bool hasMockEntry = it != m_mockVolumes.end() && volumeIndex >= 0 && volumeIndex < it->size();
+  if (!hasRealVolume && !hasMockEntry)
+  {
+    lastError_ = tr("设置耗材失败：部件索引无效");
+    return false;
+  }
+
   // P0.5.4: 同步真实 ModelVolume extruder config
 #ifdef HAS_LIBSLIC3R
-  if (model_ && size_t(objectIndex) < model_->objects.size() &&
-      model_->objects[size_t(objectIndex)] &&
-      size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size())
+  if (hasRealVolume)
   {
     auto *vol = model_->objects[size_t(objectIndex)]->volumes[size_t(volumeIndex)];
-    if (vol && extruderId >= 0)
+    if (vol)
     {
-      // 对齐上游 GUI_ObjectList::set_extruder_for_selected_items
-      if (vol->config.has("extruder"))
-        vol->config.set("extruder", extruderId);
-      else
-        vol->config.set_key_value("extruder", new Slic3r::ConfigOptionInt(extruderId));
+      if (extruderId >= 0)
+      {
+        // 对齐上游 GUI_ObjectList::set_extruder_for_selected_items
+        if (vol->config.has("extruder"))
+          vol->config.set("extruder", extruderId);
+        else
+          vol->config.set_key_value("extruder", new Slic3r::ConfigOptionInt(extruderId));
+      }
+      else if (vol->config.has("extruder"))
+      {
+        // P16.4: extruder < 0 means "Default"/inherit — erase the override so
+        // the part inherits like the upstream object-level write clears its
+        // part volumes' extruder keys (GUI_ObjectList.cpp:5684-5688).
+        vol->config.erase("extruder");
+      }
     }
   }
 #endif
 
-  it->operator[](volumeIndex).extruderId = extruderId;
+  if (hasMockEntry)
+    it->operator[](volumeIndex).extruderId = extruderId;
   lastError_.clear();
   emit projectChanged();
   return true;
@@ -3012,7 +3208,7 @@ bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &fileP
 
 // ── 原始体创建（对齐上游 create_mesh + add_volume）──
 
-bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
+bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType, int volumeType)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3029,6 +3225,14 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
   if (primitiveType < 0 || primitiveType > 3)
   {
     lastError_ = tr("创建原始体失败：原始体类型无效");
+    return false;
+  }
+  // P16.5: the primitive can land as any non-text volume type
+  // (upstream load_generic_subobject carries the target ModelVolumeType,
+  // GUI_Factories.cpp:675-690).
+  if (volumeType < 0 || volumeType > 4)
+  {
+    lastError_ = tr("创建原始体失败：部件类型无效");
     return false;
   }
 
@@ -3049,7 +3253,8 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
       default: its = Slic3r::its_make_sphere(10, 2.0 * M_PI / 360.0); break;
       }
 
-      auto *newVol = obj->add_volume(Slic3r::TriangleMesh(std::move(its)));
+      auto *newVol = obj->add_volume(Slic3r::TriangleMesh(std::move(its)),
+                                     static_cast<Slic3r::ModelVolumeType>(volumeType));
       newVol->name = std::string(typeNames[primitiveType]);
 
       lastError_.clear();
@@ -3069,7 +3274,7 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType)
   auto &vols = m_mockVolumes[objectIndex];
   MockVolumeEntry entry;
   entry.name = tr(primNames[primitiveType]);
-  entry.type = MockVolumeType::ModelPart;
+  entry.type = static_cast<MockVolumeType>(volumeType);
   vols.append(entry);
 
   lastError_.clear();
@@ -6620,17 +6825,22 @@ bool ProjectServiceMock::convertObjectUnits(int objectIndex, int conversionType)
 
 bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
 {
+  return assembleObjectsReturningIndex(objIndices) >= 0;
+}
+
+int ProjectServiceMock::assembleObjectsReturningIndex(const QList<int> &objIndices)
+{
   if (objIndices.size() < 2)
   {
     lastError_ = tr("合并失败：至少需要选中两个对象");
-    return false;
+    return -1;
   }
 
 #ifdef HAS_LIBSLIC3R
   if (!model_)
   {
     lastError_ = tr("合并失败：模型无效");
-    return false;
+    return -1;
   }
 
   // Validate all indices
@@ -6639,37 +6849,271 @@ bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
     if (idx < 0 || size_t(idx) >= model_->objects.size() || !model_->objects[size_t(idx)])
     {
       lastError_ = tr("合并失败：对象索引无效 (%1)").arg(idx);
-      return false;
+      return -1;
     }
   }
 
   try
   {
-    auto *targetObj = model_->objects[size_t(objIndices[0])];
-
-    // Move volumes from subsequent objects into the first object
-    for (int i = 1; i < objIndices.size(); ++i)
+    // P16.1: multi-instance sources participate as separate single-instance
+    // objects (upstream get_object_idxs -> instances_to_separated_objects,
+    // GUI_ObjectList.cpp:2593-2669 + :5212-5240: for each instance i>0 a copy
+    // of the object keeps only instance i, and the original keeps instance 0).
+    QList<int> mergeIdxs = objIndices;
+    const int declaredCount = mergeIdxs.size();
+    for (int n = 0; n < declaredCount; ++n)
     {
-      auto *srcObj = model_->objects[size_t(objIndices[i])];
-      if (!srcObj) continue;
-      for (auto *vol : srcObj->volumes)
+      const int idx = mergeIdxs[n];
+      auto *obj = model_->objects[size_t(idx)];
+      const int instCnt = int(obj->instances.size());
+      if (instCnt <= 1)
+        continue;
+      for (int i = instCnt - 1; i > 0; --i)
       {
-        if (vol)
-          targetObj->add_volume(*vol);
+        auto *copy = model_->add_object(*obj);
+        for (int instIdx = int(copy->instances.size()) - 1; instIdx >= 0; --instIdx)
+        {
+          if (instIdx != i)
+            copy->delete_instance(instIdx);
+        }
+        mergeIdxs.append(int(model_->objects.size()) - 1);
+      }
+      while (int(obj->instances.size()) > 1)
+        obj->delete_instance(int(obj->instances.size()) - 1);
+    }
+
+    // P16.1: merge into a NEW object named "Assembly" like the upstream
+    // merge(true) (GUI_ObjectList.cpp:2681-2684), not into the first source.
+    auto *newObject = model_->add_object();
+    newObject->name = "Assembly";
+    auto *firstObject = model_->objects[size_t(mergeIdxs.front())];
+
+    // Membership plate must be read before any index shifts (the assembly
+    // lands on the first source's plate).
+    const int targetPlate = plateIndexForObject(mergeIdxs.front());
+
+    for (int objIdx : mergeIdxs)
+    {
+      auto *object = model_->objects[size_t(objIdx)];
+      if (object->id() == firstObject->id())
+        newObject->add_instance(); // upstream GUI_ObjectList.cpp:2698-2700
+
+      // P16.1 core transform fix: bake instance_matrix * volume_matrix so
+      // merged volumes keep their world placement
+      // (upstream GUI_ObjectList.cpp:2701-2712).
+      const Slic3r::Transform3d transformationMatrix =
+          object->instances[0]->get_transformation().get_matrix();
+
+      for (const Slic3r::ModelVolume *volume : object->volumes)
+      {
+        Slic3r::ModelVolume *newVolume = newObject->add_volume(*volume);
+        const Slic3r::Transform3d &volumeMatrix = newVolume->get_matrix();
+        newVolume->set_transformation(transformationMatrix * volumeMatrix);
+
+        // Multi-volume sources keep their per-volume config; single-volume
+        // sources only sink the object extruder below
+        // (upstream comment + branch, GUI_ObjectList.cpp:2719-2729).
+        if (object->volumes.size() > 1)
+          newVolume->config.assign_config(volume->config);
+
+        newVolume->mmu_segmentation_facets.assign(volume->mmu_segmentation_facets);
+      }
+      newObject->sort_volumes(true); // upstream GUI_ObjectList.cpp:2733
+
+      // Merge object config key-by-key, falling back to defaults for keys
+      // the new config has never seen (upstream GUI_ObjectList.cpp:2735-2760).
+      auto &config = newObject->config;
+      auto newOptKeys = config.keys();
+      const auto &fromConfig = object->config;
+      auto optKeys = fromConfig.keys();
+      for (const auto &optKey : optKeys)
+      {
+        if (std::find(newOptKeys.begin(), newOptKeys.end(), optKey) == newOptKeys.end())
+        {
+          const Slic3r::ConfigOption *option = fromConfig.option(optKey);
+          if (!option)
+            option = Slic3r::DynamicPrintConfig::new_from_defaults_keys({optKey})->option(optKey);
+          if (option)
+            config.set_key_value(optKey, option->clone());
+        }
+      }
+      // Save the extruder value of a single-volume source into its volume
+      // config (upstream GUI_ObjectList.cpp:2761-2767).
+      if (object->volumes.size() == 1 &&
+          std::find(optKeys.begin(), optKeys.end(), "extruder") != optKeys.end())
+      {
+        Slic3r::ModelVolume *volume = newObject->volumes.back();
+        const Slic3r::ConfigOption *option = fromConfig.option("extruder");
+        if (option)
+          volume->config.set_key_value("extruder", option->clone());
+      }
+      // Merge layer height ranges (upstream GUI_ObjectList.cpp:2769-2770).
+      for (const auto &range : object->layer_config_ranges)
+        newObject->layer_config_ranges.emplace(range);
+    }
+
+    // Upstream tail: ensure on bed, re-center around origin, zero the
+    // translation and initialize the assemble transformation
+    // (GUI_ObjectList.cpp:2772-2781).
+    newObject->ensure_on_bed();
+    newObject->center_around_origin();
+    newObject->translate_instances(-newObject->origin_translation);
+    newObject->origin_translation = Slic3r::Vec3d::Zero();
+    Slic3r::Geometry::Transformation assembleT = newObject->instances[0]->get_transformation();
+    newObject->instances[0]->set_assemble_transformation(assembleT);
+
+    // Locate the merged object before the sources are removed; the index is
+    // re-based after the deletion below (delete_object shifts survivors).
+    const auto mergedIt = std::find(model_->objects.begin(), model_->objects.end(), newObject);
+    const int newIndex = int(mergedIt - model_->objects.begin());
+
+    // Remove the merged sources (descending so lower indices stay valid).
+    QList<int> sorted = mergeIdxs;
+    std::sort(sorted.begin(), sorted.end(), std::greater<int>());
+    QSet<int> removedSet(sorted.begin(), sorted.end());
+    for (int index : sorted)
+      model_->delete_object(size_t(index));
+
+    // Rebuild the metadata mirrors from the real model (same contract as
+    // deleteObject / splitObject — the old assemble skipped this and left
+    // modelCount_/objectNames_ stale).
+    objectNames_.clear();
+    objectNames_.reserve(int(model_->objects.size()));
+    objectModuleNames_.clear();
+    objectModuleNames_.reserve(int(model_->objects.size()));
+    objectPrintableStates_.clear();
+    objectVisibleStates_.clear();
+    objectPositions_.clear();
+    objectRotations_.clear();
+    objectScales_.clear();
+    for (size_t i = 0; i < model_->objects.size(); ++i)
+    {
+      const auto *obj = model_->objects[i];
+      if (obj && !obj->name.empty())
+        objectNames_ << QString::fromStdString(obj->name);
+      else
+        objectNames_ << tr("对象 %1").arg(int(i + 1));
+
+      if (obj && !obj->module_name.empty())
+        objectModuleNames_ << QString::fromStdString(obj->module_name);
+      else
+        objectModuleNames_ << tr("默认模块");
+
+      const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
+      objectPrintableStates_.append(printable);
+      objectVisibleStates_.append(printable);
+
+      if (obj && !obj->instances.empty() && obj->instances.front())
+      {
+        const auto *inst = obj->instances.front();
+        const auto off = inst->get_offset();
+        objectPositions_.append(QVector3D(
+          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
+        const auto rot = inst->get_rotation();
+        objectRotations_.append(QVector3D(
+          qRadiansToDegrees(static_cast<float>(rot.x())),
+          qRadiansToDegrees(static_cast<float>(rot.y())),
+          qRadiansToDegrees(static_cast<float>(rot.z()))));
+        const auto sc = inst->get_scaling_factor();
+        objectScales_.append(QVector3D(
+          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+      }
+      else
+      {
+        objectPositions_.append(QVector3D(0, 0, 0));
+        objectRotations_.append(QVector3D(0, 0, 0));
+        objectScales_.append(QVector3D(1, 1, 1));
       }
     }
+    modelCount_ = objectNames_.size();
 
-    // Remove every source in descending order while retaining the actual target,
-    // regardless of where its index falls in the sorted list.
-    QList<int> sorted = objIndices;
-    std::sort(sorted.begin(), sorted.end(), std::greater<int>());
-    const int targetIndex = objIndices.front();
-    for (int index : sorted)
+    // Rebuild plate membership: drop the merged sources, shift survivors and
+    // register the assembly on the first source's plate.
+    auto adjustedIndex = [&removedSet](int oldIndex) {
+      int shift = 0;
+      for (int removed : removedSet)
+      {
+        if (removed < oldIndex)
+          ++shift;
+      }
+      return oldIndex - shift;
+    };
+    if (m_plateList && m_plateList->plateCount() > 0)
     {
-      if (index != targetIndex)
-        model_->delete_object(size_t(index));
+      for (int pi = 0; pi < m_plateList->plateCount(); ++pi)
+      {
+        auto *p = m_plateList->plate(pi);
+        if (!p)
+          continue;
+        std::set<std::pair<int, int>> rebuilt;
+        for (const auto &pair : p->objToInstanceSet())
+        {
+          if (removedSet.contains(pair.first))
+            continue;
+          const int ni = adjustedIndex(pair.first);
+          if (ni >= 0 && ni < modelCount_)
+            rebuilt.insert({ni, pair.second});
+        }
+        p->clearInstances();
+        for (const auto &pair : rebuilt)
+          p->addInstance(pair.first, pair.second);
+      }
+      auto *target = m_plateList->plate(qBound(0, targetPlate, m_plateList->plateCount() - 1));
+      if (target)
+        target->addInstance(adjustedIndex(newIndex), 0);
     }
 
+    syncTransformsFromModel();
+    lastError_.clear();
+    emit projectChanged();
+    if (m_plateList)
+      emit plateDataLoaded(m_plateList->plateCount());
+    // Re-based merged-object index after the source deletions.
+    return adjustedIndex(newIndex);
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("合并失败：%1").arg(QString::fromLatin1(ex.what()));
+    return -1;
+  }
+#else
+  Q_UNUSED(objIndices);
+  lastError_ = tr("合并对象需要 libslic3r");
+  return -1;
+#endif
+}
+
+bool ProjectServiceMock::mergeObjectVolumes(int objectIndex)
+{
+  if (objectIndex < 0 || objectIndex >= objectNames_.size())
+  {
+    lastError_ = tr("合并部件失败：对象索引无效");
+    return false;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
+  {
+    lastError_ = tr("合并部件失败：模型对象无效");
+    return false;
+  }
+
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (obj->volumes.size() <= 1)
+  {
+    // Upstream ModelObject::merge() no-ops with a single volume
+    // (Model.cpp:2012-2016); surface that honestly.
+    lastError_ = tr("合并部件失败：对象只有一个部件");
+    return false;
+  }
+
+  try
+  {
+    // P16.2: merge(false) — union all part meshes into one volume, per-part
+    // configs are dropped by the upstream merge itself
+    // (GUI_ObjectList.cpp:2792-2810 -> Model.cpp:2010-2028).
+    obj->merge();
+    obj->invalidate_bounding_box();
     syncTransformsFromModel();
     modelCount_ = objectNames_.size();
     lastError_.clear();
@@ -6678,12 +7122,12 @@ bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
   }
   catch (const std::exception &ex)
   {
-    lastError_ = tr("合并失败：%1").arg(QString::fromLatin1(ex.what()));
+    lastError_ = tr("合并部件失败：%1").arg(QString::fromLatin1(ex.what()));
     return false;
   }
 #else
-  Q_UNUSED(objIndices);
-  lastError_ = tr("合并对象需要 libslic3r");
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("合并部件需要 libslic3r");
   return false;
 #endif
 }
@@ -10314,6 +10758,17 @@ QByteArray ProjectServiceMock::meshData() const
           const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
           const Slic3r::Transform3d combined = instMat * volMat;
 
+          // P15.10 (MIRROR): mirrored instances flip the triangle winding.
+          // Upstream detects left-handed volumes via the mirror-sign product
+          // (GLVolume::is_left_handed, 3DScene.cpp:335-340) and renders them
+          // with glFrontFace(GL_CW) (3DScene.cpp:520-521/:607-608); the
+          // equivalent CPU-bake transform is swapping two vertices of every
+          // triangle of that batch. The renderer recomputes per-face normals
+          // from the triangle winding, so the swap flips the normals the
+          // same way -- matching upstream mirrored lighting.
+          const bool leftHanded =
+              combined.matrix().block<3, 3>(0, 0).determinant() < 0.0;
+
           const auto &its = vol->mesh().its; // const ref — 零拷贝
           if (its.vertices.empty() || its.indices.empty())
             continue;
@@ -10335,9 +10790,12 @@ QByteArray ProjectServiceMock::meshData() const
               continue;
             }
 
+            // P15.10 (MIRROR): emit order (0, 2, 1) reverses the winding for
+            // left-handed batches; (0, 1, 2) otherwise.
+            const int emitOrder[3] = {0, leftHanded ? 2 : 1, leftHanded ? 1 : 2};
             for (int k = 0; k < 3; ++k)
             {
-              const Slic3r::Vec3f &lv = its.vertices[face(k)];
+              const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
               // 应用实例+Volume 变换到世界坐标 (slic3r)
               // Transform3d * Vec3d 直接应用仿射变换（含平移）
               const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(

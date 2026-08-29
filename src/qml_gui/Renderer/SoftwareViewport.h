@@ -247,7 +247,7 @@ private:
 
   // Phase 238 (PREV-07): one parsed GCV1 preview segment (wire-compatible
   // with PreviewViewModel::PackedSegment / RhiViewportRenderer::
-  // GcvPackedSegment -- 20 floats + 4 ints = 92 bytes; the layout is
+  // GcvPackedSegment -- 21 floats + 4 ints = 96 bytes (P17.2 height); the layout is
   // static_asserted in SoftwareViewport.cpp).
   struct PreviewSegment
   {

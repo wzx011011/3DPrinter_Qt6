@@ -253,14 +253,22 @@
   }
 
   if (typeof qt !== "undefined" && qt.webChannelTransport) {
-    new QWebChannel(qt.webChannelTransport, function (channel) {
-      if (channel.objects.bridge) connect(channel.objects.bridge);
-      else setState({ enabled: true, installed: true });  // bridge missing
-    });
+    try {
+      new QWebChannel(qt.webChannelTransport, function (channel) {
+        const keys = Object.keys(channel.objects).join(",");
+        if (channel.objects.bridge) connect(channel.objects.bridge);
+        else setState({ enabled: true, installed: true });
+        input.placeholder = "DIAG objects=[" + keys + "]";
+      });
+    } catch (e) {
+      setState({ enabled: true, installed: true });
+      input.placeholder = "DIAG exception: " + e;
+    }
   } else {
-    // Standalone browser preview (no bridge): still show the empty state.
     setState({ enabled: true, installed: true });
-    updateEmptyState();
+    input.placeholder = "DIAG qt=" + (typeof qt) + " transport=" +
+      (typeof qt !== "undefined" ? typeof qt.webChannelTransport : "n/a") +
+      " QWebChannel=" + (typeof QWebChannel);
   }
 
   // ── input handling ───────────────────────────────────────────────────────

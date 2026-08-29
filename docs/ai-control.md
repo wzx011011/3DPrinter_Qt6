@@ -157,3 +157,27 @@ save_project / undo / redo / get_app_state / get_scene 全部经 GLM 真实
 - sidecar 崩溃自动重启上限 3 次，之后报错停机。
 - 外部 harness 直连（Claude Code 等）：服务器已具备，仅缺文档章节——
   属后续增量。
+
+## 网页版聊天 UI（2026-08-29，step 2，commit bc1ddf5）
+
+架构：ChatSidebar.qml 只做面板宿主（边框 + WebChannel 注册），聊天 UI 全部
+在 qrc:/web/chat 本地网页（vanilla JS + vendored marked/DOMPurify，免构建），
+经 QWebChannel 桥（AiChatBridge，objectName="bridge"）与宿主互通。main.qml
+用 Loader 懒加载（Chromium 进程树首开才启动）。QtWebEngineQuick 在
+main() 里经 QLibrary 动态初始化（静态链接会在部分机器上 pre-main 加载器
+中止）。同一 WebEngine 基础设施后续直接服务网页版模型库。
+
+两个关键坑（排障记录）：
+1. 自编 Qt（E:/Qt6.10 旧版）未启用 Vulkan，缺 16 个 Qt6Gui Vulkan 导出 +
+   Qt6Quick::QSGVulkanTexture::fromNative，导致 Qt6WebEngineCore.dll 入口点
+   错误、应用无法启动。修复：用官方 6.10.2（qtbase/qtdeclarative/qtsvg/
+   qttools/qtshadertools）覆盖 E:/Qt6.10（备份在 E:\qt_ext_cache\qt_backup），
+   然后删 build/ 旧 Qt6*.dll 让 windeployqt 重新部署（同版本它会跳过）。
+2. QML WebChannel 的 registeredObjects 按对象 objectName 发布；桥必须
+   setObjectName("bridge")，否则 channel.objects.bridge 为 undefined，
+   网页 JS 静默异常（面板空白、欢迎语不出现）。
+
+真机验收（2026-08-29，GLM）：欢迎页/建议胶囊/输入栏渲染；用户气泡；
+load_model 工具卡（✓ + "test_cube.stl 已加载"）；delete_object 权限卡
+（"将删除第 1 个对象，可撤销" + 拒绝/允许）拒绝全链路（卡收敛为"已拒绝"
+灰条、忙碌条消失、AI 回复确认）；✕ 关闭 + 重开 pageReady 历史回放完整。

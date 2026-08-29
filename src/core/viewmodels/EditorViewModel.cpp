@@ -5532,6 +5532,74 @@ bool EditorViewModel::contextActionAvailable(const QString &action) const
     return m_contextMenuFamily == ContextMenuSvg;
   if (normalized == QStringLiteral("addPrimitive"))
     return projectService_->currentPlateIndex() >= 0;
+  // P16.3: menu wiring for the existing two-object boolean backend; the
+  // upstream can_mesh_boolean gate (GUI_ObjectList.cpp:3151-3159) adapts to
+  // the Qt6 backend contract of exactly two selected objects.
+  if (normalized == QStringLiteral("meshBoolean"))
+    return m_selectedSourceIndices.size() == 2 && hasObject;
+  // P16.4: Change Filament visibility (GUI_Factories.cpp:1879-1961):
+  // dropped with <= 1 filament; dropped for a single non-part/modifier
+  // volume selection (:1896-1901).
+  if (normalized == QStringLiteral("changeFilament"))
+  {
+    if (!projectService_ || projectService_->filamentCount() <= 1)
+      return false;
+    if (hasPart && m_selectedSourceIndices.size() <= 1)
+    {
+      const int volType = projectService_->objectVolumeType(m_contextSourceObjectIndex,
+                                                            m_contextVolumeIndex);
+      return volType == int(MockVolumeType::ModelPart)
+          || volType == int(MockVolumeType::ParameterModifier);
+    }
+    return hasObject || hasPart;
+  }
+  // P16.9: Flush Options shows for a single-object selection on a plate
+  // with more than one extruder in use while the prime tower is enabled
+  // (GUI_Factories.cpp:944-961).
+  if (normalized == QStringLiteral("flushOptions"))
+  {
+    if (!projectService_ || !hasObject || hasPart || m_selectedSourceIndices.size() != 1)
+      return false;
+    const int plateIndex = projectService_->plateIndexForObject(m_contextSourceObjectIndex);
+    if (plateIndex < 0)
+      return false;
+    const QVariant primeTower = projectService_->plateConfigValue(
+        plateIndex, QStringLiteral("enable_prime_tower"));
+    if (!primeTower.isValid() || !primeTower.toBool())
+      return false;
+    // Distinct extruders in use on the plate: object-level assignment plus
+    // per-volume overrides (upstream plate->get_extruders).
+    QSet<int> extruders{1};
+    for (int objectIndex : projectService_->plateObjectIndices(plateIndex))
+    {
+      const int objectExtruder = projectService_->scopedOptionValue(
+          objectIndex, -1, QStringLiteral("extruder"), QVariant(1)).toInt();
+      if (objectExtruder > 0)
+        extruders.insert(objectExtruder);
+      const int volCount = projectService_->objectVolumeCount(objectIndex);
+      for (int v = 0; v < volCount; ++v)
+      {
+        const int volExtruder = projectService_->volumeExtruderId(objectIndex, v);
+        if (volExtruder > 0)
+          extruders.insert(volExtruder);
+      }
+    }
+    return extruders.size() > 1;
+  }
+  // P16.9: Invalidate cut info is only offered when the selection really
+  // carries cut info (upstream has_selected_cut_object gate,
+  // GUI_Factories.cpp:1201-1213).
+  if (normalized == QStringLiteral("invalidateCutInfo"))
+    return anySelectedObjectHasCutInfo();
+  // P16.2: merge(false) needs one object with more than one part; upstream
+  // invokes it from an object OR part selection (GUI_ObjectList.cpp:2792-2810).
+  if (normalized == QStringLiteral("mergeToSingle"))
+    return hasObject && m_selectedSourceIndices.size() == 1
+        && projectService_->objectVolumeCount(m_contextSourceObjectIndex) > 1;
+  // P16.5: the add-volume submenu family gates on an object selection like
+  // the upstream is_instance_or_object_selected (GUI_Factories.cpp:655).
+  if (normalized == QStringLiteral("addVolume"))
+    return hasObject;
   if (normalized.startsWith(QStringLiteral("plate")))
     return hasPlate;
   if (normalized == QStringLiteral("export") || normalized == QStringLiteral("splitObjects"))
@@ -5999,14 +6067,14 @@ bool EditorViewModel::addVolumeFromFile(int objectIndex, const QString &filePath
   return ok;
 }
 
-bool EditorViewModel::addPrimitive(int objectIndex, int primitiveType)
+bool EditorViewModel::addPrimitive(int objectIndex, int primitiveType, int volumeType)
 {
   if (!projectService_)
     return false;
   const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
   if (sourceIndex < 0)
     return false;
-  bool ok = projectService_->addPrimitive(sourceIndex, primitiveType);
+  bool ok = projectService_->addPrimitive(sourceIndex, primitiveType, volumeType);
   if (ok)
   {
     rebuildObjectEntriesFromService();
@@ -6313,6 +6381,10 @@ void EditorViewModel::setSelectedObjectsPrintable(bool printable)
   if (!canSetSelectionPrintable())
     return;
 
+  // P16.8: per-object printable enters the undo stack (upstream
+  // set_printable takes a snapshot, Selection.cpp:519 / ObjectList
+  // toggle_printable_state take_snapshot GUI_ObjectList.cpp:5830).
+  QList<QPair<int, bool>> before; // (sourceIndex, oldPrintable)
   QSet<int> affectedPlates;
   for (int sourceIndex : m_selectedSourceIndices)
   {
@@ -6325,10 +6397,19 @@ void EditorViewModel::setSelectedObjectsPrintable(bool printable)
         emit stateChanged();
         return;
       }
+      before.append({sourceIndex, !printable});
       m_objects[sourceIndex].printable = printable;
       if (plateIndex >= 0)
         affectedPlates.insert(plateIndex);
     }
+  }
+
+  if (m_undoManager && !before.isEmpty())
+  {
+    m_undoManager->beginMacro(tr("Set Printable"));
+    for (const auto &entry : before)
+      m_undoManager->push(new PrintableCommand(entry.first, -1, entry.second, printable, projectService_));
+    m_undoManager->endMacro();
   }
 
   for (int plateIndex : affectedPlates)
@@ -6511,10 +6592,36 @@ void EditorViewModel::mirrorSelectedObjects(int axis)
     return;
 
 #ifdef HAS_LIBSLIC3R
-  // Sync real model mirror state
+  // Sync real model mirror state. P16.8: each mirrored object enters the undo
+  // stack as a MirrorCommand (upstream Selection::mirror rides on a
+  // Plater::take_snapshot; GUI_Factories.cpp:1109-1125 menu).
+  struct MirrorPair { int index; QVector3D oldMirror, newMirror; };
+  QList<MirrorPair> pairs;
   for (int srcIdx : m_selectedSourceIndices)
-    projectService_->mirrorObject(srcIdx, axis);
+  {
+    const QVector3D oldMirror = projectService_->objectMirror(srcIdx);
+    if (!projectService_->mirrorObject(srcIdx, axis))
+      continue;
+    pairs.append(MirrorPair{srcIdx, oldMirror, projectService_->objectMirror(srcIdx)});
+  }
   projectService_->syncTransformsFromModel();
+
+  if (m_undoManager && !pairs.isEmpty())
+  {
+    if (pairs.size() == 1)
+    {
+      m_undoManager->push(new MirrorCommand(pairs[0].index, pairs[0].oldMirror,
+                                            pairs[0].newMirror, projectService_));
+    }
+    else
+    {
+      m_undoManager->beginMacro(tr("Mirror"));
+      for (const MirrorPair &pair : pairs)
+        m_undoManager->push(new MirrorCommand(pair.index, pair.oldMirror,
+                                              pair.newMirror, projectService_));
+      m_undoManager->endMacro();
+    }
+  }
 #endif
 
   // The active viewport handles the visual mirror through its bound state.
@@ -6707,11 +6814,41 @@ bool EditorViewModel::reloadSelectedFromDisk()
   if (!canTransformSelection())
     return false;
 
-  bool anyReloaded = false;
-  for (int srcIdx : m_selectedSourceIndices)
+  // P16.8: Reload from disk rides the undo stack via in-place object
+  // snapshot swaps (upstream reload takes a Plater snapshot).
+  const QList<int> targets = m_selectedSourceIndices.values();
+  QList<ObjectSnapshotCommand *> commands;
+  if (m_undoManager)
   {
-    if (projectService_->reloadFromDisk(srcIdx))
-      anyReloaded = true;
+    for (int objectIndex : targets)
+      commands.append(new ObjectSnapshotCommand(objectIndex, tr("Reload from disk"),
+                                                projectService_));
+  }
+
+  bool anyReloaded = false;
+  for (int i = 0; i < targets.size(); ++i)
+  {
+    const bool ok = projectService_->reloadFromDisk(targets[i]);
+    if (i < commands.size())
+    {
+      if (ok)
+        commands[i]->setAfterState(); // reload keeps the object index stable
+      else
+      {
+        delete commands[i];
+        commands[i] = nullptr;
+      }
+    }
+    anyReloaded = ok || anyReloaded;
+  }
+
+  if (m_undoManager)
+  {
+    for (ObjectSnapshotCommand *cmd : commands)
+    {
+      if (cmd)
+        m_undoManager->push(cmd);
+    }
   }
 
   if (anyReloaded)
@@ -6795,20 +6932,269 @@ bool EditorViewModel::assembleSelectedObjects()
   }
 
   QList<int> indices = m_selectedSourceIndices.values();
-  if (!projectService_->assembleObjects(indices))
+  std::sort(indices.begin(), indices.end());
+
+  // P16.8: upstream takes a whole-model "Assemble" snapshot
+  // (Plater::TakeSnapshot, GUI_ObjectList.cpp:2674); the Qt6 equivalent is
+  // the deep scene snapshot command.
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Assemble"), projectService_) : nullptr;
+
+  const int mergedIndex = projectService_->assembleObjectsReturningIndex(indices);
+  if (mergedIndex < 0)
   {
+    delete cmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
     return false;
   }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
+  }
 
+  // Select the merged object like the upstream add_object_to_list +
+  // select_item tail (GUI_ObjectList.cpp:2784-2788).
   m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(mergedIndex);
+  m_primarySelectedSourceIndex = mergedIndex;
+  m_selectedVolumeObjectSourceIndex = -1;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndex = -1;
+
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
   invalidateSliceResultsForCurrentPlate();
   statusText_ = tr("已合并选中对象");
   emit stateChanged();
   return true;
+}
+
+bool EditorViewModel::mergeSelectedPartsToSingleObject()
+{
+  // P16.2: ObjectList::merge(false) — merge every part of ONE object into a
+  // single mesh object; per-part settings are dropped by the upstream merge
+  // itself (GUI_ObjectList.cpp:2792-2810 + Model.cpp:2010-2028).
+  if (!projectService_)
+    return false;
+
+  const int sourceIndex = m_contextSourceObjectIndex >= 0
+                              ? m_contextSourceObjectIndex
+                              : selectedSourceObjectIndex();
+  if (sourceIndex < 0 || projectService_->objectVolumeCount(sourceIndex) <= 1)
+  {
+    statusText_ = tr("合并部件需要选中含多个部件的对象");
+    emit stateChanged();
+    return false;
+  }
+
+  auto *cmd = m_undoManager
+                  ? new SceneSnapshotCommand(tr("Merge parts to an object"), projectService_)
+                  : nullptr;
+
+  if (!projectService_->mergeObjectVolumes(sourceIndex))
+  {
+    delete cmd;
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("已合并部件为单一对象");
+  emit stateChanged();
+  return true;
+}
+
+// ── P16.4: Change Filament (GUI_Factories.cpp:1879-1961) ───────────────────
+
+int EditorViewModel::configFilamentCount() const
+{
+  // Upstream filaments_count equivalent (GUI_Factories.cpp:1893: the
+  // submenu is dropped entirely when <= 1).
+  return projectService_ ? projectService_->filamentCount() : 1;
+}
+
+int EditorViewModel::objectExtruderId(int objectIndex) const
+{
+  if (!projectService_)
+    return -1;
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0)
+    return -1;
+  // Upstream initial_extruder reads the item config "extruder" key
+  // (GUI_Factories.cpp:1915-1922); -1 marks "not configured / inherit".
+  const QVariant value = projectService_->scopedOptionValue(
+      sourceIndex, -1, QStringLiteral("extruder"), QVariant(-1));
+  return value.toInt();
+}
+
+void EditorViewModel::setExtruderForSelectedItems(int extruder)
+{
+  // P16.4: port of ObjectList::set_extruder_for_selected_items
+  // (GUI_ObjectList.cpp:5622-5695).
+  if (!projectService_ || extruder < 0)
+    return;
+  if (extruder > projectService_->filamentCount())
+    return; // upstream clamp against the configured colors (:5626-5629)
+
+  if (hasSelectedVolume() && m_selectedVolumeObjectSourceIndex >= 0)
+  {
+    const int objIdx = m_selectedVolumeObjectSourceIndex;
+    const int volIdx = m_selectedVolumeIndex;
+    const int volType = projectService_->objectVolumeType(objIdx, volIdx);
+    // Only MODEL_PART / PARAMETER_MODIFIER volumes take a filament
+    // (:5639-5651).
+    if (volType != int(MockVolumeType::ModelPart)
+        && volType != int(MockVolumeType::ParameterModifier))
+      return;
+    int newExtruder = extruder;
+    if (extruder == 0 && volType == int(MockVolumeType::ModelPart))
+    {
+      // "Default" on a part resolves to the parent object's extruder
+      // (:5659-5666); 1 when the object carries no explicit extruder.
+      const QVariant parentValue = projectService_->scopedOptionValue(
+          objIdx, -1, QStringLiteral("extruder"), QVariant(1));
+      newExtruder = qMax(1, parentValue.toInt());
+    }
+    projectService_->setVolumeExtruderId(objIdx, volIdx, newExtruder);
+  }
+  else if (!m_selectedSourceIndices.isEmpty())
+  {
+    for (int objIdx : m_selectedSourceIndices)
+    {
+      // "Default" on an object resolves to extruder 1 (:5659-5662).
+      const int newExtruder = extruder == 0 ? 1 : extruder;
+      projectService_->setScopedOptionValue(objIdx, -1, QStringLiteral("extruder"),
+                                            newExtruder);
+      // Clear every part volume's extruder override so the object assignment
+      // rules (:5679-5688).
+      const int volCount = projectService_->objectVolumeCount(objIdx);
+      for (int v = 0; v < volCount; ++v)
+        projectService_->setVolumeExtruderId(objIdx, v, -1);
+    }
+  }
+  else
+  {
+    return;
+  }
+  statusText_ = tr("已更新所选对象耗材");
+  emit stateChanged();
+}
+
+// ── P16.9: Flush Options (GUI_Factories.cpp:937-1028) ──────────────────────
+
+bool EditorViewModel::flushOptionValue(int optionIndex) const
+{
+  if (!projectService_)
+    return false;
+  const int sourceIndex = m_contextSourceObjectIndex >= 0
+                              ? m_contextSourceObjectIndex
+                              : selectedSourceObjectIndex();
+  if (sourceIndex < 0)
+    return false;
+  return projectService_->objectFlushOption(sourceIndex, optionIndex);
+}
+
+bool EditorViewModel::toggleFlushOption(int optionIndex)
+{
+  // Upstream flips the object-config bool and refreshes the settings panel
+  // (GUI_Factories.cpp:966-975).
+  if (!projectService_)
+    return false;
+  const int sourceIndex = m_contextSourceObjectIndex >= 0
+                              ? m_contextSourceObjectIndex
+                              : selectedSourceObjectIndex();
+  if (sourceIndex < 0)
+    return false;
+  const bool flipped = !projectService_->objectFlushOption(sourceIndex, optionIndex);
+  if (!projectService_->setObjectFlushOption(sourceIndex, optionIndex, flipped))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  invalidateSliceResultsForCurrentPlate();
+  emit stateChanged();
+  return true;
+}
+
+// ── P16.9: Invalidate cut info (GUI_ObjectList.cpp:3033-3076) ──────────────
+
+bool EditorViewModel::anySelectedObjectHasCutInfo() const
+{
+  if (!projectService_)
+    return false;
+  for (int sourceIndex : m_selectedSourceIndices)
+  {
+    if (projectService_->objectHasCutInfo(sourceIndex))
+      return true;
+  }
+  return false;
+}
+
+bool EditorViewModel::invalidateSelectedCutInfo()
+{
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
+    return false;
+  // Upstream invalidates the cut info of the selected object; every object
+  // sharing its cut id is invalidated inside the service
+  // (GUI_ObjectList.cpp:3051-3076).
+  bool anyInvalidated = false;
+  for (int sourceIndex : m_selectedSourceIndices)
+    anyInvalidated = projectService_->invalidateCutInfo(sourceIndex) || anyInvalidated;
+  if (!anyInvalidated)
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("已失效切割信息");
+  emit stateChanged();
+  return true;
+}
+
+// ── P16.11: per-instance printable (GUI_ObjectList.cpp:5817-5866) ──────────
+
+bool EditorViewModel::instancePrintable(int objectIndex, int instanceIndex) const
+{
+  if (!projectService_)
+    return false;
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  return sourceIndex >= 0 && projectService_->instancePrintable(sourceIndex, instanceIndex);
+}
+
+void EditorViewModel::toggleInstancePrintable(int objectIndex, int instanceIndex)
+{
+  if (!projectService_)
+    return;
+  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
+  if (sourceIndex < 0 || instanceIndex < 0)
+    return;
+  const bool flipped = !projectService_->instancePrintable(sourceIndex, instanceIndex);
+  if (!projectService_->setInstancePrintable(sourceIndex, instanceIndex, flipped))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return;
+  }
+  // P16.8: single-instance toggle undo (upstream toggle_printable_state
+  // takes a snapshot, GUI_ObjectList.cpp:5830).
+  if (m_undoManager)
+    m_undoManager->push(new PrintableCommand(sourceIndex, instanceIndex, !flipped,
+                                             flipped, projectService_));
+  invalidateSliceResultsForCurrentPlate();
+  emit stateChanged();
 }
 
 bool EditorViewModel::instanceToObject(int instIdx)
@@ -6842,6 +7228,24 @@ bool EditorViewModel::setSelectedInstanceCount(int count)
   if (!projectService_ || sourceIndex < 0 || count < 1)
     return false;
 
+  // P16.8: instance-count changes ride the undo stack. The count delta is
+  // one command; the follow-up arrange's position changes ride along as
+  // TransformCommand entries so a full undo restores the pre-arrange layout.
+  struct Before
+  {
+    int index;
+    QVector3D position, rotation, scale;
+  };
+  QList<Before> before;
+  if (m_undoManager)
+  {
+    for (int index = 0; index < projectService_->objectNames().size(); ++index)
+      before.append(Before{index, projectService_->objectPosition(index),
+                           projectService_->objectRotation(index),
+                           projectService_->objectScale(index)});
+  }
+  const int oldCount = projectService_->objectInstanceCount(sourceIndex);
+
   if (!projectService_->setObjectInstanceCount(sourceIndex, count)) {
     statusText_ = projectService_->lastError();
     emit stateChanged();
@@ -6852,6 +7256,26 @@ bool EditorViewModel::setSelectedInstanceCount(int count)
       .arg(m_bedWidth).arg(m_bedDepth);
   projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
                                   m_arrangeAlignY, printableArea);
+
+  if (m_undoManager)
+  {
+    m_undoManager->beginMacro(tr("Set Number of Instances"));
+    m_undoManager->push(new InstanceCountCommand(sourceIndex, oldCount, count, projectService_));
+    for (const Before &entry : before)
+    {
+      const QVector3D newPos = projectService_->objectPosition(entry.index);
+      const QVector3D newRot = projectService_->objectRotation(entry.index);
+      const QVector3D newScale = projectService_->objectScale(entry.index);
+      if (newPos == entry.position && newRot == entry.rotation && newScale == entry.scale)
+        continue;
+      auto *cmd = new TransformCommand(entry.index, entry.position, entry.rotation,
+                                       entry.scale, projectService_);
+      cmd->setNewTransform(newPos, newRot, newScale);
+      m_undoManager->push(cmd);
+    }
+    m_undoManager->endMacro();
+  }
+
   refreshMeshCacheAndFitHint();
   invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
@@ -6929,20 +7353,42 @@ bool EditorViewModel::arraySelectedObject(int rows, int cols, float spacingX, fl
 
 bool EditorViewModel::splitSelectedToObjects()
 {
+  // P16.8: whole-model snapshot like the upstream split flow (Plater::priv::
+  // split_object takes a snapshot; object indices shift wholesale).
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Split to objects"), projectService_) : nullptr;
   const int beforeCount = modelCount();
   splitSelectedObject();
-  return modelCount() != beforeCount;
+  if (modelCount() == beforeCount)
+  {
+    delete cmd;
+    return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
+  }
+  return true;
 }
 
 bool EditorViewModel::splitSelectedToParts()
 {
   if (!projectService_ || !hasSelectedVolume())
     return false;
+
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Split to parts"), projectService_) : nullptr;
   if (!projectService_->splitVolumeIntoParts(m_selectedVolumeObjectSourceIndex,
-                                              m_selectedVolumeIndex)) {
+                                              m_selectedVolumeIndex))
+  {
+    delete cmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
     return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
   }
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
@@ -7083,12 +7529,44 @@ bool EditorViewModel::dropSelectedObjectsToBed()
 {
   if (!projectService_ || m_selectedSourceIndices.isEmpty())
     return false;
+
+  // P16.8: capture transforms so the drop rides the undo stack as
+  // TransformCommands (upstream Selection::drop takes a snapshot and do_move
+  // records "Move Object", Selection.cpp:491-496).
+  struct Before
+  {
+    int index;
+    QVector3D position, rotation, scale;
+  };
+  QList<Before> before;
+  before.reserve(m_selectedSourceIndices.size());
+  for (int objectIndex : m_selectedSourceIndices)
+    before.append(Before{objectIndex, projectService_->objectPosition(objectIndex),
+                         projectService_->objectRotation(objectIndex),
+                         projectService_->objectScale(objectIndex)});
+
   bool changed = false;
   for (int objectIndex : m_selectedSourceIndices)
     changed = projectService_->dropObjectToBed(objectIndex) || changed;
   if (!changed)
+  {
     statusText_ = projectService_->lastError();
+  }
   else {
+    if (m_undoManager)
+    {
+      m_undoManager->beginMacro(tr("Drop"));
+      for (const Before &entry : before)
+      {
+        auto *cmd = new TransformCommand(entry.index, entry.position, entry.rotation,
+                                         entry.scale, projectService_);
+        cmd->setNewTransform(projectService_->objectPosition(entry.index),
+                             projectService_->objectRotation(entry.index),
+                             projectService_->objectScale(entry.index));
+        m_undoManager->push(cmd);
+      }
+      m_undoManager->endMacro();
+    }
     refreshMeshCacheAndFitHint();
     invalidateSliceResultsForCurrentPlate();
   }
@@ -7116,9 +7594,44 @@ bool EditorViewModel::convertSelectedObjectUnits(int conversionType)
 {
   if (!projectService_ || m_selectedSourceIndices.isEmpty())
     return false;
+
+  // P16.8: one in-place object snapshot swap per converted object
+  // (upstream convert-unit menu rides on Plater::TakeSnapshot).
+  const QList<int> targets = m_selectedSourceIndices.values();
+  QList<ObjectSnapshotCommand *> commands;
+  if (m_undoManager)
+  {
+    for (int objectIndex : targets)
+      commands.append(new ObjectSnapshotCommand(objectIndex, tr("Convert units"),
+                                                projectService_));
+  }
+
   bool changed = false;
-  for (int objectIndex : m_selectedSourceIndices)
-    changed = projectService_->convertObjectUnits(objectIndex, conversionType) || changed;
+  for (int i = 0; i < targets.size(); ++i)
+  {
+    const bool ok = projectService_->convertObjectUnits(targets[i], conversionType);
+    if (i < commands.size())
+    {
+      if (ok)
+        commands[i]->setAfterState(); // convert keeps the object index stable
+      else
+      {
+        delete commands[i];
+        commands[i] = nullptr; // failed conversion pushes nothing
+      }
+    }
+    changed = ok || changed;
+  }
+
+  if (m_undoManager)
+  {
+    for (ObjectSnapshotCommand *cmd : commands)
+    {
+      if (cmd)
+        m_undoManager->push(cmd);
+    }
+  }
+
   if (changed) {
     refreshMeshCacheAndFitHint();
     invalidateSliceResultsForCurrentPlate();
@@ -7983,20 +8496,71 @@ bool EditorViewModel::setPlateThumbnailFromBase64(int plateIndex, const QString 
 
 void EditorViewModel::centerSelectedObjects()
 {
-  // 对齐上游 Plater::priv::on_center / ModelObject::center_instances
-  // Mock 模式：重置选中对象位置到原点
-  if (!projectService_)
+  // P16.10: align the selection to the plate center like upstream
+  // Selection::center (Selection.cpp:474-489): translate by
+  // (plate_center - selection_bbox_center) on X/Y only — the height (Z) is
+  // kept. The old Qt6 behavior reset positions to the origin, which is the
+  // plate corner, not the plate center.
+  if (!projectService_ || m_selectedSourceIndices.isEmpty())
     return;
-  const int count = objectCount();
-  for (int i = 0; i < count; ++i)
+
+  const QVariantMap box = projectService_->selectionWorldBoundingBox(m_selectedSourceIndices.values());
+  if (box.isEmpty())
+    return;
+
+  const double srcX = 0.5 * (box.value(QStringLiteral("minX")).toDouble()
+                             + box.value(QStringLiteral("maxX")).toDouble());
+  const double srcZ = 0.5 * (box.value(QStringLiteral("minZ")).toDouble()
+                             + box.value(QStringLiteral("maxZ")).toDouble());
+  // Plate center origin = printable-area bbox center (upstream
+  // PartPlate::get_center_origin, PartPlate.cpp:1881-1889), in GL coords
+  // X/Z — same convention as scaleSelectionToFitBed.
+  const double dstX = double(bedOriginX() + bedWidth() * 0.5f);
+  const double dstZ = double(bedOriginY() + bedDepth() * 0.5f);
+  const double dx = dstX - srcX;
+  const double dz = dstZ - srcZ;
+  if (std::abs(dx) < 1e-9 && std::abs(dz) < 1e-9)
+    return;
+
+  struct Before
   {
-    if (isObjectSelected(i))
-    {
-      const int sourceIndex = mapFilteredToSourceIndex(i);
-      if (sourceIndex >= 0)
-        projectService_->setObjectPosition(sourceIndex, 0, 0, 0);
-    }
+    int index;
+    QVector3D position, rotation, scale;
+  };
+  QList<Before> before;
+  before.reserve(m_selectedSourceIndices.size());
+  for (const int index : m_selectedSourceIndices)
+    before.append(Before{index, projectService_->objectPosition(index),
+                         projectService_->objectRotation(index),
+                         projectService_->objectScale(index)});
+
+  for (const Before &entry : before)
+  {
+    const QVector3D pos = projectService_->objectPosition(entry.index);
+    projectService_->setObjectPosition(entry.index,
+                                       float(pos.x() + dx), pos.y(),
+                                       float(pos.z() + dz));
   }
+
+  // P16.8: Center undo (one snapshot per move, upstream takes a "Move
+  // Object" snapshot in do_move).
+  if (m_undoManager)
+  {
+    m_undoManager->beginMacro(tr("Center"));
+    for (const Before &entry : before)
+    {
+      auto *cmd = new TransformCommand(entry.index, entry.position, entry.rotation,
+                                       entry.scale, projectService_);
+      cmd->setNewTransform(projectService_->objectPosition(entry.index),
+                           projectService_->objectRotation(entry.index),
+                           projectService_->objectScale(entry.index));
+      m_undoManager->push(cmd);
+    }
+    m_undoManager->endMacro();
+  }
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
   invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }

@@ -279,6 +279,15 @@ public:
   void setObjectPlateForIndex(int objectIndex, int plateIndex);
   Q_INVOKABLE bool objectPrintable(int index) const;
   Q_INVOKABLE bool setObjectPrintable(int index, bool printable);
+  /// P16.11 per-instance printable granularity (对齐上游
+  /// ObjectList::toggle_printable_state, GUI_ObjectList.cpp:5817 —
+  /// itInstance rows toggle ModelInstance::printable individually).
+  Q_INVOKABLE bool instancePrintable(int objectIndex, int instanceIndex) const;
+  Q_INVOKABLE bool setInstancePrintable(int objectIndex, int instanceIndex, bool printable);
+  /// P16.8 mirror read/write for the extended TransformCommand undo path
+  /// (对齐上游 ModelInstance::get_mirror / set_mirror).
+  QVector3D objectMirror(int index) const;
+  bool setObjectMirror(int index, float x, float y, float z);
   Q_INVOKABLE bool objectVisible(int index) const;
   Q_INVOKABLE bool setObjectVisible(int index, bool visible);
   Q_INVOKABLE int objectVolumeCount(int index) const;
@@ -303,6 +312,20 @@ public:
   Q_INVOKABLE QString objectVolumeTypeLabel(int objectIndex, int volumeIndex) const;
   /// Get volume type as integer (0=ModelPart, 1=NegativeVolume, etc.) for the given volume
   Q_INVOKABLE int objectVolumeType(int objectIndex, int volumeIndex) const;
+  /// P16.9 Flush Options (对齐上游 MenuFactory::append_menu_items_flush_options,
+  /// GUI_Factories.cpp:937-1028; keys are the FREQ_SETTINGS_BUNDLE_FFF
+  /// "Flush options" bundle GUI_Factories.cpp:69). optionIndex:
+  /// 0=flush_into_infill, 1=flush_into_objects, 2=flush_into_support.
+  /// Reads fall back to the object's plate config like the upstream fallback
+  /// to the global print preset.
+  Q_INVOKABLE bool objectFlushOption(int objectIndex, int optionIndex) const;
+  Q_INVOKABLE bool setObjectFlushOption(int objectIndex, int optionIndex, bool value);
+  /// P16.9 Invalidate cut info (对齐上游 ObjectList::has_selected_cut_object /
+  /// invalidate_cut_info_for_selection, GUI_ObjectList.cpp:3033-3076).
+  /// objectHasCutInfo mirrors ModelObject::is_cut(); invalidateCutInfo clears
+  /// cut_id on the object AND every object sharing its cut id.
+  Q_INVOKABLE bool objectHasCutInfo(int objectIndex) const;
+  Q_INVOKABLE bool invalidateCutInfo(int objectIndex);
   QVariant scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue = QVariant()) const;
   bool setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value);
   /// Plate-level scoped overrides (对齐上游 PartPlate config override)
@@ -331,7 +354,10 @@ public:
   Q_INVOKABLE bool addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType);
   /// 添加原始体 volume（对齐上游 create_mesh + add_volume）
   /// primitiveType: 0=立方体, 1=球体, 2=圆柱体, 3=圆环
-  Q_INVOKABLE bool addPrimitive(int objectIndex, int primitiveType);
+  /// volumeType: target ModelVolumeType (P16.5 add-volume submenu ports the
+  /// upstream append_submenu_add_generic per-type submenus, GUI_Factories.cpp:675;
+  /// 0=ModelPart keeps the historical single-type behaviour).
+  Q_INVOKABLE bool addPrimitive(int objectIndex, int primitiveType, int volumeType = 0);
   /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
   /// Mock 模式：创建 TextEmboss 类型 volume
   Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
@@ -611,6 +637,14 @@ public:
   bool splitVolumeIntoParts(int objectIndex, int volumeIndex);
   /// 合并多个对象为一个多部件对象（对齐上游 GUI_ObjectList::assemble）
   bool assembleObjects(const QList<int> &objIndices);
+  /// P16.1: assemble variant returning the merged object's index (-1 on
+  /// failure) so the caller can select the new "Assembly" object like the
+  /// upstream add_object_to_list + select_item tail (GUI_ObjectList.cpp:2786-2788).
+  int assembleObjectsReturningIndex(const QList<int> &objIndices);
+  /// P16.2: merge all parts of one object into a single mesh volume
+  /// (对齐上游 ObjectList::merge(false) -> ModelObject::merge, Model.cpp:2010-2028;
+  /// per-part configs are dropped by the upstream merge itself).
+  bool mergeObjectVolumes(int objectIndex);
   /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）
   bool duplicateInstanceAsObject(int objectIndex, int instanceIndex);
   /// 创建原始几何体到当前平板（对齐上游 create_mesh + add_volume）
