@@ -25,6 +25,7 @@
 #include "core/viewmodels/MultiMachineViewModel.h"
 #include "core/viewmodels/AmsMaterialsViewModel.h"
 #include "core/viewmodels/AiViewModel.h"
+#include "AiChatBridge.h"
 #include "core/ai/AiAgentService.h"
 #include "core/ai/AppToolRegistry.h"
 #include "core/ai/McpHttpServer.h"
@@ -168,6 +169,9 @@ BackendContext::BackendContext(QObject *parent)
   aiMcp_ = new OWzx::McpHttpServer(aiRegistry_, this);
   aiAgentService_ = new AiAgentService(this);
   aiViewModel_ = new AiViewModel(aiAgentService_, this);
+  // Web chat page bridge (QWebChannel) — the WebEngine chat panel talks to
+  // the same ViewModel/harness through this object.
+  aiChatBridge_ = new AiChatBridge(aiViewModel_, aiAgentService_, this);
   // Preferences drive start/stop; re-apply on every settings change so the
   // sidebar reacts immediately to enable/key/model/port edits.
   connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
@@ -376,6 +380,8 @@ QObject *BackendContext::editorViewModel() const { return editorViewModel_; }
 QObject *BackendContext::sliceService() const { return sliceService_; }
 
 QObject *BackendContext::aiViewModel() const { return aiViewModel_; }
+
+QObject *BackendContext::aiChatBridge() const { return aiChatBridge_; }
 
 void BackendContext::applyAiSettings()
 {

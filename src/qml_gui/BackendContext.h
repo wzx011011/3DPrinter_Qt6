@@ -37,6 +37,7 @@ class ModelMallViewModel;
 class MultiMachineViewModel;
 class AmsMaterialsViewModel;
 class AiAgentService;
+class AiChatBridge;
 class AiViewModel;
 namespace OWzx { class McpHttpServer; }
 
@@ -117,7 +118,10 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
   // AI 助手（OWzx-only，docs/ai-control.md）：聊天侧栏 ViewModel + 控制面
   // 活跃状态（MCP 服务器 + sidecar 是否已按偏好设置启动）。
+  // aiChatBridge 是暴露给 WebEngine 聊天页的 QWebChannel 对象（网页版
+  // 聊天 UI，替代 QML 卡片渲染）。
   Q_PROPERTY(QObject *aiViewModel READ aiViewModel CONSTANT)
+  Q_PROPERTY(QObject *aiChatBridge READ aiChatBridge CONSTANT)
   Q_PROPERTY(bool aiControlActive READ aiControlActive NOTIFY stateChanged)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
   // Phase 51: shell-level action gate properties (SHELL-03) - forward to EditorViewModel/PreviewViewModel.
@@ -310,6 +314,7 @@ public:
 
   // AI 助手（OWzx-only，docs/ai-control.md）
   QObject *aiViewModel() const;
+  QObject *aiChatBridge() const;
   bool aiControlActive() const { return aiControlActive_; }
   /// (Re)applies the AI preferences: starts/stops the loopback MCP server and
   /// the sidecar harness. Called from the constructor and on
@@ -609,6 +614,8 @@ private:
   /// Sidecar harness host (Python + Claude Agent SDK + GLM).
   AiAgentService *aiAgentService_ = nullptr;
   AiViewModel *aiViewModel_ = nullptr;
+  /// QWebChannel bridge for the WebEngine chat page (web chat UI).
+  AiChatBridge *aiChatBridge_ = nullptr;
   bool aiControlActive_ = false;
 
 

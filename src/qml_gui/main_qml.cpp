@@ -3,6 +3,7 @@
 #include <QQmlContext>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QLibrary>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QFile>
@@ -268,6 +269,25 @@ static void applyStartupOpenRequests(const StartupOpenRequest &request,
 
 int main(int argc, char *argv[])
 {
+  // WebEngine quick module init MUST run before QGuiApplication (it sets
+  // Qt::AA_ShareOpenGLContexts so Chromium's GPU context can share with the
+  // scene graph). Resolved dynamically: statically linking WebEngineQuick
+  // into the exe makes the loader abort pre-main on machines with old
+  // dependency DLLs beside the exe; loading it here keeps startup decoupled.
+  // When the DLL is absent the chat panel degrades gracefully (QML plugin
+  // import fails with a message, the rest of the app runs).
+  {
+    QLibrary webEngineQuick(QStringLiteral("Qt6WebEngineQuick"));
+    if (webEngineQuick.load()) {
+      using WebEngineInit = void (*)();
+      const QString kInitMangled =
+          QStringLiteral("?initialize@QtWebEngineQuick@@YAXXZ");
+      if (auto *init = reinterpret_cast<WebEngineInit>(
+              webEngineQuick.resolve(kInitMangled.toUtf8().constData())))
+        init();
+    }
+  }
+
   if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
     qputenv("OWZX_RHI_RENDERER", "auto");
 
@@ -300,7 +320,10 @@ int main(int argc, char *argv[])
   }
 
   // Enable QML debugging output for diagnostics
-  qputenv("QT_LOGGING_RULES", "qt.qml.binding=true;qt.qml.connections=true");
+  // qml.debug=true keeps console.log visible in the diagnostics file (the
+  // rules string replaces defaults, so it must be listed explicitly).
+  qputenv("QT_LOGGING_RULES",
+          "qt.qml.binding=true;qt.qml.connections=true;qml.debug=true");
 
   // Redirect all Qt messages to diagnostic log file
   if (qEnvironmentVariableIsSet("QML_DEBUG_LOG")) {

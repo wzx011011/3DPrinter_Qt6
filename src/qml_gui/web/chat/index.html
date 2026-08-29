@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!-- OWzx AI assistant chat page (decision record: docs/ai-control.md).
+     Loaded from qrc by the ChatSidebar WebEngineView; talks to the host over
+     QWebChannel (AiChatBridge). Local trusted content only — assistant
+     markdown is sanitized with DOMPurify, every other field is inserted as
+     plain text. -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OWzx AI 助手</title>
+  <link rel="stylesheet" href="chat.css">
+</head>
+<body>
+  <header id="topbar">
+    <div id="title">AI 助手</div>
+    <div class="spacer"></div>
+    <button id="btnClear" class="iconbtn" title="清空对话">🗑</button>
+    <button id="btnClose" class="iconbtn" title="关闭">✕</button>
+  </header>
+
+  <div id="notices">
+    <div id="noticeDisabled" class="notice hidden">
+      AI 助手未启用：请到 偏好设置 → AI 助手 填写 API Key 并打开开关。
+    </div>
+    <div id="noticeNotInstalled" class="notice warning hidden">
+      AI 组件未安装：需要 ai_sidecar 目录（可选组件，见 docs/ai-control.md）。
+    </div>
+  </div>
+
+  <main id="chat">
+    <div id="welcome" class="welcome hidden">
+      <div class="welcome-text">
+        你好！我是 OWzx AI 助手，可以用大白话指挥我：加载模型、调参数、切片、排查问题都行。
+      </div>
+      <div id="chips">
+        <button class="chip">帮我加载一个模型</button>
+        <button class="chip">把壁厚循环数调成 4</button>
+        <button class="chip">切片当前板</button>
+        <button class="chip">这条 G-code 预计要打多久？</button>
+      </div>
+    </div>
+    <!-- messages render here -->
+  </main>
+
+  <div id="busy" class="busy hidden">
+    <span class="spinner"></span>
+    <span>正在处理…（Esc 取消）</span>
+  </div>
+
+  <footer id="inputbar">
+    <input id="input" type="text" placeholder="提问、调参数、排查问题…" autocomplete="off">
+    <button id="btnSend" class="sendbtn" title="发送" disabled>➤</button>
+  </footer>
+
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script src="chat.js"></script>
+</body>
+</html>

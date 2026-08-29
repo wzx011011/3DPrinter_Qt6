@@ -136,10 +136,11 @@ if(OWZX_QML_GUI)
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg)
+        # WebEngineQuick：AI 聊天面板 + 未来模型库的内嵌网页渲染（主包内置）。
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel)
     else()
         # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
@@ -149,6 +150,10 @@ if(OWZX_QML_GUI)
         src/nanosvg_impl.cpp
         src/qml_gui/BackendContext.cpp
         src/qml_gui/BackendContext.h
+        src/qml_gui/AiChatBridge.cpp
+        src/qml_gui/AiChatBridge.h
+        src/core/viewmodels/AiMessageDecorate.cpp
+        src/core/viewmodels/AiMessageDecorate.h
         src/core/services/SliceService.cpp
         src/core/services/SliceService.h
         src/core/services/PresetServiceMock.cpp
@@ -402,6 +407,12 @@ if(OWZX_QML_GUI)
     target_link_libraries(OWzxSlicer PRIVATE
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Svg
     )
+    # NOTE: Qt6::WebEngineQuick/Qt6::WebChannel are intentionally NOT linked
+    # into the exe. The WebEngine DLLs load dynamically via the QtWebEngine
+    # QML plugin (and QLibrary in main); statically importing them made the
+    # loader abort pre-main on machines where old dependency DLLs sit next to
+    # the exe (entry-point error against Qt6WebEngineCore). Dynamic loading
+    # keeps startup decoupled from the web stack.
     qt_add_shaders(OWzxSlicer "rhi_viewport_shaders"
         PREFIX
             "/rhi_viewport/shaders"

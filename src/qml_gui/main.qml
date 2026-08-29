@@ -860,19 +860,23 @@ ApplicationWindow {
             }
         }
 
-        ChatSidebar {
-            id: aiChatPanel
-            visible: root.aiChatOpen
+        // WebEngine 聊天面板懒加载：Chromium 进程树只在首次打开侧栏时启动
+        // （首开 +~1s），关闭仅隐藏不销毁，重开即恢复。
+        Loader {
+            id: aiChatPanelLoader
+            active: root.aiChatOpen
+            visible: root.aiChatOpen && status === Loader.Ready
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.topMargin: root.prepareChromeHeight
             width: 360
             z: 50
-            aiVm: backend ? backend.aiViewModel : null
-            sidecarInstalled: backend && backend.aiViewModel
-                               ? backend.aiViewModel.installed : false
-            onClosed: root.aiChatOpen = false
+
+            sourceComponent: ChatSidebar {
+                bridge: backend ? backend.aiChatBridge : null
+                onClosed: root.aiChatOpen = false
+            }
         }
     }
 

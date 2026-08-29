@@ -156,6 +156,15 @@
         <!-- Data files -->
         <file>data/hints.json</file>
     </qresource>
+    <!-- AI chat web page (WebEngine + QWebChannel bridge, docs/ai-control.md).
+         Local trusted content: marked (MIT) + DOMPurify (Apache-2.0) vendored. -->
+    <qresource prefix="/web/chat">
+        <file alias="index.html">web/chat/index.html</file>
+        <file alias="chat.css">web/chat/chat.css</file>
+        <file alias="chat.js">web/chat/chat.js</file>
+        <file alias="vendor/marked.min.js">web/chat/vendor/marked.min.js</file>
+        <file alias="vendor/purify.min.js">web/chat/vendor/purify.min.js</file>
+    </qresource>
     <!-- Qt Quick Controls 2 style config must be at root prefix -->
     <qresource prefix="/">
         <file alias="qtquickcontrols2.conf">qtquickcontrols2.conf</file>
