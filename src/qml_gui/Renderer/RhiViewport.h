@@ -100,6 +100,13 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QVariantList assembleRotations READ assembleRotations WRITE setAssembleRotations)
   Q_PROPERTY(QVariantList assembleScales READ assembleScales WRITE setAssembleScales)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
+  // P15.11 (MULTICENTER): ALL selected source object indices (upstream
+  // Selection::get_bounding_box() unions every selected volume's bounds). The
+  // renderer unions the AABBs of every listed index for the gizmo pivot, the
+  // white selection-center sphere, and the corner-tick highlight box. The
+  // single-index property above is kept for back-compat (picking still writes
+  // it); the setter calls update() like its single-index twin.
+  Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices WRITE setSelectedSourceObjectIndices)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
   // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
   // Assembly measurement overlay annotates (volume A and volume B). Default -1
@@ -400,6 +407,9 @@ public:
   void setAssembleScales(const QVariantList &value);
   int selectedSourceObjectIndex() const { return m_selectedSourceObjectIndex; }
   void setSelectedSourceObjectIndex(int value);
+  // P15.11 (MULTICENTER): full multi-selection list (see the Q_PROPERTY above).
+  QVariantList selectedSourceObjectIndices() const { return m_selectedSourceObjectIndices; }
+  void setSelectedSourceObjectIndices(const QVariantList &value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
   void setHoveredSourceObjectIndex(int value);
   // Phase 92 (ASMMEASURE-02): Assembly measurement overlay selection indices.
@@ -841,6 +851,8 @@ private:
   QVariantList m_assembleRotations;
   QVariantList m_assembleScales;
   int m_selectedSourceObjectIndex = -1;
+  // P15.11 (MULTICENTER): all selected source object indices (see the Q_PROPERTY).
+  QVariantList m_selectedSourceObjectIndices;
   int m_hoveredSourceObjectIndex = -1;
   // Phase 92 (ASMMEASURE-02): the two volumes the overlay annotates. -1 = not set.
   int m_assemblyMeasureSelectedA = -1;

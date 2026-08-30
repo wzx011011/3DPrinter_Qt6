@@ -336,6 +336,16 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   }
   const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
+  // P15.11 (MULTICENTER): mirror the full multi-selection so the renderer's
+  // union paths (gizmo pivot, selection-center sphere, corner-tick highlight)
+  // cover every selected object (upstream Selection::get_bounding_box()).
+  {
+    QList<int> selectedIndices;
+    selectedIndices.reserve(viewport->m_selectedSourceObjectIndices.size());
+    for (const QVariant &entry : viewport->m_selectedSourceObjectIndices)
+      selectedIndices.append(entry.toInt());
+    m_prepareScene.setSelectedSourceObjectIndices(selectedIndices);
+  }
   m_prepareScene.setHoveredSourceObjectIndex(viewport->m_hoveredSourceObjectIndex);
   // P15.4 (SELBOX): mirror the gizmo-drag flag. Upstream skips the selection
   // outline while a gizmo runs (if (!m_gizmos.is_running()),
@@ -3828,15 +3838,18 @@ QVector<RhiViewportRenderer::Vertex> RhiViewportRenderer::buildHighlightVertices
   QVector<Vertex> vertices;
   if (m_gizmoDragging)
     return vertices;
-  const int selectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
-  if (selectedSourceObjectIndex < 0)
+  // P15.11 (MULTICENTER): the white corner-tick box wraps the union AABB of
+  // ALL selected objects (upstream Selection::render_bounding_box draws the
+  // box of the whole multi-selection, Selection.cpp:2567).
+  const QList<int> selectedIndices = effectiveSelectedSourceIndices();
+  if (selectedIndices.isEmpty())
     return vertices;
 
-  // Cumulative bounds of every batch of the selected object.
+  // Cumulative bounds of every batch of every selected object.
   PrepareSceneData::ModelBounds box;
   bool hasBox = false;
   for (const PrepareSceneData::ModelBatch &batch : m_prepareScene.modelBatches()) {
-    if (batch.sourceObjectIndex != selectedSourceObjectIndex || batch.vertexCount <= 0)
+    if (!selectedIndices.contains(batch.sourceObjectIndex) || batch.vertexCount <= 0)
       continue;
     if (!hasBox) {
       box = batch.bounds;
@@ -3910,10 +3923,24 @@ QShader RhiViewportRenderer::loadShader(const QString &path) const
 // Phase 67: Gizmo center computation (delegates to the free function so it
 // can be unit-tested without linking the full renderer).
 // ===========================================================================
+QList<int> RhiViewportRenderer::effectiveSelectedSourceIndices() const
+{
+  // P15.11 (MULTICENTER): prefer the mirrored multi-selection list; fall back
+  // to the back-compat single index when only that legacy property is bound
+  // (e.g. the Assemble canvas).
+  QList<int> indices = m_prepareScene.selectedSourceObjectIndices();
+  if (indices.isEmpty() && m_prepareScene.selectedSourceObjectIndex() >= 0)
+    indices.append(m_prepareScene.selectedSourceObjectIndex());
+  return indices;
+}
+
 QVector3D RhiViewportRenderer::computeGizmoCenter() const
 {
-  return GizmoCenter::fromSelectedBatch(
-      m_prepareScene.selectedSourceObjectIndex(),
+  // P15.11 (MULTICENTER): union AABB center of ALL selected objects (upstream
+  // Selection::get_bounding_box().center()) -- the gizmo pivot and the white
+  // selection-center sphere both anchor here.
+  return GizmoCenter::fromSelectedIndices(
+      effectiveSelectedSourceIndices(),
       m_prepareScene.modelBatches());
 }
 
@@ -4085,9 +4112,11 @@ bool RhiViewportRenderer::ensureGizmoPipeline()
 
 void RhiViewportRenderer::renderSelectionCenter(QRhiCommandBuffer *cb)
 {
+  // P15.11 (MULTICENTER): draw whenever ANY object is selected (the union
+  // multi-selection included), not only when the primary index is set.
   if (cb == nullptr || m_gizmoVertexBuffer == nullptr
       || m_selectionCenterVertexCount == 0
-      || m_prepareScene.selectedSourceObjectIndex() < 0)
+      || effectiveSelectedSourceIndices().isEmpty())
     return;
   if (!ensureGizmoPipeline())
     return;
@@ -4123,9 +4152,10 @@ void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)
 {
   if (cb == nullptr || m_gizmoVertexBuffer == nullptr)
     return;
-  // Only draw when move mode is active AND something is selected.
+  // Only draw when move mode is active AND something is selected
+  // (P15.11 MULTICENTER: multi-selection included).
   if (m_gizmoMode != 0 /*GizmoMove*/ ||
-      m_prepareScene.selectedSourceObjectIndex() < 0)
+      effectiveSelectedSourceIndices().isEmpty())
     return;
   if (!ensureGizmoPipeline())
     return;
@@ -4156,7 +4186,7 @@ void RhiViewportRenderer::renderRotateGizmo(QRhiCommandBuffer *cb)
   if (cb == nullptr || m_gizmoVertexBuffer == nullptr)
     return;
   if (m_gizmoMode != 1 /*GizmoRotate*/ ||
-      m_prepareScene.selectedSourceObjectIndex() < 0)
+      effectiveSelectedSourceIndices().isEmpty())
     return;
   if (!ensureGizmoPipeline())
     return;
@@ -4177,7 +4207,7 @@ void RhiViewportRenderer::renderScaleGizmo(QRhiCommandBuffer *cb)
   if (cb == nullptr || m_gizmoVertexBuffer == nullptr)
     return;
   if (m_gizmoMode != 2 /*GizmoScale*/ ||
-      m_prepareScene.selectedSourceObjectIndex() < 0)
+      effectiveSelectedSourceIndices().isEmpty())
     return;
   if (!ensureGizmoPipeline())
     return;

@@ -156,6 +156,11 @@ public:
                      activeSourceObjectIndices);
   }
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
+  // P15.11 (MULTICENTER): ALL selected source object indices (upstream
+  // Selection::get_bounding_box() unions every selected volume's bounds).
+  // Consumers: the gizmo pivot, the white selection-center sphere, and the
+  // white corner-tick highlight box all union across this list.
+  void setSelectedSourceObjectIndices(const QList<int> &sourceObjectIndices);
   void setHoveredSourceObjectIndex(int sourceObjectIndex);
   // v5.16 (EXCLAREA): bed_exclude_area FLAT point stream [x1,y1,x2,y2,...]
   // (upstream coPoints; init_exclude_bounding_box groups every 4 points into
@@ -218,6 +223,8 @@ public:
   const ModelBounds &modelBounds() const;
   bool hasModelBounds() const;
   int selectedSourceObjectIndex() const;
+  // P15.11 (MULTICENTER): full multi-selection index list (sorted).
+  const QList<int> &selectedSourceObjectIndices() const;
   int hoveredSourceObjectIndex() const;
   bool containsCurrentPlatePoint(float x, float z) const;
   // P15.3 (OUTOFBED): print volume uniforms for the current plate
@@ -301,6 +308,8 @@ private:
   ModelBounds m_modelBounds;
   bool m_hasModelBounds = false;
   int m_selectedSourceObjectIndex = -1;
+  // P15.11 (MULTICENTER): every selected source object (sorted ascending).
+  QList<int> m_selectedSourceObjectIndices;
   int m_hoveredSourceObjectIndex = -1;
   quint32 m_dirtyFlags = DirtyNone;
   // P15.3 (OUTOFBED): print volume + per-instance outside state.

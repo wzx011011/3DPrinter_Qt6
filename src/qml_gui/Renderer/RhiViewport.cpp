@@ -489,6 +489,17 @@ void RhiViewport::setSelectedSourceObjectIndex(int value)
   update();
 }
 
+// P15.11 (MULTICENTER): full multi-selection setter. update() triggers
+// synchronize() so the renderer re-unions the selection AABBs (gizmo pivot,
+// selection-center sphere, corner-tick highlight) on the next frame.
+void RhiViewport::setSelectedSourceObjectIndices(const QVariantList &value)
+{
+  if (m_selectedSourceObjectIndices == value)
+    return;
+  m_selectedSourceObjectIndices = value;
+  update();
+}
+
 void RhiViewport::setHoveredSourceObjectIndex(int value)
 {
   if (m_hoveredSourceObjectIndex == value)
@@ -1412,9 +1423,11 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   }
 
   // Phase 69/70: active gizmo hit tests take priority over object picking.
+  // P15.11 (MULTICENTER): a non-empty multi-selection list also hosts the
+  // gizmo (the drawn gizmo sits at the union center in that case).
   if (event->button() == Qt::LeftButton &&
       (m_gizmoMode == GizmoMove || m_gizmoMode == GizmoRotate || m_gizmoMode == GizmoScale) &&
-      m_selectedSourceObjectIndex >= 0)
+      (m_selectedSourceObjectIndex >= 0 || !m_selectedSourceObjectIndices.isEmpty()))
   {
     const int axis = pickGizmoAxisAt(event->position());
     if (axis != 0)
@@ -2040,14 +2053,23 @@ ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
 // ===========================================================================
 QVector3D RhiViewport::currentGizmoCenter() const
 {
+  // P15.11 (MULTICENTER): pivot on the union AABB of ALL selected objects
+  // (upstream Selection::get_bounding_box().center()), matching the center the
+  // renderer draws the gizmo at. Falls back to the back-compat single index
+  // when only that legacy property was written.
+  QList<int> indices;
+  indices.reserve(m_selectedSourceObjectIndices.size());
+  for (const QVariant &entry : m_selectedSourceObjectIndices)
+    indices.append(entry.toInt());
+  if (indices.isEmpty() && m_selectedSourceObjectIndex >= 0)
+    indices.append(m_selectedSourceObjectIndex);
   // Reuse the extracted Phase 67 helper against the pick-scene batches.
-  return GizmoCenter::fromSelectedBatch(m_selectedSourceObjectIndex,
-                                        m_pickScene.modelBatches());
+  return GizmoCenter::fromSelectedIndices(indices, m_pickScene.modelBatches());
 }
 
 int RhiViewport::pickGizmoAxisAt(const QPointF &position)
 {
-  if (m_selectedSourceObjectIndex < 0)
+  if (m_selectedSourceObjectIndex < 0 && m_selectedSourceObjectIndices.isEmpty())
     return 0;
   updatePickingScene();
   const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};

@@ -5510,6 +5510,22 @@ int EditorViewModel::selectedSourceObjectIndex() const
   return m_primarySelectedSourceIndex;
 }
 
+// P15.11 (MULTICENTER): full multi-selection list for the renderer's union
+// bounds (upstream Selection::get_bounding_box covers every selected volume,
+// Selection.cpp). Volume selections keep their parent source index in
+// m_selectedSourceIndices, so this one list covers both selection kinds.
+// Sorted ascending so QML/RHI consumers see a stable order.
+QVariantList EditorViewModel::selectedSourceObjectIndices() const
+{
+  QList<int> indices = m_selectedSourceIndices.values();
+  std::sort(indices.begin(), indices.end());
+  QVariantList result;
+  result.reserve(indices.size());
+  for (int index : indices)
+    result.append(index);
+  return result;
+}
+
 int EditorViewModel::selectedObjectCount() const { return m_selectedSourceIndices.size(); }
 
 QVariant EditorViewModel::rotationCenter() const

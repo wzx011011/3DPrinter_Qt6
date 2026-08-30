@@ -60,6 +60,12 @@ private slots:
   void rhiRotateScaleGizmoBridgeStaysCppOwned();
   void rhiGizmosRenderAsDepthIndependentOverlay();
   void rhiSelectionCenterMatchesUpstreamMarkerContract();
+  // P15.11 (MULTICENTER): multi-select aggregate center property chain --
+  // EditorViewModel list property -> PreparePage binding -> RhiViewport
+  // property -> PrepareSceneData mirror -> renderer union paths (gizmo pivot,
+  // selection-center sphere, corner-tick highlight), matching upstream
+  // Selection::get_bounding_box().center().
+  void rhiMultiSelectUnionCenterPropertyChain();
   void sequentialClearanceUsesEnginePayloadAndDedicatedBuffers();
   // P15.11: live drag-time clearance preview (upstream
   // GLCanvas3D::update_sequential_clearance) -- drag hooks, debounced async
@@ -2458,7 +2464,9 @@ void QmlUiAuditTests::rhiSelectionCenterMatchesUpstreamMarkerContract()
   QVERIFY2(centerStart >= 0 && moveStart > centerStart,
            "P15.11: renderSelectionCenter must be defined before gizmo rendering");
   const QString centerBlock = rendererSource.mid(centerStart, moveStart - centerStart);
-  QVERIFY2(centerBlock.contains(QStringLiteral("m_prepareScene.selectedSourceObjectIndex() < 0"))
+  // P15.11 (MULTICENTER): the gate keys on the effective selection set (the
+  // multi-selection list included), not only the primary index.
+  QVERIFY2(centerBlock.contains(QStringLiteral("effectiveSelectedSourceIndices().isEmpty()"))
                && centerBlock.contains(QStringLiteral("m_gizmoTriPipeline.get()"))
                && centerBlock.contains(QStringLiteral("m_selectionCenterVertexBase")),
            "P15.11: marker must require a selection and use the depth-independent gizmo triangle pipeline");
@@ -2505,6 +2513,90 @@ void QmlUiAuditTests::rhiSelectionCenterMatchesUpstreamMarkerContract()
                && rendererSource.contains(QStringLiteral("fromAxisAndAngle"))
                && rendererSource.contains(QStringLiteral("hintSceneRotation")),
            "P15.11: renderer must mirror the hint rotation and premultiply it into the hint vertices");
+}
+
+// P15.11 (MULTICENTER): the gizmo pivot and the white selection-center sphere
+// must anchor on the union AABB of ALL selected objects (upstream
+// Selection::get_bounding_box().center()), not just the primary selection.
+// Locks the full pass-through chain: EditorViewModel list property -> QML
+// binding -> RhiViewport property -> PrepareSceneData list mirror ->
+// renderer union paths (GizmoCenter::fromSelectedIndices + highlight union +
+// selection-list draw gates).
+void QmlUiAuditTests::rhiMultiSelectUnionCenterPropertyChain()
+{
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // (a) VM: sorted QVariantList of every selected source object index.
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList selectedSourceObjectIndices")),
+           "P15.11: EditorViewModel must expose the full selected index list property");
+  QVERIFY2(editorSource.contains(QStringLiteral("QVariantList EditorViewModel::selectedSourceObjectIndices() const"))
+               && editorSource.contains(QStringLiteral("m_selectedSourceIndices.values()")),
+           "P15.11: EditorViewModel must derive the list from the full selection set");
+
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  // (b) QML: the viewport property binds the VM list (unqualified binding
+  // inside the viewport item property block, cf. hintLocalRotation).
+  QVERIFY2(preparePage.contains(QStringLiteral("selectedSourceObjectIndices:"))
+               && preparePage.contains(QStringLiteral("editorVm.selectedSourceObjectIndices")),
+           "P15.11: PreparePage must bind the viewport selection list to the viewmodel");
+
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  // (c) Viewport: QVariantList property + single-index back-compat kept.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList selectedSourceObjectIndices"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(int selectedSourceObjectIndex")),
+           "P15.11: RhiViewport must expose the selection list next to the back-compat single index");
+  QVERIFY2(viewportSource.contains(QStringLiteral("void RhiViewport::setSelectedSourceObjectIndices")),
+           "P15.11: RhiViewport must implement the selection list setter");
+  // Item-side gizmo hit testing pivots on the same union center the renderer draws.
+  QVERIFY2(viewportSource.contains(QStringLiteral("GizmoCenter::fromSelectedIndices")),
+           "P15.11: RhiViewport gizmo picking must reuse the multi-select union center");
+
+  const QString sceneHeader = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
+  const QString sceneSource = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
+  QVERIFY2(!sceneHeader.isEmpty(), "Unable to read PrepareSceneData.h");
+  QVERIFY2(!sceneSource.isEmpty(), "Unable to read PrepareSceneData.cpp");
+  // (d) Scene data: list setter + accessor alongside the single-index pair.
+  QVERIFY2(sceneHeader.contains(QStringLiteral("setSelectedSourceObjectIndices"))
+               && sceneHeader.contains(QStringLiteral("selectedSourceObjectIndices() const")),
+           "P15.11: PrepareSceneData must carry the multi-selection list");
+  QVERIFY2(sceneSource.contains(QStringLiteral("void PrepareSceneData::setSelectedSourceObjectIndices")),
+           "P15.11: PrepareSceneData must implement the multi-selection mirror");
+
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  // (e) Renderer: synchronize mirrors the list; the gizmo center unions every
+  // listed index via the shared GizmoCenter helper.
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_prepareScene.setSelectedSourceObjectIndices(")),
+           "P15.11: renderer synchronize must mirror the selection list into the scene data");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("effectiveSelectedSourceIndices"))
+               && rendererSource.contains(QStringLiteral("GizmoCenter::fromSelectedIndices(")),
+           "P15.11: renderer gizmo center must union ALL selected indices");
+  QVERIFY2(rendererSource.contains(QStringLiteral("selectedIndices.contains(batch.sourceObjectIndex)")),
+           "P15.11: the corner-tick highlight box must wrap the whole multi-selection");
+  // The selection-center draw gate keys on the selection list (non-empty),
+  // not the single primary index.
+  const int centerStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::renderSelectionCenter"));
+  const int hintsStart = rendererSource.indexOf(QStringLiteral("\nvoid RhiViewportRenderer::renderSidebarHints"), centerStart);
+  QVERIFY2(centerStart >= 0 && hintsStart > centerStart,
+           "P15.11: renderSelectionCenter must stay discoverable for the multi-select audit");
+  const QString centerBlock = rendererSource.mid(centerStart, hintsStart - centerStart);
+  QVERIFY2(centerBlock.contains(QStringLiteral("effectiveSelectedSourceIndices().isEmpty()")),
+           "P15.11: selection-center sphere must draw whenever ANY object is selected");
+
+  // The single-index union helper stays for the tests / picking callers.
+  const QString gizmoCenterHeader = readSource(QStringLiteral("src/core/rendering/GizmoCenter.h"));
+  QVERIFY2(gizmoCenterHeader.contains(QStringLiteral("fromSelectedIndices"))
+               && gizmoCenterHeader.contains(QStringLiteral("fromSelectedBatch")),
+           "P15.11: GizmoCenter must keep the single-index overload delegating to the list union");
 }
 
 void QmlUiAuditTests::sequentialClearanceUsesEnginePayloadAndDedicatedBuffers()

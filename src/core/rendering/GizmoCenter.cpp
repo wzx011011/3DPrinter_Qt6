@@ -4,17 +4,17 @@
 
 namespace GizmoCenter
 {
-QVector3D fromSelectedBatch(int selectedSourceObjectIndex,
-                            const QList<PrepareSceneData::ModelBatch> &batches)
+QVector3D fromSelectedIndices(const QList<int> &selectedSourceObjectIndices,
+                              const QList<PrepareSceneData::ModelBatch> &batches)
 {
-  if (selectedSourceObjectIndex < 0)
+  if (selectedSourceObjectIndices.isEmpty())
     return {}; // no selection - gizmo sits at origin
 
   PrepareSceneData::ModelBounds bounds;
   bool found = false;
   for (const auto &b : batches)
   {
-    if (b.sourceObjectIndex != selectedSourceObjectIndex)
+    if (!selectedSourceObjectIndices.contains(b.sourceObjectIndex))
       continue;
 
     if (!found)
@@ -25,7 +25,8 @@ QVector3D fromSelectedBatch(int selectedSourceObjectIndex,
     }
 
     // Selection::get_bounding_box() merges all selected volume bounds before
-    // taking the center, so do the same for every render batch of this object.
+    // taking the center, so do the same for every render batch of every
+    // selected object.
     bounds.minX = std::min(bounds.minX, b.bounds.minX);
     bounds.minY = std::min(bounds.minY, b.bounds.minY);
     bounds.minZ = std::min(bounds.minZ, b.bounds.minZ);
@@ -35,12 +36,20 @@ QVector3D fromSelectedBatch(int selectedSourceObjectIndex,
   }
 
   if (!found)
-    return {}; // selected index not in current batches (stale selection)
+    return {}; // none of the selected indices is in current batches (stale selection)
 
   // Midpoint of the unioned world-space AABB, matching Selection::get_bounding_box().center().
   return QVector3D(
       (bounds.minX + bounds.maxX) * 0.5f,
       (bounds.minY + bounds.maxY) * 0.5f,
       (bounds.minZ + bounds.maxZ) * 0.5f);
+}
+
+QVector3D fromSelectedBatch(int selectedSourceObjectIndex,
+                            const QList<PrepareSceneData::ModelBatch> &batches)
+{
+  if (selectedSourceObjectIndex < 0)
+    return {}; // no selection - gizmo sits at origin
+  return fromSelectedIndices(QList<int>{selectedSourceObjectIndex}, batches);
 }
 } // namespace GizmoCenter

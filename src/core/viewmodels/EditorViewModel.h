@@ -113,6 +113,11 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int pendingObjObjectIndex READ pendingObjObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY stateChanged)
+  // P15.11 (MULTICENTER): sorted list of ALL selected source object indices
+  // (upstream Selection::get_bounding_box() unions every selected volume's
+  // bounds). The gizmo pivot and the white selection-center sphere sit at the
+  // center of this union AABB, not the primary selection's.
+  Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY stateChanged)
   // Upstream GLCanvas3D.cpp:4309-4327: the constrained camera orbit pivots
   // on the selection bbox center, else the whole-model bbox center (GL world
@@ -667,6 +672,10 @@ public:
   int pendingObjObjectIndex() const { return m_pendingObjObjectIndex; }
   int selectedObjectIndex() const;
   int selectedSourceObjectIndex() const;
+  /// P15.11 (MULTICENTER): getter backing the selectedSourceObjectIndices
+  /// Q_PROPERTY. Sorted ascending so the renderer's union AABB is order-stable
+  /// across QML round-trips; empty when nothing is selected.
+  QVariantList selectedSourceObjectIndices() const;
   int selectedObjectCount() const;
   QVariant rotationCenter() const;
   /// Phase 198 (PHASE198): getter backing the selectedVolumeIndex Q_PROPERTY.

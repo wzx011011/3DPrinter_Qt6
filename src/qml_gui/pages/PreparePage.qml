@@ -1650,6 +1650,10 @@ Item {
                     meshBatchExtruderIds: root.editorVm ? root.editorVm.meshBatchExtruderIds : []
                     meshBatchPrintableFlags: root.editorVm ? root.editorVm.meshBatchPrintableFlags : []
                     selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
+                    // P15.11 (MULTICENTER): the gizmo pivot + white selection-center
+                    // sphere + corner-tick highlight box anchor on the union AABB of
+                    // ALL selected objects (upstream Selection::get_bounding_box()).
+                    selectedSourceObjectIndices: root.editorVm ? root.editorVm.selectedSourceObjectIndices : []
                     onObjectPickedSource: function(sourceIndex) {
                         if (root.editorVm)
                             root.editorVm.selectSourceObject(sourceIndex)

@@ -430,6 +430,18 @@ void PrepareSceneData::setSelectedSourceObjectIndex(int sourceObjectIndex)
   markDirty(DirtySelection);
 }
 
+// P15.11 (MULTICENTER): mirror the full multi-selection (upstream
+// Selection::get_bounding_box unions every selected volume). A change marks
+// DirtySelection so the highlight + gizmo paths rebuild on the next frame.
+void PrepareSceneData::setSelectedSourceObjectIndices(const QList<int> &sourceObjectIndices)
+{
+  if (sameObjectIndices(m_selectedSourceObjectIndices, sourceObjectIndices))
+    return;
+
+  m_selectedSourceObjectIndices = sourceObjectIndices;
+  markDirty(DirtySelection);
+}
+
 void PrepareSceneData::setHoveredSourceObjectIndex(int sourceObjectIndex)
 {
   if (m_hoveredSourceObjectIndex == sourceObjectIndex)
@@ -595,6 +607,11 @@ bool PrepareSceneData::hasModelBounds() const
 int PrepareSceneData::selectedSourceObjectIndex() const
 {
   return m_selectedSourceObjectIndex;
+}
+
+const QList<int> &PrepareSceneData::selectedSourceObjectIndices() const
+{
+  return m_selectedSourceObjectIndices;
 }
 
 int PrepareSceneData::hoveredSourceObjectIndex() const

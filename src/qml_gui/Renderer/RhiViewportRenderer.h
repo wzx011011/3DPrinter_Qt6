@@ -193,6 +193,12 @@ private:
   void deliverCompletedThumbnail();
   // Phase 67: instance helper forwarding to the static testable one.
   QVector3D computeGizmoCenter() const;
+  // P15.11 (MULTICENTER): the effective selection set -- every mirrored
+  // selected source object index, or the back-compat single index when only
+  // that legacy property is bound (e.g. the Assemble canvas). Consumers:
+  // computeGizmoCenter, buildHighlightVertices, and the transform-gizmo /
+  // selection-center draw gates.
+  QList<int> effectiveSelectedSourceIndices() const;
 
   std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
   std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
@@ -508,9 +514,10 @@ private:
   // ── Phase 67: Gizmo state read from RhiViewport in synchronize() ──
   // The viewport item owns gizmoMode/cutAxis/cutPosition as Q_PROPERTY values;
   // the renderer mirrors them here so render() (Phase 68+) can branch on them.
-  // gizmoCenter is computed from the selected object's union AABB midpoint via
-  // GizmoCenter::fromSelectedBatch (src/core/rendering/GizmoCenter.h), which is
-  // unit-tested independently.
+  // gizmoCenter is computed from the selection's union AABB midpoint via
+  // GizmoCenter::fromSelectedIndices (src/core/rendering/GizmoCenter.h) over
+  // every selected source object (P15.11 MULTICENTER), unit-tested
+  // independently.
   int m_gizmoMode = 0;          // RhiViewport::GizmoMode (0=Move, 1=Rotate, 2=Scale, 5=Cut, ...)
   int m_cutAxis = 2;            // 0=X, 1=Y, 2=Z (default Z)
   float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
@@ -520,7 +527,7 @@ private:
   float m_cutRotationX = 0.f;
   float m_cutRotationY = 0.f;
   float m_cutRotationZ = 0.f;
-  QVector3D m_gizmoCenter;      // midpoint of selected source object's union AABB; origin if no selection
+  QVector3D m_gizmoCenter;      // midpoint of ALL selected objects' union AABB; origin if no selection
   QVector3D m_cameraEye;        // Phase 68: camera position for gizmoScale computation
   bool m_cutPlaneDirty = true;
   bool m_showWipeTower = false;
