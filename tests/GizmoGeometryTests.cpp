@@ -194,7 +194,7 @@ void GizmoGeometryTests::testMoveGizmoOffsets()
 
 void GizmoGeometryTests::testRotateGizmoVertexCount()
 {
-  const QFile geometrySource(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(
+  QFile geometrySource(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(
       QStringLiteral("src/core/rendering/GizmoGeometry.cpp")));
   QVERIFY2(geometrySource.open(QIODevice::ReadOnly | QIODevice::Text),
            "Unable to read GizmoGeometry.cpp");
@@ -354,6 +354,8 @@ void GizmoGeometryTests::testSidebarPositionHintsUseWorldAxes()
 
 void GizmoGeometryTests::testSidebarScaleHintsUseWorldAxes()
 {
+  // scale_x = forward arrow on +X at [5,6] plus the upstream reverse arrow
+  // T(-5Y)*Rz(PI), which lands on [4,5] pointing back at the center.
   const auto verts = GizmoGeometry::buildSidebarHintVertices(QStringLiteral("scale_x"), false);
   QCOMPARE(verts.size(), 72);
   float minX = FLT_MAX;
@@ -363,23 +365,40 @@ void GizmoGeometryTests::testSidebarScaleHintsUseWorldAxes()
     minX = std::min(minX, v.x);
     maxX = std::max(maxX, v.x);
   }
-  QVERIFY2(minX > 4.9f && maxX > 5.7f,
-           "scale_x hints must be translated along world X after orientation");
+  // scale_x = opposed arrow pair bracketing the center: the upstream
+  // T(+5Y) forward arrow lands on [5,6] and the T(-5Y)*Rz(PI) reverse
+  // arrow lands on [-6,-5] (Rz flips the shifted arrow to the far side).
+  QVERIFY2(minX > -6.1f && minX < -5.9f,
+           "scale_x reverse arrow must reach the -5 offset");
+  QVERIFY2(maxX > 5.9f && maxX < 6.1f,
+           "scale_x forward arrow must reach the +5 offset plus cone tip");
 }
 
 void GizmoGeometryTests::testSidebarRotationHintsUseWorldPlanes()
 {
+  // rotation_x curved arrows rotate AROUND X, i.e. they lie in the YZ plane:
+  // the X extent is only the ring tube thickness, while Y/Z span the ring.
   const auto verts = GizmoGeometry::buildSidebarHintVertices(QStringLiteral("rotation_x"));
   QCOMPARE(verts.size(), 3456);
   float minX = FLT_MAX;
   float maxX = -FLT_MAX;
+  float minY = FLT_MAX;
+  float maxY = -FLT_MAX;
+  float minZ = FLT_MAX;
+  float maxZ = -FLT_MAX;
   for (const auto &v : verts)
   {
     minX = std::min(minX, v.x);
     maxX = std::max(maxX, v.x);
+    minY = std::min(minY, v.y);
+    maxY = std::max(maxY, v.y);
+    minZ = std::min(minZ, v.z);
+    maxZ = std::max(maxZ, v.z);
   }
-  QVERIFY2(minX < -0.72f && maxX > 0.72f,
-           "rotation_x hint must occupy the YZ plane after one orientation rotation");
+  QVERIFY2(minX > -0.1f && maxX < 0.1f,
+           "rotation_x hint must stay thin along its rotation axis X");
+  QVERIFY2(maxY - minY > 1.3f && maxZ - minZ > 1.3f,
+           "rotation_x hint ring must span the Y and Z plane axes");
 }
 
 // ===========================================================================

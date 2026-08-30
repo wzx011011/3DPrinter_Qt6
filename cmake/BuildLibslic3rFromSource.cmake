@@ -791,8 +791,14 @@ if(MSVC)
     # symbol) are UTF-8 without BOM; without /utf-8 MSVC on a non-English locale
     # (e.g. codepage 936) misinterprets multibyte sequences and fails with C2001.
     target_compile_options(libslic3r_from_source PRIVATE /utf-8)
+    # NO propagated /DEBUG here. An earlier /DEBUG in this PUBLIC list made
+    # EVERY consumer (8+ test executables, owzx-cli) emit a ~1 GB full PDB at
+    # link, ~8 GB per verify run — on the E: drive this repeatedly exhausted
+    # disk and killed ninja mid-build. The main exe keeps its own
+    # /Zi + /DEBUG:FULL (CMakeLists.txt), whose PDB still merges the /Zi
+    # objects of libslic3r, so crash diagnosis is unaffected. Tests do not
+    # need PDBs (QtTest assertions, no crash-dump symbolication).
     target_link_options(libslic3r_from_source PUBLIC
-        /DEBUG
         /NODEFAULTLIB:LIBCMT
         /NODEFAULTLIB:libcpmt
         ${_delayload_libs}
