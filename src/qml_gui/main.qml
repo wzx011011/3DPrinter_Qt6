@@ -874,7 +874,6 @@ ApplicationWindow {
             z: 50
 
             sourceComponent: ChatSidebar {
-                bridge: backend ? backend.aiChatBridge : null
                 onClosed: root.aiChatOpen = false
             }
         }

@@ -391,8 +391,12 @@ if(OWZX_QML_GUI)
     endif()
     # Qt AUTOMOC needs compile definitions and include paths from Qt modules.
     # libslic3r PUBLIC linkage propagates generated-header dirs (libslic3r_version.h).
+    # QWebChannel: BackendContext owns the chat page's channel (typed
+    # QWebChannel* property for WebEngineView.webChannel). Qt6WebEngineQuick
+    # itself stays out of the link — loaded via QLibrary + QML plugin.
     target_link_libraries(owzx_app_core PUBLIC
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::GuiPrivate Qt6::Svg
+        Qt6::WebChannel
     )
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(owzx_app_core PUBLIC libslic3r)

@@ -253,22 +253,14 @@
   }
 
   if (typeof qt !== "undefined" && qt.webChannelTransport) {
-    try {
-      new QWebChannel(qt.webChannelTransport, function (channel) {
-        const keys = Object.keys(channel.objects).join(",");
-        if (channel.objects.bridge) connect(channel.objects.bridge);
-        else setState({ enabled: true, installed: true });
-        input.placeholder = "DIAG objects=[" + keys + "]";
-      });
-    } catch (e) {
-      setState({ enabled: true, installed: true });
-      input.placeholder = "DIAG exception: " + e;
-    }
+    new QWebChannel(qt.webChannelTransport, function (channel) {
+      if (channel.objects.bridge) connect(channel.objects.bridge);
+      else setState({ enabled: true, installed: true });
+    });
   } else {
+    // Standalone browser preview (no bridge): still show the empty state.
     setState({ enabled: true, installed: true });
-    input.placeholder = "DIAG qt=" + (typeof qt) + " transport=" +
-      (typeof qt !== "undefined" ? typeof qt.webChannelTransport : "n/a") +
-      " QWebChannel=" + (typeof QWebChannel);
+    updateEmptyState();
   }
 
   // ── input handling ───────────────────────────────────────────────────────

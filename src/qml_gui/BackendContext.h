@@ -4,6 +4,7 @@
 #include <QColor>
 #include <QTranslator>
 #include <QElapsedTimer>
+#include <QWebChannel>
 class QNetworkAccessManager;
 #include <QHash>
 #include <QVariant>
@@ -315,6 +316,13 @@ public:
   // AI 助手（OWzx-only，docs/ai-control.md）
   QObject *aiViewModel() const;
   QObject *aiChatBridge() const;
+  // Chat panel wiring: QML hands over its QQmlWebChannel element (the only
+  // channel type WebEngineView.webChannel accepts); the bridge is then
+  // registered through the public QWebChannel base API. QML-side
+  // registeredObjects cannot be used — in Qt 6 it requires the attached
+  // WebChannel.id property on the registered object, which a C++-owned
+  // bridge cannot declare.
+  Q_INVOKABLE void attachAiChatChannel(QObject *channel);
   bool aiControlActive() const { return aiControlActive_; }
   /// (Re)applies the AI preferences: starts/stops the loopback MCP server and
   /// the sidecar harness. Called from the constructor and on

@@ -41,6 +41,7 @@
 #include <QRandomGenerator>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QWebChannel>
 #include <QJsonObject>
 #include <QDesktopServices>
 #include <QHostInfo>
@@ -170,7 +171,8 @@ BackendContext::BackendContext(QObject *parent)
   aiAgentService_ = new AiAgentService(this);
   aiViewModel_ = new AiViewModel(aiAgentService_, this);
   // Web chat page bridge (QWebChannel) — the WebEngine chat panel talks to
-  // the same ViewModel/harness through this object.
+  // the same ViewModel/harness through this object. Registration happens in
+  // attachAiChatChannel() once QML hands over its channel element.
   aiChatBridge_ = new AiChatBridge(aiViewModel_, aiAgentService_, this);
   // Preferences drive start/stop; re-apply on every settings change so the
   // sidebar reacts immediately to enable/key/model/port edits.
@@ -382,6 +384,19 @@ QObject *BackendContext::sliceService() const { return sliceService_; }
 QObject *BackendContext::aiViewModel() const { return aiViewModel_; }
 
 QObject *BackendContext::aiChatBridge() const { return aiChatBridge_; }
+
+void BackendContext::attachAiChatChannel(QObject *channel) {
+  // channel is the QML WebChannel element (QQmlWebChannel) hosting the chat
+  // page's transport; QQmlWebChannel derives from QWebChannel, so the public
+  // base-API registration applies. The page resolves it as
+  // channel.objects.bridge right after its own load.
+  auto *webChannel = qobject_cast<QWebChannel *>(channel);
+  if (!webChannel) {
+    qWarning("[Backend] attachAiChatChannel: not a QWebChannel instance");
+    return;
+  }
+  webChannel->registerObject(QStringLiteral("bridge"), aiChatBridge_);
+}
 
 void BackendContext::applyAiSettings()
 {
