@@ -129,6 +129,11 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
   Q_PROPERTY(QString sidebarField READ sidebarField WRITE setSidebarField NOTIFY sidebarFieldChanged)
   Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale NOTIFY uniformScaleChanged)
+  // P15.11 (SIDEBAR-LOCAL-AXES): local-axis orientation for the sidebar
+  // transform hint arrows (Selection.cpp:2661-2760 orient the arrow matrix by
+  // the selected object's rotation instead of the world axes). Bound from
+  // editorVm.selectedHintLocalRotation; {0, 0, 0} = world axes.
+  Q_PROPERTY(QVariantList hintLocalRotation READ hintLocalRotation WRITE setHintLocalRotation NOTIFY hintLocalRotationChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
   Q_PROPERTY(int gcodeViewMode READ gcodeViewMode WRITE setGcodeViewMode NOTIFY gcodeViewModeChanged)
   Q_PROPERTY(QVariantList roleVisibility READ roleVisibility WRITE setRoleVisibility NOTIFY roleVisibilityChanged)
@@ -434,6 +439,12 @@ public:
   void setSidebarField(const QString &value);
   bool uniformScale() const { return m_uniformScale; }
   void setUniformScale(bool value);
+  // P15.11 (SIDEBAR-LOCAL-AXES): selected object's local-axis rotation for
+  // the sidebar hint arrows, {rx, ry, rz} degrees in the slic3r frame (bound
+  // from editorVm.selectedHintLocalRotation). The renderer converts to the
+  // scene frame and premultiplies the hint vertices with it.
+  QVariantList hintLocalRotation() const { return m_hintLocalRotation; }
+  void setHintLocalRotation(const QVariantList &value);
 
   bool wireframeMode() const { return m_wireframeMode; }
   void setWireframeMode(bool value);
@@ -589,6 +600,7 @@ signals:
   void gizmoModeChanged();
   void sidebarFieldChanged();
   void uniformScaleChanged();
+  void hintLocalRotationChanged();
   void wireframeModeChanged();
   void gcodeViewModeChanged();
   void roleVisibilityChanged();
@@ -855,6 +867,8 @@ private:
   int m_gizmoMode = GizmoMove;
   QString m_sidebarField;
   bool m_uniformScale = true;
+  // P15.11 (SIDEBAR-LOCAL-AXES): {rx, ry, rz} degrees, slic3r frame.
+  QVariantList m_hintLocalRotation;
   bool m_wireframeMode = false;
   int m_gcodeViewMode = GCodeFeature;
   QVariantList m_roleVisibility;

@@ -2477,6 +2477,34 @@ void QmlUiAuditTests::rhiSelectionCenterMatchesUpstreamMarkerContract()
   QVERIFY2(preparePage.contains(QStringLiteral("onActiveFocusChanged"))
                && preparePage.contains(QStringLiteral("viewport3d.sidebarField")),
            "P15.11: transform field focus must bridge semantic sidebar state to the viewport");
+
+  // P15.11 (SIDEBAR-LOCAL-AXES): the hint arrows orient on the selected
+  // object's local axes (Selection.cpp:2003-2020). Lock the full pass-through
+  // chain: service rotation accessors -> EditorViewModel property -> QML
+  // viewport binding -> renderer mirror + premultiply at upload.
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList hintLocalRotation")),
+           "P15.11: viewport must expose the hint local-axis rotation property");
+  // The binding lives inside the viewport item's own property block, so the
+  // property name is unqualified there (the `viewport3d.` prefix only appears
+  // in out-of-block imperative assignments, cf. viewport3d.sidebarField).
+  QVERIFY2(preparePage.contains(QStringLiteral("hintLocalRotation:"))
+               && preparePage.contains(QStringLiteral("editorVm.selectedHintLocalRotation")),
+           "P15.11: PreparePage must bind the viewport hint rotation to the viewmodel");
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList selectedHintLocalRotation")),
+           "P15.11: EditorViewModel must expose the selected hint local rotation");
+  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  QVERIFY2(serviceHeader.contains(QStringLiteral("objectInstanceRotationDegrees"))
+               && serviceHeader.contains(QStringLiteral("objectVolumeRotationDegrees")),
+           "P15.11: service must expose the instance/volume rotation accessors");
+  QVERIFY2(editorSource.contains(QStringLiteral("objectInstanceRotationDegrees"))
+               || editorSource.contains(QStringLiteral("objectVolumeRotationDegrees")),
+           "P15.11: viewmodel must source hint rotation from the service accessors");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_hintLocalRotationDegrees"))
+               && rendererSource.contains(QStringLiteral("fromAxisAndAngle"))
+               && rendererSource.contains(QStringLiteral("hintSceneRotation")),
+           "P15.11: renderer must mirror the hint rotation and premultiply it into the hint vertices");
 }
 
 void QmlUiAuditTests::sequentialClearanceUsesEnginePayloadAndDedicatedBuffers()

@@ -5226,6 +5226,38 @@ int EditorViewModel::selectedVolumeIndex() const
   return m_selectedVolumeIndex;
 }
 
+// P15.11 (SIDEBAR-LOCAL-AXES): orientation source for the sidebar transform
+// hint arrows. Upstream builds the hint transform as bbox-center translation
+// times an orient matrix taken from the selected object's local axes
+// (Selection.cpp:2003-2020): instance rotation for a single full object,
+// instance * volume rotation for a single-volume / single-modifier
+// selection. {0, 0, 0} keeps the world-axis orientation when nothing (or a
+// multi-object selection) is active -- matches the manipulator fallback.
+QVariantList EditorViewModel::selectedHintLocalRotation() const
+{
+  QVector3D rotation(0, 0, 0);
+  if (!projectService_)
+    return {rotation.x(), rotation.y(), rotation.z()};
+  if (hasSelectedVolume() && m_selectedVolumeObjectSourceIndex >= 0)
+  {
+    const int volumeIndex = m_selectedVolumeIndex >= 0
+                                ? m_selectedVolumeIndex
+                                : (m_selectedVolumeIndices.isEmpty()
+                                       ? -1
+                                       : *m_selectedVolumeIndices.begin());
+    if (volumeIndex >= 0)
+      rotation = projectService_->objectVolumeRotationDegrees(
+          m_selectedVolumeObjectSourceIndex, volumeIndex);
+  }
+  else
+  {
+    const int objectIndex = primarySelectedSourceIndex(this);
+    if (objectIndex >= 0)
+      rotation = projectService_->objectInstanceRotationDegrees(objectIndex);
+  }
+  return {rotation.x(), rotation.y(), rotation.z()};
+}
+
 bool EditorViewModel::canOpenSelectionSettings() const
 {
   if (m_selectedVolumeObjectSourceIndex >= 0)

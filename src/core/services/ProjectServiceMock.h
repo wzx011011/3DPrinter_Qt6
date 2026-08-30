@@ -719,6 +719,18 @@ public:
   bool setObjectScale(int index, float x, float y, float z);
   bool setObjectScaleUniform(int index, float s);
 
+  // P15.11 (SIDEBAR-LOCAL-AXES): Euler XYZ degrees (slic3r frame, radians
+  // under the hood) backing the sidebar transform-hint orientation. Upstream
+  // orients the hint arrows on the selected object's local axes via the
+  // first selected volume's instance rotation matrix, composed with the
+  // volume rotation for a single-volume selection (Selection.cpp:2003-2020).
+  // Both accessors follow the objectRotation() convention: first instance,
+  // degrees out, no GL axis swap (the renderer owns the frame conversion).
+  QVector3D objectInstanceRotationDegrees(int objectIndex) const;
+  /// Combined instance * volume rotation for a selected volume; falls back
+  /// to the instance rotation when the volume index does not resolve.
+  QVector3D objectVolumeRotationDegrees(int objectIndex, int volumeIndex) const;
+
   // ASM-01 (Phase 138): per-instance assemble-transform accessors. In assembly
   // mode the Move/Rotate/Scale gizmos target ModelInstance::m_assemble_transformation
   // (upstream Model.hpp:1253-1298), NOT m_transformation. These mirror the ordinary

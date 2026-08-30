@@ -124,6 +124,12 @@ class EditorViewModel final : public QObject
   /// per-object settings / layer-range dialogs. Exposed so QML dialogs bound
   /// to `editorVm.selectedVolumeIndex` resolve (previously undefined).
   Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged)
+  /// P15.11 (SIDEBAR-LOCAL-AXES): orientation of the sidebar transform hint
+  /// arrows on the selected object's local axes (upstream Selection.cpp
+  /// orient_matrix: instance rotation, composed with the volume rotation for
+  /// a single-volume selection). {rx, ry, rz} Euler degrees in the slic3r
+  /// frame; {0, 0, 0} when there is no selection (world axes preserved).
+  Q_PROPERTY(QVariantList selectedHintLocalRotation READ selectedHintLocalRotation NOTIFY stateChanged)
   Q_PROPERTY(int contextMenuFamily READ contextMenuFamily NOTIFY stateChanged)
   Q_PROPERTY(int contextSourceObjectIndex READ contextSourceObjectIndex NOTIFY stateChanged)
   Q_PROPERTY(int contextVolumeIndex READ contextVolumeIndex NOTIFY stateChanged)
@@ -665,6 +671,11 @@ public:
   QVariant rotationCenter() const;
   /// Phase 198 (PHASE198): getter backing the selectedVolumeIndex Q_PROPERTY.
   int selectedVolumeIndex() const;
+  /// P15.11 (SIDEBAR-LOCAL-AXES): getter backing the selectedHintLocalRotation
+  /// Q_PROPERTY. Returns {rx, ry, rz} degrees (slic3r frame) for the primary
+  /// selection -- instance rotation, or instance * volume rotation when a
+  /// single volume is selected; {0, 0, 0} when nothing is selected.
+  QVariantList selectedHintLocalRotation() const;
   int contextMenuFamily() const;
   int contextSourceObjectIndex() const;
   int contextVolumeIndex() const;

@@ -385,6 +385,10 @@ private:
   float m_selectionCenterLastGizmoScale = -1.0f;
   QString m_sidebarField;
   bool m_uniformScale = true;
+  // P15.11 (SIDEBAR-LOCAL-AXES): selected object's local-axis rotation
+  // mirrored from RhiViewport::m_hintLocalRotation ({rx, ry, rz} degrees,
+  // slic3r frame). Premultiplied into the sidebar hint vertices at upload.
+  QVector3D m_hintLocalRotationDegrees{0.f, 0.f, 0.f};
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
   bool m_sceneBuffersUploaded = false;
   bool m_modelVertexBufferUploaded = false;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QVector>
+#include <QQuaternion>
 #include <QVector3D>
 #include <QString>
 #include <vector>
@@ -56,9 +57,15 @@ public:
 
   // Sidebar transform hint arrows selected by a semantic field name.
   // Position/scale use straight arrows; rotation uses paired curved arrows.
+  // P15.11 (SIDEBAR-LOCAL-AXES): `orientation` (scene frame, about the
+  // builder origin = gizmo center) re-orients the built hint onto the
+  // selected object's local axes (upstream Selection.cpp:2003-2020 composes
+  // the hint model matrix as bbox-center translation * orient_matrix).
+  // Identity keeps the world-axis layout.
   static QVector<GizmoVertex> buildSidebarHintVertices(
       const QString &field,
-      bool uniformScale = false);
+      bool uniformScale = false,
+      const QQuaternion &orientation = QQuaternion());
 
   // Cut plane fill: 2 triangles (6 verts) perpendicular to cutAxis at
   // cutPosition, using selected object bounds expanded by 5% on the two

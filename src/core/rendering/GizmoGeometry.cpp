@@ -403,7 +403,8 @@ GizmoGeometry::buildScaleGizmoVertices(GizmoGeometryOffsets *out)
 // buildSidebarHintVertices
 // ===========================================================================
 QVector<GizmoVertex>
-GizmoGeometry::buildSidebarHintVertices(const QString &field, bool uniformScale)
+GizmoGeometry::buildSidebarHintVertices(const QString &field, bool uniformScale,
+                                        const QQuaternion &orientation)
 {
   QVector<GizmoVertex> result;
   if (field.isEmpty())
@@ -484,6 +485,19 @@ GizmoGeometry::buildSidebarHintVertices(const QString &field, bool uniformScale)
       part.reserve(ringSize);
       for (int i = 0; i < ringSize; ++i) part.append(source[first + i]);
       appendTransformed(part, transform, axis);
+    }
+  }
+
+  // P15.11 (SIDEBAR-LOCAL-AXES): re-orient the assembled hint onto the
+  // selected object's local axes. The renderer converts the mirrored
+  // slic3r-frame Euler triple into this scene-frame quaternion; identity
+  // keeps the world-axis layout byte-for-byte.
+  if (!orientation.isIdentity()) {
+    for (GizmoVertex &v : result) {
+      const QVector3D p = orientation.rotatedVector(QVector3D(v.x, v.y, v.z));
+      v.x = p.x();
+      v.y = p.y();
+      v.z = p.z();
     }
   }
   return result;

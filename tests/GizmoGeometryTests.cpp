@@ -77,6 +77,7 @@ private slots:
   void testSidebarPositionHintsUseWorldAxes();
   void testSidebarScaleHintsUseWorldAxes();
   void testSidebarRotationHintsUseWorldPlanes();
+  void testSidebarHintLocalAxisOrientation();
 
   // Cut plane + wipe tower
   void testCutPlaneGeometry();
@@ -399,6 +400,50 @@ void GizmoGeometryTests::testSidebarRotationHintsUseWorldPlanes()
            "rotation_x hint must stay thin along its rotation axis X");
   QVERIFY2(maxY - minY > 1.3f && maxZ - minZ > 1.3f,
            "rotation_x hint ring must span the Y and Z plane axes");
+}
+
+// P15.11 (SIDEBAR-LOCAL-AXES): the renderer premultiplies the sidebar hint
+// vertices with the mirrored selection rotation (Selection.cpp:2003-2020
+// orient_matrix). Lock the axis mapping with the exact scene quaternion the
+// renderer derives from a slic3r instance rotated Rz(90): qY(-rz)*qZ(-ry)*
+// qX(-rx) with (rx,ry,rz)=(0,0,90) is qY(-90). The local +X arrow must swing
+// onto scene +Z, which is slic3r world +Y -- exactly where an instance
+// Rz(90) carries the local X axis.
+void GizmoGeometryTests::testSidebarHintLocalAxisOrientation()
+{
+  const QQuaternion instanceRz90 = QQuaternion::fromAxisAndAngle(0.f, 1.f, 0.f, -90.f);
+  const auto rotated = GizmoGeometry::buildSidebarHintVertices(
+      QStringLiteral("position_x"), false, instanceRz90);
+  QCOMPARE(rotated.size(), 36);
+  float best = -FLT_MAX;
+  QVector3D tip;
+  for (const auto &v : rotated)
+  {
+    const QVector3D p(v.x, v.y, v.z);
+    const float along = QVector3D::dotProduct(p, QVector3D(0.f, 0.f, 1.f));
+    if (along > best)
+    {
+      best = along;
+      tip = p;
+    }
+  }
+  QVERIFY2(best > 0.99f,
+           "Rz(90) instance must swing the local X arrow onto scene Z");
+  QVERIFY2(std::abs(tip.x()) < 0.08f && std::abs(tip.y()) < 0.08f,
+           "rotated arrow tip must stay on the +Z axis");
+
+  // Identity (the {0,0,0} no-selection default) must keep the world-axis
+  // layout byte-for-byte so existing hint behavior is untouched.
+  const auto worldAxis = GizmoGeometry::buildSidebarHintVertices(QStringLiteral("position_y"));
+  const auto identity = GizmoGeometry::buildSidebarHintVertices(
+      QStringLiteral("position_y"), false, QQuaternion());
+  QCOMPARE(worldAxis.size(), identity.size());
+  for (int i = 0; i < worldAxis.size(); ++i)
+  {
+    if (worldAxis[i].x != identity[i].x || worldAxis[i].y != identity[i].y
+        || worldAxis[i].z != identity[i].z)
+      QFAIL("identity orientation must not perturb the world-axis hint");
+  }
 }
 
 // ===========================================================================

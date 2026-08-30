@@ -9183,6 +9183,62 @@ bool ProjectServiceMock::setObjectScaleUniform(int index, float s)
   return setObjectScale(index, s, s, s);
 }
 
+// P15.11 (SIDEBAR-LOCAL-AXES): first-instance rotation as slic3r-frame Euler
+// XYZ degrees. Upstream builds the sidebar hint orientation from the first
+// selected volume's instance rotation matrix (Selection.cpp:2010-2013), so
+// the query reads instances.front() like the other transform accessors.
+QVector3D ProjectServiceMock::objectInstanceRotationDegrees(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)] &&
+      !model_->objects[size_t(objectIndex)]->instances.empty())
+  {
+    const auto *inst = model_->objects[size_t(objectIndex)]->instances.front();
+    if (inst)
+    {
+      const auto rot = inst->get_rotation(); // radians in slic3r space
+      return QVector3D(
+        qRadiansToDegrees(static_cast<float>(rot.x())),
+        qRadiansToDegrees(static_cast<float>(rot.y())),
+        qRadiansToDegrees(static_cast<float>(rot.z())));
+    }
+  }
+#endif
+  return (objectIndex >= 0 && objectIndex < objectRotations_.size())
+             ? objectRotations_[objectIndex] : QVector3D(0, 0, 0);
+}
+
+// P15.11 (SIDEBAR-LOCAL-AXES): combined instance * volume rotation for a
+// selected volume. Upstream composes instance then volume rotation matrices
+// for the single-volume / single-modifier branch (Selection.cpp:2017-2020)
+// and the composite is what the hint arrows orient on. Re-extracting the
+// Euler angles keeps the same degrees representation as
+// objectInstanceRotationDegrees. Mock mode stores no volume rotations, so it
+// degrades to the instance rotation (identity volume = world axes preserved).
+QVector3D ProjectServiceMock::objectVolumeRotationDegrees(int objectIndex, int volumeIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size())
+  {
+    const auto *obj = model_->objects[size_t(objectIndex)];
+    if (obj && !obj->instances.empty() && volumeIndex >= 0 &&
+        size_t(volumeIndex) < obj->volumes.size() && obj->volumes[size_t(volumeIndex)])
+    {
+      const Slic3r::Transform3d orient =
+          obj->instances.front()->get_transformation().get_rotation_matrix() *
+          obj->volumes[size_t(volumeIndex)]->get_transformation().get_rotation_matrix();
+      const auto rot = Slic3r::Geometry::extract_euler_angles(orient); // radians, slic3r frame
+      return QVector3D(
+        qRadiansToDegrees(static_cast<float>(rot.x())),
+        qRadiansToDegrees(static_cast<float>(rot.y())),
+        qRadiansToDegrees(static_cast<float>(rot.z())));
+    }
+  }
+#endif
+  return objectInstanceRotationDegrees(objectIndex);
+}
+
 // ---- ASM-01 (Phase 138): assemble-transform accessors ----
 // Mirror the ordinary objectPosition/Rotation/Scale dual-path pattern but target
 // ModelInstance::m_assemble_transformation (upstream Model.hpp:1253-1298) instead of

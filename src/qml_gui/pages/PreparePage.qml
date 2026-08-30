@@ -1626,6 +1626,11 @@ Item {
                     // selection / model bbox center (upstream
                     // GLCanvas3D.cpp:4309-4327 rotate_target).
                     rotationCenterHint: root.editorVm ? root.editorVm.rotationCenter : null
+                    // P15.11 (SIDEBAR-LOCAL-AXES): orient the sidebar transform
+                    // hint arrows on the selected object's local axes
+                    // (upstream Selection.cpp orient_matrix). Re-evaluates via
+                    // stateChanged on every selection change.
+                    hintLocalRotation: root.editorVm ? root.editorVm.selectedHintLocalRotation : []
                     // v5.16 (NAVIGATOR): show_3d_navigator (default on).
                     navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
                     navigatorBottomOffset: root.prepareViewportOverlayStack

@@ -370,6 +370,9 @@ private slots:
   void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
   // v3.2 Phase 25-03: QRhi picking selects source objects through the ViewModel
   void rendererPickingSelectsSourceObjectThroughEditorViewModel();
+  // P15.11 (SIDEBAR-LOCAL-AXES): the sidebar hint orientation mirrors the
+  // selected object's local axes (Selection.cpp:2003-2020 orient_matrix).
+  void selectedHintLocalRotationMirrorsSelectionRotation();
   // v3.8 Phase 69: move-gizmo drag deltas coalesce into one undo command.
   void gizmoMoveDragCoalescesIntoSingleUndoCommand();
   // v3.8 Phase 70: rotate/scale gizmo drags coalesce into one undo command.
@@ -4671,6 +4674,42 @@ void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewMod
   QVERIFY(editor.activePlateObjectIndices().isEmpty());
   QVERIFY(!editor.selectSourceObject(0));
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+}
+
+// P15.11 (SIDEBAR-LOCAL-AXES): selectedHintLocalRotation feeds the sidebar
+// hint arrows the selected object's local-axis orientation. The accessor
+// mirrors the first instance rotation (Selection.cpp:2010-2013) and returns
+// {0, 0, 0} with no selection so the hints keep the world-axis layout.
+void ViewModelSmokeTests::selectedHintLocalRotationMirrorsSelectionRotation()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  const QVariantList noSelection = editor.selectedHintLocalRotation();
+  QCOMPARE(noSelection.size(), 3);
+  QVERIFY2(qFuzzyIsNull(noSelection.at(0).toFloat())
+               && qFuzzyIsNull(noSelection.at(1).toFloat())
+               && qFuzzyIsNull(noSelection.at(2).toFloat()),
+           "no selection must yield identity (world-axis hints)");
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  const int sourceObject = editor.selectedSourceObjectIndex();
+  QVERIFY(sourceObject >= 0);
+
+  QVERIFY(project.setObjectRotation(sourceObject, 30.f, 45.f, 60.f));
+  const QVariantList rotation = editor.selectedHintLocalRotation();
+  QCOMPARE(rotation.size(), 3);
+  QVERIFY2(qAbs(rotation.at(0).toFloat() - 30.f) < 0.01f
+               && qAbs(rotation.at(1).toFloat() - 45.f) < 0.01f
+               && qAbs(rotation.at(2).toFloat() - 60.f) < 0.01f,
+           qPrintable(QStringLiteral(
+                          "hint rotation must mirror the selected instance "
+                          "Euler degrees, got (%1, %2, %3)")
+                          .arg(rotation.at(0).toFloat())
+                          .arg(rotation.at(1).toFloat())
+                          .arg(rotation.at(2).toFloat())));
 }
 
 void ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()

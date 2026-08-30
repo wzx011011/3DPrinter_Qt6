@@ -667,6 +667,19 @@ void RhiViewport::setUniformScale(bool value)
   update();
 }
 
+// P15.11 (SIDEBAR-LOCAL-AXES): reverse-channel pipe for the sidebar hint
+// orientation. Selection change -> stateChanged -> QML binding -> setter ->
+// update() -> synchronize() -> gizmo buffer rebuild, mirroring the
+// sidebarField/uniformScale loop.
+void RhiViewport::setHintLocalRotation(const QVariantList &value)
+{
+  if (m_hintLocalRotation == value)
+    return;
+  m_hintLocalRotation = value;
+  emit hintLocalRotationChanged();
+  update();
+}
+
 void RhiViewport::setWireframeMode(bool value)
 {
   if (m_wireframeMode == value)

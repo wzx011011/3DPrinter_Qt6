@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QHash>
 #include <QPainter>
+#include <QQuaternion>
 #include <QSvgRenderer>
 
 #include <algorithm>
@@ -489,7 +490,20 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   const bool prevUniformScale = m_uniformScale;
   m_sidebarField = viewport->m_sidebarField;
   m_uniformScale = viewport->m_uniformScale;
-  if (m_sidebarField != prevSidebarField || m_uniformScale != prevUniformScale)
+  // P15.11 (SIDEBAR-LOCAL-AXES): mirror the selected object's local-axis
+  // orientation for the sidebar hint arrows ({rx, ry, rz} degrees, slic3r
+  // frame; empty list = identity). A change rebuilds the shared gizmo buffer
+  // together with the field/scale changes so the arrows re-orient on the
+  // next frame after a selection change (Selection.cpp:2003-2020).
+  const QVector3D prevHintLocalRotation = m_hintLocalRotationDegrees;
+  m_hintLocalRotationDegrees =
+      viewport->m_hintLocalRotation.size() >= 3
+          ? QVector3D(viewport->m_hintLocalRotation.at(0).toFloat(),
+                      viewport->m_hintLocalRotation.at(1).toFloat(),
+                      viewport->m_hintLocalRotation.at(2).toFloat())
+          : QVector3D(0.f, 0.f, 0.f);
+  if (m_sidebarField != prevSidebarField || m_uniformScale != prevUniformScale
+      || m_hintLocalRotationDegrees != prevHintLocalRotation)
     m_gizmoVertexBufferUploaded = false;
   m_cutAxis = viewport->m_cutAxis;
   m_cutPosition = viewport->m_cutPosition;
@@ -3955,8 +3969,26 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
   m_selectionCenterVertexBase = quint32(scaleBase + scaleVerts.size());
   m_selectionCenterVertexCount = quint32(selectionCenterVerts.size());
   m_selectionCenterLastGizmoScale = gizmoScale;
+  // P15.11 (SIDEBAR-LOCAL-AXES): orient the sidebar hint arrows on the
+  // selected object's local axes. Upstream composes the hint model matrix as
+  // bbox-center translation * orient_matrix taken from the selection's
+  // instance (+ volume) rotation (Selection.cpp:2003-2020), so the arrows
+  // rotate with the object around the bbox center. The baked mesh batches
+  // already carry that rotation, so the renderer mirrors it as an extra
+  // vertex rotation about the builder origin (= m_gizmoCenter via the gizmo
+  // shader). The mirrored degrees are the slic3r-frame triple
+  // R = Rz(rz)*Ry(ry)*Rx(rx); conjugating through the slic3r(X,Y,Z) ->
+  // scene(X,Z,Y) swap relabels the Y/Z axes and flips each principal-axis
+  // sign, giving the scene quaternion qY(-rz)*qZ(-ry)*qX(-rx) (Qt's
+  // operator* applies the rightmost factor first, matching the slic3r
+  // X-first application order).
+  const QQuaternion hintSceneRotation =
+      QQuaternion::fromAxisAndAngle(0.f, 1.f, 0.f, -m_hintLocalRotationDegrees.z()) *
+      QQuaternion::fromAxisAndAngle(0.f, 0.f, 1.f, -m_hintLocalRotationDegrees.y()) *
+      QQuaternion::fromAxisAndAngle(1.f, 0.f, 0.f, -m_hintLocalRotationDegrees.x());
   const QVector<GizmoVertex> sidebarHintVerts =
-      GizmoGeometry::buildSidebarHintVertices(m_sidebarField, m_uniformScale);
+      GizmoGeometry::buildSidebarHintVertices(m_sidebarField, m_uniformScale,
+                                              hintSceneRotation);
   m_sidebarHintVertexBase = quint32(scaleBase + scaleVerts.size()
                                      + selectionCenterVerts.size());
   m_sidebarHintVertexCount = quint32(sidebarHintVerts.size());
