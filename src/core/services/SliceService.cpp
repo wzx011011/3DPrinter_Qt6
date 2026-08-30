@@ -67,21 +67,8 @@ namespace
     }
   }
 
-  SequentialPrintClearance packSequentialClearance(
-      const Slic3r::Polygons &collision,
-      const std::vector<std::pair<Slic3r::Polygon, float>> &height)
-  {
-    SequentialPrintClearance out;
-    for (const auto &polygon : collision)
-    {
-      appendPolygonOutline(polygon, out.collisionOutline, 0.025f);
-      appendPolygonFan(polygon, out.collisionFill, 0.0125f);
-    }
-    for (const auto &entry : height)
-      appendPolygonFan(entry.first, out.heightFill, entry.second);
-    out.valid = !out.collisionOutline.empty() || !out.heightFill.empty();
-    return out;
-  }
+  // P15.11: moved to SliceService::packSequentialClearance (public static) so
+  // the drag-time preview packs through the SAME stream builder.
 #endif
 
   QString formatDurationLabel(double seconds)
@@ -559,6 +546,48 @@ namespace
 #endif
   }
 } // anonymous namespace
+
+#ifdef HAS_LIBSLIC3R
+// P15.11: shared value-stream packer (see SliceService.h). Identical body to
+// the worker-local helper it replaces so the Print::validate payload format
+// is unchanged; the drag-time preview (SequentialClearanceCompute::runCompute)
+// packs through this too.
+SequentialPrintClearance SliceService::packSequentialClearance(
+    const Slic3r::Polygons &collision,
+    const std::vector<std::pair<Slic3r::Polygon, float>> &height)
+{
+  SequentialPrintClearance out;
+  for (const auto &polygon : collision)
+  {
+    appendPolygonOutline(polygon, out.collisionOutline, 0.025f);
+    appendPolygonFan(polygon, out.collisionFill, 0.0125f);
+  }
+  for (const auto &entry : height)
+    appendPolygonFan(entry.first, out.heightFill, entry.second);
+  out.valid = !out.collisionOutline.empty() || !out.heightFill.empty();
+  return out;
+}
+
+// P15.11: resolved plate config with the SAME merge sequence the slice worker
+// runs before Print::apply (defaults -> enum restore -> preset injection ->
+// plate overrides -> enum restore -> normalize_fdm). Bed-shape injection and
+// the Marlin relative-E tweak are intentionally omitted: neither influences
+// the clearance / skirt options the drag preview reads.
+Slic3r::DynamicPrintConfig SliceService::makeResolvedPlateConfig(
+    const QHash<QString, QVariant> &mergedPreset,
+    const Slic3r::DynamicPrintConfig *plateCfg)
+{
+  Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
+  restoreGenericEnumMaps(config);
+  if (!mergedPreset.isEmpty())
+    injectPresetConfig(config, mergedPreset);
+  if (plateCfg && !plateCfg->empty())
+    config.apply(*plateCfg);
+  restoreGenericEnumMaps(config);
+  config.normalize_fdm();
+  return config;
+}
+#endif
 
 void SliceService::startSlice(const QString &projectName)
 {

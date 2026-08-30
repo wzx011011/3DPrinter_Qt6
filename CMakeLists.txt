@@ -156,6 +156,10 @@ if(OWZX_QML_GUI)
         src/core/viewmodels/AiMessageDecorate.h
         src/core/services/SliceService.cpp
         src/core/services/SliceService.h
+        # P15.11: drag-time sequential clearance preview (value-only
+        # SequentialPrintClearance streams, no Print::apply).
+        src/core/services/SequentialClearanceCompute.cpp
+        src/core/services/SequentialClearanceCompute.h
         src/core/services/PresetServiceMock.cpp
         src/core/services/PresetServiceMock.h
         src/core/services/DeviceServiceMock.cpp

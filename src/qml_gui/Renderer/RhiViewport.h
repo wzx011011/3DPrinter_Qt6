@@ -38,6 +38,11 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill WRITE setSequentialClearanceFill)
   Q_PROPERTY(QByteArray sequentialHeightFill READ sequentialHeightFill WRITE setSequentialHeightFill)
   Q_PROPERTY(bool sequentialClearanceActive READ sequentialClearanceActive WRITE setSequentialClearanceActive)
+  // P15.11: true while the clearance streams hold the drag-time preview
+  // (upstream render_fill=false). The renderer uploads the upstream NO_FILL
+  // gray (0.75, 0.75, 0.75, 0.75) instead of the failure blue and keeps the
+  // overlay visible during the gizmo drag (validation overlay stays hidden).
+  Q_PROPERTY(bool sequentialClearancePreviewMode READ sequentialClearancePreviewMode WRITE setSequentialClearancePreviewMode)
   Q_PROPERTY(QByteArray previewData READ previewData WRITE setPreviewData)
   Q_PROPERTY(int layerMin READ layerMin WRITE setLayerMin)
   Q_PROPERTY(int layerMax READ layerMax WRITE setLayerMax)
@@ -304,7 +309,9 @@ public:
   QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
   QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
   bool sequentialClearanceActive() const { return m_sequentialClearanceActive; }
+  bool sequentialClearancePreviewMode() const { return m_sequentialClearancePreviewMode; }
   void setSequentialClearanceActive(bool active);
+  void setSequentialClearancePreviewMode(bool preview);
   void setSequentialClearanceOutline(const QByteArray &data);
   void setSequentialClearanceFill(const QByteArray &data);
   void setSequentialHeightFill(const QByteArray &data);
@@ -781,6 +788,7 @@ private:
   QByteArray m_sequentialClearanceFill;
   QByteArray m_sequentialHeightFill;
   bool m_sequentialClearanceActive = false;
+  bool m_sequentialClearancePreviewMode = false;
   QByteArray m_previewData;
   int m_layerMin = 0;
   int m_layerMax = 0;

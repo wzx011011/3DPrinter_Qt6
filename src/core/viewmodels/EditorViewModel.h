@@ -27,10 +27,14 @@
 // struct captured by value in the worker; included here so the
 // onWipeTowerGeometryReady slot signature has the complete type.
 #include "core/services/SliceService.h"
+// P15.11: drag-time sequential clearance preview. The header declares only
+// plain-value structs (no libslic3r types) -- safe to include unconditionally.
+#include "core/services/SequentialClearanceCompute.h"
 
 class ProjectServiceMock;
 class UndoRedoManager;
 class ConfigViewModel;
+class QTimer;
 namespace OWzx {
 class MeasureEngine;
 class SceneRaycaster;  // Phase 115 (MEASURE-04): two-stage pick stage-2.
@@ -131,6 +135,12 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline NOTIFY sequentialClearanceChanged)
   Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill NOTIFY sequentialClearanceChanged)
   Q_PROPERTY(QByteArray sequentialHeightFill READ sequentialHeightFill NOTIFY sequentialClearanceChanged)
+  // P15.11: true while the sequentialClearance* streams hold the DRAG-TIME
+  // preview geometry (upstream update_sequential_clearance, render_fill=false
+  // gray hulls) instead of the post-validate failure payload. Bound to
+  // RhiViewport so the renderer switches to the NO_FILL gray color and keeps
+  // drawing during the gizmo drag (upstream resets the overlay at mouse-up).
+  Q_PROPERTY(bool sequentialClearancePreviewMode READ sequentialClearancePreviewMode NOTIFY sequentialClearanceChanged)
   /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
   Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY stateChanged)
   /// 选中对象边界框尺寸 (dx, dy, dz, volume)，全零表示无选中
@@ -273,6 +283,8 @@ public:
   QByteArray sequentialClearanceOutline() const { return m_sequentialClearanceOutline; }
   QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
   QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
+  // P15.11: drag-time preview flag (see the Q_PROPERTY comment).
+  bool sequentialClearancePreviewMode() const { return m_sequentialClearancePreviewMode; }
   QVector4D fitHint() const { return m_fitHint; }
   QVector4D measureDimensions() const { return m_measureDimensions; }
 
@@ -1679,6 +1691,21 @@ private:
   void refreshMeshCacheAndFitHint();
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
+  // P15.11: drag-time sequential clearance preview (upstream
+  // GLCanvas3D::update_sequential_clearance + reset_sequential_print_clearance).
+  // begin is called by every beginGizmo{Move,Rotate,Scale}Drag (the
+  // RhiViewport mouse-handler drag hooks emit gizmoDragBegin/gizmoDragEnd for
+  // them); refresh restarts the 150 ms debounce on each applyGizmo*Delta;
+  // end cancels stale computes and restores the validation payload. All three
+  // gate on the resolved ByObject print sequence (GLCanvas3D.cpp:5193-5195).
+  void beginDragSequentialClearance();
+  void refreshDragSequentialClearance();
+  void endDragSequentialClearance();
+  /// P15.11: debounce-timer callback -- collects the CURRENT instance poses
+  /// (value only) and runs SequentialClearanceCompute::runCompute on
+  /// QtConcurrent with a generation counter; the finished handler drops stale
+  /// results and reuses onSequentialPrintClearanceReady for delivery.
+  void dispatchDragSequentialClearanceCompute();
   void rebuildObjectEntriesFromService();
   /// Phase 240 (GIZ-02): shared paint commit path. Mirrors the painted
   /// TriangleSelector into the Qt data layer (setTriangleSupportState),
@@ -1819,6 +1846,21 @@ private:
   QByteArray m_sequentialClearanceOutline;
   QByteArray m_sequentialClearanceFill;
   QByteArray m_sequentialHeightFill;
+  // P15.11: drag-time preview state. m_validationClearance* backs up the
+  // post-validate payload while the drag overwrites the live streams; the
+  // restore at drag end (upstream reset_sequential_print_clearance at
+  // mouse_up, GLCanvas3D.cpp:4698) brings the last validation result back
+  // (empty backup = cleared). The generation counter cancels in-flight
+  // QtConcurrent computes when the drag ends or a newer tick supersedes them.
+  bool m_sequentialClearancePreviewMode = false;
+  bool m_dragClearanceActive = false;
+  quint64 m_dragClearanceGeneration = 0;
+  QTimer *m_dragClearanceTimer = nullptr; ///< 150 ms single-shot move debounce
+  SequentialClearanceCompute::HullCache m_dragClearanceHullCache;
+  SequentialClearanceCompute::ConfigValues m_dragClearanceConfig;
+  QByteArray m_validationClearanceOutline;
+  QByteArray m_validationClearanceFill;
+  QByteArray m_validationClearanceHeightFill;
   QList<int> m_cachedMeshBatchSourceObjectIndices;
   QList<int> m_cachedMeshBatchVolumeIndices;
   QList<int> m_cachedMeshBatchInstanceIndices;

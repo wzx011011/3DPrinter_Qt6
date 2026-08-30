@@ -61,6 +61,11 @@ private slots:
   void rhiGizmosRenderAsDepthIndependentOverlay();
   void rhiSelectionCenterMatchesUpstreamMarkerContract();
   void sequentialClearanceUsesEnginePayloadAndDedicatedBuffers();
+  // P15.11: live drag-time clearance preview (upstream
+  // GLCanvas3D::update_sequential_clearance) -- drag hooks, debounced async
+  // compute with generation counter, value-only payload reuse, preview gray
+  // vs failure blue, and the restore at drag end.
+  void sequentialClearanceDragPreviewMirrorsUpstream();
   void rhiCutPlaneAndWipeTowerStayCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
@@ -2507,6 +2512,105 @@ void QmlUiAuditTests::sequentialClearanceUsesEnginePayloadAndDedicatedBuffers()
   QVERIFY2(preparePage.contains(QStringLiteral("sequentialClearanceOutline"))
                && preparePage.contains(QStringLiteral("sequentialHeightFill")),
            "PreparePage must bind the engine-produced clearance streams");
+}
+
+void QmlUiAuditTests::sequentialClearanceDragPreviewMirrorsUpstream()
+{
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+
+  // Drag trigger hook: the model-drag lifecycle lives in the RhiViewport mouse
+  // handlers (mousePressEvent starts the gizmo drag, mouseReleaseEvent ends
+  // it) -- exactly the events upstream maps to
+  // m_sequential_print_clearance_first_displacement (GLCanvas3D.cpp:4197) and
+  // reset_sequential_print_clearance (GLCanvas3D.cpp:4698).
+  const int pressStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::mousePressEvent"));
+  const int moveStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::mouseMoveEvent"), pressStart);
+  const int releaseStart = viewportSource.indexOf(QStringLiteral("void RhiViewport::mouseReleaseEvent"), moveStart);
+  QVERIFY2(pressStart >= 0 && moveStart > pressStart && releaseStart > moveStart,
+           "RhiViewport mouse handlers must define the drag lifecycle");
+  const QString pressBlock = viewportSource.mid(pressStart, moveStart - pressStart);
+  const QString releaseBlock = viewportSource.mid(releaseStart);
+  QVERIFY2(pressBlock.contains(QStringLiteral("m_gizmoDragging = true"))
+               && pressBlock.contains(QStringLiteral("emit gizmoDragBegin();")),
+           "mousePressEvent must start the model drag hook");
+  QVERIFY2(releaseBlock.contains(QStringLiteral("emit gizmoDragEnd();")),
+           "mouseReleaseEvent must end the model drag hook");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("sequentialClearancePreviewMode")),
+           "RhiViewport must expose the drag-preview mode property");
+
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+
+  // The ViewModel drag entry points (invoked from the viewport hooks via QML)
+  // must begin / refresh / end the clearance preview on ALL gizmo drags that
+  // displace objects (upstream Move/Scale/Rotate, GLCanvas3D.cpp:4051-4056).
+  QVERIFY2(editorSource.count(QStringLiteral("beginDragSequentialClearance();")) >= 3,
+           "begin/rotate/scale drag must begin the clearance preview");
+  QVERIFY2(editorSource.count(QStringLiteral("refreshDragSequentialClearance();")) >= 3,
+           "move/rotate/scale deltas must refresh the clearance preview");
+  QVERIFY2(editorSource.count(QStringLiteral("endDragSequentialClearance();")) >= 3,
+           "end/rotate/scale drag must end the clearance preview");
+  // Upstream ByObject gate (GLCanvas3D.cpp:5192-5195).
+  const int beginPreviewStart = editorSource.indexOf(QStringLiteral("void EditorViewModel::beginDragSequentialClearance"));
+  QVERIFY2(beginPreviewStart >= 0, "beginDragSequentialClearance must be defined");
+  const QString beginPreviewBlock = editorSource.mid(beginPreviewStart, 1400);
+  QVERIFY2(beginPreviewBlock.contains(QStringLiteral("resolvedPlatePrintSequence(currentPlateIndex()) != 2")),
+           "the preview must gate on the resolved ByObject print sequence");
+
+  // Debounced async compute: 150 ms single-shot timer -> value-only
+  // QtConcurrent job with a generation counter dropping stale results.
+  QVERIFY2(editorSource.contains(QStringLiteral("m_dragClearanceTimer->setInterval(150)"))
+               && editorSource.contains(QStringLiteral("QtConcurrent::run("))
+               && editorSource.contains(QStringLiteral("++m_dragClearanceGeneration"))
+               && editorSource.contains(QStringLiteral("generation != m_dragClearanceGeneration")),
+           "the preview compute must be debounced, async, and generation-guarded");
+
+  // Value-only payload reuse: the compute helper returns the SAME
+  // SequentialPrintClearance struct, and its header carries no libslic3r
+  // types across the thread boundary (Frozen Decision 1 pattern).
+  const QString computeHeader = readSource(QStringLiteral("src/core/services/SequentialClearanceCompute.h"));
+  const QString computeSource = readSource(QStringLiteral("src/core/services/SequentialClearanceCompute.cpp"));
+  QVERIFY2(!computeHeader.isEmpty() && !computeSource.isEmpty(),
+           "Unable to read SequentialClearanceCompute files");
+  QVERIFY2(computeHeader.contains(QStringLiteral("SequentialPrintClearance runCompute")),
+           "runCompute must produce the shared SequentialPrintClearance payload");
+  const QStringList headerLines = computeHeader.split(QLatin1Char('\n'));
+  for (const QString &line : headerLines)
+  {
+    if (line.contains(QStringLiteral("Slic3r::")) && !line.contains(QStringLiteral("//")))
+      QFAIL("SequentialClearanceCompute.h must stay value-only (no Slic3r:: outside comments)");
+  }
+
+  // Renderer distinction: preview gray (upstream NO_FILL_COLOR 0.75, 0.75,
+  // 0.75, 0.75) vs failure blue in the upload, and the preview stays visible
+  // during the drag while the failure overlay does not.
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(rendererSource.contains(QStringLiteral("previewMode ? 0.75f : 0.8f"))
+               && rendererSource.contains(QStringLiteral("previewMode ? 0.75f : 1.0f"))
+               && rendererSource.contains(QStringLiteral("previewMode ? 0.75f : 0.5f")),
+           "the renderer upload must distinguish preview gray from failure blue");
+  QVERIFY2(rendererSource.contains(QStringLiteral("m_gizmoDragging && !m_sequentialClearancePreviewMode")),
+           "only the failure overlay may be gated off during a gizmo drag");
+  QVERIFY2(rendererSource.contains(QStringLiteral("!m_sequentialClearancePreviewMode && m_sequentialClearanceFillBuffer")),
+           "preview mode must skip the collision fill fan (render_fill=false)");
+
+  // Drag end clears/restores: the validation payload backup replaces the live
+  // streams and the preview flag drops (upstream
+  // reset_sequential_print_clearance at mouse-up).
+  const int endPreviewStart = editorSource.indexOf(QStringLiteral("void EditorViewModel::endDragSequentialClearance"));
+  QVERIFY2(endPreviewStart >= 0, "endDragSequentialClearance must be defined");
+  const QString endPreviewBlock = editorSource.mid(endPreviewStart, 1400);
+  QVERIFY2(endPreviewBlock.contains(QStringLiteral("m_sequentialClearancePreviewMode = false;"))
+               && endPreviewBlock.contains(QStringLiteral("m_sequentialClearanceOutline = m_validationClearanceOutline;")),
+           "drag end must restore the validation payload and drop the preview flag");
+
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(preparePage.contains(QStringLiteral("sequentialClearancePreviewMode")),
+           "PreparePage must bind the drag-preview mode");
 }
 
 void QmlUiAuditTests::rhiCutPlaneAndWipeTowerStayCppOwned()

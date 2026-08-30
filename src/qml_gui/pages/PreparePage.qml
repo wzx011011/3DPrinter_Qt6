@@ -1559,6 +1559,12 @@ Item {
                     sequentialClearanceOutline: root.editorVm ? root.editorVm.sequentialClearanceOutline : null
                     sequentialClearanceFill: root.editorVm ? root.editorVm.sequentialClearanceFill : null
                     sequentialHeightFill: root.editorVm ? root.editorVm.sequentialHeightFill : null
+                    // P15.11: drag-time preview flag -- while a Move/Rotate/
+                    // Scale gizmo drag runs, the ViewModel swaps the streams
+                    // to the live upstream hull preview and the renderer
+                    // switches to the NO_FILL color + keeps drawing during
+                    // the drag.
+                    sequentialClearancePreviewMode: root.editorVm ? root.editorVm.sequentialClearancePreviewMode : false
                     bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
                     bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
                     bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0

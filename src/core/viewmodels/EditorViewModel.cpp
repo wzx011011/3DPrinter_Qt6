@@ -44,6 +44,7 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QtConcurrent/QtConcurrentRun> // Phase 240 (GIZ-06): simplify preview job
+#include <QFutureWatcher> // P15.11: drag-time clearance preview compute delivery
 #include <algorithm>
 
 #ifdef HAS_LIBSLIC3R
@@ -408,6 +409,9 @@ void EditorViewModel::beginGizmoMoveDrag()
     m_gizmoMoveDragStartPos = projectService_->assembleOffset(idx);
   else
     m_gizmoMoveDragStartPos = projectService_->objectPosition(idx);
+  // P15.11: drag started (RhiViewport mousePressEvent -> gizmoDragBegin) --
+  // capture the hull cache + show the live clearance preview.
+  beginDragSequentialClearance();
 }
 
 void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
@@ -449,6 +453,8 @@ void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
   const QVector3D newPos = oldPos + delta;
   projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
   invalidateSliceResultsForCurrentPlate();
+  // P15.11: object moved during the drag -- restart the debounced preview.
+  refreshDragSequentialClearance();
 
   if (!m_gizmoMoveDragActive && m_undoManager)
   {
@@ -465,6 +471,10 @@ void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
 
 void EditorViewModel::endGizmoMoveDrag()
 {
+  // P15.11: drag ended (RhiViewport mouseReleaseEvent -> gizmoDragEnd) --
+  // cancel stale computes and restore the validation payload. Runs BEFORE the
+  // active-flag early return so every end path restores the overlay.
+  endDragSequentialClearance();
   if (!m_gizmoMoveDragActive)
     return;
 
@@ -554,6 +564,10 @@ void EditorViewModel::beginGizmoRotateDrag()
     m_gizmoRotateDragStartRot = projectService_->assembleRotation(idx);
   else
     m_gizmoRotateDragStartRot = projectService_->objectRotation(idx);
+  // P15.11: rotate drags drive the live clearance preview too (upstream
+  // update_sequential_clearance runs for the Move/Scale/Rotate gizmos,
+  // GLCanvas3D.cpp:4051-4056).
+  beginDragSequentialClearance();
 }
 
 void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
@@ -613,6 +627,8 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
 
   projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
   invalidateSliceResultsForCurrentPlate();
+  // P15.11: rotation changed during the drag -- restart the debounced preview.
+  refreshDragSequentialClearance();
 
   if (!m_gizmoRotateDragActive && m_undoManager)
   {
@@ -630,6 +646,8 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
 
 void EditorViewModel::endGizmoRotateDrag()
 {
+  // P15.11: cancel stale computes + restore the validation payload first.
+  endDragSequentialClearance();
   if (!m_gizmoRotateDragActive)
     return;
 
@@ -719,6 +737,9 @@ void EditorViewModel::beginGizmoScaleDrag()
     m_gizmoScaleDragStartScale = projectService_->assembleScale(idx);
   else
     m_gizmoScaleDragStartScale = projectService_->objectScale(idx);
+  // P15.11: scale drags drive the live clearance preview (upstream
+  // Move/Scale/Rotate gizmo path, GLCanvas3D.cpp:4051-4056).
+  beginDragSequentialClearance();
 }
 
 void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
@@ -777,6 +798,8 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
 
   projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
   invalidateSliceResultsForCurrentPlate();
+  // P15.11: scale changed during the drag -- restart the debounced preview.
+  refreshDragSequentialClearance();
 
   if (!m_gizmoScaleDragActive && m_undoManager)
   {
@@ -794,6 +817,8 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
 
 void EditorViewModel::endGizmoScaleDrag()
 {
+  // P15.11: cancel stale computes + restore the validation payload first.
+  endDragSequentialClearance();
   if (!m_gizmoScaleDragActive)
     return;
 
@@ -4860,6 +4885,12 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       m_sequentialClearanceOutline.clear();
       m_sequentialClearanceFill.clear();
       m_sequentialHeightFill.clear();
+      // P15.11: the payload being replaced is stale, so a drag in progress
+      // must not restore it at drag end (the next debounced tick repaints the
+      // live preview streams).
+      m_validationClearanceOutline.clear();
+      m_validationClearanceFill.clear();
+      m_validationClearanceHeightFill.clear();
       emit sequentialClearanceChanged();
     }
         statusText_ = sliceService_->slicing() ? QStringLiteral("切片中...") : QStringLiteral("切片完成");
@@ -4937,6 +4968,15 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
           this, &EditorViewModel::onFilamentMapReady);
   connect(sliceService_, &SliceService::sequentialPrintClearanceReady,
           this, &EditorViewModel::onSequentialPrintClearanceReady);
+  // P15.11: 150 ms debounce for the drag-time clearance preview. Each
+  // applyGizmo*Delta restarts the timer; the timeout dispatches the
+  // value-only compute on QtConcurrent (upstream recomputes per mouse move,
+  // GLCanvas3D.cpp:4248, debounced here to bound the hull rebuild rate).
+  m_dragClearanceTimer = new QTimer(this);
+  m_dragClearanceTimer->setSingleShot(true);
+  m_dragClearanceTimer->setInterval(150);
+  connect(m_dragClearanceTimer, &QTimer::timeout,
+          this, &EditorViewModel::dispatchDragSequentialClearanceCompute);
   connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
@@ -5322,6 +5362,102 @@ void EditorViewModel::onSequentialPrintClearanceReady(const SequentialPrintClear
   m_sequentialHeightFill = pack(clearance.heightFill);
   emit sequentialClearanceChanged();
   emit stateChanged();
+}
+
+// ---------- P15.11: drag-time sequential clearance preview ----------
+// Upstream GLCanvas3D::update_sequential_clearance (GLCanvas3D.cpp:5190-5388)
+// recomputes the clearance hulls per mouse displacement while the resolved
+// print sequence is ByObject, and reset_sequential_print_clearance clears the
+// overlay at mouse_up (GLCanvas3D.cpp:4698). The Qt port runs the same rules
+// on a debounced QtConcurrent worker over value-only captures.
+
+void EditorViewModel::beginDragSequentialClearance()
+{
+  m_dragClearanceActive = false;
+  if (!projectService_ || m_activeCanvasType != 0)
+    return;
+  // Upstream gate: preview only while the resolved sequence is ByObject
+  // (GLCanvas3D.cpp:5192-5195 prints_sequence == ByLayer -> return).
+  if (resolvedPlatePrintSequence(currentPlateIndex()) != 2)
+    return;
+  m_dragClearanceConfig = SequentialClearanceCompute::resolveConfigValues(
+      projectService_, currentPlateIndex(),
+      configViewModel_ ? configViewModel_->mergedConfigValues() : QHash<QString, QVariant>{},
+      double(bedOriginX()), double(bedOriginY()),
+      double(bedOriginX() + bedWidth()), double(bedOriginY() + bedDepth()));
+  // Hull cache is built ONCE per drag sequence (upstream
+  // m_sequential_print_clearance_first_displacement set at LeftDown,
+  // GLCanvas3D.cpp:4197) on the GUI thread; per-tick work stays value-only.
+  m_dragClearanceHullCache = SequentialClearanceCompute::captureHullCache(projectService_, m_dragClearanceConfig);
+  if (!m_dragClearanceHullCache.valid)
+    return;
+  m_dragClearanceActive = true;
+  // Back up the post-validate payload; restored at drag end.
+  m_validationClearanceOutline = m_sequentialClearanceOutline;
+  m_validationClearanceFill = m_sequentialClearanceFill;
+  m_validationClearanceHeightFill = m_sequentialHeightFill;
+  m_sequentialClearancePreviewMode = true;
+  emit sequentialClearanceChanged();
+  // First preview at drag start (upstream paints on the first displacement;
+  // painting immediately also covers the pre-move overlap baseline).
+  dispatchDragSequentialClearanceCompute();
+}
+
+void EditorViewModel::refreshDragSequentialClearance()
+{
+  if (!m_dragClearanceActive || !m_dragClearanceTimer)
+    return;
+  m_dragClearanceTimer->start();
+}
+
+void EditorViewModel::endDragSequentialClearance()
+{
+  if (!m_dragClearanceActive && !m_sequentialClearancePreviewMode)
+    return;
+  m_dragClearanceActive = false;
+  // Cancel any in-flight debounced compute (generation-counter gate).
+  ++m_dragClearanceGeneration;
+  if (m_dragClearanceTimer)
+    m_dragClearanceTimer->stop();
+  if (!m_sequentialClearancePreviewMode)
+    return;
+  m_sequentialClearancePreviewMode = false;
+  // Restore the pre-drag validation payload (empty backup = cleared overlay).
+  m_sequentialClearanceOutline = m_validationClearanceOutline;
+  m_sequentialClearanceFill = m_validationClearanceFill;
+  m_sequentialHeightFill = m_validationClearanceHeightFill;
+  m_validationClearanceOutline.clear();
+  m_validationClearanceFill.clear();
+  m_validationClearanceHeightFill.clear();
+  emit sequentialClearanceChanged();
+  emit stateChanged();
+}
+
+void EditorViewModel::dispatchDragSequentialClearanceCompute()
+{
+  if (!m_dragClearanceActive)
+    return;
+#ifdef HAS_LIBSLIC3R
+  const auto poses = SequentialClearanceCompute::collectInstancePoses(projectService_);
+  const quint64 generation = ++m_dragClearanceGeneration;
+  auto *watcher = new QFutureWatcher<SequentialPrintClearance>(this);
+  connect(watcher, &QFutureWatcher<SequentialPrintClearance>::finished, this,
+          [this, watcher, generation]()
+  {
+    watcher->deleteLater();
+    // Drop stale results (a newer tick superseded this job or the drag ended).
+    if (generation != m_dragClearanceGeneration || !m_dragClearanceActive)
+      return;
+    onSequentialPrintClearanceReady(watcher->result());
+  });
+  // Value-only capture (Frozen Decision 1 pattern): HullCache / ConfigValues /
+  // InstancePose copies, no Slic3r::Model pointer or Print crosses threads.
+  watcher->setFuture(QtConcurrent::run(
+      [cache = m_dragClearanceHullCache, config = m_dragClearanceConfig, poses]()
+  {
+    return SequentialClearanceCompute::runCompute(cache, config, poses);
+  }));
+#endif
 }
 
 // ---------- object list ----------

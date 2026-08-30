@@ -106,6 +106,16 @@ void RhiViewport::setSequentialClearanceActive(bool active)
   update();
 }
 
+// P15.11: drag-time preview flag. A flip changes the baked per-vertex color
+// (failure blue vs preview gray), so update() re-synchronizes and the renderer
+// marks the clearance buffers dirty.
+void RhiViewport::setSequentialClearancePreviewMode(bool preview)
+{
+  if (m_sequentialClearancePreviewMode == preview) return;
+  m_sequentialClearancePreviewMode = preview;
+  update();
+}
+
 void RhiViewport::setSequentialClearanceOutline(const QByteArray &data)
 {
   if (m_sequentialClearanceOutline == data) return;

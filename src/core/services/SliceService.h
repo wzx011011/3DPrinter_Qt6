@@ -21,9 +21,13 @@ class ProjectServiceMock;
 class AppSettingsService;
 
 #ifdef HAS_LIBSLIC3R
+// P15.11: the static clearance packer exposes Slic3r::Polygons by reference;
+// Polygons is a typedef so the real header is included instead of a shim.
+#include <libslic3r/Polygon.hpp>
 namespace Slic3r
 {
   class Print;
+  class DynamicPrintConfig;
 }
 #endif
 
@@ -172,6 +176,25 @@ public:
 
   State sliceState() const { return sliceState_; }
   explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
+
+#ifdef HAS_LIBSLIC3R
+  /// P15.11: packs engine polygons into the SequentialPrintClearance value
+  /// streams (outline segments / fill fans / height fans at the polygon
+  /// height). Shared by the Print::validate worker AND the drag-time
+  /// sequential-clearance preview (SequentialClearanceCompute) so both paths
+  /// emit the identical stream format.
+  static SequentialPrintClearance packSequentialClearance(
+      const Slic3r::Polygons &collision,
+      const std::vector<std::pair<Slic3r::Polygon, float>> &height);
+  /// P15.11: builds the resolved print config for a plate with the SAME merge
+  /// sequence the slice worker uses (full_print_config defaults +
+  /// restoreGenericEnumMaps + preset injection + plate overrides +
+  /// normalize_fdm). Consumed by the drag-time sequential clearance preview so
+  /// its clearance / skirt rules read exactly the values Print::apply would.
+  static Slic3r::DynamicPrintConfig makeResolvedPlateConfig(
+      const QHash<QString, QVariant> &mergedPreset,
+      const Slic3r::DynamicPrintConfig *plateCfg);
+#endif
 
   /// B1 plate-switch gate: mirrors upstream
   /// BackgroundSlicingProcess::can_switch_print (BackgroundSlicingProcess.cpp:

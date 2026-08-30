@@ -583,14 +583,17 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   const QByteArray prevClearanceFill = m_sequentialClearanceFill;
   const QByteArray prevHeightFill = m_sequentialHeightFill;
   const bool prevClearanceActive = m_sequentialClearanceActive;
+  const bool prevClearancePreviewMode = m_sequentialClearancePreviewMode;
   m_sequentialClearanceOutline = viewport->m_sequentialClearanceOutline;
   m_sequentialClearanceFill = viewport->m_sequentialClearanceFill;
   m_sequentialHeightFill = viewport->m_sequentialHeightFill;
   m_sequentialClearanceActive = viewport->m_sequentialClearanceActive;
+  m_sequentialClearancePreviewMode = viewport->m_sequentialClearancePreviewMode;
   if (prevClearanceOutline != m_sequentialClearanceOutline ||
       prevClearanceFill != m_sequentialClearanceFill ||
       prevHeightFill != m_sequentialHeightFill ||
-      prevClearanceActive != m_sequentialClearanceActive)
+      prevClearanceActive != m_sequentialClearanceActive ||
+      prevClearancePreviewMode != m_sequentialClearancePreviewMode)
     m_sequentialClearanceBuffersUploaded = false;
 
   const QByteArray prevPaintOverlay = m_paintOverlayData;
@@ -2906,10 +2909,18 @@ bool RhiViewportRenderer::uploadSequentialClearanceBuffers(QRhiResourceUpdateBat
       return false;
     QVector<GizmoVertex> vertices;
     vertices.reserve(bytes.size() / int(sizeof(float) * 3));
+    // P15.11: the drag-time preview renders the upstream NO_FILL gray
+    // (SequentialPrintClearance::render NO_FILL_COLOR = 0.75, 0.75, 0.75,
+    // 0.75) while the post-validate failure overlay keeps the blue tint.
+    const bool previewMode = m_sequentialClearancePreviewMode;
+    const float colorR = previewMode ? 0.75f : 0.8f;
+    const float colorG = previewMode ? 0.75f : 0.8f;
+    const float colorB = previewMode ? 0.75f : 1.0f;
+    const float colorA = previewMode ? 0.75f : 0.5f;
     const float *p = reinterpret_cast<const float *>(bytes.constData());
     const int n = bytes.size() / int(sizeof(float) * 3);
     for (int i = 0; i < n; ++i)
-      vertices.append({p[i * 3], p[i * 3 + 1], p[i * 3 + 2], 0.8f, 0.8f, 1.0f, 0.5f});
+      vertices.append({p[i * 3], p[i * 3 + 1], p[i * 3 + 2], colorR, colorG, colorB, colorA});
     updates->uploadStaticBuffer(buffer.get(), 0, quint32(vertices.size() * sizeof(GizmoVertex)), vertices.constData());
     count = quint32(vertices.size());
     return true;
@@ -2926,7 +2937,13 @@ bool RhiViewportRenderer::uploadSequentialClearanceBuffers(QRhiResourceUpdateBat
 
 void RhiViewportRenderer::renderSequentialClearance(QRhiCommandBuffer *cb)
 {
-  if (!m_sequentialClearanceActive || m_gizmoDragging)
+  if (!m_sequentialClearanceActive)
+    return;
+  // P15.11: the post-validate failure overlay stays hidden while a gizmo drag
+  // moves the object; the drag-time preview (upstream update_sequential_
+  // clearance, render_fill=false) is the overlay that IS live during the drag.
+  // Upstream clears it at mouse_up (reset_sequential_print_clearance).
+  if (m_gizmoDragging && !m_sequentialClearancePreviewMode)
     return;
   if (m_sequentialClearanceOutlineBuffer && m_sequentialClearanceOutlineVertexCount > 0) {
     cb->setGraphicsPipeline(m_translucentLinePipeline.get());
@@ -2934,7 +2951,10 @@ void RhiViewportRenderer::renderSequentialClearance(QRhiCommandBuffer *cb)
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_sequentialClearanceOutlineVertexCount);
   }
-  if (m_sequentialClearanceFillBuffer && m_sequentialClearanceFillVertexCount > 0) {
+  // render_fill=false during the preview: upstream never builds m_fill for
+  // the drag hulls, so the collision fill fan only renders for the
+  // post-validate overlay.
+  if (!m_sequentialClearancePreviewMode && m_sequentialClearanceFillBuffer && m_sequentialClearanceFillVertexCount > 0) {
     cb->setGraphicsPipeline(m_translucentFillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_sequentialClearanceFillBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);

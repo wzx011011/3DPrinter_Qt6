@@ -559,6 +559,9 @@ private:
   QByteArray m_sequentialClearanceFill;
   QByteArray m_sequentialHeightFill;
   bool m_sequentialClearanceActive = false;
+  // P15.11: true while the streams above hold the drag-time preview; selects
+  // the upstream NO_FILL gray color and the during-draw visibility gate.
+  bool m_sequentialClearancePreviewMode = false;
   bool m_sequentialClearanceBuffersUploaded = false;
   QVariantList m_extrudersColors;
   float m_brushRadius = 2.0f;
