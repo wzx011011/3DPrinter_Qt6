@@ -99,6 +99,34 @@ void RhiViewport::setMeshData(const QByteArray &data)
   update();
 }
 
+void RhiViewport::setSequentialClearanceActive(bool active)
+{
+  if (m_sequentialClearanceActive == active) return;
+  m_sequentialClearanceActive = active;
+  update();
+}
+
+void RhiViewport::setSequentialClearanceOutline(const QByteArray &data)
+{
+  if (m_sequentialClearanceOutline == data) return;
+  m_sequentialClearanceOutline = data;
+  update();
+}
+
+void RhiViewport::setSequentialClearanceFill(const QByteArray &data)
+{
+  if (m_sequentialClearanceFill == data) return;
+  m_sequentialClearanceFill = data;
+  update();
+}
+
+void RhiViewport::setSequentialHeightFill(const QByteArray &data)
+{
+  if (m_sequentialHeightFill == data) return;
+  m_sequentialHeightFill = data;
+  update();
+}
+
 void RhiViewport::setPreviewData(const QByteArray &data)
 {
   if (m_previewData == data)
@@ -598,6 +626,24 @@ void RhiViewport::setGizmoMode(int value)
     return;
   m_gizmoMode = value;
   emit gizmoModeChanged();
+  update();
+}
+
+void RhiViewport::setSidebarField(const QString &value)
+{
+  if (m_sidebarField == value)
+    return;
+  m_sidebarField = value;
+  emit sidebarFieldChanged();
+  update();
+}
+
+void RhiViewport::setUniformScale(bool value)
+{
+  if (m_uniformScale == value)
+    return;
+  m_uniformScale = value;
+  emit uniformScaleChanged();
   update();
 }
 

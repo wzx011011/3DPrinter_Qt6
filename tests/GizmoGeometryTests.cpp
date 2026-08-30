@@ -73,6 +73,11 @@ private slots:
   void testScaleGizmoBoundingBox();
   void testScaleGizmoOffsets();
 
+  // Sidebar transform hints
+  void testSidebarPositionHintsUseWorldAxes();
+  void testSidebarScaleHintsUseWorldAxes();
+  void testSidebarRotationHintsUseWorldPlanes();
+
   // Cut plane + wipe tower
   void testCutPlaneGeometry();
   void testCutPlaneAxisColors();
@@ -310,6 +315,71 @@ void GizmoGeometryTests::testScaleGizmoOffsets()
   QCOMPARE(offsets.boxBase[2], 78);
   QCOMPARE(offsets.shaftVertCount, 2);
   QCOMPARE(offsets.boxVertCount, 36);
+}
+
+// ===========================================================================
+// Sidebar transform hints
+// ===========================================================================
+
+void GizmoGeometryTests::testSidebarPositionHintsUseWorldAxes()
+{
+  const std::pair<QString, QVector3D> cases[] = {
+      {QStringLiteral("position_x"), QVector3D(1.f, 0.f, 0.f)},
+      {QStringLiteral("position_y"), QVector3D(0.f, 1.f, 0.f)},
+      {QStringLiteral("position_z"), QVector3D(0.f, 0.f, 1.f)}};
+  for (const auto &caseData : cases)
+  {
+    const auto verts = GizmoGeometry::buildSidebarHintVertices(caseData.first);
+    QCOMPARE(verts.size(), 36);
+    float best = -FLT_MAX;
+    QVector3D tip;
+    for (const auto &v : verts)
+    {
+      const QVector3D p(v.x, v.y, v.z);
+      const float along = QVector3D::dotProduct(p, caseData.second);
+      if (along > best)
+      {
+        best = along;
+        tip = p;
+      }
+    }
+    QVERIFY2(best > 0.99f,
+             "sidebar position hint must point along its named world axis");
+    QVERIFY2(std::abs(tip.x() - caseData.second.x() * best) < 0.08f
+                 && std::abs(tip.y() - caseData.second.y() * best) < 0.08f
+                 && std::abs(tip.z() - caseData.second.z() * best) < 0.08f,
+             "sidebar position hint tip must not retain a second axis rotation");
+  }
+}
+
+void GizmoGeometryTests::testSidebarScaleHintsUseWorldAxes()
+{
+  const auto verts = GizmoGeometry::buildSidebarHintVertices(QStringLiteral("scale_x"), false);
+  QCOMPARE(verts.size(), 72);
+  float minX = FLT_MAX;
+  float maxX = -FLT_MAX;
+  for (const auto &v : verts)
+  {
+    minX = std::min(minX, v.x);
+    maxX = std::max(maxX, v.x);
+  }
+  QVERIFY2(minX > 4.9f && maxX > 5.7f,
+           "scale_x hints must be translated along world X after orientation");
+}
+
+void GizmoGeometryTests::testSidebarRotationHintsUseWorldPlanes()
+{
+  const auto verts = GizmoGeometry::buildSidebarHintVertices(QStringLiteral("rotation_x"));
+  QCOMPARE(verts.size(), 3456);
+  float minX = FLT_MAX;
+  float maxX = -FLT_MAX;
+  for (const auto &v : verts)
+  {
+    minX = std::min(minX, v.x);
+    maxX = std::max(maxX, v.x);
+  }
+  QVERIFY2(minX < -0.72f && maxX > 0.72f,
+           "rotation_x hint must occupy the YZ plane after one orientation rotation");
 }
 
 // ===========================================================================

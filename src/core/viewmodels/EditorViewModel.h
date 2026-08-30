@@ -127,6 +127,10 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int contextPlateIndex READ contextPlateIndex NOTIFY stateChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
+  // P15.11: post-validate clearance streams, packed as raw float XYZ triples.
+  Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline NOTIFY sequentialClearanceChanged)
+  Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill NOTIFY sequentialClearanceChanged)
+  Q_PROPERTY(QByteArray sequentialHeightFill READ sequentialHeightFill NOTIFY sequentialClearanceChanged)
   /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
   Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY stateChanged)
   /// 选中对象边界框尺寸 (dx, dy, dz, volume)，全零表示无选中
@@ -266,6 +270,9 @@ public:
   int settingsTargetObjectIndex() const;
   int settingsTargetVolumeIndex() const;
   QByteArray meshData() const;
+  QByteArray sequentialClearanceOutline() const { return m_sequentialClearanceOutline; }
+  QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
+  QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
   QVector4D fitHint() const { return m_fitHint; }
   QVector4D measureDimensions() const { return m_measureDimensions; }
 
@@ -1100,6 +1107,9 @@ public:
   Q_INVOKABLE int plateBedType(int plateIndex) const;
   Q_INVOKABLE bool setPlateBedType(int plateIndex, int bedType);
   Q_INVOKABLE int platePrintSequence(int plateIndex) const;
+  /// Resolve a plate's ByDefault sequence against the effective global print
+  /// config; returns the UI sequence index (0=ByDefault, 1=ByLayer, 2=ByObject).
+  Q_INVOKABLE int resolvedPlatePrintSequence(int plateIndex) const;
   Q_INVOKABLE bool setPlatePrintSequence(int plateIndex, int seq);
   Q_INVOKABLE int plateSpiralMode(int plateIndex) const;
   Q_INVOKABLE bool setPlateSpiralMode(int plateIndex, int mode);
@@ -1173,8 +1183,8 @@ public:
   /// Each entry is a flat [x1,y1,x2,y2,...] point list for one polygon.
   Q_PROPERTY(QVariantList bedExcludeAreas READ bedExcludeAreas NOTIFY bedShapeChanged)
   /// v5.16 (HTLIMIT): extruder_clearance_height_to_rod/_to_lid from the
-  /// printer preset (Plater.cpp:8151-8152). The ByObject gate is applied in
-  /// QML via platePrintSequence(currentPlateIndex) == 2.
+  /// printer preset (Plater.cpp:8151-8152). The ByObject gate is applied via
+  /// resolvedPlatePrintSequence(currentPlateIndex) == 2.
   Q_PROPERTY(float bedHeightToRod READ bedHeightToRod NOTIFY bedShapeChanged)
   Q_PROPERTY(float bedHeightToLid READ bedHeightToLid NOTIFY bedShapeChanged)
   /// v5.16 (BEDMODEL): the printer's bed_model STL packed as a triangle
@@ -1610,6 +1620,7 @@ private slots:
   /// untouched (no placeholder pushed as "real" geometry). Always emits
   /// wipeTowerGeometryChanged() so the QML bindings refresh.
   void onWipeTowerGeometryReady(const WipeTowerGeometry &geometry);
+  void onSequentialPrintClearanceReady(const SequentialPrintClearance &clearance);
   /// Phase 108 (FMAP-01): receives the captured-by-value filament-map auto-
   /// recommendation delivered by SliceService::filamentMapReady on the GUI
   /// thread. Applies the valid gate: when result.valid is false (user picked
@@ -1625,6 +1636,7 @@ signals:
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();
+  void sequentialClearanceChanged();
   /// Phase 236 (DLG-03): an .obj with a multi-color .mtl finished loading —
   /// pendingObjColors holds the colors, the ObjColorDialog should open.
   void objColorMappingRequested(const QString &objectName);
@@ -1804,6 +1816,9 @@ private:
   // Measure selection (对齐上游 GLGizmoMeasure)
   int m_measureSelectionMode = 0; ///< 0=Default point, 1=Feature selection
   QByteArray m_cachedMeshData;
+  QByteArray m_sequentialClearanceOutline;
+  QByteArray m_sequentialClearanceFill;
+  QByteArray m_sequentialHeightFill;
   QList<int> m_cachedMeshBatchSourceObjectIndices;
   QList<int> m_cachedMeshBatchVolumeIndices;
   QList<int> m_cachedMeshBatchInstanceIndices;

@@ -37,6 +37,8 @@ private slots:
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
   // _render_3d_navigator + ImGuizmo ViewManipulate).
   void rhiViewportHostsUpstream3dNavigator();
+  // P15.9: active plate identity overlay remains backend-derived and actionable.
+  void prepareViewportHostsPlateIdentityOverlay();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
@@ -54,6 +56,8 @@ private slots:
   void rhiMoveGizmoDragBridgeStaysCppOwned();
   void rhiRotateScaleGizmoBridgeStaysCppOwned();
   void rhiGizmosRenderAsDepthIndependentOverlay();
+  void rhiSelectionCenterMatchesUpstreamMarkerContract();
+  void sequentialClearanceUsesEnginePayloadAndDedicatedBuffers();
   void rhiCutPlaneAndWipeTowerStayCppOwned();
   void visiblePlaceholderSurfacesAreHonest();
   // Phase 22 (UI-3): actively guard the v3.0 Phase 17 plate-lifecycle menu wiring
@@ -2377,7 +2381,7 @@ void QmlUiAuditTests::rhiRotateScaleGizmoBridgeStaysCppOwned()
                && rendererSource.contains(QStringLiteral("renderRotateGizmo(cb)"))
                && rendererSource.contains(QStringLiteral("renderScaleGizmo(cb)")),
            "RhiViewportRenderer must upload and draw rotate/scale gizmo geometry");
-  QVERIFY2(rendererSource.contains(QStringLiteral("verts.reserve(moveVerts.size() + rotateVerts.size() + scaleVerts.size())")),
+  QVERIFY2(rendererSource.contains(QStringLiteral("verts.reserve(moveVerts.size() + rotateVerts.size() + scaleVerts.size()")),
            "RhiViewportRenderer must reserve the combined gizmo vertex count before GPU upload");
 
   const QString geometrySource = readSource(QStringLiteral("src/core/rendering/GizmoGeometry.cpp"));
@@ -2424,6 +2428,82 @@ void QmlUiAuditTests::rhiGizmosRenderAsDepthIndependentOverlay()
            "RHI gizmo pipelines must render as overlays: no depth test and no depth writes");
   QVERIFY2(!pipelineBlock.contains(QStringLiteral("pipe->setDepthTest(true)")),
            "RHI gizmo pipelines must not test against model depth already written earlier in the pass");
+}
+
+void QmlUiAuditTests::rhiSelectionCenterMatchesUpstreamMarkerContract()
+{
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rendererHeader.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+
+  QVERIFY2(rendererHeader.contains(QStringLiteral("renderSelectionCenter"))
+               && rendererHeader.contains(QStringLiteral("m_selectionCenterVertexCount")),
+           "P15.11: RhiViewportRenderer must own a selection-center draw range");
+  QVERIFY2(rendererSource.contains(QStringLiteral("kSelectionCenterRadius = 0.75f"))
+               && rendererSource.contains(QStringLiteral("kSelectionCenterColor"))
+               && rendererSource.contains(QStringLiteral("buildBrushSphereVertices")),
+           "P15.11: selection center must be a white 0.75 mm sphere in the shared gizmo buffer");
+
+  const int centerStart = rendererSource.indexOf(QStringLiteral("void RhiViewportRenderer::renderSelectionCenter"));
+  const int moveStart = rendererSource.indexOf(QStringLiteral("\nvoid RhiViewportRenderer::renderMoveGizmo"), centerStart);
+  QVERIFY2(centerStart >= 0 && moveStart > centerStart,
+           "P15.11: renderSelectionCenter must be defined before gizmo rendering");
+  const QString centerBlock = rendererSource.mid(centerStart, moveStart - centerStart);
+  QVERIFY2(centerBlock.contains(QStringLiteral("m_prepareScene.selectedSourceObjectIndex() < 0"))
+               && centerBlock.contains(QStringLiteral("m_gizmoTriPipeline.get()"))
+               && centerBlock.contains(QStringLiteral("m_selectionCenterVertexBase")),
+           "P15.11: marker must require a selection and use the depth-independent gizmo triangle pipeline");
+  QVERIFY2(rendererSource.contains(QStringLiteral("renderSelectionCenter(cb);")),
+           "P15.11: marker must render before the active transform gizmo");
+
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QString sidebarField"))
+               && viewportHeader.contains(QStringLiteral("Q_PROPERTY(bool uniformScale")),
+           "P15.11: viewport must expose sidebar hint state and uniform scaling");
+  QVERIFY2(rendererSource.contains(QStringLiteral("buildSidebarHintVertices"))
+               && rendererSource.contains(QStringLiteral("renderSidebarHints(cb);"))
+               && rendererSource.contains(QStringLiteral("!m_gizmoVertexBufferUploaded")),
+           "P15.11: renderer must build, upload, and draw sidebar hint geometry");
+  QVERIFY2(preparePage.contains(QStringLiteral("onActiveFocusChanged"))
+               && preparePage.contains(QStringLiteral("viewport3d.sidebarField")),
+           "P15.11: transform field focus must bridge semantic sidebar state to the viewport");
+}
+
+void QmlUiAuditTests::sequentialClearanceUsesEnginePayloadAndDedicatedBuffers()
+{
+  const QString sliceHeader = readSource(QStringLiteral("src/core/services/SliceService.h"));
+  const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(sliceHeader.contains(QStringLiteral("SequentialPrintClearance")),
+           "sequential clearance must cross the worker boundary as a value payload");
+  QVERIFY2(sliceSource.contains(QStringLiteral("collisionPolygons"))
+               && sliceSource.contains(QStringLiteral("heightPolygons"))
+               && sliceSource.contains(QStringLiteral("print.validate(\n            &validationWarning, &collisionPolygons, &heightPolygons)")),
+           "SliceService must capture both engine collision and height outputs");
+  QVERIFY2(editorHeader.contains(QStringLiteral("sequentialClearanceOutline"))
+               && editorHeader.contains(QStringLiteral("sequentialHeightFill"))
+               && editorSource.contains(QStringLiteral("onSequentialPrintClearanceReady")),
+           "EditorViewModel must expose and receive the clearance payload");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("sequentialClearanceOutline"))
+               && viewportHeader.contains(QStringLiteral("sequentialHeightFill")),
+           "RhiViewport must bridge all clearance streams");
+  QVERIFY2(rendererHeader.contains(QStringLiteral("m_sequentialClearanceOutlineBuffer"))
+               && rendererHeader.contains(QStringLiteral("m_sequentialHeightFillBuffer")),
+           "clearance must use dedicated outline and height buffers");
+  QVERIFY2(rendererSource.contains(QStringLiteral("renderSequentialClearance(cb);"))
+               && rendererSource.contains(QStringLiteral("m_gizmoDragging"))
+               && rendererSource.contains(QStringLiteral("renderSelectionCenter(cb);")),
+           "clearance rendering must be gated during gizmo drag and precede the selection center");
+  QVERIFY2(preparePage.contains(QStringLiteral("sequentialClearanceOutline"))
+               && preparePage.contains(QStringLiteral("sequentialHeightFill")),
+           "PreparePage must bind the engine-produced clearance streams");
 }
 
 void QmlUiAuditTests::rhiCutPlaneAndWipeTowerStayCppOwned()
@@ -9154,6 +9234,48 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
 // face/edge/corner clicks through a 40-frame interpolation, highlights the
 // hovered face, and is gated by the show_3d_navigator app_config (default
 // true, AppConfig.cpp:200; View-menu check item MainFrame.cpp:2630-2638).
+void QmlUiAuditTests::prepareViewportHostsPlateIdentityOverlay()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+
+  const qsizetype overlay = preparePage.indexOf(QStringLiteral("id: plateViewportOverlay"));
+  const qsizetype viewport = preparePage.indexOf(QStringLiteral("id: viewport3d"));
+  QVERIFY2(overlay >= 0 && viewport >= 0 && overlay < viewport,
+           "plate identity overlay must be declared above the viewport in the page stack");
+  QVERIFY2(preparePage.contains(QStringLiteral("editorVm.currentPlateIndex"))
+               && preparePage.contains(QStringLiteral("editorVm.plateName(root.editorVm.currentPlateIndex)")),
+           "plate overlay must derive index and name from EditorViewModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("plateRenameDialog.createObject(root)"))
+               && preparePage.contains(QStringLiteral("dialog.plateIndex = root.editorVm.currentPlateIndex")),
+           "plate overlay hover action must reuse the existing rename dialog path");
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(int currentPlateIndex READ currentPlateIndex"))
+               && editorHeader.contains(QStringLiteral("Q_INVOKABLE QString plateName(int i) const")),
+           "EditorViewModel must expose the plate identity source APIs");
+
+  // P15.9: the identity overlay must expose only operations already supported
+  // by EditorViewModel and the plate context menu.
+  QVERIFY2(preparePage.contains(QStringLiteral("id: plateSelector"))
+               && preparePage.contains(QStringLiteral("setCurrentPlateIndex(currentIndex)"))
+               && preparePage.contains(QStringLiteral("model: {"))
+               && preparePage.contains(QStringLiteral("plateName(i)")),
+           "plate overlay must provide a backend-driven plate switcher");
+  QVERIFY2(preparePage.contains(QStringLiteral("togglePlateLocked(root.editorVm.currentPlateIndex)"))
+               && preparePage.contains(QStringLiteral("isPlateLocked(root.editorVm.currentPlateIndex)"))
+               && preparePage.contains(QStringLiteral("contextActionAvailable(\"plateLock\")")),
+           "plate overlay lock control must use the existing backend gate and state");
+  QVERIFY2(preparePage.contains(QStringLiteral("arrangePlate(root.editorVm.currentPlateIndex)"))
+               && preparePage.contains(QStringLiteral("autoOrientContextPlate()"))
+               && preparePage.contains(QStringLiteral("contextActionAvailable(\"plateArrange\")"))
+               && preparePage.contains(QStringLiteral("contextActionAvailable(\"plateOrient\")")),
+           "plate overlay must wire arrange and auto-orient to existing APIs");
+  QVERIFY2(preparePage.contains(QStringLiteral("canDeletePlate(root.editorVm.currentPlateIndex)"))
+               && preparePage.contains(QStringLiteral("requestConfirmDeletePlate()")),
+           "plate overlay delete must use the backend guard and existing confirmation path");
+}
+
 void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
 {
   const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
@@ -9346,6 +9468,7 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
 void QmlUiAuditTests::v516BedExcludeAndHeightLimitWired()
 {
   const QString editorVmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString evmH = editorVmH;
   const QString editorVm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString viewportH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString viewport = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
@@ -9396,12 +9519,14 @@ void QmlUiAuditTests::v516BedExcludeAndHeightLimitWired()
            "HTLIMIT: preview canvas must not draw the limit rings");
 
   // QML binding: Prepare viewport consumes both; the ByObject gate mirrors
-  // PartPlate.cpp:916 (print_sequence == ByObject, PlatePrintSequence::ByObject=2).
+  // PartPlate.cpp:916 through the resolved global-aware sequence API.
   QVERIFY2(preparePage.contains(QStringLiteral("bedExcludeAreas: root.editorVm")),
            "EXCLAREA: PreparePage must bind editorVm.bedExcludeAreas");
-  QVERIFY2(preparePage.contains(QStringLiteral("bedHeightLimitActive: root.editorVm"))
-               && preparePage.contains(QStringLiteral("platePrintSequence(root.editorVm.currentPlateIndex) === 2")),
-           "HTLIMIT: PreparePage must gate the rings on ByObject plates");
+  QVERIFY2(evmH.contains(QStringLiteral("resolvedPlatePrintSequence(int plateIndex) const")),
+           "HTLIMIT: EditorViewModel must expose the resolved sequence API");
+  QVERIFY2(preparePage.count(QStringLiteral("resolvedPlatePrintSequence(root.editorVm.currentPlateIndex) === 2")) == 2
+               && !preparePage.contains(QStringLiteral("platePrintSequence(root.editorVm.currentPlateIndex) === 2")),
+           "HTLIMIT: PreparePage must gate both paths on the resolved ByObject sequence");
 }
 
 // v5.16 Phase 236 (DLG-01..04): dialog reachability and completion audit.
@@ -9956,7 +10081,8 @@ void QmlUiAuditTests::engineSemanticsSourceAudit()
   // ── ENGN-03b: validate warnings routed to a notification ──────────────
   // Upstream shows Print::validate warnings as a notification without
   // aborting (Plater.cpp:13742-13759); postValidateWarning was dead code.
-  QVERIFY2(sliceCpp.contains(QStringLiteral("print.validate(&validationWarning)")),
+  QVERIFY2(sliceCpp.contains(QStringLiteral("print.validate("))
+               && sliceCpp.contains(QStringLiteral("&validationWarning")),
            "ENGN-03: the slice worker must request the non-fatal validate warning out-param");
   QVERIFY2(sliceCpp.contains(QStringLiteral("emit receiver->validateWarning(")),
            "ENGN-03: the worker must deliver the warning through validateWarning");

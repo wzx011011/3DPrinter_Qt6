@@ -1,6 +1,6 @@
 // GizmoStateWiringTests - verifies the Phase 67 gizmoCenter computation
 // (GWIRE-02): the static helper RhiViewportRenderer::computeGizmoCenterFromBatches
-// must return the AABB midpoint of the batch matching the selected
+// must return the union AABB midpoint of all batches matching the selected
 // sourceObjectIndex, or origin when there is no usable selection.
 //
 // AUTOMOC caveat (single-file QtTest, see tests/GizmoMathTests.cpp:1-10):
@@ -79,12 +79,15 @@ void GizmoStateWiringTests::testSingleBatchReturnsMidpoint()
 void GizmoStateWiringTests::testMultiBatchFindsSelected()
 {
   QList<PrepareSceneData::ModelBatch> batches;
-  batches.append(makeBatch(0, 0.f, 0.f, 0.f, 2.f, 2.f, 2.f));    // midpoint (1,1,1)
-  batches.append(makeBatch(2, 10.f, 20.f, 30.f, 20.f, 40.f, 50.f)); // midpoint (15,30,40)
-  batches.append(makeBatch(5, -1.f, -1.f, -1.f, 1.f, 1.f, 1.f));  // midpoint (0,0,0)
+  batches.append(makeBatch(0, 0.f, 0.f, 0.f, 2.f, 2.f, 2.f));
+  // The selected source object spans disjoint render batches. The union is
+  // X[-10,20] Y[-20,40] Z[-30,50] -> center (5,10,10).
+  batches.append(makeBatch(2, 10.f, 20.f, 30.f, 20.f, 40.f, 50.f));
+  batches.append(makeBatch(2, -10.f, -20.f, -30.f, -2.f, 0.f, 5.f));
+  batches.append(makeBatch(5, -1.f, -1.f, -1.f, 1.f, 1.f, 1.f));
   QVector3D center = GizmoCenter::fromSelectedBatch(2, batches);
-  QVERIFY2(approxVec(center, QVector3D(15.f, 30.f, 40.f)),
-           "multi-batch: must pick the midpoint of the matching sourceObjectIndex only");
+  QVERIFY2(approxVec(center, QVector3D(5.f, 10.f, 10.f)),
+           "multi-batch selection must use the union AABB center");
 }
 
 void GizmoStateWiringTests::testBatchBoundsWithNegativeRanges()

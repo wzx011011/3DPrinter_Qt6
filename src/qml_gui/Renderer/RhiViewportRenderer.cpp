@@ -480,10 +480,23 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   const float prevCutPosition = m_cutPosition;
   const QVector3D prevGizmoCenter = m_gizmoCenter;
   m_gizmoMode = viewport->m_gizmoMode;
+  const QString prevSidebarField = m_sidebarField;
+  const bool prevUniformScale = m_uniformScale;
+  m_sidebarField = viewport->m_sidebarField;
+  m_uniformScale = viewport->m_uniformScale;
+  if (m_sidebarField != prevSidebarField || m_uniformScale != prevUniformScale)
+    m_gizmoVertexBufferUploaded = false;
   m_cutAxis = viewport->m_cutAxis;
   m_cutPosition = viewport->m_cutPosition;
   m_gizmoCenter = computeGizmoCenter();
   m_cameraEye = viewport->m_camera.eye();
+  // P15.11: the selection-center sphere has a fixed upstream radius of
+  // 0.75 mm, while the shared gizmo shader scales its local coordinates by
+  // camera distance. Rebuild only when that scale changes.
+  const float selectionCenterGizmoScale =
+      std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.0f);
+  if (!qFuzzyCompare(selectionCenterGizmoScale, m_selectionCenterLastGizmoScale))
+    m_gizmoVertexBufferUploaded = false;
   if (m_gizmoMode != prevGizmoMode || m_cutAxis != prevCutAxis ||
       !qFuzzyCompare(m_cutPosition, prevCutPosition) ||
       m_gizmoCenter != prevGizmoCenter)
@@ -561,6 +574,20 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // stream (world-transformed painted facets); brush fields drive the sphere
   // cursor. A change to the payload forces an overlay re-upload; the brush
   // cursor re-uploads when its inputs change (handled in renderBrushCursor).
+  const QByteArray prevClearanceOutline = m_sequentialClearanceOutline;
+  const QByteArray prevClearanceFill = m_sequentialClearanceFill;
+  const QByteArray prevHeightFill = m_sequentialHeightFill;
+  const bool prevClearanceActive = m_sequentialClearanceActive;
+  m_sequentialClearanceOutline = viewport->m_sequentialClearanceOutline;
+  m_sequentialClearanceFill = viewport->m_sequentialClearanceFill;
+  m_sequentialHeightFill = viewport->m_sequentialHeightFill;
+  m_sequentialClearanceActive = viewport->m_sequentialClearanceActive;
+  if (prevClearanceOutline != m_sequentialClearanceOutline ||
+      prevClearanceFill != m_sequentialClearanceFill ||
+      prevHeightFill != m_sequentialHeightFill ||
+      prevClearanceActive != m_sequentialClearanceActive)
+    m_sequentialClearanceBuffersUploaded = false;
+
   const QByteArray prevPaintOverlay = m_paintOverlayData;
   m_paintOverlayData = viewport->m_paintOverlayData;
   m_extrudersColors = viewport->m_extrudersColors;
@@ -706,7 +733,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                    !m_hollowMarkerBufferUploaded ||
                                    !m_advancedCutMarkerBufferUploaded ||
                                    !m_measureOverlayBufferUploaded ||
-                                   !m_flattenHoverBufferUploaded)) {
+                                   !m_flattenHoverBufferUploaded ||
+                                   !m_sequentialClearanceBuffersUploaded ||
+                                   !m_gizmoVertexBufferUploaded)) {
       updates = rhi()->nextResourceUpdateBatch();
       if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
           !uploadWipeTowerBuffer(updates))
@@ -724,6 +753,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         uploadBrushCursorBuffer(updates);
         uploadHollowMarkerBuffer(updates);
         uploadAdvancedCutMarkerBuffer(updates);
+        uploadSequentialClearanceBuffers(updates);
         // Phase 240 (GIZ-05/GIZ-03): measure overlay + flatten hover streams.
         uploadMeasureOverlayBuffer(updates);
         uploadFlattenHoverBuffer(updates);
@@ -967,6 +997,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &highlightBinding);
       cb->draw(m_highlightVertexCount);
     }
+    // P15.11: backend-captured sequential clearance, after selection outline
+    // and before selection center/gizmo geometry (upstream GLCanvas3D order).
+    renderSequentialClearance(cb);
     renderWipeTower(cb);
     renderCutPlane(cb);
     // Phase 91 (ASMEXPLODE-02): yellow dashed connector guide lines on
@@ -985,6 +1018,11 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     {
       renderAssemblyMeasureOverlay(cb);
     }
+    // P15.11: white 0.75 mm selection center. Upstream renders this after
+    // selection/clearance and before the current gizmo (Selection.cpp:1952).
+    renderSelectionCenter(cb);
+    // P15.11: sidebar field hints are drawn before the active gizmo.
+    renderSidebarHints(cb);
     // Phase 68: render the move gizmo (X/Y/Z arrows) when gizmoMode == Move.
     // Drawn after meshes/highlight so it sits on top via no-depth-write.
     renderMoveGizmo(cb);
@@ -2542,6 +2580,8 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   if (!uploadHighlightBuffer(updates, dirtyFlags))
     return false;
+  if (!uploadSequentialClearanceBuffers(updates))
+    return false;
   if (!uploadCutPlaneBuffers(updates, dirtyFlags))
     return false;
   if (!uploadWipeTowerBuffer(updates))
@@ -2845,6 +2885,62 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
 
   m_modelVertexBufferUploaded = true;
   return true;
+}
+
+bool RhiViewportRenderer::uploadSequentialClearanceBuffers(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  auto upload = [&](const QByteArray &bytes, std::unique_ptr<QRhiBuffer> &buffer,
+                    quint32 &capacity, quint32 &count) {
+    count = 0;
+    if (bytes.size() < int(sizeof(float) * 3) || bytes.size() % int(sizeof(float) * 3) != 0)
+      return true;
+    const quint32 size = quint32(bytes.size() / int(sizeof(float) * 3) * sizeof(GizmoVertex));
+    if (!ensureBuffer(buffer, size, capacity, QRhiBuffer::VertexBuffer))
+      return false;
+    QVector<GizmoVertex> vertices;
+    vertices.reserve(bytes.size() / int(sizeof(float) * 3));
+    const float *p = reinterpret_cast<const float *>(bytes.constData());
+    const int n = bytes.size() / int(sizeof(float) * 3);
+    for (int i = 0; i < n; ++i)
+      vertices.append({p[i * 3], p[i * 3 + 1], p[i * 3 + 2], 0.8f, 0.8f, 1.0f, 0.5f});
+    updates->uploadStaticBuffer(buffer.get(), 0, quint32(vertices.size() * sizeof(GizmoVertex)), vertices.constData());
+    count = quint32(vertices.size());
+    return true;
+  };
+  if (!upload(m_sequentialClearanceOutline, m_sequentialClearanceOutlineBuffer,
+              m_sequentialClearanceOutlineBytes, m_sequentialClearanceOutlineVertexCount)) return false;
+  if (!upload(m_sequentialClearanceFill, m_sequentialClearanceFillBuffer,
+              m_sequentialClearanceFillBytes, m_sequentialClearanceFillVertexCount)) return false;
+  if (!upload(m_sequentialHeightFill, m_sequentialHeightFillBuffer,
+              m_sequentialHeightFillBytes, m_sequentialHeightFillVertexCount)) return false;
+  m_sequentialClearanceBuffersUploaded = true;
+  return true;
+}
+
+void RhiViewportRenderer::renderSequentialClearance(QRhiCommandBuffer *cb)
+{
+  if (!m_sequentialClearanceActive || m_gizmoDragging)
+    return;
+  if (m_sequentialClearanceOutlineBuffer && m_sequentialClearanceOutlineVertexCount > 0) {
+    cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_sequentialClearanceOutlineBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_sequentialClearanceOutlineVertexCount);
+  }
+  if (m_sequentialClearanceFillBuffer && m_sequentialClearanceFillVertexCount > 0) {
+    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_sequentialClearanceFillBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_sequentialClearanceFillVertexCount);
+  }
+  if (m_sequentialHeightFillBuffer && m_sequentialHeightFillVertexCount > 0) {
+    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    const QRhiCommandBuffer::VertexInput binding(m_sequentialHeightFillBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &binding);
+    cb->draw(m_sequentialHeightFillVertexCount);
+  }
 }
 
 bool RhiViewportRenderer::uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags)
@@ -3799,6 +3895,17 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
   QVector<GizmoVertex> rotateVerts = GizmoGeometry::buildRotateGizmoVertices(&rotateOffsets);
   QVector<GizmoVertex> scaleVerts = GizmoGeometry::buildScaleGizmoVertices(&scaleOffsets);
 
+  // P15.11: Selection::render_center initializes a 0.75 mm sphere, draws it
+  // white at the selected bounding-box center, and disables depth testing.
+  // The gizmo shader normally camera-scales local coordinates, so compensate
+  // here to retain the upstream world-space radius while sharing its center
+  // uniform and depth-independent triangle pipeline.
+  constexpr float kSelectionCenterRadius = 0.75f;
+  constexpr float kSelectionCenterColor[4] = {1.f, 1.f, 1.f, 1.f};
+  const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
+  QVector<GizmoVertex> selectionCenterVerts = GizmoGeometry::buildBrushSphereVertices(
+      QVector3D(), kSelectionCenterRadius / gizmoScale, kSelectionCenterColor);
+
   auto adjustOffsets = [](GizmoGeometryOffsets offsets, int base) {
     for (int ax = 0; ax < 3; ++ax)
     {
@@ -3820,12 +3927,23 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
   m_moveGizmoOffsets = adjustOffsets(moveOffsets, moveBase);
   m_rotateGizmoOffsets = adjustOffsets(rotateOffsets, rotateBase);
   m_scaleGizmoOffsets = adjustOffsets(scaleOffsets, scaleBase);
+  m_selectionCenterVertexBase = quint32(scaleBase + scaleVerts.size());
+  m_selectionCenterVertexCount = quint32(selectionCenterVerts.size());
+  m_selectionCenterLastGizmoScale = gizmoScale;
+  const QVector<GizmoVertex> sidebarHintVerts =
+      GizmoGeometry::buildSidebarHintVertices(m_sidebarField, m_uniformScale);
+  m_sidebarHintVertexBase = quint32(scaleBase + scaleVerts.size()
+                                     + selectionCenterVerts.size());
+  m_sidebarHintVertexCount = quint32(sidebarHintVerts.size());
 
   QVector<GizmoVertex> verts;
-  verts.reserve(moveVerts.size() + rotateVerts.size() + scaleVerts.size());
+  verts.reserve(moveVerts.size() + rotateVerts.size() + scaleVerts.size()
+                + selectionCenterVerts.size() + sidebarHintVerts.size());
   verts += moveVerts;
   verts += rotateVerts;
   verts += scaleVerts;
+  verts += selectionCenterVerts;
+  verts += sidebarHintVerts;
 
   const quint32 byteSize = quint32(verts.size() * sizeof(GizmoVertex));
   if (!ensureBuffer(m_gizmoVertexBuffer, byteSize, m_gizmoVertexBufferBytes,
@@ -3906,6 +4024,42 @@ bool RhiViewportRenderer::ensureGizmoPipeline()
   m_gizmoPipelineCreated = true;
   qInfo("[RHI] gizmo pipelines created (lines + triangles, depth-independent overlay)");
   return true;
+}
+
+void RhiViewportRenderer::renderSelectionCenter(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_gizmoVertexBuffer == nullptr
+      || m_selectionCenterVertexCount == 0
+      || m_prepareScene.selectedSourceObjectIndex() < 0)
+    return;
+  if (!ensureGizmoPipeline())
+    return;
+
+  // Upstream Selection::render_center chooses dragging_center while a gizmo
+  // runs, otherwise the selected bounds center. The RHI gizmo center follows
+  // the selected bounds as the transformed scene is synchronized, and the
+  // shared gizmo pipeline is depth-independent like the upstream GL draw.
+  const QRhiCommandBuffer::VertexInput binding(m_gizmoVertexBuffer.get(), 0);
+  cb->setShaderResources();
+  cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_selectionCenterVertexCount, 1, m_selectionCenterVertexBase);
+}
+
+void RhiViewportRenderer::renderSidebarHints(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_gizmoVertexBuffer == nullptr
+      || m_sidebarHintVertexCount == 0
+      || m_prepareScene.selectedSourceObjectIndex() < 0)
+    return;
+  if (!ensureGizmoPipeline())
+    return;
+
+  const QRhiCommandBuffer::VertexInput binding(m_gizmoVertexBuffer.get(), 0);
+  cb->setShaderResources();
+  cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_sidebarHintVertexCount, 1, m_sidebarHintVertexBase);
 }
 
 void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)

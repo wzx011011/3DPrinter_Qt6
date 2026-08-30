@@ -2,6 +2,7 @@
 
 #include <QVector>
 #include <QVector3D>
+#include <QString>
 #include <vector>
 
 // GizmoVertex is the shared POD vertex layout {x,y,z,r,g,b,a} (7 floats,
@@ -52,6 +53,12 @@ public:
   // Shaft uses GL_LINES; box uses GL_TRIANGLES.
   static QVector<GizmoVertex> buildScaleGizmoVertices(
       GizmoGeometryOffsets *out = nullptr);
+
+  // Sidebar transform hint arrows selected by a semantic field name.
+  // Position/scale use straight arrows; rotation uses paired curved arrows.
+  static QVector<GizmoVertex> buildSidebarHintVertices(
+      const QString &field,
+      bool uniformScale = false);
 
   // Cut plane fill: 2 triangles (6 verts) perpendicular to cutAxis at
   // cutPosition, using selected object bounds expanded by 5% on the two

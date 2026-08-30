@@ -14,9 +14,9 @@
 // forwards to fromSelectedBatch().
 namespace GizmoCenter
 {
-// Returns the midpoint of the batch whose sourceObjectIndex matches
-// `selectedSourceObjectIndex`. Returns origin (0,0,0) when the index is < 0
-// or not found in `batches`.
+// Returns the midpoint of the union AABB of all batches whose sourceObjectIndex
+// matches `selectedSourceObjectIndex`. Returns origin (0,0,0) when the index is
+// < 0 or not found in `batches`.
 QVector3D fromSelectedBatch(int selectedSourceObjectIndex,
                             const QList<PrepareSceneData::ModelBatch> &batches);
 }

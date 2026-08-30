@@ -114,20 +114,31 @@ struct WipeTowerGeometry {
 /// When valid is false (user picked Manual, so mode >= fmmManual and no
 /// auto-map was computed), receivers must not surface an auto recommendation.
 struct FilamentMapResult {
-  /// True ONLY when the upstream auto-recommendation actually ran, i.e. when
-  /// the resolved mode was < fmmManual (Print.cpp:2485). When the user picked
+  /// True ONLY when the upstream auto-recommendation actually ran, i.e. when the
+  /// resolved mode was < fmmManual (Print.cpp:2485). When the user picked
   /// Manual, the engine does not compute an auto-map, so valid stays false and
   /// there is no recommendation to surface (mirrors WTREAD-02 gate logic).
   bool valid = false;
   /// The resolved per-plate filament-map mode (OWzx::FilamentMapMode). When
   /// capturing, the worker resolves fmmDefault against the resolved mode read
-  /// from the print config (Print::get_filament_map_mode, Print.cpp:3056) so
-  /// the value stored here is always one of the three concrete modes.
+  /// from the print config (Print::get_filament_map_mode, Print.cpp:3056) so the
+  /// value stored here is always one of the three concrete modes.
   OWzx::FilamentMapMode mode = OWzx::FilamentMapMode::fmmDefault;
   /// The auto-recommended per-extruder mapping (1-based group ids), as returned
   /// by Print::get_filament_maps(). Empty when valid is false.
   std::vector<int> maps;
 };
+
+/// P15.11: Qt-safe sequential-print clearance geometry captured by value in
+/// the Print::validate worker call. Streams contain flattened XYZ floats in
+/// millimeters; no libslic3r polygon or Print object crosses the worker boundary.
+struct SequentialPrintClearance {
+  bool valid = false;
+  std::vector<float> collisionOutline;
+  std::vector<float> collisionFill;
+  std::vector<float> heightFill;
+};
+Q_DECLARE_METATYPE(SequentialPrintClearance)
 
 class SliceService final : public QObject
 {
@@ -266,6 +277,9 @@ signals:
   /// emit). When result.valid is false (user picked Manual, so no auto-map was
   /// computed by the engine), receivers must not surface an auto recommendation.
   void filamentMapReady(const FilamentMapResult &result);
+  /// P15.11: delivers the post-validate sequential clearance streams. Invalid
+  /// payloads clear stale geometry after non-ByObject/no-collision slices.
+  void sequentialPrintClearanceReady(const SequentialPrintClearance &clearance);
   void sliceFailed(const QString &message);
   /// Phase 239 (ENGN-03): emitted after a slice SUCCEEDS when Print::validate
   /// reported a non-fatal warning (upstream fills the `warning` out-param,

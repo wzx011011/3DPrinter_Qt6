@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <QMatrix4x4>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -396,6 +397,96 @@ GizmoGeometry::buildScaleGizmoVertices(GizmoGeometryOffsets *out)
     out->boxVertCount = kScaleBoxVerts;
   }
   return verts;
+}
+
+// ===========================================================================
+// buildSidebarHintVertices
+// ===========================================================================
+QVector<GizmoVertex>
+GizmoGeometry::buildSidebarHintVertices(const QString &field, bool uniformScale)
+{
+  QVector<GizmoVertex> result;
+  if (field.isEmpty())
+    return result;
+
+  const bool position = field.startsWith(QStringLiteral("position"));
+  const bool rotation = field.startsWith(QStringLiteral("rotation"));
+  const bool scale = field.startsWith(QStringLiteral("scale"));
+  if (!position && !rotation && !scale)
+    return result;
+
+  int axis = -1;
+  if (field.endsWith(QLatin1Char('x'))) axis = 0;
+  else if (field.endsWith(QLatin1Char('y'))) axis = 1;
+  else if (field.endsWith(QLatin1Char('z'))) axis = 2;
+  if (axis < 0)
+    return result;
+
+  auto appendTransformed = [&result](const QVector<GizmoVertex> &source,
+                                     const QMatrix4x4 &transform,
+                                     int colorAxis) {
+    const float *rgb = GizmoGeometry::kAxisColorRGB[colorAxis];
+    for (const GizmoVertex &v : source) {
+      const QVector3D p = transform * QVector3D(v.x, v.y, v.z);
+      result.append({p.x(), p.y(), p.z(), rgb[0], rgb[1], rgb[2], v.a});
+    }
+  };
+
+  // Upstream Selection::render_sidebar_hints renders m_arrow in its canonical
+  // +Y orientation, then rotates that one primitive into X/Z. The previous Qt
+  // code selected an already axis-oriented gizmo primitive and rotated it again,
+  // so position_x/position_z (and scale/rotation hints) landed on the wrong
+  // world axis. Keep the canonical source and apply upstream transforms once.
+  if (position || scale) {
+    const QVector<GizmoVertex> source = GizmoGeometry::buildMoveGizmoVertices();
+    const int first = 1 * 38 + 2; // canonical straight arrow (+Y), cone only
+    const int count = 36;
+    auto addArrow = [&](int selectedAxis, float offset, bool reverse) {
+      QMatrix4x4 transform;
+      transform.setToIdentity();
+      if (selectedAxis == 0) transform.rotate(90.f, 0.f, 0.f, -1.f);
+      else if (selectedAxis == 2) transform.rotate(90.f, 1.f, 0.f, 0.f);
+      if (reverse) {
+        // Upstream: T(-5Y) * Rz(PI), with column-vector multiplication.
+        transform.translate(0.f, -5.f, 0.f);
+        transform.rotate(180.f, 0.f, 0.f, 1.f);
+      }
+      else if (offset != 0.f) {
+        transform.translate(0.f, offset, 0.f);
+      }
+      QVector<GizmoVertex> part;
+      part.reserve(count);
+      for (int i = 0; i < count; ++i) part.append(source[first + i]);
+      appendTransformed(part, transform, selectedAxis);
+    };
+    if (position)
+      addArrow(axis, 0.f, false);
+    else {
+      const int firstAxis = uniformScale ? 0 : axis;
+      const int lastAxis = uniformScale ? 2 : axis;
+      for (int current = firstAxis; current <= lastAxis; ++current) {
+        addArrow(current, 5.f, false);
+        addArrow(current, -5.f, true);
+      }
+    }
+  }
+  else if (rotation) {
+    const QVector<GizmoVertex> source = GizmoGeometry::buildRotateGizmoVertices();
+    const int ringSize = 1728;
+    const int first = 2 * ringSize; // canonical curved arrow ring (normal +Z)
+    for (int direction = 0; direction < 2; ++direction) {
+      QMatrix4x4 transform;
+      transform.setToIdentity();
+      if (axis == 0) transform.rotate(90.f, 0.f, 1.f, 0.f);
+      else if (axis == 1) transform.rotate(-90.f, 1.f, 0.f, 0.f);
+      if (direction) transform.rotate(180.f, 0.f, 0.f, 1.f);
+      QVector<GizmoVertex> part;
+      part.reserve(ringSize);
+      for (int i = 0; i < ringSize; ++i) part.append(source[first + i]);
+      appendTransformed(part, transform, axis);
+    }
+  }
+  return result;
 }
 
 // ===========================================================================

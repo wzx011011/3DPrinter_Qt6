@@ -32,6 +32,12 @@ class RhiViewport : public QQuickRhiItem
   // editorVm.explosionRatio in AssemblePage.qml.
   Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY explosionRatioChanged)
   Q_PROPERTY(QByteArray meshData READ meshData WRITE setMeshData)
+  // P15.11: backend-packed sequential clearance streams. Geometry is opaque
+  // bytes here; collision calculation never occurs in QML/RHI.
+  Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline WRITE setSequentialClearanceOutline)
+  Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill WRITE setSequentialClearanceFill)
+  Q_PROPERTY(QByteArray sequentialHeightFill READ sequentialHeightFill WRITE setSequentialHeightFill)
+  Q_PROPERTY(bool sequentialClearanceActive READ sequentialClearanceActive WRITE setSequentialClearanceActive)
   Q_PROPERTY(QByteArray previewData READ previewData WRITE setPreviewData)
   Q_PROPERTY(int layerMin READ layerMin WRITE setLayerMin)
   Q_PROPERTY(int layerMax READ layerMax WRITE setLayerMax)
@@ -116,6 +122,8 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float markerZ READ markerZ WRITE setMarkerZ)
   Q_PROPERTY(bool showMarker READ showMarker WRITE setShowMarker)
   Q_PROPERTY(int gizmoMode READ gizmoMode WRITE setGizmoMode NOTIFY gizmoModeChanged)
+  Q_PROPERTY(QString sidebarField READ sidebarField WRITE setSidebarField NOTIFY sidebarFieldChanged)
+  Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale NOTIFY uniformScaleChanged)
   Q_PROPERTY(bool wireframeMode READ wireframeMode WRITE setWireframeMode NOTIFY wireframeModeChanged)
   Q_PROPERTY(int gcodeViewMode READ gcodeViewMode WRITE setGcodeViewMode NOTIFY gcodeViewModeChanged)
   Q_PROPERTY(QVariantList roleVisibility READ roleVisibility WRITE setRoleVisibility NOTIFY roleVisibilityChanged)
@@ -282,6 +290,14 @@ public:
 
   QByteArray meshData() const { return m_meshData; }
   void setMeshData(const QByteArray &data);
+  QByteArray sequentialClearanceOutline() const { return m_sequentialClearanceOutline; }
+  QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
+  QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
+  bool sequentialClearanceActive() const { return m_sequentialClearanceActive; }
+  void setSequentialClearanceActive(bool active);
+  void setSequentialClearanceOutline(const QByteArray &data);
+  void setSequentialClearanceFill(const QByteArray &data);
+  void setSequentialHeightFill(const QByteArray &data);
 
   QByteArray previewData() const { return m_previewData; }
   void setPreviewData(const QByteArray &data);
@@ -397,6 +413,10 @@ public:
 
   int gizmoMode() const { return m_gizmoMode; }
   void setGizmoMode(int value);
+  QString sidebarField() const { return m_sidebarField; }
+  void setSidebarField(const QString &value);
+  bool uniformScale() const { return m_uniformScale; }
+  void setUniformScale(bool value);
 
   bool wireframeMode() const { return m_wireframeMode; }
   void setWireframeMode(bool value);
@@ -544,6 +564,8 @@ signals:
   void navigatorLabelsChanged();
   void assemblyMeasureSelectionChanged();
   void gizmoModeChanged();
+  void sidebarFieldChanged();
+  void uniformScaleChanged();
   void wireframeModeChanged();
   void gcodeViewModeChanged();
   void roleVisibilityChanged();
@@ -739,6 +761,10 @@ private:
   // renderer re-applies the per-volume offset (see RhiViewportRenderer).
   float m_explosionRatio = 1.0f;
   QByteArray m_meshData;
+  QByteArray m_sequentialClearanceOutline;
+  QByteArray m_sequentialClearanceFill;
+  QByteArray m_sequentialHeightFill;
+  bool m_sequentialClearanceActive = false;
   QByteArray m_previewData;
   int m_layerMin = 0;
   int m_layerMax = 0;
@@ -803,6 +829,8 @@ private:
   float m_markerZ = 0.f;
   bool m_showMarker = true;
   int m_gizmoMode = GizmoMove;
+  QString m_sidebarField;
+  bool m_uniformScale = true;
   bool m_wireframeMode = false;
   int m_gcodeViewMode = GCodeFeature;
   QVariantList m_roleVisibility;

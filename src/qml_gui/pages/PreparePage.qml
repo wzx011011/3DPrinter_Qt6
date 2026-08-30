@@ -1373,6 +1373,103 @@ Item {
                     viewport: viewport3d
                 }
 
+                // P15.9: backend-driven plate controls in the viewport. Upstream
+                // PartPlate renders identity in the canvas while the plate menu
+                // owns these operations. Keep only presentation and dispatch here.
+                Rectangle {
+                    id: plateViewportOverlay
+                    z: 98
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.topMargin: root.targetViewportTopInset + 10
+                    anchors.rightMargin: 18
+                    width: plateViewportOverlayRow.implicitWidth + 20
+                    height: 40
+                    radius: 4
+                    color: Qt.rgba(0.04, 0.05, 0.07, 0.88)
+                    border.width: 1
+                    border.color: plateOverlayHover.containsMouse ? Theme.accent : Theme.borderSubtle
+                    visible: root.editorVm && root.editorVm.plateCount > 0
+
+                    Row {
+                        id: plateViewportOverlayRow
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 6
+                        spacing: 5
+
+                        CxComboBox {
+                            id: plateSelector
+                            anchors.verticalCenter: parent.verticalCenter
+                            implicitWidth: 142
+                            model: {
+                                var labels = []
+                                if (root.editorVm) {
+                                    for (var i = 0; i < root.editorVm.plateCount; ++i) {
+                                        var name = root.editorVm.plateName(i)
+                                        labels.push(qsTr("Plate %1").arg(i + 1) + "  "
+                                                    + (name.length > 0 ? name : qsTr("Untitled")))
+                                    }
+                                }
+                                return labels
+                            }
+                            currentIndex: root.editorVm ? root.editorVm.currentPlateIndex : -1
+                            onActivated: if (root.editorVm) root.editorVm.setCurrentPlateIndex(currentIndex)
+                            ToolTip.visible: hovered
+                            ToolTip.text: qsTr("Switch plate")
+                        }
+
+                        CxIconButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconSource: "qrc:/qml/assets/icons/settings.svg"
+                            toolTipText: qsTr("Rename plate")
+                            onClicked: {
+                                var dialog = plateRenameDialog.createObject(root)
+                                dialog.plateIndex = root.editorVm.currentPlateIndex
+                                dialog.currentName = root.editorVm.plateName(root.editorVm.currentPlateIndex)
+                                dialog.open()
+                            }
+                        }
+                        CxIconButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconSource: "qrc:/qml/assets/icons/lock.svg"
+                            selected: root.editorVm && root.editorVm.isPlateLocked(root.editorVm.currentPlateIndex)
+                            toolTipText: selected ? qsTr("Unlock plate") : qsTr("Lock plate")
+                            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateLock")
+                            onClicked: root.editorVm.togglePlateLocked(root.editorVm.currentPlateIndex)
+                        }
+                        CxIconButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
+                            toolTipText: qsTr("Arrange objects")
+                            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateArrange")
+                            onClicked: root.editorVm.arrangePlate(root.editorVm.currentPlateIndex)
+                        }
+                        CxIconButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
+                            toolTipText: qsTr("Auto orient objects")
+                            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateOrient")
+                            onClicked: root.editorVm.autoOrientContextPlate()
+                        }
+                        CxIconButton {
+                            anchors.verticalCenter: parent.verticalCenter
+                            iconSource: "qrc:/qml/assets/icons/trash.svg"
+                            cxStyle: CxIconButton.Style.ChromeDanger
+                            toolTipText: qsTr("Delete plate")
+                            enabled: root.editorVm && root.editorVm.canDeletePlate(root.editorVm.currentPlateIndex)
+                            onClicked: root.prepareContextMenus.requestConfirmDeletePlate()
+                        }
+                    }
+
+                    MouseArea {
+                        id: plateOverlayHover
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        acceptedButtons: Qt.NoButton
+                    }
+                }
+
                 GLToolbars {
                     id: glToolbars
                     anchors.fill: parent
@@ -1387,6 +1484,7 @@ Item {
                     anchors.fill: parent
                     z: 0
                     canvasType: GLViewport.CanvasView3D
+                    uniformScale: root.editorVm ? root.editorVm.uniformScale : true
                     meshData: root.editorVm ? root.editorVm.meshData : null
                     bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
                     // v5.15 (BEDTEX): printer bed texture image (upstream
@@ -1407,7 +1505,14 @@ Item {
                     bedHeightToRod: root.editorVm ? root.editorVm.bedHeightToRod : 0
                     bedHeightToLid: root.editorVm ? root.editorVm.bedHeightToLid : 0
                     bedHeightLimitActive: root.editorVm
-                                          && root.editorVm.platePrintSequence(root.editorVm.currentPlateIndex) === 2
+                                          && root.editorVm.resolvedPlatePrintSequence(root.editorVm.currentPlateIndex) === 2
+                    // P15.11: clearance is shown only for the resolved ByObject
+                    // sequence; all geometry arrives precomputed from Print::validate.
+                    sequentialClearanceActive: root.editorVm
+                                          && root.editorVm.resolvedPlatePrintSequence(root.editorVm.currentPlateIndex) === 2
+                    sequentialClearanceOutline: root.editorVm ? root.editorVm.sequentialClearanceOutline : null
+                    sequentialClearanceFill: root.editorVm ? root.editorVm.sequentialClearanceFill : null
+                    sequentialHeightFill: root.editorVm ? root.editorVm.sequentialHeightFill : null
                     bedDepth: root.editorVm ? root.editorVm.bedDepth : 220
                     bedOriginX: root.editorVm ? root.editorVm.bedOriginX : 0
                     bedOriginY: root.editorVm ? root.editorVm.bedOriginY : 0
@@ -1822,6 +1927,7 @@ Item {
 
                 TransformMetricField {
                     axisName: "X"
+                    sidebarField: viewport3d.gizmoMode === GLViewport.GizmoMove ? "position_x" : viewport3d.gizmoMode === GLViewport.GizmoRotate ? "rotation_x" : "scale_x"
                     accentColor: "#e066a0"
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
                     // Phase 241 (PAGE-04): Move positions display in the
@@ -1848,6 +1954,7 @@ Item {
                 }
                 TransformMetricField {
                     axisName: "Y"
+                    sidebarField: viewport3d.gizmoMode === GLViewport.GizmoMove ? "position_y" : viewport3d.gizmoMode === GLViewport.GizmoRotate ? "rotation_y" : "scale_y"
                     accentColor: Theme.textTertiary
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
                     value: {
@@ -1871,6 +1978,7 @@ Item {
                 }
                 TransformMetricField {
                     axisName: "Z"
+                    sidebarField: viewport3d.gizmoMode === GLViewport.GizmoMove ? "position_z" : viewport3d.gizmoMode === GLViewport.GizmoRotate ? "rotation_z" : "scale_z"
                     accentColor: Theme.statusInfo
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
                     value: {
@@ -4299,6 +4407,7 @@ Item {
         property real value: 0
         property int decimals: 1
         property color accentColor: Theme.textSecondary
+        property string sidebarField: ""
         signal commitValue(real v)
 
         spacing: 4
@@ -4338,6 +4447,15 @@ Item {
             QtObject {
                 id: internal
                 property string editText: ""
+            }
+
+            onActiveFocusChanged: {
+                if (!root.editorVm || !field.sidebarField)
+                    return
+                if (activeFocus)
+                    viewport3d.sidebarField = field.sidebarField
+                else if (viewport3d.sidebarField === field.sidebarField)
+                    viewport3d.sidebarField = ""
             }
 
             onTextEdited: internal.editText = text

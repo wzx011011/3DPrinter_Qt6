@@ -63,6 +63,8 @@ private:
   bool uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadHighlightBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
+  bool uploadSequentialClearanceBuffers(QRhiResourceUpdateBatch *updates);
+  void renderSequentialClearance(QRhiCommandBuffer *cb);
   bool uploadCutPlaneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadWipeTowerBuffer(QRhiResourceUpdateBatch *updates);
   // Phase 121 (PAINT-02/OV-03): parse m_paintOverlayData bytes -> GizmoVertex
@@ -124,6 +126,8 @@ private:
   void releaseBedTypeParts();
   void prepareBedTypeParts(QRhiResourceUpdateBatch *updates);
   void renderBedTypeParts(QRhiCommandBuffer *cb);
+  void renderSelectionCenter(QRhiCommandBuffer *cb);         // P15.11
+  void renderSidebarHints(QRhiCommandBuffer *cb);
   void renderMoveGizmo(QRhiCommandBuffer *cb);                // Phase 68
   void renderRotateGizmo(QRhiCommandBuffer *cb);              // Phase 70
   void renderScaleGizmo(QRhiCommandBuffer *cb);               // Phase 70
@@ -218,6 +222,9 @@ private:
   std::unique_ptr<QRhiBuffer> m_bedLimitBuffer;
   std::unique_ptr<QRhiBuffer> m_modelVertexBuffer;
   std::unique_ptr<QRhiBuffer> m_highlightVertexBuffer;
+  std::unique_ptr<QRhiBuffer> m_sequentialClearanceOutlineBuffer;
+  std::unique_ptr<QRhiBuffer> m_sequentialClearanceFillBuffer;
+  std::unique_ptr<QRhiBuffer> m_sequentialHeightFillBuffer;
   std::unique_ptr<QRhiBuffer> m_cameraUniformBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_srb;
   std::unique_ptr<QRhiGraphicsPipeline> m_fillPipeline;
@@ -368,6 +375,16 @@ private:
   GizmoGeometryOffsets m_moveGizmoOffsets;
   GizmoGeometryOffsets m_rotateGizmoOffsets;
   GizmoGeometryOffsets m_scaleGizmoOffsets;
+  // P15.11: white selection-center sphere range, appended to the shared gizmo
+  // buffer. Its vertices are inverse-scaled at upload so the gizmo shader
+  // leaves the upstream 0.75 mm radius unchanged.
+  quint32 m_selectionCenterVertexBase = 0;
+  quint32 m_selectionCenterVertexCount = 0;
+  quint32 m_sidebarHintVertexBase = 0;
+  quint32 m_sidebarHintVertexCount = 0;
+  float m_selectionCenterLastGizmoScale = -1.0f;
+  QString m_sidebarField;
+  bool m_uniformScale = true;
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
   bool m_sceneBuffersUploaded = false;
   bool m_modelVertexBufferUploaded = false;
@@ -394,6 +411,9 @@ private:
   quint32 m_bedLimitBufferBytes = 0;
   quint32 m_modelVertexBufferBytes = 0;
   quint32 m_highlightVertexBufferBytes = 0;
+  quint32 m_sequentialClearanceOutlineBytes = 0;
+  quint32 m_sequentialClearanceFillBytes = 0;
+  quint32 m_sequentialHeightFillBytes = 0;
   quint32 m_cameraUniformBufferBytes = 0;
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
@@ -423,6 +443,9 @@ private:
   quint32 m_bedLimitVertexCount = 0;
   quint32 m_modelVertexCount = 0;
   quint32 m_highlightVertexCount = 0;
+  quint32 m_sequentialClearanceOutlineVertexCount = 0;
+  quint32 m_sequentialClearanceFillVertexCount = 0;
+  quint32 m_sequentialHeightFillVertexCount = 0;
   quint32 m_cutPlaneFillVertexCount = 0;
   quint32 m_cutPlaneOutlineVertexCount = 0;
   quint32 m_wipeTowerVertexCount = 0;
@@ -481,9 +504,9 @@ private:
   // ── Phase 67: Gizmo state read from RhiViewport in synchronize() ──
   // The viewport item owns gizmoMode/cutAxis/cutPosition as Q_PROPERTY values;
   // the renderer mirrors them here so render() (Phase 68+) can branch on them.
-  // gizmoCenter is computed from the selected object's AABB midpoint via the
-  // free function GizmoCenter::fromSelectedBatch (src/core/rendering/GizmoCenter.h),
-  // which is unit-tested independently.
+  // gizmoCenter is computed from the selected object's union AABB midpoint via
+  // GizmoCenter::fromSelectedBatch (src/core/rendering/GizmoCenter.h), which is
+  // unit-tested independently.
   int m_gizmoMode = 0;          // RhiViewport::GizmoMode (0=Move, 1=Rotate, 2=Scale, 5=Cut, ...)
   int m_cutAxis = 2;            // 0=X, 1=Y, 2=Z (default Z)
   float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
@@ -493,7 +516,7 @@ private:
   float m_cutRotationX = 0.f;
   float m_cutRotationY = 0.f;
   float m_cutRotationZ = 0.f;
-  QVector3D m_gizmoCenter;      // midpoint of the selected batch's bounds; origin if no selection
+  QVector3D m_gizmoCenter;      // midpoint of selected source object's union AABB; origin if no selection
   QVector3D m_cameraEye;        // Phase 68: camera position for gizmoScale computation
   bool m_cutPlaneDirty = true;
   bool m_showWipeTower = false;
@@ -532,6 +555,11 @@ private:
   // Phase 240 (GIZ-03): flatten hovered-facet stream from
   // EditorViewModel::flattenHoverData.
   QByteArray m_flattenHoverData;
+  QByteArray m_sequentialClearanceOutline;
+  QByteArray m_sequentialClearanceFill;
+  QByteArray m_sequentialHeightFill;
+  bool m_sequentialClearanceActive = false;
+  bool m_sequentialClearanceBuffersUploaded = false;
   QVariantList m_extrudersColors;
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1;     // 1=Sphere

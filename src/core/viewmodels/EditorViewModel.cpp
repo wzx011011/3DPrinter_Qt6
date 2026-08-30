@@ -4857,6 +4857,10 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     {
       m_sliceEstimatedTime.clear();
       m_sliceResultPlateIndex = -1;
+      m_sequentialClearanceOutline.clear();
+      m_sequentialClearanceFill.clear();
+      m_sequentialHeightFill.clear();
+      emit sequentialClearanceChanged();
     }
         statusText_ = sliceService_->slicing() ? QStringLiteral("切片中...") : QStringLiteral("切片完成");
         emit stateChanged(); });
@@ -4931,6 +4935,8 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   // stays false and no stale map leaks to the Phase 110 UI.
   connect(sliceService_, &SliceService::filamentMapReady,
           this, &EditorViewModel::onFilamentMapReady);
+  connect(sliceService_, &SliceService::sequentialPrintClearanceReady,
+          this, &EditorViewModel::onSequentialPrintClearanceReady);
   connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
@@ -5301,6 +5307,22 @@ int EditorViewModel::settingsTargetVolumeIndex() const
 }
 
 QByteArray EditorViewModel::meshData() const { return m_cachedMeshData; }
+
+void EditorViewModel::onSequentialPrintClearanceReady(const SequentialPrintClearance &clearance)
+{
+  auto pack = [](const std::vector<float> &values) {
+    QByteArray bytes;
+    if (!values.empty())
+      bytes = QByteArray(reinterpret_cast<const char *>(values.data()),
+                         qsizetype(values.size() * sizeof(float)));
+    return bytes;
+  };
+  m_sequentialClearanceOutline = pack(clearance.collisionOutline);
+  m_sequentialClearanceFill = pack(clearance.collisionFill);
+  m_sequentialHeightFill = pack(clearance.heightFill);
+  emit sequentialClearanceChanged();
+  emit stateChanged();
+}
 
 // ---------- object list ----------
 int EditorViewModel::objectCount() const { return visibleObjectIndices().size(); }
@@ -8321,6 +8343,28 @@ bool EditorViewModel::setPlateBedType(int plateIndex, int bedType)
 int EditorViewModel::platePrintSequence(int plateIndex) const
 {
   return projectService_ ? projectService_->platePrintSequence(plateIndex) : 0;
+}
+
+int EditorViewModel::resolvedPlatePrintSequence(int plateIndex) const
+{
+  const int plateSequence = platePrintSequence(plateIndex);
+  if (plateSequence != 0 || !configViewModel_)
+    return plateSequence;
+
+  // PartPlate::get_real_print_seq resolves ByDefault through the active print preset.
+  const QVariant globalSequence = configViewModel_->mergedConfigValues().value(
+      QStringLiteral("print_sequence"));
+  // PrintSequence is ByLayer=0, ByObject=1, ByDefault=2 upstream, while
+  // the Prepare controls expose ByDefault=0, ByLayer=1, ByObject=2.
+  switch (globalSequence.toInt())
+  {
+  case 0:
+    return 1;
+  case 1:
+    return 2;
+  default:
+    return 0;
+  }
 }
 
 bool EditorViewModel::setPlatePrintSequence(int plateIndex, int seq)

@@ -29,6 +29,61 @@
 
 namespace
 {
+#ifdef HAS_LIBSLIC3R
+  template <typename PolygonLike>
+  void appendPolygonOutline(const PolygonLike &polygon, std::vector<float> &out, float y)
+  {
+    if (polygon.points.size() < 2)
+      return;
+    for (size_t i = 0; i < polygon.points.size(); ++i)
+    {
+      const auto &a = polygon.points[i];
+      const auto &b = polygon.points[(i + 1) % polygon.points.size()];
+      out.push_back(float(Slic3r::unscaled<double>(a.x())));
+      out.push_back(y);
+      out.push_back(float(Slic3r::unscaled<double>(a.y())));
+      out.push_back(float(Slic3r::unscaled<double>(b.x())));
+      out.push_back(y);
+      out.push_back(float(Slic3r::unscaled<double>(b.y())));
+    }
+  }
+
+  template <typename PolygonLike>
+  void appendPolygonFan(const PolygonLike &polygon, std::vector<float> &out, float y)
+  {
+    if (polygon.points.size() < 3)
+      return;
+    const auto &origin = polygon.points.front();
+    for (size_t i = 1; i + 1 < polygon.points.size(); ++i)
+    {
+      const auto &a = polygon.points[i];
+      const auto &b = polygon.points[i + 1];
+      for (const auto *point : {&origin, &a, &b})
+      {
+        out.push_back(float(Slic3r::unscaled<double>(point->x())));
+        out.push_back(y);
+        out.push_back(float(Slic3r::unscaled<double>(point->y())));
+      }
+    }
+  }
+
+  SequentialPrintClearance packSequentialClearance(
+      const Slic3r::Polygons &collision,
+      const std::vector<std::pair<Slic3r::Polygon, float>> &height)
+  {
+    SequentialPrintClearance out;
+    for (const auto &polygon : collision)
+    {
+      appendPolygonOutline(polygon, out.collisionOutline, 0.025f);
+      appendPolygonFan(polygon, out.collisionFill, 0.0125f);
+    }
+    for (const auto &entry : height)
+      appendPolygonFan(entry.first, out.heightFill, entry.second);
+    out.valid = !out.collisionOutline.empty() || !out.heightFill.empty();
+    return out;
+  }
+#endif
+
   QString formatDurationLabel(double seconds)
   {
     const qint64 totalSeconds = std::max<qint64>(0, qRound64(seconds));
@@ -629,6 +684,7 @@ void SliceService::startSlice(const QString &projectName)
     // branch populates it. Captured by value into the GUI-thread delivery
     // lambda below so no Print* escapes the worker (Frozen Decision 1).
     FilamentMapResult capturedFilamentMap{};
+    SequentialPrintClearance capturedClearance{};
 
 #ifdef HAS_LIBSLIC3R
     try
@@ -798,7 +854,11 @@ void SliceService::startSlice(const QString &projectName)
       // process_validation_warning) via the validateWarning signal.
       {
         Slic3r::StringObjectException validationWarning;
-        Slic3r::StringObjectException validationError = print.validate(&validationWarning);
+        Slic3r::Polygons collisionPolygons;
+        std::vector<std::pair<Slic3r::Polygon, float>> heightPolygons;
+        Slic3r::StringObjectException validationError = print.validate(
+            &validationWarning, &collisionPolygons, &heightPolygons);
+        capturedClearance = packSequentialClearance(collisionPolygons, heightPolygons);
         if (!validationError.string.empty())
           throw std::runtime_error("Slice validation failed: " + validationError.string);
         validationWarningText = QString::fromUtf8(validationWarning.string.c_str());
@@ -938,7 +998,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance]() {
       if (!receiver)
         return;
 
@@ -951,6 +1011,7 @@ void SliceService::startSlice(const QString &projectName)
         receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("Slicing cancelled");
         receiver->clearActiveTargetResult();
+        emit receiver->sequentialPrintClearanceReady(SequentialPrintClearance{});
         qInfo("[SliceService] slice cancelled plate=%d reason=%s",
               resultPlateIndex,
               receiver->statusLabel_.toUtf8().constData());
@@ -968,6 +1029,7 @@ void SliceService::startSlice(const QString &projectName)
         receiver->sliceState_ = State::Error;
         receiver->statusLabel_ = errorText;
         receiver->clearActiveTargetResult();
+        emit receiver->sequentialPrintClearanceReady(SequentialPrintClearance{});
         qWarning("[SliceService] slice failed plate=%d reason=%s",
                  resultPlateIndex,
                  errorText.toUtf8().constData());
@@ -1044,6 +1106,7 @@ void SliceService::startSlice(const QString &projectName)
             static_cast<int>(capturedFilamentMap.mode),
             static_cast<int>(capturedFilamentMap.maps.size()));
       emit receiver->filamentMapReady(capturedFilamentMap);
+      emit receiver->sequentialPrintClearanceReady(capturedClearance);
     }, Qt::QueuedConnection); });
 }
 
@@ -1167,6 +1230,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         receiver->sliceState_ = State::Cancelled;
         receiver->statusLabel_ = QObject::tr("Slicing cancelled");
         receiver->clearActiveTargetResult();
+        emit receiver->sequentialPrintClearanceReady(SequentialPrintClearance{});
         qInfo("[SliceService] slice cancelled plate=%d reason=%s",
               targetPlateIndex,
               receiver->statusLabel_.toUtf8().constData());

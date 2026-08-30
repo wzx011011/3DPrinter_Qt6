@@ -8257,14 +8257,9 @@ void ViewModelSmokeTests::assembleUndoRestoresSources()
   undoManager.redo();
   QCOMPARE(project.modelCount(), 1);
   QCOMPARE(project.objectNames().value(0), QStringLiteral("Assembly"));
-  // KNOWN ISSUE (P16.8 follow-up): the redo path restores the Assembly
-  // object identity but the deep-snapshot volume rehydrate drops the second
-  // volume (restorePlateListSnapshot phase-2b "survivor" branch skips
-  // re-writing an object whose name already exists, so the Assembly rebuilt
-  // by the forward operation stays in place with its 2 volumes only until
-  // the phase-2a name reconcile rewrites it). Tracked in the P16 section;
-  // this assertion locks the model-count/name contract that does hold.
-  QCOMPARE(project.objectVolumeCount(0), 1);
+  // P16.8a fixed: the deep snapshot now round-trips through the BBS 3MF
+  // writer, so the merged object comes back with BOTH source volumes.
+  QCOMPARE(project.objectVolumeCount(0), 2);
 }
 #else
 void ViewModelSmokeTests::assembleUndoRestoresSources()

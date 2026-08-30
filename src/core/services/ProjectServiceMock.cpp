@@ -22,6 +22,7 @@
 #include <QMetaObject>
 #include <QPointer>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QtConcurrent/QtConcurrentRun>
 #include <limits>
 #include <cstdint>
@@ -4920,25 +4921,54 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
     single.add_object(*obj);
     if (single.objects.empty() || !single.objects.front())
       return {};
+    if (single.objects.front()->instances.empty())
+      single.add_default_instances();
 
-    // 经临时 3MF 文件序列化（复用 saveProjectAs 的 store_3mf 路径，Format/3mf.hpp:60）
-    QTemporaryFile temp(QDir::temp().absoluteFilePath(
-        QStringLiteral("owzx_obj_snap_XXXXXX.3mf")));
-    temp.setAutoRemove(true);
-    if (!temp.open())
+    // P16.8a fix: serialize through the BBS writer (store_bbs_3mf), the same
+    // format load_bbs_3mf reads back with full per-volume fidelity (the
+    // proven storeProject3mf path). The old Prusa-style store_3mf blob went
+    // back through load_3mf, which flattened a multi-volume object into one
+    // volume (a merged Assembly lost its second part through undo/redo).
+    // The scratch model needs the same invariants storeProject3mf upholds:
+    // one PlateData with the object membership, and one (invalid) thumbnail
+    // placeholder per plate so the writer's thumbnail_status indexing stays
+    // in bounds.
+    // Write next to the app binary (the directory where the proven
+    // storeProject3mf renames succeed); the user temp dir denied the writer's
+    // .tmp rename in the unattended test session.
+    const QString snapPath = QCoreApplication::applicationDirPath()
+        + QStringLiteral("/owzx_obj_snap_%1.3mf")
+              .arg(QDateTime::currentMSecsSinceEpoch());
+    QFile::remove(snapPath);
+    const QByteArray pathBytes = snapPath.toUtf8();
+    Slic3r::StoreParams params;
+    params.path = pathBytes.constData();
+    params.model = &single;
+    params.strategy = Slic3r::SaveStrategy::Zip64;
+    // Wild-pointer hazard: StoreParams::config is uninitialized by the
+    // StoreParams() constructor (see the storeProject3mf comment above) --
+    // null it explicitly so the writer skips the project-config branch.
+    params.config = nullptr;
+    Slic3r::PlateData *scratchPlate = new Slic3r::PlateData();
+    scratchPlate->plate_index = 0;
+    scratchPlate->objects_and_instances.emplace_back(0, 0);
+    params.plate_data_list.push_back(scratchPlate);
+    Slic3r::ThumbnailData *thumbPlaceholder = new Slic3r::ThumbnailData();
+    params.thumbnail_data.push_back(thumbPlaceholder);
+
+    const bool stored = Slic3r::store_bbs_3mf(params);
+    delete scratchPlate;
+    delete thumbPlaceholder;
+    if (!stored)
       return {};
-    const QString tmpPath = temp.fileName();
-    temp.close();
 
-    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
-    if (!Slic3r::store_3mf(tmpPath.toStdString().c_str(), &single, &config,
-                           false, nullptr, true))
-      return {};
-
-    QFile result(tmpPath);
+    QFile result(snapPath);
     if (!result.open(QIODevice::ReadOnly))
       return {};
-    return result.readAll();
+    const QByteArray blob = result.readAll();
+    result.close();
+    QFile::remove(snapPath);
+    return blob;
   }
   catch (...)
   {
@@ -4990,7 +5020,43 @@ int ProjectServiceMock::restoreFullObjectSnapshot(const QByteArray &snapshot, in
     // 深拷贝进 model_（add_object(const ModelObject&) 走 new_clone，
     // Model.cpp:435——与 captureFullObjectSnapshot/duplicateObject 同手法；
     // ModelObject::set_model 是 private（friend Print），不能直接移交所有权）。
-    Slic3r::ModelObject *restored = model_->add_object(*loaded.objects.front());
+    // P16.8a: the Prusa store_3mf writes a multi-volume object as a
+    // components object and _create_object_instance (3mf.cpp:1873-1910)
+    // expands components into one single-volume ModelObject per component.
+    // The snapshot contract is ONE object carrying the original volume list,
+    // so re-merge the exploded components: each component's placement (the
+    // loader baked it into its instance transform) becomes the volume matrix
+    // relative to the merged object's single instance.
+    Slic3r::ModelObject *restored = nullptr;
+    if (loaded.objects.size() == 1)
+    {
+      restored = model_->add_object(*loaded.objects.front());
+    }
+    else
+    {
+      Slic3r::ModelObject *merged = model_->add_object();
+      for (Slic3r::ModelObject *comp : loaded.objects)
+      {
+        if (!comp || comp->instances.empty())
+          continue;
+        const Slic3r::Transform3d instMat =
+            comp->instances.front()->get_transformation().get_matrix();
+        for (const Slic3r::ModelVolume *vol : comp->volumes)
+        {
+          if (!vol)
+            continue;
+          Slic3r::ModelVolume *newVol = merged->add_volume(*vol);
+          newVol->set_transformation(instMat * vol->get_matrix());
+        }
+      }
+      if (merged->volumes.empty())
+      {
+        model_->delete_object(model_->objects.size() - 1);
+        return -1;
+      }
+      merged->add_instance();
+      restored = merged;
+    }
     if (!restored)
       return -1;
 
