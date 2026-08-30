@@ -110,6 +110,16 @@ public:
   /// Upstream compute_colum_count (PartPlate.hpp:38): ceil(sqrt(count)).
   /// Public: the renderer bakes plate-grid offsets with the same formula.
   static int computePlateColumns(int plateCount);
+  // P15.9 (PLATEANCHOR): per-plate grid offsets (upstream
+  // PartPlate::compute_shape_position, PartPlate.cpp:3206: stride = bed size
+  // * (1 + LOGICAL_PART_PLATE_GAP), PartPlate.cpp:53). Writes the slic3r-frame
+  // left/top offsets of `plateIndex` relative to the bed origin; callers add
+  // their own bed origin. Shared by the bed geometry, the axes anchor, the
+  // height-limit rings, the renderer's bed-type offset, and the RhiViewport
+  // plateAnchors projection so every consumer uses one plate layout.
+  static void plateGridOffset(int plateIndex, int plateCount,
+                              float bedWidth, float bedDepth,
+                              float &outOffsetX, float &outOffsetY);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
   // P15.1/15.2 (COLOR): full render-channel form. batchVolumeTypes values are

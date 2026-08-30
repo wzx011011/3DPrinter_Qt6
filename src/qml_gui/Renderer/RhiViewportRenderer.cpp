@@ -382,14 +382,19 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // current plate's grid offset (upstream compute_shape_position) is baked
   // into both the bed model vertices and the bed-type part quads.
   {
+    // P15.9 (PLATEANCHOR): the current-plate grid offset now comes from the
+    // shared PrepareSceneData::plateGridOffset helper (same layout as the bed
+    // geometry and the RhiViewport plateAnchors projection).
     const int plateCount = viewport->m_plateCount;
-    const int cols = PrepareSceneData::computePlateColumns(plateCount > 0 ? plateCount : 1);
-    const int row = plateCount > 0 ? viewport->m_currentPlateIndex / cols : 0;
-    const int col = plateCount > 0 ? viewport->m_currentPlateIndex % cols : 0;
-    const float strideX = viewport->m_bedWidth * 1.2f;
-    const float strideD = viewport->m_bedDepth * 1.2f;
-    m_bedTypePlateOffsetX = float(col) * strideX;
-    m_bedTypePlateOffsetZ = float(row) * strideD;
+    const int plateIndex = plateCount > 0 ? viewport->m_currentPlateIndex : 0;
+    float offsetXF = 0.0f;
+    float offsetZF = 0.0f;
+    PrepareSceneData::plateGridOffset(plateIndex, plateCount,
+                                      viewport->m_bedWidth,
+                                      viewport->m_bedDepth,
+                                      offsetXF, offsetZF);
+    m_bedTypePlateOffsetX = offsetXF;
+    m_bedTypePlateOffsetZ = offsetZF;
 
     static float s_lastBedModelOffX = 1e9f;
     static float s_lastBedModelOffZ = 1e9f;

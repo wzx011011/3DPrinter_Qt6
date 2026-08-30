@@ -39,6 +39,9 @@ private slots:
   void rhiViewportHostsUpstream3dNavigator();
   // P15.9: active plate identity overlay remains backend-derived and actionable.
   void prepareViewportHostsPlateIdentityOverlay();
+  // P15.9: plate clusters are anchored to each plate's world position via the
+  // shared PrepareSceneData layout + the RhiViewport plateAnchors projection.
+  void prepareViewportAnchorsPlateClustersToWorld();
   void rhiViewportRendererUsesModelBuffersAndCameraUniforms();
   void previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans();
   void previewRhiViewportFitsCameraToPreviewDataBeforeOrbit();
@@ -9241,39 +9244,141 @@ void QmlUiAuditTests::prepareViewportHostsPlateIdentityOverlay()
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
 
-  const qsizetype overlay = preparePage.indexOf(QStringLiteral("id: plateViewportOverlay"));
+  // P15.9: the fixed top-right cluster was replaced by per-plate clusters
+  // (upstream PartPlate::render_icons draws identity on every plate).
+  QVERIFY2(!preparePage.contains(QStringLiteral("id: plateViewportOverlay")),
+           "the fixed top-right plate cluster must be replaced by anchored clusters");
+  const qsizetype clusters = preparePage.indexOf(QStringLiteral("id: plateClusterRepeater"));
   const qsizetype viewport = preparePage.indexOf(QStringLiteral("id: viewport3d"));
-  QVERIFY2(overlay >= 0 && viewport >= 0 && overlay < viewport,
-           "plate identity overlay must be declared above the viewport in the page stack");
+  QVERIFY2(clusters >= 0 && viewport >= 0 && clusters < viewport,
+           "plate identity clusters must be declared above the viewport in the page stack");
   QVERIFY2(preparePage.contains(QStringLiteral("editorVm.currentPlateIndex"))
-               && preparePage.contains(QStringLiteral("editorVm.plateName(root.editorVm.currentPlateIndex)")),
-           "plate overlay must derive index and name from EditorViewModel");
+               && preparePage.contains(QStringLiteral("editorVm.plateName(i)")),
+               "plate clusters must derive index and name from EditorViewModel");
   QVERIFY2(preparePage.contains(QStringLiteral("plateRenameDialog.createObject(root)"))
-               && preparePage.contains(QStringLiteral("dialog.plateIndex = root.editorVm.currentPlateIndex")),
-           "plate overlay hover action must reuse the existing rename dialog path");
+               && preparePage.contains(QStringLiteral("dialog.plateIndex = plateCluster.plateIdx"))
+               && preparePage.contains(QStringLiteral("dialog.currentName = root.editorVm.plateName(plateCluster.plateIdx)")),
+           "plate cluster rename must reuse the existing rename dialog path on its own plate");
   QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(int currentPlateIndex READ currentPlateIndex"))
                && editorHeader.contains(QStringLiteral("Q_INVOKABLE QString plateName(int i) const")),
            "EditorViewModel must expose the plate identity source APIs");
 
-  // P15.9: the identity overlay must expose only operations already supported
-  // by EditorViewModel and the plate context menu.
+  // P15.9: the identity clusters must expose only operations already supported
+  // by EditorViewModel and the plate context menu, dispatched to the cluster's
+  // own plate (upstream Plater::select_plate_by_hover_id acts on plate_index).
   QVERIFY2(preparePage.contains(QStringLiteral("id: plateSelector"))
                && preparePage.contains(QStringLiteral("setCurrentPlateIndex(currentIndex)"))
                && preparePage.contains(QStringLiteral("model: {"))
                && preparePage.contains(QStringLiteral("plateName(i)")),
-           "plate overlay must provide a backend-driven plate switcher");
-  QVERIFY2(preparePage.contains(QStringLiteral("togglePlateLocked(root.editorVm.currentPlateIndex)"))
-               && preparePage.contains(QStringLiteral("isPlateLocked(root.editorVm.currentPlateIndex)"))
-               && preparePage.contains(QStringLiteral("contextActionAvailable(\"plateLock\")")),
-           "plate overlay lock control must use the existing backend gate and state");
-  QVERIFY2(preparePage.contains(QStringLiteral("arrangePlate(root.editorVm.currentPlateIndex)"))
-               && preparePage.contains(QStringLiteral("autoOrientContextPlate()"))
-               && preparePage.contains(QStringLiteral("contextActionAvailable(\"plateArrange\")"))
-               && preparePage.contains(QStringLiteral("contextActionAvailable(\"plateOrient\")")),
-           "plate overlay must wire arrange and auto-orient to existing APIs");
-  QVERIFY2(preparePage.contains(QStringLiteral("canDeletePlate(root.editorVm.currentPlateIndex)"))
-               && preparePage.contains(QStringLiteral("requestConfirmDeletePlate()")),
-           "plate overlay delete must use the backend guard and existing confirmation path");
+           "plate clusters must provide a backend-driven plate switcher");
+  QVERIFY2(preparePage.contains(QStringLiteral("togglePlateLocked(plateCluster.plateIdx)"))
+               && preparePage.contains(QStringLiteral("isPlateLocked(plateCluster.plateIdx)")),
+           "plate cluster lock must use the existing backend state and action per plate");
+  QVERIFY2(preparePage.contains(QStringLiteral("arrangePlate(plateCluster.plateIdx)"))
+               && preparePage.contains(QStringLiteral("autoOrientContextPlate()")),
+           "plate clusters must wire arrange and auto-orient to existing APIs");
+  QVERIFY2(preparePage.contains(QStringLiteral("canDeletePlate(plateCluster.plateIdx)"))
+               && preparePage.contains(QStringLiteral("confirmDeletePlateAt(plateCluster.plateIdx)")),
+           "plate cluster delete must use the backend guard and the shared confirm path");
+}
+
+// P15.9: plate-anchored control clusters. Locks the whole chain: the shared
+// PrepareSceneData plate-grid layout helper, the RhiViewport plateAnchors
+// projection (mirroring navigatorLabels and refreshed on camera moves), and
+// the PreparePage Repeater that positions one compact cluster per plate
+// (upstream PartPlate::render_icons, PartPlate.cpp:972-1076).
+void QmlUiAuditTests::prepareViewportAnchorsPlateClustersToWorld()
+{
+  const QString sceneHeader = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
+  const QString sceneSource = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!sceneHeader.isEmpty(), "Unable to read PrepareSceneData.h");
+  QVERIFY2(!sceneSource.isEmpty(), "Unable to read PrepareSceneData.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+
+  auto countOccurrences = [](const QString &haystack, const QString &needle) {
+    int count = 0;
+    const qsizetype needleSize = needle.size();
+    for (qsizetype pos = haystack.indexOf(needle); pos >= 0;
+         pos = haystack.indexOf(needle, pos + needleSize))
+      ++count;
+    return count;
+  };
+
+  // Shared layout helper: one plate-grid formula for every consumer (bed
+  // geometry, axes anchor, height-limit rings, renderer bed-type offset, and
+  // the plateAnchors projection).
+  QVERIFY2(sceneHeader.contains(QStringLiteral("static void plateGridOffset(")),
+           "PrepareSceneData must own the shared plateGridOffset layout helper");
+  const qsizetype helperImpl =
+      sceneSource.indexOf(QStringLiteral("void PrepareSceneData::plateGridOffset("));
+  QVERIFY2(helperImpl >= 0, "PrepareSceneData must implement plateGridOffset");
+  QVERIFY2(sceneSource.contains(QStringLiteral(
+               "plateGridOffset(i, plateCount, m_bedWidth, m_bedDepth, offsetX, offsetY);")),
+           "the bed geometry and height-limit rings must use the shared layout helper");
+  QVERIFY2(sceneSource.contains(QStringLiteral(
+               "plateGridOffset(current, plateCount, m_bedWidth, m_bedDepth, offsetX, offsetY);")),
+           "the axes anchor must use the shared layout helper");
+  QVERIFY2(rendererSource.contains(QStringLiteral("PrepareSceneData::plateGridOffset(")),
+           "the renderer bed-type plate offset must use the shared layout helper");
+  // The duplicated stride math must be gone: the gap-ratio stride now lives
+  // only inside plateGridOffset (strideX + strideD = exactly two occurrences,
+  // and no caller may recompute it from the member bed size).
+  QVERIFY2(countOccurrences(sceneSource, QStringLiteral("(1.0f + kPlateGapRatio)")) == 2
+               && !sceneSource.contains(QStringLiteral("m_bedWidth * (1.0f + kPlateGapRatio)")),
+           "the plate grid stride must be single-sourced in plateGridOffset");
+
+  // RhiViewport: property surface + projection getter.
+  QVERIFY2(viewportHeader.contains(QStringLiteral(
+               "Q_PROPERTY(QVariantList plateAnchors READ plateAnchors NOTIFY plateAnchorsChanged)")),
+           "RhiViewport must expose the plateAnchors projection property");
+  QVERIFY2(viewportHeader.contains(QStringLiteral("void plateAnchorsChanged();")),
+           "RhiViewport must declare the plateAnchorsChanged notify signal");
+  const qsizetype anchorsImpl =
+      viewportSource.indexOf(QStringLiteral("QVariantList RhiViewport::plateAnchors() const"));
+  QVERIFY2(anchorsImpl >= 0, "RhiViewport must compute the anchors in C++");
+  QVERIFY2(viewportSource.indexOf(QStringLiteral("cameraMvp(aspect)"), anchorsImpl) > anchorsImpl,
+           "anchor projection must use the same cameraMvp(aspect) math as projectWorldToScreen");
+  QVERIFY2(viewportSource.indexOf(QStringLiteral("PrepareSceneData::plateGridOffset("), anchorsImpl)
+               > anchorsImpl,
+           "anchor positions must come from the shared plate layout helper");
+  QVERIFY2(viewportSource.contains(QStringLiteral("{\"plateIndex\", i},"))
+               && viewportSource.contains(QStringLiteral("{\"visible\", visible}})")),
+           "anchor entries must carry {plateIndex, x, y, visible}");
+
+  // Camera moves and plate/bed changes must refresh the anchors (mirrors the
+  // navigatorLabelsChanged camera-change sites).
+  QVERIFY2(countOccurrences(viewportSource, QStringLiteral("emit plateAnchorsChanged()")) >= 10,
+           "camera moves and plate/bed footprint changes must re-emit plateAnchorsChanged");
+  QVERIFY2(countOccurrences(viewportSource,
+                            QStringLiteral("emit navigatorLabelsChanged();\n"
+                                           "  emit plateAnchorsChanged();")) >= 5,
+           "plate anchors must refresh at the navigator label camera-change sites");
+
+  // PreparePage: one Repeater bound to plateAnchors, hidden behind the
+  // camera, dispatching to the existing VM actions with per-control
+  // tooltips (upstream render_icons per-icon hover/tooltip).
+  QVERIFY2(preparePage.contains(QStringLiteral("viewport3d.plateAnchors")),
+           "PreparePage must bind the cluster Repeater to the viewport plateAnchors");
+  QVERIFY2(preparePage.contains(QStringLiteral("id: plateClusterRepeater"))
+               && preparePage.contains(QStringLiteral("id: plateCluster")),
+           "PreparePage must render one cluster per plate anchor");
+  QVERIFY2(preparePage.contains(QStringLiteral("modelData.visible")),
+           "clusters must hide when their anchor is behind the camera");
+  QVERIFY2(preparePage.contains(QStringLiteral("qsTr(\"Switch plate\")"))
+               && preparePage.contains(QStringLiteral("qsTr(\"Rename plate\")"))
+               && preparePage.contains(QStringLiteral("qsTr(\"Lock plate\")"))
+               && preparePage.contains(QStringLiteral("qsTr(\"Unlock plate\")"))
+               && preparePage.contains(QStringLiteral("qsTr(\"Arrange objects\")"))
+               && preparePage.contains(QStringLiteral("qsTr(\"Auto orient objects\")"))
+               && preparePage.contains(QStringLiteral("qsTr(\"Delete plate\")")),
+           "every cluster control must carry its tooltip (upstream render_icons)");
 }
 
 void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()

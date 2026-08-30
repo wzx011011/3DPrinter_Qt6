@@ -69,6 +69,19 @@ Item {
         })
     }
 
+    // P15.9: shared per-plate delete confirmation. The plate context menu and
+    // the anchored plate clusters both land here so destructive plate actions
+    // keep the confirm step (v5.14 UI-REVIEW blocker) and target the same
+    // backend API (editorVm.deletePlate).
+    function confirmDeletePlateAt(plateIdx) {
+        deleteConfirm.dialogTitle = qsTr("删除平板")
+        deleteConfirm.message = qsTr("确定要删除该平板吗？其上对象将一并移除，可通过撤销（Ctrl+Z）恢复。")
+        deleteConfirm.confirmText = qsTr("删除")
+        deleteConfirm.openWithAction(function() {
+            if (root.editorVm) root.editorVm.deletePlate(plateIdx)
+        })
+    }
+
     // Phase 174 (FEAT-01): per-object settings override dialog. Opens when
     // selectionSettingsRequested fires (right-click Settings, GLToolbars
     // settings button, ObjectList menu). Reads/writes via the scopedOption*
@@ -99,12 +112,7 @@ Item {
             })
         }
         onRequestConfirmDeletePlate: {
-            deleteConfirm.dialogTitle = qsTr("删除平板")
-            deleteConfirm.message = qsTr("确定要删除该平板吗？其上对象将一并移除，可通过撤销（Ctrl+Z）恢复。")
-            deleteConfirm.confirmText = qsTr("删除")
-            deleteConfirm.openWithAction(function() {
-                if (root.editorVm) root.editorVm.deletePlate(root.editorVm.contextPlateIndex)
-            })
+            root.confirmDeletePlateAt(root.editorVm ? root.editorVm.contextPlateIndex : -1)
         }
         onRequestRenameObject: {
             if (!root.editorVm) return
@@ -1373,100 +1381,138 @@ Item {
                     viewport: viewport3d
                 }
 
-                // P15.9: backend-driven plate controls in the viewport. Upstream
-                // PartPlate renders identity in the canvas while the plate menu
-                // owns these operations. Keep only presentation and dispatch here.
-                Rectangle {
-                    id: plateViewportOverlay
-                    z: 98
-                    anchors.top: parent.top
-                    anchors.right: parent.right
-                    anchors.topMargin: root.targetViewportTopInset + 10
-                    anchors.rightMargin: 18
-                    width: plateViewportOverlayRow.implicitWidth + 20
-                    height: 40
-                    radius: 4
-                    color: Qt.rgba(0.04, 0.05, 0.07, 0.88)
-                    border.width: 1
-                    border.color: plateOverlayHover.containsMouse ? Theme.accent : Theme.borderSubtle
-                    visible: root.editorVm && root.editorVm.plateCount > 0
-
-                    Row {
-                        id: plateViewportOverlayRow
-                        anchors.fill: parent
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 6
-                        spacing: 5
-
-                        CxComboBox {
-                            id: plateSelector
-                            anchors.verticalCenter: parent.verticalCenter
-                            implicitWidth: 142
-                            model: {
-                                var labels = []
-                                if (root.editorVm) {
-                                    for (var i = 0; i < root.editorVm.plateCount; ++i) {
-                                        var name = root.editorVm.plateName(i)
-                                        labels.push(qsTr("Plate %1").arg(i + 1) + "  "
-                                                    + (name.length > 0 ? name : qsTr("Untitled")))
-                                    }
-                                }
-                                return labels
-                            }
-                            currentIndex: root.editorVm ? root.editorVm.currentPlateIndex : -1
-                            onActivated: if (root.editorVm) root.editorVm.setCurrentPlateIndex(currentIndex)
-                            ToolTip.visible: hovered
-                            ToolTip.text: qsTr("Switch plate")
-                        }
-
-                        CxIconButton {
-                            anchors.verticalCenter: parent.verticalCenter
-                            iconSource: "qrc:/qml/assets/icons/settings.svg"
-                            toolTipText: qsTr("Rename plate")
-                            onClicked: {
-                                var dialog = plateRenameDialog.createObject(root)
-                                dialog.plateIndex = root.editorVm.currentPlateIndex
-                                dialog.currentName = root.editorVm.plateName(root.editorVm.currentPlateIndex)
-                                dialog.open()
-                            }
-                        }
-                        CxIconButton {
-                            anchors.verticalCenter: parent.verticalCenter
-                            iconSource: "qrc:/qml/assets/icons/lock.svg"
-                            selected: root.editorVm && root.editorVm.isPlateLocked(root.editorVm.currentPlateIndex)
-                            toolTipText: selected ? qsTr("Unlock plate") : qsTr("Lock plate")
-                            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateLock")
-                            onClicked: root.editorVm.togglePlateLocked(root.editorVm.currentPlateIndex)
-                        }
-                        CxIconButton {
-                            anchors.verticalCenter: parent.verticalCenter
-                            iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                            toolTipText: qsTr("Arrange objects")
-                            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateArrange")
-                            onClicked: root.editorVm.arrangePlate(root.editorVm.currentPlateIndex)
-                        }
-                        CxIconButton {
-                            anchors.verticalCenter: parent.verticalCenter
-                            iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
-                            toolTipText: qsTr("Auto orient objects")
-                            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateOrient")
-                            onClicked: root.editorVm.autoOrientContextPlate()
-                        }
-                        CxIconButton {
-                            anchors.verticalCenter: parent.verticalCenter
-                            iconSource: "qrc:/qml/assets/icons/trash.svg"
-                            cxStyle: CxIconButton.Style.ChromeDanger
-                            toolTipText: qsTr("Delete plate")
-                            enabled: root.editorVm && root.editorVm.canDeletePlate(root.editorVm.currentPlateIndex)
-                            onClicked: root.prepareContextMenus.requestConfirmDeletePlate()
-                        }
+                // P15.9: per-plate identity clusters anchored to each plate's
+                // own world position. Upstream PartPlate::render_icons draws
+                // the icon stack on every plate at its bed position
+                // (PartPlate.cpp:972-1076) and Plater::select_plate_by_hover_id
+                // (Plater.cpp:13862) dispatches each action to that plate.
+                // Anchors are projected in C++ (RhiViewport::plateAnchors);
+                // this overlay only positions the existing backend-driven
+                // controls, hides behind-camera clusters, and dispatches.
+                Repeater {
+                    id: plateClusterRepeater
+                    // Read the viewport size before the anchors so this
+                    // binding also refreshes when the viewport layout
+                    // settles (same pattern as NavigatorLabels.qml).
+                    model: {
+                        if (!viewport3d)
+                            return []
+                        const w = viewport3d.width
+                        const h = viewport3d.height
+                        return viewport3d.plateAnchors
                     }
 
-                    MouseArea {
-                        id: plateOverlayHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
+                    delegate: Rectangle {
+                        id: plateCluster
+                        required property var modelData
+                        readonly property int plateIdx: modelData ? modelData.plateIndex : -1
+                        // Anchor = the plate's top-right world corner; the
+                        // cluster hangs just inside the plate like the
+                        // upstream icon column (PARTPLATE_ICON_GAP_TOP/LEFT).
+                        x: modelData && modelData.visible ? modelData.x - width - 8 : 0
+                        y: modelData && modelData.visible ? modelData.y + 8 : 0
+                        z: 98
+                        width: plateClusterRow.implicitWidth + 20
+                        height: 40
+                        radius: 4
+                        color: Qt.rgba(0.04, 0.05, 0.07, 0.88)
+                        border.width: 1
+                        border.color: plateClusterHover.containsMouse ? Theme.accent : Theme.borderSubtle
+                        visible: modelData && modelData.visible
+                                 && root.editorVm && root.editorVm.plateCount > 0
+                                 && plateIdx >= 0
+
+                        Row {
+                            id: plateClusterRow
+                            anchors.fill: parent
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 6
+                            spacing: 5
+
+                            CxComboBox {
+                                id: plateSelector
+                                anchors.verticalCenter: parent.verticalCenter
+                                implicitWidth: 142
+                                model: {
+                                    var labels = []
+                                    if (root.editorVm) {
+                                        for (var i = 0; i < root.editorVm.plateCount; ++i) {
+                                            var name = root.editorVm.plateName(i)
+                                            labels.push(qsTr("Plate %1").arg(i + 1) + "  "
+                                                        + (name.length > 0 ? name : qsTr("Untitled")))
+                                        }
+                                    }
+                                    return labels
+                                }
+                                currentIndex: root.editorVm ? root.editorVm.currentPlateIndex : -1
+                                onActivated: if (root.editorVm) root.editorVm.setCurrentPlateIndex(currentIndex)
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Switch plate")
+                            }
+
+                            CxIconButton {
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconSource: "qrc:/qml/assets/icons/settings.svg"
+                                toolTipText: qsTr("Rename plate")
+                                enabled: root.editorVm && plateCluster.plateIdx >= 0
+                                onClicked: {
+                                    var dialog = plateRenameDialog.createObject(root)
+                                    dialog.plateIndex = plateCluster.plateIdx
+                                    dialog.currentName = root.editorVm.plateName(plateCluster.plateIdx)
+                                    dialog.open()
+                                }
+                            }
+                            CxIconButton {
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconSource: "qrc:/qml/assets/icons/lock.svg"
+                                selected: root.editorVm && plateCluster.plateIdx >= 0
+                                          && root.editorVm.isPlateLocked(plateCluster.plateIdx)
+                                toolTipText: selected ? qsTr("Unlock plate") : qsTr("Lock plate")
+                                enabled: root.editorVm && plateCluster.plateIdx >= 0
+                                onClicked: root.editorVm.togglePlateLocked(plateCluster.plateIdx)
+                            }
+                            CxIconButton {
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
+                                toolTipText: qsTr("Arrange objects")
+                                enabled: root.editorVm && plateCluster.plateIdx >= 0
+                                onClicked: root.editorVm.arrangePlate(plateCluster.plateIdx)
+                            }
+                            CxIconButton {
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconSource: "qrc:/qml/assets/icons/rotate-2.svg"
+                                toolTipText: qsTr("Auto orient objects")
+                                enabled: root.editorVm && plateCluster.plateIdx >= 0
+                                         && root.editorVm.plateObjectCount(plateCluster.plateIdx) > 0
+                                onClicked: {
+                                    // Upstream select_plate(plate_index) +
+                                    // orient() (Plater.cpp:13956-13971):
+                                    // resolving the plate context
+                                    // (ViewportContextTarget::Plate = 2)
+                                    // selects the plate, then the existing
+                                    // context auto-orient runs on it. Same
+                                    // dispatch as the plate context menu.
+                                    root.editorVm.synchronizeViewportContext(2, -1, -1, -1, plateCluster.plateIdx)
+                                    root.editorVm.autoOrientContextPlate()
+                                }
+                            }
+                            CxIconButton {
+                                anchors.verticalCenter: parent.verticalCenter
+                                iconSource: "qrc:/qml/assets/icons/trash.svg"
+                                cxStyle: CxIconButton.Style.ChromeDanger
+                                toolTipText: qsTr("Delete plate")
+                                enabled: root.editorVm && plateCluster.plateIdx >= 0
+                                         && root.editorVm.canDeletePlate(plateCluster.plateIdx)
+                                onClicked: root.confirmDeletePlateAt(plateCluster.plateIdx)
+                            }
+                        }
+
+                        MouseArea {
+                            id: plateClusterHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                        }
                     }
                 }
 

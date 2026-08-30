@@ -185,6 +185,8 @@ void RhiViewport::setBedWidth(float value)
   ++m_sceneGeneration;
   update();
   updateSceneExtent();
+  // P15.9 (PLATEANCHOR): the bed footprint drives the plate grid stride.
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::setBedDepth(float value)
@@ -195,6 +197,8 @@ void RhiViewport::setBedDepth(float value)
   ++m_sceneGeneration;
   update();
   updateSceneExtent();
+  // P15.9 (PLATEANCHOR): the bed footprint drives the plate grid stride.
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::setBedOriginX(float value)
@@ -204,6 +208,8 @@ void RhiViewport::setBedOriginX(float value)
   m_bedOriginX = value;
   ++m_sceneGeneration;
   update();
+  // P15.9 (PLATEANCHOR): plate anchors offset from the bed origin.
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::setBedOriginY(float value)
@@ -213,6 +219,8 @@ void RhiViewport::setBedOriginY(float value)
   m_bedOriginY = value;
   ++m_sceneGeneration;
   update();
+  // P15.9 (PLATEANCHOR): plate anchors offset from the bed origin.
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::setBedShapeType(int value)
@@ -343,6 +351,8 @@ void RhiViewport::setPlateCount(int value)
   ++m_sceneGeneration;
   ++m_modelGeneration;
   update();
+  // P15.9 (PLATEANCHOR): the anchor list carries one entry per plate.
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)
@@ -793,6 +803,7 @@ void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
   ++m_fitRequestCount;
   update();
   emit navigatorLabelsChanged();
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::requestPreviewFit()
@@ -837,6 +848,7 @@ void RhiViewport::requestViewPreset(int preset)
   m_cameraDirty = true;
   update();
   emit navigatorLabelsChanged();
+  emit plateAnchorsChanged();
 }
 
 // Phase 237 (VIEW-01): upstream-named view selection (upstream
@@ -888,6 +900,7 @@ void RhiViewport::selectView(const QString &direction)
   m_cameraDirty = true;
   update();
   emit navigatorLabelsChanged();
+  emit plateAnchorsChanged();
 }
 
 // Phase 237 (VIEW-01): orthographic projection toggle (upstream View-menu
@@ -902,6 +915,8 @@ void RhiViewport::setOrthographicCamera(bool ortho)
   m_cameraDirty = true;
   emit cameraProjectionChanged();
   update();
+  // P15.9 (PLATEANCHOR): the projection flip moves every projected anchor.
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::mirrorSelection(int axis)
@@ -1064,6 +1079,50 @@ QVariantList RhiViewport::navigatorLabels() const
   return labels;
 }
 
+// P15.9 (PLATEANCHOR): project every plate's top-right corner to item pixels
+// so QML can anchor the per-plate identity clusters (upstream render_icons
+// draws each plate's icon stack at its own bed position, PartPlate.cpp:972).
+// The projection mirrors projectWorldToScreen: cameraMvp(aspect) built from
+// the same proj/view matrices the renderer uploads, mapped to item size.
+QVariantList RhiViewport::plateAnchors() const
+{
+  QVariantList anchors;
+  const int plateCount = m_plateCount > 0 ? m_plateCount : 0;
+  if (plateCount <= 0)
+    return anchors;
+  const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+  const float aspect = float(viewSize.width()) / float(viewSize.height());
+  const QMatrix4x4 mvp = cameraMvp(aspect);
+  for (int i = 0; i < plateCount; ++i) {
+    float offsetX = 0.0f;
+    float offsetY = 0.0f;
+    PrepareSceneData::plateGridOffset(i, plateCount, m_bedWidth, m_bedDepth,
+                                      offsetX, offsetY);
+    // Anchor at the plate's top-right corner (slic3r frame): the upstream
+    // icon column sits at the bed extents max X just below the plate top
+    // edge (calc_vertex_for_icons, PartPlate.cpp:633-641). Qt scene frame:
+    // X = bed X, Y = height (ground), Z = bed Y.
+    const float worldX = m_bedOriginX + offsetX + m_bedWidth;
+    const float worldZ = m_bedOriginY + offsetY;
+    const QVector4D clip = mvp * QVector4D(worldX, 0.0f, worldZ, 1.0f);
+    // Behind the camera (or degenerate w) -> QML hides the cluster.
+    const bool visible = clip.w() > 0.0f && !qFuzzyIsNull(clip.w());
+    double px = 0.0;
+    double py = 0.0;
+    if (visible) {
+      const QVector3D ndc = clip.toVector3D() / clip.w();
+      px = double((ndc.x() * 0.5f + 0.5f) * float(viewSize.width()));
+      py = double((1.f - (ndc.y() * 0.5f + 0.5f)) * float(viewSize.height()));
+    }
+    anchors.append(QVariantMap{
+        {"plateIndex", i},
+        {"x", px},
+        {"y", py},
+        {"visible", visible}});
+  }
+  return anchors;
+}
+
 bool RhiViewport::startNavigatorPress(const QPointF &position)
 {
   if (!m_navigatorEnabled)
@@ -1109,6 +1168,7 @@ void RhiViewport::navigatorDragMove(const QPointF &position)
     m_cameraDirty = true;
     update();
     emit navigatorLabelsChanged();
+    emit plateAnchorsChanged();
   }
   m_navigatorLastPos = position;
   updateNavigatorHover(position, false);
@@ -1193,6 +1253,7 @@ void RhiViewport::advanceNavigatorSnap()
   m_cameraDirty = true;
   update();
   emit navigatorLabelsChanged();
+  emit plateAnchorsChanged();
 }
 
 void RhiViewport::mousePressEvent(QMouseEvent *event)
@@ -1568,6 +1629,7 @@ void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
   m_cameraDirty = true;
   update();
   emit navigatorLabelsChanged();
+  emit plateAnchorsChanged();
 }
 
 // P14 (CAM-PARITY): pick-based pan (upstream is_camera_pan block,
@@ -1587,6 +1649,10 @@ void RhiViewport::applyCameraPan()
     m_camera.translateWorld(pressGround - currentGround);
     m_cameraDirty = true;
     update();
+    // P15.9 (PLATEANCHOR): pan translates the camera target, so the
+    // world-anchored plate clusters move with the scene (the navigator cube
+    // labels are orientation-only and skip this emit).
+    emit plateAnchorsChanged();
   }
 }
 
@@ -1755,6 +1821,7 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
   event->accept();
   update();
   emit navigatorLabelsChanged();
+  emit plateAnchorsChanged();
 }
 
 QMatrix4x4 RhiViewport::cameraMvp(float aspect) const

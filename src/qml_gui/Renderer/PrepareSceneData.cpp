@@ -670,6 +670,24 @@ int PrepareSceneData::computePlateColumns(int plateCount)
   return value > rounded ? int(rounded) + 1 : int(rounded);
 }
 
+void PrepareSceneData::plateGridOffset(int plateIndex, int plateCount,
+                                       float bedWidth, float bedDepth,
+                                       float &outOffsetX, float &outOffsetY)
+{
+  // P15.9 (PLATEANCHOR): single source of the per-plate grid layout.
+  // Upstream compute_shape_position (PartPlate.cpp:3206) offsets each plate
+  // by col/row * (bed size * (1 + LOGICAL_PART_PLATE_GAP 1/5),
+  // PartPlate.cpp:53); columns come from compute_colum_count
+  // (PartPlate.hpp:38).
+  const int count = plateCount > 0 ? plateCount : 1;
+  const int index = plateIndex > 0 ? plateIndex : 0;
+  const int cols = computePlateColumns(count);
+  const float strideX = bedWidth * (1.0f + kPlateGapRatio);
+  const float strideD = bedDepth * (1.0f + kPlateGapRatio);
+  outOffsetX = float(index % cols) * strideX;
+  outOffsetY = float(index / cols) * strideD;
+}
+
 void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();
@@ -691,17 +709,16 @@ void PrepareSceneData::rebuildBedGeometry()
   // SELECT_COLOR + LINE_TOP_SEL_COLOR; the others UNSELECT_DARK_COLOR +
   // LINE_TOP_DARK_COLOR (PartPlate::render_background/render_grid).
   const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
-  const float strideX = m_bedWidth * (1.0f + kPlateGapRatio);
-  const float strideD = m_bedDepth * (1.0f + kPlateGapRatio);
   const int cols = computePlateColumns(plateCount);
 
   for (int i = 0; i < plateCount; ++i) {
-    const int row = i / cols;
-    const int col = i % cols;
-    const float left = m_bedOriginX + float(col) * strideX;
-    const float top = m_bedOriginY + float(row) * strideD;
+    float offsetX = 0.0f;
+    float offsetY = 0.0f;
+    plateGridOffset(i, plateCount, m_bedWidth, m_bedDepth, offsetX, offsetY);
+    const float left = m_bedOriginX + offsetX;
+    const float top = m_bedOriginY + offsetY;
     const bool selected = (m_plateCount <= 0) || (i == m_currentPlateIndex);
-    rebuildPlateGeometry(row, col, left, top, selected);
+    rebuildPlateGeometry(i / cols, i % cols, left, top, selected);
   }
 
   rebuildAxesGeometry();
@@ -994,11 +1011,11 @@ void PrepareSceneData::rebuildAxesGeometry()
   const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
   const bool validPlate = m_currentPlateIndex >= 0 && m_currentPlateIndex < plateCount;
   const int current = validPlate ? m_currentPlateIndex : 0;
-  const float strideX = m_bedWidth * (1.0f + kPlateGapRatio);
-  const float strideD = m_bedDepth * (1.0f + kPlateGapRatio);
-  const int cols = computePlateColumns(plateCount);
-  const float left = m_bedOriginX + float(current % cols) * strideX;
-  const float top = m_bedOriginY + float(current / cols) * strideD;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  plateGridOffset(current, plateCount, m_bedWidth, m_bedDepth, offsetX, offsetY);
+  const float left = m_bedOriginX + offsetX;
+  const float top = m_bedOriginY + offsetY;
   // Bed3D::set_shape: stem length = 0.1 * bounding_volume max size
   // (3DBed.cpp:326); printable height is not tracked here, so the max uses
   // the plate footprint.
@@ -1290,9 +1307,6 @@ void PrepareSceneData::rebuildHeightLimitGeometry()
     return;
 
   const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
-  const float strideX = m_bedWidth * (1.0f + kPlateGapRatio);
-  const float strideD = m_bedDepth * (1.0f + kPlateGapRatio);
-  const int cols = computePlateColumns(plateCount);
 
   auto appendVertical = [](QList<ModelVertex> &vertices,
                            float x, float depth, float z0, float z1,
@@ -1313,10 +1327,11 @@ void PrepareSceneData::rebuildHeightLimitGeometry()
   };
 
   for (int i = 0; i < plateCount; ++i) {
-    const int row = i / cols;
-    const int col = i % cols;
-    const float left = m_bedOriginX + float(col) * strideX;
-    const float top = m_bedOriginY + float(row) * strideD;
+    float offsetX = 0.0f;
+    float offsetY = 0.0f;
+    plateGridOffset(i, plateCount, m_bedWidth, m_bedDepth, offsetX, offsetY);
+    const float left = m_bedOriginX + offsetX;
+    const float top = m_bedOriginY + offsetY;
     const float right = left + m_bedWidth;
     const float bottom = top + m_bedDepth;
 
