@@ -134,28 +134,48 @@ class Harness:
         # approved plan) interrupt the user with a confirmation card.
         self._readonly_tools: set[str] = set()
 
-    def _refresh_readonly_tools(self) -> None:
-        """Fetch MCP annotations so can_use_tool can auto-allow read-only tools."""
+    def _refresh_readonly_tools(self, retries: int = 3) -> None:
+        """Fetch MCP annotations so can_use_tool can auto-allow read-only tools.
+
+        Retried: right after launch the app's main thread may still be busy
+        loading QML, and the loopback MCP server lives in that event loop —
+        the first tools/list can time out even though nothing is wrong.
+        """
+        import time
         import urllib.request
 
-        try:
-            req = urllib.request.Request(
-                self.mcp_url,
-                data=json.dumps({"jsonrpc": "2.0", "id": 900, "method": "tools/list"}).encode(),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.mcp_token}",
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                payload = json.loads(resp.read().decode("utf-8"))
-            for tool in payload.get("result", {}).get("tools", []):
-                ann = tool.get("annotations") or {}
-                if ann.get("readOnlyHint"):
-                    self._readonly_tools.add(tool.get("name", ""))
-        except Exception as exc:  # noqa: BLE001 -- safe fallback: ask for everything
-            emit({"type": "error", "message": f"tools/list annotations unavailable: {exc}"})
+        # Proxy-free opener: this request is loopback. Machines that export
+        # HTTP(S)_PROXY without NO_PROXY would otherwise route it through the
+        # proxy and time out.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        request = urllib.request.Request(
+            self.mcp_url,
+            data=json.dumps({"jsonrpc": "2.0", "id": 900, "method": "tools/list"}).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.mcp_token}",
+            },
+            method="POST",
+        )
+        last_exc: Exception | None = None
+        for attempt in range(retries):
+            try:
+                with opener.open(request, timeout=5) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                for tool in payload.get("result", {}).get("tools", []):
+                    ann = tool.get("annotations") or {}
+                    if ann.get("readOnlyHint"):
+                        self._readonly_tools.add(tool.get("name", ""))
+                return
+            except Exception as exc:  # noqa: BLE001 -- retry, then fall back
+                last_exc = exc
+                if attempt + 1 < retries:
+                    time.sleep(2)
+        # Non-fatal fallback: without annotations every tool asks for
+        # confirmation. Log to stderr (sidecar log) instead of emitting an
+        # error event so the chat transcript stays clean.
+        print(f"[sidecar] tools/list annotations unavailable after "
+              f"{retries} attempts: {last_exc}", file=sys.stderr, flush=True)
 
     # -- permission bridge: SDK callback -> host card -> stdin answer --------
     async def can_use_tool(self, tool_name, tool_input, context):  # noqa: ANN001

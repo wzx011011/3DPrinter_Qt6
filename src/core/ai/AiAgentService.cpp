@@ -42,6 +42,13 @@ bool AiAgentService::start() {
   QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
   env.insert(QStringLiteral("PYTHONUNBUFFERED"), QStringLiteral("1"));
   env.insert(QStringLiteral("PYTHONIOENCODING"), QStringLiteral("utf-8"));
+  // The sidecar talks to the loopback MCP server; on machines that export
+  // HTTP(S)_PROXY without NO_PROXY, proxy-honoring HTTP clients would route
+  // those requests through the proxy and time out.
+  env.insert(QStringLiteral("NO_PROXY"),
+             QStringLiteral("127.0.0.1,localhost,::1"));
+  env.insert(QStringLiteral("no_proxy"),
+             QStringLiteral("127.0.0.1,localhost,::1"));
   env.insert(QStringLiteral("OWZX_MCP_URL"), config_.mcpUrl);
   env.insert(QStringLiteral("OWZX_MCP_TOKEN"), config_.mcpToken);
   env.insert(QStringLiteral("OWZX_MODEL"), config_.model);
