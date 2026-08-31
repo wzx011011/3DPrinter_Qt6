@@ -52,7 +52,8 @@ struct CalibrationHistoryEntry
 {
     QString name;           // Calibration type name
     QString filamentId;     // Filament preset identifier
-    float kValue;           // K-value (Pressure Advance); 0 when no machine-readable readback
+    float kValue;           // K-value (Pressure Advance); 0 for non-PA results
+    float flowRate;         // Flow ratio result; 0 when not a Flow Rate result
     float nozzleDiameter;   // Nozzle diameter used
     QString timestamp;      // ISO timestamp
     // Phase 125 (CALIB-03): honest result bookkeeping. hasRealReadback is true
@@ -165,6 +166,7 @@ public:
     Q_INVOKABLE QString historyName(int index) const;
     Q_INVOKABLE QString historyFilamentId(int index) const;
     Q_INVOKABLE float historyKValue(int index) const;
+    Q_INVOKABLE float historyFlowRate(int index) const;
     Q_INVOKABLE float historyNozzleDiameter(int index) const;
     Q_INVOKABLE QString historyTimestamp(int index) const;
     /// Phase 125 (CALIB-03): true when the K-value was read back from a real
@@ -174,7 +176,8 @@ public:
     Q_INVOKABLE QString historyNotes(int index) const;
     Q_INVOKABLE void addHistoryEntry(const QString &name, const QString &filamentId,
                                       float kValue, float nozzleDiameter, const QString &timestamp,
-                                      bool hasRealReadback = false, const QString &notes = QString());
+                                      bool hasRealReadback = false, const QString &notes = QString(),
+                                      float flowRate = 0.0f);
     Q_INVOKABLE void clearHistory();
 
 signals:

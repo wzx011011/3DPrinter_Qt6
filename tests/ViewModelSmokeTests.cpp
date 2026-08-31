@@ -3636,8 +3636,12 @@ void ViewModelSmokeTests::calibrationSaveToPresetWritesPresetValues()
   values.insert(QStringLiteral("filament_flow_ratio"), 0.98);
   QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat, presetName, values));
 
-  // PA mode writes pressure_advance.
+  // PA mode writes pressure_advance. Complete the local fallback sweep first
+  // so the ViewModel has a measured result to save.
   QVERIFY(vm.selectItemById(QStringLiteral("flow_dynamics")));
+  calib.startCalibration(calib.calibTypeIndexById(QStringLiteral("flow_dynamics")));
+  for (int i = 0; i < 50 && calib.isRunning(); ++i)
+    QVERIFY(QMetaObject::invokeMethod(&calib, "onTick", Qt::DirectConnection));
   vm.setSelectedFilamentPreset(presetName);
   vm.setCurrentKValue(0.032f);
   QVERIFY2(vm.saveCalibrationResultToPreset(),
@@ -3647,10 +3651,13 @@ void ViewModelSmokeTests::calibrationSaveToPresetWritesPresetValues()
   // The pre-existing flow ratio survives the read-modify-write.
   QCOMPARE(preset.presetValue(presetName, QStringLiteral("filament_flow_ratio")).toDouble(), 0.98);
 
-  // FlowRate mode writes filament_flow_ratio.
+  // FlowRate mode writes filament_flow_ratio after its own completed sweep.
   QVERIFY(vm.selectItemById(QStringLiteral("flow_rate")));
+  calib.startCalibration(calib.calibTypeIndexById(QStringLiteral("flow_rate")));
+  for (int i = 0; i < 50 && calib.isRunning(); ++i)
+    QVERIFY(QMetaObject::invokeMethod(&calib, "onTick", Qt::DirectConnection));
   vm.setSelectedFilamentPreset(presetName);
-  vm.setCurrentKValue(0.95f);
+  vm.setCurrentFlowRate(0.95f);
   QVERIFY(vm.saveCalibrationResultToPreset());
   QCOMPARE(preset.presetValue(presetName, QStringLiteral("filament_flow_ratio")).toFloat(), 0.95f);
 

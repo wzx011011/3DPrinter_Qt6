@@ -14,12 +14,17 @@ CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObj
         connect(m_service, &CalibrationServiceMock::stepChanged, this, &CalibrationViewModel::calibrationParamsChanged);
         connect(m_service, &CalibrationServiceMock::statusChanged, this, &CalibrationViewModel::statusChanged);
         connect(m_service, &CalibrationServiceMock::historyChanged, this, &CalibrationViewModel::historyChanged);
-        connect(m_service, &CalibrationServiceMock::calibrationFinished, this, [this](bool)
+        connect(m_service, &CalibrationServiceMock::calibrationFinished, this, [this](bool success)
             {
+                if (success && m_selectedIndex >= 0) {
+                    m_hasResult = true;
+                    m_resultMode = m_service->calibTypeMode(m_selectedIndex);
+                }
                 emit runningChanged();
                 emit progressChanged();
                 emit stepChanged();
                 emit statusChanged(m_selectedIndex, selectedStatus());
+                emit calibrationParamsChanged();
             });
     }
 }
@@ -61,6 +66,11 @@ int CalibrationViewModel::calibItemStatus(int i) const
 QString CalibrationViewModel::calibItemId(int i) const
 {
     return m_service ? m_service->calibTypeId(i) : QString{};
+}
+
+QString CalibrationViewModel::calibItemCategory(int i) const
+{
+    return m_service ? m_service->calibTypeCategory(i) : QString{};
 }
 
 bool CalibrationViewModel::calibItemImplemented(int i) const
@@ -111,6 +121,7 @@ void CalibrationViewModel::selectItem(int index)
     if (m_selectedIndex == index) return;
     m_selectedIndex = index;
     emit selectionChanged();
+    emit calibrationParamsChanged();
 }
 
 bool CalibrationViewModel::selectItemById(const QString &id)
@@ -275,6 +286,13 @@ void CalibrationViewModel::setCurrentKValue(float v)
     emit calibrationParamsChanged();
 }
 
+void CalibrationViewModel::setCurrentFlowRate(float v)
+{
+    if (qFuzzyCompare(m_currentFlowRate, v)) return;
+    m_currentFlowRate = v;
+    emit calibrationParamsChanged();
+}
+
 void CalibrationViewModel::setCurrentNValue(float v)
 {
     if (qFuzzyCompare(m_currentNValue, v)) return;
@@ -288,11 +306,25 @@ bool CalibrationViewModel::showParamInputs() const
     return id.contains(QStringLiteral("cali"));
 }
 
+bool CalibrationViewModel::hasCalibrationResult() const
+{
+    return m_hasResult && m_service && m_selectedIndex >= 0
+        && m_service->calibTypeMode(m_selectedIndex) == m_resultMode;
+}
+
 QString CalibrationViewModel::calibrationResultSummary() const
 {
-    if (!m_hasResult) return {};
-    return QStringLiteral("K = %1, N = %2").arg(m_currentKValue, 0, 'f', 4)
-                                         .arg(m_currentNValue, 0, 'f', 2);
+    if (!hasCalibrationResult())
+        return {};
+
+    if (m_service->calibTypeMode(m_selectedIndex) == CalibrationServiceMock::calibModeFlowRate()) {
+        return QStringLiteral("Flow ratio = %1, nozzle = %2 mm")
+            .arg(m_currentFlowRate, 0, 'f', 3)
+            .arg(m_currentNValue, 0, 'f', 2);
+    }
+    return QStringLiteral("K = %1, nozzle = %2 mm")
+        .arg(m_currentKValue, 0, 'f', 4)
+        .arg(m_currentNValue, 0, 'f', 2);
 }
 
 // --- Phase 125 (CALIB-02): user-editable calibration range ---
@@ -345,14 +377,18 @@ void CalibrationViewModel::setCalibStep(double v)
 
 void CalibrationViewModel::saveCalibrationResult()
 {
-    if (!m_service || m_selectedIndex < 0) return;
-    m_hasResult = true;
+    if (!m_service || !hasCalibrationResult()) return;
+    const int resultMode = m_service->calibTypeMode(m_selectedIndex);
+    const bool isFlowRate = resultMode == CalibrationServiceMock::calibModeFlowRate();
     m_service->addHistoryEntry(
         m_service->calibTypeName(m_selectedIndex),
         m_selectedFilamentPreset.isEmpty() ? QStringLiteral("default") : m_selectedFilamentPreset,
-        m_currentKValue,
+        isFlowRate ? 0.0f : m_currentKValue,
         m_currentNValue,
-        QDateTime::currentDateTime().toString(Qt::ISODate));
+        QDateTime::currentDateTime().toString(Qt::ISODate),
+        false,
+        QString(),
+        isFlowRate ? m_currentFlowRate : 0.0f);
     emit calibrationParamsChanged();
 }
 
@@ -363,7 +399,7 @@ bool CalibrationViewModel::saveCalibrationResultToPreset()
     // the PA K-value into the filament preset's pressure_advance and the flow
     // ratio into filament_flow_ratio. Read-modify-write keeps every other
     // preset value intact; savePresetValues rejects read-only presets.
-    if (!m_service || m_selectedIndex < 0 || !m_presetService)
+    if (!m_service || !hasCalibrationResult() || !m_presetService)
         return false;
 
     const int mode = m_service->calibTypeMode(m_selectedIndex);
@@ -384,22 +420,26 @@ bool CalibrationViewModel::saveCalibrationResultToPreset()
     if (presetName.isEmpty() || !m_presetService->hasPreset(presetName))
         return false;
 
+    const bool isFlowRate = mode == CalibrationServiceMock::calibModeFlowRate();
+    const float resultValue = isFlowRate ? m_currentFlowRate : m_currentKValue;
     QHash<QString, QVariant> values = m_presetService->presetValues(presetName);
-    values.insert(key, m_currentKValue);
+    values.insert(key, resultValue);
     if (!m_presetService->savePresetValues(presetName, values))
         return false;
 
     // Upstream save also appends a history entry.
     m_hasResult = true;
+    m_resultMode = mode;
     m_service->addHistoryEntry(
         m_service->calibTypeName(m_selectedIndex),
         presetName,
-        m_currentKValue,
+        isFlowRate ? 0.0f : m_currentKValue,
         m_currentNValue,
         QDateTime::currentDateTime().toString(Qt::ISODate),
-        true,
+        false,
         QStringLiteral("%1 = %2 written to preset '%3'")
-            .arg(key, QString::number(m_currentKValue), presetName));
+            .arg(key, QString::number(resultValue), presetName),
+        isFlowRate ? m_currentFlowRate : 0.0f);
     emit calibrationParamsChanged();
     return true;
 }
@@ -407,9 +447,18 @@ bool CalibrationViewModel::saveCalibrationResultToPreset()
 void CalibrationViewModel::loadHistoryEntry(int index)
 {
     if (!m_service || index < 0 || index >= m_service->historyCount()) return;
+    const QString historyName = m_service->historyName(index);
+    for (int i = 0; i < m_service->calibTypeCount(); ++i) {
+        if (m_service->calibTypeName(i) == historyName) {
+            selectItem(i);
+            break;
+        }
+    }
     m_currentKValue = m_service->historyKValue(index);
+    m_currentFlowRate = m_service->historyFlowRate(index);
     m_currentNValue = m_service->historyNozzleDiameter(index);
     m_hasResult = true;
+    m_resultMode = m_service->calibTypeMode(m_selectedIndex);
     emit calibrationParamsChanged();
 }
 
@@ -433,6 +482,11 @@ QString CalibrationViewModel::historyFilamentId(int index) const
 float CalibrationViewModel::historyKValue(int index) const
 {
     return m_service ? m_service->historyKValue(index) : 0.0f;
+}
+
+float CalibrationViewModel::historyFlowRate(int index) const
+{
+    return m_service ? m_service->historyFlowRate(index) : 0.0f;
 }
 
 float CalibrationViewModel::historyNozzleDiameter(int index) const

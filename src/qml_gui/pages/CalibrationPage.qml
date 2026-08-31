@@ -20,6 +20,7 @@ Item {
     required property var calibrationVm
     property var _calibItems: []
     property var _totalSteps: 0
+    property string activeFilter: "all"
 
     Component.onCompleted: {
         reloadCalibItems()
@@ -29,8 +30,13 @@ Item {
     function reloadCalibItems() {
         var arr = []
         var n = calibrationVm.calibItemCount()
-        for (var i = 0; i < n; ++i)
+        for (var i = 0; i < n; ++i) {
+            var category = calibrationVm.calibItemCategory(i)
+            if (activeFilter !== "all" && category !== activeFilter)
+                continue
             arr.push({
+                         sourceIndex: i,
+                         category: category,
                          id: calibrationVm.calibItemId(i),
                          icon: calibrationVm.calibItemIcon(i),
                          name: calibrationVm.calibItemName(i),
@@ -40,7 +46,25 @@ Item {
                          startable: calibrationVm.calibItemStartable(i),
                          unavailableReason: calibrationVm.calibItemUnavailableReason(i)
                       })
+        }
         _calibItems = arr
+    }
+
+    onActiveFilterChanged: reloadCalibItems()
+
+    function adjustPrimaryValue(delta) {
+        var current = isFlowRateCalibration ? calibrationVm.currentFlowRate : calibrationVm.currentKValue
+        var minimum = isFlowRateCalibration ? 0.5 : 0.0
+        var maximum = isFlowRateCalibration ? 1.5 : 1.0
+        var adjusted = Math.max(minimum, Math.min(maximum, current + delta))
+        if (isFlowRateCalibration)
+            calibrationVm.setCurrentFlowRate(adjusted)
+        else
+            calibrationVm.setCurrentKValue(adjusted)
+    }
+
+    function adjustNozzleDiameter(delta) {
+        calibrationVm.setCurrentNValue(Math.max(0.10, Math.min(2.00, calibrationVm.currentNValue + delta)))
     }
 
     function reloadSteps() {
@@ -57,6 +81,8 @@ Item {
     }
 
     property var _stepsArr: []
+    property bool isFlowRateCalibration: calibrationVm.selectedIndex >= 0
+                                         && calibrationVm.calibItemId(calibrationVm.selectedIndex) === "flow_rate"
 
     Connections {
         target: root.calibrationVm
@@ -138,48 +164,45 @@ Item {
                 }
 
                 // Category filter pills
-                Repeater {
-                    model: [
-                        { label: qsTr("All"), cat: "all" },
-                        { label: qsTr("Slice Calibration"), cat: "slice" },
-                        { label: qsTr("Hardware Calibration"), cat: "hardware" }
-                    ]
-                    Rectangle {
-                        Layout.preferredHeight: 26
-                        Layout.preferredWidth: catLbl.implicitWidth + 20
-                        radius: 13
-                        color: _activeFilter === modelData.cat ? Theme.accent : "transparent"
-                        border.color: _activeFilter === modelData.cat ? Theme.accent : Theme.borderSubtle
-                        border.width: 1
+                Item {
+                    id: catFilterRow
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 26
 
-                        property string _activeFilter: "all"
+                    Row {
+                        anchors.fill: parent
+                        spacing: Theme.spacingSM
 
-                        Text {
-                            id: catLbl
-                            anchors.centerIn: parent
-                            text: modelData.label
-                            color: parent._activeFilter === modelData.cat ? Theme.textOnAccent : Theme.textTertiary
-                            font.pixelSize: Theme.fontSizeSM
-                        }
+                        Repeater {
+                            model: [
+                                { label: qsTr("All"), cat: "all" },
+                                { label: qsTr("Slice Calibration"), cat: "slice" },
+                                { label: qsTr("Hardware Calibration"), cat: "hardware" }
+                            ]
+                            Rectangle {
+                                height: 26
+                                width: catLbl.implicitWidth + 20
+                                radius: 13
+                                color: root.activeFilter === modelData.cat ? Theme.accent : "transparent"
+                                border.color: root.activeFilter === modelData.cat ? Theme.accent : Theme.borderSubtle
+                                border.width: 1
 
-                        TapHandler {
-                            onTapped: {
-                                // Update filter across all pills
-                                var pills = catFilterRow.children
-                                for (var i = 0; i < pills.length; ++i) {
-                                    pills[i]._activeFilter = modelData.cat
+                                Text {
+                                    id: catLbl
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: root.activeFilter === modelData.cat ? Theme.textOnAccent : Theme.textTertiary
+                                    font.pixelSize: Theme.fontSizeSM
+                                }
+
+                                TapHandler {
+                                    onTapped: root.activeFilter = modelData.cat
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-
-        // Filter bar row id
-        Item {
-            id: catFilterRow
-            visible: false
         }
 
         // Separator
@@ -215,7 +238,8 @@ Item {
                             anchors.left: parent.left
                             anchors.leftMargin: Theme.spacingLG
                             anchors.verticalCenter: parent.verticalCenter
-                            text: qsTr("SLICE CALIBRATION")
+                            text: root.activeFilter === "hardware"
+                                  ? qsTr("HARDWARE CALIBRATION") : qsTr("SLICE CALIBRATION")
                             color: Theme.textDisabled
                             font.pixelSize: Theme.fontSizeXS
                             font.bold: true
@@ -243,13 +267,13 @@ Item {
                                     height: modelData.startable ? 52 : 66
                                     radius: Theme.radiusMD
                                     color: {
-                                        if (root.calibrationVm.selectedIndex === index)
+                                        if (root.calibrationVm.selectedIndex === modelData.sourceIndex)
                                             return Theme.bgElevated
                                         if (itemHov.containsMouse)
                                             return Theme.bgHover
                                         return "transparent"
                                     }
-                                    border.color: root.calibrationVm.selectedIndex === index ? Theme.accent : "transparent"
+                                    border.color: root.calibrationVm.selectedIndex === modelData.sourceIndex ? Theme.accent : "transparent"
                                     border.width: 1
 
                                     // Status indicator dot
@@ -311,7 +335,7 @@ Item {
                                     HoverHandler { id: itemHov }
                                     TapHandler {
                                         onTapped: {
-                                            root.calibrationVm.selectItem(index)
+                                            root.calibrationVm.selectItem(modelData.sourceIndex)
                                             root.reloadSteps()
                                         }
                                     }
@@ -588,7 +612,7 @@ Item {
                                             spacing: Theme.spacingMD
 
                                             Text {
-                                                text: qsTr("K 值")
+                                                text: root.isFlowRateCalibration ? qsTr("Flow 比率") : qsTr("K 值")
                                                 color: Theme.textPrimary
                                                 font.pixelSize: Theme.fontSizeSM
                                                 font.bold: true
@@ -596,7 +620,7 @@ Item {
                                             }
 
                                             Text {
-                                                text: qsTr("Pressure Advance")
+                                                text: root.isFlowRateCalibration ? qsTr("Filament Flow Ratio") : qsTr("Pressure Advance")
                                                 color: Theme.textTertiary
                                                 font.pixelSize: Theme.fontSizeXS
                                                 Layout.fillWidth: true
@@ -604,15 +628,22 @@ Item {
 
                                             CxSpinBox {
                                                 id: kSpinBox
-                                                value: Math.round(root.calibrationVm.currentKValue * 1000)
-                                                from: 0
-                                                to: 1000
+                                                value: Math.round((root.isFlowRateCalibration
+                                                                   ? root.calibrationVm.currentFlowRate
+                                                                   : root.calibrationVm.currentKValue) * 1000)
+                                                from: root.isFlowRateCalibration ? 500 : 0
+                                                to: root.isFlowRateCalibration ? 1500 : 1000
                                                 stepSize: 1
                                                 editable: true
                                                 property real realValue: value / 1000.0
                                                 textFromValue: function(v, locale) { return (v / 1000.0).toFixed(3) }
                                                 valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 1000) }
-                                                onValueModified: root.calibrationVm.setCurrentKValue(realValue)
+                                                onValueModified: {
+                                                    if (root.isFlowRateCalibration)
+                                                        root.calibrationVm.setCurrentFlowRate(realValue)
+                                                    else
+                                                        root.calibrationVm.setCurrentKValue(realValue)
+                                                }
                                             }
 
                                             // Fine adjustment buttons
@@ -624,7 +655,7 @@ Item {
                                                 border.width: 1
                                                 Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                                                 HoverHandler { id: kFineDec }
-                                                TapHandler { onTapped: kSpinBox.value = Math.max(kSpinBox.from, parseFloat((kSpinBox.value - 0.0001).toFixed(4))) }
+                                                TapHandler { onTapped: root.adjustPrimaryValue(-0.001) }
                                             }
                                             Rectangle {
                                                 width: 24; height: 24
@@ -634,7 +665,7 @@ Item {
                                                 border.width: 1
                                                 Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                                                 HoverHandler { id: kFineInc }
-                                                TapHandler { onTapped: kSpinBox.value = Math.min(kSpinBox.to, parseFloat((kSpinBox.value + 0.0001).toFixed(4))) }
+                                                TapHandler { onTapped: root.adjustPrimaryValue(0.001) }
                                             }
                                         }
 
@@ -680,7 +711,7 @@ Item {
                                                 border.width: 1
                                                 Text { anchors.centerIn: parent; text: "--"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                                                 HoverHandler { id: nFineDec }
-                                                TapHandler { onTapped: nSpinBox.value = Math.max(nSpinBox.from, parseFloat((nSpinBox.value - 0.01).toFixed(2))) }
+                                                TapHandler { onTapped: root.adjustNozzleDiameter(-0.01) }
                                             }
                                             Rectangle {
                                                 width: 24; height: 24
@@ -690,7 +721,7 @@ Item {
                                                 border.width: 1
                                                 Text { anchors.centerIn: parent; text: "+"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                                                 HoverHandler { id: nFineInc }
-                                                TapHandler { onTapped: nSpinBox.value = Math.min(nSpinBox.to, parseFloat((nSpinBox.value + 0.01).toFixed(2))) }
+                                                TapHandler { onTapped: root.adjustNozzleDiameter(0.01) }
                                             }
                                         }
                                     }

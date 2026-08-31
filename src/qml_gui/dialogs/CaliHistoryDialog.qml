@@ -42,6 +42,7 @@ CxDialog {
                 name: calibrationVm.historyName(i),
                 filamentId: calibrationVm.historyFilamentId(i),
                 kValue: calibrationVm.historyKValue(i),
+                flowRate: calibrationVm.historyFlowRate(i),
                 nozzleDiameter: calibrationVm.historyNozzleDiameter(i),
                 timestamp: calibrationVm.historyTimestamp(i)
             })
@@ -142,7 +143,9 @@ CxDialog {
                         RowLayout {
                             spacing: Theme.spacingLG
                             Text {
-                                text: qsTr("K值: %1").arg(modelData.kValue.toFixed(3))
+                                text: modelData.flowRate > 0
+                                      ? qsTr("Flow: %1").arg(modelData.flowRate.toFixed(3))
+                                      : qsTr("K值: %1").arg(modelData.kValue.toFixed(3))
                                 color: Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeXS
                             }
@@ -175,12 +178,28 @@ CxDialog {
                         }
                     }
 
-                    // Action buttons
                     Rectangle {
-                        width: 28; height: 28; radius: 4
-                        color: exportHov.containsMouse ? Theme.borderInput : "transparent"
-                        Text { anchors.centerIn: parent; text: "⤓"; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeMD }
-                        MouseArea { id: exportHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: {} }
+                        width: loadLabel.implicitWidth + 16; height: 28; radius: 4
+                        color: loadHistoryHov.containsMouse ? Theme.bgHover : Theme.bgInset
+                        border.color: Theme.borderSubtle
+                        border.width: 1
+                        Text {
+                            id: loadLabel
+                            anchors.centerIn: parent
+                            text: qsTr("加载")
+                            color: Theme.textSecondary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            id: loadHistoryHov
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.calibrationVm.loadHistoryEntry(index)
+                                root.close()
+                            }
+                        }
                     }
                 }
 

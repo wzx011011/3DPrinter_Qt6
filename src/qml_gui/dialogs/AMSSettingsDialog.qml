@@ -150,7 +150,9 @@ CxDialog {
                                     }
                                 }
 
-                                // Preset color buttons
+                                // Slot colors come from the mock AMS profile. The
+                                // viewmodel deliberately exposes no color mutation API,
+                                // so these are static indicators rather than buttons.
                                 Row {
                                     spacing: Theme.spacingXS
                                     Repeater {
@@ -165,13 +167,10 @@ CxDialog {
                                             border.color: Theme.textDisabled
                                             border.width: 1
 
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    // Visual feedback placeholder
-                                                }
-                                            }
+                                            HoverHandler { id: amsColorHover }
+                                            ToolTip.visible: amsColorHover.hovered
+                                            ToolTip.text: qsTr("AMS slot color is read-only")
+                                            ToolTip.delay: 500
                                         }
                                     }
                                 }

@@ -30,6 +30,7 @@ class CalibrationViewModel : public QObject
     Q_PROPERTY(int historyCount READ historyCount NOTIFY historyChanged)
     /// K 值参数（对齐上游 CalibrationWizardCaliPage K-value input）
     Q_PROPERTY(float currentKValue READ currentKValue WRITE setCurrentKValue NOTIFY calibrationParamsChanged)
+    Q_PROPERTY(float currentFlowRate READ currentFlowRate WRITE setCurrentFlowRate NOTIFY calibrationParamsChanged)
     /// N 值参数（对齐上游 CalibrationWizardCaliPage N-value / nozzle diameter input）
     Q_PROPERTY(float currentNValue READ currentNValue WRITE setCurrentNValue NOTIFY calibrationParamsChanged)
     /// 当前步骤是否为校准/精调步骤（显示参数输入）
@@ -60,6 +61,7 @@ public:
     Q_INVOKABLE QString calibItemDesc(int i) const;
     Q_INVOKABLE int calibItemStatus(int i) const;
     Q_INVOKABLE QString calibItemId(int i) const;
+    Q_INVOKABLE QString calibItemCategory(int i) const;
     Q_INVOKABLE bool calibItemImplemented(int i) const;
     Q_INVOKABLE bool calibItemStartable(int i) const;
     Q_INVOKABLE QString calibItemUnavailableReason(int i) const;
@@ -96,10 +98,12 @@ public:
     // K/N 参数访问器（对齐上游 CalibrationWizardCaliPage）
     float currentKValue() const { return m_currentKValue; }
     void setCurrentKValue(float v);
+    float currentFlowRate() const { return m_currentFlowRate; }
+    void setCurrentFlowRate(float v);
     float currentNValue() const { return m_currentNValue; }
     void setCurrentNValue(float v);
     bool showParamInputs() const;
-    bool hasCalibrationResult() const { return m_hasResult; }
+    bool hasCalibrationResult() const;
     QString calibrationResultSummary() const;
 
     // Phase 125 (CALIB-02): range accessors/setters. The getter reads the
@@ -134,6 +138,7 @@ public:
     Q_INVOKABLE QString historyName(int index) const;
     Q_INVOKABLE QString historyFilamentId(int index) const;
     Q_INVOKABLE float historyKValue(int index) const;
+    Q_INVOKABLE float historyFlowRate(int index) const;
     Q_INVOKABLE float historyNozzleDiameter(int index) const;
     Q_INVOKABLE QString historyTimestamp(int index) const;
     Q_INVOKABLE void clearHistory();
@@ -160,6 +165,8 @@ private:
     PresetServiceMock *m_presetService = nullptr;
     QString m_selectedFilamentPreset;
     float m_currentKValue = 0.0f;
+    float m_currentFlowRate = 1.0f;
     float m_currentNValue = 0.4f;
     bool m_hasResult = false;
+    int m_resultMode = -1;
 };

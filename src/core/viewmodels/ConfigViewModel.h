@@ -55,6 +55,7 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(QString bedTypeImagesDir READ bedTypeImagesDir NOTIFY stateChanged)
   Q_PROPERTY(QString currentFilamentPreset READ currentFilamentPreset NOTIFY stateChanged)
   Q_PROPERTY(QString currentPrintPreset READ currentPrintPreset NOTIFY stateChanged)
+  Q_PROPERTY(QString lastPresetError READ lastPresetError NOTIFY stateChanged)
   Q_PROPERTY(bool currentPresetCombinationValid READ currentPresetCombinationValid NOTIFY stateChanged)
   Q_PROPERTY(QString currentPresetCompatibilityMessage READ currentPresetCompatibilityMessage NOTIFY stateChanged)
   Q_PROPERTY(QString pendingUnsavedAction READ pendingUnsavedAction NOTIFY stateChanged)
@@ -120,6 +121,7 @@ public:
   QString bedTypeImagesDir() const;
   QString currentFilamentPreset() const { return currentFilamentPreset_; }
   QString currentPrintPreset() const { return currentPrintPreset_; }
+  QString lastPresetError() const { return lastPresetError_; }
   bool currentPresetCombinationValid() const;
   QString currentPresetCompatibilityMessage() const;
   QString pendingUnsavedAction() const { return pendingUnsavedAction_; }
@@ -337,6 +339,7 @@ private:
   int bottomLayers_ = 4;
   bool enableBrim_ = false;
   QString activePresetTier_ = QStringLiteral("print");
+  QString lastPresetError_;
   QString settingsScope_ = QStringLiteral("global");
   QString settingsTargetType_;
   QString settingsTargetName_;

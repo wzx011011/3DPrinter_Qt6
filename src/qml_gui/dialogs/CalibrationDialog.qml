@@ -79,12 +79,11 @@ CxDialog {
         // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
-        // Hardware calibration options (aligns with upstream CalibrationDialog::create_check_option)
-        // Upstream has 4 checkboxes: xcam_cali, bed_leveling, vibration, motor_noise
+        // Hardware calibration is unavailable until live printer support exists.
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingMD
-            visible: !root.calibrationVm || !root.calibrationVm.isRunning
+            visible: false
 
             Text {
                 text: qsTr("硬件校准选项")

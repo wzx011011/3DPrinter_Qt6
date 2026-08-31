@@ -96,6 +96,8 @@ private slots:
   // single-modal gate + Transfer, no empty settings tabs, corrected
   // create-preset scope mapping, sidebar rename/delete affordance.
   void presetSystemCompletionSourceAudit();
+  void savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen();
+  void calibrationAndParameterControlsUseHonestLocalSemantics();
   // v5.16 Phase 236 (DLG-01..04): dialog reachability and completion —
   // every dialogs/*.qml is qrc-registered, instantiated somewhere, and has
   // at least one trigger (BackendContext emitter call, menu item, or open
@@ -3287,6 +3289,84 @@ void QmlUiAuditTests::presetSystemCompletionSourceAudit()
            "LeftSidebar printer combo must use the decorated sectioned list");
   QVERIFY2(sidebar.contains(QStringLiteral("plainPresetName(")),
            "LeftSidebar combos must normalize decorated names via plainPresetName()");
+}
+
+void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
+{
+  const QString saveDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SavePresetDialog.qml"));
+  const QString configVmHeader = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  const QString configVm = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"));
+  QVERIFY2(!saveDialog.isEmpty(), "Unable to read SavePresetDialog.qml");
+
+  // Wave 1A: each dialog tier selects its own duplicate-name list and category.
+  QVERIFY2(saveDialog.contains(QStringLiteral("if (tier === \"print\") return configVm.printPresetNames"))
+               && saveDialog.contains(QStringLiteral("if (tier === \"filament\") return configVm.filamentPresetNames"))
+               && saveDialog.contains(QStringLiteral("if (tier === \"printer\") return configVm.printerPresetNames")),
+           "W1A: SavePresetDialog must validate duplicate names in all three dialog tiers");
+  QVERIFY2(saveDialog.contains(QStringLiteral("if (tier === \"print\") return 0"))
+               && saveDialog.contains(QStringLiteral("if (tier === \"filament\") return 1"))
+               && saveDialog.contains(QStringLiteral("if (tier === \"printer\") return 2")),
+           "W1A: SavePresetDialog must map all three tiers to their own categories");
+  QVERIFY2(!saveDialog.contains(QStringLiteral("configVm.activePresetTier")),
+           "W1A: SavePresetDialog must not use shared activePresetTier");
+
+  // Duplicate and persistence failures remain in the modal; only a successful
+  // creation accepts it, and the ViewModel failure is rendered to the user.
+  QVERIFY2(saveDialog.contains(QStringLiteral("if (root.configVm.createCustomPreset(category, name)) {\n                            root.accept()")),
+           "W1A: SavePresetDialog must accept only after createCustomPreset succeeds");
+  QVERIFY2(saveDialog.contains(QStringLiteral("root.saveError = root.configVm.lastPresetError")),
+           "W1A: SavePresetDialog must show the ViewModel save failure");
+  QVERIFY2(configVmHeader.contains(QStringLiteral("lastPresetError"))
+               && configVm.contains(QStringLiteral("A preset with this name already exists."))
+               && configVm.contains(QStringLiteral("Failed to save preset '%1' to disk.")),
+           "W1A: ConfigViewModel must provide actual duplicate and persistence errors");
+}
+
+void QmlUiAuditTests::calibrationAndParameterControlsUseHonestLocalSemantics()
+{
+  const QString calibrationPage = readSource(QStringLiteral("src/qml_gui/pages/CalibrationPage.qml"));
+  const QString calibrationVm = readSource(QStringLiteral("src/core/viewmodels/CalibrationViewModel.cpp"));
+  const QString historyDialog = readSource(QStringLiteral("src/qml_gui/dialogs/CaliHistoryDialog.qml"));
+  const QString optionRow = readSource(QStringLiteral("src/qml_gui/components/OptionRow.qml"));
+  const QString amsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/AMSSettingsDialog.qml"));
+  QVERIFY2(!calibrationPage.isEmpty(), "Unable to read CalibrationPage.qml");
+
+  // W1B: category changes rebuild the visible list from source indices; they
+  // are not isolated state on an individual delegate.
+  QVERIFY2(calibrationPage.contains(QStringLiteral("property string activeFilter: \"all\""))
+               && calibrationPage.contains(QStringLiteral("calibrationVm.calibItemCategory(i)"))
+               && calibrationPage.contains(QStringLiteral("sourceIndex: i"))
+               && calibrationPage.contains(QStringLiteral("onActiveFilterChanged: reloadCalibItems()")),
+           "W1B: calibration category filters must rebuild the source-indexed list");
+  QVERIFY2(!calibrationPage.contains(QStringLiteral("_activeFilter")),
+           "W1B: calibration filtering must not retain per-delegate filter state");
+  QVERIFY2(calibrationPage.contains(QStringLiteral("adjustPrimaryValue(-0.001)"))
+               && calibrationPage.contains(QStringLiteral("adjustPrimaryValue(0.001)"))
+               && calibrationPage.contains(QStringLiteral("adjustNozzleDiameter(-0.01)"))
+               && calibrationPage.contains(QStringLiteral("adjustNozzleDiameter(0.01)")),
+           "W1B: calibration fine controls must adjust real K/flow and nozzle increments");
+  QVERIFY2(calibrationPage.contains(QStringLiteral("currentFlowRate"))
+               && calibrationVm.contains(QStringLiteral("filament_flow_ratio"))
+               && calibrationVm.contains(QStringLiteral("isFlowRate ? m_currentFlowRate : m_currentKValue")),
+           "W1B: flow-rate results must remain distinct from pressure-advance K values");
+  QVERIFY2(historyDialog.contains(QStringLiteral("loadHistoryEntry(index)"))
+               && !historyDialog.contains(QStringLiteral("text: qsTr(\"导出\")")),
+           "W1B: calibration history must offer its supported load action, not an empty export action");
+
+  // W1C: option bounds and AMS colors are descriptive unless a dedicated
+  // mutation API exists; no second editable bound or inert color click target.
+  QVERIFY2(optionRow.contains(QStringLiteral("id: rangeMinEditor"))
+               && optionRow.contains(QStringLiteral("text: root.formattedNumber(root.oMin)"))
+               && optionRow.contains(QStringLiteral("id: rangeMaxEditor"))
+               && optionRow.contains(QStringLiteral("text: root.formattedNumber(root.oMax)")),
+           "W1C: range bounds must be displayed as validation limits");
+  QVERIFY2(!optionRow.contains(QStringLiteral("onCommit: root.optionModel.setValue(root.optIdx, valueText)"))
+               && optionRow.contains(QStringLiteral("ToolTip.text: qsTr(\"Edit the color value in the field\")")),
+           "W1C: range/color chrome must not masquerade as duplicate writable controls");
+  QVERIFY2(amsDialog.contains(QStringLiteral("setSlotMaterial(index, root._materialTypes[idx])"))
+               && amsDialog.contains(QStringLiteral("AMS slot color is read-only"))
+               && !amsDialog.contains(QStringLiteral("onClicked: {\n                                                }")),
+           "W1C: AMS material selection stays functional and color indicators stay honest");
 }
 
 void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()

@@ -811,8 +811,12 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name)
 
 bool ConfigViewModel::createCustomPreset(int category, const QString &name, const QString &inherits)
 {
-  if (!presetService_)
+  lastPresetError_.clear();
+  if (!presetService_) {
+    lastPresetError_ = tr("Preset service is unavailable.");
+    emit stateChanged();
     return false;
+  }
 
   QString tier;
   if (category == PresetServiceMock::PrinterCat)
@@ -821,8 +825,11 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
     tier = QStringLiteral("filament");
   else if (category == PresetServiceMock::PrintCat)
     tier = QStringLiteral("print");
-  else
+  else {
+    lastPresetError_ = tr("Unsupported preset category.");
+    emit stateChanged();
     return false;
+  }
 
   // v5.16 (PSET2-02): with an explicit parent, seed the new preset from the
   // parent's resolved chain (CreatePresetsDialog "inherits from"); otherwise
@@ -831,8 +838,11 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
   QHash<QString, QVariant> tierValues;
   if (!parent.isEmpty())
   {
-    if (!presetService_->hasPreset(parent))
+    if (!presetService_->hasPreset(parent)) {
+      lastPresetError_ = tr("The selected parent preset no longer exists.");
+      emit stateChanged();
       return false;
+    }
     tierValues = presetService_->presetValues(parent);
   }
   else
@@ -841,8 +851,21 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
   }
 
   const QString trimmedName = name.trimmed();
-  if (!presetService_->createCustomPreset(category, trimmedName, tierValues, parent))
+  if (trimmedName.isEmpty()) {
+    lastPresetError_ = tr("Preset name cannot be empty.");
+    emit stateChanged();
     return false;
+  }
+  if (presetService_->hasPreset(trimmedName)) {
+    lastPresetError_ = tr("A preset with this name already exists.");
+    emit stateChanged();
+    return false;
+  }
+  if (!presetService_->createCustomPreset(category, trimmedName, tierValues, parent)) {
+    lastPresetError_ = tr("Failed to save preset '%1' to disk.").arg(trimmedName);
+    emit stateChanged();
+    return false;
+  }
 
   setCurrentPresetTierValue(tier, trimmedName);
 

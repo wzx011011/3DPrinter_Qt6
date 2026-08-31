@@ -33,12 +33,13 @@ CxDialog {
     /// 当前 preset tier ("print"/"filament"/"printer")
     required property string presetTier
     /// 建议名称（默认 = 当前 preset 名 + "(modified)"）
-    property string suggestedName: configVm ? (configVm.activePresetTier === "print" ? configVm.currentPrintPreset
-                                                : configVm.activePresetTier === "filament" ? configVm.currentFilamentPreset
+    property string suggestedName: configVm ? (presetTier === "print" ? configVm.currentPrintPreset
+                                                : presetTier === "filament" ? configVm.currentFilamentPreset
                                                 : configVm.currentPrinterPreset) + " (modified)" : ""
 
     /// 用户输入的名称（默认 = suggestedName）
     property string enteredName: suggestedName
+    property string saveError: ""
 
     /// tier → category 索引（对齐 createCustomPreset 的 category 参数）
     /// 0=print, 1=filament, 2=printer
@@ -46,18 +47,24 @@ CxDialog {
         if (tier === "print") return 0
         if (tier === "filament") return 1
         if (tier === "printer") return 2
-        return 0
+        return -1
+    }
+
+    function presetNamesForTier(tier) {
+        if (!configVm) return []
+        if (tier === "print") return configVm.printPresetNames
+        if (tier === "filament") return configVm.filamentPresetNames
+        if (tier === "printer") return configVm.printerPresetNames
+        return []
     }
 
     /// 校验：名称非空 + 不重名
     function isValidName() {
         var name = nameInput.text.trim()
-        if (name.length === 0) return false
-        // 重名校验（已有预设列表）
-        if (!configVm) return true
-        var existing = configVm.activePresetTier === "print" ? configVm.printPresetNames
-                     : configVm.activePresetTier === "filament" ? configVm.filamentPresetNames
-                     : configVm.printerPresetNames
+        if (name.length === 0 || root.tierToCategory(root.presetTier) < 0) return false
+        // Duplicate validation uses this dialog's tier, not shared page state.
+        if (!configVm) return false
+        var existing = root.presetNamesForTier(root.presetTier)
         return existing.indexOf(name) < 0
     }
 
@@ -129,8 +136,9 @@ CxDialog {
 
             // 重名/空名警告
             Text {
-                visible: !root.isValidName() && nameInput.text.length > 0
-                text: qsTr("A preset with this name already exists. Choose another name.")
+                visible: root.saveError.length > 0 || (!root.isValidName() && nameInput.text.length > 0)
+                text: root.saveError.length > 0 ? root.saveError
+                                                : qsTr("A preset with this name already exists. Choose another name.")
                 color: Theme.statusError
                 font.pixelSize: Theme.fontSizeXS
                 wrapMode: Text.WordWrap
@@ -153,12 +161,25 @@ CxDialog {
                     enabled: root.isValidName()
                     cxStyle: CxButton.Style.Primary
                     onClicked: {
-                        if (!root.configVm) { root.reject(); return }
+                        root.saveError = ""
+                        if (!root.configVm) {
+                            root.saveError = qsTr("Preset service is unavailable.")
+                            return
+                        }
                         var name = nameInput.text.trim()
                         var category = root.tierToCategory(root.presetTier)
-                        // 创建新预设（createCustomPreset 内部调 PresetService.savePresetValues）
-                        root.configVm.createCustomPreset(category, name)
-                        root.accept()
+                        if (category < 0) {
+                            root.saveError = qsTr("Unsupported preset category.")
+                            return
+                        }
+                        // Keep the dialog open when persistence rejects the save.
+                        if (root.configVm.createCustomPreset(category, name)) {
+                            root.accept()
+                        } else {
+                            root.saveError = root.configVm.lastPresetError
+                            if (root.saveError.length === 0)
+                                root.saveError = qsTr("Failed to save the preset.")
+                        }
                     }
                 }
             }

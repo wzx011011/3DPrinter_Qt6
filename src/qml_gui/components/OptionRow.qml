@@ -108,6 +108,9 @@ Item {
     }
 
     readonly property bool isNumeric: root.oType === "int" || root.oType === "double" || root.oType === "percent"
+    // optMin/optMax are ConfigOption schema bounds, not a two-value option.
+    // Keep range-like keys identifiable so their permitted interval can be
+    // shown without presenting the bounds as independently editable values.
     readonly property bool isRangeLike:
         root.isNumeric && (root.oKey.indexOf("_range") >= 0
             || root.oKey.indexOf("_min") >= 0
@@ -299,7 +302,7 @@ Item {
 
                 RowLayout {
                     id: numericCluster
-                    visible: root.isNumeric && !root.isRangeLike
+                    visible: root.isNumeric
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
                     width: Math.min(parent.width, root.controlColumnWidth)
@@ -342,9 +345,10 @@ Item {
                     id: rangeCluster
                     visible: root.isRangeLike
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
-                    width: Math.min(parent.width, root.compact ? 360 : 420)
-                    spacing: 8
+                    anchors.left: parent.left
+                    anchors.right: numericCluster.left
+                    anchors.rightMargin: 8
+                    spacing: 4
 
                     Text {
                         id: rangeMinLabel
@@ -354,14 +358,12 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    CxNumericEdit {
+                    Text {
                         id: rangeMinEditor
-                        Layout.preferredWidth: root.compactFieldWidth
-                        Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
-                        decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
-                        text: root.formattedNumber(root.oVal)
-                        enabled: !root.oRO
-                        onCommit: (valueText) => root.setNumericValue(valueText)
+                        text: root.formattedNumber(root.oMin)
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeXS
+                        Layout.alignment: Qt.AlignVCenter
                     }
 
                     Text {
@@ -380,14 +382,12 @@ Item {
                         Layout.alignment: Qt.AlignVCenter
                     }
 
-                    CxNumericEdit {
+                    Text {
                         id: rangeMaxEditor
-                        Layout.preferredWidth: root.compactFieldWidth
-                        Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
-                        decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
                         text: root.formattedNumber(root.oMax)
-                        enabled: !root.oRO
-                        onCommit: (valueText) => root.setNumericValue(valueText)
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeXS
+                        Layout.alignment: Qt.AlignVCenter
                     }
 
                     Text {
@@ -417,13 +417,11 @@ Item {
                     width: Math.min(parent.width, root.controlColumnWidth)
                     spacing: 6
 
-                    CxIconButton {
+                    Rectangle {
                         id: colorSwatchButton
-                        buttonSize: root.compact ? 24 : 28
-                        iconSize: 0
-                        enabled: !root.oRO
-                        toolTipText: qsTr("Color")
-                        onClicked: root.optionModel.setValue(root.optIdx, root.oVal)
+                        Layout.preferredWidth: root.compact ? 24 : 28
+                        Layout.preferredHeight: root.compact ? 24 : 28
+                        color: "transparent"
 
                         Rectangle {
                             id: colorSwatch
@@ -436,6 +434,11 @@ Item {
                             border.color: Theme.borderDefault
                             border.width: 1
                         }
+
+                        HoverHandler { id: colorSwatchHover }
+                        ToolTip.visible: colorSwatchHover.hovered
+                        ToolTip.text: qsTr("Edit the color value in the field")
+                        ToolTip.delay: 500
                     }
 
                     CxTextField {

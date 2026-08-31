@@ -772,6 +772,11 @@ float CalibrationServiceMock::historyKValue(int index) const
     return (index >= 0 && index < m_history.size()) ? m_history[index].kValue : 0.0f;
 }
 
+float CalibrationServiceMock::historyFlowRate(int index) const
+{
+    return (index >= 0 && index < m_history.size()) ? m_history[index].flowRate : 0.0f;
+}
+
 float CalibrationServiceMock::historyNozzleDiameter(int index) const
 {
     return (index >= 0 && index < m_history.size()) ? m_history[index].nozzleDiameter : 0.4f;
@@ -794,12 +799,13 @@ QString CalibrationServiceMock::historyNotes(int index) const
 
 void CalibrationServiceMock::addHistoryEntry(const QString &name, const QString &filamentId,
                                               float kValue, float nozzleDiameter, const QString &timestamp,
-                                              bool hasRealReadback, const QString &notes)
+                                              bool hasRealReadback, const QString &notes, float flowRate)
 {
     CalibrationHistoryEntry entry;
     entry.name = name;
     entry.filamentId = filamentId;
     entry.kValue = kValue;
+    entry.flowRate = flowRate;
     entry.nozzleDiameter = nozzleDiameter;
     entry.timestamp = timestamp;
     entry.hasRealReadback = hasRealReadback;
@@ -847,6 +853,7 @@ void CalibrationServiceMock::loadHistoryFromDisk()
         entry.name = obj.value(QStringLiteral("name")).toString();
         entry.filamentId = obj.value(QStringLiteral("filamentId")).toString();
         entry.kValue = float(obj.value(QStringLiteral("kValue")).toDouble());
+        entry.flowRate = float(obj.value(QStringLiteral("flowRate")).toDouble());
         entry.nozzleDiameter = float(obj.value(QStringLiteral("nozzleDiameter")).toDouble());
         entry.timestamp = obj.value(QStringLiteral("timestamp")).toString();
         entry.hasRealReadback = obj.value(QStringLiteral("hasRealReadback")).toBool(false);
@@ -873,6 +880,7 @@ void CalibrationServiceMock::persistHistoryToDisk()
         obj.insert(QStringLiteral("name"), e.name);
         obj.insert(QStringLiteral("filamentId"), e.filamentId);
         obj.insert(QStringLiteral("kValue"), double(e.kValue));
+        obj.insert(QStringLiteral("flowRate"), double(e.flowRate));
         obj.insert(QStringLiteral("nozzleDiameter"), double(e.nozzleDiameter));
         obj.insert(QStringLiteral("timestamp"), e.timestamp);
         obj.insert(QStringLiteral("hasRealReadback"), e.hasRealReadback);
