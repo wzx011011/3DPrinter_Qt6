@@ -801,7 +801,32 @@ void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
     return;
   currentLayerMin_ = lo;
   currentLayerMax_ = hi;
+  // P17.7: top_layer_only tints segments outside the current top layer, so a
+  // range change re-runs the recolor while the flag is on.
+  if (m_topLayerOnly && !segments_.empty())
+    recolorAndPackSegments();
   emit stateChanged();
+}
+
+// P17.7: upstream top_layer_only — while the sequential view is scrubbed,
+// segments outside the current top layer render in Neutral_Color
+// (GV.cpp:3285: `else color = Neutral_Color`). The neutral dark-gray matches
+// GCodeViewer.cpp:750. Re-pack applies it to the baked segment colors.
+void PreviewViewModel::setTopLayerOnly(bool on)
+{
+  if (m_topLayerOnly == on)
+    return;
+  m_topLayerOnly = on;
+  recolorAndPackSegments();
+  emit stateChanged();
+}
+
+// P17.9: full-config accessor — the header `; key = value` block parsed by
+// rebuildFromGCode (upstream apply_config(DynamicPrintConfig) from the gcode
+// file, GCodeProcessor.cpp:1602/1796).
+QVariantMap PreviewViewModel::fullConfig() const
+{
+  return m_fullConfig;
 }
 
 void PreviewViewModel::jumpToLayer(int oneIndexedLayer)
@@ -840,6 +865,12 @@ void PreviewViewModel::setCurrentMove(int move)
   currentMove_ = clamped;
   updateToolPositionData();
   rebuildGcodeLineWindow();
+  // P17.7: top_layer_only grays out-of-top-layer segments as the scrub
+  // position crosses layer boundaries — repack keeps the baked colors in
+  // sync with the current position (the payload rebuild mirrors upstream
+  // refresh_render_paths on sequential-view changes).
+  if (m_topLayerOnly)
+    recolorAndPackSegments();
   emit stateChanged();
 }
 
@@ -1316,6 +1347,7 @@ void PreviewViewModel::resetPreviewState()
   m_moveAccumulatedTime.clear();
   prepareTimeSeconds_ = 0.f;
   prepareTimeCaptured_ = false;
+  m_fullConfig.clear();
   const bool hadTicks = !tickMarks_.isEmpty();
   tickMarks_.clear();
   m_maxLayerTime = 0.f;
@@ -1410,6 +1442,9 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   // accumulation (pure time advance folded into the total).
   bool absolutePositioning = true;
   float dwellSeconds = 0.f;
+  // P17.9: when the gcode carries ;TIME_ELAPSED tags, layer times come from
+  // the tags (authoritative) and the accel-model pass is skipped.
+  bool elapsedTagSeen = false;
   float currentWidth = 0.f;
   float currentHeight = 0.f;
   float elapsedTime = 0.f;
@@ -1505,6 +1540,18 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     if (raw.startsWith(';'))
     {
       appendSourceLine(qMax(0, moveIndex));
+      // P17.9: full-config header — OrcaSlicer writes `; key = value` lines
+      // in the file header; upstream apply_config(DynamicPrintConfig) reads
+      // exactly these (GCodeProcessor.cpp:1575-1602 pre-parse + :1796).
+      if (raw.startsWith(QStringLiteral("; "))
+          && raw.contains(QStringLiteral(" = ")))
+      {
+        const QString body = raw.mid(2);
+        const int eq = body.indexOf(QStringLiteral(" = "));
+        if (eq > 0)
+          m_fullConfig.insert(body.left(eq).trimmed(),
+                              body.mid(eq + 3).trimmed());
+      }
       if (raw.startsWith(QStringLiteral(";TYPE:")))
         currentType = raw.mid(6).trimmed();
       else
@@ -1568,6 +1615,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       {
         elapsedTime = taggedValue;
         currentLayerTime = qMax(0.f, elapsedTime - layerStartElapsed);
+        elapsedTagSeen = true;
       }
       if (parseTaggedValue(raw, QStringLiteral("LINE_WIDTH"), taggedValue)
           || parseTaggedValue(raw, QStringLiteral("WIDTH"), taggedValue))
@@ -2182,9 +2230,102 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   moveCount_ = moveIndex;
   layerCount_ = qMax(1, hasPrintLayerZ ? layer + 1 : 1);
 
-  // Save last layer's time
-  m_layerTimes.append(currentLayerTime);
-  m_maxLayerTime = qMax(m_maxLayerTime, currentLayerTime);
+  // P17.9: acceleration-aware trapezoidal time model (upstream
+  // GCodeProcessor TimeMachine, GCodeProcessor.cpp:2500-2700 — simplified
+  // global planner). Backward pass bounds entry velocities from the 0-exit
+  // end constraint; forward pass bounds by cruise feed + accel reach; the
+  // trapezoid/triangle formula yields each move duration. Replaces the
+  // dist/feed cruise estimate so accel-limited small moves take realistic
+  // longer times (roles/layer/move accumulators rebuilt from the new dt).
+  if (!segments_.empty() && !elapsedTagSeen)
+  {
+    const int n = int(segments_.size());
+    QVector<float> dist(n), cruise(n), acc(n);
+    for (int i = 0; i < n; ++i)
+    {
+      const auto &sg = segments_[i];
+      const float dx = sg.x2 - sg.x1, dy = sg.y2 - sg.y1, dz = sg.z2 - sg.z1;
+      dist[i] = std::sqrt(dx * dx + dy * dy + dz * dz);
+      cruise[i] = sg.feedrate > 0.f ? sg.feedrate / 60.f : 0.f; // mm/min -> mm/s
+      acc[i] = sg.acceleration > 0.f ? sg.acceleration : 1250.f;
+    }
+    QVector<float> ve(n), vx(n);
+    float running = 0.f;
+    for (int i = n - 1; i >= 0; --i)
+    {
+      running = std::min(cruise[i],
+                         std::sqrt(running * running + 2.f * acc[i] * std::max(dist[i], 0.f)));
+      ve[i] = running;
+      vx[i] = running;
+    }
+    float ventry = 0.f;
+    QVector<float> dt(n, 0.f);
+    for (int i = 0; i < n; ++i)
+    {
+      const float vstart = std::min(ventry, cruise[i]);
+      float vend = std::min(ve[i], std::sqrt(vstart * vstart + 2.f * acc[i] * dist[i]));
+      if (dist[i] < 1e-6f)
+      {
+        dt[i] = 0.f;
+        ventry = 0.f;
+        continue;
+      }
+      if (vstart * vstart + 2.f * acc[i] * dist[i] < vend * vend)
+        vend = std::sqrt(vstart * vstart + 2.f * acc[i] * dist[i]);
+      if (vend > 1e-3f && vstart * vstart + 2.f * acc[i] * dist[i] >= vend * vend
+          && vstart < cruise[i] + 1e-3f)
+        dt[i] = (vend - vstart) / acc[i]
+            + std::max(0.f, dist[i] - (vend * vend - vstart * vstart) / (2.f * acc[i])) / vend;
+      else
+        dt[i] = (vend + vstart) > 1e-3f ? 2.f * dist[i] / (vend + vstart) : 0.f;
+      ventry = vend;
+    }
+
+    // Rebuild the accumulators from the accel-corrected durations.
+    m_moveAccumulatedTime.clear();
+    m_moveAccumulatedTime.reserve(n);
+    float accElapsed = 0.f;
+    for (int i = 0; i < n; ++i)
+    {
+      accElapsed += dt[i];
+      m_moveAccumulatedTime.push_back(accElapsed);
+    }
+    // Per-layer durations, in first-appearance layer order.
+    m_layerTimes.assign(size_t(qMax(1, layerCount_)), 0.f);
+    QHash<int, float> layerDt;
+    for (int i = 0; i < n; ++i)
+    {
+      const int li = qBound(0, segments_[i].layer, layerCount_ - 1);
+      layerDt[li] += dt[i];
+    }
+    for (const float v : layerDt)
+      Q_UNUSED(v);
+    for (int li = 0; li < layerCount_; ++li)
+      m_layerTimes[li] = layerDt.value(li, 0.f);
+    m_maxLayerTime = 0.f;
+    for (const auto &entry : layerDt)
+      m_maxLayerTime = std::max(m_maxLayerTime, entry);
+    // Role times: rebuild per-role durations from the accel-corrected dt
+    // (the parse-time values used a cruise-only estimate).
+    QHash<int, double> roleSeconds;
+    for (int i = 0; i < n; ++i)
+    {
+      const auto &sg = segments_[i];
+      if (sg.kind != KindExtrude)
+        continue;
+      roleSeconds[sg.role] += dt[i];
+    }
+    for (auto it = roleTimeAccum.begin(); it != roleTimeAccum.end(); ++it)
+    {
+      const int role = roleForType(it.key());
+      it.value() = roleSeconds.value(role, 0.0);
+    }
+  } else {
+    // Elapsed-tag files: the ;TIME_ELAPSED tags are authoritative — the
+    // legacy final append (last layer's duration) closes the series.
+    m_layerTimes.append(currentLayerTime);
+    m_maxLayerTime = qMax(m_maxLayerTime, currentLayerTime);
+  }
 
   currentLayerMin_ = 0;
   currentLayerMax_ = layerCount_ - 1;
@@ -2576,18 +2717,38 @@ void PreviewViewModel::recolorAndPackSegments()
     p.move = s.move;
     p.role = s.role;
 
+    // P17.7: top_layer_only — while the sequential view is scrubbed
+    // (moveEnd short of the full toolpath), segments outside the top layer
+    // render in the upstream Neutral_Color dark gray
+    // (GV.cpp:3285 + :750 Neutral_Color = 0.18 gray).
+    const bool topLayerGray =
+        m_topLayerOnly && currentMove_ < moveCount_ && s.layer != currentLayerMax_;
+
     if (mode == VT_LineType)
     {
       // FeatureType: use the baked per-role base color (kRoleColors).
-      p.r = s.baseR;
-      p.g = s.baseG;
-      p.b = s.baseB;
+      if (topLayerGray)
+      {
+        p.r = 0.18f;
+        p.g = 0.18f;
+        p.b = 0.18f;
+      } else {
+        p.r = s.baseR;
+        p.g = s.baseG;
+        p.b = s.baseB;
+      }
     }
     else if (mode == VT_Filament || mode == VT_Tool)
     {
       // Filament (ColorPrint) / Tool: per-extruder palette from the
       // CONFIGURED filament colors (Phase 238 PREV-06).
-      const ColorResult tc = effectiveExtruderColor(s.extruder_id, configuredColors);
+      ColorResult tc = effectiveExtruderColor(s.extruder_id, configuredColors);
+      if (topLayerGray)
+      {
+        tc.r = 0.18f;
+        tc.g = 0.18f;
+        tc.b = 0.18f;
+      }
       p.r = tc.r; p.g = tc.g; p.b = tc.b;
     }
     else if (mode == VT_ActualSpeed || mode == VT_Jerk || mode == VT_ActualFlow || mode == VT_PressureAdvance)
@@ -2602,10 +2763,16 @@ void PreviewViewModel::recolorAndPackSegments()
       case VT_PressureAdvance: value = s.pressure_advance; break;
       default: break;
       }
-      const ColorResult c = valueToGradient(value, minV, maxV);
+      ColorResult c = valueToGradient(value, minV, maxV);
+      if (topLayerGray)
+      {
+        c.r = 0.18f;
+        c.g = 0.18f;
+        c.b = 0.18f;
+      }
       p.r = c.r; p.g = c.g; p.b = c.b;
     }
-    else if (mode == VT_Summary)
+    else if (mode == VT_FilamentId)
     {
       // Summary: statistics only; segments still draw in their baked role color.
       p.r = s.baseR; p.g = s.baseG; p.b = s.baseB;
@@ -2745,10 +2912,20 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
       usedIds.insert(s.extruder_id);
     QList<int> sortedIds = usedIds.values();
     std::sort(sortedIds.begin(), sortedIds.end());
+    // P17.6: filament preset names from the gcode full config
+    // (filament_settings_id, upstream legend shows the preset per extruder,
+    // GCodeViewer.cpp:5470-5477).
+    const QStringList presetNames =
+        m_fullConfig.value(QStringLiteral("filament_settings_id"))
+            .toString()
+            .split(QStringLiteral(", "), Qt::SkipEmptyParts);
+
     for (int id : sortedIds)
     {
       const QString col = colorHex(effectiveExtruderColor(id, configuredColors));
-      const QString label = QStringLiteral("Extruder %1").arg(id);
+      QString label = QStringLiteral("Extruder %1").arg(id);
+      if (id >= 1 && id <= presetNames.size())
+        label += QStringLiteral(" (%1)").arg(presetNames.at(id - 1));
       int cnt = 0;
       for (const auto &s : segments_)
         if (s.extruder_id == id) ++cnt;

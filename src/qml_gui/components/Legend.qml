@@ -11,6 +11,22 @@ Item {
     readonly property int legendType: root.previewVm ? root.previewVm.legendType : 0
     implicitHeight: legendLayout.implicitHeight
 
+    // P17.10: imperial display — SettingsViewModel.units 1 = inch
+    // (upstream use_inches, Preferences.cpp:1110). mm -> in (/25.4).
+    readonly property bool imperialUnits: {
+        const b = typeof backend !== "undefined" ? backend : null
+        return b && b.settingsViewModel ? b.settingsViewModel.units === 1 : false
+    }
+    function lengthValue(mmText) {
+        if (!root.imperialUnits)
+            return mmText
+        // mmText is a plain decimal mm string from the ViewModel stops.
+        const mm = parseFloat(mmText)
+        if (isNaN(mm))
+            return mmText
+        return (mm / 25.4).toFixed(2)
+    }
+
     // P17.3: gradient stop color lookup by index into the VM's 10-step list.
     function stopColor(index) {
         if (!root.previewVm)
@@ -101,7 +117,9 @@ Item {
                                 Layout.fillWidth: true
                                 horizontalAlignment: index === 0 ? Text.AlignLeft
                                     : (index === 9 ? Text.AlignRight : Text.AlignHCenter)
-                                text: root.stopValue(index)
+                                text: root.imperialUnits
+                                          ? root.lengthValue(root.stopValue(index))
+                                          : root.stopValue(index)
                                 color: Theme.textPrimary
                                 font.pixelSize: Theme.fontSizeXS - 1
                                 font.family: Theme.fontMono
@@ -114,14 +132,19 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
-                            text: root.previewVm ? root.previewVm.legendGradientMinLabel : "--"
+                            // P17.10: min endpoint converts under imperial.
+                            text: root.imperialUnits
+                                      ? root.lengthValue(root.previewVm ? root.previewVm.legendGradientMinLabel : "--") + " in"
+                                      : (root.previewVm ? root.previewVm.legendGradientMinLabel : "--")
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
                             font.family: Theme.fontMono
                         }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: root.previewVm ? root.previewVm.legendGradientMaxLabel : "--"
+                            text: root.imperialUnits
+                                      ? root.lengthValue(root.previewVm ? root.previewVm.legendGradientMaxLabel : "--") + " in"
+                                      : (root.previewVm ? root.previewVm.legendGradientMaxLabel : "--")
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
                             font.family: Theme.fontMono

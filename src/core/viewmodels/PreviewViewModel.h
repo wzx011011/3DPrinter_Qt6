@@ -54,6 +54,12 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int colorChangeCount READ colorChangeCount NOTIFY stateChanged)
   Q_PROPERTY(QVariantList customGcodeRows READ customGcodeRows NOTIFY stateChanged)
   Q_PROPERTY(QString prepareTime READ prepareTime NOTIFY stateChanged)
+  // P17.7: upstream top_layer_only — while the sequential view is scrubbed,
+  // segments outside the top layer render in Neutral_Color (GV.cpp:3285).
+  Q_PROPERTY(bool topLayerOnly READ topLayerOnly WRITE setTopLayerOnly NOTIFY stateChanged)
+  // P17.9: full-config key/values parsed from the `; key = value` header
+  // block (upstream apply_config(DynamicPrintConfig) from the gcode file).
+  Q_PROPERTY(QVariantMap fullConfig READ fullConfig NOTIFY stateChanged)
   Q_PROPERTY(QString totalTime READ totalTime NOTIFY stateChanged)
   Q_PROPERTY(QString filamentUsed READ filamentUsed NOTIFY stateChanged)
   Q_PROPERTY(QString filamentWeight READ filamentWeight NOTIFY stateChanged)
@@ -177,8 +183,15 @@ public:
   QString legendGradientMaxColor() const { return m_legendGradMaxColor; }
   QVariantList legendGradientStops() const;
   QVariantList legendRoleColumns() const;
+  bool topLayerOnly() const { return m_topLayerOnly; }
+  void setTopLayerOnly(bool on);
+  Q_INVOKABLE QString fullConfigValue(const QString &key) const
+  {
+    return m_fullConfig.value(key).toString();
+  }
   int colorChangeCount() const;
   QVariantList customGcodeRows() const;
+  QVariantMap fullConfig() const;
   QString prepareTime() const;
   QString totalTime() const { return totalTime_; }
   QString filamentUsed() const { return filamentUsed_; }
@@ -401,6 +414,8 @@ private:
   // P17.4/P17.10: per-role filament length (mm) and the prepare time
   // (elapsed before the first extrusion move).
   QHash<int, double> m_roleFilamentLength;
+  bool m_topLayerOnly = false;
+  QVariantMap m_fullConfig;
   float prepareTimeSeconds_ = 0.f;
   bool prepareTimeCaptured_ = false;
   QString totalTime_ = QStringLiteral("--:--:--");
