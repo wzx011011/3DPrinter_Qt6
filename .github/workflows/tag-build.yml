@@ -63,8 +63,10 @@ jobs:
           arch: "win64_msvc2022_64"
           # qtshadertools: rhi_viewport .qsb pipeline. qtwebengine + qtwebchannel:
           # the AI chat panel hard-requires Qt6::WebEngineQuick + Qt6::WebChannel
-          # (CMakeLists.txt find_package, p15-p17 line).
-          modules: "qtshadertools qtwebengine qtwebchannel"
+          # (CMakeLists.txt find_package, p15-p17 line). qtwebengine's CMake
+          # config additionally requires Positioning (and its Location/WebSockets
+          # siblings) -- without them Qt6WebEngineCore_FOUND=FALSE.
+          modules: "qtshadertools qtwebengine qtwebchannel qtwebsockets qtpositioning qtlocation"
 
       - name: Compute OrcaSlicer deps cache key
         shell: pwsh
