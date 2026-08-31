@@ -163,24 +163,10 @@ Item {
             anchors.rightMargin: root.compact ? 10 : 18
             spacing: 8
 
-            Rectangle {
-                id: sectionIconRail
-                Layout.preferredWidth: 18
-                Layout.preferredHeight: 18
-                radius: 3
-                color: "transparent"
-                border.width: 1
-                border.color: Theme.accent
-
-                Text {
-                    id: sectionGlyph
-                    anchors.centerIn: parent
-                    text: "+"
-                    color: Theme.accent
-                    font.pixelSize: Theme.fontSizeMD
-                    font.bold: true
-                }
-            }
+            // Group headers are static titles (upstream OptionsGroup/StaticBox
+            // renders the group name + divider with no per-group toggle), so
+            // this header deliberately has no icon/affordance -- the former
+            // decorative "+" box read as a dead clickable button.
 
             Text {
                 text: root.oGroup

@@ -4124,15 +4124,19 @@ void QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
 
   const QStringList sectionTokens = {
-      QStringLiteral("sectionIconRail"),
       QStringLiteral("sectionDivider"),
-      QStringLiteral("sectionGlyph"),
       QStringLiteral("Theme.accent")
   };
   for (const QString &token : sectionTokens) {
     QVERIFY2(optionRow.contains(token),
              qPrintable(QStringLiteral("OptionRow missing Phase 86 section-header token: %1").arg(token)));
   }
+  // Dead-control elimination: the former decorative "+" glyph box
+  // (sectionIconRail/sectionGlyph) had no upstream behavior and read as a
+  // dead clickable button; group headers must stay plain static titles.
+  QVERIFY2(!optionRow.contains(QStringLiteral("sectionIconRail"))
+               && !optionRow.contains(QStringLiteral("sectionGlyph")),
+           "OptionRow must not resurrect the decorative section \"+\" button (dead control)");
   QVERIFY2(!optionRow.contains(QStringLiteral("color: root.compact ? \"transparent\" : Theme.bgSurface")),
            "Phase 86 section headers must not keep the old plain text/card header branch");
 
