@@ -2681,7 +2681,9 @@ void ViewModelSmokeTests::testTabPositionEnumValues()
   QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpProject), 5);
   QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpCalibration), 6);
   QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder1), 7);
-  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder2), 8);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpDebug), 7);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPreferences), 8);
+  QCOMPARE(static_cast<int>(BackendContext::TabPosition::tpPlaceholder2), 7);
 
   // Confirm Q_ENUM registration -- proves QML can read backend.TabPosition.tpX
   const QMetaEnum meta = QMetaEnum::fromType<BackendContext::TabPosition>();
@@ -2694,7 +2696,9 @@ void ViewModelSmokeTests::testTabPositionEnumValues()
   QCOMPARE(meta.keyToValue("tpProject"), 5);
   QCOMPARE(meta.keyToValue("tpCalibration"), 6);
   QCOMPARE(meta.keyToValue("tpPlaceholder1"), 7);
-  QCOMPARE(meta.keyToValue("tpPlaceholder2"), 8);
+  QCOMPARE(meta.keyToValue("tpDebug"), 7);
+  QCOMPARE(meta.keyToValue("tpPreferences"), 8);
+  QCOMPARE(meta.keyToValue("tpPlaceholder2"), 7);
 }
 
 void ViewModelSmokeTests::testRequestSelectTabSignal()

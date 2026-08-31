@@ -217,6 +217,14 @@ void CameraController::viewIso()
   setRotationAzEl(45.0f, 35.0f);
 }
 
+void CameraController::viewPlate()
+{
+  // Upstream Camera.cpp:102-106 uses topfront for the plate/default view.
+  // In the Qt scene frame the bed is XZ and Y is up, so the eye is at
+  // azimuth 0 with a 45-degree elevation above the bed.
+  setRotationAzEl(0.0f, 45.0f);
+}
+
 // Phase 237 (VIEW-01): remaining Camera::select_view directions (upstream
 // Camera.cpp:94-101). Qt6 Y-up mapping: bottom = -Y, rear = -Z, left = -X.
 void CameraController::viewBottom()

@@ -519,6 +519,7 @@ private:
   // every selected source object (P15.11 MULTICENTER), unit-tested
   // independently.
   int m_gizmoMode = 0;          // RhiViewport::GizmoMode (0=Move, 1=Rotate, 2=Scale, 5=Cut, ...)
+  bool m_showSelectedOutline = true;
   int m_cutAxis = 2;            // 0=X, 1=Y, 2=Z (default Z)
   float m_cutPosition = 0.f;    // cut-plane offset along cutAxis (mm)
   // Phase 240 (GIZ-04): interactive cut-plane tilt (Euler XYZ degrees,

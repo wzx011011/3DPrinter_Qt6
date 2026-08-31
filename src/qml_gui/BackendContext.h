@@ -189,6 +189,7 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(int tpProject READ tpProject CONSTANT)
   Q_PROPERTY(int tpCalibration READ tpCalibration CONSTANT)
   Q_PROPERTY(int tpPlaceholder1 READ tpPlaceholder1 CONSTANT)
+  Q_PROPERTY(int tpDebug READ tpDebug CONSTANT)
   Q_PROPERTY(int tpPreferences READ tpPreferences CONSTANT)
   Q_PROPERTY(int tpPlaceholder2 READ tpPlaceholder2 CONSTANT)
   // Phase 3: ViewMode ids mirror Plater canvas modes.
@@ -224,8 +225,9 @@ public:
     tpProject = 5,
     tpCalibration = 6,
     tpPlaceholder1 = 7,   // upstream: tpAuxiliary; reserved for future use
+    tpDebug = tpPlaceholder1, // reserved/debug slot; no page route is mounted
     tpPreferences = 8,    // upstream PreferencesDialog, hosted as a Qt page
-    tpPlaceholder2 = tpPreferences, // compatibility alias for the former slot name
+    tpPlaceholder2 = tpPlaceholder1, // compatibility alias for the former debug slot
   };
   Q_ENUM(TabPosition)
 
@@ -259,8 +261,9 @@ public:
   int tpProject() const { return static_cast<int>(TabPosition::tpProject); }
   int tpCalibration() const { return static_cast<int>(TabPosition::tpCalibration); }
   int tpPlaceholder1() const { return static_cast<int>(TabPosition::tpPlaceholder1); }
+  int tpDebug() const { return static_cast<int>(TabPosition::tpDebug); }
   int tpPreferences() const { return static_cast<int>(TabPosition::tpPreferences); }
-  int tpPlaceholder2() const { return tpPreferences(); }
+  int tpPlaceholder2() const { return tpPlaceholder1(); }
 
   // QML-friendly ViewMode accessors (Q_PROPERTY constants)
   int vmView3D() const { return static_cast<int>(ViewMode::View3D); }
@@ -364,6 +367,8 @@ public:
   Q_INVOKABLE void requestSetSidebarCollapsed(bool c);  ///< Set persisted sidebar collapsed state.
   Q_INVOKABLE void requestSetSidebarWidth(int w);       ///< Set persisted sidebar width clamped to [min,max].
   Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< Set persisted sidebar dock area.
+  /// Restore the default window/sidebar layout used by a fresh application.
+  Q_INVOKABLE void resetWindowLayout();
   Q_INVOKABLE void postError(const QString &message, int severity = 0);
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
   Q_INVOKABLE void clearError();

@@ -120,6 +120,8 @@ private slots:
   // Wave 3: MultiMachine View routes the selected local device into Monitor.
   void multiMachineViewRoutesToMonitorIdentity();
   void multiMachinePaginationHasPageInputAndGoAction();
+  // Wave 4: visible workflow entries and semantic reserved/preferences indices.
+  void waveFourRoutesAndPageIndicesAreDiscoverable();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
@@ -10263,6 +10265,29 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
   // MainFrame.cpp:2623-2629) and stays Preview-gated.
   QVERIFY2(topbar.contains(QStringLiteral("setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)")),
            "VIEW-01: Show G-code Window must toggle PreviewViewModel::showGcodeWindow");
+  // Wave 4: only the View actions with live Qt6 consumers are exposed.
+  const QString wave4BackendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString wave4BackendImpl = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString rendererImpl = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  const QString wave4RhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  QVERIFY2(topbar.contains(QStringLiteral("backend.resetWindowLayout()"))
+               && wave4BackendHeader.contains(QStringLiteral("Q_INVOKABLE void resetWindowLayout()"))
+               && wave4BackendImpl.contains(QStringLiteral("requestSetSidebarCollapsed(false)"))
+               && wave4BackendImpl.contains(QStringLiteral("requestSetSidebarWidth(kSidebarDefaultWidth)"))
+               && wave4BackendImpl.contains(QStringLiteral("requestSetSidebarDockArea(static_cast<int>(SidebarDockArea::Left))")),
+           "VIEW-W4: Reset Window Layout must restore the persisted sidebar layout defaults");
+  QVERIFY2(topbar.contains(QStringLiteral("root.activeViewport.showSelectedOutline = !root.activeViewport.showSelectedOutline"))
+               && wave4RhiHeader.contains(QStringLiteral("Q_PROPERTY(bool showSelectedOutline"))
+               && rendererHeader.contains(QStringLiteral("bool m_showSelectedOutline = true"))
+               && rendererImpl.contains(QStringLiteral("m_showSelectedOutline = viewport->m_showSelectedOutline"))
+               && rendererImpl.contains(QStringLiteral("if (m_showSelectedOutline && m_highlightVertexBuffer")),
+           "VIEW-W4: Show Selected Outline must gate the RHI highlight render pass");
+  QVERIFY2(!topbar.contains(QStringLiteral("显示标签"))
+               && !topbar.contains(QStringLiteral("Show Labels"))
+               && !topbar.contains(QStringLiteral("显示悬垂"))
+               && !topbar.contains(QStringLiteral("Show Overhang")),
+           "VIEW-W4: labels and overhang must stay absent until their global scene render paths exist");
   // The old disabled stub items must stay gone (no fake-green entries).
   for (const QString &stub : {QStringLiteral("显示/隐藏 Gizmo"), QStringLiteral("显示层"),
                               QStringLiteral("隐藏层")})
@@ -10283,8 +10308,12 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-01: RhiViewport must expose upstream-named selectView(direction)");
   QVERIFY2(cameraHeader.contains(QStringLiteral("void viewBottom();"))
                && cameraHeader.contains(QStringLiteral("void viewRear();"))
-               && cameraHeader.contains(QStringLiteral("void viewLeft();")),
-           "VIEW-01: CameraController must declare the bottom/rear/left presets");
+               && cameraHeader.contains(QStringLiteral("void viewLeft();"))
+               && cameraHeader.contains(QStringLiteral("void viewPlate();")),
+           "VIEW-01: CameraController must declare the bottom/rear/left/plate presets");
+  QVERIFY2(rhiImpl.contains(QStringLiteral("m_camera.viewPlate();"))
+               && rhiImpl.contains(QStringLiteral("zoom_to_bed equivalent")),
+           "VIEW-01: plate/default view must select the oblique plate view and fit the bed");
   QVERIFY2(cameraImpl.contains(QStringLiteral("mat.ortho(")),
            "VIEW-01: CameraController must implement the orthographic projection branch");
 
@@ -10673,6 +10702,36 @@ void QmlUiAuditTests::multiMachinePaginationHasPageInputAndGoAction()
   QVERIFY2(vm.contains(QStringLiteral("Q_PROPERTY(int currentPage READ currentPage WRITE setCurrentPage"))
                && vm.contains(QStringLiteral("void setCurrentPage(int page)")),
            "WAVE-3: pagination input must use the existing bounded currentPage property");
+}
+
+void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
+{
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString backendCpp = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  QVERIFY2(!topbar.isEmpty() && !mainQml.isEmpty() && !backendH.isEmpty() && !backendCpp.isEmpty(),
+           "WAVE-4: unable to read shell/page routing sources");
+
+  QVERIFY2(topbar.contains(QStringLiteral("pos: backend.tpMultiDevice"))
+               && topbar.contains(QStringLiteral("pos: backend.tpCalibration"))
+               && topbar.contains(QStringLiteral("pos: backend.tpPreferences")),
+           "WAVE-4: MultiMachine, Calibration, and Preferences must be discoverable in the workflow strip");
+
+  QVERIFY2(backendH.contains(QStringLiteral("tpDebug = tpPlaceholder1"))
+               && backendH.contains(QStringLiteral("tpPreferences = 8"))
+               && backendH.contains(QStringLiteral("int tpDebug() const"))
+               && backendH.contains(QStringLiteral("int tpPlaceholder2() const { return tpPlaceholder1(); }"))
+               && !backendH.contains(QStringLiteral("tpPlaceholder2 = tpPreferences")),
+           "WAVE-4: reserved/debug and Preferences indices must remain distinct");
+  QVERIFY2(backendCpp.contains(QStringLiteral("constexpr int kLastTab = static_cast<int>(TabPosition::tpPreferences)"))
+               && backendCpp.contains(QStringLiteral("requestSelectTab(static_cast<int>(TabPosition::tpPreferences))")),
+           "WAVE-4: existing routing must continue to accept Preferences as the final page index");
+
+  QVERIFY2(mainQml.contains(QStringLiteral("PreferencesPage {"))
+               && mainQml.contains(QStringLiteral("active: backend.currentPage === backend.tpPreferences"))
+               && mainQml.contains(QStringLiteral("+ (backend.tpPreferences + 1)")),
+           "WAVE-4: Preferences must remain mounted at its semantic route and status index");
 }
 
 void QmlUiAuditTests::pageHonestyAndCliSourceAudit()

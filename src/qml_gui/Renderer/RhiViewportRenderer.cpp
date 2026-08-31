@@ -166,6 +166,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     return;
 
   m_canvasType = viewport->m_canvasType;
+  m_showSelectedOutline = viewport->m_showSelectedOutline;
   // Phase 91 (ASMEXPLODE-02): mirror upstream m_explosion_ratio
   // (GLCanvas3D.hpp:596). If the ratio changed since the last synchronize,
   // force a model re-upload so buildModelVertices re-applies the per-volume
@@ -1018,7 +1019,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // after the mesh with their own gizmo gating inside the render helpers.
     renderMeasureOverlay(cb);
     renderFlattenHover(cb);
-  if (m_highlightVertexBuffer && m_highlightVertexCount > 0) {
+    if (m_showSelectedOutline && m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // P15.4 (SELBOX): the selection highlight is now the upstream white
       // corner-box outline (Selection.cpp:1939-1949 + render_bounding_box
       // :2558-2654): line topology through the opaque line pipeline with

@@ -110,6 +110,7 @@ class ViewportContextMenuTests final : public QObject
 
 private slots:
   void rhiAndSoftwareExposeTheSameContextSignal();
+  void selectedOutlinePropertyNotifiesAndRetainsState();
   void directRightClickClassificationMatchesAcrossRenderers();
   void dragToolLayerAndWipeSuppressContextRequests();
 };
@@ -120,6 +121,23 @@ void ViewportContextMenuTests::rhiAndSoftwareExposeTheSameContextSignal()
   SoftwareViewport software;
   QVERIFY(rhi.metaObject()->indexOfSignal("contextMenuRequested(int,int,int,int,int,double,double)") >= 0);
   QVERIFY(software.metaObject()->indexOfSignal("contextMenuRequested(int,int,int,int,int,double,double)") >= 0);
+}
+
+void ViewportContextMenuTests::selectedOutlinePropertyNotifiesAndRetainsState()
+{
+  RhiViewport viewport;
+  QVERIFY(viewport.showSelectedOutline());
+
+  QSignalSpy changed(&viewport, &RhiViewport::showSelectedOutlineChanged);
+  viewport.setShowSelectedOutline(false);
+  QVERIFY(!viewport.showSelectedOutline());
+  QCOMPARE(changed.count(), 1);
+
+  viewport.setShowSelectedOutline(false);
+  QCOMPARE(changed.count(), 1);
+  viewport.setShowSelectedOutline(true);
+  QVERIFY(viewport.showSelectedOutline());
+  QCOMPARE(changed.count(), 2);
 }
 
 void ViewportContextMenuTests::directRightClickClassificationMatchesAcrossRenderers()

@@ -835,10 +835,11 @@ ApplicationWindow {
                 }
             }
 
-            // Status bar — 显示 "9" 页数（之前是 12）
+            // Status bar — report the semantic page index, including the reserved slot.
             StatusBar {
                 Layout.fillWidth: true
-                statusText: "就绪  |  Qt 6.10  |  页面 " + (backend.currentPage + 1) + " / 9  |  " + backend.latencyBrief
+                statusText: "就绪  |  Qt 6.10  |  页面 " + (backend.currentPage + 1) + " / "
+                            + (backend.tpPreferences + 1) + "  |  " + backend.latencyBrief
             }
         }
 

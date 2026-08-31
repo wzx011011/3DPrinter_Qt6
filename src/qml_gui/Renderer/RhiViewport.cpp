@@ -178,6 +178,15 @@ void RhiViewport::setShowTravelMoves(bool value)
   update();
 }
 
+void RhiViewport::setShowSelectedOutline(bool value)
+{
+  if (m_showSelectedOutline == value)
+    return;
+  m_showSelectedOutline = value;
+  emit showSelectedOutlineChanged();
+  update();
+}
+
 void RhiViewport::setShowBed(bool value)
 {
   if (m_showBed == value)
@@ -897,7 +906,9 @@ void RhiViewport::requestViewPreset(int preset)
 void RhiViewport::selectView(const QString &direction)
 {
   const QString dir = direction.toLower();
-  if (dir == QLatin1String("top"))
+  if (dir == QLatin1String("plate"))
+    m_camera.viewPlate();
+  else if (dir == QLatin1String("top"))
     m_camera.viewTop();
   else if (dir == QLatin1String("bottom"))
     m_camera.viewBottom();

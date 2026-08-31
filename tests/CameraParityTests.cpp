@@ -53,6 +53,7 @@ private slots:
   void zoomIsMultiplicativePerNotch();
   void zoomBoundsFollowSceneBox();
   void translateWorldClampsTargetTo3xSceneBox();
+  void plateViewMatchesUpstreamTopFront();
   void groundPointOnPlaneRoundTrip();
 };
 
@@ -224,6 +225,21 @@ void CameraParityTests::translateWorldClampsTargetTo3xSceneBox()
   QVERIFY(t.y() >= 60.0f - 180.0f - 1e-3f);
   QVERIFY(t.z() <= 110.0f + 330.0f + 1e-3f);
   QCOMPARE(t.y(), 60.0f - 180.0f);
+}
+
+void CameraParityTests::plateViewMatchesUpstreamTopFront()
+{
+  // Upstream Camera::select_view("plate") (Camera.cpp:102-106) is the
+  // top-front oblique view, distinct from the isometric default. The Qt
+  // scene frame maps the upstream vertical axis to Y and bed depth to Z.
+  CameraController cam;
+  const QVector3D target = cam.target();
+  cam.viewPlate();
+  const QVector3D eyeDirection = (cam.eye() - target).normalized();
+  QVERIFY(std::abs(eyeDirection.x()) < 1e-3f);
+  QVERIFY(std::abs(eyeDirection.y() - std::sqrt(0.5f)) < 1e-3f);
+  QVERIFY(std::abs(eyeDirection.z() - std::sqrt(0.5f)) < 1e-3f);
+  QVERIFY(std::abs(cam.elevation() - 45.0f) < 1e-3f);
 }
 
 void CameraParityTests::groundPointOnPlaneRoundTrip()

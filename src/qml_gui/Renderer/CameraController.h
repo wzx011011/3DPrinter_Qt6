@@ -70,6 +70,8 @@ public:
   void viewFront();
   void viewRight();
   void viewIso();
+  // Upstream Camera::select_view("plate") / "topfront": oblique bed view.
+  void viewPlate();
   // Phase 237 (VIEW-01): remaining upstream Camera::select_view directions
   // (Camera.cpp:86-107). Azimuth/elevation table derived from the established
   // Qt6 mapping (Y-up, azimuth measured from +Z toward +X, front=+Z,

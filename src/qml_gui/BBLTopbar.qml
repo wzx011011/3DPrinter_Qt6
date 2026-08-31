@@ -71,7 +71,10 @@ Item {
         { label: qsTr("准备"), icon: "qrc:/qml/assets/icons/box.svg", pos: backend.tp3DEditor },
         { label: qsTr("预览"), icon: "qrc:/qml/assets/icons/layers.svg", pos: backend.tpPreview },
         { label: qsTr("设备"), icon: "qrc:/qml/assets/icons/printer.svg", pos: backend.tpDevice },
-        { label: qsTr("项目"), icon: "qrc:/qml/assets/icons/device-floppy.svg", pos: backend.tpProject }
+        { label: qsTr("多设备"), icon: "qrc:/qml/assets/icons/printer.svg", pos: backend.tpMultiDevice },
+        { label: qsTr("项目"), icon: "qrc:/qml/assets/icons/device-floppy.svg", pos: backend.tpProject },
+        { label: qsTr("校准"), icon: "qrc:/qml/assets/icons/settings.svg", pos: backend.tpCalibration },
+        { label: qsTr("偏好设置"), icon: "qrc:/qml/assets/icons/settings.svg", pos: backend.tpPreferences }
     ]
 
     function selectWorkflowTab(tab) {
@@ -937,10 +940,10 @@ Item {
         // menu camera presets (MainFrame.cpp:2213-2235 add_common_view_menu_
         // items) plus the projection radio pair, the G-code window check item
         // and the 3D navigator check item from MainFrame.cpp:2601-2638.
-        // Upstream items with no Qt6 consumer (Reset Window Layout, Show
-        // Labels Ctrl+E, Show Overhang, Show Selected Outline -- no
-        // layout-reset API, and the renderer has no label/overhang/outline
-        // draw pass) are deliberately not added as fake toggles.
+        // Wave 4 exposes only controls with a live Qt6 consumer. Labels and
+        // overhang are intentionally omitted: labels lack the upstream
+        // object-instance text render path, and overhang is only a paint-tool
+        // filter rather than a global scene overlay.
         CxMenu {
             id: viewMenu
 
@@ -989,6 +992,18 @@ Item {
                 text: qsTr("重置视图")
                 enabled: root.preparePageRef !== null
                 onTriggered: if (root.preparePageRef) root.preparePageRef.applyFitHintIfReady()
+            }
+            CxMenuItem {
+                text: qsTr("重置窗口布局")
+                enabled: viewMenu.viewEnabled
+                onTriggered: backend.resetWindowLayout()
+            }
+            CxMenuItem {
+                text: (root.activeViewport && root.activeViewport.showSelectedOutline ? "✓ " : "")
+                      + qsTr("显示选中对象轮廓")
+                enabled: viewMenu.viewEnabled && root.activeViewport !== null
+                onTriggered: if (root.activeViewport)
+                    root.activeViewport.showSelectedOutline = !root.activeViewport.showSelectedOutline
             }
 
             MenuSeparator {}

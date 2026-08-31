@@ -690,6 +690,13 @@ void BackendContext::requestSetSidebarDockArea(int area)
   settings.sync();
   emit sidebarDockAreaChanged();
 }
+void BackendContext::resetWindowLayout()
+{
+  requestSetSidebarCollapsed(false);
+  requestSetSidebarWidth(kSidebarDefaultWidth);
+  requestSetSidebarDockArea(static_cast<int>(SidebarDockArea::Left));
+}
+
 void BackendContext::openSettings()
 {
   requestSelectTab(static_cast<int>(TabPosition::tpPreferences));

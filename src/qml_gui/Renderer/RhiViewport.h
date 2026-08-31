@@ -250,6 +250,9 @@ class RhiViewport : public QQuickRhiItem
   // (MainFrame.cpp:2604-2620, app_config use_perspective_camera). The setter
   // calls update() so the next render rebuilds the projection.
   Q_PROPERTY(bool orthographicCamera READ orthographicCamera WRITE setOrthographicCamera NOTIFY cameraProjectionChanged)
+  // View-menu selection outline gate. The renderer owns the actual outline
+  // pass; this property carries the preference across the QML/RHI boundary.
+  Q_PROPERTY(bool showSelectedOutline READ showSelectedOutline WRITE setShowSelectedOutline NOTIFY showSelectedOutlineChanged)
 
 public:
   // Mirrors upstream ECanvasType { CanvasView3D=0, CanvasPreview=1,
@@ -556,6 +559,8 @@ public:
   // orthographicCamera Q_PROPERTY above).
   bool orthographicCamera() const { return m_camera.useOrtho(); }
   void setOrthographicCamera(bool ortho);
+  bool showSelectedOutline() const { return m_showSelectedOutline; }
+  void setShowSelectedOutline(bool value);
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors.
   QVariantList extrudersColors() const { return m_extrudersColors; }
   void setExtrudersColors(const QVariantList &c);
@@ -600,6 +605,7 @@ signals:
   void explosionRatioChanged();
   // Phase 237 (VIEW-01): projection toggle notify (orthographicCamera).
   void cameraProjectionChanged();
+  void showSelectedOutlineChanged();
   // v5.16 (NAVIGATOR): navigator cube enable + label overlay updates.
   void navigatorEnabledChanged();
   void navigatorLabelsChanged();
@@ -876,6 +882,7 @@ private:
   float m_markerY = 0.f;
   float m_markerZ = 0.f;
   bool m_showMarker = true;
+  bool m_showSelectedOutline = true;
   int m_gizmoMode = GizmoMove;
   QString m_sidebarField;
   bool m_uniformScale = true;
