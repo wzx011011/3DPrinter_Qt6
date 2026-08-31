@@ -20,6 +20,7 @@ class QmlUiAuditTests final : public QObject
 
 private slots:
   void topLevelUiHasNoVisiblePlaceholdersOrNoopActions();
+  void monitorSdCardPanelIsExplicitlyUnavailable();
   void mainChromeUsesThemeTokens();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
   void guiStartupDeepLinkArgumentsAreExtensible();
@@ -104,6 +105,9 @@ private slots:
   // action); AboutDialog carries AGPL-3.0; EditGCode saves via
   // ConfigViewModel::setValue; WipeTowerDialog persists via saveFlushVolumes.
   void dialogReachabilitySourceAudit();
+  // Wave 2: the firmware dialog must disclose unavailable OTA support instead
+  // of simulating a firmware check, update progress, or success.
+  void firmwareDialogDoesNotSimulateOta();
   // v5.16 Phase 241 (PAGE-01..04 + CLI-01..02): page honesty + CLI surface —
   // HomePage binds the real recent model + rotating hint database with no
   // dead quick action, ProjectPage has no console.log New Project button and
@@ -747,6 +751,29 @@ void QmlUiAuditTests::topLevelUiHasNoVisiblePlaceholdersOrNoopActions()
     QVERIFY2(!mainQml.contains(pattern) && !topbar.contains(pattern),
              qPrintable(QStringLiteral("Top-level no-op action remains: %1").arg(pattern)));
   }
+}
+
+void QmlUiAuditTests::monitorSdCardPanelIsExplicitlyUnavailable()
+{
+  const QString monitorPage = readSource(QStringLiteral("src/qml_gui/pages/MonitorPage.qml"));
+  const QString monitorViewModel = readSource(QStringLiteral("src/core/viewmodels/MonitorViewModel.h"));
+  const QString deviceService = readSource(QStringLiteral("src/core/services/DeviceServiceMock.h"));
+
+  QVERIFY2(!monitorPage.isEmpty(), "Unable to read MonitorPage.qml");
+  QVERIFY2(monitorViewModel.contains(QStringLiteral("selectedDeviceFilesystemSupported")),
+           "MonitorViewModel must expose the device filesystem capability");
+  QVERIFY2(deviceService.contains(QStringLiteral("selectedDeviceFilesystemSupported")),
+           "DeviceServiceMock must declare the device filesystem capability");
+  QVERIFY2(monitorPage.contains(QStringLiteral("selectedDeviceFilesystemSupported")),
+           "MonitorPage must bind its SD-card state to the capability");
+  QVERIFY2(monitorPage.contains(QStringLiteral("SD 卡文件不可用")),
+           "MonitorPage must explain when device filesystem operations are unavailable");
+  QVERIFY2(!monitorPage.contains(QStringLiteral("test_cube.gcode"))
+               && !monitorPage.contains(QStringLiteral("1.8 / 5.2 GB")),
+           "MonitorPage must not present hard-coded SD-card files or storage usage");
+  QVERIFY2(!monitorPage.contains(QStringLiteral("id: importMA"))
+               && !monitorPage.contains(QStringLiteral("id: deleteMA")),
+           "MonitorPage must not retain inert SD-card import or delete controls");
 }
 
 void QmlUiAuditTests::mainChromeUsesThemeTokens()
@@ -10146,6 +10173,37 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
            "DLG-03: ProjectServiceMock must expose projectVersionInfo");
   QVERIFY2(backendHeader.contains(QStringLiteral("systemInfo")),
            "DLG-03: BackendContext must expose systemInfo for SysInfoDialog");
+}
+
+void QmlUiAuditTests::firmwareDialogDoesNotSimulateOta()
+{
+  const QString firmwareDialog = readSource(QStringLiteral("src/qml_gui/dialogs/FirmwareDialog.qml"));
+  QVERIFY2(!firmwareDialog.isEmpty(), "Unable to read FirmwareDialog.qml");
+  QVERIFY2(firmwareDialog.contains(QStringLiteral("固件更新当前不可用"))
+               && firmwareDialog.contains(QStringLiteral("尚未集成打印机固件检查或 OTA 升级协议")),
+           "FirmwareDialog must explicitly disclose that firmware OTA is unavailable");
+
+  const QStringList simulatedOtaTokens = {
+      QStringLiteral("simulateUpgrade"),
+      QStringLiteral("upgradeTimer"),
+      QStringLiteral("UpgradeSuccess"),
+      QStringLiteral("upgradeProgress"),
+      QStringLiteral("latestVersion"),
+  };
+  for (const QString &token : simulatedOtaTokens) {
+    QVERIFY2(!firmwareDialog.contains(token),
+             qPrintable(QStringLiteral("FirmwareDialog must not retain simulated OTA token: %1").arg(token)));
+  }
+
+  const QString backendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString backendImpl = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
+  const QString monitorHeader = readSource(QStringLiteral("src/core/viewmodels/MonitorViewModel.h"));
+  QVERIFY2(backendHeader.contains(QStringLiteral("showFirmwareDialog"))
+               && backendImpl.contains(QStringLiteral("emit showFirmwareDialogRequested();")),
+           "FirmwareDialog must remain reachable through BackendContext's QML dialog request");
+  QVERIFY2(!monitorHeader.contains(QStringLiteral("updateFirmware"))
+               && !monitorHeader.contains(QStringLiteral("firmwareUpdate")),
+           "MonitorViewModel must not advertise an OTA operation without a device protocol");
 }
 
 // Phase 237 (VIEW-01..06) source audit: the View menu carries the 7 upstream

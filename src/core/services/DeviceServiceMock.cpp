@@ -225,6 +225,12 @@ QString DeviceServiceMock::selectedDeviceModel() const
   return (idx >= 0 && idx < devices_.size()) ? devices_[idx].model : QString();
 }
 
+QString DeviceServiceMock::selectedDeviceSerial() const
+{
+  const int idx = selectedDeviceIndex();
+  return (idx >= 0 && idx < devices_.size()) ? devices_[idx].sn : QString();
+}
+
 bool DeviceServiceMock::selectedDeviceOnline() const
 {
   const int idx = selectedDeviceIndex();
@@ -342,6 +348,13 @@ bool DeviceServiceMock::selectedDeviceCameraTimelapse() const
 {
   const int idx = selectedDeviceIndex();
   return (idx >= 0 && idx < devices_.size()) ? devices_[idx].cameraTimelapse : false;
+}
+
+bool DeviceServiceMock::selectedDeviceFilesystemSupported() const
+{
+  // The current device protocol integration can upload a local print file,
+  // but does not implement SD-card listing, import, or deletion.
+  return false;
 }
 
 QString DeviceServiceMock::searchText() const { return searchText_; }

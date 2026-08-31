@@ -4,261 +4,41 @@ import QtQuick.Layouts
 import ".."
 import "../controls"
 
-// P8.5 -- FirmwareDialog (aligns with upstream UpgradePanel / MachineInfoPanel)
-// Firmware upgrade management: version display, upgrade check, OTA progress
-// Usage: FirmwareDialog { id: dlg }  ->  dlg.open()
-
+// Firmware OTA is unavailable until a device protocol implementation exists.
 CxDialog {
     id: root
 
     closePolicy: Popup.NoAutoClose
-
     dialogTitle: qsTr("固件升级")
 
     anchors.centerIn: parent
     width: 460
-    height: 420
-
-    // Mock firmware state (aligns with upstream MachineObject firmware info)
-    property string printerModel: "CR-10 SE"
-    property string serialNumber: "CP04A00XXXXXXXX"
-    property string currentVersion: "01.06.00.00"
-    property string latestVersion: "01.07.01.00"
-    property bool isBeta: false
-
-    // Upgrade state (aligns with upstream UpgradingState)
-    enum UpgradeState {
-        UpgradeAvailable,
-        UpgradeNotAvailable,
-        Upgrading,
-        UpgradeSuccess,
-        UpgradeFailed
-    }
-
-    property int upgradeState: FirmwareDialog.UpgradeState.UpgradeAvailable
-    property real upgradeProgress: 0.0
+    height: 250
 
     contentItem: ColumnLayout {
         width: root.width
         spacing: Theme.spacingLG
         anchors.margins: Theme.spacingXXL
-        // -- Printer Info Section --
-        Rectangle {
+
+        Text {
             Layout.fillWidth: true
-            implicitHeight: infoCol.implicitHeight + 20
-            radius: 6
-            color: Theme.scrollBarTrackColor
-            border.color: Theme.borderInput
-            border.width: 1
-
-            ColumnLayout {
-                id: infoCol
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: Theme.spacingLG
-                spacing: Theme.spacingMD
-                // Printer model
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-                    Text {
-                        Layout.preferredWidth: 90
-                        text: qsTr("打印机型号")
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                    Text {
-                        text: root.printerModel
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeSM
-                        font.bold: true
-                    }
-                    Item { Layout.fillWidth: true }
-                    Rectangle {
-                        visible: root.isBeta
-                        width: 36
-                        height: 16
-                        radius: 3
-                        color: Theme.statusWarning
-                        Text {
-                            anchors.centerIn: parent
-                            text: "BETA"
-                            color: Theme.accentDark
-                            font.pixelSize: 8
-                            font.bold: true
-                        }
-                    }
-                }
-
-                // Serial number
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-                    Text {
-                        Layout.preferredWidth: 90
-                        text: qsTr("序列号")
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                    Text {
-                        text: root.serialNumber
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                }
-
-                // Current version
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-                    Text {
-                        Layout.preferredWidth: 90
-                        text: qsTr("当前版本")
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                    Text {
-                        text: root.currentVersion
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeSM
-                        font.bold: true
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    Text {
-                        visible: root.upgradeState === FirmwareDialog.UpgradeAvailable
-                        text: qsTr("新版本可用: %1").arg(root.latestVersion)
-                        color: Theme.accent
-                        font.pixelSize: Theme.fontSizeSM
-                        font.bold: true
-                    }
-                }
-
-                // Latest version (when upgrade not available)
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-                    visible: root.upgradeState === FirmwareDialog.UpgradeNotAvailable
-                    Text {
-                        Layout.preferredWidth: 90
-                        text: qsTr("最新版本")
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                    Text {
-                        text: root.latestVersion
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeSM
-                    }
-                }
-            }
+            text: qsTr("固件更新当前不可用")
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeLG
+            font.bold: true
+            wrapMode: Text.Wrap
         }
 
-        // -- Release Notes --
-        Rectangle {
+        Text {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            radius: 6
-            color: Theme.bgPanel
-            border.color: Theme.borderInput
-            border.width: 1
-
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Theme.spacingMD
-                spacing: Theme.spacingSM
-                Text {
-                    text: qsTr("更新日志")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeSM
-                    font.bold: true
-                }
-
-                ScrollView {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    contentWidth: availableWidth
-
-                    Text {
-                        width: parent.width
-                        wrapMode: Text.Wrap
-                        text: qsTr("v%1 更新内容:\n\n1. 优化切片算法，提升打印质量\n2. 修复 AMS 多耗材切换偶尔失败的问题\n3. 新增 timelapse 视频录制优化\n4. 改善 Wi-Fi 连接稳定性\n5. 修复部分情况下热床温度显示异常").arg(root.latestVersion)
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeXS
-                        lineHeight: 1.5
-                    }
-                }
-            }
+            text: qsTr("此版本尚未集成打印机固件检查或 OTA 升级协议，因此无法显示版本信息或执行固件更新。")
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontSizeSM
+            wrapMode: Text.Wrap
+            lineHeight: 1.4
         }
 
-        // -- Progress Bar (visible during upgrade) --
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spacingSM
-            visible: root.upgradeState === FirmwareDialog.UpgradeState.Upgrading
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spacingMD
-                Text {
-                    text: qsTr("正在升级...")
-                    color: Theme.accent
-                    font.pixelSize: Theme.fontSizeSM
-                    font.bold: true
-                }
-                Item { Layout.fillWidth: true }
-                Text {
-                    text: Math.round(root.upgradeProgress * 100) + "%"
-                    color: Theme.accent
-                    font.pixelSize: Theme.fontSizeSM
-                    font.bold: true
-                }
-            }
-
-            CxProgressBar {
-                Layout.fillWidth: true
-                from: 0; to: 1
-                value: root.upgradeProgress
-            }
-
-            Text {
-                text: qsTr("升级过程中请勿断开电源或网络连接")
-                color: Theme.statusWarning
-                font.pixelSize: Theme.fontSizeXS
-            }
-        }
-
-        // -- Status message (success/fail) --
-        RowLayout {
-            Layout.fillWidth: true
-            visible: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-               || root.upgradeState === FirmwareDialog.UpgradeState.UpgradeFailed
-
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 30
-                radius: 4
-                color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-                    ? "#1F18C75E" : "#1FEF4444"
-                border.color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-                    ? Theme.accent : Theme.statusError
-                border.width: 1
-
-                Text {
-                    anchors.centerIn: parent
-                    text: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-                        ? qsTr("升级成功！打印机将自动重启。")
-                        : qsTr("升级失败，请检查网络连接后重试。")
-                    color: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeSuccess
-                        ? Theme.accent : Theme.statusError
-                    font.pixelSize: Theme.fontSizeSM
-                    font.bold: true
-                }
-            }
-        }
+        Item { Layout.fillHeight: true }
     }
 
     footer: Rectangle {
@@ -266,6 +46,7 @@ CxDialog {
         height: 48
         color: Theme.bgSurface
         radius: 8
+
         Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left
@@ -277,25 +58,7 @@ CxDialog {
         RowLayout {
             anchors.fill: parent
             anchors.rightMargin: Theme.spacingXL
-            spacing: Theme.spacingMD
             Item { Layout.fillWidth: true }
-
-            // Mock upgrade simulation button
-            CxButton {
-                visible: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeAvailable
-                text: qsTr("开始升级")
-                cxStyle: CxButton.Style.Primary
-                onClicked: simulateUpgrade()
-            }
-
-            CxButton {
-                visible: root.upgradeState === FirmwareDialog.UpgradeState.UpgradeFailed
-                text: qsTr("重试")
-                cxStyle: CxButton.Style.Primary
-                onClicked: {
-                    root.upgradeState = FirmwareDialog.UpgradeState.UpgradeAvailable
-                }
-            }
 
             CxButton {
                 text: qsTr("关闭")
@@ -303,32 +66,5 @@ CxDialog {
                 onClicked: root.close()
             }
         }
-    }
-
-    // Mock upgrade simulation
-    function simulateUpgrade() {
-        root.upgradeState = FirmwareDialog.UpgradeState.Upgrading
-        root.upgradeProgress = 0.0
-        upgradeTimer.start()
-    }
-
-    Timer {
-        id: upgradeTimer
-        interval: 100
-        repeat: true
-        onTriggered: {
-            root.upgradeProgress += 0.02
-            if (root.upgradeProgress >= 1.0) {
-                root.upgradeProgress = 1.0
-                stop()
-                root.upgradeState = FirmwareDialog.UpgradeState.UpgradeSuccess
-            }
-        }
-    }
-
-    onClosed: {
-        upgradeTimer.stop()
-        root.upgradeProgress = 0.0
-        root.upgradeState = FirmwareDialog.UpgradeState.UpgradeAvailable
     }
 }

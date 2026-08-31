@@ -262,6 +262,7 @@ private slots:
   void int05_MqttCommandConstructionAndControlFlow();
   // v2.8 P2-C: INT-06 FTP URL construction + send-print routing
   void int06_FtpUrlAndSendPrintRouting();
+  void monitorDeviceFilesystemCapabilityIsExplicit();
   void appSettingsAndEditorBedShapePersistDeterministically();
   void editor_import_model_updates_state();
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
@@ -286,6 +287,7 @@ private slots:
   // the error state (upstream Plater.cpp:13742-13759).
   void validateWarningRoutesToBackendNotificationWithoutErrorState();
   void monitor_refresh_updates_network_and_device();
+  void monitor_selected_device_serial_is_forwarded();
   void config_default_and_switch_preset();
   void configEnumNullKeysMapGuards();
   void testUpstreamDefaultsContainVectorKeys();
@@ -962,6 +964,18 @@ void ViewModelSmokeTests::monitor_refresh_updates_network_and_device()
   QTRY_VERIFY_WITH_TIMEOUT(spy.count() >= 1, 5000);
   QVERIFY(monitor.monitorState() != beforeState || monitor.latencyMs() != beforeLatency);
   QVERIFY(monitor.networkOnline());
+}
+
+void ViewModelSmokeTests::monitor_selected_device_serial_is_forwarded()
+{
+  DeviceServiceMock device;
+  NetworkServiceMock network;
+  CameraServiceMock camera;
+  MonitorViewModel monitor(&device, &network, &camera);
+
+  QCOMPARE(monitor.selectedDeviceSerial(), QStringLiteral("CP01001A001"));
+  monitor.selectDevice(1);
+  QCOMPARE(monitor.selectedDeviceSerial(), QStringLiteral("CP01002B002"));
 }
 
 void ViewModelSmokeTests::config_default_and_switch_preset()
@@ -4156,6 +4170,17 @@ void ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting()
     device.selectDevice(0);
     device.startPrint(0, QString()); // mock path, no crash
   }
+}
+
+void ViewModelSmokeTests::monitorDeviceFilesystemCapabilityIsExplicit()
+{
+  DeviceServiceMock device;
+  NetworkServiceMock network;
+  CameraServiceMock camera;
+  MonitorViewModel monitor(&device, &network, &camera);
+
+  QVERIFY(!device.selectedDeviceFilesystemSupported());
+  QVERIFY(!monitor.selectedDeviceFilesystemSupported());
 }
 
 void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()

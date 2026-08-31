@@ -1372,14 +1372,17 @@ Item {
                                             font.pixelSize: Theme.fontSizeSM
                                         }
                                         Text {
-                                            text: "LAN"
+                                            text: root.monitorVm.mqttConnected
+                                                  ? qsTr("MQTT") : qsTr("不可用")
                                             color: Theme.textPrimary
                                             font.pixelSize: Theme.fontSizeXL
                                             font.bold: true
                                         }
                                         Item { Layout.fillHeight: true }
                                         Text {
-                                            text: qsTr("局域网直连")
+                                            text: root.monitorVm.mqttConnected
+                                                  ? qsTr("局域网 MQTT 连接")
+                                                  : qsTr("尚未建立 MQTT 连接")
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeXS
                                         }
@@ -1455,14 +1458,14 @@ Item {
                                             font.pixelSize: Theme.fontSizeSM
                                         }
                                         Text {
-                                            text: "CP\u2026\u2026"
+                                            text: root.monitorVm.selectedDeviceSerial || qsTr("不可用")
                                             color: Theme.textPrimary
                                             font.pixelSize: Theme.fontSizeXL
                                             font.bold: true
                                         }
                                         Item { Layout.fillHeight: true }
                                         Text {
-                                            text: qsTr("固件版本: 1.0.0")
+                                            text: qsTr("固件版本不可用")
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeXS
                                         }
@@ -1604,108 +1607,40 @@ Item {
                         }
                     }
 
-                    // Tab 1: SD Card (对齐上游 MediaFilePanel)
+                    // Tab 1: SD Card (aligns with upstream MediaFilePanel)
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
                         spacing: 12
                         visible: tabBar.currentIndex === 1
 
-                        // Header row
-                        RowLayout {
+                        Item {
                             Layout.fillWidth: true
-                            Text { text: qsTr("SD 卡文件管理"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeLG; font.bold: true }
-                            Item { Layout.fillWidth: true }
-                            Text { text: "8 " + qsTr("个文件"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM }
-                        }
+                            Layout.fillHeight: true
 
-                        // Storage bar
-                        Rectangle {
-                            Layout.fillWidth: true
-                            height: 24
-                            radius: 6
-                            color: Theme.bgElevated
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.margins: 4
-                                spacing: 8
-                                Text { text: qsTr("已用"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
-                                Rectangle {
-                                    Layout.fillWidth: true; height: 8; radius: 4; color: Theme.switchTrackOff
-                                    Rectangle { width: parent.width * 0.35; height: parent.height; radius: 4; color: Theme.accent }
-                                }
-                                Text { text: "1.8 / 5.2 GB"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
-                            }
-                        }
+                            Column {
+                                anchors.centerIn: parent
+                                width: Math.min(parent.width, 360)
+                                spacing: Theme.spacingSM
+                                visible: !root.monitorVm.selectedDeviceFilesystemSupported
 
-                        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.borderSubtle }
-
-                        // File list header
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Text { text: qsTr("文件名"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; Layout.fillWidth: true }
-                            Text { text: qsTr("大小"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 60 }
-                            Text { text: qsTr("日期"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 90 }
-                        }
-
-                        // Mock file list (对齐 upstream MediaFilePanel file table)
-                        Repeater {
-                            model: [
-                                { name: "test_cube.gcode", size: "2.3 MB", date: "2026-03-14" },
-                                { name: "benchy_0.2mm.gcode", size: "8.7 MB", date: "2026-03-13" },
-                                { name: "calibration_flow.gcode", size: "1.1 MB", date: "2026-03-12" },
-                                { name: "dragon_v2.gcode", size: "15.2 MB", date: "2026-03-11" },
-                                { name: "support_test.gcode", size: "3.4 MB", date: "2026-03-10" },
-                                { name: "multi_part.gcode", size: "22.1 MB", date: "2026-03-09" },
-                                { name: "tower_test.gcode", size: "4.5 MB", date: "2026-03-08" },
-                                { name: "random_box.gcode", size: "1.8 MB", date: "2026-03-07" }
-                            ]
-                            delegate: Rectangle {
-                                Layout.fillWidth: true
-                                height: 34
-                                radius: 6
-                                color: fileMA.containsMouse ? Theme.bgHover : "transparent"
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 8
-                                    spacing: 4
-
-                                    Text { text: modelData.name; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "monospace"; Layout.fillWidth: true; elide: Text.ElideRight }
-                                    Text { text: modelData.size; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 60; horizontalAlignment: Text.AlignRight }
-                                    Text { text: modelData.date; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; Layout.preferredWidth: 90; horizontalAlignment: Text.AlignRight }
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    text: qsTr("SD 卡文件不可用")
+                                    color: Theme.textSecondary
+                                    font.pixelSize: Theme.fontSizeLG
+                                    font.bold: true
                                 }
 
-                                MouseArea {
-                                    id: fileMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
+                                Text {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    width: parent.width
+                                    text: qsTr("当前设备连接不支持浏览、导入或删除 SD 卡文件。")
+                                    color: Theme.textTertiary
+                                    font.pixelSize: Theme.fontSizeMD
+                                    horizontalAlignment: Text.AlignHCenter
+                                    wrapMode: Text.WordWrap
                                 }
-                            }
-                        }
-
-                        Item { Layout.fillHeight: true }
-
-                        // Bottom actions
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            Item { Layout.fillWidth: true }
-                            Rectangle {
-                                Layout.preferredWidth: 80; height: 28; radius: 6
-                                color: importMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                                border.width: 1; border.color: Theme.borderSubtle
-                                Text { anchors.centerIn: parent; text: qsTr("导入"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
-                                MouseArea { id: importMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor }
-                            }
-                            Rectangle {
-                                Layout.preferredWidth: 80; height: 28; radius: 6
-                                color: deleteMA.containsMouse ? Theme.statusErrorPressed : Theme.bgElevated
-                                border.width: 1; border.color: Theme.borderSubtle
-                                Text { anchors.centerIn: parent; text: qsTr("删除"); color: deleteMA.containsMouse ? "#ffaaaa" : Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
-                                MouseArea { id: deleteMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor }
                             }
                         }
                     }

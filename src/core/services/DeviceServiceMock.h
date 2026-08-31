@@ -85,6 +85,8 @@ class DeviceServiceMock final : public QObject
   Q_PROPERTY(QString selectedDeviceName READ selectedDeviceName NOTIFY selectedDeviceChanged)
   /// Convenience: model type of selected device
   Q_PROPERTY(QString selectedDeviceModel READ selectedDeviceModel NOTIFY selectedDeviceChanged)
+  /// Convenience: serial number of selected device
+  Q_PROPERTY(QString selectedDeviceSerial READ selectedDeviceSerial NOTIFY selectedDeviceChanged)
   /// Convenience: online status of selected device
   Q_PROPERTY(bool selectedDeviceOnline READ selectedDeviceOnline NOTIFY selectedDeviceChanged)
   /// Convenience: status text of selected device
@@ -118,6 +120,8 @@ class DeviceServiceMock final : public QObject
   Q_PROPERTY(bool selectedDeviceCameraRecording READ selectedDeviceCameraRecording NOTIFY selectedDeviceChanged)
   /// Convenience: camera timelapse on/off of selected device
   Q_PROPERTY(bool selectedDeviceCameraTimelapse READ selectedDeviceCameraTimelapse NOTIFY selectedDeviceChanged)
+  /// Whether the selected device exposes a browsable and mutable filesystem.
+  Q_PROPERTY(bool selectedDeviceFilesystemSupported READ selectedDeviceFilesystemSupported NOTIFY selectedDeviceChanged)
   /// Search/filter text
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY searchTextChanged)
   /// Number of devices after filtering
@@ -134,6 +138,7 @@ public:
   int selectedDeviceIndex() const;
   QString selectedDeviceName() const;
   QString selectedDeviceModel() const;
+  QString selectedDeviceSerial() const;
   bool selectedDeviceOnline() const;
   QString selectedDeviceStatus() const;
   int selectedDeviceProgress() const;
@@ -163,6 +168,7 @@ public:
   bool selectedDeviceWorkLightOn() const;
   bool selectedDeviceCameraRecording() const;
   bool selectedDeviceCameraTimelapse() const;
+  bool selectedDeviceFilesystemSupported() const;
 
   QString searchText() const;
   void setSearchText(const QString &text);

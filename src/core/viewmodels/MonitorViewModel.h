@@ -25,6 +25,7 @@ class MonitorViewModel final : public QObject
   Q_PROPERTY(int selectedDeviceIndex READ selectedDeviceIndex NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceName READ selectedDeviceName NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceModel READ selectedDeviceModel NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(QString selectedDeviceSerial READ selectedDeviceSerial NOTIFY selectedDeviceChanged)
   Q_PROPERTY(bool selectedDeviceOnline READ selectedDeviceOnline NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceStatus READ selectedDeviceStatus NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceProgress READ selectedDeviceProgress NOTIFY selectedDeviceChanged)
@@ -47,6 +48,7 @@ class MonitorViewModel final : public QObject
   Q_PROPERTY(bool selectedDeviceWorkLightOn READ selectedDeviceWorkLightOn NOTIFY selectedDeviceChanged)
   Q_PROPERTY(bool selectedDeviceCameraRecording READ selectedDeviceCameraRecording NOTIFY selectedDeviceChanged)
   Q_PROPERTY(bool selectedDeviceCameraTimelapse READ selectedDeviceCameraTimelapse NOTIFY selectedDeviceChanged)
+  Q_PROPERTY(bool selectedDeviceFilesystemSupported READ selectedDeviceFilesystemSupported NOTIFY selectedDeviceChanged)
 
   // ── Network status ──────────────────────────────────────────
   Q_PROPERTY(bool networkOnline READ networkOnline NOTIFY networkChanged)
@@ -66,6 +68,7 @@ public:
   int selectedDeviceIndex() const;
   QString selectedDeviceName() const;
   QString selectedDeviceModel() const;
+  QString selectedDeviceSerial() const;
   bool selectedDeviceOnline() const;
   QString selectedDeviceStatus() const;
   int selectedDeviceProgress() const;
@@ -89,6 +92,7 @@ public:
   bool selectedDeviceWorkLightOn() const;
   bool selectedDeviceCameraRecording() const;
   bool selectedDeviceCameraTimelapse() const;
+  bool selectedDeviceFilesystemSupported() const;
 
   bool networkOnline() const;
   int latencyMs() const;

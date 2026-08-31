@@ -91,6 +91,11 @@ QString MonitorViewModel::selectedDeviceModel() const
   return deviceService_ ? deviceService_->selectedDeviceModel() : QString();
 }
 
+QString MonitorViewModel::selectedDeviceSerial() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceSerial() : QString();
+}
+
 bool MonitorViewModel::selectedDeviceOnline() const
 {
   return deviceService_ ? deviceService_->selectedDeviceOnline() : false;
@@ -185,6 +190,11 @@ bool MonitorViewModel::selectedDeviceCameraRecording() const
 bool MonitorViewModel::selectedDeviceCameraTimelapse() const
 {
   return deviceService_ ? deviceService_->selectedDeviceCameraTimelapse() : false;
+}
+
+bool MonitorViewModel::selectedDeviceFilesystemSupported() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceFilesystemSupported() : false;
 }
 
 // ── Network ───────────────────────────────────────────────────
