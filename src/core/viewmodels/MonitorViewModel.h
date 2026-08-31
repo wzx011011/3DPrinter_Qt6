@@ -102,6 +102,8 @@ public:
 
   /// Select device by filtered index
   Q_INVOKABLE void selectDevice(int filteredIndex);
+  /// Select a device by stable local identity from another device workflow.
+  Q_INVOKABLE bool selectDeviceByIdentity(const QString &ip, const QString &name = {});
 
   /// Refresh all device data (mock polling)
   Q_INVOKABLE void refresh();

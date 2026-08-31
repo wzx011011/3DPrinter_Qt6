@@ -34,7 +34,6 @@ class HomeViewModel;
 class SettingsViewModel;
 class ProjectViewModel;
 class CalibrationViewModel;
-class ModelMallViewModel;
 class MultiMachineViewModel;
 class AmsMaterialsViewModel;
 class AiAgentService;
@@ -99,7 +98,6 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QObject *settingsViewModel READ settingsViewModel CONSTANT)
   Q_PROPERTY(QObject *projectViewModel READ projectViewModel CONSTANT)
   Q_PROPERTY(QObject *calibrationViewModel READ calibrationViewModel CONSTANT)
-  Q_PROPERTY(QObject *modelMallViewModel READ modelMallViewModel CONSTANT)
   Q_PROPERTY(QObject *multiMachineViewModel READ multiMachineViewModel CONSTANT)
   // Phase 199 (WIZ-01): expose the preset data service to QML so the
   // ConfigWizard can enumerate vendors / printer models / materials /
@@ -299,7 +297,6 @@ public:
   QObject *settingsViewModel() const;
   QObject *projectViewModel() const;
   QObject *calibrationViewModel() const;
-  QObject *modelMallViewModel() const;
   QObject *multiMachineViewModel() const;
   QObject *amsMaterialsViewModel() const;
   /// Plugin registry + persisted enable/install state (Phase 202). Mock data
@@ -635,7 +632,6 @@ private:
   SettingsViewModel *settingsViewModel_ = nullptr;
   ProjectViewModel *projectViewModel_ = nullptr;
   CalibrationViewModel *calibrationViewModel_ = nullptr;
-  ModelMallViewModel *modelMallViewModel_ = nullptr;
   MultiMachineViewModel *multiMachineViewModel_ = nullptr;
   AmsMaterialsViewModel *amsMaterialsViewModel_ = nullptr;
 

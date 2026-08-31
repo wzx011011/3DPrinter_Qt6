@@ -404,11 +404,12 @@ bool MultiMachineViewModel::pagedCloudTaskSelected(int i) const {
 // ──────────────────────────────────────────────
 void MultiMachineViewModel::viewMachine(int index)
 {
-  // Aligns with upstream EVT_MULTI_DEVICE_VIEW -> jump_to_monitor
-  int idx = m_currentPage * m_pageSize + index;
-  if (idx >= 0 && idx < m_machineEntries.size()) {
-    emit messageRequested(tr("View device: %1").arg(m_machineEntries[idx].name));
-  }
+  // Aligns with upstream EVT_MULTI_DEVICE_VIEW -> jump_to_monitor.
+  // Resolve the paged/filtered row before handing identity to the shell.
+  const MachineEntry *machine = filteredMachineAt(m_machineEntries, m_currentPage, m_pageSize, index);
+  if (!machine)
+    return;
+  emit deviceViewRequested(machine->ip, machine->name, machine->model);
 }
 
 void MultiMachineViewModel::editPrinters()

@@ -196,6 +196,22 @@ ApplicationWindow {
         }
     }
 
+    // Upstream MultiMachineManagerPage::EVT_MULTI_DEVICE_VIEW routes the
+    // selected device to Monitor::jump_to_monitor(dev_id). Keep identity
+    // resolution in MonitorViewModel and page navigation in the shell.
+    Connections {
+        target: backend.multiMachineViewModel
+        function onDeviceViewRequested(ip, name, model) {
+            if (!backend.monitorViewModel
+                || !backend.monitorViewModel.selectDeviceByIdentity(ip, name)) {
+                backend.postNotification(qsTr("Device is no longer available in Monitor."),
+                                         qsTr("Device"), 2)
+                return
+            }
+            backend.requestSelectTab(backend.tpDevice)
+        }
+    }
+
     // Phase 237 (VIEW-02): delete-all destructive confirm (upstream
     // "All objects will be removed, continue?" message, Plater.cpp:11107;
     // confirm runs EditorViewModel::clearWorkspace, the OWzx equivalent of

@@ -158,26 +158,40 @@ save_project / undo / redo / get_app_state / get_scene 全部经 GLM 真实
 - 外部 harness 直连（Claude Code 等）：服务器已具备，仅缺文档章节——
   属后续增量。
 
-## 网页版聊天 UI（2026-08-29，step 2，commit bc1ddf5）
+## 网页版聊天 UI（2026-08-29/30，step 2，bc1ddf5 + 修复提交）
 
-架构：ChatSidebar.qml 只做面板宿主（边框 + WebChannel 注册），聊天 UI 全部
+架构：ChatSidebar.qml 只做面板宿主（边框 + WebChannel 挂接），聊天 UI 全部
 在 qrc:/web/chat 本地网页（vanilla JS + vendored marked/DOMPurify，免构建），
-经 QWebChannel 桥（AiChatBridge，objectName="bridge"）与宿主互通。main.qml
-用 Loader 懒加载（Chromium 进程树首开才启动）。QtWebEngineQuick 在
-main() 里经 QLibrary 动态初始化（静态链接会在部分机器上 pre-main 加载器
-中止）。同一 WebEngine 基础设施后续直接服务网页版模型库。
+经 QWebChannel 桥（AiChatBridge）与宿主互通。main.qml 用 Loader 懒加载
+（Chromium 进程树首开才启动）。QtWebEngineQuick 在 main() 里经 QLibrary 动态
+初始化（静态链接会在部分机器上 pre-main 加载器中止）。同一 WebEngine 基础
+设施后续直接服务网页版模型库。
 
-两个关键坑（排障记录）：
+排障记录（三个真坑，均为实测定位）：
 1. 自编 Qt（E:/Qt6.10 旧版）未启用 Vulkan，缺 16 个 Qt6Gui Vulkan 导出 +
    Qt6Quick::QSGVulkanTexture::fromNative，导致 Qt6WebEngineCore.dll 入口点
-   错误、应用无法启动。修复：用官方 6.10.2（qtbase/qtdeclarative/qtsvg/
-   qttools/qtshadertools）覆盖 E:/Qt6.10（备份在 E:\qt_ext_cache\qt_backup），
-   然后删 build/ 旧 Qt6*.dll 让 windeployqt 重新部署（同版本它会跳过）。
-2. QML WebChannel 的 registeredObjects 按对象 objectName 发布；桥必须
-   setObjectName("bridge")，否则 channel.objects.bridge 为 undefined，
-   网页 JS 静默异常（面板空白、欢迎语不出现）。
+   错误、应用无法启动。修复：官方 6.10.2 覆盖 E:/Qt6.10（备份在
+   E:\qt_ext_cache\qt_backup），并删 build/ 旧 Qt6*.dll 强制 windeployqt
+   重新部署（同版本它会跳过）。
+2. WebEngineView.webChannel 属性类型是 QQmlWebChannel*（QML 包装器），
+   普通 C++ QWebChannel 赋不上去（静默失败，页面永远拿不到 qt 对象）。
+   必须用 QML WebChannel 元素提供 transport。
+3. Qt 6.10 的 QQmlWebChannel 注册不走 objectName：registeredObjects_append
+   要求被注册对象带 attached WebChannel.id（只有 QML 里声明的对象才有），
+   C++ 实例直接被拒——"Cannot register an object without WebChannel
+   attached property"，且 QQmlListProperty 无 RESET，绑定只写一次不重试。
+   解法：ChatSidebar.qml 的 Component.onCompleted 里把 channel 元素交给
+   BackendContext.attachAiChatChannel(QObject*)，C++ 用公开基类
+   QWebChannel::registerObject("bridge", aiChatBridge_) 完成注册。
 
-真机验收（2026-08-29，GLM）：欢迎页/建议胶囊/输入栏渲染；用户气泡；
-load_model 工具卡（✓ + "test_cube.stl 已加载"）；delete_object 权限卡
-（"将删除第 1 个对象，可撤销" + 拒绝/允许）拒绝全链路（卡收敛为"已拒绝"
-灰条、忙碌条消失、AI 回复确认）；✕ 关闭 + 重开 pageReady 历史回放完整。
+另：面板打开后 objects 为空的另一诱因——url 与 webChannel 的属性顺序：
+webChannel 必须先于 url 赋值（文档序），否则该次导航拿不到
+qt.webChannelTransport 引导脚本；url 以 bridge 是否就绪做门控。
+
+真机验收（2026-08-30，GLM，全部以本人核对截图为准，build/ 下）：
+- 欢迎页/建议胶囊/输入栏（diag9_03_top.png）
+- 用户绿气泡 + 「导入模型」工具卡转圈 + 权限卡「AI 请求：导入模型」
+  （smoke_04_panel.png）
+- 允许路径：卡收敛「✓ 已允许」+ AI 回复「加载成功：test_cube.stl 已导入
+  到当前面板，对象数 1（位于 Plate 0）」（tab4_zone.png）
+- 关闭/重开 pageReady 历史回放完整（replay_02_panel.png）

@@ -21,7 +21,6 @@
 #include "core/viewmodels/SettingsViewModel.h"
 #include "core/viewmodels/ProjectViewModel.h"
 #include "core/viewmodels/CalibrationViewModel.h"
-#include "core/viewmodels/ModelMallViewModel.h"
 #include "core/viewmodels/MultiMachineViewModel.h"
 #include "core/viewmodels/AmsMaterialsViewModel.h"
 #include "core/viewmodels/AiViewModel.h"
@@ -147,7 +146,6 @@ BackendContext::BackendContext(QObject *parent)
   projectViewModel_->setProjectService(projectService_);
   calibrationViewModel_ = new CalibrationViewModel(calibrationService_, this);
   calibrationViewModel_->setPresetService(presetService_);
-  modelMallViewModel_ = new ModelMallViewModel(this);
   multiMachineViewModel_ = new MultiMachineViewModel(this);
   // Phase 201 (v5.6 AMS Architecture Cleanup): mock data + persistence for
   // AMSSettingsDialog. Data source stays mock; persistence is local QSettings.
@@ -472,7 +470,6 @@ QObject *BackendContext::homeViewModel() const { return homeViewModel_; }
 QObject *BackendContext::settingsViewModel() const { return settingsViewModel_; }
 QObject *BackendContext::projectViewModel() const { return projectViewModel_; }
 QObject *BackendContext::calibrationViewModel() const { return calibrationViewModel_; }
-QObject *BackendContext::modelMallViewModel() const { return modelMallViewModel_; }
 QObject *BackendContext::multiMachineViewModel() const { return multiMachineViewModel_; }
 QObject *BackendContext::amsMaterialsViewModel() const { return amsMaterialsViewModel_; }
 QObject *BackendContext::appSettings() const { return appSettings_; }

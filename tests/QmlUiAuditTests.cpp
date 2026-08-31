@@ -117,6 +117,9 @@ private slots:
   // validation.
   void pageHonestyAndCliSourceAudit();
   void shellGuardNotificationAndDialogRegressionAudit();
+  // Wave 3: MultiMachine View routes the selected local device into Monitor.
+  void multiMachineViewRoutesToMonitorIdentity();
+  void multiMachinePaginationHasPageInputAndGoAction();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
   // Phase 76: Prepare workflow panels must stay compact and backend-gated.
@@ -483,10 +486,10 @@ private slots:
   // 124 source-audit pattern (readSource + QVERIFY2 with CALIB-02/CALIB-03-
   // named messages). Source-level only; runs in the regression ctest.
   void calibrationRangeInputAndKValueReadback();
-  // Phase 126 (CLEAN-01): the legacy dead-code pages (DeviceListPage,
-  // AuxiliaryPage, ModelMallPage, AuxiliaryListPanel) + AuxiliaryService must
-  // stay deleted (No-Deprecated-UI rule). These were in the removed LAN/device/
-  // cloud scope -- deletion, not repair. Source-level only.
+  // Wave 3 (MALL-01): Model Mall is blocked because no approved Web container,
+  // service contract, or authentication flow exists. The removed page and its
+  // mock catalog/download ViewModel must not return as a simulated feature.
+  // The remaining legacy dead-code surfaces follow the same deletion contract.
   void legacyDeadCodePagesRemoved();
   // Phase 121 (PAINT-02 + PAINT-03): source-audit lock that the painted-facet
   // overlay render + brush interaction wiring is in place. Locks: (a)
@@ -6825,15 +6828,17 @@ void QmlUiAuditTests::calibrationRangeInputAndKValueReadback()
 
 void QmlUiAuditTests::legacyDeadCodePagesRemoved()
 {
-  // Phase 126 (CLEAN-01): the legacy dead-code pages + AuxiliaryService must
-  // stay deleted. These were in the removed LAN/device/cloud scope -- deletion,
-  // not repair (No-Deprecated-UI rule). Each QVERIFY2 names the CLEAN-01
-  // contract it locks.
+  // Wave 3 (MALL-01): Model Mall remains blocked. The upstream feature relies
+  // on a Web host, remote service contract, and authentication flow that are
+  // outside the approved scope. Do not substitute static models or simulated
+  // downloads for the unavailable workflow.
   const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
   const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
+  const QString mallVmCpp = readSource(QStringLiteral("src/core/viewmodels/ModelMallViewModel.cpp"));
+  const QString mallVmHeader = readSource(QStringLiteral("src/core/viewmodels/ModelMallViewModel.h"));
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
 
@@ -6843,7 +6848,7 @@ void QmlUiAuditTests::legacyDeadCodePagesRemoved()
   QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryPage.qml")),
            "CLEAN-01/CL-01: qml.qrc must not list AuxiliaryPage.qml (dead, deleted)");
   QVERIFY2(!qrc.contains(QStringLiteral("ModelMallPage.qml")),
-           "CLEAN-01/CL-01: qml.qrc must not list ModelMallPage.qml (dead, removed cloud scope)");
+           "MALL-01: qml.qrc must not list ModelMallPage.qml (blocked cloud workflow)");
   QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryListPanel.qml")),
            "CLEAN-01/CL-01: qml.qrc must not list AuxiliaryListPanel.qml (orphan panel, deleted)");
 
@@ -6853,6 +6858,19 @@ void QmlUiAuditTests::legacyDeadCodePagesRemoved()
   // BBLTopbar must not show the removed "辅助" tab.
   QVERIFY2(!topbar.contains(QStringLiteral("tpPlaceholder1")),
            "CLEAN-01/CL-02: BBLTopbar must not reference tpPlaceholder1 tab (Auxiliary tab removed)");
+
+  // MALL-01: static catalog data and timer-driven download completion would
+  // falsely represent a completed remote model acquisition. Both the QML page
+  // and C++ ViewModel must remain absent until the real upstream contract is
+  // deliberately migrated.
+  QVERIFY2(mallVmCpp.isEmpty(),
+           "MALL-01: ModelMallViewModel.cpp must stay removed (no simulated downloads)");
+  QVERIFY2(mallVmHeader.isEmpty(),
+           "MALL-01: ModelMallViewModel.h must stay removed (no static catalog API)");
+  QVERIFY2(!backendH.contains(QStringLiteral("modelMallViewModel")),
+           "MALL-01: BackendContext must not expose a Model Mall ViewModel");
+  QVERIFY2(!cmake.contains(QStringLiteral("ModelMallViewModel")),
+           "MALL-01: CMake must not compile a Model Mall mock implementation");
 
   // CLEAN-01/CL-03: AuxiliaryService must be absent from BackendContext.h + CMakeLists.txt.
   QVERIFY2(!backendH.contains(QStringLiteral("AuxiliaryService")),
@@ -10608,6 +10626,53 @@ void QmlUiAuditTests::shellGuardNotificationAndDialogRegressionAudit()
            "Toast confirm/cancel actions must target the delegate notification ID");
   QVERIFY2(!errorToast.contains(QStringLiteral("opacity: 0\n        Component.onCompleted")),
            "Toast opacity animation must have one owner");
+}
+
+void QmlUiAuditTests::multiMachineViewRoutesToMonitorIdentity()
+{
+  const QString multiMachinePage = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
+  const QString multiMachineVmH = readSource(QStringLiteral("src/core/viewmodels/MultiMachineViewModel.h"));
+  const QString multiMachineVmCpp = readSource(QStringLiteral("src/core/viewmodels/MultiMachineViewModel.cpp"));
+  const QString monitorVmH = readSource(QStringLiteral("src/core/viewmodels/MonitorViewModel.h"));
+  const QString monitorVmCpp = readSource(QStringLiteral("src/core/viewmodels/MonitorViewModel.cpp"));
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!multiMachinePage.isEmpty() && !multiMachineVmH.isEmpty() &&
+               !multiMachineVmCpp.isEmpty() && !monitorVmH.isEmpty() &&
+               !monitorVmCpp.isEmpty() && !mainQml.isEmpty(),
+           "WAVE-3: unable to read device routing sources");
+
+  QVERIFY2(multiMachinePage.contains(QStringLiteral("_vm.viewMachine(index)")),
+           "WAVE-3: MultiMachine View action must call the VM");
+  QVERIFY2(multiMachineVmH.contains(QStringLiteral("deviceViewRequested")) &&
+               multiMachineVmCpp.contains(QStringLiteral("emit deviceViewRequested")) &&
+               !multiMachineVmCpp.contains(QStringLiteral("emit messageRequested(tr(\"View device:")),
+           "WAVE-3: View must emit a routing request instead of a toast-only message");
+  QVERIFY2(monitorVmH.contains(QStringLiteral("selectDeviceByIdentity")) &&
+               monitorVmCpp.contains(QStringLiteral("deviceAt(i)")) &&
+               monitorVmCpp.contains(QStringLiteral("device.value(QStringLiteral(\"ip\"))")),
+           "WAVE-3: Monitor must resolve the selected device by local identity");
+  QVERIFY2(mainQml.contains(QStringLiteral("onDeviceViewRequested(ip, name, model)")) &&
+               mainQml.contains(QStringLiteral("selectDeviceByIdentity(ip, name)")) &&
+               mainQml.contains(QStringLiteral("backend.requestSelectTab(backend.tpDevice)")),
+           "WAVE-3: shell must select the Monitor identity before routing to tpDevice");
+  QVERIFY2(!mainQml.contains(QStringLiteral("schedule")) &&
+               !mainQml.contains(QStringLiteral("cloud scheduling")),
+           "WAVE-3: local View routing must not introduce cloud scheduling");
+}
+
+void QmlUiAuditTests::multiMachinePaginationHasPageInputAndGoAction()
+{
+  const QString page = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
+  const QString vm = readSource(QStringLiteral("src/core/viewmodels/MultiMachineViewModel.h"));
+  QVERIFY2(!page.isEmpty() && !vm.isEmpty(), "WAVE-3: unable to read pagination sources");
+  QVERIFY2(page.contains(QStringLiteral("id: devicePageInput"))
+               && page.contains(QStringLiteral("IntValidator"))
+               && page.contains(QStringLiteral("_vm.currentPage = requested - 1"))
+               && page.contains(QStringLiteral("text: qsTr(\"Go\")")),
+           "WAVE-3: device pagination must provide validated page input and Go action");
+  QVERIFY2(vm.contains(QStringLiteral("Q_PROPERTY(int currentPage READ currentPage WRITE setCurrentPage"))
+               && vm.contains(QStringLiteral("void setCurrentPage(int page)")),
+           "WAVE-3: pagination input must use the existing bounded currentPage property");
 }
 
 void QmlUiAuditTests::pageHonestyAndCliSourceAudit()

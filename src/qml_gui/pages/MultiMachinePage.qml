@@ -475,6 +475,29 @@ Item {
                         Layout.leftMargin: Theme.spacingSM
                         Layout.rightMargin: Theme.spacingSM
                     }
+                    // Upstream m_flipping_panel also accepts a page number and
+                    // applies it as a one-based page selection.
+                    CxTextField {
+                        id: devicePageInput
+                        Layout.preferredWidth: 46
+                        Layout.preferredHeight: 24
+                        text: (_vm.currentPage + 1).toString()
+                        horizontalAlignment: TextInput.AlignHCenter
+                        validator: IntValidator { bottom: 1; top: Math.max(1, _vm.totalPages) }
+                        function applyPage() {
+                            var requested = parseInt(text, 10)
+                            if (!isNaN(requested))
+                                _vm.currentPage = requested - 1
+                            text = (_vm.currentPage + 1).toString()
+                        }
+                        onAccepted: applyPage()
+                    }
+                    CxButton {
+                        compact: true
+                        text: qsTr("Go")
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: devicePageInput.applyPage()
+                    }
                     // Next page
                     Rectangle {
                         width: 24

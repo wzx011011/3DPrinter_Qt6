@@ -251,8 +251,6 @@ if(OWZX_QML_GUI)
         src/core/viewmodels/ProjectViewModel.h
         src/core/viewmodels/CalibrationViewModel.cpp
         src/core/viewmodels/CalibrationViewModel.h
-        src/core/viewmodels/ModelMallViewModel.cpp
-        src/core/viewmodels/ModelMallViewModel.h
         src/core/viewmodels/MultiMachineViewModel.cpp
         src/core/viewmodels/MultiMachineViewModel.h
         src/core/viewmodels/AmsMaterialsViewModel.cpp

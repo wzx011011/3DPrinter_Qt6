@@ -171,6 +171,8 @@ signals:
   void cloudTasksChanged();
   void cloudPaginationChanged();
   void sortChanged();
+  /// Requests the application shell to show this device in Monitor.
+  void deviceViewRequested(const QString &ip, const QString &name, const QString &model);
   void messageRequested(QString text);
 
 private:

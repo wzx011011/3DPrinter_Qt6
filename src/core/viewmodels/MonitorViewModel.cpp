@@ -222,6 +222,24 @@ void MonitorViewModel::selectDevice(int filteredIndex)
     deviceService_->selectDevice(filteredIndex);
 }
 
+bool MonitorViewModel::selectDeviceByIdentity(const QString &ip, const QString &name)
+{
+  if (!deviceService_)
+    return false;
+
+  for (int i = 0; i < filteredDeviceCount(); ++i) {
+    const QVariantMap device = deviceAt(i);
+    const bool matchesIdentity = !ip.isEmpty()
+        ? device.value(QStringLiteral("ip")).toString() == ip
+        : (!name.isEmpty() && device.value(QStringLiteral("name")).toString() == name);
+    if (matchesIdentity) {
+      selectDevice(i);
+      return true;
+    }
+  }
+  return false;
+}
+
 void MonitorViewModel::refresh()
 {
   if (deviceService_) deviceService_->refresh();
