@@ -61,7 +61,10 @@ jobs:
           host: "windows"
           target: "desktop"
           arch: "win64_msvc2022_64"
-          modules: "qtshadertools"
+          # qtshadertools: rhi_viewport .qsb pipeline. qtwebengine + qtwebchannel:
+          # the AI chat panel hard-requires Qt6::WebEngineQuick + Qt6::WebChannel
+          # (CMakeLists.txt find_package, p15-p17 line).
+          modules: "qtshadertools qtwebengine qtwebchannel"
 
       - name: Compute OrcaSlicer deps cache key
         shell: pwsh
