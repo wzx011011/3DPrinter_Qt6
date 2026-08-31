@@ -55,7 +55,7 @@ Rectangle {
 
         Row {
             spacing: 10
-            Label { text: qsTr("速度 ") + (root.previewVm ? root.previewVm.toolFeedrate.toFixed(0) : "0") + " mm/s"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
+            Label { text: qsTr("速度 ") + (root.previewVm ? (root.previewVm.toolFeedrate / 60.0).toFixed(1) : "0.0") + " mm/s"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
             Label { text: qsTr("层 ") + (root.previewVm ? root.previewVm.toolLayer + 1 : 0); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
         }
 

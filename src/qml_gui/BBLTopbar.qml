@@ -1032,7 +1032,9 @@ Item {
             CxMenuItem {
                 text: (backend.previewViewModel && backend.previewViewModel.showGcodeWindow ? "✓ " : "")
                       + qsTr("显示 G-code 窗口")
-                enabled: backend.currentPage === backend.tpPreview && backend.previewViewModel !== null
+                enabled: backend.currentPage === backend.tpPreview
+                          && backend.previewViewModel !== null
+                          && backend.previewViewModel.previewReady
                 onTriggered: if (backend.previewViewModel)
                     backend.previewViewModel.setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)
             }

@@ -32,6 +32,8 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int layerCount READ layerCount NOTIFY stateChanged)
   Q_PROPERTY(int currentLayerMin READ currentLayerMin NOTIFY stateChanged)
   Q_PROPERTY(int currentLayerMax READ currentLayerMax NOTIFY stateChanged)
+  /// Single-layer mode aligned with upstream IMSlider::switch_one_layer_mode.
+  Q_PROPERTY(bool singleLayer READ singleLayer WRITE setSingleLayer NOTIFY stateChanged)
   Q_PROPERTY(int moveCount READ moveCount NOTIFY stateChanged)
   Q_PROPERTY(int currentMove READ currentMove NOTIFY stateChanged)
   Q_PROPERTY(QString currentTime READ currentTime NOTIFY stateChanged)
@@ -72,6 +74,12 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int viewModeIndex READ viewModeIndex WRITE setViewModeIndex NOTIFY stateChanged)
   Q_PROPERTY(bool currentViewModeAvailable READ currentViewModeAvailable NOTIFY stateChanged)
   Q_PROPERTY(QString currentViewModeStatus READ currentViewModeStatus NOTIFY stateChanged)
+  /// Visibility controls exposed by the upstream GCodeViewer for the active
+  /// view type (GCodeViewer.cpp:4944-5010, :5028-5039).
+  Q_PROPERTY(bool roleVisibilityAvailable READ roleVisibilityAvailable NOTIFY stateChanged)
+  Q_PROPERTY(bool extruderVisibilityAvailable READ extruderVisibilityAvailable NOTIFY stateChanged)
+  Q_PROPERTY(bool moveVisibilityAvailable READ moveVisibilityAvailable NOTIFY stateChanged)
+  Q_PROPERTY(bool travelVisibilityAvailable READ travelVisibilityAvailable NOTIFY stateChanged)
   /// Normal/Stealth mode aligned with upstream PrintEstimatedStatistics modes.
   Q_PROPERTY(bool stealthMode READ stealthMode WRITE setStealthMode NOTIFY stateChanged)
   /// Travel visibility toggle aligned with upstream GCodeViewer.
@@ -165,6 +173,7 @@ public:
   int layerCount() const { return layerCount_; }
   int currentLayerMin() const { return currentLayerMin_; }
   int currentLayerMax() const { return currentLayerMax_; }
+  bool singleLayer() const { return singleLayer_; }
   int moveCount() const { return moveCount_; }
   int currentMove() const { return currentMove_; }
   /// Elapsed time at the current move position, aligned with upstream IMSlider get_label.
@@ -254,6 +263,10 @@ public:
   QString currentViewModeStatus() const;
   Q_INVOKABLE bool viewModeAvailable(int index) const;
   Q_INVOKABLE QString viewModeStatusText(int index) const;
+  bool roleVisibilityAvailable() const;
+  bool extruderVisibilityAvailable() const;
+  bool moveVisibilityAvailable() const;
+  bool travelVisibilityAvailable() const;
   bool stealthMode() const { return stealthMode_; }
   Q_INVOKABLE void setStealthMode(bool enabled);
   bool showTravelMoves() const { return showTravelMoves_; }
@@ -314,6 +327,10 @@ public:
   bool toolIsExtrusion() const { return toolIsExtrusion_; }
 
   Q_INVOKABLE void setLayerRange(int minLayer, int maxLayer);
+  /// Toggle one-layer mode, aligned with upstream IMSlider::switch_one_layer_mode.
+  Q_INVOKABLE void setSingleLayer(bool enabled);
+  /// Apply a wheel step to the selected layer handle, matching IMSlider::on_mouse_wheel.
+  Q_INVOKABLE void wheelLayer(int delta, bool accelerated = false, bool lowerHandle = false);
   /// Jump to a 1-indexed layer, aligned with upstream IMSlider::do_go_to_layer.
   Q_INVOKABLE void jumpToLayer(int oneIndexedLayer);
   /// Move the full layer range, aligned with upstream IMSlider mouse-wheel behavior.
@@ -400,6 +417,7 @@ private:
   int layerCount_ = 0;
   int currentLayerMin_ = 0;
   int currentLayerMax_ = 0;
+  bool singleLayer_ = false;
   int moveCount_ = 0;
   int currentMove_ = 0;
   QByteArray gcodePreviewData_;

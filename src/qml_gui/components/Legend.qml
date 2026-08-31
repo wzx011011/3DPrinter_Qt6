@@ -183,6 +183,8 @@ Item {
                         // ColorPrint, GCodeViewer.cpp:3337).
                         CxCheckBox {
                             visible: root.legendType === 2
+                                     && root.previewVm
+                                     && root.previewVm.extruderVisibilityAvailable
                                      && legendRow.modelData.extruderId !== undefined
                             checked: legendRow.modelData.visible !== undefined
                                      ? legendRow.modelData.visible : true

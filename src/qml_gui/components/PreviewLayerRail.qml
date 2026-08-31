@@ -15,6 +15,9 @@ Item {
 
     readonly property int totalLayers: root.previewVm ? root.previewVm.layerCount : 0
     readonly property int lastLayerIndex: Math.max(0, root.totalLayers - 1)
+    readonly property bool hasTemplateGcode: root.previewVm
+        && root.previewVm.fullConfig
+        && String(root.previewVm.fullConfig["template_custom_gcode"] || "").length > 0
 
     // Tick mark editing state aligned with upstream IMSlider::render_edit_menu.
     property int editMenuTickLayer: -1
@@ -46,6 +49,16 @@ Item {
             smallFont: true
             controlEnabled: root.previewVm && root.totalLayers > 0
             onTriggered: root.previewVm.jumpToLayer(root.totalLayers)
+        }
+
+        CxStepButton {
+            label: root.previewVm && root.previewVm.singleLayer ? "1" : "2"
+            tooltip: qsTr("Toggle single layer")
+            preferredWidth: 30
+            preferredHeight: 24
+            smallFont: true
+            controlEnabled: root.previewVm && root.totalLayers > 0
+            onTriggered: root.previewVm.setSingleLayer(!root.previewVm.singleLayer)
         }
 
         Label {
@@ -87,22 +100,37 @@ Item {
                 stepSize: 1
                 snapMode: RangeSlider.SnapAlways
                 enabled: root.previewVm && root.totalLayers > 0
+                property bool lowerHandleSelected: false
                 first.value: root.previewVm ? root.previewVm.currentLayerMin : 0
                 second.value: root.previewVm ? root.previewVm.currentLayerMax : 0
+                first.onPressedChanged: if (first.pressed) layerRangeSlider.lowerHandleSelected = true
+                second.onPressedChanged: if (second.pressed) layerRangeSlider.lowerHandleSelected = false
                 first.onMoved: root.commitRange(first.value, second.value)
                 second.onMoved: root.commitRange(first.value, second.value)
+                // IMSlider::on_mouse_wheel changes the active handle. The rail
+                // itself owns wheel input so the backend remains the source of truth.
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: function(event) {
+                        if (root.previewVm)
+                            root.previewVm.wheelLayer(event.angleDelta.y > 0 ? 1 : -1,
+                                                      event.modifiers & Qt.ShiftModifier,
+                                                      layerRangeSlider.lowerHandleSelected)
+                        event.accepted = true
+                    }
+                }
             }
 
             // Tick marks rendered on the slider track, aligned with upstream IMSlider::draw_ticks.
-            // Adapted from the horizontal LayerSlider.qml to the vertical orientation: the tick
-            // position along the track is now y (top=layer 0, bottom=last layer).
+            // Adapted from the horizontal LayerSlider.qml to the vertical orientation. Qt's
+            // vertical controls increase upward, matching IMSlider::get_pos_from_value.
             Repeater {
                 model: root.previewVm ? root.previewVm.tickMarks : []
                 delegate: Item {
                     id: tickDelegate
                     readonly property real tickY: railTrackHost.trackMargin
                         + (root.lastLayerIndex > 0
-                           ? (modelData.tick / root.lastLayerIndex) * railTrackHost.trackHeight
+                           ? (1 - modelData.tick / root.lastLayerIndex) * railTrackHost.trackHeight
                            : 0)
                     readonly property int tickType: modelData.type
                     readonly property int tickLayer: modelData.tick
@@ -194,7 +222,7 @@ Item {
                         onReleased: {
                             if (!tickDelegate.dragging) return
                             var relY = tickDelegate.dragY + 4 - railTrackHost.trackMargin
-                            var targetLayer = Math.round((relY / railTrackHost.trackHeight) * root.lastLayerIndex)
+                            var targetLayer = Math.round((1 - relY / railTrackHost.trackHeight) * root.lastLayerIndex)
                             targetLayer = Math.max(0, Math.min(targetLayer, root.lastLayerIndex))
                             var fromLayer = tickDelegate.dragFromLayer
                             tickDelegate.dragging = false
@@ -231,7 +259,7 @@ Item {
                     if (!root.previewVm || root.lastLayerIndex <= 0) return
                     if (mouse.button !== Qt.RightButton) return
                     var relY = mouse.y - railTrackHost.trackMargin
-                    var clickedLayer = Math.round((relY / railTrackHost.trackHeight) * root.lastLayerIndex)
+                    var clickedLayer = Math.round((1 - relY / railTrackHost.trackHeight) * root.lastLayerIndex)
                     clickedLayer = Math.max(0, Math.min(clickedLayer, root.lastLayerIndex))
                     root.addMenuTargetLayer = clickedLayer
                     sliderAddMenu.popup()
@@ -253,7 +281,7 @@ Item {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: root.previewVm ? root.previewVm.currentLayerMax + 1 : 0
+            text: root.previewVm ? root.previewVm.currentLayerMin + 1 : 0
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
             font.family: Theme.fontMono
@@ -290,12 +318,9 @@ Item {
                 customGcodeAddDialog.open()
             }
         }
-        // Phase 119 (TICK-04) + Phase 238 (PREV-04): ColorChange +
-        // Template + Change Filament + Jump to Layer round out the upstream
-        // add menu (IMSlider.cpp:1327-1395). ColorChange and Change
-        // Filament open pickers (extruder + color) instead of hardcoded
-        // values; Jump to Layer opens the layer dialog
-        // (IMSlider.cpp:1221-1313).
+        // Phase 238 (PREV-04): upstream exposes Pause, Custom G-code, an
+        // optional configured Template, Jump to Layer, and multi-extruder
+        // Change Filament (IMSlider.cpp:1328-1377).
         CxMenuItem {
             text: qsTr("Change Filament...")
             // Upstream gates the entry on m_extruder_colors.size() > 1
@@ -307,14 +332,9 @@ Item {
             }
         }
         CxMenuItem {
-            text: qsTr("Add Color Change")
-            onTriggered: {
-                colorChangeDialog.targetLayer = root.addMenuTargetLayer
-                colorChangeDialog.open()
-            }
-        }
-        CxMenuItem {
-            text: qsTr("Add Template")
+            text: qsTr("Add Custom Template")
+            visible: root.hasTemplateGcode
+            enabled: root.previewVm && root.addMenuTargetLayer >= 0
             onTriggered: {
                 if (root.previewVm && root.addMenuTargetLayer >= 0)
                     root.previewVm.addTemplateAtLayer(root.addMenuTargetLayer)

@@ -712,6 +712,8 @@ private slots:
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
   void previewCompletionSourceAudit();
+  void previewWave5SliderSourceAudit();
+  void previewWave5GcodeWindowAndAddMenuHonesty();
   // Phase 239 (ENGN-01..03): slicing engine semantics source audits --
   // stale-preview auto-reslice, previous-G-code reuse wiring, async export
   // worker, validate-warning notification routing.
@@ -1667,7 +1669,7 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
     // marker renders only when a real tool position exists); the raw
     // showMarker property stays part of the binding expression.
     QStringLiteral("showMarker: root.previewVm"),
-    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition)"),
+    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData)"),
     QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
     QStringLiteral("markerX: root.previewVm.toolX"),
     QStringLiteral("markerY: root.previewVm.toolY"),
@@ -1773,7 +1775,7 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
     QStringLiteral("root.previewVm.gcodeLines"),
     QStringLiteral("root.previewVm.currentGcodeLine"),
     QStringLiteral("root.leftPanelWidth"),
-    QStringLiteral("root.rightPanelExpanded")
+    QStringLiteral("root.analysisExpanded")
   };
   for (const QString &binding : requiredStateBindings) {
     QVERIFY2(previewPage.contains(binding),
@@ -2220,7 +2222,7 @@ void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
     // Phase 238 (PREV-02): the binding gates on hasToolPosition now; the
     // raw showMarker property remains part of the binding expression.
     QStringLiteral("showMarker: root.previewVm"),
-    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition)"),
+    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData)"),
     QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
     QStringLiteral("markerX: root.previewVm.toolX"),
     QStringLiteral("markerY: root.previewVm.toolY"),
@@ -6526,19 +6528,18 @@ void QmlUiAuditTests::tickTypeCoverageAndDragRelocation()
   QVERIFY2(rail.contains(QStringLiteral("previewVm.moveTick")),
            "TICK-05: PreviewLayerRail.qml tick delegate must call previewVm.moveTick on drag release");
 
-  // TICK-04 (Add menu coverage): the Add menu must surface ColorChange + Template
-  // entries so all 5 types are reachable from the UI.
-  QVERIFY2(rail.contains(QStringLiteral("Add Color Change")),
-           "TICK-04: PreviewLayerRail.qml Add menu must have an Add Color Change entry");
-  QVERIFY2(rail.contains(QStringLiteral("Add Template")),
-           "TICK-04: PreviewLayerRail.qml Add menu must have an Add Template entry");
+  // TICK-04 (Add menu honesty): Color Change is parsed and persisted when
+  // supplied by upstream G-code, but is not advertised as a local Add action
+  // without an equivalent upstream gate/data source. Template insertion is
+  // exposed only when template_custom_gcode exists in the payload.
+  QVERIFY2(!rail.contains(QStringLiteral("text: qsTr(\"Add Color Change\")")),
+           "TICK-04: PreviewLayerRail.qml must not advertise ungated Color Change insertion");
+  QVERIFY2(rail.contains(QStringLiteral("text: qsTr(\"Add Custom Template\")"))
+               && rail.contains(QStringLiteral("visible: root.hasTemplateGcode")),
+           "TICK-04: Template insertion must be visible only with upstream template data");
 
-  // TICK-04 (Add menu wired): the two new entries must call the matching
-  // ViewModel add methods (not just display the label).
-  QVERIFY2(rail.contains(QStringLiteral("addColorChangeAtLayer")),
-           "TICK-04: PreviewLayerRail.qml Add Color Change must call previewVm.addColorChangeAtLayer");
   QVERIFY2(rail.contains(QStringLiteral("addTemplateAtLayer")),
-           "TICK-04: PreviewLayerRail.qml Add Template must call previewVm.addTemplateAtLayer");
+           "TICK-04: PreviewLayerRail.qml Template action must call previewVm.addTemplateAtLayer");
 }
 
 void QmlUiAuditTests::triangleSelectorEnginePorted()
@@ -10317,12 +10318,14 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
   QVERIFY2(cameraImpl.contains(QStringLiteral("mat.ortho(")),
            "VIEW-01: CameraController must implement the orthographic projection branch");
 
-  // PreviewPage exposes the preview viewport + binds the G-code panel to the
-  // viewmodel property (active-canvas routing + Show G-code Window consumer).
+  // PreviewPage exposes the preview viewport; the G-code source window is
+  // independently gated by the persisted preference and real preview data.
   QVERIFY2(previewPage.contains(QStringLiteral("property alias previewViewportRef: previewViewport")),
            "VIEW-01: PreviewPage must expose the preview viewport for active-canvas routing");
-  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm ? root.previewVm.showGcodeWindow : true")),
-           "VIEW-01: PreviewPage right panel must bind to PreviewViewModel::showGcodeWindow");
+  QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm.showGcodeWindow && root.hasPreviewData")),
+           "VIEW-01: PreviewPage source window must bind to showGcodeWindow and previewReady");
+  QVERIFY2(previewPage.contains(QStringLiteral("property bool analysisExpanded")),
+           "VIEW-01: analysis pane disclosure must be independent from showGcodeWindow");
   const QString previewVmHeader = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
   QVERIFY2(previewVmHeader.contains(QStringLiteral("bool showGcodeWindow READ showGcodeWindow WRITE setShowGcodeWindow")),
            "VIEW-01: PreviewViewModel must declare the showGcodeWindow property");
@@ -10526,6 +10529,22 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   QVERIFY2(legend.contains(QStringLiteral("toggleExtruderVisibility")),
            "PREV-06: the legend rows must toggle per-extruder visibility");
 
+  // ── W5: update_by_mode visibility gates ───────────────────────────────
+  // Upstream exposes role/move options in FeatureType, Travel in FeatureType
+  // and Feedrate, and tool visibility only in ColorPrint.
+  QVERIFY2(previewVmCpp.contains(QStringLiteral("roleVisibilityAvailable()"))
+               && previewVmCpp.contains(QStringLiteral("extruderVisibilityAvailable()"))
+               && previewVmCpp.contains(QStringLiteral("moveVisibilityAvailable()"))
+               && previewVmCpp.contains(QStringLiteral("travelVisibilityAvailable()")),
+           "W5: PreviewViewModel must centralize update_by_mode visibility gates");
+  QVERIFY2(visFilter.contains(QStringLiteral("roleVisibilityAvailable"))
+               && visFilter.contains(QStringLiteral("moveVisibilityAvailable")),
+           "W5: VisibilityFilter must gate role and move rows by active view mode");
+  QVERIFY2(statsPanel.contains(QStringLiteral("travelVisibilityAvailable")),
+           "W5: StatsPanel must gate Travel like upstream Feedrate/FeatureType options");
+  QVERIFY2(legend.contains(QStringLiteral("extruderVisibilityAvailable")),
+           "W5: Legend must gate extruder visibility to ColorPrint");
+
   // ── PREV-07: software fallback paints the preview segments ────────────
   // SoftwareViewport previously painted only the bed grid; the fallback
   // preview must draw the GCV1 segments so the page is not blank.
@@ -10535,6 +10554,53 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
            "PREV-07: SoftwareViewport::paintScene must draw the preview segments");
   QVERIFY2(softwareVp.contains(QStringLiteral("GCV1")),
            "PREV-07: the fallback parser must validate the GCV1 wire format");
+}
+
+void QmlUiAuditTests::previewWave5SliderSourceAudit()
+{
+  const QString rail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString page = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString vmh = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.h"));
+  const QString vmcpp = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  QVERIFY2(rail.contains(QStringLiteral("1 - modelData.tick / root.lastLayerIndex")),
+           "W5: vertical ticks must invert Y like IMSlider::get_pos_from_value");
+  QVERIFY2(rail.contains(QStringLiteral("1 - relY / railTrackHost.trackHeight")),
+           "W5: vertical tick drag and add targets must invert Y");
+  QVERIFY2(rail.contains(QStringLiteral("WheelHandler"))
+               && rail.contains(QStringLiteral("wheelLayer")),
+           "W5: layer rail wheel input must route through PreviewViewModel");
+  QVERIFY2(rail.contains(QStringLiteral("setSingleLayer(!root.previewVm.singleLayer)")),
+           "W5: rail must expose IMSlider one-layer toggle");
+  QVERIFY2(page.contains(QStringLiteral("case Qt.Key_L:"))
+               && page.contains(QStringLiteral("setSingleLayer")),
+           "W5: L must toggle one-layer mode");
+  QVERIFY2(vmh.contains(QStringLiteral("Q_PROPERTY(bool singleLayer"))
+               && vmh.contains(QStringLiteral("wheelLayer")),
+           "W5: PreviewViewModel must expose one-layer and wheel APIs");
+  QVERIFY2(vmcpp.contains(QStringLiteral("accelerated ? 5 : 1"))
+               && vmcpp.contains(QStringLiteral("if (singleLayer_)")),
+           "W5: backend wheel semantics must support accelerated and single-layer modes");
+}
+
+void QmlUiAuditTests::previewWave5GcodeWindowAndAddMenuHonesty()
+{
+  const QString rail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
+  const QString page = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  QVERIFY2(rail.contains(QStringLiteral("visible: root.hasTemplateGcode")),
+           "W5: template insertion must be hidden when template_custom_gcode is absent");
+  QVERIFY2(!rail.contains(QStringLiteral("text: qsTr(\"Add Color Change\")")),
+           "W5: Add menu must not advertise unsupported Color Change insertion");
+  QVERIFY2(page.contains(QStringLiteral("root.previewVm.showGcodeWindow && root.hasPreviewData")),
+           "W5: source window must require both the preference and real preview data");
+  QVERIFY2(page.contains(QStringLiteral("property bool analysisExpanded"))
+               && page.contains(QStringLiteral("root.analysisExpanded")),
+           "W5: analysis disclosure must be independent from showGcodeWindow");
+  QVERIFY2(page.contains(QStringLiteral("showMarker && root.previewVm.hasToolPosition && root.hasPreviewData")),
+           "W5: marker and tooltip must be gated by a real current move");
+  QVERIFY2(topbar.contains(QStringLiteral("currentPage === backend.tpPreview"))
+               && topbar.contains(QStringLiteral("backend.previewViewModel.previewReady")),
+           "W5: Show G-code Window must remain Preview-scoped and data-gated");
 }
 
 void QmlUiAuditTests::engineSemanticsSourceAudit()

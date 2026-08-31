@@ -21,12 +21,8 @@ Item {
     // MainFrame.cpp:3455).
     property alias previewViewportRef: previewViewport
 
-    // Phase 237 (VIEW-01): G-code window visibility is owned by the
-    // viewmodel (upstream View menu "Show G-code Window" toggles the
-    // app_config show_gcode_window flag, MainFrame.cpp:2623-2629); the panel
-    // collapses but keeps its collapsed rail (same visual as the old local
-    // bool).
-    property bool rightPanelExpanded: root.previewVm ? root.previewVm.showGcodeWindow : true
+    // The analysis pane and upstream G-code window are separate surfaces.
+    property bool analysisExpanded: true
     // Phase 164 (SW-01): preview left panel now sources its width from the
     // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
     readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 320
@@ -34,7 +30,7 @@ Item {
     readonly property int targetPreviewLayerRailWidth: 38
     readonly property int targetPreviewMoveBarHeight: 50
     readonly property int leftPanelWidth: root.targetPreviewLeftWidth
-    readonly property int rightPanelWidth: root.rightPanelExpanded ? root.targetPreviewRightWidth : 38
+    readonly property int rightPanelWidth: root.targetPreviewRightWidth
     readonly property bool hasPreviewData: root.previewVm && root.previewVm.previewReady
 
     function cameraButtonLabel(index) {
@@ -82,6 +78,10 @@ Item {
             break
         case Qt.Key_PageDown:
             root.previewVm.moveLayerRange(event.modifiers & Qt.ShiftModifier ? -10 : -1)
+            event.accepted = true
+            break
+        case Qt.Key_L:
+            root.previewVm.setSingleLayer(!root.previewVm.singleLayer)
             event.accepted = true
             break
         }
@@ -311,11 +311,10 @@ Item {
                     roleVisibility: root.previewVm.roleVisibilityMask
                     showBed: root.previewVm.showBed
                     // Phase 238 (PREV-02): the marker renders only when a real
-                    // tool position exists (upstream shows the marker only
-                    // while a render path/current position is set,
-                    // GCodeViewer.cpp:1258 m_show_marker || current != end).
+                    // tool position exists (upstream Marker visibility is tied
+                    // to a current sequential move).
                     showMarker: root.previewVm
-                                ? (root.previewVm.showMarker && root.previewVm.hasToolPosition)
+                                ? (root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData)
                                 : false
                     gcodeViewMode: root.previewVm.viewModeIndex
                     markerX: root.previewVm.toolX
@@ -357,7 +356,7 @@ Item {
                     anchors.bottom: parent.bottom
                     anchors.margins: 14
                     previewVm: root.previewVm
-                    visible: root.previewVm ? root.previewVm.showMarker : false
+                    visible: root.previewVm ? (root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData) : false
                 }
             }
 
@@ -374,19 +373,17 @@ Item {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: root.rightPanelExpanded ? 8 : 4
+                    anchors.margins: 8
                     spacing: 6
 
                     SidePanelHeader {
                         title: qsTr("分析")
-                        expanded: root.rightPanelExpanded
-                        // Phase 237 (VIEW-01): route through the viewmodel so
-                        // the View-menu toggle and this header stay in sync.
-                        onToggleRequested: if (root.previewVm) root.previewVm.setShowGcodeWindow(!root.previewVm.showGcodeWindow)
+                        expanded: root.analysisExpanded
+                        onToggleRequested: root.analysisExpanded = !root.analysisExpanded
                     }
 
                     ColumnLayout {
-                        visible: root.rightPanelExpanded
+                        visible: root.analysisExpanded
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         spacing: 8
@@ -424,6 +421,7 @@ Item {
 
                         Rectangle {
                             id: gcodeSourcePanel
+                            visible: root.previewVm && root.previewVm.showGcodeWindow && root.hasPreviewData
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             Layout.minimumHeight: 150

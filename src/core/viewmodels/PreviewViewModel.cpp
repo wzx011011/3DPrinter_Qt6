@@ -737,6 +737,30 @@ QString PreviewViewModel::currentViewModeStatus() const
   return viewModeStatusText(viewModeIndex_);
 }
 
+bool PreviewViewModel::roleVisibilityAvailable() const
+{
+  // Upstream renders per-extrusion-role rows only for FeatureType.
+  return viewModeIndex_ == VT_LineType;
+}
+
+bool PreviewViewModel::extruderVisibilityAvailable() const
+{
+  // Upstream m_tool_visibles is exposed only by ColorPrint.
+  return viewModeIndex_ == VT_Filament;
+}
+
+bool PreviewViewModel::moveVisibilityAvailable() const
+{
+  // Retract, unretract, wipe, and seam options are FeatureType-only.
+  return viewModeIndex_ == VT_LineType;
+}
+
+bool PreviewViewModel::travelVisibilityAvailable() const
+{
+  // Upstream exposes Travel in FeatureType and Feedrate views.
+  return viewModeIndex_ == VT_LineType || viewModeIndex_ == VT_Speed;
+}
+
 bool PreviewViewModel::viewModeAvailable(int index) const
 {
   if (index < 0 || index >= viewModes().size())
@@ -796,7 +820,7 @@ void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
   if (layerCount_ <= 0)
     return;
   const int lo = qBound(0, minLayer, layerCount_ - 1);
-  const int hi = qBound(lo, maxLayer, layerCount_ - 1);
+  const int hi = singleLayer_ ? lo : qBound(lo, maxLayer, layerCount_ - 1);
   if (lo == currentLayerMin_ && hi == currentLayerMax_)
     return;
   currentLayerMin_ = lo;
@@ -827,6 +851,35 @@ void PreviewViewModel::setTopLayerOnly(bool on)
 QVariantMap PreviewViewModel::fullConfig() const
 {
   return m_fullConfig;
+}
+
+void PreviewViewModel::setSingleLayer(bool enabled)
+{
+  if (singleLayer_ == enabled)
+    return;
+  singleLayer_ = enabled;
+  if (singleLayer_)
+    setLayerRange(currentLayerMax_, currentLayerMax_);
+  else
+    setLayerRange(0, layerCount_ - 1);
+  emit stateChanged();
+}
+
+void PreviewViewModel::wheelLayer(int delta, bool accelerated, bool lowerHandle)
+{
+  if (layerCount_ <= 0 || delta == 0)
+    return;
+  const int step = delta * (accelerated ? 5 : 1);
+  if (singleLayer_)
+  {
+    setLayerRange(currentLayerMax_ + step, currentLayerMax_ + step);
+    return;
+  }
+  // IMSlider changes the selected handle; the higher handle is the default.
+  if (lowerHandle)
+    setLayerRange(currentLayerMin_ + step, currentLayerMax_);
+  else
+    setLayerRange(currentLayerMin_, currentLayerMax_ + step);
 }
 
 void PreviewViewModel::jumpToLayer(int oneIndexedLayer)
@@ -1368,6 +1421,7 @@ void PreviewViewModel::resetPreviewState()
   currentMove_ = 0;
   currentLayerMin_ = 0;
   currentLayerMax_ = 0;
+  singleLayer_ = false;
   estimatedTime_ = QStringLiteral("--:--:--");
   totalTime_ = QStringLiteral("--:--:--");
   filamentUsed_ = QStringLiteral("--");
@@ -2771,11 +2825,6 @@ void PreviewViewModel::recolorAndPackSegments()
         c.b = 0.18f;
       }
       p.r = c.r; p.g = c.g; p.b = c.b;
-    }
-    else if (mode == VT_FilamentId)
-    {
-      // Summary: statistics only; segments still draw in their baked role color.
-      p.r = s.baseR; p.g = s.baseG; p.b = s.baseB;
     }
     else if (mode == VT_FilamentId)
     {

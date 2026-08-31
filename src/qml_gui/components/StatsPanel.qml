@@ -50,6 +50,7 @@ Item {
         }
 
         ToggleRow {
+            visible: root.previewVm && root.previewVm.travelVisibilityAvailable
             label: qsTr("显示空驶")
             checked: root.previewVm ? root.previewVm.showTravelMoves : false
             onChanged: if (root.previewVm) root.previewVm.setShowTravelMoves(checked)

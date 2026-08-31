@@ -65,6 +65,11 @@ private slots:
   void test_prev04_retract_unretract_default_hidden();
   // P17.3: 10-step gradient legend rows with values.
   void test_prev03_gradient_stops_ten_rows();
+  // Wave 5: vertical layer direction and IMSlider one-layer/wheel semantics.
+  void test_wave5_layer_slider_semantics();
+  // Wave 5: upstream update_by_mode visibility gates.
+  void test_wave5_preview_visibility_gates();
+  void test_wave5_marker_and_tick_payloads_are_data_backed();
 
 private:
   QString fixturePath() const;
@@ -737,6 +742,35 @@ void PreviewParserTests::test_prev06_extruder_visibility_gates_filament_payload(
 // with LNK2001 "unresolved external symbol main" because QtTest has no default
 // entry. Matches the pattern in every sibling single-file QtTest in tests/.
 
+// Wave 5: local PreviewViewModel support for IMSlider one-layer and wheel behavior.
+void PreviewParserTests::test_wave5_layer_slider_semantics()
+{
+  const auto tmp = writeTempGcode(QStringLiteral(
+      "T0\nG28\n;LAYER:0\n;TYPE:Outer wall\nG1 X10 Y10 Z0.2 E1 F1800\n"
+      ";LAYER:1\n;TYPE:Outer wall\nG1 X20 Y10 Z0.4 E2 F1800\n"
+      ";LAYER:2\n;TYPE:Outer wall\nG1 X30 Y10 Z0.6 E3 F1800\n"));
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY2(preview.loadGCodeForPreview(tmp.path), "three-layer gcode should parse");
+  QCOMPARE(preview.layerCount(), 3);
+  preview.setLayerRange(1, 2);
+  preview.setSingleLayer(true);
+  QVERIFY(preview.singleLayer());
+  QCOMPARE(preview.currentLayerMin(), 2);
+  QCOMPARE(preview.currentLayerMax(), 2);
+  preview.wheelLayer(-1);
+  QCOMPARE(preview.currentLayerMin(), 1);
+  QCOMPARE(preview.currentLayerMax(), 1);
+  preview.wheelLayer(-1, true);
+  QCOMPARE(preview.currentLayerMin(), 0);
+  QCOMPARE(preview.currentLayerMax(), 0);
+  preview.setSingleLayer(false);
+  QVERIFY(!preview.singleLayer());
+  QCOMPARE(preview.currentLayerMin(), 0);
+  QCOMPARE(preview.currentLayerMax(), 2);
+}
+
 // P17.9: G91 relative positioning. A closed square loop written in relative
 // moves must land each vertex at the cumulative position (the seam detector
 // closing on the first vertex proves the math); treating relative moves as
@@ -812,6 +846,69 @@ void PreviewParserTests::test_prev09_g4_dwell_adds_time()
            "total time should render with seconds for sub-minute prints");
   QVERIFY2(preview.totalTime() != QStringLiteral("0.0s"),
            "dwell must extend the total time beyond the move time");
+}
+
+// Wave 5: update_by_mode exposes visibility controls conditionally by view.
+void PreviewParserTests::test_wave5_marker_and_tick_payloads_are_data_backed()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  QVERIFY(!preview.hasToolPosition());
+  QVERIFY(preview.tickMarks().isEmpty());
+
+  const auto tmp = writeTempGcode(QStringLiteral(
+      "T0\nG28\n;LAYER:0\n;TYPE:Outer wall\n"
+      "; PAUSE_PRINT\nG1 X10 Y10 Z0.2 E1 F1800\n"));
+  QVERIFY2(preview.loadGCodeForPreview(tmp.path), "marker fixture should parse");
+  QVERIFY(preview.hasToolPosition());
+  const QVariantList ticks = preview.tickMarks();
+  QCOMPARE(ticks.size(), 1);
+  const QVariantMap tick = ticks.first().toMap();
+  QCOMPARE(tick.value(QStringLiteral("type")).toInt(), 0);
+  QCOMPARE(tick.value(QStringLiteral("tick")).toInt(), 0);
+
+  preview.setShowMarker(false);
+  QVERIFY(!preview.showMarker());
+  QVERIFY(preview.hasToolPosition());
+}
+
+void PreviewParserTests::test_wave5_preview_visibility_gates()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+  const QStringList modes = preview.viewModes();
+
+  const int lineType = modes.indexOf(QStringLiteral("Line Type"));
+  const int filament = modes.indexOf(QStringLiteral("Filament"));
+  const int speed = modes.indexOf(QStringLiteral("Speed"));
+  const int temperature = modes.indexOf(QStringLiteral("Temperature"));
+  QVERIFY(lineType >= 0 && filament >= 0 && speed >= 0 && temperature >= 0);
+
+  preview.setViewModeIndex(lineType);
+  QVERIFY(preview.roleVisibilityAvailable());
+  QVERIFY(preview.moveVisibilityAvailable());
+  QVERIFY(preview.travelVisibilityAvailable());
+  QVERIFY(!preview.extruderVisibilityAvailable());
+
+  preview.setViewModeIndex(filament);
+  QVERIFY(!preview.roleVisibilityAvailable());
+  QVERIFY(!preview.moveVisibilityAvailable());
+  QVERIFY(!preview.travelVisibilityAvailable());
+  QVERIFY(preview.extruderVisibilityAvailable());
+
+  preview.setViewModeIndex(speed);
+  QVERIFY(!preview.roleVisibilityAvailable());
+  QVERIFY(!preview.moveVisibilityAvailable());
+  QVERIFY(preview.travelVisibilityAvailable());
+  QVERIFY(!preview.extruderVisibilityAvailable());
+
+  preview.setViewModeIndex(temperature);
+  QVERIFY(!preview.roleVisibilityAvailable());
+  QVERIFY(!preview.moveVisibilityAvailable());
+  QVERIFY(!preview.travelVisibilityAvailable());
+  QVERIFY(!preview.extruderVisibilityAvailable());
 }
 
 // P17.1: upstream EViewType::FilamentId is a hidden diagnostic mode — it is

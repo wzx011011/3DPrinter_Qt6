@@ -48,13 +48,16 @@ Item {
         anchors.top: parent.top
         title: qsTr("线型可见性")
         expanded: true
+        visible: root.previewVm && (root.previewVm.roleVisibilityAvailable
+                                    || root.previewVm.moveVisibilityAvailable)
 
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingXS
 
             Repeater {
-                model: root.previewVm ? root.previewVm.roleVisibilities : []
+                model: root.previewVm && root.previewVm.roleVisibilityAvailable
+                       ? root.previewVm.roleVisibilities : []
 
                 delegate: Rectangle {
                     id: roleVisibilityRow
@@ -112,7 +115,8 @@ Item {
                 label: qsTr("回抽 (Retract)")
                 swatch: "#CD22D6"  // upstream Retractions (0.803,0.135,0.839)
                 checked: root.previewVm ? root.previewVm.showRetractMoves : true
-                visible: root.previewVm && root.previewVm.moveCountOfKind(2) > 0
+                visible: root.previewVm && root.previewVm.moveVisibilityAvailable
+                         && root.previewVm.moveCountOfKind(2) > 0
                 onToggled: function(checked) { if (root.previewVm) root.previewVm.setShowRetractMoves(checked) }
             }
             MoveKindRow {
@@ -120,21 +124,24 @@ Item {
                 label: qsTr("取消回抽 (Unretract)")
                 swatch: "#49ADCE"  // upstream Unretractions (0.287,0.679,0.810)
                 checked: root.previewVm ? root.previewVm.showUnretractMoves : true
-                visible: root.previewVm && root.previewVm.moveCountOfKind(3) > 0
+                visible: root.previewVm && root.previewVm.moveVisibilityAvailable
+                         && root.previewVm.moveCountOfKind(3) > 0
                 onToggled: function(checked) { if (root.previewVm) root.previewVm.setShowUnretractMoves(checked) }
             }
             MoveKindRow {
                 label: qsTr("擦料 (Wipe)")
                 swatch: "#FFFF00"  // upstream Wipe_Color YELLOW
                 checked: root.previewVm ? root.previewVm.showWipeMoves : false
-                visible: root.previewVm && root.previewVm.moveCountOfKind(4) > 0
+                visible: root.previewVm && root.previewVm.moveVisibilityAvailable
+                         && root.previewVm.moveCountOfKind(4) > 0
                 onToggled: function(checked) { if (root.previewVm) root.previewVm.setShowWipeMoves(checked) }
             }
             MoveKindRow {
                 label: qsTr("接缝 (Seam)")
                 swatch: "#E6E6E6"  // upstream Seams (0.9,0.9,0.9)
                 checked: root.previewVm ? root.previewVm.showSeamMarks : true
-                visible: root.previewVm && root.previewVm.moveCountOfKind(5) > 0
+                visible: root.previewVm && root.previewVm.moveVisibilityAvailable
+                         && root.previewVm.moveCountOfKind(5) > 0
                 onToggled: function(checked) { if (root.previewVm) root.previewVm.setShowSeamMarks(checked) }
             }
         }
