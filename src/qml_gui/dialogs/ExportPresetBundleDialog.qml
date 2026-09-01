@@ -161,7 +161,11 @@ CxDialog {
                 for (var name in root.selectedPresets)
                     if (root.selectedPresets[name]) selected.push(name)
                 var count = root.configVm.exportBundleIni(path, selected)
-                console.log("[ExportPresetBundle] export to: " + path + " count=" + count)
+                if (backend)
+                    backend.postNotification(count > 0
+                        ? qsTr("已导出 %1 个用户预设到 %2").arg(count).arg(path)
+                        : qsTr("未导出任何预设（写入失败或选择为空）"),
+                        qsTr("导出预设包"), count > 0 ? 0 : 2)
             }
             root.accept()
         }

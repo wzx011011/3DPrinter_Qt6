@@ -3205,10 +3205,11 @@ void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
 
 void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
 {
+  // Phase 167 (Cmp-02) removed components/FilamentSlot.qml as a confirmed
+  // orphan; LeftSidebar owns the slot UI inline, so the Phase 52-03 binding
+  // contract below guards the sidebar source directly.
   const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
-  const QString slot = readSource(QStringLiteral("src/qml_gui/components/FilamentSlot.qml"));
   QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
-  QVERIFY2(!slot.isEmpty(), "Unable to read FilamentSlot.qml");
 
   // PREPSB-01: filament slot count is dynamic (no hard-coded model: 5).
   QVERIFY2(!sidebar.contains(QStringLiteral("\n                            model: 5\n")),
@@ -3217,12 +3218,6 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar filament Repeater must bind to editorVm.extruderCount");
   QVERIFY2(sidebar.contains(QStringLiteral("Math.max(1,")),
            "LeftSidebar slot count must guard against 0 with Math.max(1, ...)");
-
-  // PREPSB-01: dead color picker popup must be hidden (no toggle onClicked).
-  QVERIFY2(!slot.contains(QStringLiteral("colorPickerLoader.active = !colorPickerLoader.active")),
-           "FilamentSlot must not toggle the dead color picker popup");
-  QVERIFY2(slot.contains(QStringLiteral("TODO(Phase 56)")),
-           "FilamentSlot must carry an honest Phase-56 TODO for the color picker");
 
   // PREPSB-03: dirty state surfaced via isPresetDirty (printer + process).
   QVERIFY2(sidebar.count(QStringLiteral("isPresetDirty")) >= 2,
@@ -4061,15 +4056,14 @@ void QmlUiAuditTests::gcode04RhiViewportIsDefaultRegistrationNoSoftwareViewportI
 
 // -- Phase 56-03: settings dialog UI audit (Cx-only controls, qsTr, main.qml dispatch) --
 
-// SETTINGS-01/02: the three new settings-dialog files use Cx* controls and the
-// OptionRow/GroupNavSidebar pattern; TextArea is allowed inside OptionRow for
+// SETTINGS-01/02: the settings-dialog files use Cx* controls and the
+// OptionRow pattern; TextArea is allowed inside OptionRow for
 // the multiline string option (no CxTextArea covers it yet).
 void QmlUiAuditTests::settingsDialogUsesOnlyCxControls()
 {
   const QStringList files = {
     QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"),
     QStringLiteral("src/qml_gui/components/OptionRow.qml"),
-    QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"),
   };
   for (const auto &path : files)
   {
@@ -4097,7 +4091,6 @@ void QmlUiAuditTests::settingsDialogNoRawControls()
                                       QRegularExpression::MultilineOption);
   const QStringList files = {
     QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"),
-    QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"),
   };
   for (const auto &path : files)
   {
@@ -4121,15 +4114,13 @@ void QmlUiAuditTests::settingsDialogStringsQsTr()
   const QStringList files = {
     QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"),
     QStringLiteral("src/qml_gui/components/OptionRow.qml"),
-    QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"),
   };
-  // SettingsDialog is label-heavy (many static strings); OptionRow and
-  // GroupNavSidebar are mostly dynamic bindings (optLabel/group names) with a
-  // few static strings each. Require qsTr usage proportional to that.
+  // SettingsDialog is label-heavy (many static strings); OptionRow is mostly
+  // dynamic bindings (optLabel/group names) with a few static strings.
+  // Require qsTr usage proportional to that.
   static const struct { QString path; int minHits; } checks[] = {
     {QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"), 5},
     {QStringLiteral("src/qml_gui/components/OptionRow.qml"), 1},
-    {QStringLiteral("src/qml_gui/components/GroupNavSidebar.qml"), 1},
   };
   for (const auto &c : checks)
   {

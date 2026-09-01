@@ -61,7 +61,10 @@ Item {
             var path = currentFile.toString().replace("file:///", "")
             if (root.editorVm) {
                 var ok = root.editorVm.saveProjectAs(path)
-                console.log("[ProjectPage] save to: " + path + " result=" + ok)
+                if (backend)
+                    backend.postNotification(ok ? qsTr("项目已保存：") + path
+                                                : qsTr("项目保存失败"),
+                                             qsTr("项目"), ok ? 0 : 2)
             }
         }
     }
@@ -78,7 +81,10 @@ Item {
             var ext = path.split('.').pop().toLowerCase()
             if (root.editorVm) {
                 var ok = root.editorVm.exportModel(path, ext)
-                console.log("[ProjectPage] export to: " + path + " format=" + ext + " result=" + ok)
+                if (backend)
+                    backend.postNotification(ok ? qsTr("模型已导出：") + path
+                                                : qsTr("模型导出失败"),
+                                             qsTr("导出"), ok ? 0 : 2)
             }
         }
     }
