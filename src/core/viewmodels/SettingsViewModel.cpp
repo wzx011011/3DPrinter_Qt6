@@ -3,8 +3,9 @@
 #include <QSettings>
 #include <QUuid>
 
-// Helper: save a setting value and sync
-#define SAVE_SETTING(key, val) do { QSettings s; s.setValue(key, val); } while(0)
+// Preference setters update the live draft. Persistence is intentionally
+// deferred until applyPreferences(), so Cancel can restore a real transaction.
+#define SAVE_SETTING(key, val) do { Q_UNUSED(key); Q_UNUSED(val); } while(0)
 
 static QStringList categoryTitles()
 {
@@ -36,46 +37,49 @@ SettingsViewModel::SettingsViewModel(QObject *parent) : QObject(parent)
 
 void SettingsViewModel::loadFromSettings()
 {
+  // Missing keys fall back to the factory defaults (not the current draft
+  // members): cancelPreferences() relies on this to restore the last
+  // committed state when draft edits were never applied.
   QSettings s;
-  m_themeIndex       = s.value("themeIndex", m_themeIndex).toInt();
-  m_fontSize         = s.value("fontSize", m_fontSize).toInt();
-  m_uiScaleIndex     = s.value("uiScaleIndex", m_uiScaleIndex).toInt();
-  m_languageIndex    = s.value("languageIndex", m_languageIndex).toInt();
-  m_showHomePage     = s.value("showHomePage", m_showHomePage).toBool();
-  m_defaultPage      = s.value("defaultPage", m_defaultPage).toInt();
-  m_units            = s.value("units", m_units).toInt();
-  m_autoSave         = s.value("autoSave", m_autoSave).toBool();
-  m_autoSaveInterval = s.value("autoSaveInterval", m_autoSaveInterval).toInt();
-  m_checkUpdates     = s.value("checkUpdates", m_checkUpdates).toBool();
-  m_region           = s.value("region", m_region).toInt();
-  m_autoBackup       = s.value("autoBackup", m_autoBackup).toBool();
-  m_undoLimit        = s.value("undoLimit", m_undoLimit).toInt();
-  m_defaultNozzleIndex = s.value("defaultNozzleIndex", m_defaultNozzleIndex).toInt();
-  m_defaultBedShape  = s.value("defaultBedShape", m_defaultBedShape).toInt();
+  m_themeIndex       = s.value("themeIndex", 0).toInt();
+  m_fontSize         = s.value("fontSize", 12).toInt();
+  m_uiScaleIndex     = s.value("uiScaleIndex", 0).toInt();
+  m_languageIndex    = s.value("languageIndex", 0).toInt();
+  m_showHomePage     = s.value("showHomePage", true).toBool();
+  m_defaultPage      = s.value("defaultPage", 1).toInt();
+  m_units            = s.value("units", 0).toInt();
+  m_autoSave         = s.value("autoSave", true).toBool();
+  m_autoSaveInterval = s.value("autoSaveInterval", 10).toInt();
+  m_checkUpdates     = s.value("checkUpdates", true).toBool();
+  m_region           = s.value("region", 0).toInt();
+  m_autoBackup       = s.value("autoBackup", false).toBool();
+  m_undoLimit        = s.value("undoLimit", 100).toInt();
+  m_defaultNozzleIndex = s.value("defaultNozzleIndex", 1).toInt();
+  m_defaultBedShape  = s.value("defaultBedShape", 0).toInt();
   // v5.12 camera settings
-  m_cameraNavStyle   = s.value("cameraNavStyle", m_cameraNavStyle).toInt();
-  m_zoomToMouse      = s.value("zoomToMouse", m_zoomToMouse).toBool();
-  m_freeCamera       = s.value("freeCamera", m_freeCamera).toBool();
-  m_reverseZoom      = s.value("reverseZoom", m_reverseZoom).toBool();
-  m_show3DNavigator  = s.value("show3DNavigator", m_show3DNavigator).toBool();
-  m_autoUpload       = s.value("autoUpload", m_autoUpload).toBool();
-  m_updateChannel    = s.value("updateChannel", m_updateChannel).toInt();
-  m_notificationsEnabled = s.value("notificationsEnabled", m_notificationsEnabled).toBool();
-  m_hintsEnabled     = s.value("hintsEnabled", m_hintsEnabled).toBool();
-  m_autoDismissSec   = s.value("autoDismissSec", m_autoDismissSec).toInt();
-  m_showProgressNotifications = s.value("showProgressNotifications", m_showProgressNotifications).toBool();
-  m_developerMode    = s.value("developerMode", m_developerMode).toBool();
-  m_showDebugOverlay = s.value("showDebugOverlay", m_showDebugOverlay).toBool();
-  m_logLevel         = s.value("logLevel", m_logLevel).toInt();
-  m_verboseGcode     = s.value("verboseGcode", m_verboseGcode).toBool();
-  m_glDebugContext   = s.value("glDebugContext", m_glDebugContext).toBool();
-  m_maxLogSizeMb     = s.value("maxLogSizeMb", m_maxLogSizeMb).toInt();
+  m_cameraNavStyle   = s.value("cameraNavStyle", 0).toInt();
+  m_zoomToMouse      = s.value("zoomToMouse", true).toBool();
+  m_freeCamera       = s.value("freeCamera", false).toBool();
+  m_reverseZoom      = s.value("reverseZoom", false).toBool();
+  m_show3DNavigator  = s.value("show3DNavigator", true).toBool();
+  m_autoUpload       = s.value("autoUpload", false).toBool();
+  m_updateChannel    = s.value("updateChannel", 0).toInt();
+  m_notificationsEnabled = s.value("notificationsEnabled", true).toBool();
+  m_hintsEnabled     = s.value("hintsEnabled", true).toBool();
+  m_autoDismissSec   = s.value("autoDismissSec", 5).toInt();
+  m_showProgressNotifications = s.value("showProgressNotifications", true).toBool();
+  m_developerMode    = s.value("developerMode", false).toBool();
+  m_showDebugOverlay = s.value("showDebugOverlay", false).toBool();
+  m_logLevel         = s.value("logLevel", 2).toInt();
+  m_verboseGcode     = s.value("verboseGcode", false).toBool();
+  m_glDebugContext   = s.value("glDebugContext", false).toBool();
+  m_maxLogSizeMb     = s.value("maxLogSizeMb", 50).toInt();
   // AI 助手（OWzx-only，docs/ai-control.md）
-  m_aiEnabled        = s.value("aiEnabled", m_aiEnabled).toBool();
-  m_aiApiKey         = s.value("aiApiKey", m_aiApiKey).toString();
-  m_aiModel          = s.value("aiModel", m_aiModel).toString();
-  m_aiBaseUrl        = s.value("aiBaseUrl", m_aiBaseUrl).toString();
-  m_aiPort           = s.value("aiPort", m_aiPort).toInt();
+  m_aiEnabled        = s.value("aiEnabled", false).toBool();
+  m_aiApiKey         = s.value("aiApiKey", QString()).toString();
+  m_aiModel          = s.value("aiModel", QStringLiteral("glm-5.3-flash")).toString();
+  m_aiBaseUrl        = s.value("aiBaseUrl", QStringLiteral("https://open.bigmodel.cn/api/anthropic")).toString();
+  m_aiPort           = s.value("aiPort", 27417).toInt();
 }
 
 QString SettingsViewModel::aiControlToken() const
@@ -177,35 +181,9 @@ void SettingsViewModel::setLayerHeight(double h)
 
 void SettingsViewModel::resetPreferences()
 {
-  // Reset only keys owned by this viewmodel so unrelated application state survives.
-  QSettings s;
-  const QStringList keys = {
-      QStringLiteral("themeIndex"), QStringLiteral("fontSize"),
-      QStringLiteral("uiScaleIndex"), QStringLiteral("languageIndex"),
-      QStringLiteral("showHomePage"), QStringLiteral("defaultPage"),
-      QStringLiteral("units"), QStringLiteral("autoSave"),
-      QStringLiteral("autoSaveInterval"), QStringLiteral("checkUpdates"),
-      QStringLiteral("region"), QStringLiteral("autoBackup"),
-      QStringLiteral("undoLimit"), QStringLiteral("defaultNozzleIndex"),
-      QStringLiteral("defaultBedShape"), QStringLiteral("cameraNavStyle"),
-      QStringLiteral("zoomToMouse"), QStringLiteral("freeCamera"),
-      QStringLiteral("reverseZoom"), QStringLiteral("show3DNavigator"),
-      QStringLiteral("autoUpload"),
-      QStringLiteral("updateChannel"), QStringLiteral("notificationsEnabled"),
-      QStringLiteral("hintsEnabled"), QStringLiteral("autoDismissSec"),
-      QStringLiteral("showProgressNotifications"), QStringLiteral("developerMode"),
-      QStringLiteral("showDebugOverlay"), QStringLiteral("logLevel"),
-      QStringLiteral("verboseGcode"), QStringLiteral("glDebugContext"),
-      QStringLiteral("maxLogSizeMb"),
-      // AI 助手 reset — deliberately EXCLUDES aiApiKey (credential: resetting
-      // preferences should not silently discard the user's GLM key) and the
-      // aiControl token group (rotating it would break connected sessions).
-      QStringLiteral("aiEnabled"), QStringLiteral("aiModel"),
-      QStringLiteral("aiBaseUrl"), QStringLiteral("aiPort")};
-  for (const QString &key : keys)
-    s.remove(key);
-  s.sync();
-
+  // Restore defaults in the draft only. Apply persists them; Cancel preserves
+  // the previous local commit. Credentials and the AI control token remain out
+  // of this action so a visual reset cannot silently discard access material.
   setThemeIndex(0);
   setFontSize(12);
   setUiScaleIndex(0);
@@ -225,6 +203,7 @@ void SettingsViewModel::resetPreferences()
   setZoomToMouse(true);
   setFreeCamera(false);
   setReverseZoom(false);
+  setShow3DNavigator(true);
   setAutoUpload(false);
   setUpdateChannel(0);
   setNotificationsEnabled(true);
@@ -241,6 +220,69 @@ void SettingsViewModel::resetPreferences()
   setAiModel(QStringLiteral("glm-5.3-flash"));
   setAiBaseUrl(QStringLiteral("https://open.bigmodel.cn/api/anthropic"));
   setAiPort(27417);
+}
+
+void SettingsViewModel::applyPreferences()
+{
+  saveToSettings();
+}
+
+void SettingsViewModel::cancelPreferences()
+{
+  loadFromSettings();
+  notifyPreferencesRestored();
+}
+
+void SettingsViewModel::saveToSettings() const
+{
+  QSettings s;
+  s.setValue(QStringLiteral("themeIndex"), m_themeIndex);
+  s.setValue(QStringLiteral("fontSize"), m_fontSize);
+  s.setValue(QStringLiteral("uiScaleIndex"), m_uiScaleIndex);
+  s.setValue(QStringLiteral("languageIndex"), m_languageIndex);
+  s.setValue(QStringLiteral("showHomePage"), m_showHomePage);
+  s.setValue(QStringLiteral("defaultPage"), m_defaultPage);
+  s.setValue(QStringLiteral("units"), m_units);
+  s.setValue(QStringLiteral("autoSave"), m_autoSave);
+  s.setValue(QStringLiteral("autoSaveInterval"), m_autoSaveInterval);
+  s.setValue(QStringLiteral("checkUpdates"), m_checkUpdates);
+  s.setValue(QStringLiteral("region"), m_region);
+  s.setValue(QStringLiteral("autoBackup"), m_autoBackup);
+  s.setValue(QStringLiteral("undoLimit"), m_undoLimit);
+  s.setValue(QStringLiteral("defaultNozzleIndex"), m_defaultNozzleIndex);
+  s.setValue(QStringLiteral("defaultBedShape"), m_defaultBedShape);
+  s.setValue(QStringLiteral("cameraNavStyle"), m_cameraNavStyle);
+  s.setValue(QStringLiteral("zoomToMouse"), m_zoomToMouse);
+  s.setValue(QStringLiteral("freeCamera"), m_freeCamera);
+  s.setValue(QStringLiteral("reverseZoom"), m_reverseZoom);
+  s.setValue(QStringLiteral("show3DNavigator"), m_show3DNavigator);
+  s.setValue(QStringLiteral("autoUpload"), m_autoUpload);
+  s.setValue(QStringLiteral("updateChannel"), m_updateChannel);
+  s.setValue(QStringLiteral("notificationsEnabled"), m_notificationsEnabled);
+  s.setValue(QStringLiteral("hintsEnabled"), m_hintsEnabled);
+  s.setValue(QStringLiteral("autoDismissSec"), m_autoDismissSec);
+  s.setValue(QStringLiteral("showProgressNotifications"), m_showProgressNotifications);
+  s.setValue(QStringLiteral("developerMode"), m_developerMode);
+  s.setValue(QStringLiteral("showDebugOverlay"), m_showDebugOverlay);
+  s.setValue(QStringLiteral("logLevel"), m_logLevel);
+  s.setValue(QStringLiteral("verboseGcode"), m_verboseGcode);
+  s.setValue(QStringLiteral("glDebugContext"), m_glDebugContext);
+  s.setValue(QStringLiteral("maxLogSizeMb"), m_maxLogSizeMb);
+  s.setValue(QStringLiteral("aiEnabled"), m_aiEnabled);
+  s.setValue(QStringLiteral("aiApiKey"), m_aiApiKey);
+  s.setValue(QStringLiteral("aiModel"), m_aiModel);
+  s.setValue(QStringLiteral("aiBaseUrl"), m_aiBaseUrl);
+  s.setValue(QStringLiteral("aiPort"), m_aiPort);
+  s.sync();
+}
+
+void SettingsViewModel::notifyPreferencesRestored()
+{
+  emit themeIndexChanged();
+  emit fontSizeChanged();
+  emit uiScaleIndexChanged();
+  emit languageIndexChanged();
+  emit settingsChanged();
 }
 
 void SettingsViewModel::setShowHomePage(bool v)

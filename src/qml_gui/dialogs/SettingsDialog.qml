@@ -144,6 +144,15 @@ ApplicationWindow {
         return ""
     }
 
+    function presetIndexForName(name) {
+        if (!configVm || !name) return -1
+        for (var i = 0; i < presetNames.length; ++i) {
+            if (configVm.plainPresetName(presetNames[i]) === name)
+                return i
+        }
+        return -1
+    }
+
     // Set default tab on first load
     Component.onCompleted: {
         if (tabPages.length > 0) activeTab = tabPages[0].key
@@ -363,7 +372,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         model: root.presetNames
                         currentIndex: {
-                            var idx = root.presetNames.indexOf(root.currentPreset)
+                            var idx = root.presetIndexForName(root.currentPreset)
                             return idx >= 0 ? idx : 0
                         }
                         onActivated: (i) => {
@@ -422,6 +431,19 @@ ApplicationWindow {
                             id: compatHover
                             anchors.fill: parent
                             hoverEnabled: true
+                        }
+                    }
+
+                    CxIconButton {
+                        buttonSize: 28
+                        iconSize: 15
+                        cxStyle: CxIconButton.Style.Ghost
+                        iconSource: "qrc:/qml/assets/icons/restore.svg"
+                        enabled: root.configVm && root.configVm.globalModifiedCount > 0
+                        toolTipText: qsTr("恢复系统值")
+                        onClicked: {
+                            if (root.configVm)
+                                root.configVm.restoreAllSystemValues()
                         }
                     }
 

@@ -23,6 +23,8 @@ public:
 
   /// Category-aware preset lists
   Q_INVOKABLE QStringList presetNamesForCategory(int category) const;
+  /// Editable user presets for export and user-managed selection surfaces.
+  Q_INVOKABLE QStringList userPresetNamesForCategory(int category) const;
   Q_INVOKABLE QString defaultPresetForCategory(int category) const;
   Q_INVOKABLE int presetCategory(const QString &presetName) const;
   Q_INVOKABLE bool isReadOnlyPreset(const QString &presetName) const;
@@ -95,6 +97,10 @@ public:
   /// tree + manifest is the interop unit. Returns the count of exported
   /// presets (-1 = directory creation failure).
   Q_INVOKABLE int exportBundleIni(const QString &dirPath) const;
+  /// Export only the named user presets into the supported directory JSON
+  /// bundle. An empty selection is rejected so the UI cannot claim to export
+  /// content that was not selected.
+  Q_INVOKABLE int exportBundleIni(const QString &dirPath, const QStringList &presetNames) const;
   /// Phase 147 (PSET-01) / v5.16 (PSET2-04): upstream-compatible bundle
   /// import. Reads the export tree (index.json or per-category subdirs of
   /// upstream-shaped JSON) plus legacy flat `.ini` files. Returns the count
@@ -172,6 +178,10 @@ public:
 
   /// 获取预设继承的父预设名（对齐上游 Preset::inherits）
   QString presetInherits(const QString &presetName) const;
+  /// Return the values supplied by the preset's parent, or its category default.
+  QHash<QString, QVariant> presetSystemValues(const QString &presetName) const;
+  /// True when another local preset inherits from this preset.
+  bool hasPresetChildren(const QString &presetName) const;
 
   /// v5.16 (PSET2-01): user preset persistence root. Defaults to
   /// QStandardPaths AppDataLocation + "/user/presets" (mirrors upstream

@@ -8,25 +8,56 @@ import "../controls"
 // ─────────────────────────────────────────────────────────────────────────────
 // ExportPresetBundleDialog.qml — V21-02 PRESET-03 导出预设包
 //
-// 上游: third_party/OrcaSlicer/src/slic3r/GUI/ExportPresetBundleDialog.cpp (23KB)
-//   - 多选预设 + 压缩导出 .zip/.bbscfg
-//
-// OWzx 实现 (v5.16 PSET2-04):
-//   - 选目录 → 导出全部自定义预设为逐预设上游形状 JSON 文件
-//     （<目录>/{printer,filament,process}/<名称>.json + index.json 清单；
-//     PresetServiceMock::exportBundleIni。上游是打 zip 包，zip 打包暂缓，
-//     目录树 + 清单为互操作单元，importBundleIni 两者皆可读）
+// Upstream ExportPresetBundleDialog offers selectable presets and zip/bbscfg
+// packaging. Qt6 currently supports the local directory JSON interchange
+// format only: category JSON files plus index.json. The unsupported archive
+// formats are disclosed in the dialog instead of being advertised as parity.
 // ─────────────────────────────────────────────────────────────────────────────
 
 CxDialog {
     id: root
     modal: true
     dialogTitle: qsTr("导出预设包")
-    width: 420
-    height: 180
+    width: 520
+    height: 620
     padding: 0
 
     required property var configVm
+    property var selectedPresets: ({})
+    property var presetSections: []
+
+    function selectedCount() {
+        var count = 0
+        for (var name in root.selectedPresets)
+            if (root.selectedPresets[name]) ++count
+        return count
+    }
+
+    function togglePreset(name, checked) {
+        var next = {}
+        for (var existing in root.selectedPresets)
+            next[existing] = root.selectedPresets[existing]
+        next[name] = checked
+        root.selectedPresets = next
+    }
+
+    function resetSelection() {
+        root.selectedPresets = ({})
+        for (var i = 0; i < root.presetSections.length; ++i) {
+            var section = root.presetSections[i]
+            for (var j = 0; j < section.names.length; ++j)
+                root.togglePreset(section.names[j], true)
+        }
+    }
+
+    onOpened: {
+        root.presetSections = [
+            { label: qsTr("打印机"), names: configVm ? configVm.userPresetNamesForCategory(2) : [] },
+            { label: qsTr("耗材"), names: configVm ? configVm.userPresetNamesForCategory(1) : [] },
+            { label: qsTr("工艺"), names: configVm ? configVm.userPresetNamesForCategory(0) : [] }
+        ]
+        resetSelection()
+    }
 
     contentItem: Rectangle {
         color: Theme.bgPanel
@@ -35,24 +66,70 @@ CxDialog {
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: Theme.spacingXXL
-            spacing: Theme.spacingLG
+            spacing: Theme.spacingMD
             Text {
                 Layout.fillWidth: true
-                text: qsTr("将当前所有自定义预设导出为可分享的预设包目录。")
+                text: qsTr("选择要导出的用户预设。导出结果是本地目录格式：分类 JSON 文件 + index.json。")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.WordWrap
             }
 
             Text {
-                text: qsTr("格式: 目录（printer/filament/process 逐预设 JSON + index.json，对齐上游用户预设格式）")
+                Layout.fillWidth: true
+                text: qsTr("当前不支持 .zip 或 .bbscfg；不会生成或声称生成这些格式。")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSizeXS
                 wrapMode: Text.WordWrap
-                Layout.fillWidth: true
             }
 
-            Item { Layout.fillHeight: true }
+            RowLayout {
+                Layout.fillWidth: true
+                CxButton {
+                    text: qsTr("全选")
+                    onClicked: root.resetSelection()
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("已选择 %1 项").arg(root.selectedCount())
+                    color: Theme.textSecondary
+                    horizontalAlignment: Text.AlignRight
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                Column {
+                    width: parent.width
+                    spacing: Theme.spacingSM
+                    Repeater {
+                        model: presetSections
+                        delegate: Column {
+                            property var section: modelData
+                            width: parent.width
+                            spacing: Theme.spacingXS
+                            Text {
+                                text: parent.section.label
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeSM
+                                font.bold: true
+                            }
+                            Repeater {
+                                model: parent.section.names
+                                delegate: CxCheckBox {
+                                    width: parent.width
+                                    text: modelData
+                                    checked: root.selectedPresets[modelData] === true
+                                    onToggled: root.togglePreset(modelData, checked)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             RowLayout {
                 Layout.fillWidth: true
@@ -64,6 +141,7 @@ CxDialog {
                 }
                 CxButton {
                     text: qsTr("选择目录...")
+                    enabled: root.selectedCount() > 0
                     cxStyle: CxButton.Style.Primary
                     onClicked: exportFolderDialog.open()
                 }
@@ -79,7 +157,10 @@ CxDialog {
             // (configVm.exportBundleIni → PresetServiceMock::exportBundleIni).
             var path = selectedFolder.toString().replace("file:///", "")
             if (root.configVm && path.length > 0) {
-                var count = root.configVm.exportBundleIni(path)
+                var selected = []
+                for (var name in root.selectedPresets)
+                    if (root.selectedPresets[name]) selected.push(name)
+                var count = root.configVm.exportBundleIni(path, selected)
                 console.log("[ExportPresetBundle] export to: " + path + " count=" + count)
             }
             root.accept()

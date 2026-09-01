@@ -525,6 +525,11 @@ int ConfigViewModel::exportBundleIni(const QString &dirPath) const
     return presetService_ ? presetService_->exportBundleIni(dirPath) : -1;
 }
 
+int ConfigViewModel::exportBundleIni(const QString &dirPath, const QStringList &presetNames) const
+{
+    return presetService_ ? presetService_->exportBundleIni(dirPath, presetNames) : -1;
+}
+
 int ConfigViewModel::importBundleIni(const QString &dirPath)
 {
     if (!presetService_) return -1;
@@ -600,6 +605,11 @@ QStringList ConfigViewModel::filamentPresetNames() const
 QStringList ConfigViewModel::printPresetNames() const
 {
   return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::PrintCat) : QStringList{};
+}
+
+QStringList ConfigViewModel::userPresetNamesForCategory(int category) const
+{
+  return presetService_ ? presetService_->userPresetNamesForCategory(category) : QStringList{};
 }
 
 QStringList ConfigViewModel::compatibleFilamentPresetNames() const
@@ -843,6 +853,11 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
       emit stateChanged();
       return false;
     }
+    if (presetService_->presetCategory(parent) != category) {
+      lastPresetError_ = tr("The selected parent belongs to another preset category.");
+      emit stateChanged();
+      return false;
+    }
     tierValues = presetService_->presetValues(parent);
   }
   else
@@ -879,10 +894,27 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
 
 bool ConfigViewModel::deletePreset(int category, const QString &name)
 {
-  if (!presetService_)
+  lastPresetError_.clear();
+  if (!presetService_) {
+    lastPresetError_ = tr("Preset service is unavailable.");
+    emit stateChanged();
     return false;
-  if (presetService_->presetCategory(name) != category)
+  }
+  if (presetService_->presetCategory(name) != category) {
+    lastPresetError_ = tr("Preset does not belong to the selected category.");
+    emit stateChanged();
     return false;
+  }
+  if (!presetService_->isUserPreset(name)) {
+    lastPresetError_ = tr("This preset is built-in or read-only.");
+    emit stateChanged();
+    return false;
+  }
+  if (presetService_->hasPresetChildren(name)) {
+    lastPresetError_ = tr("Presets inherited by other presets cannot be deleted.");
+    emit stateChanged();
+    return false;
+  }
 
   // v5.16 (PSET2-07): the previous blanket "in use" early return made the
   // default-switch branches below unreachable dead code. Upstream allows
@@ -931,12 +963,38 @@ bool ConfigViewModel::isPresetInUse(const QString &name) const
 
 bool ConfigViewModel::renamePreset(int category, const QString &oldName, const QString &newName)
 {
-  if (!presetService_ || newName.trimmed().isEmpty())
+  lastPresetError_.clear();
+  if (!presetService_) {
+    lastPresetError_ = tr("Preset service is unavailable.");
+    emit stateChanged();
     return false;
-  if (presetService_->presetCategory(oldName) != category)
+  }
+  if (newName.trimmed().isEmpty()) {
+    lastPresetError_ = tr("Preset name cannot be empty.");
+    emit stateChanged();
     return false;
+  }
+  if (presetService_->presetCategory(oldName) != category) {
+    lastPresetError_ = tr("Preset does not belong to the selected category.");
+    emit stateChanged();
+    return false;
+  }
+  if (!presetService_->isUserPreset(oldName)) {
+    lastPresetError_ = tr("This preset is built-in or read-only.");
+    emit stateChanged();
+    return false;
+  }
+  if (presetService_->hasPresetChildren(oldName)) {
+    lastPresetError_ = tr("A preset inherited by other presets cannot be renamed.");
+    emit stateChanged();
+    return false;
+  }
 
   bool ok = presetService_->renamePreset(oldName, newName.trimmed());
+  if (!ok) {
+    lastPresetError_ = tr("A preset with this name already exists or could not be saved.");
+    emit stateChanged();
+  }
   if (ok)
   {
     // Keep the current tier preset names in sync with the rename.
@@ -1154,6 +1212,11 @@ bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
 {
   // v5.16 (PSET2-05): accept both plain and decorated (combo display) names.
   const QString plain = plainPresetName(name);
+  if (presetService_ && presetService_->presetCategory(plain) != PresetServiceMock::PrinterCat) {
+    lastPresetError_ = tr("The selected printer preset is unavailable.");
+    emit stateChanged();
+    return false;
+  }
   if (queuePendingAction(QStringLiteral("switch-printer-preset"), plain))
   {
     setCurrentPrinterPreset(plain);
@@ -1165,6 +1228,11 @@ bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
 bool ConfigViewModel::requestCurrentFilamentPreset(const QString &name)
 {
   const QString plain = plainPresetName(name);
+  if (presetService_ && presetService_->presetCategory(plain) != PresetServiceMock::FilamentCat) {
+    lastPresetError_ = tr("The selected filament preset is unavailable.");
+    emit stateChanged();
+    return false;
+  }
   if (queuePendingAction(QStringLiteral("switch-filament-preset"), plain))
   {
     setCurrentFilamentPreset(plain);
@@ -1248,6 +1316,11 @@ QVariantMap ConfigViewModel::projectPresetConfigOverlay() const
 bool ConfigViewModel::requestCurrentPrintPreset(const QString &name)
 {
   const QString plain = plainPresetName(name);
+  if (presetService_ && presetService_->presetCategory(plain) != PresetServiceMock::PrintCat) {
+    lastPresetError_ = tr("The selected print preset is unavailable.");
+    emit stateChanged();
+    return false;
+  }
   if (queuePendingAction(QStringLiteral("switch-print-preset"), plain))
   {
     setCurrentPrintPreset(plain);
@@ -2309,6 +2382,39 @@ void ConfigViewModel::resetAllGlobalOptions()
   emit stateChanged();
   if (before != effectivePresetValuesForTier(tier))
     emit sliceAffectingConfigChanged();
+}
+
+bool ConfigViewModel::restoreAllSystemValues()
+{
+  if (!presetService_)
+    return false;
+  const QString tier = normalizedTier(activePresetTier_);
+  QString presetName;
+  if (tier == QStringLiteral("printer"))
+    presetName = currentPrinterPreset_;
+  else if (tier == QStringLiteral("filament"))
+    presetName = currentFilamentPreset_;
+  else
+    presetName = currentPrintPreset_;
+  if (presetName.isEmpty())
+    return false;
+
+  const auto before = effectivePresetValuesForTier(tier);
+  const auto systemValues = presetService_->presetSystemValues(presetName);
+  if (systemValues.isEmpty())
+    return false;
+  if (tier == QStringLiteral("printer"))
+    printerPresetValues_ = systemValues;
+  else if (tier == QStringLiteral("filament"))
+    filamentPresetValues_ = systemValues;
+  else
+    printPresetValues_ = systemValues;
+  updateMergedPresetValues();
+  applyScopeValues();
+  emit stateChanged();
+  if (before != effectivePresetValuesForTier(tier))
+    emit sliceAffectingConfigChanged();
+  return true;
 }
 
 // SETTINGS-05 reset-group: reset all options in a named group to reference values.

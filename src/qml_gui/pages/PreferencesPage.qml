@@ -10,37 +10,8 @@ Item {
     required property var settingsVm
     property var backend
 
-    // Dead-control elimination: caption state for the check-now button
-    // (backend.checkForUpdates result lands here).
-    property string updateCheckMessage: qsTr("点击“检查更新”获取最新版本信息。")
-    property bool updateCheckOk: false
-
-    Connections {
-        target: backend
-        function onUpdateCheckFinished(ok, updateAvailable, message) {
-            root.updateCheckOk = ok
-            root.updateCheckMessage = message
-        }
-    }
-
     AboutDialog {
         id: aboutDlg
-    }
-
-    // Phase 236 (DLG-01): orphan dialogs get reachable entry points. Both
-    // are placeholder implementations (real network/device probes pending);
-    // the monitor viewmodel feeds their required bindings. Opened from the
-    // Advanced "工具与设备对话框" launchers above.
-    NetworkTestDialog {
-        id: networkTestDialog
-        parent: Overlay.overlay
-        networkVm: backend.monitorViewModel
-    }
-
-    TroubleshootDialog {
-        id: troubleshootDialog
-        parent: Overlay.overlay
-        monitorVm: backend.monitorViewModel
     }
 
     // 切换到《关于》分类时自动弹出
@@ -51,6 +22,32 @@ Item {
                 aboutDlg.open()
         }
     }
+
+    // Advanced-category diagnostics entries (upstream MainFrame hosts these
+    // launchers in Preferences). NetworkTestDialog drives the real backend
+    // DNS+HTTPS probe; TroubleshootDialog is the device diagnostics walkthrough.
+    NetworkTestDialog {
+        id: networkTestDialog
+    }
+
+    TroubleshootDialog {
+        id: troubleshootDialog
+    }
+
+    // Dead-control elimination: the update check drives the real
+    // backend.checkForUpdates release query (upstream Help > Check for
+    // Update, MainFrame.cpp:2160); the result lands here.
+    property string updateCheckMessage: qsTr("点击“检查更新”获取最新版本信息。")
+    property bool updateCheckOk: false
+
+    Connections {
+        target: root.backend
+        function onUpdateCheckFinished(ok, available, message) {
+            root.updateCheckOk = ok
+            root.updateCheckMessage = message
+        }
+    }
+
 
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
@@ -227,7 +224,9 @@ Item {
                         Layout.preferredWidth: 500
                     }
 
-                    // Check for updates（对齐上游 preset_update/版本检查）
+                    // notYetEffectiveHint: persisted only — no startup update
+                    // service reads the flag yet; manual checks live on the
+                    // 更新 page and drive the real release query.
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("启动时检查更新"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
@@ -235,16 +234,6 @@ Item {
                             checked: root.settingsVm.checkUpdates
                             onToggled: root.settingsVm.setCheckUpdates(checked)
                         }
-                    }
-
-                    Text {
-                        // notYetEffectiveHint: persisted only — no update
-                        // server is wired (mock mode).
-                        text: qsTr("仅持久化该偏好：当前无更新服务器通道，切换后不会触发网络请求。")
-                        color: Theme.textDisabled
-                        font.pixelSize: Theme.fontSizeXS
-                        wrapMode: Text.Wrap
-                        Layout.preferredWidth: 500
                     }
 
                     // Notification preferences（对齐上游 notification_manager preferences）
@@ -319,22 +308,8 @@ Item {
                         }
                     }
 
-                    // Region selection（对齐上游 PreferencesDialog region combo）
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("区域设置"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
-                        CxComboBox {
-                            model: [qsTr("跟随系统"), qsTr("中国"), qsTr("美国"), qsTr("欧洲"), qsTr("日本")]
-                            currentIndex: root.settingsVm.region
-                            onActivated: root.settingsVm.setRegion(currentIndex)
-                        }
-                    }
-
                     Text {
-                        // notYetEffectiveHint: persisted only — upstream feeds
-                        // the region into the login/network agent; the cloud
-                        // account channel is out of scope here.
-                        text: qsTr("仅持久化该偏好：区域仅在上游登录/网络通道中使用，本版本暂无该通道。")
+                        text: qsTr("区域、云同步和设备上传依赖未迁移的网络服务，当前不可用。")
                         color: Theme.textDisabled
                         font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
@@ -612,20 +587,8 @@ Item {
                         CxSwitch { checked: root.settingsVm.reverseZoom; onToggled: root.settingsVm.setReverseZoom(checked) }
                     }
 
-                    // Print host upload
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("切片完成后自动上传"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
-                        CxSwitch {
-                            checked: root.settingsVm.autoUpload
-                            onToggled: root.settingsVm.setAutoUpload(checked)
-                        }
-                    }
-
                     Text {
-                        // notYetEffectiveHint: persisted only — device send is
-                        // out of scope (REQUIREMENTS), so no upload happens.
-                        text: qsTr("仅持久化该偏好：设备发送通道不在当前范围内，开启后暂不会执行上传。")
+                        text: qsTr("自动上传需要设备网络通道，当前不可用。")
                         color: Theme.textDisabled
                         font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
@@ -662,20 +625,20 @@ Item {
                         }
                     }
 
-                    // Check for updates button
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("自动检查更新"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
-                        CxSwitch {
-                            checked: root.settingsVm.checkUpdates
-                            onToggled: root.settingsVm.setCheckUpdates(checked)
-                        }
+                    Text {
+                        Layout.fillWidth: true
+                        text: qsTr("更新通道为本地偏好，当前构建未接入自动下载通道，仅记录选择。")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 400
                     }
 
-                    // Update channel
+                    // notYetEffectiveHint: persisted only — no update feed
+                    // consumer reads the channel selection yet (upstream feeds
+                    // it from the update service channel).
                     RowLayout {
                         spacing: 16
-                        Text { text: qsTr("更新通道"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        Text { text: qsTr("更新通道"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
                         Row {
                             spacing: 4
                             Repeater {
@@ -724,18 +687,9 @@ Item {
                     visible: root.settingsVm.prefCategory === 5
                     Layout.fillWidth: true; spacing: 16
 
-                    RowLayout {
-                        spacing: 16
-                        Text { text: qsTr("自动备份项目到云端"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 200 }
-                        CxSwitch {
-                            checked: root.settingsVm.autoBackup
-                            onToggled: root.settingsVm.setAutoBackup(checked)
-                        }
-                    }
-
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("启用后，项目文件将自动备份到您的云端账户。需要先登录云端账号。")
+                        text: qsTr("账号、隐私和云端备份依赖云服务，当前不可用。")
                         color: Theme.textDisabled
                         font.pixelSize: Theme.fontSizeXS
                         wrapMode: Text.Wrap
@@ -751,9 +705,10 @@ Item {
                     // Phase 236 (DLG-01): dialog launchers that upstream hosts
                     // in Preferences (AMS / Firmware / SpeedLimit / Plugin
                     // Manager / Lite Mode). Each opens the already-instantiated
-                    // main.qml dialog via the BackendContext request signals.
-                    // NetworkTestDialog and TroubleshootDialog are diagnostics
-                    // entry points (placeholder implementations).
+                    // main.qml or page-local dialog via the BackendContext
+                    // request signals. NetworkTestDialog drives the real
+                    // backend probe; FirmwareDialog discloses that OTA is not
+                    // integrated instead of simulating an update.
                     Text {
                         text: qsTr("工具与设备对话框")
                         color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
@@ -801,7 +756,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("AMS 与固件等对话框当前使用占位数据（真实设备通道在设备页）。")
+                        text: qsTr("文件关联和单实例运行依赖未迁移的平台服务，当前不可用。")
                         color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 500
                     }
@@ -887,6 +842,8 @@ Item {
                     }
 
                     // Debug Overlay toggle
+                    // notYetEffectiveHint: persisted only — no renderer
+                    // consumer reads the overlay flag yet.
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("调试覆盖层"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
@@ -897,6 +854,8 @@ Item {
                     }
 
                     // Log Level selector
+                    // notYetEffectiveHint: persisted only — logging rules are
+                    // compiled in; the level selection has no runtime reader.
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("日志级别"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
@@ -908,6 +867,8 @@ Item {
                     }
 
                     // Verbose G-code toggle
+                    // notYetEffectiveHint: persisted only — no G-code export
+                    // consumer reads the verbosity flag yet.
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("详细 G-code"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
@@ -918,6 +879,9 @@ Item {
                     }
 
                     // OpenGL Debug toggle
+                    // notYetEffectiveHint: persisted only — the GL context is
+                    // created before preferences load; takes effect in a test
+                    // harness, not the running window.
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("OpenGL 调试上下文"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
@@ -928,6 +892,8 @@ Item {
                     }
 
                     // Max Log Size selector
+                    // notYetEffectiveHint: persisted only — log rotation is
+                    // not implemented, so the size cap has no runtime reader.
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("最大日志大小 (MB)"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
@@ -1069,9 +1035,14 @@ Item {
                         onClicked: root.settingsVm.resetPreferences()
                     }
                     CxButton {
+                        text: qsTr("取消")
+                        onClicked: root.settingsVm.cancelPreferences()
+                    }
+                    CxButton {
                         text: qsTr("应用")
                         cxStyle: CxButton.Style.Primary
                         onClicked: {
+                            root.settingsVm.applyPreferences()
                             appliedHint.opacity = 1
                             appliedHintTimer.restart()
                         }

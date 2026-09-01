@@ -111,6 +111,7 @@ public:
   QStringList printerPresetNames() const;
   QStringList filamentPresetNames() const;
   QStringList printPresetNames() const;
+  Q_INVOKABLE QStringList userPresetNamesForCategory(int category) const;
   QStringList compatibleFilamentPresetNames() const;
   QStringList compatiblePrintPresetNames() const;
   QString currentPrinterPreset() const { return currentPrinterPreset_; }
@@ -155,6 +156,7 @@ public:
   /// v5.16 (PSET2-04): per-preset upstream-shape JSON bundle export/import
   /// (directory tree + index.json manifest). Proxies PresetServiceMock.
   Q_INVOKABLE int exportBundleIni(const QString &dirPath) const;
+  Q_INVOKABLE int exportBundleIni(const QString &dirPath, const QStringList &presetNames) const;
   Q_INVOKABLE int importBundleIni(const QString &dirPath);
   bool isPresetDirty() const;
   int globalModifiedCount() const;
@@ -270,6 +272,9 @@ public:
   Q_INVOKABLE QString globalModifiedDefaultValue(const QString &key) const;
   Q_INVOKABLE bool resetGlobalOption(const QString &key);
   Q_INVOKABLE void resetAllGlobalOptions();
+  /// Restore the active tier to its resolved system/parent values without
+  /// writing the selected preset (upstream Tab::on_roll_back_value(true)).
+  Q_INVOKABLE bool restoreAllSystemValues();
   Q_INVOKABLE QString materialPresetName(int localIndex) const;
 
   Q_INVOKABLE int layerRangeCount() const;

@@ -252,6 +252,7 @@ private slots:
   // Phase 241 (PAGE-04): startup-page preference drives currentPage and the
   // mm<->inch display conversion math is exact.
   void preferencesStartupPageAndInchesConversion();
+  void preferencesApplyCancelTransactionsAndRuntimeRestore();
   void settingsResetPreservesUnownedKeysAndResetsAllProperties();
   // Phase 241 (PAGE-04): the backup primitive writes a real .3mf snapshot
   // without hijacking the current project path.
@@ -334,7 +335,10 @@ private slots:
   void userPresetNamesDoNotCollideOnDisk();
   void userPresetWriteFailureLeavesMemoryUnchanged();
   void createPresetHonorsScopeAndInherits();
+  void presetTreeRejectsCrossCategoryParentAndChildCrud();
+  void configRestoreAllSystemValuesUsesParentValues();
   void bundleImportCategoriesRoundTrip();
+  void bundleExportHonorsSelectedContents();
   void configTransferPendingChangesAndDialogGate();
   void configDeleteCurrentPresetFallsBackToDefault();
   void filamentSlotVectorResizesAndPersistsWithProject();
@@ -2433,6 +2437,80 @@ void ViewModelSmokeTests::createPresetHonorsScopeAndInherits()
                                      QStringLiteral("No Such Parent")));
 }
 
+void ViewModelSmokeTests::presetTreeRejectsCrossCategoryParentAndChildCrud()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetTreeIntegrity"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ScopedUserPresetDir presetDir(preset);
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  const QString printerParent = preset.defaultPresetForCategory(PresetServiceMock::PrinterCat);
+  QVERIFY(!config.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("UT Cross Category Parent"), printerParent));
+  QVERIFY(config.lastPresetError().contains(QStringLiteral("another preset category")));
+
+  const QString parent = QStringLiteral("UT Tree Parent");
+  const QString child = QStringLiteral("UT Tree Child");
+  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat, parent));
+  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat, child, parent));
+  QVERIFY(preset.hasPresetChildren(parent));
+  QVERIFY(!config.renamePreset(PresetServiceMock::PrintCat, parent,
+                               QStringLiteral("UT Tree Parent Renamed")));
+  QVERIFY(config.lastPresetError().contains(QStringLiteral("cannot be renamed")));
+  QVERIFY(!config.deletePreset(PresetServiceMock::PrintCat, parent));
+  QVERIFY(config.lastPresetError().contains(QStringLiteral("cannot be deleted")));
+  QVERIFY(preset.hasPreset(parent));
+  QCOMPARE(preset.presetInherits(child), parent);
+}
+
+void ViewModelSmokeTests::configRestoreAllSystemValuesUsesParentValues()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("PresetRestoreSystemValues"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ScopedUserPresetDir presetDir(preset);
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+
+  const QString parent = QStringLiteral("UT Restore Parent");
+  const QString child = QStringLiteral("UT Restore Child");
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, parent,
+                                    {{QStringLiteral("layer_height"), 0.16}}));
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, child,
+                                    {{QStringLiteral("layer_height"), 0.20}}, parent));
+  config.setCurrentPrintPreset(child);
+  config.setActivePresetTier(QStringLiteral("print"));
+
+  auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printOpts);
+  const int layerIdx = printOpts->indexOfKey(QStringLiteral("layer_height"));
+  QVERIFY(layerIdx >= 0);
+  printOpts->setValue(layerIdx, 0.28);
+  QVERIFY(config.isPresetDirty());
+
+  QVERIFY(config.restoreAllSystemValues());
+  QCOMPARE(printOpts->optValue(layerIdx).toDouble(), 0.16);
+  QVERIFY(config.isPresetDirty());
+  // Upstream Tab::reset semantics: reset-to-system only restores the editing
+  // session (the dirty flag keeps pending the change). The child preset's
+  // stored override stays untouched until an explicit save.
+  QCOMPARE(preset.presetValue(child, QStringLiteral("layer_height")).toDouble(), 0.20);
+}
+
 // v5.16 (PSET2-04): exportBundleIni writes the per-preset upstream-shape
 // JSON tree; importBundleIni lands categories exactly (the previous import
 // swapped printer<->print, FIX-14).
@@ -2498,6 +2576,42 @@ void ViewModelSmokeTests::bundleImportCategoriesRoundTrip()
   QCOMPARE(target.presetValue(QStringLiteral("UT Bundle Process"),
                               QStringLiteral("layer_height")).toDouble(), 0.24);
 
+  QDir(exportDir).removeRecursively();
+}
+
+void ViewModelSmokeTests::bundleExportHonorsSelectedContents()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("BundleSelection"));
+  const QString exportDir = QDir::temp().filePath(QStringLiteral("owzx_pset2_bundle_selection"));
+  QDir(exportDir).removeRecursively();
+
+  PresetServiceMock source;
+  ScopedUserPresetDir dir(source);
+  QVERIFY(source.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("UT Selected Printer"),
+                                    {{QStringLiteral("nozzle_diameter"), 0.6}}));
+  QVERIFY(source.createCustomPreset(PresetServiceMock::FilamentCat,
+                                    QStringLiteral("UT Unselected Filament"),
+                                    {{QStringLiteral("nozzle_temp"), 230}}));
+  QCOMPARE(source.exportBundleIni(exportDir, {QStringLiteral("UT Selected Printer")}), 1);
+
+  QFile manifestFile(QDir(exportDir).filePath(QStringLiteral("index.json")));
+  QVERIFY(manifestFile.open(QIODevice::ReadOnly));
+  const QJsonArray entries = QJsonDocument::fromJson(manifestFile.readAll())
+                                 .object().value(QStringLiteral("presets")).toArray();
+  QCOMPARE(entries.size(), 1);
+  QCOMPARE(entries.at(0).toObject().value(QStringLiteral("name")).toString(),
+           QStringLiteral("UT Selected Printer"));
+  QVERIFY(QFile::exists(QDir(exportDir).filePath(
+      entries.at(0).toObject().value(QStringLiteral("file")).toString())));
+  QVERIFY(!QFile::exists(QDir(exportDir).filePath(QStringLiteral("filament/UT Unselected Filament.json"))));
+
+  PresetServiceMock target;
+  ScopedUserPresetDir targetDir(target);
+  QCOMPARE(target.importBundleIni(exportDir), 1);
+  QVERIFY(target.hasPreset(QStringLiteral("UT Selected Printer")));
+  QVERIFY(!target.hasPreset(QStringLiteral("UT Unselected Filament")));
   QDir(exportDir).removeRecursively();
 }
 
@@ -3771,6 +3885,54 @@ void ViewModelSmokeTests::preferencesStartupPageAndInchesConversion()
   backendSettings->setDefaultPage(0); // Home page preference
   backend.applyStartupPagePreference();
   QCOMPARE(backend.currentPage(), backend.tpHome());
+}
+
+void ViewModelSmokeTests::preferencesApplyCancelTransactionsAndRuntimeRestore()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("SettingsTransaction"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("themeIndex"), QStringLiteral("fontSize"),
+      QStringLiteral("reverseZoom"), QStringLiteral("undoLimit")});
+  snapshot.clear();
+
+  SettingsViewModel settings;
+  QSignalSpy themeSpy(&settings, &SettingsViewModel::themeIndexChanged);
+  QSignalSpy changedSpy(&settings, &SettingsViewModel::settingsChanged);
+  QCOMPARE(settings.themeIndex(), 0);
+  QVERIFY(!settings.reverseZoom());
+
+  // Draft changes update live consumers but cannot survive a new instance.
+  settings.setThemeIndex(2);
+  settings.setReverseZoom(true);
+  settings.setUndoLimit(20);
+  QCOMPARE(settings.themeIndex(), 2);
+  QVERIFY(settings.reverseZoom());
+  QVERIFY(themeSpy.count() > 0);
+  QVERIFY(changedSpy.count() > 0);
+  SettingsViewModel uncommitted;
+  QCOMPARE(uncommitted.themeIndex(), 0);
+  QVERIFY(!uncommitted.reverseZoom());
+
+  // Cancel restores the previously committed values and emits signals so the
+  // BackendContext reapplies theme, camera, timer, and undo consumers.
+  themeSpy.clear();
+  changedSpy.clear();
+  settings.cancelPreferences();
+  QCOMPARE(settings.themeIndex(), 0);
+  QVERIFY(!settings.reverseZoom());
+  QCOMPARE(settings.undoLimit(), 100);
+  QCOMPARE(themeSpy.count(), 1);
+  QCOMPARE(changedSpy.count(), 1);
+
+  settings.setThemeIndex(1);
+  settings.setReverseZoom(true);
+  settings.setUndoLimit(50);
+  settings.applyPreferences();
+  SettingsViewModel committed;
+  QCOMPARE(committed.themeIndex(), 1);
+  QVERIFY(committed.reverseZoom());
+  QCOMPARE(committed.undoLimit(), 50);
 }
 
 void ViewModelSmokeTests::settingsResetPreservesUnownedKeysAndResetsAllProperties()

@@ -1135,6 +1135,21 @@ QStringList PresetServiceMock::presetNamesForCategory(int category) const
   return isValidCategory(category) ? m_categoryPresets.value(category) : QStringList{};
 }
 
+QStringList PresetServiceMock::userPresetNamesForCategory(int category) const
+{
+  if (!isValidCategory(category))
+    return {};
+
+  QStringList names;
+  for (const QString &name : m_categoryPresets.value(category))
+  {
+    const auto metaIt = m_presetMetadata.constFind(name);
+    if (metaIt != m_presetMetadata.constEnd() && !metaIt->builtin)
+      names.append(name);
+  }
+  return names;
+}
+
 QString PresetServiceMock::defaultPresetForCategory(int category) const
 {
   if (!isValidCategory(category))
@@ -1825,20 +1840,39 @@ QString PresetServiceMock::findCompatiblePresetForCategory(int category, const Q
 // the interop unit (importBundleIni reads either).
 int PresetServiceMock::exportBundleIni(const QString &dirPath) const
 {
+  QStringList allUserPresetNames;
+  for (auto it = m_presetMetadata.constBegin(); it != m_presetMetadata.constEnd(); ++it)
+  {
+    if (!it->builtin)
+      allUserPresetNames.append(it.key());
+  }
+  return exportBundleIni(dirPath, allUserPresetNames);
+}
+
+int PresetServiceMock::exportBundleIni(const QString &dirPath, const QStringList &selectedNames) const
+{
   QDir dir(dirPath);
   if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
   {
     qWarning("[Preset] exportBundleIni: cannot create directory %s", dirPath.toUtf8().constData());
     return -1;
   }
+  if (selectedNames.isEmpty() && !m_presetStore.isEmpty())
+  {
+    qWarning("[Preset] exportBundleIni: no presets selected");
+    return 0;
+  }
 
+  const bool filterSelection = !selectedNames.isEmpty();
+  const QSet<QString> selection(selectedNames.cbegin(), selectedNames.cend());
   QJsonArray manifestPresets;
   int exported = 0;
   for (auto it = m_presetStore.constBegin(); it != m_presetStore.constEnd(); ++it)
   {
     const QString &name = it.key();
     const auto metaIt = m_presetMetadata.constFind(name);
-    if (metaIt == m_presetMetadata.constEnd() || metaIt->builtin)
+    if (metaIt == m_presetMetadata.constEnd() || metaIt->builtin ||
+        (filterSelection && !selection.contains(name)))
       continue;
 
     const QString categoryDir = userPresetCategoryDir(metaIt->category);
@@ -2156,8 +2190,22 @@ bool PresetServiceMock::createCustomPreset(int category, const QString &name,
   // captured at vendor-load time), so overlaying `values` on top reproduces
   // upstream Preset inheritance semantics at creation.
   const QString parent = inherits.trimmed();
-  if (!parent.isEmpty() && !m_presetStore.contains(parent))
-    return false;
+  if (!parent.isEmpty())
+  {
+    if (!m_presetStore.contains(parent) || presetCategory(parent) != category)
+      return false;
+
+    // Keep the local preset tree acyclic before linking the new child.
+    QSet<QString> visited;
+    QString ancestor = parent;
+    while (!ancestor.isEmpty())
+    {
+      if (ancestor == trimmedName || visited.contains(ancestor))
+        return false;
+      visited.insert(ancestor);
+      ancestor = m_presetInherits.value(ancestor);
+    }
+  }
 
   QHash<QString, QVariant> resolved;
   if (!parent.isEmpty())
@@ -2199,6 +2247,8 @@ bool PresetServiceMock::deletePreset(const QString &presetName)
     return false;
 
   const int category = presetCategory(presetName);
+  if (hasPresetChildren(presetName))
+    return false;
   if (!removeUserPresetFile(category, presetName))
     return false;
   m_presetStore.remove(presetName);
@@ -2228,6 +2278,10 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
     return false;
 
   const int category = presetCategory(oldName);
+  // A rename would otherwise leave child JSON files pointing at an absent
+  // parent. Keep the tree valid until child-rename propagation is explicit.
+  if (hasPresetChildren(oldName))
+    return false;
   const QHash<QString, QVariant> values = m_presetStore.value(oldName);
   const QString inherits = m_presetInherits.value(oldName);
   // Write the replacement first. If deleting the old file fails, remove the
@@ -2263,4 +2317,28 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
 QString PresetServiceMock::presetInherits(const QString &presetName) const
 {
   return m_presetInherits.value(presetName);
+}
+
+QHash<QString, QVariant> PresetServiceMock::presetSystemValues(const QString &presetName) const
+{
+  const int category = presetCategory(presetName);
+  if (!isValidCategory(category))
+    return {};
+
+  const QString parent = m_presetInherits.value(presetName);
+  if (!parent.isEmpty() && presetCategory(parent) == category)
+    return m_presetStore.value(parent);
+  return m_presetStore.value(defaultPresetForCategory(category));
+}
+
+bool PresetServiceMock::hasPresetChildren(const QString &presetName) const
+{
+  if (presetName.isEmpty())
+    return false;
+  for (auto it = m_presetInherits.cbegin(); it != m_presetInherits.cend(); ++it)
+  {
+    if (it.value() == presetName)
+      return true;
+  }
+  return false;
 }

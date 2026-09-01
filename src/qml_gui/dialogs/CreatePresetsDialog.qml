@@ -69,6 +69,8 @@ CxDialog {
         inheritsCombo.model = (names && names.length > 0) ? names : []
         inheritsCombo.currentIndex = 0
         root.selectedInherits = (names && names.length > 0) ? names[0] : ""
+        dupWarning.visible = false
+        dupWarning.text = ""
     }
 
     ColumnLayout {
@@ -160,7 +162,9 @@ CxDialog {
                     if (ok) {
                         root.accept()
                     } else {
-                        dupWarning.text = qsTr("创建失败（名称重复、范围无效或继承的预设不存在）")
+                        dupWarning.text = root.configVm.lastPresetError
+                            ? root.configVm.lastPresetError
+                            : qsTr("创建预设失败")
                         dupWarning.visible = true
                     }
                 }

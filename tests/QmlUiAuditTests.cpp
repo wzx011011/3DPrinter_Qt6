@@ -564,6 +564,9 @@ private slots:
   // Locks the upstream-compatible `.ini` export/import + the CreatePresetsDialog
   // QML + the ConfigViewModel request/signal wiring.
   void v50PresetIniAndCreateDialogWired();
+  // Wave 6: only the supported local directory JSON format may be advertised,
+  // and the dialog must forward explicit content selection to the service.
+  void exportPresetBundleUsesSupportedFormatAndSelection();
   // Phase 148 (PSET-03/04): UnsavedChangesDialog + Simple/Advanced filter gate.
   // Both pieces were largely wired pre-v5.0; this slot anchors that they remain
   // intact + the C++ filter rule is real (advancedMode toggles comAdvanced+).
@@ -7613,12 +7616,44 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
            "PSET-02: SettingsDialog must instantiate CreatePresetsDialog");
   QVERIFY2(settingsDialog.contains(QStringLiteral("onCreatePresetRequired")),
            "PSET-02: SettingsDialog must bind onCreatePresetRequired to open the dialog");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("presetIndexForName")),
+           "PSET2-W6: SettingsDialog must normalize decorated preset labels before selecting");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("restoreAllSystemValues()")),
+           "PSET2-W6: SettingsDialog restore action must use the ConfigViewModel API");
+  QVERIFY2(createDialog.contains(QStringLiteral("root.configVm.lastPresetError")),
+           "PSET2-W6: CreatePresetsDialog must surface the real ConfigViewModel failure");
+  QVERIFY2(presetSvc.contains(QStringLiteral("hasPresetChildren")),
+           "PSET2-W6: PresetServiceMock must protect inherited preset trees");
 
   // PSET-02: ConfigViewModel exposes the request/signal pair.
   QVERIFY2(configVmH.contains(QStringLiteral("requestCreatePreset")),
            "PSET-02: ConfigViewModel must expose requestCreatePreset Q_INVOKABLE");
   QVERIFY2(configVmH.contains(QStringLiteral("createPresetRequired")),
            "PSET-02: ConfigViewModel must declare createPresetRequired signal");
+}
+
+void QmlUiAuditTests::exportPresetBundleUsesSupportedFormatAndSelection()
+{
+  const QString dialog = readSource(QStringLiteral("src/qml_gui/dialogs/ExportPresetBundleDialog.qml"));
+  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+  const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
+  QVERIFY2(!dialog.isEmpty(), "Unable to read ExportPresetBundleDialog.qml");
+  QVERIFY2(dialog.contains(QStringLiteral("selectedPresets")),
+           "Wave 6: preset bundle dialog must keep explicit selected content");
+  QVERIFY2(dialog.contains(QStringLiteral("exportBundleIni(path, selected)")),
+           "Wave 6: dialog must pass selected presets to the export API");
+  QVERIFY2(dialog.contains(QStringLiteral("userPresetNamesForCategory")),
+           "Wave 6: dialog must expose only exportable user presets");
+  QVERIFY2(dialog.contains(QStringLiteral(".zip 或 .bbscfg")),
+           "Wave 6: dialog must disclose unsupported zip/bbscfg formats");
+  QVERIFY2(dialog.contains(QStringLiteral("分类 JSON 文件 + index.json")),
+           "Wave 6: dialog must name the supported local directory format");
+  QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundleIni(const QString &dirPath, const QStringList &presetNames)")),
+           "Wave 6: PresetServiceMock must support selected-content export");
+  QVERIFY2(presetSvcH.contains(QStringLiteral("userPresetNamesForCategory")),
+           "Wave 6: PresetServiceMock must expose exportable user presets");
+  QVERIFY2(configVmH.contains(QStringLiteral("exportBundleIni(const QString &dirPath, const QStringList &presetNames)")),
+           "Wave 6: ConfigViewModel must expose selected-content export to QML");
 }
 
 void QmlUiAuditTests::v50UnsavedChangesAndFilterWired()
@@ -11016,9 +11051,23 @@ void QmlUiAuditTests::deadControlEliminationAudit()
                && speedDlg.contains(QStringLiteral("rows.splice(")),
            "SPEEDLIMIT: add/remove must mutate limitItems");
 
-  // PreferencesPage check-now drives the same backend entry point.
-  QVERIFY2(prefsPage.contains(QStringLiteral("checkForUpdates")),
-           "PREFS: the check-now button must call backend.checkForUpdates");
-  QVERIFY2(!prefsPage.contains(QStringLiteral("更新检查功能需要连接更新服务器后启用")),
-           "PREFS: the mock-mode excuse caption must not return");
+  // Wave 6 local-only preferences use a real staged Apply/Cancel transaction.
+  // Real integrations stay wired (the update check drives the real release
+  // query; the Advanced launchers open the real probe/diagnostics dialogs with
+  // honest in-dialog capability states). Genuinely unavailable cloud/device
+  // surfaces stay explicit instead of being persistence-only knobs.
+  QVERIFY2(prefsPage.contains(QStringLiteral("applyPreferences"))
+               && prefsPage.contains(QStringLiteral("cancelPreferences")),
+           "PREFS: Apply and Cancel must use the SettingsViewModel transaction API");
+  QVERIFY2(prefsPage.contains(QStringLiteral("backend.checkForUpdates()"))
+               && prefsPage.contains(QStringLiteral("onUpdateCheckFinished")),
+           "PREFS: the update check must drive the real BackendContext release query");
+  QVERIFY2(prefsPage.contains(QStringLiteral("networkTestDialog.open()"))
+               && prefsPage.contains(QStringLiteral("troubleshootDialog.open()")),
+           "PREFS: the diagnostics dialogs must keep their launcher entries");
+  QVERIFY2(prefsPage.contains(QStringLiteral("云端备份依赖云服务，当前不可用"))
+               && prefsPage.contains(QStringLiteral("文件关联和单实例运行")),
+           "PREFS: unavailable cloud and platform integrations must be explicit");
+  QVERIFY2(!prefsPage.contains(QStringLiteral("setAutoUpload")),
+           "PREFS: device auto-upload has no transport and must stay removed");
 }

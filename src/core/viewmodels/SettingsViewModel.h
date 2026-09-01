@@ -191,10 +191,17 @@ public slots:
   void setAiPort(int v);
   void setCurrentPreset(const QString &preset);
   void setLayerHeight(double h);
+  /// Commit the current local preference draft to QSettings. Runtime consumers
+  /// already see draft values so appearance and viewport changes can be previewed.
+  Q_INVOKABLE void applyPreferences();
+  /// Discard the current draft and restore the values from the last local commit.
+  Q_INVOKABLE void cancelPreferences();
   Q_INVOKABLE void resetPreferences();
 
 private:
   void loadFromSettings();
+  void saveToSettings() const;
+  void notifyPreferencesRestored();
 
   int m_prefCategory = 0;
   int m_fontSize = 12;
