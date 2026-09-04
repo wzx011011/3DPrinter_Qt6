@@ -129,6 +129,12 @@ public:
   /// are not). Refuses when the name is unknown, builtin, or read-only.
   bool overwriteUserPreset(int category, const QString &name,
                            const QHash<QString, QVariant> &values);
+  /// G-13: Detach — cut a USER preset's inheritance link, flattening the
+  /// parent-resolved chain overlaid with `values` into a standalone preset
+  /// (upstream "detach from system preset" flow). The name and selection are
+  /// unchanged; builtin/read-only presets are refused.
+  bool detachPresetFromParent(int category, const QString &name,
+                              const QHash<QString, QVariant> &values);
   /// v5.16 (PSET2-03): merge `values` into an existing user preset without
   /// replacing its other keys and persist to disk. This is the Transfer
   /// primitive (upstream UnsavedChangesDialog Action::Transfer,

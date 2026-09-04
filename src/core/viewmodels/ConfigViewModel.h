@@ -169,6 +169,12 @@ public:
   /// (upstream SavePresetDialog replace path). Keeps the current selection;
   /// fails for builtin/read-only targets.
   Q_INVOKABLE bool overwriteUserPreset(int category, const QString &name);
+  /// G-13: Detach — flatten an inherited USER preset (cut the inherits link,
+  /// the resolved values become its own) and persist it. Keeps the current
+  /// selection; fails for builtin/read-only targets.
+  Q_INVOKABLE bool detachPresetFromParent(int category, const QString &name);
+  /// G-13: name of the parent preset `name` inherits from (empty = none).
+  Q_INVOKABLE QString presetInheritsParent(const QString &name) const;
   Q_INVOKABLE bool deletePreset(int category, const QString &name);
   Q_INVOKABLE bool renamePreset(int category, const QString &oldName, const QString &newName);
   Q_INVOKABLE bool canDeletePreset(const QString &name) const;

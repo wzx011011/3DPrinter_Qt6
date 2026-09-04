@@ -86,6 +86,13 @@ CxDialog {
             && root.userPresetNamesForTier(root.presetTier).indexOf(name) >= 0
     }
 
+    /// G-13: current preset's parent (non-empty = inherited from a
+    /// system/vendor preset, so the upstream "detach" option applies).
+    function currentPresetParent() {
+        return (configVm && currentPresetNameForTier().length > 0)
+            ? configVm.presetInheritsParent(currentPresetNameForTier()) : ""
+    }
+
     /// G-13 (upstream SavePresetDialog.cpp:191-232): name legality beyond
     /// duplicates — forbidden filesystem characters and the reserved
     /// "Default" prefix used by bundled presets.
@@ -186,6 +193,17 @@ CxDialog {
                 }
             }
 
+            // G-13: Detach option -- applies when saving over the CURRENT
+            // preset and that preset inherits from a system/vendor parent
+            // (upstream SavePresetDialog.cpp:135-165 detach branch).
+            CxCheckBox {
+                id: detachFromParent
+                visible: nameInput.text.trim() === root.currentPresetNameForTier()
+                    && root.currentPresetParent().length > 0
+                text: qsTr("脱离继承的系统预设（Detach）")
+                font.pixelSize: Theme.fontSizeXS
+            }
+
             // 重名/空名/非法名警告 + G-01 覆盖提示
             Text {
                 readonly property string typedName: nameInput.text.trim()
@@ -244,7 +262,12 @@ CxDialog {
                         // (warned replace), or create a NEW custom preset.
                         var ok
                         if (name === root.currentPresetNameForTier()) {
-                            ok = root.configVm.saveCurrentPreset()
+                            // G-13: Detach flattens the inherited preset with
+                            // the current edits; otherwise the normal
+                            // save-in-place runs.
+                            ok = root.detachFromParent.checked
+                                ? root.configVm.detachPresetFromParent(category, name)
+                                : root.configVm.saveCurrentPreset()
                         } else if (root.isOverwriteTarget(name)) {
                             ok = root.configVm.overwriteUserPreset(category, name)
                         } else {

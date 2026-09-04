@@ -261,6 +261,8 @@ private slots:
   void deletePlateUndoReconcilesDuplicateNamesByStableId();
   // G-04: storeProject3mf writes the thumbnail family + production strategy.
   void projectStoreWritesThumbnailFamily();
+  // G-13: Detach flattens an inherited user preset (cut the inherits link).
+  void detachFlattensInheritedUserPreset();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -4098,6 +4100,35 @@ void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
 void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
 {
   QSKIP("G-04 thumbnail-family store requires HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
+{
+  // G-13: Detach (upstream "detach from system preset") cuts the inherits
+  // link of a USER preset, keeping the resolved values as its own.
+  PresetServiceMock presets;
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.2);
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("MyProfile"), values,
+                                     QStringLiteral("Default")));
+  QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")),
+           QStringLiteral("Default"));
+
+  QVERIFY(presets.detachPresetFromParent(PresetServiceMock::PrintCat,
+                                         QStringLiteral("MyProfile"), values));
+  QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")), QString());
+  // The preset and its values survive the flatten.
+  QVERIFY(presets.hasPreset(QStringLiteral("MyProfile")));
+  QCOMPARE(presets.presetCategory(QStringLiteral("MyProfile")),
+           PresetServiceMock::PrintCat);
+}
+#else
+void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
+{
+  QSKIP("G-13 detach requires HAS_LIBSLIC3R");
 }
 #endif
 
