@@ -86,13 +86,28 @@ CxDialog {
             && root.userPresetNamesForTier(root.presetTier).indexOf(name) >= 0
     }
 
-    /// 校验：名称非空；重名仅允许覆盖当前预设（saveCurrentPreset）或既有用户
+    /// G-13 (upstream SavePresetDialog.cpp:191-232): name legality beyond
+    /// duplicates — forbidden filesystem characters and the reserved
+    /// "Default" prefix used by bundled presets.
+    readonly property var illegalNameRe: /[<>:"\/\\|?*\u0000-\u001f]/
+    function illegalNameError(name) {
+        if (illegalNameRe.test(name))
+            return qsTr("Preset name contains illegal characters.")
+        if (name.indexOf("Default") === 0)
+            return qsTr("'Default…' is a reserved name for bundled presets.")
+        return ""
+    }
+
+    /// 校验：名称非空合法；重名仅允许覆盖当前预设（saveCurrentPreset）或既有用户
     /// 预设（overwriteUserPreset），内建/厂商重名仍拒绝
     function isValidName() {
         var name = nameInput.text.trim()
         if (name.length === 0 || root.tierToCategory(root.presetTier) < 0) return false
         // Duplicate validation uses this dialog's tier, not shared page state.
         if (!configVm) return false
+        // G-13: filesystem-illegal characters and the reserved "Default"
+        // prefix (upstream SavePresetDialog.cpp:191-232).
+        if (root.illegalNameError(name) !== "") return false
         // R-P1.J: saving over the CURRENT preset's own name is the upstream
         // primary path (SavePresetDialog overwrite); the suggested name IS the
         // current preset name, so rejecting it made the suggested save
@@ -171,16 +186,21 @@ CxDialog {
                 }
             }
 
-            // 重名/空名警告 + G-01 覆盖提示
+            // 重名/空名/非法名警告 + G-01 覆盖提示
             Text {
                 readonly property string typedName: nameInput.text.trim()
+                readonly property string illegalReason: typedName.length > 0
+                    ? root.illegalNameError(typedName) : ""
                 readonly property bool overwriteHint: root.isOverwriteTarget(typedName)
                 readonly property bool blocked: (root.saveError.length > 0)
+                                               || (illegalReason !== "")
                                                || (!root.isValidName() && typedName.length > 0)
                 visible: blocked || overwriteHint
                 text: {
                     if (root.saveError.length > 0)
                         return root.saveError
+                    if (illegalReason !== "")
+                        return illegalReason
                     if (overwriteHint)
                         return qsTr("A preset with this name already exists and will be replaced.")
                     return qsTr("A preset with this name already exists. Choose another name.")
