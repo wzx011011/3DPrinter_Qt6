@@ -721,8 +721,15 @@ Item {
             anchors.fill: parent
             from: 1
             to: 1000
-            value: root.editorVm && root.editorVm.contextSourceObjectIndex >= 0
-                   ? root.editorVm.objectInstanceCount(root.editorVm.selectedObjectIndex) : 1
+        }
+        // G-07: refresh the spin box at open time — the one-shot declarative
+        // binding captured objectInstanceCount() when the menu was built, so
+        // the dialog kept showing a stale count for a different object and
+        // OK silently wrote the wrong number.
+        onOpened: {
+            const idx = root.editorVm ? root.editorVm.selectedObjectIndex : -1
+            instanceCount.value = (root.editorVm && idx >= 0)
+                ? root.editorVm.objectInstanceCount(idx) : 1
         }
     }
 
