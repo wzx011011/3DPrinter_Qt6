@@ -8232,7 +8232,7 @@ bool EditorViewModel::deletePlate(int plateIndex)
     // mesh refresh the viewport kept rendering the DELETED plate's meshes
     // (setCurrentPlateIndex() refreshes -- this path must too). Also revalidate
     // the selection, which can point past the remaining objects.
-    ensureValidObjectSelection();
+    ensureValidObjectSelection(true);
     refreshMeshCacheAndFitHint();
     emit stateChanged();
     return true;
