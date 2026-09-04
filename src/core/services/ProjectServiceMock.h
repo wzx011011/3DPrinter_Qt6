@@ -947,6 +947,10 @@ private:
   /// used inline). Writes the model + plate list + per-plate thumbnails.
   /// Returns false on failure (lastError_ set).
   bool storeProject3mf(const QString &filePath);
+  /// R-P0.4: OWzx plate filament-state sidecar shared by saveProject and
+  /// saveProjectAs so every save path writes the identical project payload.
+  /// Returns false on failure (lastError_ set).
+  bool writePlateFilamentStateSidecar(const QString &filePath);
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)

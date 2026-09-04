@@ -35,6 +35,10 @@ Item {
     signal newProjectRequested()
     signal openProjectRequested(string filePath)
     signal saveAsRequested()
+    /// R-P0.6: quit requests route to main.qml's guarded requestQuit() -- the
+    /// topbar must never call Qt.quit() directly (it bypasses the dirty-
+    /// project confirm, upstream MainFrame.cpp:443 close_with_confirm).
+    signal quitRequested()
     signal importModelRequested(string nameFilter)
     signal exportGcodeRequested()
     signal exportAllGcodeRequested()
@@ -116,7 +120,7 @@ Item {
                 MenuItem { text: qsTr("新建项目"); onTriggered: root.newProjectRequested() }
                 MenuItem { text: qsTr("打开项目..."); onTriggered: root.openProjectRequested("") }
                 MenuItem { text: qsTr("保存项目"); onTriggered: if (!backend.topbarSaveProject()) root.saveAsRequested() }
-                MenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
+                MenuItem { text: qsTr("退出"); onTriggered: root.quitRequested() }
             }
             Menu {
                 title: qsTr("编辑")
@@ -868,7 +872,7 @@ Item {
 
         CxMenuItem {
             text: qsTr("退出")
-            onTriggered: Qt.quit()
+            onTriggered: root.quitRequested()
         }
     }
 

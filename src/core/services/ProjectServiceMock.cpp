@@ -1205,8 +1205,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
         printableStates.append(printable);
 
-        const bool visible = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
-        visibleStates.append(visible);
+        // R-P0.5: same source as the printable mirror.
+        visibleStates.append(printable);
       }
     }
     else
@@ -2147,6 +2147,10 @@ bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
 #endif
 
   objectPrintableStates_[index] = printable;
+  // R-P0.5: keep the visibility mirror in lockstep (both mirrors describe the
+  // same ModelInstance::printable flag -- see setObjectVisible).
+  if (index < objectVisibleStates_.size())
+    objectVisibleStates_[index] = printable;
   lastError_.clear();
   emit projectChanged();
   return true;
@@ -5105,9 +5109,8 @@ int ProjectServiceMock::restoreFullObjectSnapshot(const QByteArray &snapshot, in
                                  : tr("默认模块"));
       const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
       objectPrintableStates_.append(pr);
-      objectVisibleStates_.append(o && !o->instances.empty()
-                                      ? o->instances.front()->is_printable()
-                                      : true);
+      // R-P0.5: seed the visibility mirror from the same source.
+      objectVisibleStates_.append(pr);
       if (o && !o->instances.empty() && o->instances.front())
       {
         const auto *inst = o->instances.front();
@@ -6383,8 +6386,9 @@ bool ProjectServiceMock::deleteObject(int index)
       const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
 
-      const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
-      objectVisibleStates_.append(vis);
+      // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
+      // from the SAME source (is_printable() previously let them diverge).
+      objectVisibleStates_.append(printable);
 
       // P0.5.1: 从真实实例同步变换（slic3r → GL）
       if (obj && !obj->instances.empty() && obj->instances.front())
@@ -8729,8 +8733,9 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
       const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
 
-      const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
-      objectVisibleStates_.append(vis);
+      // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
+      // from the SAME source (is_printable() previously let them diverge).
+      objectVisibleStates_.append(printable);
 
       // P0.5.1: 从真实实例同步变换（slic3r → GL）
       if (obj && !obj->instances.empty() && obj->instances.front())
@@ -8918,8 +8923,8 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
       const bool printable = o && !o->instances.empty() ? o->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
 
-      const bool vis = o && !o->instances.empty() ? o->instances.front()->is_printable() : true;
-      objectVisibleStates_.append(vis);
+      // R-P0.5: same source as the printable mirror.
+      objectVisibleStates_.append(printable);
     }
 
     // 新对象从 objectIndex 位置开始
@@ -10331,7 +10336,8 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           names << ((obj && !obj->name.empty()) ? QString::fromStdString(obj->name) : QObject::tr("对象 %1").arg(int(i + 1)));
           moduleNames << ((obj && !obj->module_name.empty()) ? QString::fromStdString(obj->module_name) : QObject::tr("默认模块"));
           printableStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
-          visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true);
+          // R-P0.5: same source as the printable mirror.
+          visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
         }
 
         if (loadedPlateNames.isEmpty())

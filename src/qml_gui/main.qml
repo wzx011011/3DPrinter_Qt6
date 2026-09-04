@@ -38,8 +38,11 @@ ApplicationWindow {
     readonly property int frameRadius: (backend.visualCompareMode) ? 0 : 18
     readonly property int prepareChromeHeight: 70
 
-    // The force-close bypass remains set through the Qt.quit-generated close
-    // event. Clearing it before Qt.quit would reopen the dirty-project guard.
+    // R-P0.6: force-close is set ONLY after the dirty-project guard is
+    // satisfied (confirm dialog accepted, or the project is clean).
+    // Qt.quit() never delivers a QCloseEvent, so every quit entry point
+    // (frameless X button, File>退出) must go through requestQuit() --
+    // a direct Qt.quit() silently bypasses the dirty-project confirm.
     property bool forceClose: false
     property string pendingGuardAction: ""
     property string pendingOpenPath: ""
@@ -60,6 +63,20 @@ ApplicationWindow {
     // 当前 tab-switch latency token (BBLTopbar 写入, Connections onCurrentPageChanged 收尾)
     // 替代旧的 pendingSwitchToken / pendingSwitchTargetPage（Plan 02-02 Pitfall 3 迁移）
     property int activeTabSwitchToken: -1
+
+    // R-P0.6 (upstream MainFrame.cpp:443 close_with_confirm): the shared
+    // quit entry point. Dirty projects get the confirm dialog; clean projects
+    // (or an approved forceClose) quit directly.
+    function requestQuit() {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+            root.pendingGuardAction = "quit"
+            root.pendingOpenPath = ""
+            newProjectDialog.open()
+            return
+        }
+        root.forceClose = true
+        Qt.quit()
+    }
 
     function requestNewProject() {
         if (backend.projectViewModel && backend.projectViewModel.isDirty) {
@@ -663,7 +680,8 @@ ApplicationWindow {
                 onBellClicked: notificationCenterPopup.open()
                 onWindowMinimizeRequested: root.showMinimized()
                 onWindowMaximizeRequested: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
-                onWindowCloseRequested: Qt.quit()
+                onWindowCloseRequested: root.requestQuit()
+                onQuitRequested: root.requestQuit()
                 onTitleBarDragStarted: if (root.visibility !== Window.Maximized) root.startSystemMove()
                 onTitleBarDoubleClicked: root.visibility === Window.Maximized ? root.showNormal() : root.showMaximized()
 
