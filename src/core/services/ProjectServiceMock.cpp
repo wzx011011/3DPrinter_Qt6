@@ -10058,7 +10058,17 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   Slic3r::StoreParams params;
   params.path = filePath.toUtf8().constData();
   params.model = model_;
-  params.strategy = Slic3r::SaveStrategy::Zip64;
+  // G-04: align the save strategy with upstream save_project
+  // (Plater.cpp:12136: strategy | Zip64; the project strategy carries
+  // FullPathSources + ShareMesh + SplitModel). FullPathSources preserves
+  // source references; ShareMesh dedups meshes shared by duplicated
+  // objects; SplitModel (0x1000|ProductionExt) enables the 3MF production
+  // layout the multi-plate/plate-data writer targets.
+  params.strategy = static_cast<Slic3r::SaveStrategy>(
+      static_cast<unsigned int>(Slic3r::SaveStrategy::Zip64)
+      | static_cast<unsigned int>(Slic3r::SaveStrategy::FullPathSources)
+      | static_cast<unsigned int>(Slic3r::SaveStrategy::ShareMesh)
+      | static_cast<unsigned int>(Slic3r::SaveStrategy::SplitModel));
   // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
   // WITHOUT a default member initializer and the empty StoreParams() {}
   // constructor does NOT zero it, so an unassigned params.config is a WILD
@@ -10113,9 +10123,20 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // store_bbs_3mf (called below at :5187) returns and the block exits past
   // the release_PlateData_list cleanup.
   std::vector<Slic3r::ThumbnailData> plateThumbs;
+  // G-04: per-view thumbnail families (upstream Plater.cpp:12131-12136 pushes
+  // no_light/top/picking vectors into StoreParams). A variant stays an
+  // INVALID placeholder when it was never captured -- the writer skips
+  // invalid entries (bbs_3mf.cpp is_valid guard), exactly upstream behaviour
+  // when generation is skipped.
+  std::vector<Slic3r::ThumbnailData> noLightThumbs;
+  std::vector<Slic3r::ThumbnailData> topThumbs;
+  std::vector<Slic3r::ThumbnailData> pickThumbs;
   if (m_plateList && m_plateList->plateCount() > 0)
   {
     plateThumbs.reserve(m_plateList->plateCount());
+    noLightThumbs.reserve(m_plateList->plateCount());
+    topThumbs.reserve(m_plateList->plateCount());
+    pickThumbs.reserve(m_plateList->plateCount());
     for (int i = 0; i < m_plateList->plateCount(); ++i)
     {
       const OWzx::PartPlate *p = m_plateList->plate(i);
@@ -10123,6 +10144,10 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
         plateThumbs.push_back(qimageToThumbnailData(p->thumbnail()));
       else
         plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
+      // G-04: view variants from the per-plate caches (null -> invalid).
+      noLightThumbs.push_back(qimageToThumbnailData(p ? p->noLightThumbnail() : QImage()));
+      topThumbs.push_back(qimageToThumbnailData(p ? p->topThumbnail() : QImage()));
+      pickThumbs.push_back(qimageToThumbnailData(p ? p->pickThumbnail() : QImage()));
     }
     // Take addresses of the non-const ThumbnailData entries and push as raw
     // pointers into StoreParams::thumbnail_data (vector<ThumbnailData*>,
@@ -10134,6 +10159,14 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
     // ThumbnailData*.)
     for (Slic3r::ThumbnailData &td : plateThumbs)
       params.thumbnail_data.push_back(&td);
+    // G-04: same lifetime contract for the three variant families (the
+    // noLight/top/pick locals declared above outlive store_bbs_3mf).
+    for (Slic3r::ThumbnailData &td : noLightThumbs)
+      params.no_light_thumbnail_data.push_back(&td);
+    for (Slic3r::ThumbnailData &td : topThumbs)
+      params.top_thumbnail_data.push_back(&td);
+    for (Slic3r::ThumbnailData &td : pickThumbs)
+      params.pick_thumbnail_data.push_back(&td);
   }
 
     // G-11: bounded retry with exponential backoff (50/200/800ms) -- the bbs

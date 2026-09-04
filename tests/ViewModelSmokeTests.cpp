@@ -259,6 +259,8 @@ private slots:
   void projectBackupWritesSnapshotFile();
   // G-06: delete-plate undo reconciles same-named objects by stable ObjectID.
   void deletePlateUndoReconcilesDuplicateNamesByStableId();
+  // G-04: storeProject3mf writes the thumbnail family + production strategy.
+  void projectStoreWritesThumbnailFamily();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -4043,6 +4045,59 @@ void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
 void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
 {
   QSKIP("G-06 duplicate-name undo reconciliation requires HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
+{
+  // G-04: storeProject3mf pushes the per-view thumbnail families (main +
+  // no_light/top/picking from the PartPlate variant caches) and saves under
+  // the production SaveStrategy (SplitModel|ShareMesh|FullPathSources|Zip64,
+  // Plater.cpp:12136-12143). The saved archive must round-trip: a fresh load
+  // restores both plates with thumbnails and meshes (the production strategy
+  // stays self-compatible with our reader).
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.addPlate());
+  QVERIFY(project.setCurrentPlateIndex(1));
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QCOMPARE(project.plateCount(), 2);
+
+  // Populate the plate thumbnail caches (16x16 solid PNG) so the writer has
+  // valid entries for the main family on both plates.
+  QByteArray png;
+  {
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    QImage img(16, 16, QImage::Format_RGBA8888);
+    img.fill(30);
+    img.save(&buf, "PNG");
+  }
+  const QString b64 = QString::fromLatin1(png.toBase64());
+  QVERIFY(project.setPlateThumbnailFromBase64(0, b64));
+  QVERIFY(project.setPlateThumbnailFromBase64(1, b64));
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.path() + QStringLiteral("/thumbs.3mf");
+  QVERIFY(project.saveProject(path));
+  QVERIFY(QFileInfo(path).size() > 0);
+
+  ProjectServiceMock reload;
+  QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+  QVERIFY(reload.loadFile(path));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(loadSpy.takeFirst().at(0).toBool());
+  QCOMPARE(reload.modelCount(), 2);
+  QCOMPARE(reload.plateCount(), 2);
+  QVERIFY(!reload.plateThumbnailBase64(0).isEmpty());
+  QVERIFY(!reload.plateThumbnailBase64(1).isEmpty());
+}
+#else
+void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
+{
+  QSKIP("G-04 thumbnail-family store requires HAS_LIBSLIC3R");
 }
 #endif
 

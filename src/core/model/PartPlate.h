@@ -157,6 +157,9 @@ class PartPlate {
   void setLocked(bool locked) {
     m_locked = locked;
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
+    m_noLightThumbnail = QImage();  // G-04: variants follow the main cache
+    m_topThumbnail = QImage();
+    m_pickThumbnail = QImage();
   }
 
   // ── Thumbnail cache (v3.2 Phase 30) ────────────────────────────────────
@@ -165,6 +168,20 @@ class PartPlate {
   QImage thumbnail() const { return m_thumbnail; }
   void setThumbnail(const QImage& img) { m_thumbnail = img; }
   bool hasThumbnail() const { return !m_thumbnail.isNull(); }
+
+  // ── G-04: per-view thumbnail variants ──────────────────────────────────
+  // Upstream caches no_light/top/picking variants per plate
+  // (PartPlate::no_light_thumbnail_data / top_thumbnail_data /
+  // pick_thumbnail_data, Plater.cpp:12051-12094) and stores all four
+  // families into the 3MF (StoreParams::no_light_thumbnail_data etc).
+  // Null = never captured; the writer skips invalid entries (bbs_3mf.cpp
+  // is_valid guard), matching upstream behaviour when generation is skipped.
+  QImage noLightThumbnail() const { return m_noLightThumbnail; }
+  void setNoLightThumbnail(const QImage& img) { m_noLightThumbnail = img; }
+  QImage topThumbnail() const { return m_topThumbnail; }
+  void setTopThumbnail(const QImage& img) { m_topThumbnail = img; }
+  QImage pickThumbnail() const { return m_pickThumbnail; }
+  void setPickThumbnail(const QImage& img) { m_pickThumbnail = img; }
 
   bool isPrintable() const { return m_printable; }
   void setPrintable(bool printable) { m_printable = printable; }
@@ -256,6 +273,9 @@ class PartPlate {
     m_obj_to_instance_set.insert({objIdx, instIdx});
     updateSliceReadiness();
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
+    m_noLightThumbnail = QImage();  // G-04: variants follow the main cache
+    m_topThumbnail = QImage();
+    m_pickThumbnail = QImage();
   }
 
   /// Removes (objIdx, instIdx) from the plate's instance membership.
@@ -265,6 +285,9 @@ class PartPlate {
     m_instance_outside_set.erase(key);
     updateSliceReadiness();
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
+    m_noLightThumbnail = QImage();  // G-04: variants follow the main cache
+    m_topThumbnail = QImage();
+    m_pickThumbnail = QImage();
   }
 
   /// Returns true if ANY instance of objIdx is on this plate.
@@ -276,6 +299,9 @@ class PartPlate {
     m_instance_outside_set.clear();
     updateSliceReadiness();
     m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
+    m_noLightThumbnail = QImage();  // G-04: variants follow the main cache
+    m_topThumbnail = QImage();
+    m_pickThumbnail = QImage();
   }
 
   /// True if no instances belong to this plate.
@@ -380,6 +406,10 @@ class PartPlate {
   /// Cached plate thumbnail (v3.2 Phase 30). Qt-native; invalidated on content
   /// change. Converted to Slic3r::ThumbnailData at the 3MF save boundary.
   QImage m_thumbnail;
+  /// G-04 (v5.17): per-view variant caches (no_light/top/picking), see above.
+  QImage m_noLightThumbnail;
+  QImage m_topThumbnail;
+  QImage m_pickThumbnail;
 
 #ifdef HAS_LIBSLIC3R
   /// Per-plate config override (upstream m_config, DynamicPrintConfig).
