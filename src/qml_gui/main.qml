@@ -922,12 +922,18 @@ ApplicationWindow {
             // wizard must APPLY the chosen printer/filament presets, not just
             // persist the vendor/model — otherwise the wizard's choices never
             // took effect and the app kept the previous presets.
+            // G-02: upstream load_presets also chains the print (process)
+            // preset; Qt6 selects the first available print preset, mirroring
+            // the chain's default pick.
             var dlg = configWizardDialog
             if (backend.configViewModel) {
                 if (dlg.selectedPrinter && dlg.selectedPrinter.length > 0)
                     backend.configViewModel.requestCurrentPrinterPreset(dlg.selectedPrinter)
                 if (dlg.selectedFilament && dlg.selectedFilament.length > 0)
                     backend.configViewModel.requestCurrentFilamentPreset(dlg.selectedFilament)
+                var printNames = backend.configViewModel.printPresetNames
+                if (printNames && printNames.length > 0)
+                    backend.configViewModel.requestCurrentPrintPreset(printNames[0])
             }
         }
     }

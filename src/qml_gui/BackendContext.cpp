@@ -1045,7 +1045,7 @@ bool BackendContext::topbarSaveProject()
   // per-QML-entry) so Ctrl+S and both File menus inherit it.
   if (!canSave())
   {
-    postError(tr("切片进行中，无法保存项目"), 1);
+    postError(tr("切片/任务进行中，暂无法保存项目"), 1);
     return false;
   }
 
@@ -1080,7 +1080,7 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   // R-P1.I: same mid-slice serialization gate as topbarSaveProject.
   if (!canSave())
   {
-    postError(tr("切片进行中，无法保存项目"), 1);
+    postError(tr("切片/任务进行中，暂无法保存项目"), 1);
     return false;
   }
 

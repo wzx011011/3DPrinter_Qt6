@@ -8900,7 +8900,10 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
     // 对齐上游：如果只有一个结果，表示无法拆分
     if (newObjects.size() <= 1)
     {
-      lastError_.clear();
+      // G-05: the object cannot be split -- surface it to the user instead of
+      // silently succeeding (upstream warning_catcher, Plater.cpp:5107
+      // "The selected object couldn't be split.").
+      lastError_ = tr("无法拆分：所选对象没有可分割的多个部分");
       emit projectChanged();
       return newIndices;
     }
