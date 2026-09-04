@@ -3343,9 +3343,14 @@ void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
            "W1A: SavePresetDialog must not use shared activePresetTier");
 
   // Duplicate and persistence failures remain in the modal; only a successful
-  // creation accepts it, and the ViewModel failure is rendered to the user.
-  QVERIFY2(saveDialog.contains(QStringLiteral("if (root.configVm.createCustomPreset(category, name)) {\n                            root.accept()")),
-           "W1A: SavePresetDialog must accept only after createCustomPreset succeeds");
+  // save accepts it, and the ViewModel failure is rendered to the user.
+  // R-P1.J: the save now routes through saveCurrentPreset (overwrite-current,
+  // the suggested name) OR createCustomPreset (new name) -- the anchor asserts
+  // BOTH paths exist and accept() is gated on the shared result.
+  QVERIFY2(saveDialog.contains(QStringLiteral("ok = root.configVm.saveCurrentPreset()"))
+               && saveDialog.contains(QStringLiteral("ok = root.configVm.createCustomPreset(category, name)"))
+               && saveDialog.contains(QStringLiteral("if (ok) {\n                            root.accept()")),
+           "W1A: SavePresetDialog must accept only after the save (overwrite or create) succeeds");
   QVERIFY2(saveDialog.contains(QStringLiteral("root.saveError = root.configVm.lastPresetError")),
            "W1A: SavePresetDialog must show the ViewModel save failure");
   QVERIFY2(configVmHeader.contains(QStringLiteral("lastPresetError"))
