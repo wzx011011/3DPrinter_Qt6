@@ -5,7 +5,8 @@
 // regression guard. Each check runs against BOTH the canonical live doc
 //   docs/v3.6-ui-inventory.md
 // and the frozen Phase 50 snapshot
-//   .planning/phases/50-screenshot-and-source-truth-inventory/50-INVENTORY.md
+//   .planning/milestones/v3.6-phases/50-screenshot-and-source-truth-inventory/50-INVENTORY.md
+// (archived from .planning/phases/50-... in commit 4da9eb3, R-T.2)
 // so a future drift in region count, schema, status/verification enum,
 // region-ID format, INV-02/03/04 coverage anchors, cleanup format, or
 // upstream citation fails the canonical verify with a doc-labeled message.
@@ -76,7 +77,10 @@ private:
   }
   static QString snapshotPath()
   {
-    return QStringLiteral(".planning/phases/50-screenshot-and-source-truth-inventory/50-INVENTORY.md");
+    // R-T.2: the Phase 50 directory was archived (commit 4da9eb3) from
+    // .planning/phases/50-screenshot-and-source-truth-inventory/ to
+    // .planning/milestones/v3.6-phases/. The frozen snapshot moved with it.
+    return QStringLiteral(".planning/milestones/v3.6-phases/50-screenshot-and-source-truth-inventory/50-INVENTORY.md");
   }
 };
 

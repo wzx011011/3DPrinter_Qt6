@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QTimer>
 
 namespace OWzx {
 namespace {
@@ -73,10 +74,20 @@ void McpHttpServer::onNewConnection() {
     connect(socket, &QTcpSocket::readyRead, this,
             [this, socket]() { onSocketReadyRead(socket); });
     connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
+    // R-P1.K: a partial request whose body never completes used to pin the
+    // socket forever (local processes could exhaust handles). Reap idle
+    // connections after 30s; every readyRead restarts the timer.
+    auto *idle = new QTimer(socket);
+    idle->setSingleShot(true);
+    idle->setInterval(30 * 1000);
+    connect(idle, &QTimer::timeout, socket, &QTcpSocket::disconnectFromHost);
+    idle->start();
   }
 }
 
 void McpHttpServer::onSocketReadyRead(QTcpSocket *socket) {
+  if (QTimer *idle = socket->findChild<QTimer *>())
+    idle->start();
   // One request per connection (Connection: close) — accumulate until the
   // full body per Content-Length is available, then dispatch.
   QByteArray buf = socket->property("buf").toByteArray();
@@ -101,8 +112,15 @@ void McpHttpServer::onSocketReadyRead(QTcpSocket *socket) {
 
   bool ok = false;
   const int contentLength = headerValue(headers, "Content-Length").toInt(&ok);
-  if (!ok || contentLength < 0 || body.size() < contentLength) {
-    socket->setProperty("buf", buf);  // wait for the rest
+  if (!ok || contentLength < 0) {
+    // R-P1.K: a malformed Content-Length is a bad request -- reject it
+    // instead of waiting forever for a body that was never promised.
+    sendHttpResponse(socket, 400, {});
+    socket->disconnectFromHost();
+    return;
+  }
+  if (contentLength > kMaxRequestBytes || body.size() < contentLength) {
+    socket->setProperty("buf", buf);  // wait for the rest (idle timer reaps)
     return;
   }
   if (handleRequest(socket, headers, body.left(contentLength))) {

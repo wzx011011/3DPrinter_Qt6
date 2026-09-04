@@ -39,6 +39,15 @@ class CliTests : public QObject
                QStringLiteral("/third_party/OrcaSlicer/resources/") + relative;
     }
 
+    static QString testModelPath(const QString &relative)
+    {
+        // R-T.1: repo-local CLI fixtures (tests/test_models/). The upstream
+        // submodule never shipped resources/test_models/, so Block20XY.stl
+        // lives with the tests that consume it.
+        return QString::fromUtf8(QT_TESTCASE_SOURCEDIR) +
+               QStringLiteral("/tests/test_models/") + relative;
+    }
+
     static QString findGcodeInDir(const QString &dir)
     {
         QDir d(dir);
@@ -129,7 +138,7 @@ private slots:
         QTemporaryDir tmpDir;
         QVERIFY(tmpDir.isValid());
         auto r = runCli({
-            QStringLiteral("--load"), modelPath(QStringLiteral("test_models/Block20XY.stl")),
+            QStringLiteral("--load"), testModelPath(QStringLiteral("Block20XY.stl")),
             QStringLiteral("--slice"),
             QStringLiteral("--output-dir"), tmpDir.path()
         }, 120000);

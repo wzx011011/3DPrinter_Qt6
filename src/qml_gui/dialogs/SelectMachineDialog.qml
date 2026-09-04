@@ -119,14 +119,32 @@ CxDialog {
                 CxButton {
                     text: qsTr("发送打印")
                     cxStyle: CxButton.Style.Primary
-                    enabled: deviceList.currentIndex >= 0
+                    // R-P1.E: require an online device AND a real G-code path.
+                    // Offline devices were selectable and accept() ran even
+                    // without a device VM or path (silent no-op shown as
+                    // success).
+                    enabled: {
+                        if (!root.deviceVm || root.gcodePath === "" || deviceList.currentIndex < 0)
+                            return false
+                        const dev = root.deviceVm.deviceAt(deviceList.currentIndex)
+                        return !!dev && dev.online === true
+                    }
                     onClicked: {
-                        if (root.deviceVm && root.gcodePath) {
-                            root.deviceVm.startPrint(deviceList.currentIndex, root.gcodePath)
-                        }
+                        root.deviceVm.startPrint(deviceList.currentIndex, root.gcodePath)
                         root.accept()
                     }
                 }
+            }
+
+            // R-P1.E: user-visible disclosure required by
+            // docs/依赖与协议边界审计.md -- the device stack is mock; real
+            // MQTT push to hardware is externally blocked.
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("演示模式：设备列表为本地模拟数据，发送为演示流程（真实设备推送依赖 MQTT，当前为外部阻塞项）。")
+                color: Theme.textTertiary
+                font.pixelSize: Theme.fontSizeXS
+                wrapMode: Text.Wrap
             }
         }
     }

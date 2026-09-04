@@ -370,6 +370,18 @@ Item {
                     visible: loginError !== ""
                 }
 
+                // R-P1.E: user-visible disclosure required by
+                // docs/依赖与协议边界审计.md -- cloud login/bind are local
+                // mocks (real `bambu_networking` is externally blocked), so a
+                // "success" here is a demo flow, not a real account login.
+                Label {
+                    text: qsTr("演示模式：登录/绑定为本地模拟，不会连接真实云服务（依赖 bambu_networking，外部阻塞）。")
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeXS
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
                 RowLayout {
                     Layout.alignment: Qt.AlignRight
                     spacing: 8
@@ -477,6 +489,15 @@ Item {
                         highlighted: true
                         onClicked: doBind()
                     }
+                }
+
+                // R-P1.E: mock bind disclosure (dependency-audit registry).
+                Label {
+                    text: qsTr("演示模式：绑定为本地模拟，不会连接真实设备（依赖 bambu_networking，外部阻塞）。")
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeXS
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
                 }
             }
 

@@ -57,54 +57,33 @@ CxDialog {
         }
 
         // File output path
+        // R-P1.E: show the REAL active slice result path (read-only). The old
+        // editable field carried a hardcoded "C:/Users/Output/print_job.gcode"
+        // placeholder that was never used by the send flow.
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingMD
-            Text { text: qsTr("输出路径"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; Layout.preferredWidth: 60 }
+            Text { text: qsTr("G-code"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; Layout.preferredWidth: 60 }
 
             Rectangle {
                 Layout.fillWidth: true
                 height: 28; radius: 4
                 color: Theme.bgInset
-                border.color: pathField.activeFocus ? Theme.accent : Theme.borderInput
+                border.color: Theme.borderInput
 
-                TextInput {
-                    id: pathField
+                Text {
                     anchors.fill: parent
                     anchors.leftMargin: 8; anchors.rightMargin: Theme.spacingMD
                     anchors.verticalCenter: parent.verticalCenter
                     verticalAlignment: TextInput.AlignVCenter
-                    text: "C:/Users/Output/print_job.gcode"
-                    color: Theme.chromeText
+                    text: root.editorVm && root.editorVm.lastGcodePath
+                          ? root.editorVm.lastGcodePath
+                          : qsTr("（暂无切片结果，请先切片）")
+                    color: root.editorVm && root.editorVm.lastGcodePath
+                           ? Theme.chromeText : Theme.textDisabled
                     font.pixelSize: Theme.fontSizeSM
-                    selectByMouse: true
+                    elide: Text.ElideRight
                 }
-            }
-
-            Rectangle {
-                width: 26; height: 28; radius: 4
-                color: browseHov.containsMouse ? Theme.borderInput : Theme.bgCard
-                Text { anchors.centerIn: parent; text: "📂"; font.pixelSize: Theme.fontSizeMD }
-                MouseArea {
-                    id: browseHov; anchors.fill: parent
-                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                }
-            }
-        }
-
-        // Quick options
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spacingXL
-            CheckBox {
-                text: qsTr("切片后自动发送")
-                checked: true
-                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; leftPadding: parent.indicator.width + 6 }
-            }
-            CheckBox {
-                text: qsTr("完成后通知")
-                checked: false
-                contentItem: Text { text: parent.text; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM; leftPadding: parent.indicator.width + 6 }
             }
         }
 
@@ -143,23 +122,40 @@ CxDialog {
             }
 
             // Print
+            // R-P1.E: the send flow needs BOTH a sliced G-code and the device
+            // VM. Previously it read a nonexistent `lastGcodePath` and opened
+            // SelectMachineDialog with an empty path + empty device list, which
+            // still accepted() -- a fake-completed print send. The button is
+            // now gated and disabled with an honest reason.
             Rectangle {
                 width: 80; height: 30; radius: 4
-                color: printHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
+                readonly property bool canPrint: root.editorVm !== null
+                    && (root.editorVm.lastGcodePath || "") !== ""
+                    && root.monitorVm !== null
+                color: !canPrint ? Theme.bgPressed
+                      : printHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
                 Text { anchors.centerIn: parent; text: qsTr("▶ 打印"); color: "white"; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                 MouseArea {
                     id: printHov; anchors.fill: parent
-                    hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    hoverEnabled: true
+                    cursorShape: parent.canPrint ? Qt.PointingHandCursor : Qt.ForbiddenCursor
+                    enabled: parent.canPrint
                     onClicked: {
-                        // v2.5 DEV-05: 切片后弹 SelectMachine 发送（对齐上游 SelectMachinePop）
-                        if (root.editorVm) root.editorVm.requestSlice()
-                        // 弹 SelectMachineDialog 选择设备发送（gcodePath 待 SliceService 完成后填充）
-                        selectMachineDialog.gcodePath = root.editorVm ? (root.editorVm.lastGcodePath || "") : ""
+                        selectMachineDialog.gcodePath = root.editorVm.lastGcodePath
                         selectMachineDialog.open()
                         root.close()
                     }
                 }
             }
+        }
+
+        Text {
+            Layout.fillWidth: true
+            visible: root.editorVm === null || (root.editorVm.lastGcodePath || "") === ""
+            text: qsTr("请先对当前平板切片，再发送打印。")
+            color: Theme.textDisabled
+            font.pixelSize: Theme.fontSizeXS
+            horizontalAlignment: Text.AlignHCenter
         }
     }
 
