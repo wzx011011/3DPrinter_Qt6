@@ -499,7 +499,7 @@ void SoftwareViewport::paint(QPainter *painter)
     ++count;
     minNs = std::min(minNs, dt);
     maxNs = std::max(maxNs, dt);
-    if (count >= 120) {
+    if (count >= 20) {  // Wave-final: 20-frame bucket so discrete remote repaints also produce samples
       PerfLog::event("swrender.frame", accumNs / count,
                      QStringLiteral("min=%1 max=%2 n=%3")
                          .arg(double(minNs) / 1e6, 0, 'f', 2)
