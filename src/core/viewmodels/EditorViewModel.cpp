@@ -4942,6 +4942,13 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       statusText_ = QStringLiteral("切片完成");
       emit stateChanged();
     }
+    // G-03: hand the fresh G-code to the print flow (PrintDialog continues
+    // into SelectMachineDialog without demanding a prior manual slice).
+    {
+      const QString gcodePath = sliceService_ ? sliceService_->outputPath() : QString{};
+      if (!gcodePath.isEmpty())
+        emit printSliceReady(gcodePath);
+    }
     // Phase 239 (ENGN-01/02): complete the pending page switch that
     // switchToPreview() armed before kicking the reslice / previous-G-code
     // reuse (upstream reload_print lands in preview once the background

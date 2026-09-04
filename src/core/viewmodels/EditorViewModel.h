@@ -1671,6 +1671,11 @@ private slots:
 signals:
   void stateChanged();
   void paintDataChanged();
+  /// G-03: emitted on every successful slice with the fresh G-code path —
+  /// the print dialog listens for this to continue into device selection
+  /// after an on-demand slice (upstream Plater.cpp:7172 slices from the
+  /// print flow; BackgroundSlicingProcess finished -> send).
+  void printSliceReady(const QString &gcodePath);
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();
