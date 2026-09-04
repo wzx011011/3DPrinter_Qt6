@@ -1454,36 +1454,37 @@ void ProjectServiceMock::setProjectConfigOverlay(const QVariantMap &overlay)
 
 bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 {
+    // R-P0.4: "Save As" must produce the SAME archive as "Save" -- the full
+    // storeProject3mf writer (plate_data_list + per-plate thumbnails, upstream
+    // Plater::save_project -> export_3mf, Plater.cpp:12165) plus the OWzx
+    // plate filament-state sidecar. The previous inline Prusa-style
+    // store_3mf silently dropped ALL multi-plate state, so reloading a
+    // multi-plate project collapsed every object onto plate 1 with names /
+    // locks / thumbnails / filament maps lost (silent data loss).
 #ifdef HAS_LIBSLIC3R
+    if (loading_) {
+        lastError_ = tr("加载中，无法保存");
+        emit projectChanged();
+        return false;
+    }
     if (!model_) {
         qWarning("[Project] saveProjectAs: no model loaded");
         return false;
     }
-    // 构建 config（从当前 model 的 default config）
-    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
-    // v5.16 (PSET2-06): apply the preset-selection overlay (tier preset ids +
-    // filament_presets slot vector) as string options so they round-trip
-    // through the 3MF config like upstream's embedded PresetBundle state.
-    for (auto it = m_projectConfigOverlay.constBegin(); it != m_projectConfigOverlay.constEnd(); ++it) {
-        config.set_key_value(it.key().toStdString(),
-                             new Slic3r::ConfigOptionString(it.value().toString().toStdString()));
+    if (!storeProject3mf(filePath))
+        return false;
+    if (!writePlateFilamentStateSidecar(filePath)) {
+        emit projectChanged();
+        return false;
     }
-    // 调用 libslic3r store_3mf（Format/3mf.hpp:60）
-    // model_ 是裸指针 Slic3r::Model*（非 unique_ptr）
-    bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),
-                                model_,
-                                &config,
-                                false,   // fullpath_sources=false
-                                nullptr, // thumbnail=nullptr
-                                true);   // zip64=true
-    if (ok) {
-        qDebug("[Project] saved project to: %s", filePath.toUtf8().constData());
-        currentProjectPath_ = filePath;
-    } else {
-        qWarning("[Project] store_3mf failed for: %s", filePath.toUtf8().constData());
-    }
-    return ok;
+    currentProjectPath_ = filePath;
+    sourceFilePath_ = filePath;
+    projectName_ = QFileInfo(filePath).completeBaseName();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
 #else
+    Q_UNUSED(filePath)
     qWarning("[Project] saveProjectAs: HAS_LIBSLIC3R not enabled");
     return false;
 #endif
@@ -1492,27 +1493,23 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
-    // Phase 241 (PAGE-04): backup primitive. Same store_3mf payload as
-    // saveProjectAs, but currentProjectPath_ stays untouched so a backup
+    // Phase 241 (PAGE-04): backup primitive. Same FULL writer as saveProject
+    // (R-P0.4: the previous Prusa-style store_3mf dropped plate_data_list /
+    // thumbnails, so restoring a backup collapsed the project onto plate 1),
+    // but currentProjectPath_ / sourceFilePath_ stay untouched so a backup
     // never hijacks the user's current project (upstream backup_switch also
     // writes to a separate cache copy, not the project file).
+    if (loading_) {
+        lastError_ = tr("加载中，无法保存");
+        return false;
+    }
     if (!model_) {
         qWarning("[Project] writeProjectSnapshot: no model loaded");
         return false;
     }
-    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
-    for (auto it = m_projectConfigOverlay.constBegin(); it != m_projectConfigOverlay.constEnd(); ++it) {
-        config.set_key_value(it.key().toStdString(),
-                             new Slic3r::ConfigOptionString(it.value().toString().toStdString()));
-    }
-    const bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),
-                                      model_,
-                                      &config,
-                                      false,   // fullpath_sources=false
-                                      nullptr, // thumbnail=nullptr
-                                      true);   // zip64=true
+    const bool ok = storeProject3mf(filePath);
     if (!ok)
-        qWarning("[Project] snapshot store_3mf failed for: %s", filePath.toUtf8().constData());
+        qWarning("[Project] snapshot store failed for: %s", filePath.toUtf8().constData());
     else
         qDebug("[Project] project snapshot written: %s", filePath.toUtf8().constData());
     return ok;
@@ -1568,8 +1565,13 @@ bool ProjectServiceMock::exportModel(const QString &filePath, const QString &for
         combined.WriteOBJFile(nativePath.constData());
         return true;
     } else if (ext == "3mf") {
-        // 导出 3MF（复用 store_3mf）
-        return saveProjectAs(filePath);
+        // R-P0.4: export the FULL project archive (plate_data_list +
+        // thumbnails + overlay config) via writeProjectSnapshot -- the same
+        // writer as Save but WITHOUT project bookkeeping, so exporting a copy
+        // never hijacks currentProjectPath_/sourceFilePath_ (upstream
+        // "Export as 3MF" keeps the current project, Plater.cpp:12165 saves,
+        // export stays side-effect free).
+        return writeProjectSnapshot(filePath);
     }
     qWarning("[Project] exportModel: unsupported format %s", format.toUtf8().constData());
     return false;
@@ -2201,6 +2203,9 @@ bool ProjectServiceMock::setInstancePrintable(int objectIndex, int instanceIndex
     // objectPrintable() consumers agree with the first instance.
     if (objectIndex < objectPrintableStates_.size())
       objectPrintableStates_[objectIndex] = printable;
+    // R-P0.5: visibility mirror describes the same flag -- sync it too.
+    if (objectIndex < objectVisibleStates_.size())
+      objectVisibleStates_[objectIndex] = printable;
   }
   lastError_.clear();
   emit projectChanged();
@@ -2254,26 +2259,16 @@ bool ProjectServiceMock::objectVisible(int index) const
 
 bool ProjectServiceMock::setObjectVisible(int index, bool visible)
 {
-  if (loading_)
-    return false;
-
-  if (index < 0 || index >= objectVisibleStates_.size())
-    return false;
-
-#ifdef HAS_LIBSLIC3R
-  if (!model_ || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
-    return false;
-
-  for (auto *inst : model_->objects[size_t(index)]->instances)
-  {
-    if (inst)
-      inst->printable = visible;
-  }
-#endif
-
-  objectVisibleStates_[index] = visible;
-  emit projectChanged();
-  return true;
+  // R-P0.5: in the locked upstream snapshot there is ONE object-level flag,
+  // ModelInstance::printable -- the object-list "eye" IS the printable
+  // indicator (GUI_ObjectList.cpp:5833-5853 toggle_instance_printable), and
+  // unprintable instances are excluded from Print::apply. There is no
+  // render-only ModelVolume::visible in this tree, so visibility must route
+  // through the SAME write path as printable. Previously this wrote
+  // inst->printable directly while updating only objectVisibleStates_, so the
+  // printable mirror (object list eye column, P16.6 actions) silently drifted
+  // out of sync with the engine flag.
+  return setObjectPrintable(index, visible);
 }
 
 int ProjectServiceMock::objectVolumeCount(int index) const
@@ -8975,12 +8970,11 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
         if (cur) cur->addInstance(int(model_->objects.size()) - 1, 0);
       }
     }
-    // R-P1.C: add_object() copies, so the split() outputs must be freed --
-    // upstream load_model_objects deletes its inputs (Plater.cpp); they were
-    // leaked on every split before.
-    for (auto *newObj : newObjects)
-      delete newObj;
-    newObjects.clear();
+    // R-P1.C (review followup): the split() outputs are OWNED by tempModel --
+    // ModelObject's destructor is private and the copy-constructed tempModel
+    // registered them via Model::add_object during split (Model.cpp:1952), so
+    // tempModel's destructor frees them. Do NOT delete them here (C2248 /
+    // double-free); upstream relies on the clone's destructor the same way.
 
     // 重建元数据
     objectNames_.clear();
@@ -9879,6 +9873,42 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
 // (same body; saveProject keeps the plate-state JSON + bookkeeping on top).
 // Mirrors upstream Plater::export_3mf -> store_bbs_3mf with plate_data_list
 // populated (Plater.cpp:11462 for the sliced-file variant).
+/// R-P0.4: the OWzx plate filament-state sidecar (per-plate filamentMapMode +
+/// filamentMaps JSON appended next to the 3MF archive). Shared by saveProject
+/// and saveProjectAs so every save path produces the identical project payload.
+bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
+{
+  QJsonArray plateStates;
+  if (m_plateList)
+  {
+    for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex)
+    {
+      const OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
+      if (!plate)
+        continue;
+
+      QJsonObject plateState;
+      plateState.insert(QStringLiteral("index"), plateIndex);
+      plateState.insert(QStringLiteral("filamentMapMode"), int(plate->filamentMapMode()));
+      QJsonArray maps;
+      for (int map : plate->filamentMaps())
+        maps.append(map);
+      plateState.insert(QStringLiteral("filamentMaps"), maps);
+      plateStates.append(plateState);
+    }
+  }
+  QJsonObject stateRoot;
+  stateRoot.insert(QStringLiteral("version"), 1);
+  stateRoot.insert(QStringLiteral("plates"), plateStates);
+  if (!writeOwzxPlateFilamentStates(filePath,
+                                     QJsonDocument(stateRoot).toJson(QJsonDocument::Compact)))
+  {
+    lastError_ = tr("Unable to write OWzx plate state");
+    return false;
+  }
+  return true;
+}
+
 bool ProjectServiceMock::storeProject3mf(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
@@ -9895,11 +9925,23 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // constructor does NOT zero it, so an unassigned params.config is a WILD
   // pointer. store_bbs_3mf dereferences it after a `config != nullptr` guard
   // (bbs_3mf.cpp:6350) which is UB on a wild pointer and intermittently
-  // SEGFAULTs in _add_project_config_file_to_archive during ctest. We do not
-  // currently persist a global project config (Qt6 has no preset-bundle write
-  // path yet), so explicitly null it out to skip that writer branch. This is a
-  // pre-existing latent hazard independent of FMAP-02; tracked separately.
-  params.config = nullptr;
+  // SEGFAULTs in _add_project_config_file_to_archive during ctest.
+  // v5.16 (PSET2-06) + R-P0.4: the preset-selection overlay (tier preset ids +
+  // filament_presets slots) is embedded as the project config so it round-trips
+  // on reload (upstream embeds the PresetBundle selections in the 3MF config,
+  // Plater.cpp:12021 full_config_secure). overlayConfig lives in this scope
+  // for the whole store_bbs_3mf call, which keeps the borrowed pointer valid;
+  // an empty overlay keeps config == nullptr so the writer skips the config
+  // branch entirely (same as before).
+  Slic3r::DynamicPrintConfig overlayConfig;
+  for (auto it = m_projectConfigOverlay.constBegin();
+       it != m_projectConfigOverlay.constEnd(); ++it)
+  {
+    overlayConfig.set_key_value(it.key().toStdString(),
+                                new Slic3r::ConfigOptionString(
+                                    it.value().toString().toStdString()));
+  }
+  params.config = overlayConfig.keys().empty() ? nullptr : &overlayConfig;
 
   // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
   // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
@@ -10005,32 +10047,8 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     if (!storeProject3mf(filePath))
       return false;
 
-    QJsonArray plateStates;
-    if (m_plateList)
+    if (!writePlateFilamentStateSidecar(filePath))
     {
-      for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex)
-      {
-        const OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
-        if (!plate)
-          continue;
-
-        QJsonObject plateState;
-        plateState.insert(QStringLiteral("index"), plateIndex);
-        plateState.insert(QStringLiteral("filamentMapMode"), int(plate->filamentMapMode()));
-        QJsonArray maps;
-        for (int map : plate->filamentMaps())
-          maps.append(map);
-        plateState.insert(QStringLiteral("filamentMaps"), maps);
-        plateStates.append(plateState);
-      }
-    }
-    QJsonObject stateRoot;
-    stateRoot.insert(QStringLiteral("version"), 1);
-    stateRoot.insert(QStringLiteral("plates"), plateStates);
-    if (!writeOwzxPlateFilamentStates(filePath,
-                                       QJsonDocument(stateRoot).toJson(QJsonDocument::Compact)))
-    {
-      lastError_ = tr("Unable to write OWzx plate state");
       emit projectChanged();
       return false;
     }
