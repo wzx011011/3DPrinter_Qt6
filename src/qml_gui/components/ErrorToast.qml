@@ -225,9 +225,20 @@ Item {
 
                     // Hint index
                     Text {
-                        text: backend.currentHintIndex() >= 0
-                              ? (backend.currentHintIndex() + 1) + "/" + backend.hintCount()
-                              : ""
+                        id: hintCounter
+                        // G-07: re-read the counter on hint-cursor moves —
+                        // currentHintIndex()/hintCount() are Q_INVOKABLEs whose
+                        // one-shot binding kept the creation-time counter.
+                        property int refreshTick: 0
+                        Connections {
+                            target: backend
+                            function onDailyTipChanged() { ++hintCounter.refreshTick }
+                        }
+                        text: {
+                            const tick = hintCounter.refreshTick  // re-evaluate per move
+                            return backend.currentHintIndex() >= 0
+                                  ? (backend.currentHintIndex() + 1) + "/" + backend.hintCount() : ""
+                        }
                         color: Theme.textTertiary
                         font.pixelSize: Theme.fontSizeXS
                     }

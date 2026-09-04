@@ -10,6 +10,14 @@ Rectangle {
     id: root
     required property var editorVm
     required property var configVm
+    // G-07: filament compatibility comes from a Q_INVOKABLE (one-shot in
+    // bindings). Bump this tick on every configVm state change so the row
+    // decorations re-evaluate instead of keeping stale preset-compat state.
+    property int compatRefreshTick: 0
+    Connections {
+        target: root.configVm
+        function onStateChanged() { ++root.compatRefreshTick }
+    }
     property string processCategory: ""
     signal exportRequested()
 
@@ -167,7 +175,9 @@ Rectangle {
                     radius: 4
                     color: root.sectionSurface
                     border.width: 1
-                    border.color: root.configVm && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index) ? Theme.statusError : root.dividerColor
+                    border.color: root.compatRefreshTick >= 0
+                        ? (root.configVm && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index) ? Theme.statusError : root.dividerColor)
+                        : root.dividerColor
 
                     RowLayout {
                         anchors.fill: parent
@@ -238,7 +248,8 @@ Rectangle {
                         }
 
                         Rectangle {
-                            visible: !!root.configVm && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index)
+                            visible: root.compatRefreshTick >= 0 && !!root.configVm
+                                     && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index)
                             Layout.preferredWidth: 8
                             Layout.preferredHeight: 8
                             radius: 4

@@ -7,6 +7,12 @@ Item {
     id: root
 
     required property var editorVm
+
+    // G-07: bumped whenever a context menu is about to show. Dynamic item
+    // texts below reference this tick so their one-shot Q_INVOKABLE bindings
+    // re-evaluate at every popup instead of keeping creation-time values.
+    property int menuRefreshTick: 0
+
     signal requestAddModels()
     signal requestReplacePart()
     signal requestReplaceAll()
@@ -57,19 +63,32 @@ Item {
     component FlushOptionsSubmenu: CxMenu {
         title: qsTr("Flush Options")
         enabled: root.editorVm && root.editorVm.contextActionAvailable("flushOptions")
+        onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
-            text: (root.editorVm && root.editorVm.flushOptionValue(0) ? "  [x] " : "  [  ] ")
-                  + qsTr("Flush into objects' infill")
+            // G-07: the text references menuRefreshTick (bumped in
+            // onAboutToShow) so the check mark re-reads flushOptionValue()
+            // at every popup instead of keeping the build-time value.
+            text: {
+                const tick = root.menuRefreshTick
+                return (root.editorVm && root.editorVm.flushOptionValue(0) ? "  [x] " : "  [  ] ")
+                       + qsTr("Flush into objects' infill")
+            }
             onTriggered: if (root.editorVm) root.editorVm.toggleFlushOption(0)
         }
         CxMenuItem {
-            text: (root.editorVm && root.editorVm.flushOptionValue(1) ? "  [x] " : "  [  ] ")
-                  + qsTr("Flush into this object")
+            text: {
+                const tick = root.menuRefreshTick
+                return (root.editorVm && root.editorVm.flushOptionValue(1) ? "  [x] " : "  [  ] ")
+                       + qsTr("Flush into this object")
+            }
             onTriggered: if (root.editorVm) root.editorVm.toggleFlushOption(1)
         }
         CxMenuItem {
-            text: (root.editorVm && root.editorVm.flushOptionValue(2) ? "  [x] " : "  [  ] ")
-                  + qsTr("Flush into objects' support")
+            text: {
+                const tick = root.menuRefreshTick
+                return (root.editorVm && root.editorVm.flushOptionValue(2) ? "  [x] " : "  [  ] ")
+                       + qsTr("Flush into objects' support")
+            }
             onTriggered: if (root.editorVm) root.editorVm.toggleFlushOption(2)
         }
     }
@@ -168,6 +187,7 @@ Item {
 
     CxMenu {
         id: objectMenu
+        onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
             text: qsTr("Add instance")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("addInstance")
@@ -253,8 +273,11 @@ Item {
             CxMenuItem { text: qsTr("Mirror Z"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
         }
         CxMenuItem {
-            text: root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
-                  ? qsTr("Set unprintable") : qsTr("Set printable")
+            text: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return (root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
+                       ? qsTr("Set unprintable") : qsTr("Set printable")
+            }
             enabled: root.editorVm && root.editorVm.contextActionAvailable("printable")
             onTriggered: root.editorVm.setSelectedObjectsPrintable(
                              !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
@@ -488,6 +511,7 @@ Item {
 
     CxMenu {
         id: multiMenu
+        onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
             text: qsTr("Merge")
             enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
@@ -553,8 +577,11 @@ Item {
         // P16.6: printable toggle follows the first selected object's state
         // (upstream append_menu_item_set_printable, GUI_Factories.cpp:1963)
         CxMenuItem {
-            text: root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
-                  ? qsTr("Set unprintable") : qsTr("Set printable")
+            text: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return (root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
+                       ? qsTr("Set unprintable") : qsTr("Set printable")
+            }
             enabled: root.editorVm && root.editorVm.contextActionAvailable("printable")
             onTriggered: root.editorVm.setSelectedObjectsPrintable(
                              !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
@@ -595,6 +622,7 @@ Item {
 
     CxMenu {
         id: plateMenu
+        onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
             text: qsTr("Select all objects")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateSelect")
@@ -671,14 +699,20 @@ Item {
             onTriggered: root.requestPlateSettings()
         }
         CxMenuItem {
-            text: root.editorVm && root.editorVm.isPlateLocked(root.editorVm.contextPlateIndex)
-                  ? qsTr("Unlock plate") : qsTr("Lock plate")
+            text: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return (root.editorVm && root.editorVm.isPlateLocked(root.editorVm.contextPlateIndex))
+                       ? qsTr("Unlock plate") : qsTr("Lock plate")
+            }
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateLock")
             onTriggered: root.editorVm.togglePlateLocked(root.editorVm.contextPlateIndex)
         }
         CxMenuItem {
-            text: root.editorVm && root.editorVm.isPlatePrintable(root.editorVm.contextPlateIndex)
-                  ? qsTr("Set plate unprintable") : qsTr("Set plate printable")
+            text: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return (root.editorVm && root.editorVm.isPlatePrintable(root.editorVm.contextPlateIndex))
+                       ? qsTr("Set plate unprintable") : qsTr("Set plate printable")
+            }
             enabled: root.editorVm && root.editorVm.contextActionAvailable("platePrintable")
             onTriggered: root.editorVm.setPlatePrintable(root.editorVm.contextPlateIndex,
                 !root.editorVm.isPlatePrintable(root.editorVm.contextPlateIndex))
