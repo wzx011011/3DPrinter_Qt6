@@ -18,6 +18,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QBuffer>
+#include <QThread>
 #include <algorithm>
 #include <QMetaObject>
 #include <QPointer>
@@ -4984,7 +4985,18 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
     Slic3r::ThumbnailData *thumbPlaceholder = new Slic3r::ThumbnailData();
     params.thumbnail_data.push_back(thumbPlaceholder);
 
-    const bool stored = Slic3r::store_bbs_3mf(params);
+    // G-11 lesson: the bbs writer writes "<final>.tmp" and renames it into
+    // place; under full-suite file churn (antivirus/indexer briefly holding
+    // freshly created files) the rename can fail transiently -- this flaked
+    // projectBackupWritesSnapshotFile in-suite while passing standalone.
+    // Bounded retry with a short backoff.
+    bool stored = false;
+    for (int attempt = 0; attempt < 3 && !stored; ++attempt)
+    {
+      if (attempt > 0)
+        QThread::msleep(60);
+      stored = Slic3r::store_bbs_3mf(params);
+    }
     delete scratchPlate;
     delete thumbPlaceholder;
     if (!stored)
@@ -10032,7 +10044,14 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   bool ok = false;
   try
   {
-    ok = Slic3r::store_bbs_3mf(params);
+    // G-11: bounded retry for the writer's transient ".tmp" rename failure
+    // (same flake class as captureFullObjectSnapshot -- see the comment there).
+    for (int attempt = 0; attempt < 3 && !ok; ++attempt)
+    {
+      if (attempt > 0)
+        QThread::msleep(60);
+      ok = Slic3r::store_bbs_3mf(params);
+    }
   }
   catch (const std::exception &ex)
   {
