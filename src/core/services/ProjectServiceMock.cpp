@@ -4991,10 +4991,11 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
     // projectBackupWritesSnapshotFile in-suite while passing standalone.
     // Bounded retry with a short backoff.
     bool stored = false;
+    const int backoffMs[] = {0, 200, 800};
     for (int attempt = 0; attempt < 3 && !stored; ++attempt)
     {
       if (attempt > 0)
-        QThread::msleep(60);
+        QThread::msleep(backoffMs[attempt]);
       stored = Slic3r::store_bbs_3mf(params);
     }
     delete scratchPlate;
@@ -10041,18 +10042,21 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
       params.thumbnail_data.push_back(&td);
   }
 
-  bool ok = false;
-  try
-  {
-    // G-11: bounded retry for the writer's transient ".tmp" rename failure
-    // (same flake class as captureFullObjectSnapshot -- see the comment there).
-    for (int attempt = 0; attempt < 3 && !ok; ++attempt)
+    // G-11: bounded retry with exponential backoff (50/200/800ms) -- the bbs
+    // writer's ".tmp" rename can be blocked briefly by antivirus/indexer file
+    // holds under full-suite churn. When all attempts fail, the qWarning
+    // diagnostics above name the observable cause.
+    bool ok = false;
+    try
     {
-      if (attempt > 0)
-        QThread::msleep(60);
-      ok = Slic3r::store_bbs_3mf(params);
+      const int backoffMs[] = {0, 200, 800};
+      for (int attempt = 0; attempt < 3 && !ok; ++attempt)
+      {
+        if (attempt > 0)
+          QThread::msleep(backoffMs[attempt]);
+        ok = Slic3r::store_bbs_3mf(params);
+      }
     }
-  }
   catch (const std::exception &ex)
   {
     Slic3r::release_PlateData_list(plateData);  // free heap PlateData even on throw
@@ -10066,6 +10070,17 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
 
   if (!ok)
   {
+    // G-11 diagnostics: store_bbs_3mf returns bool only; log the observable
+    // state so in-suite failures name their cause.
+    QFileInfo outInfo(filePath);
+    qWarning("[Project] store_bbs_3mf failed path=%s dirExists=%d dirWritable=%d "
+             "outExists=%d tmpExists=%d plates=%d objects=%d",
+             filePath.toUtf8().constData(),
+             int(outInfo.dir().exists()), int(outInfo.isWritable()),
+             int(outInfo.exists()),
+             int(QFileInfo(outInfo.dir(), outInfo.fileName() + QStringLiteral(".tmp")).exists()),
+             m_plateList ? m_plateList->plateCount() : -1,
+             model_ ? int(model_->objects.size()) : -1);
     lastError_ = tr("3MF 保存失败");
     emit projectChanged();
     return false;
