@@ -1,0 +1,522 @@
+﻿2026-08-15T05:01:58.1195302Z ##[group]Run jurplel/install-qt-action@v4
+2026-08-15T05:01:58.1195692Z with:
+2026-08-15T05:01:58.1195877Z   version: 6.10.0
+2026-08-15T05:01:58.1196062Z   host: windows
+2026-08-15T05:01:58.1196254Z   target: desktop
+2026-08-15T05:01:58.1196436Z   arch: win64_msvc2022_64
+2026-08-15T05:01:58.1196648Z   modules: qtshadertools
+2026-08-15T05:01:58.1197079Z   install-deps: true
+2026-08-15T05:01:58.1197268Z   cache: false
+2026-08-15T05:01:58.1197477Z   cache-key-prefix: install-qt-action
+2026-08-15T05:01:58.1197733Z   setup-python: true
+2026-08-15T05:01:58.1197940Z   add-tools-to-path: true
+2026-08-15T05:01:58.1198145Z   set-env: true
+2026-08-15T05:01:58.1198337Z   no-qt-binaries: false
+2026-08-15T05:01:58.1198537Z   tools-only: false
+2026-08-15T05:01:58.1198723Z   aqtversion: ==3.3.*
+2026-08-15T05:01:58.1198917Z   py7zrversion: ==1.0.*
+2026-08-15T05:01:58.1199109Z   source: false
+2026-08-15T05:01:58.1199294Z   documentation: false
+2026-08-15T05:01:58.1199488Z   examples: false
+2026-08-15T05:01:58.1199717Z   use-official: false
+2026-08-15T05:01:58.1199900Z env:
+2026-08-15T05:01:58.1200064Z   TAG_NAME: v5.16
+2026-08-15T05:01:58.1200448Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T05:01:58.1201082Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T05:01:58.1201656Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T05:01:58.1202168Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T05:01:58.1202543Z   CommandPromptType: Native
+2026-08-15T05:01:58.1202900Z   DevEnvDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\
+2026-08-15T05:01:58.1203407Z   ExtensionSdkDir: C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs
+2026-08-15T05:01:58.1205658Z   EXTERNAL_INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:01:58.1207747Z   Framework40Version: v4.0
+2026-08-15T05:01:58.1208013Z   FrameworkDir: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:01:58.1208350Z   FrameworkDir64: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:01:58.1208646Z   FrameworkVersion: v4.0.30319
+2026-08-15T05:01:58.1208879Z   FrameworkVersion64: v4.0.30319
+2026-08-15T05:01:58.1209389Z   FSHARPINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools
+2026-08-15T05:01:58.1209971Z   HTMLHelpDir: C:\Program Files (x86)\HTML Help Workshop
+2026-08-15T05:01:58.1210435Z   IFCPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ifc\x64
+2026-08-15T05:01:58.1212647Z   INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:01:58.1216248Z   is_x64_arch: true
+2026-08-15T05:01:58.1217413Z   LIB: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\lib\um\x64;C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64;C:\Program Files (x86)\Windows Kits\10\\lib\10.0.26100.0\\um\x64
+2026-08-15T05:01:58.1220002Z   LIBPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x86\store\references;C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0;C:\Windows\Microsoft.NET\Framework64\v4.0.30319
+2026-08-15T05:01:58.1221604Z   NETFXSDKDir: C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\
+2026-08-15T05:01:58.1235851Z   Path: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\VCPackages;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\bin\Roslyn;C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\;C:\Program Files (x86)\HTML Help Workshop;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Team Tools\DiagnosticsHub\Collector;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\Llvm\x64\bin;C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\\x64;C:\Program Files (x86)\Windows Kits\10\bin\\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\\MSBuild\Current\Bin\amd64;C:\Windows\Microsoft.NET\Framework64\v4.0.30319;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\;D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\Linux\bin\ConnectionManagerExe;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:01:58.1250681Z   Platform: x64
+2026-08-15T05:01:58.1250873Z   UCRTVersion: 10.0.26100.0
+2026-08-15T05:01:58.1251176Z   UniversalCRTSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:01:58.1251661Z   VCIDEInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\
+2026-08-15T05:01:58.1252180Z   VCINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\
+2026-08-15T05:01:58.1252667Z   VCPKG_ROOT: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:01:58.1253229Z   VCToolsInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\
+2026-08-15T05:01:58.1253866Z   VCToolsRedistDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC\14.44.35112\
+2026-08-15T05:01:58.1254306Z   VCToolsVersion: 14.44.35207
+2026-08-15T05:01:58.1254542Z   VisualStudioVersion: 17.0
+2026-08-15T05:01:58.1254912Z   VS170COMNTOOLS: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\
+2026-08-15T05:01:58.1255313Z   VSCMD_ARG_app_plat: Desktop
+2026-08-15T05:01:58.1255539Z   VSCMD_ARG_HOST_ARCH: x64
+2026-08-15T05:01:58.1255751Z   VSCMD_ARG_TGT_ARCH: x64
+2026-08-15T05:01:58.1255963Z   VSCMD_VER: 17.14.37
+2026-08-15T05:01:58.1256264Z   VSINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\
+2026-08-15T05:01:58.1256745Z   VSSDK150INSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:01:58.1257233Z   VSSDKINSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:01:58.1257924Z   WindowsLibPath: C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0
+2026-08-15T05:01:58.1258584Z   WindowsSdkBinPath: C:\Program Files (x86)\Windows Kits\10\bin\
+2026-08-15T05:01:58.1258959Z   WindowsSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:01:58.1259259Z   WindowsSDKLibVersion: 10.0.26100.0\
+2026-08-15T05:01:58.1259618Z   WindowsSdkVerBinPath: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\
+2026-08-15T05:01:58.1259986Z   WindowsSDKVersion: 10.0.26100.0\
+2026-08-15T05:01:58.1260424Z   WindowsSDK_ExecutablePath_x64: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\
+2026-08-15T05:01:58.1261077Z   WindowsSDK_ExecutablePath_x86: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\
+2026-08-15T05:01:58.1261606Z   __DOTNET_ADD_64BIT: 1
+2026-08-15T05:01:58.1261816Z   __DOTNET_PREFERRED_BITNESS: 64
+2026-08-15T05:01:58.1270582Z   __VSCMD_PREINIT_PATH: D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files (x86)\sbt\bin;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer
+2026-08-15T05:01:58.1279684Z ##[endgroup]
+2026-08-15T05:01:58.1337773Z ##[start-action display=Setup Python;id=__jurplel_install-qt-action.__actions_setup-python]
+2026-08-15T05:01:58.1491380Z ##[group]Run actions/setup-python@v6
+2026-08-15T05:01:58.1491652Z with:
+2026-08-15T05:01:58.1491837Z   python-version: >=3.9.0 <=3.13.3
+2026-08-15T05:01:58.1492075Z   check-latest: false
+2026-08-15T05:01:58.1494792Z   token: ***
+2026-08-15T05:01:58.1494994Z   update-environment: true
+2026-08-15T05:01:58.1495227Z   allow-prereleases: false
+2026-08-15T05:01:58.1495433Z   freethreaded: false
+2026-08-15T05:01:58.1495619Z env:
+2026-08-15T05:01:58.1495780Z   TAG_NAME: v5.16
+2026-08-15T05:01:58.1496157Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T05:01:58.1496811Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T05:01:58.1497382Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T05:01:58.1497871Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T05:01:58.1498454Z   CommandPromptType: Native
+2026-08-15T05:01:58.1498812Z   DevEnvDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\
+2026-08-15T05:01:58.1499331Z   ExtensionSdkDir: C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs
+2026-08-15T05:01:58.1502315Z   EXTERNAL_INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:01:58.1504456Z   Framework40Version: v4.0
+2026-08-15T05:01:58.1504724Z   FrameworkDir: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:01:58.1505056Z   FrameworkDir64: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:01:58.1505349Z   FrameworkVersion: v4.0.30319
+2026-08-15T05:01:58.1505583Z   FrameworkVersion64: v4.0.30319
+2026-08-15T05:01:58.1506102Z   FSHARPINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools
+2026-08-15T05:01:58.1506679Z   HTMLHelpDir: C:\Program Files (x86)\HTML Help Workshop
+2026-08-15T05:01:58.1507138Z   IFCPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ifc\x64
+2026-08-15T05:01:58.1509346Z   INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:01:58.1511363Z   is_x64_arch: true
+2026-08-15T05:01:58.1512504Z   LIB: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\lib\um\x64;C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64;C:\Program Files (x86)\Windows Kits\10\\lib\10.0.26100.0\\um\x64
+2026-08-15T05:01:58.1514966Z   LIBPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x86\store\references;C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0;C:\Windows\Microsoft.NET\Framework64\v4.0.30319
+2026-08-15T05:01:58.1516548Z   NETFXSDKDir: C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\
+2026-08-15T05:01:58.1530735Z   Path: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\VCPackages;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\bin\Roslyn;C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\;C:\Program Files (x86)\HTML Help Workshop;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Team Tools\DiagnosticsHub\Collector;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\Llvm\x64\bin;C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\\x64;C:\Program Files (x86)\Windows Kits\10\bin\\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\\MSBuild\Current\Bin\amd64;C:\Windows\Microsoft.NET\Framework64\v4.0.30319;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\;D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\Linux\bin\ConnectionManagerExe;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:01:58.1545469Z   Platform: x64
+2026-08-15T05:01:58.1545675Z   UCRTVersion: 10.0.26100.0
+2026-08-15T05:01:58.1545975Z   UniversalCRTSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:01:58.1546459Z   VCIDEInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\
+2026-08-15T05:01:58.1547068Z   VCINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\
+2026-08-15T05:01:58.1547543Z   VCPKG_ROOT: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:01:58.1548109Z   VCToolsInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\
+2026-08-15T05:01:58.1548735Z   VCToolsRedistDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC\14.44.35112\
+2026-08-15T05:01:58.1549170Z   VCToolsVersion: 14.44.35207
+2026-08-15T05:01:58.1549393Z   VisualStudioVersion: 17.0
+2026-08-15T05:01:58.1549756Z   VS170COMNTOOLS: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\
+2026-08-15T05:01:58.1550164Z   VSCMD_ARG_app_plat: Desktop
+2026-08-15T05:01:58.1550378Z   VSCMD_ARG_HOST_ARCH: x64
+2026-08-15T05:01:58.1550585Z   VSCMD_ARG_TGT_ARCH: x64
+2026-08-15T05:01:58.1550785Z   VSCMD_VER: 17.14.37
+2026-08-15T05:01:58.1551077Z   VSINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\
+2026-08-15T05:01:58.1551548Z   VSSDK150INSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:01:58.1552061Z   VSSDKINSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:01:58.1552739Z   WindowsLibPath: C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0
+2026-08-15T05:01:58.1553370Z   WindowsSdkBinPath: C:\Program Files (x86)\Windows Kits\10\bin\
+2026-08-15T05:01:58.1553743Z   WindowsSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:01:58.1554043Z   WindowsSDKLibVersion: 10.0.26100.0\
+2026-08-15T05:01:58.1554403Z   WindowsSdkVerBinPath: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\
+2026-08-15T05:01:58.1554771Z   WindowsSDKVersion: 10.0.26100.0\
+2026-08-15T05:01:58.1555206Z   WindowsSDK_ExecutablePath_x64: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\
+2026-08-15T05:01:58.1555859Z   WindowsSDK_ExecutablePath_x86: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\
+2026-08-15T05:01:58.1556291Z   __DOTNET_ADD_64BIT: 1
+2026-08-15T05:01:58.1556500Z   __DOTNET_PREFERRED_BITNESS: 64
+2026-08-15T05:01:58.1565333Z   __VSCMD_PREINIT_PATH: D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files (x86)\sbt\bin;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer
+2026-08-15T05:01:58.1574365Z ##[endgroup]
+2026-08-15T05:01:58.3099931Z ##[group]Installed versions
+2026-08-15T05:01:58.3194961Z Successfully set up CPython (3.12.10)
+2026-08-15T05:01:58.3195806Z ##[endgroup]
+2026-08-15T05:01:58.3313297Z ##[end-action id=__jurplel_install-qt-action.__actions_setup-python;outcome=success;conclusion=success;duration_ms=197]
+2026-08-15T05:01:58.3316273Z ##[start-action display=Setup and run aqtinstall;id=__jurplel_install-qt-action.__jurplel_install-qt-action]
+2026-08-15T05:01:58.3447210Z ##[group]Run jurplel/install-qt-action/action@v4
+2026-08-15T05:01:58.3447530Z with:
+2026-08-15T05:01:58.3447720Z   version: 6.10.0
+2026-08-15T05:01:58.3447920Z   host: windows
+2026-08-15T05:01:58.3448103Z   target: desktop
+2026-08-15T05:01:58.3448290Z   arch: win64_msvc2022_64
+2026-08-15T05:01:58.3448499Z   install-deps: true
+2026-08-15T05:01:58.3448701Z   modules: qtshadertools
+2026-08-15T05:01:58.3448915Z   cache: false
+2026-08-15T05:01:58.3449121Z   cache-key-prefix: install-qt-action
+2026-08-15T05:01:58.3449404Z   add-tools-to-path: true
+2026-08-15T05:01:58.3449623Z   set-env: true
+2026-08-15T05:01:58.3449826Z   no-qt-binaries: false
+2026-08-15T05:01:58.3450038Z   tools-only: false
+2026-08-15T05:01:58.3450233Z   aqtversion: ==3.3.*
+2026-08-15T05:01:58.3450436Z   py7zrversion: ==1.0.*
+2026-08-15T05:01:58.3450639Z   source: false
+2026-08-15T05:01:58.3450944Z   documentation: false
+2026-08-15T05:01:58.3451300Z   examples: false
+2026-08-15T05:01:58.3451575Z   use-official: false
+2026-08-15T05:01:58.3451838Z env:
+2026-08-15T05:01:58.3452115Z   TAG_NAME: v5.16
+2026-08-15T05:01:58.3480842Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T05:01:58.3481602Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T05:01:58.3482218Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T05:01:58.3482744Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T05:01:58.3483120Z   CommandPromptType: Native
+2026-08-15T05:01:58.3483471Z   DevEnvDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\
+2026-08-15T05:01:58.3483973Z   ExtensionSdkDir: C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs
+2026-08-15T05:01:58.3486212Z   EXTERNAL_INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:01:58.3488744Z   Framework40Version: v4.0
+2026-08-15T05:01:58.3489026Z   FrameworkDir: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:01:58.3489364Z   FrameworkDir64: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:01:58.3489662Z   FrameworkVersion: v4.0.30319
+2026-08-15T05:01:58.3489901Z   FrameworkVersion64: v4.0.30319
+2026-08-15T05:01:58.3490419Z   FSHARPINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools
+2026-08-15T05:01:58.3490996Z   HTMLHelpDir: C:\Program Files (x86)\HTML Help Workshop
+2026-08-15T05:01:58.3491480Z   IFCPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ifc\x64
+2026-08-15T05:01:58.3493682Z   INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:01:58.3495710Z   is_x64_arch: true
+2026-08-15T05:01:58.3496851Z   LIB: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\lib\um\x64;C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64;C:\Program Files (x86)\Windows Kits\10\\lib\10.0.26100.0\\um\x64
+2026-08-15T05:01:58.3499311Z   LIBPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x86\store\references;C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0;C:\Windows\Microsoft.NET\Framework64\v4.0.30319
+2026-08-15T05:01:58.3500903Z   NETFXSDKDir: C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\
+2026-08-15T05:01:58.3515080Z   Path: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\VCPackages;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\bin\Roslyn;C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\;C:\Program Files (x86)\HTML Help Workshop;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Team Tools\DiagnosticsHub\Collector;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\Llvm\x64\bin;C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\\x64;C:\Program Files (x86)\Windows Kits\10\bin\\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\\MSBuild\Current\Bin\amd64;C:\Windows\Microsoft.NET\Framework64\v4.0.30319;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\;D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\Linux\bin\ConnectionManagerExe;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:01:58.3530837Z   Platform: x64
+2026-08-15T05:01:58.3531044Z   UCRTVersion: 10.0.26100.0
+2026-08-15T05:01:58.3531342Z   UniversalCRTSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:01:58.3531834Z   VCIDEInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\
+2026-08-15T05:01:58.3532350Z   VCINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\
+2026-08-15T05:01:58.3532824Z   VCPKG_ROOT: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:01:58.3533386Z   VCToolsInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\
+2026-08-15T05:01:58.3534131Z   VCToolsRedistDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC\14.44.35112\
+2026-08-15T05:01:58.3534575Z   VCToolsVersion: 14.44.35207
+2026-08-15T05:01:58.3534804Z   VisualStudioVersion: 17.0
+2026-08-15T05:01:58.3535254Z   VS170COMNTOOLS: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\
+2026-08-15T05:01:58.3535655Z   VSCMD_ARG_app_plat: Desktop
+2026-08-15T05:01:58.3535876Z   VSCMD_ARG_HOST_ARCH: x64
+2026-08-15T05:01:58.3536085Z   VSCMD_ARG_TGT_ARCH: x64
+2026-08-15T05:01:58.3536297Z   VSCMD_VER: 17.14.37
+2026-08-15T05:01:58.3536595Z   VSINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\
+2026-08-15T05:01:58.3537066Z   VSSDK150INSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:01:58.3537543Z   VSSDKINSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:01:58.3538212Z   WindowsLibPath: C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0
+2026-08-15T05:01:58.3538848Z   WindowsSdkBinPath: C:\Program Files (x86)\Windows Kits\10\bin\
+2026-08-15T05:01:58.3539216Z   WindowsSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:01:58.3539526Z   WindowsSDKLibVersion: 10.0.26100.0\
+2026-08-15T05:01:58.3539889Z   WindowsSdkVerBinPath: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\
+2026-08-15T05:01:58.3540259Z   WindowsSDKVersion: 10.0.26100.0\
+2026-08-15T05:01:58.3540700Z   WindowsSDK_ExecutablePath_x64: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\
+2026-08-15T05:01:58.3541363Z   WindowsSDK_ExecutablePath_x86: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\
+2026-08-15T05:01:58.3541800Z   __DOTNET_ADD_64BIT: 1
+2026-08-15T05:01:58.3542014Z   __DOTNET_PREFERRED_BITNESS: 64
+2026-08-15T05:01:58.3550708Z   __VSCMD_PREINIT_PATH: D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files (x86)\sbt\bin;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer
+2026-08-15T05:01:58.3559792Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:01:58.3560291Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
+2026-08-15T05:01:58.3560732Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:01:58.3561123Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:01:58.3561499Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:01:58.3561805Z ##[endgroup]
+2026-08-15T05:01:58.7851341Z [command]C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe -m pip install setuptools>=70.1.0 py7zr==1.0.*
+2026-08-15T05:02:03.2816870Z Collecting setuptools>=70.1.0
+2026-08-15T05:02:03.4634715Z   Downloading setuptools-84.0.0-py3-none-any.whl.metadata (6.6 kB)
+2026-08-15T05:02:03.5343758Z Collecting py7zr==1.0.*
+2026-08-15T05:02:03.5522224Z   Downloading py7zr-1.0.0-py3-none-any.whl.metadata (17 kB)
+2026-08-15T05:02:03.6439020Z Collecting texttable (from py7zr==1.0.*)
+2026-08-15T05:02:03.6624980Z   Downloading texttable-1.7.0-py2.py3-none-any.whl.metadata (9.8 kB)
+2026-08-15T05:02:03.7775423Z Collecting pycryptodomex>=3.20.0 (from py7zr==1.0.*)
+2026-08-15T05:02:03.7956317Z   Downloading pycryptodomex-3.23.0-cp37-abi3-win_amd64.whl.metadata (3.5 kB)
+2026-08-15T05:02:03.8660369Z Collecting brotli>=1.1.0 (from py7zr==1.0.*)
+2026-08-15T05:02:04.0081237Z   Downloading brotli-1.2.0-cp312-cp312-win_amd64.whl.metadata (6.3 kB)
+2026-08-15T05:02:04.1099314Z Collecting psutil (from py7zr==1.0.*)
+2026-08-15T05:02:04.1273466Z   Downloading psutil-7.2.2-cp37-abi3-win_amd64.whl.metadata (22 kB)
+2026-08-15T05:02:04.2608269Z Collecting pyzstd>=0.16.1 (from py7zr==1.0.*)
+2026-08-15T05:02:04.2783406Z   Downloading pyzstd-0.19.1-py3-none-any.whl.metadata (2.6 kB)
+2026-08-15T05:02:04.3819916Z Collecting pyppmd<1.3.0,>=1.1.0 (from py7zr==1.0.*)
+2026-08-15T05:02:04.4013657Z   Downloading pyppmd-1.2.0-cp312-cp312-win_amd64.whl.metadata (5.6 kB)
+2026-08-15T05:02:04.4841504Z Collecting pybcj<1.1.0,>=1.0.0 (from py7zr==1.0.*)
+2026-08-15T05:02:04.5022665Z   Downloading pybcj-1.0.8-cp312-cp312-win_amd64.whl.metadata (3.9 kB)
+2026-08-15T05:02:04.5522004Z Collecting multivolumefile>=0.2.3 (from py7zr==1.0.*)
+2026-08-15T05:02:04.5697191Z   Downloading multivolumefile-0.2.3-py3-none-any.whl.metadata (6.3 kB)
+2026-08-15T05:02:04.6592409Z Collecting inflate64<1.1.0,>=1.0.0 (from py7zr==1.0.*)
+2026-08-15T05:02:04.6779105Z   Downloading inflate64-1.0.4-cp312-cp312-win_amd64.whl.metadata (4.5 kB)
+2026-08-15T05:02:04.7790081Z Collecting backports-zstd>=1.0.0 (from pyzstd>=0.16.1->py7zr==1.0.*)
+2026-08-15T05:02:04.7970594Z   Downloading backports_zstd-1.6.0-cp312-cp312-win_amd64.whl.metadata (7.0 kB)
+2026-08-15T05:02:04.8549226Z Collecting typing-extensions>=4.13.2 (from pyzstd>=0.16.1->py7zr==1.0.*)
+2026-08-15T05:02:04.8721504Z   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-08-15T05:02:04.9068773Z Downloading py7zr-1.0.0-py3-none-any.whl (69 kB)
+2026-08-15T05:02:04.9545357Z Downloading inflate64-1.0.4-cp312-cp312-win_amd64.whl (35 kB)
+2026-08-15T05:02:04.9930830Z Downloading pybcj-1.0.8-cp312-cp312-win_amd64.whl (24 kB)
+2026-08-15T05:02:05.0303426Z Downloading pyppmd-1.2.0-cp312-cp312-win_amd64.whl (46 kB)
+2026-08-15T05:02:05.0628717Z Downloading setuptools-84.0.0-py3-none-any.whl (818 kB)
+2026-08-15T05:02:05.1247408Z    ---------------------------------------- 818.2/818.2 kB 11.8 MB/s  0:00:00
+2026-08-15T05:02:05.1418085Z Downloading brotli-1.2.0-cp312-cp312-win_amd64.whl (369 kB)
+2026-08-15T05:02:05.1739342Z Downloading multivolumefile-0.2.3-py3-none-any.whl (17 kB)
+2026-08-15T05:02:05.2060807Z Downloading pycryptodomex-3.23.0-cp37-abi3-win_amd64.whl (1.8 MB)
+2026-08-15T05:02:05.2474603Z    ---------------------------------------- 1.8/1.8 MB 32.8 MB/s  0:00:00
+2026-08-15T05:02:05.2641605Z Downloading pyzstd-0.19.1-py3-none-any.whl (23 kB)
+2026-08-15T05:02:05.2961651Z Downloading backports_zstd-1.6.0-cp312-cp312-win_amd64.whl (329 kB)
+2026-08-15T05:02:05.3288176Z Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-08-15T05:02:05.3629558Z Downloading psutil-7.2.2-cp37-abi3-win_amd64.whl (137 kB)
+2026-08-15T05:02:05.3988221Z Downloading texttable-1.7.0-py2.py3-none-any.whl (10 kB)
+2026-08-15T05:02:05.8723866Z Installing collected packages: texttable, brotli, typing-extensions, setuptools, pyppmd, pycryptodomex, pybcj, psutil, multivolumefile, inflate64, backports-zstd, pyzstd, py7zr
+2026-08-15T05:02:09.5229284Z 
+2026-08-15T05:02:09.5252211Z Successfully installed backports-zstd-1.6.0 brotli-1.2.0 inflate64-1.0.4 multivolumefile-0.2.3 psutil-7.2.2 py7zr-1.0.0 pybcj-1.0.8 pycryptodomex-3.23.0 pyppmd-1.2.0 pyzstd-0.19.1 setuptools-84.0.0 texttable-1.7.0 typing-extensions-4.16.0
+2026-08-15T05:02:09.5269214Z 
+2026-08-15T05:02:09.5270456Z [notice] A new release of pip is available: 26.2 -> 26.2.1
+2026-08-15T05:02:09.5271161Z [notice] To update, run: python.exe -m pip install --upgrade pip
+2026-08-15T05:02:09.6868730Z [command]C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe -m pip install aqtinstall==3.3.*
+2026-08-15T05:02:11.0322972Z Collecting aqtinstall==3.3.*
+2026-08-15T05:02:11.2173493Z   Downloading aqtinstall-3.3.0-py3-none-any.whl.metadata (11 kB)
+2026-08-15T05:02:11.3098640Z Collecting bs4 (from aqtinstall==3.3.*)
+2026-08-15T05:02:11.3242228Z   Downloading bs4-0.0.2-py2.py3-none-any.whl.metadata (411 bytes)
+2026-08-15T05:02:11.3721718Z Collecting defusedxml (from aqtinstall==3.3.*)
+2026-08-15T05:02:11.3868648Z   Downloading defusedxml-0.7.1-py2.py3-none-any.whl.metadata (32 kB)
+2026-08-15T05:02:11.4669679Z Collecting humanize (from aqtinstall==3.3.*)
+2026-08-15T05:02:11.4814451Z   Downloading humanize-4.16.0-py3-none-any.whl.metadata (8.0 kB)
+2026-08-15T05:02:11.5284370Z Collecting patch-ng (from aqtinstall==3.3.*)
+2026-08-15T05:02:11.5435382Z   Downloading patch_ng-1.19.1-py3-none-any.whl.metadata (3.2 kB)
+2026-08-15T05:02:11.5596821Z Requirement already satisfied: py7zr>=0.22.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from aqtinstall==3.3.*) (1.0.0)
+2026-08-15T05:02:11.6021538Z Collecting requests>=2.31.0 (from aqtinstall==3.3.*)
+2026-08-15T05:02:11.6175836Z   Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+2026-08-15T05:02:11.6744569Z Collecting semantic-version (from aqtinstall==3.3.*)
+2026-08-15T05:02:11.6893924Z   Downloading semantic_version-2.10.0-py2.py3-none-any.whl.metadata (9.7 kB)
+2026-08-15T05:02:11.7066565Z Requirement already satisfied: texttable in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from aqtinstall==3.3.*) (1.7.0)
+2026-08-15T05:02:11.7083326Z Requirement already satisfied: pycryptodomex>=3.20.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (3.23.0)
+2026-08-15T05:02:11.7090172Z Requirement already satisfied: brotli>=1.1.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (1.2.0)
+2026-08-15T05:02:11.7096757Z Requirement already satisfied: psutil in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (7.2.2)
+2026-08-15T05:02:11.7101921Z Requirement already satisfied: pyzstd>=0.16.1 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (0.19.1)
+2026-08-15T05:02:11.7107645Z Requirement already satisfied: pyppmd<1.3.0,>=1.1.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (1.2.0)
+2026-08-15T05:02:11.7113075Z Requirement already satisfied: pybcj<1.1.0,>=1.0.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (1.0.8)
+2026-08-15T05:02:11.7118084Z Requirement already satisfied: multivolumefile>=0.2.3 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (0.2.3)
+2026-08-15T05:02:11.7123447Z Requirement already satisfied: inflate64<1.1.0,>=1.0.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from py7zr>=0.22.0->aqtinstall==3.3.*) (1.0.4)
+2026-08-15T05:02:11.7196512Z Requirement already satisfied: backports-zstd>=1.0.0 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from pyzstd>=0.16.1->py7zr>=0.22.0->aqtinstall==3.3.*) (1.6.0)
+2026-08-15T05:02:11.7203903Z Requirement already satisfied: typing-extensions>=4.13.2 in C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages (from pyzstd>=0.16.1->py7zr>=0.22.0->aqtinstall==3.3.*) (4.16.0)
+2026-08-15T05:02:11.8791957Z Collecting charset_normalizer<4,>=2 (from requests>=2.31.0->aqtinstall==3.3.*)
+2026-08-15T05:02:11.8945022Z   Downloading charset_normalizer-3.5.0-cp312-cp312-win_amd64.whl.metadata (44 kB)
+2026-08-15T05:02:11.9501827Z Collecting idna<4,>=2.5 (from requests>=2.31.0->aqtinstall==3.3.*)
+2026-08-15T05:02:11.9646467Z   Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+2026-08-15T05:02:12.0247671Z Collecting urllib3<3,>=1.26 (from requests>=2.31.0->aqtinstall==3.3.*)
+2026-08-15T05:02:12.0394854Z   Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+2026-08-15T05:02:12.0976158Z Collecting certifi>=2023.5.7 (from requests>=2.31.0->aqtinstall==3.3.*)
+2026-08-15T05:02:12.1119805Z   Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+2026-08-15T05:02:12.1673633Z Collecting beautifulsoup4 (from bs4->aqtinstall==3.3.*)
+2026-08-15T05:02:12.1816993Z   Downloading beautifulsoup4-4.15.0-py3-none-any.whl.metadata (3.8 kB)
+2026-08-15T05:02:12.2358534Z Collecting soupsieve>=1.6.1 (from beautifulsoup4->bs4->aqtinstall==3.3.*)
+2026-08-15T05:02:12.2502339Z   Downloading soupsieve-2.9.2-py3-none-any.whl.metadata (4.6 kB)
+2026-08-15T05:02:12.2886282Z Downloading aqtinstall-3.3.0-py3-none-any.whl (71 kB)
+2026-08-15T05:02:12.3226945Z Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+2026-08-15T05:02:12.3565893Z Downloading charset_normalizer-3.5.0-cp312-cp312-win_amd64.whl (200 kB)
+2026-08-15T05:02:12.3965097Z Downloading idna-3.18-py3-none-any.whl (65 kB)
+2026-08-15T05:02:12.4262599Z Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+2026-08-15T05:02:12.4539750Z Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+2026-08-15T05:02:12.4937715Z Downloading bs4-0.0.2-py2.py3-none-any.whl (1.2 kB)
+2026-08-15T05:02:12.5211546Z Downloading beautifulsoup4-4.15.0-py3-none-any.whl (109 kB)
+2026-08-15T05:02:12.7190958Z Downloading soupsieve-2.9.2-py3-none-any.whl (37 kB)
+2026-08-15T05:02:12.7488373Z Downloading defusedxml-0.7.1-py2.py3-none-any.whl (25 kB)
+2026-08-15T05:02:12.7780449Z Downloading humanize-4.16.0-py3-none-any.whl (137 kB)
+2026-08-15T05:02:12.8101482Z Downloading patch_ng-1.19.1-py3-none-any.whl (17 kB)
+2026-08-15T05:02:12.8386202Z Downloading semantic_version-2.10.0-py2.py3-none-any.whl (15 kB)
+2026-08-15T05:02:12.9601890Z Installing collected packages: urllib3, soupsieve, semantic-version, patch-ng, idna, humanize, defusedxml, charset_normalizer, certifi, requests, beautifulsoup4, bs4, aqtinstall
+2026-08-15T05:02:14.3695573Z 
+2026-08-15T05:02:14.3724811Z Successfully installed aqtinstall-3.3.0 beautifulsoup4-4.15.0 bs4-0.0.2 certifi-2026.7.22 charset_normalizer-3.5.0 defusedxml-0.7.1 humanize-4.16.0 idna-3.18 patch-ng-1.19.1 requests-2.34.2 semantic-version-2.10.0 soupsieve-2.9.2 urllib3-2.7.0
+2026-08-15T05:02:14.3741129Z 
+2026-08-15T05:02:14.3742105Z [notice] A new release of pip is available: 26.2 -> 26.2.1
+2026-08-15T05:02:14.3742768Z [notice] To update, run: python.exe -m pip install --upgrade pip
+2026-08-15T05:02:14.5193606Z [command]C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe -m aqt version
+2026-08-15T05:02:14.9314549Z INFO    : aqtinstall(aqt) v3.3.0 on Python 3.12.10 [CPython MSC v.1943 64 bit (AMD64)]
+2026-08-15T05:02:15.0400304Z [command]C:\hostedtoolcache\windows\Python\3.12.10\x64\python.exe -m aqt install-qt windows desktop 6.10.0 win64_msvc2022_64 --autodesktop --outputdir D:\a\3DPrinter_Qt6\Qt --modules qtshadertools
+2026-08-15T05:02:15.3136393Z INFO    : aqtinstall(aqt) v3.3.0 on Python 3.12.10 [CPython MSC v.1943 64 bit (AMD64)]
+2026-08-15T05:02:18.1778243Z INFO    : Found extension qtwebengine
+2026-08-15T05:02:19.5075982Z INFO    : Found extension qtpdf
+2026-08-15T05:02:20.8823209Z INFO    : Downloading qtsvg...
+2026-08-15T05:02:20.9041661Z INFO    : Downloading qtdeclarative...
+2026-08-15T05:02:20.9249583Z INFO    : Downloading qtbase...
+2026-08-15T05:02:20.9278230Z INFO    : Downloading qtshadertools...
+2026-08-15T05:02:21.6920874Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:21.6964450Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:21.7237054Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:21.7559149Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:22.5332977Z INFO    : Finished installation of qtsvg-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z in 2.43590490
+2026-08-15T05:02:22.7592423Z INFO    : Finished installation of qtshadertools-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z in 2.68822110
+2026-08-15T05:02:23.3985556Z INFO    : Downloading qttools...
+2026-08-15T05:02:23.5562064Z INFO    : Downloading qttranslations...
+2026-08-15T05:02:24.1951051Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:24.2917891Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:25.1475096Z INFO    : Finished installation of qttranslations-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z in 2.35898640
+2026-08-15T05:02:25.9370546Z INFO    : Downloading d3dcompiler_47...
+2026-08-15T05:02:26.6809684Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:27.3044244Z INFO    : Finished installation of d3dcompiler_47-x64.7z in 2.14825820
+2026-08-15T05:02:27.5889917Z INFO    : Finished installation of qttools-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z in 5.04759830
+2026-08-15T05:02:28.0465143Z INFO    : Downloading opengl32sw...
+2026-08-15T05:02:28.6125318Z INFO    : Finished installation of qtbase-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z in 8.53308100
+2026-08-15T05:02:28.7890487Z INFO    : Redirected: qt.mirror.constant.com
+2026-08-15T05:02:29.6986612Z INFO    : Finished installation of opengl32sw-64-mesa_11_2_2-signed_sha256.7z in 2.38664160
+2026-08-15T05:02:41.8355461Z INFO    : Finished installation of qtdeclarative-Windows-Windows_11_24H2-MSVC2022-Windows-Windows_11_24H2-X86_64.7z in 21.75260640
+2026-08-15T05:02:41.9599143Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\bin\qmake.exe
+2026-08-15T05:02:41.9639125Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Concurrent.prl
+2026-08-15T05:02:41.9643244Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Concurrentd.prl
+2026-08-15T05:02:41.9647090Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Core.prl
+2026-08-15T05:02:41.9650851Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Cored.prl
+2026-08-15T05:02:41.9654546Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6DBus.prl
+2026-08-15T05:02:41.9658254Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6DBusd.prl
+2026-08-15T05:02:41.9661860Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Designer.prl
+2026-08-15T05:02:41.9665647Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6DesignerComponents.prl
+2026-08-15T05:02:41.9669789Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6DesignerComponentsd.prl
+2026-08-15T05:02:41.9673412Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Designerd.prl
+2026-08-15T05:02:41.9677489Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6DeviceDiscoverySupport.prl
+2026-08-15T05:02:41.9681186Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6DeviceDiscoverySupportd.prl
+2026-08-15T05:02:41.9684715Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6EntryPoint.prl
+2026-08-15T05:02:41.9688281Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6EntryPointd.prl
+2026-08-15T05:02:41.9691844Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6ExampleIcons.prl
+2026-08-15T05:02:41.9695513Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6ExampleIconsd.prl
+2026-08-15T05:02:41.9699181Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6ExamplesAssetDownloader.prl
+2026-08-15T05:02:41.9702804Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6ExamplesAssetDownloaderd.prl
+2026-08-15T05:02:41.9706873Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6FbSupport.prl
+2026-08-15T05:02:41.9710556Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6FbSupportd.prl
+2026-08-15T05:02:41.9714189Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Gui.prl
+2026-08-15T05:02:41.9717855Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Guid.prl
+2026-08-15T05:02:41.9721598Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Help.prl
+2026-08-15T05:02:41.9725254Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Helpd.prl
+2026-08-15T05:02:41.9728867Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsAnimation.prl
+2026-08-15T05:02:41.9732638Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsAnimationd.prl
+2026-08-15T05:02:41.9736262Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsFolderListModel.prl
+2026-08-15T05:02:41.9739957Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsFolderListModeld.prl
+2026-08-15T05:02:41.9743607Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsPlatform.prl
+2026-08-15T05:02:41.9747189Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsPlatformd.prl
+2026-08-15T05:02:41.9750700Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsQmlModels.prl
+2026-08-15T05:02:41.9754407Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsQmlModelsd.prl
+2026-08-15T05:02:41.9758079Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsSettings.prl
+2026-08-15T05:02:41.9761635Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsSettingsd.prl
+2026-08-15T05:02:41.9765258Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsSharedImage.prl
+2026-08-15T05:02:41.9768865Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsSharedImaged.prl
+2026-08-15T05:02:41.9772551Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsSynchronizer.prl
+2026-08-15T05:02:41.9776136Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsSynchronizerd.prl
+2026-08-15T05:02:41.9779743Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsWavefrontMesh.prl
+2026-08-15T05:02:41.9783557Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6LabsWavefrontMeshd.prl
+2026-08-15T05:02:41.9787056Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Network.prl
+2026-08-15T05:02:41.9790632Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Networkd.prl
+2026-08-15T05:02:41.9794292Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6OpenGL.prl
+2026-08-15T05:02:41.9797895Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6OpenGLd.prl
+2026-08-15T05:02:41.9801545Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6OpenGLWidgets.prl
+2026-08-15T05:02:41.9805103Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6OpenGLWidgetsd.prl
+2026-08-15T05:02:41.9808718Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6PacketProtocol.prl
+2026-08-15T05:02:41.9812328Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6PacketProtocold.prl
+2026-08-15T05:02:41.9815878Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6PrintSupport.prl
+2026-08-15T05:02:41.9819444Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6PrintSupportd.prl
+2026-08-15T05:02:41.9823055Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Qml.prl
+2026-08-15T05:02:41.9827348Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlAssetDownloader.prl
+2026-08-15T05:02:41.9831253Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlAssetDownloaderd.prl
+2026-08-15T05:02:41.9835029Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlCompiler.prl
+2026-08-15T05:02:41.9838552Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlCompilerd.prl
+2026-08-15T05:02:41.9842105Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlCore.prl
+2026-08-15T05:02:41.9845669Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlCored.prl
+2026-08-15T05:02:41.9849201Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Qmld.prl
+2026-08-15T05:02:41.9852774Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlDebug.prl
+2026-08-15T05:02:41.9856384Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlDebugd.prl
+2026-08-15T05:02:41.9859945Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlDom.prl
+2026-08-15T05:02:41.9863629Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlDomd.prl
+2026-08-15T05:02:41.9867224Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlFormat.prl
+2026-08-15T05:02:41.9871013Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlFormatd.prl
+2026-08-15T05:02:41.9874702Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlLocalStorage.prl
+2026-08-15T05:02:41.9878305Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlLocalStoraged.prl
+2026-08-15T05:02:41.9881792Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlLS.prl
+2026-08-15T05:02:41.9885507Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlLSd.prl
+2026-08-15T05:02:41.9889251Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlMeta.prl
+2026-08-15T05:02:41.9893365Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlMetad.prl
+2026-08-15T05:02:41.9896661Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlModels.prl
+2026-08-15T05:02:41.9900164Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlModelsd.prl
+2026-08-15T05:02:41.9903716Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlNetwork.prl
+2026-08-15T05:02:41.9907306Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlNetworkd.prl
+2026-08-15T05:02:41.9910894Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlToolingSettings.prl
+2026-08-15T05:02:41.9914421Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlToolingSettingsd.prl
+2026-08-15T05:02:41.9917909Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlTypeRegistrar.prl
+2026-08-15T05:02:41.9921567Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlTypeRegistrard.prl
+2026-08-15T05:02:41.9925326Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlWorkerScript.prl
+2026-08-15T05:02:41.9928856Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlWorkerScriptd.prl
+2026-08-15T05:02:41.9932997Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlXmlListModel.prl
+2026-08-15T05:02:41.9935910Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QmlXmlListModeld.prl
+2026-08-15T05:02:41.9939288Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Quick.prl
+2026-08-15T05:02:41.9942738Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2.prl
+2026-08-15T05:02:41.9946292Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Basic.prl
+2026-08-15T05:02:41.9949884Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Basicd.prl
+2026-08-15T05:02:41.9953588Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2BasicStyleImpl.prl
+2026-08-15T05:02:41.9957311Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2BasicStyleImpld.prl
+2026-08-15T05:02:41.9960738Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2d.prl
+2026-08-15T05:02:41.9964404Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2FluentWinUI3StyleImpl.prl
+2026-08-15T05:02:41.9967992Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2FluentWinUI3StyleImpld.prl
+2026-08-15T05:02:41.9971393Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Fusion.prl
+2026-08-15T05:02:41.9974924Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Fusiond.prl
+2026-08-15T05:02:41.9978460Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2FusionStyleImpl.prl
+2026-08-15T05:02:41.9982378Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2FusionStyleImpld.prl
+2026-08-15T05:02:41.9985792Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Imagine.prl
+2026-08-15T05:02:41.9989375Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Imagined.prl
+2026-08-15T05:02:41.9993002Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2ImagineStyleImpl.prl
+2026-08-15T05:02:41.9996523Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2ImagineStyleImpld.prl
+2026-08-15T05:02:42.0000554Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Impl.prl
+2026-08-15T05:02:42.0004093Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Impld.prl
+2026-08-15T05:02:42.0007696Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Material.prl
+2026-08-15T05:02:42.0011287Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Materiald.prl
+2026-08-15T05:02:42.0014839Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2MaterialStyleImpl.prl
+2026-08-15T05:02:42.0018341Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2MaterialStyleImpld.prl
+2026-08-15T05:02:42.0021737Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Universal.prl
+2026-08-15T05:02:42.0025281Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2Universald.prl
+2026-08-15T05:02:42.0028863Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2UniversalStyleImpl.prl
+2026-08-15T05:02:42.0032424Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2UniversalStyleImpld.prl
+2026-08-15T05:02:42.0035942Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2WindowsStyleImpl.prl
+2026-08-15T05:02:42.0039456Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControls2WindowsStyleImpld.prl
+2026-08-15T05:02:42.0042961Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControlsTestUtils.prl
+2026-08-15T05:02:42.0046825Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickControlsTestUtilsd.prl
+2026-08-15T05:02:42.0050601Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Quickd.prl
+2026-08-15T05:02:42.0054461Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickDialogs2.prl
+2026-08-15T05:02:42.0058052Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickDialogs2d.prl
+2026-08-15T05:02:42.0061617Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickDialogs2QuickImpl.prl
+2026-08-15T05:02:42.0065132Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickDialogs2QuickImpld.prl
+2026-08-15T05:02:42.0068693Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickDialogs2Utils.prl
+2026-08-15T05:02:42.0072207Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickDialogs2Utilsd.prl
+2026-08-15T05:02:42.0075613Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickEffects.prl
+2026-08-15T05:02:42.0079095Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickEffectsd.prl
+2026-08-15T05:02:42.0082547Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickLayouts.prl
+2026-08-15T05:02:42.0086064Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickLayoutsd.prl
+2026-08-15T05:02:42.0089503Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickParticles.prl
+2026-08-15T05:02:42.0092978Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickParticlesd.prl
+2026-08-15T05:02:42.0096422Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickShapes.prl
+2026-08-15T05:02:42.0099883Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickShapesd.prl
+2026-08-15T05:02:42.0103492Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickShapesDesignHelpers.prl
+2026-08-15T05:02:42.0106956Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickShapesDesignHelpersd.prl
+2026-08-15T05:02:42.0110488Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickTemplates2.prl
+2026-08-15T05:02:42.0114003Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickTemplates2d.prl
+2026-08-15T05:02:42.0117512Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickTest.prl
+2026-08-15T05:02:42.0121099Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickTestd.prl
+2026-08-15T05:02:42.0124751Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickTestUtils.prl
+2026-08-15T05:02:42.0128711Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickTestUtilsd.prl
+2026-08-15T05:02:42.0132623Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickVectorImage.prl
+2026-08-15T05:02:42.0135983Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickVectorImaged.prl
+2026-08-15T05:02:42.0139526Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickVectorImageGenerator.prl
+2026-08-15T05:02:42.0143159Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickVectorImageGeneratord.prl
+2026-08-15T05:02:42.0146753Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickVectorImageHelpers.prl
+2026-08-15T05:02:42.0150675Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickVectorImageHelpersd.prl
+2026-08-15T05:02:42.0154117Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickWidgets.prl
+2026-08-15T05:02:42.0157625Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6QuickWidgetsd.prl
+2026-08-15T05:02:42.0161212Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6ShaderTools.prl
+2026-08-15T05:02:42.0164929Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6ShaderToolsd.prl
+2026-08-15T05:02:42.0168470Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Sql.prl
+2026-08-15T05:02:42.0172080Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Sqld.prl
+2026-08-15T05:02:42.0175626Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Svg.prl
+2026-08-15T05:02:42.0179226Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Svgd.prl
+2026-08-15T05:02:42.0182842Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6SvgWidgets.prl
+2026-08-15T05:02:42.0186453Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6SvgWidgetsd.prl
+2026-08-15T05:02:42.0189951Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Test.prl
+2026-08-15T05:02:42.0193471Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Testd.prl
+2026-08-15T05:02:42.0197043Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6UiTools.prl
+2026-08-15T05:02:42.0200551Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6UiToolsd.prl
+2026-08-15T05:02:42.0204054Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Widgets.prl
+2026-08-15T05:02:42.0207638Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Widgetsd.prl
+2026-08-15T05:02:42.0211135Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Xml.prl
+2026-08-15T05:02:42.0214612Z INFO    : Patching D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\lib\Qt6Xmld.prl
+2026-08-15T05:02:42.0220785Z INFO    : Finished installation
+2026-08-15T05:02:42.0221500Z INFO    : Time elapsed: 26.70807240 second
+2026-08-15T05:02:42.0854545Z ##[end-action id=__jurplel_install-qt-action.__jurplel_install-qt-action;outcome=success;conclusion=success;duration_ms=43752]

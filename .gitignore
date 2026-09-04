@@ -80,3 +80,8 @@ i18n/_backup_phase204/
 
 # === ZCode session plans (ephemeral) ===
 .zcode/plans/
+
+# === Perf evaluation (scripts/perf/, docs/perf-baseline.md) ===
+# Generated benchmark models + bench outputs stay out of git.
+build/perf_models/
+build/perf_out/

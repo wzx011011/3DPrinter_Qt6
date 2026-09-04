@@ -7,6 +7,9 @@
 #include <QVariant>
 #include <QVector>
 #include <QPointF>
+#include <QThread>
+#include <QMutex>
+#include <map>
 #include <memory>
 #include <atomic>
 #include <vector>
@@ -28,6 +31,7 @@ namespace Slic3r
 {
   class Print;
   class DynamicPrintConfig;
+  class Model;
 }
 #endif
 
@@ -104,6 +108,40 @@ struct WipeTowerGeometry {
   std::vector<float> meshVertices;
 };
 
+/// Wave 3b (perf): POD mirror of the preview-relevant GCodeProcessorResult
+/// fields, captured BY VALUE inside the worker after export_gcode() fills it
+/// (same Frozen Decision 1 pattern as WipeTowerGeometry: no libslic3r type
+/// escapes the worker). PreviewViewModel builds its preview containers from
+/// this directly — the exported text file is no longer re-parsed on the GUI
+/// thread (upstream GCodeViewer::load(GCodeProcessorResult), GCodeViewer.hpp:803).
+struct SlicePreviewMove
+{
+  float x = 0.0f, y = 0.0f, z = 0.0f; // move END position, printer/slic3r mm
+  float deltaExtruder = 0.0f;         // mm
+  float feedrateMMPerMin = 0.0f;      // mm/min (gcode F units)
+  float width = 0.0f;                 // mm
+  float height = 0.0f;                // mm
+  float volumetricRate = 0.0f;        // mm3/s
+  float fanSpeed = 0.0f;              // percent
+  float temperature = 0.0f;           // celsius
+  float timeSecs = 0.0f;              // per-move duration
+  qint32 kind = 0;  // 0=extrude 1=travel 2=retract 3=unretract 4=wipe 5=seam 6=tool-change 7=other marker
+  qint32 role = 0;  // canonical EGCodeExtrusionRole index (PreviewViewModel kRoleMap)
+  qint32 extruderId = 0;              // 0-based
+  qint32 layer = 0;                   // extrusion-layer index (z-change derived)
+};
+
+struct SlicePreviewData
+{
+  QVector<SlicePreviewMove> moves;
+  QVector<float> layerZs;             // first-extrusion z per layer (printer mm)
+  float filamentDiameter = 1.75f;     // mm
+  float filamentDensity = 1.24f;      // g/cm3
+  double totalFilamentMm = 0.0;       // extruded filament length
+  QHash<qint32, double> roleTimeSecs; // canonical role -> seconds
+};
+Q_DECLARE_METATYPE(SlicePreviewData)
+
 /// Phase 108 (FMAP-01): filament-map auto-recommendation readback captured BY
 /// VALUE inside the SliceService worker after print.process() succeeds and
 /// before the Print is invalidated. Mirrors the v4.4 WipeTowerGeometry capture
@@ -144,6 +182,25 @@ struct SequentialPrintClearance {
 };
 Q_DECLARE_METATYPE(SequentialPrintClearance)
 
+/// P2.3-3: support-material preview polylines captured BY VALUE inside the
+/// slice worker after print.process() succeeds (same Frozen Decision 1
+/// boundary as WipeTowerGeometry / FilamentMapResult). Mirrors the upstream
+/// support preview: the FDM supports gizmo slices and renders
+/// SupportLayer::support_fills extrusions as a gray preview volume
+/// (GLGizmoFdmSupports::run_thread, GLGizmoFdmSupports.cpp:826-928 ->
+/// _3DScene::extrusionentity_to_verts). The Qt pipe captures the polyline
+/// endpoint pairs instead (line rendering), one XYZ float triple per endpoint,
+/// already in bed millimeters (plate origin applied, print_z as the Z).
+struct SupportPreviewData {
+  /// True when at least one support extrusion polyline was captured.
+  bool valid = false;
+  /// Number of line segments (segmentVerts holds 6 floats per segment).
+  int segmentCount = 0;
+  /// Flattened segment endpoints: [x0,y0,z0, x1,y1,z1] per segment.
+  std::vector<float> segmentVerts;
+};
+Q_DECLARE_METATYPE(SupportPreviewData)
+
 class SliceService final : public QObject
 {
   Q_OBJECT
@@ -176,6 +233,7 @@ public:
 
   State sliceState() const { return sliceState_; }
   explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
+  ~SliceService() override;
 
 #ifdef HAS_LIBSLIC3R
   /// P15.11: packs engine polygons into the SequentialPrintClearance value
@@ -232,6 +290,10 @@ public:
 
   Q_INVOKABLE void startSlice(const QString &projectName);
   Q_INVOKABLE void startSlicePlate(int plateIndex);
+  /// Wave 3a (perf): when non-empty, export_gcode writes STRAIGHT to this
+  /// path (no slice_cache temp + copy). The CLI sets it from --output-dir
+  /// before startSlice; the GUI leaves it empty (temp-then-export flow).
+  void setDirectOutputPath(const QString &path) { directOutputPath_ = path; }
   Q_INVOKABLE void cancelSlice();
   /// Phase 239 (ENGN-03): cancels an in-flight G-code export (the copy runs on
   /// a QtConcurrent worker). Mirrors cancelSlice's flag semantics -- the worker
@@ -272,7 +334,7 @@ private:
   /// per-plate result store so the PartPlateList aggregate gates (upstream
   /// is_all_slice_results_valid family, PartPlate.cpp:4989-5044) see the same
   /// truth the export paths act on.
-  void setDomainResultValid(int plateIndex, bool valid);
+  void setDomainResultValid(int printId, bool valid);
   void setAllDomainResultsValid(bool valid);
 
 signals:
@@ -286,6 +348,12 @@ signals:
   /// render Cancelled/Error-specific UI.
   void sliceStateChanged();
   void sliceResultCleared();
+  /// Wave 3b (perf): delivers the captured-by-value preview moves so the
+  /// preview builds from memory instead of re-parsing the exported gcode
+  /// text file (upstream GCodeViewer::load(GCodeProcessorResult),
+  /// GCodeViewer.hpp:803). Emitted right before sliceFinished on the
+  /// success branch; a receiver that handled it skips the file parse.
+  void slicePreviewReady(const SlicePreviewData &data);
   void sliceFinished(const QString &estimatedTime);
   /// Phase 100 (WTREAD-01): delivers the captured-by-value wipe-tower geometry
   /// to the GUI thread. Emitted on the success branch of the sliceFinished
@@ -303,6 +371,11 @@ signals:
   /// P15.11: delivers the post-validate sequential clearance streams. Invalid
   /// payloads clear stale geometry after non-ByObject/no-collision slices.
   void sequentialPrintClearanceReady(const SequentialPrintClearance &clearance);
+  /// P2.3-3: delivers the captured-by-value support preview polylines to the
+  /// GUI thread. Emitted on the same success branch as wipeTowerGeometryReady;
+  /// when valid is false (no supports generated for this slice) receivers must
+  /// clear any stale preview.
+  void supportPreviewReady(const SupportPreviewData &preview);
   void sliceFailed(const QString &message);
   /// Phase 239 (ENGN-03): emitted after a slice SUCCEEDS when Print::validate
   /// reported a non-fatal warning (upstream fills the `warning` out-param,
@@ -325,11 +398,42 @@ private:
   QString resultWeightLabel_;
   QString resultPlateLabel_;
   int resultPlateIndex_ = -1;
+  int resultPlatePrintId_ = -1;
   QString resultFilamentLabel_;
   int resultLayerCount_ = 0;
-  QString resultCostLabel_;
-  int activeTargetPlateIndex_ = -1;
+  QString resultCostLabel_ = QString();
+  int activeTargetPrintId_ = -1;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
+  // Wave 3a (perf): dedicated slice thread (upstream BackgroundSlicingProcess
+  // thread_proc, BackgroundSlicingProcess.cpp:305-364) instead of the shared
+  // QtConcurrent pool, so slicing never contends with load/emboss jobs.
+  // m_sliceWorker lives ON the thread (the QThread object itself keeps main-
+  // thread affinity); queued invokeMethod targets the worker.
+  QThread m_sliceThread;
+  /// Wave 4a (perf): persistent per-plate Print + its applied model clone
+  /// (upstream PartPlate owns one Print per plate, PartPlate.cpp:3144).
+  /// Reused on the dedicated slice thread when the plate geometry signature
+  /// is unchanged: Print::apply() diffs configs/objects and only invalidates
+  /// the affected steps (PrintApply.cpp:1071-1141) and process() reuses the
+  /// cached slicing steps (Print.hpp:841 use_cache). Destroyed whenever a
+  /// slice is cancelled, fails, or the geometry signature changes.
+  struct PersistentSlice
+  {
+    std::unique_ptr<Slic3r::Print> print;
+    std::unique_ptr<Slic3r::Model> model;
+    quint64 geometrySignature = 0;
+    quint64 configSignature = 0;
+  };
+  std::map<int, PersistentSlice> m_persistentSlices;
+  /// R-P0.1: guards the STRUCTURE of m_persistentSlices, which is touched by
+  /// both the GUI thread (startSlice reuse/erase, locked) and the dedicated
+  /// slice worker (find/emplace/erase via discardPersistent, locked). Slot
+  /// CONTENTS stay worker-only while slicing_ gates GUI access, so a locked
+  /// map op can never race a live slot.
+  mutable QMutex m_persistentMutex;
+  QObject m_sliceWorker;
+  bool m_sliceWorkerAttached = false;
+  QString directOutputPath_;
   /// Phase 239 (ENGN-03): cancel flag for the QtConcurrent export worker
   /// (exportSourceToPath / exportAllPlateGCodeToDirectory). Null when idle.
   std::shared_ptr<std::atomic_bool> activeExportCancelFlag_;
@@ -339,6 +443,7 @@ private:
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
 #endif
 
+  /// Stored by stable PartPlate print identity, never mutable plate index.
   QMap<int, PlateSliceResult> plateResults_;
   QHash<QString, QVariant> mergedPresetConfig_; ///< Merged preset values injected from ConfigViewModel.
   /// Bed shape in millimeters. Empty means using full_print_config defaults.
@@ -362,7 +467,10 @@ private:
 
   void clearStoredResult();
   void clearActiveTargetResult();
-  void storePlateResult(int plateIndex, const PlateSliceResult &result);
+  int printIdForPlateIndex(int plateIndex) const;
+  int plateIndexForPrintId(int printId) const;
+  void storePlateResult(int printId, const PlateSliceResult &result);
+  void removePlateResultByPrintId(int printId);
   void setExportStatus(State state, int progress, const QString &label);
   /// Phase 239 (ENGN-03): validates the source/target synchronously (so
   /// unsafe-target rejections stay immediate) then moves the chunked copy to a

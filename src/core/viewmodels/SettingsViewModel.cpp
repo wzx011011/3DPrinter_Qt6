@@ -69,6 +69,8 @@ void SettingsViewModel::loadFromSettings()
   m_autoDismissSec   = s.value("autoDismissSec", 5).toInt();
   m_showProgressNotifications = s.value("showProgressNotifications", true).toBool();
   m_developerMode    = s.value("developerMode", false).toBool();
+  // P4.1: upstream skip_ams_blacklist_check (Preferences.cpp:1195).
+  m_skipAmsBlacklistCheck = s.value("skipAmsBlacklistCheck", false).toBool();
   m_showDebugOverlay = s.value("showDebugOverlay", false).toBool();
   m_logLevel         = s.value("logLevel", 2).toInt();
   m_verboseGcode     = s.value("verboseGcode", false).toBool();
@@ -396,6 +398,13 @@ void SettingsViewModel::setDeveloperMode(bool v)
   if (m_developerMode != v) { m_developerMode = v; SAVE_SETTING("developerMode", v); emit settingsChanged(); }
 }
 
+// P4.1: upstream skip_ams_blacklist_check (Preferences.cpp:1195). The AMS
+// device flow is externally blocked, so the flag only persists for now.
+void SettingsViewModel::setSkipAmsBlacklistCheck(bool v)
+{
+  if (m_skipAmsBlacklistCheck != v) { m_skipAmsBlacklistCheck = v; SAVE_SETTING("skipAmsBlacklistCheck", v); emit settingsChanged(); }
+}
+
 void SettingsViewModel::setShowDebugOverlay(bool v)
 {
   if (m_showDebugOverlay != v) { m_showDebugOverlay = v; SAVE_SETTING("showDebugOverlay", v); emit settingsChanged(); }
@@ -465,5 +474,13 @@ double SettingsViewModel::storageLength(double display) const
 
 QString SettingsViewModel::lengthUnitLabel() const
 {
-  return m_units == 1 ? QStringLiteral("in") : QStringLiteral("mm");
+  // P11.B2.2 (upstream bec1ce706c): the imperial unit is disambiguated from
+  // the English preposition "in" with an explicit "inches unit" comment
+  // (GLGizmoMeasure.cpp _CTX_utf8("in", "inches")). Qt equivalent:
+  // QCoreApplication::translate with the disambiguation argument.
+  return m_units == 1
+             ? QCoreApplication::translate("SettingsViewModel", "in",
+                                           "inches unit")
+             : QCoreApplication::translate("SettingsViewModel", "mm",
+                                           "millimeters unit");
 }

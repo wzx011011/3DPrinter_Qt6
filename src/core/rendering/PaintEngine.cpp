@@ -20,6 +20,96 @@
 #include <utility>
 
 namespace OWzx {
+namespace {
+
+// P2.3-2: exposes the PROTECTED TriangleSelector state (m_vertices /
+// m_triangles are protected, TriangleSelector.hpp:364+) so the staged
+// seed-fill region can be flattened for the preview overlay. This mirrors
+// upstream TriangleSelectorGUI::render, which subclasses TriangleSelector for
+// exactly the same reason and brightens leaves with is_selected_by_seed_fill
+// (GLGizmoPainterBase.cpp:1123-1157). No behavior is overridden -- read-only
+// accessors.
+class PaintSelector final : public Slic3r::TriangleSelector
+{
+public:
+  explicit PaintSelector(const Slic3r::TriangleMesh &mesh)
+      : Slic3r::TriangleSelector(mesh)
+  {}
+
+  // Flatten the staged seed-fill leaves into a compact ITS (vertex-compacted
+  // like the upstream get_facets output).
+  indexed_triangle_set seedSelectionIts() const
+  {
+    indexed_triangle_set out;
+    std::vector<int> vertexMap(m_vertices.size(), -1);
+    for (const Triangle &tr : m_triangles) {
+      if (tr.is_split() || !tr.valid() || !tr.is_selected_by_seed_fill())
+        continue;
+      Slic3r::Vec3i32 tri;
+      for (int c = 0; c < 3; ++c) {
+        const int old = tr.verts_idxs[c];
+        if (old < 0 || size_t(old) >= m_vertices.size())
+          return {};
+        if (vertexMap[size_t(old)] < 0) {
+          vertexMap[size_t(old)] = int(out.vertices.size());
+          out.vertices.push_back(m_vertices[size_t(old)].v);
+        }
+        tri[c] = vertexMap[size_t(old)];
+      }
+      out.indices.push_back(tri);
+    }
+    return out;
+  }
+
+  bool hasSeedSelection() const
+  {
+    for (const Triangle &tr : m_triangles)
+      if (!tr.is_split() && tr.valid() && tr.is_selected_by_seed_fill())
+        return true;
+    return false;
+  }
+
+  // P2.3-5: gap fragments = leaves whose area is below the gap-area
+  // threshold (upstream TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236). Area is the mesh-space triangle area
+  // (mm2, matching the upstream mm2 slider range).
+  indexed_triangle_set gapFragmentsIts(float gapAreaMm2) const
+  {
+    indexed_triangle_set out;
+    if (gapAreaMm2 <= 0.f)
+      return out;
+    std::vector<int> vertexMap(m_vertices.size(), -1);
+    for (const Triangle &tr : m_triangles) {
+      if (tr.is_split() || !tr.valid())
+        continue;
+      const Slic3r::Vec3f &a = m_vertices[size_t(tr.verts_idxs[0])].v;
+      const Slic3r::Vec3f &b = m_vertices[size_t(tr.verts_idxs[1])].v;
+      const Slic3r::Vec3f &c = m_vertices[size_t(tr.verts_idxs[2])].v;
+      const float area = 0.5f * (b - a).cross(c - a).norm();
+      if (area >= gapAreaMm2)
+        continue;
+      Slic3r::Vec3i32 tri;
+      bool ok = true;
+      for (int k = 0; k < 3; ++k) {
+        const int old = tr.verts_idxs[k];
+        if (old < 0 || size_t(old) >= m_vertices.size()) {
+          ok = false;
+          break;
+        }
+        if (vertexMap[size_t(old)] < 0) {
+          vertexMap[size_t(old)] = int(out.vertices.size());
+          out.vertices.push_back(m_vertices[size_t(old)].v);
+        }
+        tri[k] = vertexMap[size_t(old)];
+      }
+      if (ok)
+        out.indices.push_back(tri);
+    }
+    return out;
+  }
+};
+
+} // namespace
 
 // Out-of-line destructor: the cache holds unique_ptr<TriangleSelector> over a
 // type that is complete here (TriangleSelector.hpp is included by the header).
@@ -29,10 +119,10 @@ namespace OWzx {
 PaintEngine::~PaintEngine() = default;
 
 Slic3r::TriangleSelector *PaintEngine::ensureSelector(
-    int objectIndex, int volumeIndex,
+    int objectIndex, int volumeIndex, PaintKind kind,
     const std::shared_ptr<const Slic3r::TriangleMesh> &meshSharedPtr)
 {
-  const Key key = volumeKey(objectIndex, volumeIndex);
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
   auto it = m_cache.find(key);
   if (it != m_cache.end())
     return it->second.selector.get(); // cache hit (TS-03): reuse the selector
@@ -52,61 +142,98 @@ Slic3r::TriangleSelector *PaintEngine::ensureSelector(
   // is the TS-01 ownership contract bridged at the libslic3r->Qt boundary.
   auto entry = std::make_unique<CacheEntry>();
   entry->mesh = meshSharedPtr;
-  entry->selector = std::make_unique<Slic3r::TriangleSelector>(*meshSharedPtr);
+  // PaintSelector (P2.3-2) subclasses the upstream selector read-only to
+  // expose the staged seed-fill region; no behavior override.
+  entry->selector = std::make_unique<PaintSelector>(*meshSharedPtr);
   Slic3r::TriangleSelector *raw = entry->selector.get();
   m_cache.emplace(key, std::move(*entry));
   return raw;
 }
 
 Slic3r::TriangleSelector *PaintEngine::ensureSelector(int objectIndex,
-                                                      int volumeIndex)
+                                                      int volumeIndex,
+                                                      PaintKind kind)
 {
   // Lazily fetch the TriangleMesh from the Phase 120 accessor. nullptr => no
   // mesh for this (object, volume); ensureSelector returns nullptr.
   std::shared_ptr<const Slic3r::TriangleMesh> mesh =
       m_meshSource ? m_meshSource(objectIndex, volumeIndex) : nullptr;
-  return ensureSelector(objectIndex, volumeIndex, mesh);
+  return ensureSelector(objectIndex, volumeIndex, kind, mesh);
 }
 
-bool PaintEngine::paintAt(int objectIndex, int volumeIndex, int facetIdx,
+bool PaintEngine::paintAt(int objectIndex, int volumeIndex, PaintKind kind,
+                          int facetIdx,
                           const Slic3r::Vec3f &meshLocalHit,
                           float brushRadius, PaintCursorType cursor,
                           Slic3r::EnforcerBlockerType state,
                           const Slic3r::Transform3d &trafo,
                           const Slic3r::Vec3f &cameraPosMeshLocal,
-                          float highlightByAngleDeg)
+                          float highlightByAngleDeg,
+                          const Slic3r::TriangleSelector::ClippingPlane &clippingPlane)
 {
-  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  Slic3r::TriangleSelector *selector =
+      ensureSelector(objectIndex, volumeIndex, kind);
   if (!selector)
     return false; // mesh source had no mesh for the pair
 
   // Upstream GLGizmoPainterBase supplies the camera source separately from the
   // surface hit so Circle cursor clipping follows the actual view direction.
   applyPaintToSelector(*selector, facetIdx, meshLocalHit, brushRadius, cursor,
-                        state, trafo, cameraPosMeshLocal, highlightByAngleDeg);
+                        state, trafo, cameraPosMeshLocal, highlightByAngleDeg,
+                        clippingPlane);
   return true;
 }
 
-bool PaintEngine::smartFillAt(int objectIndex, int volumeIndex, int facetIdx,
+bool PaintEngine::smartFillAt(int objectIndex, int volumeIndex, PaintKind kind,
+                              int facetIdx,
                               const Slic3r::Vec3f &meshLocalHit,
                               float seedFillAngle, float highlightByAngleDeg,
                               Slic3r::EnforcerBlockerType state,
-                              const Slic3r::Transform3d &trafo)
+                              const Slic3r::Transform3d &trafo,
+                              const Slic3r::TriangleSelector::ClippingPlane &clippingPlane)
 {
-  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  Slic3r::TriangleSelector *selector =
+      ensureSelector(objectIndex, volumeIndex, kind);
   if (!selector)
     return false; // mesh source had no mesh for the pair
 
   applySmartFillToSelector(*selector, facetIdx, meshLocalHit, seedFillAngle,
-                           highlightByAngleDeg, state, trafo);
+                           highlightByAngleDeg, state, trafo, clippingPlane);
+  return true;
+}
+
+// P2.3-5 (MMU height-range tool): mirrors the upstream HEIGHT_RANGE brush
+// dispatch (GLGizmoPainterBase.cpp:726-733). The world-space bottom Z comes
+// from the ray hit; cursor_factory builds a HeightRange cursor and select_
+// patch's hr_cursor branch sweeps ALL original facets inside [z, z+height].
+bool PaintEngine::paintHeightRangeAt(int objectIndex, int volumeIndex,
+                                     PaintKind kind, float hitWorldZ,
+                                     float height,
+                                     Slic3r::EnforcerBlockerType state,
+                                     const Slic3r::Transform3d &trafo,
+                                     const Slic3r::Vec3f &cameraPosMeshLocal,
+                                     const Slic3r::TriangleSelector::ClippingPlane &clippingPlane)
+{
+  Slic3r::TriangleSelector *selector =
+      ensureSelector(objectIndex, volumeIndex, kind);
+  if (!selector)
+    return false;
+
+  auto cursor = Slic3r::TriangleSelector::SinglePointCursor::cursor_factory(
+      hitWorldZ, cameraPosMeshLocal, height, trafo, clippingPlane);
+  // facet_start is not consumed by the hr_cursor branch (TriangleSelector.cpp:
+  // 268-275 sweeps every original facet); 0 keeps the contract satisfied.
+  selector->select_patch(/*facet_start=*/0, std::move(cursor), state, trafo,
+                         /*triangle_splitting=*/true,
+                         /*highlight_by_angle_deg=*/0.f);
   return true;
 }
 
 std::shared_ptr<indexed_triangle_set>
-PaintEngine::getFacets(int objectIndex, int volumeIndex,
+PaintEngine::getFacets(int objectIndex, int volumeIndex, PaintKind kind,
                        Slic3r::EnforcerBlockerType state)
 {
-  const Key key = volumeKey(objectIndex, volumeIndex);
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
   auto it = m_cache.find(key);
   if (it == m_cache.end() || !it->second.selector)
     return nullptr;
@@ -119,20 +246,61 @@ PaintEngine::getFacets(int objectIndex, int volumeIndex,
   return its;
 }
 
-bool PaintEngine::hasFacets(int objectIndex, int volumeIndex,
+bool PaintEngine::hasFacets(int objectIndex, int volumeIndex, PaintKind kind,
                             Slic3r::EnforcerBlockerType state) const
 {
-  const Key key = volumeKey(objectIndex, volumeIndex);
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
   auto it = m_cache.find(key);
   if (it == m_cache.end() || !it->second.selector)
     return false;
   return it->second.selector->has_facets(state);
 }
 
-const Slic3r::TriangleSelector *PaintEngine::cachedSelectorForVolume(
-    int objectIndex, int volumeIndex) const
+// P2.3-2: staged seed-fill readback. The cache entry is always a PaintSelector
+// (ensureSelector is the only construction site), so the static_cast is safe.
+std::shared_ptr<indexed_triangle_set>
+PaintEngine::getSeedSelection(int objectIndex, int volumeIndex, PaintKind kind)
 {
-  const Key key = volumeKey(objectIndex, volumeIndex);
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
+  auto it = m_cache.find(key);
+  if (it == m_cache.end() || !it->second.selector)
+    return nullptr;
+  auto *paintSelector = static_cast<PaintSelector *>(it->second.selector.get());
+  return std::make_shared<indexed_triangle_set>(paintSelector->seedSelectionIts());
+}
+
+bool PaintEngine::hasSeedSelection(int objectIndex, int volumeIndex,
+                                   PaintKind kind) const
+{
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
+  auto it = m_cache.find(key);
+  if (it == m_cache.end() || !it->second.selector)
+    return false;
+  auto *paintSelector = static_cast<const PaintSelector *>(
+      it->second.selector.get());
+  return paintSelector->hasSeedSelection();
+}
+
+// P2.3-5: gap fragments (area below the gap-area threshold). The selector
+// is lazily built so the gap-fill tool view works before any stroke (null
+// only when the mesh source has no mesh for the triple).
+std::shared_ptr<indexed_triangle_set>
+PaintEngine::getGapFragments(int objectIndex, int volumeIndex, PaintKind kind,
+                             float gapAreaMm2)
+{
+  Slic3r::TriangleSelector *selector =
+      ensureSelector(objectIndex, volumeIndex, kind);
+  if (!selector)
+    return nullptr;
+  auto *paintSelector = static_cast<PaintSelector *>(selector);
+  return std::make_shared<indexed_triangle_set>(
+      paintSelector->gapFragmentsIts(gapAreaMm2));
+}
+
+const Slic3r::TriangleSelector *PaintEngine::cachedSelectorForVolume(
+    int objectIndex, int volumeIndex, PaintKind kind) const
+{
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
   auto it = m_cache.find(key);
   if (it == m_cache.end() || !it->second.selector)
     return nullptr;
@@ -141,11 +309,11 @@ const Slic3r::TriangleSelector *PaintEngine::cachedSelectorForVolume(
 
 void PaintEngine::clearObject(int objectIndex)
 {
-  // Erase every (objectIndex, *) entry. std::map::erase with iterator-based
+  // Erase every (objectIndex, *, *) entry. std::map::erase with iterator-based
   // loop avoids the iterator-invalidation hazard of a range erase on a key
   // prefix (std::map has no prefix-erase API).
   for (auto it = m_cache.begin(); it != m_cache.end();) {
-    if (it->first.first == objectIndex)
+    if (std::get<0>(it->first) == objectIndex)
       it = m_cache.erase(it);
     else
       ++it;
@@ -153,9 +321,9 @@ void PaintEngine::clearObject(int objectIndex)
 }
 
 std::optional<Slic3r::TriangleSelector::TriangleSplittingData>
-PaintEngine::serialize(int objectIndex, int volumeIndex) const
+PaintEngine::serialize(int objectIndex, int volumeIndex, PaintKind kind) const
 {
-  const Key key = volumeKey(objectIndex, volumeIndex);
+  const Key key = volumeKey(objectIndex, volumeIndex, kind);
   auto it = m_cache.find(key);
   if (it == m_cache.end() || !it->second.selector)
     return std::nullopt;
@@ -163,10 +331,11 @@ PaintEngine::serialize(int objectIndex, int volumeIndex) const
 }
 
 bool PaintEngine::deserialize(
-    int objectIndex, int volumeIndex,
+    int objectIndex, int volumeIndex, PaintKind kind,
     const Slic3r::TriangleSelector::TriangleSplittingData &data)
 {
-  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  Slic3r::TriangleSelector *selector =
+      ensureSelector(objectIndex, volumeIndex, kind);
   if (!selector)
     return false;
   // deserialize assumes the correct mesh is loaded (TriangleSelector.hpp:359).
@@ -189,7 +358,8 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
                           Slic3r::EnforcerBlockerType state,
                           const Slic3r::Transform3d &trafo,
                           const Slic3r::Vec3f &cameraPosMeshLocal,
-                          float highlightByAngleDeg)
+                          float highlightByAngleDeg,
+                          const Slic3r::TriangleSelector::ClippingPlane &clippingPlane)
 {
   // Map the Qt enum back to the upstream CursorType (TriangleSelector.hpp:52).
   const Slic3r::TriangleSelector::CursorType cursorType =
@@ -197,11 +367,12 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
           ? Slic3r::TriangleSelector::CursorType::SPHERE
           : Slic3r::TriangleSelector::CursorType::CIRCLE;
 
-  // Default ClippingPlane (inactive -- offset == FLT_MAX,
-  // TriangleSelector.hpp:65). Phase 121+ may thread a real clipping plane
-  // (cross-section-aware painting).
-  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
-
+  // P2.3-1: the caller converts the world cross-section plane into volume
+  // coordinates (upstream get_clipping_plane_in_volume_coordinates,
+  // GLGizmoPainterBase.cpp:1101) and threads it through here. The Cursor
+  // excludes facets on the clipped side from the patch (TriangleSelector.hpp
+  // Cursor::clipping_plane). Default-constructed = inactive (offset FLT_MAX).
+  //
   // cursor_factory (TriangleSelector.hpp:114) builds the SinglePointCursor
   // (Sphere or Circle) from the mesh-local center + camera source + radius +
   // trafo. The unique_ptr<Cursor> is moved into select_patch.
@@ -233,13 +404,16 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                               const Slic3r::Vec3f &meshLocalHit,
                               float seedFillAngle, float highlightByAngleDeg,
                               Slic3r::EnforcerBlockerType state,
-                              const Slic3r::Transform3d &trafo)
+                              const Slic3r::Transform3d &trafo,
+                              const Slic3r::TriangleSelector::ClippingPlane &clippingPlane)
 {
-  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
   // Upstream applies the region selected by the previous click before
   // selecting the region under the current click. The first click therefore
   // stages a region, while the second click paints the first and stages the
-  // second (GLGizmoPainterBase.cpp SMART_FILL LeftDown ordering).
+  // second (GLGizmoPainterBase.cpp SMART_FILL LeftDown ordering). The P2.3-1
+  // clipping plane bounds the fill to the visible side the same way upstream
+  // threads get_clipping_plane_in_volume_coordinates into seed_fill_select_
+  // triangles (GLGizmoPainterBase.cpp:616).
   selector.seed_fill_apply_on_triangles(/*new_state=*/state);
   selector.seed_fill_select_triangles(/*hit=*/meshLocalHit,
                                       /*facet_start=*/facetIdx,

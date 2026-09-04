@@ -1,0 +1,111 @@
+﻿2026-08-15T01:41:12.0326710Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T01:41:12.0335933Z ##[group]Run actions/checkout@v4
+2026-08-15T01:41:12.0336413Z with:
+2026-08-15T01:41:12.0336648Z   submodules: recursive
+2026-08-15T01:41:12.0336918Z   repository: wzx011011/3DPrinter_Qt6
+2026-08-15T01:41:12.0340999Z   token: ***
+2026-08-15T01:41:12.0341275Z   ssh-strict: true
+2026-08-15T01:41:12.0341495Z   ssh-user: git
+2026-08-15T01:41:12.0341720Z   persist-credentials: true
+2026-08-15T01:41:12.0341974Z   clean: true
+2026-08-15T01:41:12.0342199Z   sparse-checkout-cone-mode: true
+2026-08-15T01:41:12.0342476Z   fetch-depth: 1
+2026-08-15T01:41:12.0342695Z   fetch-tags: false
+2026-08-15T01:41:12.0342920Z   show-progress: true
+2026-08-15T01:41:12.0345169Z   lfs: false
+2026-08-15T01:41:12.0345443Z   set-safe-directory: true
+2026-08-15T01:41:12.0345722Z   allow-unsafe-pr-checkout: false
+2026-08-15T01:41:12.0346361Z env:
+2026-08-15T01:41:12.0346577Z   TAG_NAME: v5.15.8
+2026-08-15T01:41:12.0347018Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T01:41:12.0347770Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T01:41:12.0348440Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T01:41:12.0349006Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T01:41:12.0349422Z ##[endgroup]
+2026-08-15T01:41:12.1768011Z Syncing repository: wzx011011/3DPrinter_Qt6
+2026-08-15T01:41:12.1769360Z ##[group]Getting Git version info
+2026-08-15T01:41:12.1769773Z Working directory is 'D:\a\3DPrinter_Qt6\3DPrinter_Qt6'
+2026-08-15T01:41:12.2738794Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-08-15T01:41:12.6254581Z git version 2.55.0.windows.3
+2026-08-15T01:41:12.6293682Z ##[endgroup]
+2026-08-15T01:41:12.6314110Z Temporarily overriding HOME='D:\a\_temp\38add341-8b90-4c0a-888c-ef6577207b8f' before making global git config changes
+2026-08-15T01:41:12.6315279Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T01:41:12.6325652Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\3DPrinter_Qt6\3DPrinter_Qt6
+2026-08-15T01:41:12.6835254Z Deleting the contents of 'D:\a\3DPrinter_Qt6\3DPrinter_Qt6'
+2026-08-15T01:41:12.6840196Z ##[group]Initializing the repository
+2026-08-15T01:41:12.6848684Z [command]"C:\Program Files\Git\bin\git.exe" init D:\a\3DPrinter_Qt6\3DPrinter_Qt6
+2026-08-15T01:41:12.7706164Z Initialized empty Git repository in D:/a/3DPrinter_Qt6/3DPrinter_Qt6/.git/
+2026-08-15T01:41:12.7748538Z [command]"C:\Program Files\Git\bin\git.exe" remote add origin https://github.com/wzx011011/3DPrinter_Qt6
+2026-08-15T01:41:12.8294320Z ##[endgroup]
+2026-08-15T01:41:12.8294784Z ##[group]Disabling automatic garbage collection
+2026-08-15T01:41:12.8309096Z [command]"C:\Program Files\Git\bin\git.exe" config --local gc.auto 0
+2026-08-15T01:41:12.8581894Z ##[endgroup]
+2026-08-15T01:41:12.8582643Z ##[group]Setting up auth
+2026-08-15T01:41:12.8594582Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T01:41:12.8866180Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-08-15T01:41:14.1713330Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T01:41:14.1928403Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-08-15T01:41:14.6206758Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T01:41:14.6433117Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-08-15T01:41:15.0468458Z [command]"C:\Program Files\Git\bin\git.exe" config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-08-15T01:41:15.0691883Z ##[endgroup]
+2026-08-15T01:41:15.0692625Z ##[group]Fetching the repository
+2026-08-15T01:41:15.0705725Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +34f748fcaf1930f7d73b5be71bd5dbcff9109bb6:refs/tags/v5.15.8
+2026-08-15T01:41:16.7125428Z From https://github.com/wzx011011/3DPrinter_Qt6
+2026-08-15T01:41:16.7127181Z  * [new ref]         34f748fcaf1930f7d73b5be71bd5dbcff9109bb6 -> v5.15.8
+2026-08-15T01:41:16.7152915Z ##[endgroup]
+2026-08-15T01:41:16.7153558Z ##[group]Determining the checkout info
+2026-08-15T01:41:16.7156503Z ##[endgroup]
+2026-08-15T01:41:16.7164958Z [command]"C:\Program Files\Git\bin\git.exe" sparse-checkout disable
+2026-08-15T01:41:16.7503373Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all extensions.worktreeConfig
+2026-08-15T01:41:16.7724972Z ##[group]Checking out the ref
+2026-08-15T01:41:16.7737395Z [command]"C:\Program Files\Git\bin\git.exe" checkout --progress --force refs/tags/v5.15.8
+2026-08-15T01:41:17.2746172Z Note: switching to 'refs/tags/v5.15.8'.
+2026-08-15T01:41:17.2746919Z 
+2026-08-15T01:41:17.2747687Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-08-15T01:41:17.2748885Z changes and commit them, and you can discard any commits you make in this
+2026-08-15T01:41:17.2749977Z state without impacting any branches by switching back to a branch.
+2026-08-15T01:41:17.2750686Z 
+2026-08-15T01:41:17.2751201Z If you want to create a new branch to retain commits you create, you may
+2026-08-15T01:41:17.2752225Z do so (now or later) by using -c with the switch command. Example:
+2026-08-15T01:41:17.2754189Z 
+2026-08-15T01:41:17.2754428Z   git switch -c <new-branch-name>
+2026-08-15T01:41:17.2754745Z 
+2026-08-15T01:41:17.2754899Z Or undo this operation with:
+2026-08-15T01:41:17.2755184Z 
+2026-08-15T01:41:17.2755330Z   git switch -
+2026-08-15T01:41:17.2755513Z 
+2026-08-15T01:41:17.2755940Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-08-15T01:41:17.2756456Z 
+2026-08-15T01:41:17.2757204Z HEAD is now at 34f748f ci(fix): pin CI CMake to 3.31 — pre-3.5 minimums are pervasive in the tree
+2026-08-15T01:41:17.2825294Z ##[endgroup]
+2026-08-15T01:41:17.2825913Z ##[group]Setting up auth for fetching submodules
+2026-08-15T01:41:17.2836136Z [command]"C:\Program Files\Git\bin\git.exe" config --global http.https://github.com/.extraheader "AUTHORIZATION: basic ***"
+2026-08-15T01:41:17.3085909Z [command]"C:\Program Files\Git\bin\git.exe" config --global --unset-all url.https://github.com/.insteadOf
+2026-08-15T01:41:17.3337244Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add url.https://github.com/.insteadOf git@github.com:
+2026-08-15T01:41:17.3568449Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add url.https://github.com/.insteadOf org-8874000@github.com:
+2026-08-15T01:41:17.3792972Z ##[endgroup]
+2026-08-15T01:41:17.3793593Z ##[group]Fetching submodules
+2026-08-15T01:41:17.3800957Z [command]"C:\Program Files\Git\bin\git.exe" submodule sync --recursive
+2026-08-15T01:41:17.8229850Z [command]"C:\Program Files\Git\bin\git.exe" -c protocol.version=2 submodule update --init --force --depth=1 --recursive
+2026-08-15T01:41:18.2254915Z Submodule 'third_party/OrcaSlicer' (https://github.com/wzx011011/OrcaSlicer.git) registered for path 'third_party/OrcaSlicer'
+2026-08-15T01:41:18.2679708Z Cloning into 'D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer'...
+2026-08-15T01:41:35.1321476Z From https://github.com/wzx011011/OrcaSlicer
+2026-08-15T01:41:35.1322021Z  * branch              9c6ee88702edc3cd6eb253664cd60974a6983792 -> FETCH_HEAD
+2026-08-15T01:41:38.3700422Z Submodule path 'third_party/OrcaSlicer': checked out '9c6ee88702edc3cd6eb253664cd60974a6983792'
+2026-08-15T01:41:38.3897313Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local gc.auto 0"
+2026-08-15T01:41:38.8104713Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:41:38.8551764Z ##[endgroup]
+2026-08-15T01:41:38.8552189Z ##[group]Persisting credentials for submodules
+2026-08-15T01:41:38.8562997Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'url\.https\:\/\/github\.com\/\.insteadOf' && git config --local --unset-all 'url.https://github.com/.insteadOf' || :\""
+2026-08-15T01:41:39.2818451Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:41:39.3519283Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local 'http.https://github.com/.extraheader' 'AUTHORIZATION: basic ***' && git config --local --show-origin --name-only --get-regexp remote.origin.url\""
+2026-08-15T01:41:39.7488317Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:41:39.8112703Z file:D:/a/3DPrinter_Qt6/3DPrinter_Qt6/.git/modules/third_party/OrcaSlicer/config	remote.origin.url
+2026-08-15T01:41:39.8326552Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --add 'url.https://github.com/.insteadOf' 'git@github.com:'"
+2026-08-15T01:41:40.2650219Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:41:40.3117335Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --add 'url.https://github.com/.insteadOf' 'org-8874000@github.com:'"
+2026-08-15T01:41:40.8142146Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:41:40.8605007Z ##[endgroup]
+2026-08-15T01:41:40.8851107Z [command]"C:\Program Files\Git\bin\git.exe" log -1 --format=%H
+2026-08-15T01:41:40.9054169Z 34f748fcaf1930f7d73b5be71bd5dbcff9109bb6

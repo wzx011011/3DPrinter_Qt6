@@ -21,6 +21,7 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <tlhelp32.h>
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
 
@@ -81,6 +82,43 @@ static void appendStartupLog(const QString &line)
   out << QDateTime::currentDateTime().toString(Qt::ISODateWithMs)
       << " " << line << "\n";
 }
+
+#ifdef Q_OS_WIN
+// P7.1: remote-control tools (ToDesk / 向日葵 / AnyDesk / TeamViewer /
+// RustDesk) drive the console session directly — SM_REMOTESESSION stays 0 —
+// so their presence is detected by process name instead. Matches the exe
+// name by case-insensitive prefix so "_Service"/"_x64" suffixes also hit.
+static bool remoteControlToolRunning()
+{
+  const wchar_t *kMarkers[] = {
+      L"todesk", L"sunlogin", L"oray", L"anydesk", L"teamviewer", L"rustdesk",
+  };
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE)
+    return false;
+  PROCESSENTRY32W entry{};
+  entry.dwSize = sizeof(entry);
+  bool found = false;
+  if (Process32FirstW(snapshot, &entry))
+  {
+    do
+    {
+      const QString exe =
+          QString::fromWCharArray(entry.szExeFile).toLower();
+      for (const wchar_t *marker : kMarkers)
+      {
+        if (exe.startsWith(QString::fromWCharArray(marker)))
+        {
+          found = true;
+          break;
+        }
+      }
+    } while (!found && Process32NextW(snapshot, &entry));
+  }
+  CloseHandle(snapshot);
+  return found;
+}
+#endif
 
 struct StartupOpenRequest
 {
@@ -309,9 +347,42 @@ int main(int argc, char *argv[])
   // D3D12 is NOT the default because it crashes at QQuickWindow swapchain
   // init on AMD Radeon APU (v5.7 Phase 211 finding). OWZX_RHI_RENDERER=d3d12
   // opts in on verified discrete-GPU hosts.
+
+#ifdef Q_OS_WIN
+  // P7.1 (remote access): under a remote session (ToDesk / RDP / virtual
+  // display drivers), GPU-presented swapchain frames are frequently invisible
+  // to the remote capture pipeline — the window LOOKS frozen (no hover
+  // highlight, clicks appear dead) while input actually lands. Route the
+  // whole UI to the Qt Quick 2D software backend, which presents through
+  // GDI-compatible bitmaps every capture path sees. GLViewport then resolves
+  // to SoftwareViewport (QQuickPaintedItem), so the 3D canvas renders through
+  // the same path. Trade-off: lower peak render performance in remote
+  // sessions — accepted in exchange for a fully operable window.
+  //
+  // Detection covers BOTH transport kinds:
+  //   - SM_REMOTESESSION: true for terminal-services remoting (RDP).
+  //   - remoteControlToolRunning(): ToDesk / 向日葵 / AnyDesk / TeamViewer /
+  //     RustDesk do NOT create a terminal-services session — the marker is
+  //     their own process running on the host.
+  const bool remoteSession = GetSystemMetrics(SM_REMOTESESSION) != 0
+      || remoteControlToolRunning();
+  // Wave 2 GUI perf: always-on remote-control SERVICES (ToDesk/Sunlogin
+  // running in the background of a local session) must not permanently pin
+  // the app to software rendering. OWZX_FORCE_RHI=1 overrides the detection
+  // for local benchmarking / driver debugging (docs/perf-baseline.md).
+  const bool forceRhi = qEnvironmentVariableIntValue("OWZX_FORCE_RHI") != 0;
+  if (remoteSession && !forceRhi) {
+    qputenv("QT_QUICK_BACKEND", "software");
+    appendStartupLog(QStringLiteral(
+        "Remote session detected: software rendering + SoftwareViewport enabled"));
+  }
+#else
+  const bool remoteSession = false;
+#endif
+
   const RhiBackendSelection rhiSelection = selectRhiBackendFromEnvironment();
 
-  if (rhiSelection.canUseRhi) {
+  if (rhiSelection.canUseRhi && (!remoteSession || forceRhi)) {
     QQuickWindow::setGraphicsApi(rhiSelection.selectedGraphicsApi);
   } else {
     if (rhiSelection.enabled)
@@ -348,8 +419,9 @@ int main(int argc, char *argv[])
     appendStartupLog(QStringLiteral("QRhi backend selection: %1").arg(rhiSelection.diagnostics()));
 
   // Register the stable QML type name. RhiViewport is the default path, with
-  // SoftwareViewport retained as a driver/init fallback when QRhi is unavailable.
-  if (rhiSelection.canUseRhi)
+  // SoftwareViewport retained as a driver/init fallback when QRhi is unavailable
+  // and forced for remote sessions (P7.1) where GPU frames are not capturable.
+  if (rhiSelection.canUseRhi && (!remoteSession || forceRhi))
     qmlRegisterType<RhiViewport>("OWzxGL", 1, 0, "GLViewport");
   else
     qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
@@ -423,12 +495,21 @@ int main(int argc, char *argv[])
     auto *rootWindow = qobject_cast<QQuickWindow *>(engine->rootObjects().value(0));
     if (rootWindow)
     {
-      auto *frameGateConnection = new QMetaObject::Connection;
+      // Wave 2 GUI perf (bugfix): the old one-shot freed the
+      // QMetaObject::Connection inside the handler; with Qt::QueuedConnection
+      // a SECOND frameSwapped meta-call can already sit in the queue when the
+      // first handler runs (heavy first frames, e.g. a 2M-triangle
+      // --load-model), and the second delivery dereferenced the freed
+      // connection (AV in QObjectPrivate::removeConnection). The shared-ptr
+      // guard makes the handler idempotent with no raw delete.
+      auto frameGateConnection = std::make_shared<QMetaObject::Connection>();
       *frameGateConnection = QObject::connect(
           rootWindow, &QQuickWindow::frameSwapped, rootWindow,
           [&backend, startupOpenRequest, frameGateConnection]() {
+            if (!(*frameGateConnection))
+              return; // already fired once
             QObject::disconnect(*frameGateConnection);
-            delete frameGateConnection;
+            *frameGateConnection = QMetaObject::Connection{};
             applyStartupOpenRequests(startupOpenRequest, backend);
           },
           Qt::QueuedConnection);

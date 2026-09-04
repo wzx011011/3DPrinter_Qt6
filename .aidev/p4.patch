@@ -1,0 +1,4 @@
+diff --git a/src/core/viewmodels/EditorViewModel.cpp b/src/core/viewmodels/EditorViewModel.cpp
+index 5e32e04..96464ea 100644
+--- a/src/core/viewmodels/EditorViewModel.cpp
++++ b/src/core/viewmodels/EditorViewModel.cpp

@@ -1,5 +1,7 @@
 #include "ProjectServiceMock.h"
 
+#include "core/util/PerfLog.h"
+
 #include <QFileInfo>
 #include <QFile>
 #include <QDir>
@@ -26,6 +28,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 #include <limits>
 #include <cstdint>
+#include <unordered_map>
 #include <unordered_set>
 #include <QtMath>
 #include <cmath>
@@ -48,6 +51,7 @@
 #include <libslic3r/ModelArrange.hpp>
 #include <libslic3r/TriangleMeshSlicer.hpp>
 #include <libslic3r/MeshBoolean.hpp>
+#include <libslic3r/FaceDetector.hpp>  // P2.7: real exterior-face recognition
 #include <libslic3r/Geometry.hpp>
 #include <libslic3r/CutUtils.hpp>
 #include <libslic3r/Semver.hpp>
@@ -783,6 +787,71 @@ QStringList ProjectServiceMock::objMtlColors(const QString &objPath) const
 }
 
 #ifdef HAS_LIBSLIC3R
+// Wave 4a (perf): FNV-1a 64-bit over raw little-endian words. Chosen over
+// pulling a hash library because the digest never leaves the process (it
+// only gates Print reuse) and must stay stable within one build.
+namespace
+{
+inline void fnvMix(quint64 &h, quint64 word)
+{
+  h ^= word;
+  h *= 0x100000001b3ULL;
+}
+inline void fnvMixDouble(quint64 &h, double value)
+{
+  quint64 bits = 0;
+  static_assert(sizeof(bits) == sizeof(value), "double must be 64-bit");
+  std::memcpy(&bits, &value, sizeof(bits));
+  fnvMix(h, bits);
+}
+} // namespace
+
+quint64 ProjectServiceMock::currentPlateGeometrySignature() const
+{
+  if (!model_)
+    return 0;
+
+  const QList<int> plateObjectIndices = currentPlateObjectIndices();
+  quint64 h = 0xcbf29ce484222325ULL;
+  fnvMix(h, quint64(plateObjectIndices.size()));
+  for (int objectIndex : plateObjectIndices)
+  {
+    if (objectIndex < 0 || objectIndex >= int(model_->objects.size()))
+      continue;
+    const Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+    if (!obj)
+      continue;
+    fnvMix(h, quint64(obj->volumes.size()));
+    fnvMix(h, quint64(obj->instances.size()));
+    fnvMix(h, quint64(obj->id().id));
+    for (const Slic3r::ModelVolume *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      const auto &its = vol->mesh().its;
+      fnvMix(h, quint64(its.vertices.size()));
+      fnvMix(h, quint64(its.indices.size()));
+      fnvMix(h, quint64(int(vol->type())));
+      fnvMix(h, quint64(vol->extruder_id()));
+      const Slic3r::Transform3d m = vol->get_transformation().get_matrix();
+      for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+          fnvMixDouble(h, m(r, c));
+    }
+    for (const Slic3r::ModelInstance *inst : obj->instances)
+    {
+      if (!inst)
+        continue;
+      const Slic3r::Transform3d m = inst->get_transformation().get_matrix();
+      for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+          fnvMixDouble(h, m(r, c));
+      fnvMix(h, quint64(inst->printable ? 1 : 0));
+    }
+  }
+  return h;
+}
+
 std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() const
 {
   if (!model_ || !m_plateList || m_plateList->currentPlateIndex() < 0 ||
@@ -1205,8 +1274,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
         printableStates.append(printable);
 
-        const bool visible = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
-        visibleStates.append(visible);
+        // R-P0.5: same source as the printable mirror.
+        visibleStates.append(printable);
       }
     }
     else
@@ -1454,36 +1523,37 @@ void ProjectServiceMock::setProjectConfigOverlay(const QVariantMap &overlay)
 
 bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 {
+    // R-P0.4: "Save As" must produce the SAME archive as "Save" -- the full
+    // storeProject3mf writer (plate_data_list + per-plate thumbnails, upstream
+    // Plater::save_project -> export_3mf, Plater.cpp:12165) plus the OWzx
+    // plate filament-state sidecar. The previous inline Prusa-style
+    // store_3mf silently dropped ALL multi-plate state, so reloading a
+    // multi-plate project collapsed every object onto plate 1 with names /
+    // locks / thumbnails / filament maps lost (silent data loss).
 #ifdef HAS_LIBSLIC3R
+    if (loading_) {
+        lastError_ = tr("加载中，无法保存");
+        emit projectChanged();
+        return false;
+    }
     if (!model_) {
         qWarning("[Project] saveProjectAs: no model loaded");
         return false;
     }
-    // 构建 config（从当前 model 的 default config）
-    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
-    // v5.16 (PSET2-06): apply the preset-selection overlay (tier preset ids +
-    // filament_presets slot vector) as string options so they round-trip
-    // through the 3MF config like upstream's embedded PresetBundle state.
-    for (auto it = m_projectConfigOverlay.constBegin(); it != m_projectConfigOverlay.constEnd(); ++it) {
-        config.set_key_value(it.key().toStdString(),
-                             new Slic3r::ConfigOptionString(it.value().toString().toStdString()));
+    if (!storeProject3mf(filePath))
+        return false;
+    if (!writePlateFilamentStateSidecar(filePath)) {
+        emit projectChanged();
+        return false;
     }
-    // 调用 libslic3r store_3mf（Format/3mf.hpp:60）
-    // model_ 是裸指针 Slic3r::Model*（非 unique_ptr）
-    bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),
-                                model_,
-                                &config,
-                                false,   // fullpath_sources=false
-                                nullptr, // thumbnail=nullptr
-                                true);   // zip64=true
-    if (ok) {
-        qDebug("[Project] saved project to: %s", filePath.toUtf8().constData());
-        currentProjectPath_ = filePath;
-    } else {
-        qWarning("[Project] store_3mf failed for: %s", filePath.toUtf8().constData());
-    }
-    return ok;
+    currentProjectPath_ = filePath;
+    sourceFilePath_ = filePath;
+    projectName_ = QFileInfo(filePath).completeBaseName();
+    lastError_.clear();
+    emit projectChanged();
+    return true;
 #else
+    Q_UNUSED(filePath)
     qWarning("[Project] saveProjectAs: HAS_LIBSLIC3R not enabled");
     return false;
 #endif
@@ -1492,27 +1562,23 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
-    // Phase 241 (PAGE-04): backup primitive. Same store_3mf payload as
-    // saveProjectAs, but currentProjectPath_ stays untouched so a backup
+    // Phase 241 (PAGE-04): backup primitive. Same FULL writer as saveProject
+    // (R-P0.4: the previous Prusa-style store_3mf dropped plate_data_list /
+    // thumbnails, so restoring a backup collapsed the project onto plate 1),
+    // but currentProjectPath_ / sourceFilePath_ stay untouched so a backup
     // never hijacks the user's current project (upstream backup_switch also
     // writes to a separate cache copy, not the project file).
+    if (loading_) {
+        lastError_ = tr("加载中，无法保存");
+        return false;
+    }
     if (!model_) {
         qWarning("[Project] writeProjectSnapshot: no model loaded");
         return false;
     }
-    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
-    for (auto it = m_projectConfigOverlay.constBegin(); it != m_projectConfigOverlay.constEnd(); ++it) {
-        config.set_key_value(it.key().toStdString(),
-                             new Slic3r::ConfigOptionString(it.value().toString().toStdString()));
-    }
-    const bool ok = Slic3r::store_3mf(filePath.toStdString().c_str(),
-                                      model_,
-                                      &config,
-                                      false,   // fullpath_sources=false
-                                      nullptr, // thumbnail=nullptr
-                                      true);   // zip64=true
+    const bool ok = storeProject3mf(filePath);
     if (!ok)
-        qWarning("[Project] snapshot store_3mf failed for: %s", filePath.toUtf8().constData());
+        qWarning("[Project] snapshot store failed for: %s", filePath.toUtf8().constData());
     else
         qDebug("[Project] project snapshot written: %s", filePath.toUtf8().constData());
     return ok;
@@ -1568,8 +1634,13 @@ bool ProjectServiceMock::exportModel(const QString &filePath, const QString &for
         combined.WriteOBJFile(nativePath.constData());
         return true;
     } else if (ext == "3mf") {
-        // 导出 3MF（复用 store_3mf）
-        return saveProjectAs(filePath);
+        // R-P0.4: export the FULL project archive (plate_data_list +
+        // thumbnails + overlay config) via writeProjectSnapshot -- the same
+        // writer as Save but WITHOUT project bookkeeping, so exporting a copy
+        // never hijacks currentProjectPath_/sourceFilePath_ (upstream
+        // "Export as 3MF" keeps the current project, Plater.cpp:12165 saves,
+        // export stays side-effect free).
+        return writeProjectSnapshot(filePath);
     }
     qWarning("[Project] exportModel: unsupported format %s", format.toUtf8().constData());
     return false;
@@ -1642,9 +1713,11 @@ bool ProjectServiceMock::deletePlate(int plateIndex)
     return false;
 
   const int prevCurrent = m_plateList->currentPlateIndex();
+  const int removedPrintId = m_plateList->printIdForPlateIndex(plateIndex);
   if (!m_plateList->deletePlate(plateIndex))
     return false;  // refuses last plate / invalid index
 
+  emit plateRemoved(removedPrintId);
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
   if (m_plateList->currentPlateIndex() != prevCurrent)
@@ -1752,6 +1825,23 @@ void ProjectServiceMock::setPlateSliceResultValid(int plateIndex, bool valid)
   if (p) p->setSliceResultValid(valid);
 }
 
+int ProjectServiceMock::platePrintId(int plateIndex) const
+{
+  return m_plateList ? m_plateList->printIdForPlateIndex(plateIndex) : -1;
+}
+
+int ProjectServiceMock::plateIndexForPrintId(int printId) const
+{
+  return m_plateList ? m_plateList->plateIndexForPrintId(printId) : -1;
+}
+
+void ProjectServiceMock::setPlateSliceResultValidByPrintId(int printId, bool valid)
+{
+  const int plateIndex = plateIndexForPrintId(printId);
+  if (plateIndex >= 0)
+    setPlateSliceResultValid(plateIndex, valid);
+}
+
 void ProjectServiceMock::setAllSliceResultsValid(bool valid)
 {
   if (!m_plateList) return;
@@ -1775,6 +1865,22 @@ bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QLi
   std::vector<int> vmaps(maps.begin(), maps.end());
   p->setFilamentMapMode(mode);
   p->setFilamentMaps(vmaps);
+#ifdef HAS_LIBSLIC3R
+  // Keep the live config in sync with the metadata fields. SliceService applies
+  // this config through plateDynamicConfig() before slicing, matching the
+  // upstream per-plate config write used by the save path.
+  if (auto *modeOpt = p->config().option("filament_map_mode", true))
+    modeOpt->setInt(static_cast<int>(p->filamentMapMode()));
+  else {
+    auto *createdModeOpt = new Slic3r::ConfigOptionEnumGeneric();
+    createdModeOpt->setInt(static_cast<int>(p->filamentMapMode()));
+    p->config().set_key_value("filament_map_mode", createdModeOpt);
+  }
+  if (auto *mapOpt = p->config().option<Slic3r::ConfigOptionInts>("filament_map", true))
+    mapOpt->values = vmaps;
+  else
+    p->config().set_key_value("filament_map", new Slic3r::ConfigOptionInts(vmaps));
+#endif
   emit projectChanged();
   return true;
 }
@@ -2147,6 +2253,10 @@ bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
 #endif
 
   objectPrintableStates_[index] = printable;
+  // R-P0.5: keep the visibility mirror in lockstep (both mirrors describe the
+  // same ModelInstance::printable flag -- see setObjectVisible).
+  if (index < objectVisibleStates_.size())
+    objectVisibleStates_[index] = printable;
   lastError_.clear();
   emit projectChanged();
   return true;
@@ -2197,6 +2307,9 @@ bool ProjectServiceMock::setInstancePrintable(int objectIndex, int instanceIndex
     // objectPrintable() consumers agree with the first instance.
     if (objectIndex < objectPrintableStates_.size())
       objectPrintableStates_[objectIndex] = printable;
+    // R-P0.5: visibility mirror describes the same flag -- sync it too.
+    if (objectIndex < objectVisibleStates_.size())
+      objectVisibleStates_[objectIndex] = printable;
   }
   lastError_.clear();
   emit projectChanged();
@@ -2250,26 +2363,16 @@ bool ProjectServiceMock::objectVisible(int index) const
 
 bool ProjectServiceMock::setObjectVisible(int index, bool visible)
 {
-  if (loading_)
-    return false;
-
-  if (index < 0 || index >= objectVisibleStates_.size())
-    return false;
-
-#ifdef HAS_LIBSLIC3R
-  if (!model_ || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
-    return false;
-
-  for (auto *inst : model_->objects[size_t(index)]->instances)
-  {
-    if (inst)
-      inst->printable = visible;
-  }
-#endif
-
-  objectVisibleStates_[index] = visible;
-  emit projectChanged();
-  return true;
+  // R-P0.5: in the locked upstream snapshot there is ONE object-level flag,
+  // ModelInstance::printable -- the object-list "eye" IS the printable
+  // indicator (GUI_ObjectList.cpp:5833-5853 toggle_instance_printable), and
+  // unprintable instances are excluded from Print::apply. There is no
+  // render-only ModelVolume::visible in this tree, so visibility must route
+  // through the SAME write path as printable. Previously this wrote
+  // inst->printable directly while updating only objectVisibleStates_, so the
+  // printable mirror (object list eye column, P16.6 actions) silently drifted
+  // out of sync with the engine flag.
+  return setObjectPrintable(index, visible);
 }
 
 int ProjectServiceMock::objectVolumeCount(int index) const
@@ -3491,8 +3594,9 @@ bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &
         return false;
       }
 
-      // Phase 144 (EMB-02): depth from m_embossDepth Q_PROPERTY (was hardcoded 2.0).
-      const double depth = static_cast<double>(m_embossDepth > 0.0f ? m_embossDepth : 2.0f);
+      // Phase 144 (EMB-02): depth from m_embossDepth Q_PROPERTY (upstream
+      // default projection depth is 1 mm, TextConfiguration.hpp/EmbossShape.hpp).
+      const double depth = static_cast<double>(m_embossDepth > 0.0f ? m_embossDepth : 1.0f);
       Slic3r::Emboss::ProjectZ projection(depth);
       auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
 
@@ -3504,21 +3608,34 @@ bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &
 
       // 5. 添加为真实 Volume
       Slic3r::TriangleMesh mesh(std::move(its));
-      auto *newVol = model_->objects[size_t(objectIndex)]->add_volume(std::move(mesh), Slic3r::ModelVolumeType::MODEL_PART);
+      // P2.7 (registered diff closure): the Emboss gizmo's volume_type
+      // selection routes new text volumes to ModelPart (default),
+      // NegativeVolume (text as a cut-out) or ParameterModifier — mirrors
+      // the upstream GLGizmoEmboss volume_type selector.
+      Slic3r::ModelVolumeType textVolumeType = Slic3r::ModelVolumeType::MODEL_PART;
+      if (m_textVolumeType == 1)
+        textVolumeType = Slic3r::ModelVolumeType::NEGATIVE_VOLUME;
+      else if (m_textVolumeType == 2)
+        textVolumeType = Slic3r::ModelVolumeType::PARAMETER_MODIFIER;
+      auto *newVol = model_->objects[size_t(objectIndex)]->add_volume(std::move(mesh), textVolumeType);
       if (newVol)
       {
-        const QString volName = text.length() > 12 ? text.left(12) + "..." : text;
-        newVol->name = volName.toStdString();
-        newVol->set_type(Slic3r::ModelVolumeType::MODEL_PART);
+        // P2.7 (TEXT-NAMING): upstream names the volume with the full text,
+        // newlines folded to spaces (GLGizmoEmboss.cpp:3273-3277); the old
+        // 12-char truncation is applied only to the mock UI entry below.
+        QString fullText = text;
+        fullText.replace(QLatin1Char('\n'), QLatin1Char(' '));
+        newVol->name = fullText.toStdString();
+        newVol->set_type(textVolumeType);
         // Phase 155 (CLOS-02): attach editable-text metadata so the volume
         // round-trips through 3MF as a re-editable TextEmboss (upstream
         // store_bbs_3mf writes `<slic3rpe:text>` automatically).
         attachEmbossMetadata(newVol, text, fontPath, m_embossHeight, m_embossDepth,
                              m_embossBoldness, m_embossItalic);
-        // 同步 Mock 数据
+        // 同步 Mock 数据（UI 列表沿用 12 字符截断显示）
         auto &vols = m_mockVolumes[objectIndex];
         MockVolumeEntry entry;
-        entry.name = volName;
+        entry.name = fullText.length() > 12 ? fullText.left(12) + "..." : fullText;
         entry.type = MockVolumeType::TextEmboss;
         vols.append(entry);
         errMsg.clear();
@@ -3719,7 +3836,7 @@ void ProjectServiceMock::cancelEmbossVolume()
 
 // ── SVG 浮雕 volume（对齐上游 GLGizmoSVG → Model::read_from_file）──
 
-bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier)
+bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier, float xyScale)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3765,6 +3882,18 @@ bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePat
               auto tr = newVol->get_transformation();
               const auto sc = tr.get_scaling_factor();
               tr.set_scaling_factor(Slic3r::Vec3d(sc.x(), sc.y(), sc.z() * static_cast<double>(dz)));
+              newVol->set_transformation(tr);
+            }
+            // P2.7 (SVG-SCALE): the gizmo's Size input scales the shape XY
+            // with keep-ratio (upstream GLGizmoSVG Size + m_keep_ratio).
+            const float sxy = (xyScale > 0.0f) ? xyScale : 1.0f;
+            if (std::abs(sxy - 1.0f) > 1e-4f)
+            {
+              auto tr = newVol->get_transformation();
+              const auto sc = tr.get_scaling_factor();
+              tr.set_scaling_factor(Slic3r::Vec3d(sc.x() * static_cast<double>(sxy),
+                                                  sc.y() * static_cast<double>(sxy),
+                                                  sc.z()));
               newVol->set_transformation(tr);
             }
             // 同步 Mock 数据
@@ -4655,6 +4784,264 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
 #endif
 }
 
+int ProjectServiceMock::meshBooleanVolumes(int srcObjectIndex, int srcVolumeIndex,
+                                           int toolObjectIndex, int toolVolumeIndex,
+                                           int operation, bool deleteInput)
+{
+#ifdef HAS_LIBSLIC3R
+  auto fail = [](const char *tag)
+  {
+    qWarning() << "[meshBooleanVolumes] fail:" << tag;
+    return -1;
+  };
+  if (!model_ || srcObjectIndex < 0 ||
+      size_t(srcObjectIndex) >= model_->objects.size() || toolObjectIndex < 0 ||
+      size_t(toolObjectIndex) >= model_->objects.size())
+    return fail("bad-object-index");
+  auto *srcObj = model_->objects[size_t(srcObjectIndex)];
+  auto *toolObj = model_->objects[size_t(toolObjectIndex)];
+  if (!srcObj || !toolObj)
+    return fail("null-object");
+  Slic3r::ModelVolume *oldSrcVol = nullptr;
+  Slic3r::ModelVolume *toolVol = nullptr;
+  // Volume index -1 resolves to the object's first model_part volume.
+  auto resolveVolume = [](Slic3r::ModelObject *obj, int &volumeIndex)
+      -> Slic3r::ModelVolume *
+  {
+    if (volumeIndex >= 0)
+      return volumeIndex < int(obj->volumes.size()) ? obj->volumes[size_t(volumeIndex)]
+                                                    : nullptr;
+    for (size_t i = 0; i < obj->volumes.size(); ++i)
+    {
+      if (obj->volumes[i] && obj->volumes[i]->is_model_part())
+      {
+        volumeIndex = int(i);
+        return obj->volumes[i];
+      }
+    }
+    return nullptr;
+  };
+  oldSrcVol = resolveVolume(srcObj, srcVolumeIndex);
+  toolVol = resolveVolume(toolObj, toolVolumeIndex);
+  if (!oldSrcVol || !toolVol || !oldSrcVol->is_model_part() ||
+      !toolVol->is_model_part())
+    return fail("volume-not-model-part");
+
+  try
+  {
+    // Operand meshes carry their volume transform (upstream
+    // GLGizmoMeshBoolean.cpp:344-345 temp mesh + transform(m_trafo)).
+    Slic3r::TriangleMesh srcMesh = oldSrcVol->mesh();
+    srcMesh.transform(oldSrcVol->get_matrix());
+    Slic3r::TriangleMesh toolMesh = toolVol->mesh();
+    toolMesh.transform(toolVol->get_matrix());
+    if (srcMesh.its.indices.empty() || toolMesh.its.indices.empty())
+      return fail("empty-operand-mesh");
+
+    // Upstream engine is MCUT (GLGizmoMeshBoolean.cpp:347/365/383):
+    // UNION / A_NOT_B / INTERSECTION. mcut_from_source is linked into
+    // libslic3r, so the real make_boolean is available; when it yields no
+    // piece (MCUT bails on edge-case inputs), fall back to the proven CGAL
+    // corefinement ops (Phase 137).
+    const char *opts =
+        operation == 0 ? "UNION" : operation == 1 ? "A_NOT_B" : "INTERSECTION";
+    std::vector<Slic3r::TriangleMesh> results;
+    try
+    {
+      Slic3r::MeshBoolean::mcut::make_boolean(srcMesh, toolMesh, results,
+                                              std::string(opts));
+    }
+    catch (const std::exception &e)
+    {
+      qWarning() << "mcut make_boolean failed, falling back to CGAL:"
+                 << e.what();
+      results.clear();
+    }
+    if (results.empty())
+    {
+      Slic3r::TriangleMesh fallback = srcMesh;
+      if (operation == 1)
+      {
+        Slic3r::MeshBoolean::minus(fallback, toolMesh);
+      }
+      else if (operation == 0)
+      {
+        Slic3r::its_merge(fallback.its, toolMesh.its);
+        Slic3r::MeshBoolean::self_union(fallback);
+      }
+      else
+      {
+        Slic3r::MeshBoolean::cgal::intersect(fallback, toolMesh);
+      }
+      qWarning() << "[meshBooleanVolumes] cgal fallback tris:"
+                 << fallback.its.indices.size();
+      if (fallback.its.indices.empty())
+        return fail("cgal-fallback-empty");
+      results.push_back(std::move(fallback));
+    }
+    Slic3r::TriangleMesh result = std::move(results.front());
+    if (result.its.vertices.empty() || result.its.indices.empty())
+      return fail("mcut-piece-empty");
+
+    // generate_new_volume (GLGizmoMeshBoolean.cpp:423-457): append a result
+    // volume inheriting the old volume's identity, then delete the old source
+    // volume. Union always drops the inputs; difference/intersection follow
+    // the "Delete input" checkbox.
+    static const char *kSuffix[] = {"union", "difference", "intersection"};
+    const QString newName = QString::fromStdString(oldSrcVol->name) +
+                            QStringLiteral(" - ") +
+                            QString::fromLatin1(kSuffix[operation]);
+    const Slic3r::Vec3d oldOffset =
+        oldSrcVol->get_transformation().get_offset();
+    Slic3r::ModelVolume *newVol = srcObj->add_volume(std::move(result));
+    newVol->name = newName.toStdString();
+    newVol->set_new_unique_id();
+    newVol->config.apply(oldSrcVol->config);
+    newVol->set_type(oldSrcVol->type());
+    newVol->set_material_id(oldSrcVol->material_id());
+    newVol->set_offset(oldOffset);
+
+    // Delete the old source volume (always, upstream :459-461).
+    std::swap(srcObj->volumes[size_t(srcVolumeIndex)],
+              srcObj->volumes.back());
+    srcObj->delete_volume(srcObj->volumes.size() - 1);
+
+    // Mock volume mirror (file-loaded objects have none -- then nothing to
+    // sync): swap in the renamed result entry for the consumed source entry.
+    auto srcMirror = m_mockVolumes.find(srcObjectIndex);
+    if (srcMirror != m_mockVolumes.end() && srcVolumeIndex < srcMirror->size())
+    {
+      (*srcMirror)[size_t(srcVolumeIndex)].name = newName;
+    }
+
+    const bool dropTool = deleteInput || operation == 0;
+    if (dropTool)
+    {
+      std::swap(toolObj->volumes[size_t(toolVolumeIndex)],
+                toolObj->volumes.back());
+      toolObj->delete_volume(toolObj->volumes.size() - 1);
+      auto toolMirror = m_mockVolumes.find(toolObjectIndex);
+      if (toolMirror != m_mockVolumes.end() &&
+          toolVolumeIndex < toolMirror->size())
+        toolMirror->removeAt(toolVolumeIndex);
+
+      // A tool object left without any model_part volume is dead weight in
+      // the object list (upstream keeps both volumes in one object, so this
+      // only arises in the Qt6 two-object picker flow): drop it with the
+      // same parallel-array + plate-membership sync the object-level path
+      // uses.
+      bool toolHasPart = false;
+      for (const auto *v : toolObj->volumes)
+        if (v && v->is_model_part()) { toolHasPart = true; break; }
+      if (!toolHasPart)
+      {
+        model_->objects.erase(model_->objects.begin() + toolObjectIndex);
+        if (toolObjectIndex < objectNames_.size())
+        {
+          objectNames_.removeAt(toolObjectIndex);
+          objectModuleNames_.removeAt(toolObjectIndex);
+          objectPrintableStates_.removeAt(toolObjectIndex);
+          objectVisibleStates_.removeAt(toolObjectIndex);
+          objectPositions_.removeAt(toolObjectIndex);
+          objectRotations_.removeAt(toolObjectIndex);
+          objectScales_.removeAt(toolObjectIndex);
+          m_mockVolumes.remove(toolObjectIndex);
+          m_mockObjectOverrides.remove(toolObjectIndex);
+          m_mockLayerRanges.remove(toolObjectIndex);
+          modelCount_ = objectNames_.size();
+          if (m_plateList) {
+            for (int pi = 0; pi < m_plateList->plateCount(); ++pi) {
+              OWzx::PartPlate *p = m_plateList->plate(pi);
+              if (!p) continue;
+              std::set<std::pair<int,int>> rebuilt;
+              for (const auto &pair : p->objToInstanceSet()) {
+                if (pair.first == toolObjectIndex) continue;
+                int adj = pair.first > toolObjectIndex ? pair.first - 1 : pair.first;
+                if (adj >= 0 && adj < modelCount_)
+                  rebuilt.insert({adj, pair.second});
+              }
+              p->clearInstances();
+              for (const auto &pair : rebuilt)
+                p->addInstance(pair.first, pair.second);
+            }
+          }
+          if (srcObjectIndex > toolObjectIndex)
+            --srcObjectIndex;
+        }
+      }
+    }
+
+    emit projectChanged();
+    emit plateDataLoaded(m_plateList ? m_plateList->plateCount() : 0);
+    return srcObjectIndex;
+  }
+  catch (const std::exception &e)
+  {
+    qWarning() << "meshBooleanVolumes failed:" << e.what();
+    return -1;
+  }
+#else
+  Q_UNUSED(srcObjectIndex);
+  Q_UNUSED(srcVolumeIndex);
+  Q_UNUSED(toolObjectIndex);
+  Q_UNUSED(toolVolumeIndex);
+  Q_UNUSED(operation);
+  Q_UNUSED(deleteInput);
+  return -1;
+#endif
+}
+
+int ProjectServiceMock::detectExteriorFaces(int objectIndex, double sampleInterval)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 ||
+      size_t(objectIndex) >= model_->objects.size())
+    return -1;
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || obj->volumes.empty() || sampleInterval <= 0)
+    return -1;
+  try
+  {
+    // Upstream GLGizmoFaceDetector::perform_recognition passes the object's
+    // volume meshes + transforms into the engine (FaceDetector.cpp merges
+    // them and ray-marches ±X/±Y/±Z at the sample interval).
+    std::vector<Slic3r::TriangleMesh> meshes;
+    std::vector<Slic3r::Transform3d> transfos;
+    for (auto *vol : obj->volumes)
+    {
+      if (!vol || !vol->is_model_part())
+        continue;
+      meshes.push_back(vol->mesh());
+      transfos.push_back(vol->get_matrix());
+    }
+    if (meshes.empty())
+      return -1;
+
+    Slic3r::FaceDetector fd(meshes, transfos, sampleInterval);
+    fd.detect_exterior_face();
+
+    int exterior = 0;
+    for (auto &m : meshes)
+    {
+      const int facets = int(m.its.indices.size());
+      for (int i = 0; i < facets; ++i)
+        if (m.its.get_property(i).type == eExteriorAppearance)
+          ++exterior;
+    }
+    return exterior;
+  }
+  catch (const std::exception &e)
+  {
+    qWarning() << "detectExteriorFaces failed:" << e.what();
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(sampleInterval);
+  return -1;
+#endif
+}
+
 bool ProjectServiceMock::drillObject(int objectIndex, float radius, float depth, int shape, int direction, bool oneLayerOnly)
 {
 #ifdef HAS_LIBSLIC3R
@@ -5105,9 +5492,8 @@ int ProjectServiceMock::restoreFullObjectSnapshot(const QByteArray &snapshot, in
                                  : tr("默认模块"));
       const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
       objectPrintableStates_.append(pr);
-      objectVisibleStates_.append(o && !o->instances.empty()
-                                      ? o->instances.front()->is_printable()
-                                      : true);
+      // R-P0.5: seed the visibility mirror from the same source.
+      objectVisibleStates_.append(pr);
       if (o && !o->instances.empty() && o->instances.front())
       {
         const auto *inst = o->instances.front();
@@ -6172,6 +6558,27 @@ ProjectServiceMock::volumeMeshIts(int objectIndex, int volumeIndex) const
 // constructor needed -- the target IS the TriangleMesh) keeps the refcount and
 // therefore the TriangleMesh alive for as long as any PaintEngine selector
 // holds the result.
+// P2.7: resolved libslic3r ModelVolumeType int for one volume (see the
+// header). -1 when the object/volume does not resolve.
+int ProjectServiceMock::volumeType(int objectIndex, int volumeIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return -1;
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || volumeIndex < 0 || size_t(volumeIndex) >= obj->volumes.size())
+    return -1;
+  const Slic3r::ModelVolume *volume = obj->volumes[size_t(volumeIndex)];
+  if (!volume)
+    return -1;
+  return int(volume->type());
+#else
+  Q_UNUSED(objectIndex);
+  Q_UNUSED(volumeIndex);
+  return -1;
+#endif
+}
+
 std::shared_ptr<const Slic3r::TriangleMesh>
 ProjectServiceMock::volumeMeshTriangleMesh(int objectIndex, int volumeIndex) const
 {
@@ -6383,8 +6790,9 @@ bool ProjectServiceMock::deleteObject(int index)
       const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
 
-      const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
-      objectVisibleStates_.append(vis);
+      // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
+      // from the SAME source (is_printable() previously let them diverge).
+      objectVisibleStates_.append(printable);
 
       // P0.5.1: 从真实实例同步变换（slic3r → GL）
       if (obj && !obj->instances.empty() && obj->instances.front())
@@ -7566,9 +7974,16 @@ int ProjectServiceMock::cutObjectWithConnectors(int objectIndex, int axis, doubl
     Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * rotation_m;
 
     using MCA = Slic3r::ModelObjectCutAttribute;
+    // P2.7: connectors present force KeepUpper|KeepLower and disable
+    // cut-to-parts (upstream GLGizmoAdvancedCut.cpp:644-645).
+    const bool connectorsForceKeepBoth = !obj->cut_connectors.empty();
     Slic3r::ModelObjectCutAttributes attributes =
-        Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
-        Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
+        Slic3r::only_if(keepMode == 0 || keepMode == 1 ||
+                            connectorsForceKeepBoth,
+                        MCA::KeepUpper) |
+        Slic3r::only_if(keepMode == 0 || keepMode == 2 ||
+                            connectorsForceKeepBoth,
+                        MCA::KeepLower) |
         MCA::KeepAsParts;
 
     const int instance_idx = 0;
@@ -8729,8 +9144,9 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
       const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
 
-      const bool vis = obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true;
-      objectVisibleStates_.append(vis);
+      // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
+      // from the SAME source (is_printable() previously let them diverge).
+      objectVisibleStates_.append(printable);
 
       // P0.5.1: 从真实实例同步变换（slic3r → GL）
       if (obj && !obj->instances.empty() && obj->instances.front())
@@ -8918,8 +9334,8 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
       const bool printable = o && !o->instances.empty() ? o->instances.front()->printable : true;
       objectPrintableStates_.append(printable);
 
-      const bool vis = o && !o->instances.empty() ? o->instances.front()->is_printable() : true;
-      objectVisibleStates_.append(vis);
+      // R-P0.5: same source as the printable mirror.
+      objectVisibleStates_.append(printable);
     }
 
     // 新对象从 objectIndex 位置开始
@@ -9787,6 +10203,42 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
 // (same body; saveProject keeps the plate-state JSON + bookkeeping on top).
 // Mirrors upstream Plater::export_3mf -> store_bbs_3mf with plate_data_list
 // populated (Plater.cpp:11462 for the sliced-file variant).
+/// R-P0.4: the OWzx plate filament-state sidecar (per-plate filamentMapMode +
+/// filamentMaps JSON appended next to the 3MF archive). Shared by saveProject
+/// and saveProjectAs so every save path produces the identical project payload.
+bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
+{
+  QJsonArray plateStates;
+  if (m_plateList)
+  {
+    for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex)
+    {
+      const OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
+      if (!plate)
+        continue;
+
+      QJsonObject plateState;
+      plateState.insert(QStringLiteral("index"), plateIndex);
+      plateState.insert(QStringLiteral("filamentMapMode"), int(plate->filamentMapMode()));
+      QJsonArray maps;
+      for (int map : plate->filamentMaps())
+        maps.append(map);
+      plateState.insert(QStringLiteral("filamentMaps"), maps);
+      plateStates.append(plateState);
+    }
+  }
+  QJsonObject stateRoot;
+  stateRoot.insert(QStringLiteral("version"), 1);
+  stateRoot.insert(QStringLiteral("plates"), plateStates);
+  if (!writeOwzxPlateFilamentStates(filePath,
+                                     QJsonDocument(stateRoot).toJson(QJsonDocument::Compact)))
+  {
+    lastError_ = tr("Unable to write OWzx plate state");
+    return false;
+  }
+  return true;
+}
+
 bool ProjectServiceMock::storeProject3mf(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
@@ -9803,11 +10255,22 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // constructor does NOT zero it, so an unassigned params.config is a WILD
   // pointer. store_bbs_3mf dereferences it after a `config != nullptr` guard
   // (bbs_3mf.cpp:6350) which is UB on a wild pointer and intermittently
-  // SEGFAULTs in _add_project_config_file_to_archive during ctest. We do not
-  // currently persist a global project config (Qt6 has no preset-bundle write
-  // path yet), so explicitly null it out to skip that writer branch. This is a
-  // pre-existing latent hazard independent of FMAP-02; tracked separately.
-  params.config = nullptr;
+  // SEGFAULTs in _add_project_config_file_to_archive during ctest.
+  // v5.16 (PSET2-06) + R-P0.4: the preset-selection overlay (tier preset ids +
+  // filament_presets slots) is embedded as the project config so it round-trips
+  // on reload (upstream embeds the PresetBundle selections in the 3MF config).
+  // overlayConfig lives in this scope for the whole store_bbs_3mf call, which
+  // keeps the borrowed pointer valid; an empty overlay keeps config == nullptr
+  // so the writer skips the config branch entirely (same as before).
+  Slic3r::DynamicPrintConfig overlayConfig;
+  for (auto it = m_projectConfigOverlay.constBegin();
+       it != m_projectConfigOverlay.constEnd(); ++it)
+  {
+    overlayConfig.set_key_value(it.key().toStdString(),
+                                new Slic3r::ConfigOptionString(
+                                    it.value().toString().toStdString()));
+  }
+  params.config = overlayConfig.keys().empty() ? nullptr : &overlayConfig;
 
   // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
   // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
@@ -9913,32 +10376,8 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     if (!storeProject3mf(filePath))
       return false;
 
-    QJsonArray plateStates;
-    if (m_plateList)
+    if (!writePlateFilamentStateSidecar(filePath))
     {
-      for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex)
-      {
-        const OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
-        if (!plate)
-          continue;
-
-        QJsonObject plateState;
-        plateState.insert(QStringLiteral("index"), plateIndex);
-        plateState.insert(QStringLiteral("filamentMapMode"), int(plate->filamentMapMode()));
-        QJsonArray maps;
-        for (int map : plate->filamentMaps())
-          maps.append(map);
-        plateState.insert(QStringLiteral("filamentMaps"), maps);
-        plateStates.append(plateState);
-      }
-    }
-    QJsonObject stateRoot;
-    stateRoot.insert(QStringLiteral("version"), 1);
-    stateRoot.insert(QStringLiteral("plates"), plateStates);
-    if (!writeOwzxPlateFilamentStates(filePath,
-                                       QJsonDocument(stateRoot).toJson(QJsonDocument::Compact)))
-    {
-      lastError_ = tr("Unable to write OWzx plate state");
       emit projectChanged();
       return false;
     }
@@ -10331,7 +10770,8 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           names << ((obj && !obj->name.empty()) ? QString::fromStdString(obj->name) : QObject::tr("对象 %1").arg(int(i + 1)));
           moduleNames << ((obj && !obj->module_name.empty()) ? QString::fromStdString(obj->module_name) : QObject::tr("默认模块"));
           printableStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
-          visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->is_printable() : true);
+          // R-P0.5: same source as the printable mirror.
+          visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
         }
 
         if (loadedPlateNames.isEmpty())
@@ -10802,6 +11242,9 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 
 QByteArray ProjectServiceMock::meshData() const
 {
+  // OWZX_PERF_LOG gated: the de-indexed transform-baked TLV build is the
+  // pipeline stage tracked by the perf evaluation (docs/perf-baseline.md).
+  const PerfLog::Scope perfScope("meshData.build");
 #ifdef HAS_LIBSLIC3R
   if (!model_ || model_->objects.empty())
     return {};
@@ -10809,26 +11252,56 @@ QByteArray ProjectServiceMock::meshData() const
   try
   {
 
-    // ── TLV 格式 ─────────────────────────────────────────────────────────────
-    // [int32 objectCount]
-    // per object: [int32 objectId][int32 triangleCount][float * triangleCount*9]
-    // trailer:    [float * 6] bbox (minGLx, minGLy, minGLz, maxGLx, maxGLy, maxGLz)
+    // Wave 2b (perf): TLV v2 — one indexed geometry per ModelVolume (shared
+    // by every instance of that volume) plus per-batch world matrices,
+    // replacing the v1 de-indexed transform-baked soup (36 B/tri-instance,
+    // fully rebuilt on every transform change; docs/perf-baseline.md).
+    // Layout: docs/perf-wave2b-design.md. Upstream mapping: GLVolume/GLModel
+    // indexed geometry + per-instance transformation matrices
+    // (3DScene.cpp:706-717, GLModel.cpp:440-475, 3DScene.hpp:237-258).
     //
-    // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=toward)
-    //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
-    // ──────────────────────────────────────────────────────────────────────────
-
-    struct ObjBatch
+    // Wire format:
+    //   "OMD2" magic, int32 geometryCount, int32 batchCount
+    //   per geometry: [int32 geomId][int32 vertexCount][int32 indexCount]
+    //                 [float x3 * vertexCount] positions, slic3r-LOCAL mm
+    //                 [uint32 * indexCount]    canonical triangle indices
+    //                 [float x3 * vertexCount] normalized per-vertex normals
+    //   per batch:    [int32 renderObjectId][int32 sourceObjectIndex]
+    //                 [int32 volumeIndex][int32 instanceIndex][int32 geomId]
+    //                 [float x16] row-major GL world matrix
+    //                 [int32 volumeType][int32 extruderId][int32 printable]
+    //   trailer:      [float x6] scene bbox in GL world space
+    struct GeometryData
     {
-      int32_t objectId;
-      std::vector<float> verts; // 9 floats per triangle (3 verts × xyz)
+      std::vector<float> positions;    // local xyz
+      std::vector<uint32_t> indices;   // canonical winding (mirror via matrix det)
+      std::vector<float> normals;      // accumulated + normalized, local space
+      float localMin[3] = {0.0f, 0.0f, 0.0f};
+      float localMax[3] = {0.0f, 0.0f, 0.0f};
     };
 
-    std::vector<ObjBatch> batches;
-    batches.reserve(8);
+    struct BatchData
+    {
+      int32_t renderObjectId = 0;
+      int32_t sourceObjectIndex = -1;
+      int32_t volumeIndex = -1;
+      int32_t instanceIndex = -1;
+      int32_t geomId = 0;
+      // Row-major GL-space world matrix = AxisSwap * inst * vol, where
+      // AxisSwap maps slic3r (x,y,z) to GL (x,z,y). det3x3 < 0 means a
+      // mirrored instance: the consumer flips triangle winding (upstream
+      // glFrontFace(GL_CW) for left-handed volumes, 3DScene.cpp:520-521).
+      float matrix[16] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                          0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+      int32_t volumeType = 0;
+      int32_t extruderId = 1;
+      int32_t printable = 1;
+    };
 
-    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
-    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+    std::vector<GeometryData> geometries;
+    std::unordered_map<const Slic3r::ModelVolume *, int32_t> geometryIndexByVolume;
+    std::vector<BatchData> batches;
+    batches.reserve(8);
 
     std::unordered_set<int32_t> usedObjectIds;
     usedObjectIds.reserve(model_->objects.size() * 2 + 1);
@@ -10851,122 +11324,176 @@ QByteArray ProjectServiceMock::meshData() const
       return id;
     };
 
-    for (const auto *obj : model_->objects)
+    // Fetch-or-build the volume's indexed geometry (positions verbatim from
+    // the ITS — no transform bake; shared-vertex normals accumulated once).
+    auto ensureGeometry = [&](const Slic3r::ModelVolume *vol) -> int32_t
     {
-      if (!obj)
-        continue;
+      const auto found = geometryIndexByVolume.find(vol);
+      if (found != geometryIndexByVolume.end())
+        return found->second;
 
-      auto appendObjectByInstance = [&](const Slic3r::Transform3d &instMat,
-                                        const Slic3r::ModelInstance *inst)
+      const auto &its = vol->mesh().its;
+      GeometryData geom;
+      const size_t vertexCount = its.vertices.size();
+      geom.positions.resize(vertexCount * 3);
+      geom.localMin[0] = geom.localMin[1] = geom.localMin[2] = 1e30f;
+      geom.localMax[0] = geom.localMax[1] = geom.localMax[2] = -1e30f;
+      for (size_t vi = 0; vi < vertexCount; ++vi)
       {
-        // Phase 91 (ASMEXPLODE-02): emit one ObjBatch per VOLUME (not one per
-        // instance) so the CanvasAssembleView renderer can offset each volume
-        // independently for the explosion view. Each per-volume batch keeps its
-        // parent instance's stable objectId (siblings share the id), so Prepare's
-        // selection highlight is byte-for-byte identical: uploadHighlightBuffer
-        // unions the bounds of ALL batches matching a sourceObjectIndex
-        // (RhiViewportRenderer.cpp uploadHighlightBuffer loop), and picking keys
-        // on batch.sourceObjectIndex (the parallel array below), not on
-        // renderObjectId uniqueness. Upstream GLVolumeCollection stores one
-        // GLVolume per volume and m_explosion_ratio offsets each independently.
-        const int32_t instanceObjectId = makeStableObjectId(obj, inst);
+        const Slic3r::Vec3f &v = its.vertices[vi];
+        geom.positions[vi * 3 + 0] = v.x();
+        geom.positions[vi * 3 + 1] = v.y();
+        geom.positions[vi * 3 + 2] = v.z();
+        geom.localMin[0] = std::min(geom.localMin[0], v.x());
+        geom.localMin[1] = std::min(geom.localMin[1], v.y());
+        geom.localMin[2] = std::min(geom.localMin[2], v.z());
+        geom.localMax[0] = std::max(geom.localMax[0], v.x());
+        geom.localMax[1] = std::max(geom.localMax[1], v.y());
+        geom.localMax[2] = std::max(geom.localMax[2], v.z());
+      }
+      geom.indices.reserve(its.indices.size() * 3);
+      for (const auto &face : its.indices)
+        for (int k = 0; k < 3; ++k)
+          geom.indices.push_back(static_cast<uint32_t>(face(k)));
 
-        for (const auto *vol : obj->volumes)
-        {
-          if (!vol)
-            continue;
-
-          // volume 自身的局部变换
-          const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
-          const Slic3r::Transform3d combined = instMat * volMat;
-
-          // P15.10 (MIRROR): mirrored instances flip the triangle winding.
-          // Upstream detects left-handed volumes via the mirror-sign product
-          // (GLVolume::is_left_handed, 3DScene.cpp:335-340) and renders them
-          // with glFrontFace(GL_CW) (3DScene.cpp:520-521/:607-608); the
-          // equivalent CPU-bake transform is swapping two vertices of every
-          // triangle of that batch. The renderer recomputes per-face normals
-          // from the triangle winding, so the swap flips the normals the
-          // same way -- matching upstream mirrored lighting.
-          const bool leftHanded =
-              combined.matrix().block<3, 3>(0, 0).determinant() < 0.0;
-
-          const auto &its = vol->mesh().its; // const ref — 零拷贝
-          if (its.vertices.empty() || its.indices.empty())
-            continue;
-
-          // One batch per volume — exposes this volume's center via its bounds.
-          ObjBatch batch;
-          batch.objectId = instanceObjectId;
-
-          for (const auto &face : its.indices)
-          {
-            const int idx0 = face(0);
-            const int idx1 = face(1);
-            const int idx2 = face(2);
-            const int vcount = int(its.vertices.size());
-            if (idx0 < 0 || idx0 >= vcount ||
-                idx1 < 0 || idx1 >= vcount ||
-                idx2 < 0 || idx2 >= vcount)
-            {
-              continue;
-            }
-
-            // P15.10 (MIRROR): emit order (0, 2, 1) reverses the winding for
-            // left-handed batches; (0, 1, 2) otherwise.
-            const int emitOrder[3] = {0, leftHanded ? 2 : 1, leftHanded ? 1 : 2};
-            for (int k = 0; k < 3; ++k)
-            {
-              const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
-              // 应用实例+Volume 变换到世界坐标 (slic3r)
-              // Transform3d * Vec3d 直接应用仿射变换（含平移）
-              const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(
-                                                      (double)lv.x(), (double)lv.y(), (double)lv.z());
-
-              // slic3r → GL 坐标系
-              const float gx = (float)hw.x();
-              const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
-              const float gz = (float)hw.y(); // slic3r Y → GL Z
-
-              batch.verts.push_back(gx);
-              batch.verts.push_back(gy);
-              batch.verts.push_back(gz);
-
-              bminX = std::min(bminX, gx);
-              bmaxX = std::max(bmaxX, gx);
-              bminY = std::min(bminY, gy);
-              bmaxY = std::max(bmaxY, gy);
-              bminZ = std::min(bminZ, gz);
-              bmaxZ = std::max(bmaxZ, gz);
-            }
-          }
-
-          if (!batch.verts.empty())
-            batches.push_back(std::move(batch));
-        }
-      };
-
-      if (!obj->instances.empty())
+      // Shared-vertex normals: accumulate face normals (6x the area weight,
+      // mirroring upstream GLVolume behavior of smooth vertex normals), then
+      // normalize once.
+      geom.normals.assign(vertexCount * 3, 0.0f);
+      const size_t faceCount = geom.indices.size() / 3;
+      for (size_t f = 0; f < faceCount; ++f)
       {
-        for (const auto *inst : obj->instances)
+        const uint32_t i0 = geom.indices[f * 3 + 0];
+        const uint32_t i1 = geom.indices[f * 3 + 1];
+        const uint32_t i2 = geom.indices[f * 3 + 2];
+        const float ax = geom.positions[i0 * 3 + 0], ay = geom.positions[i0 * 3 + 1], az = geom.positions[i0 * 3 + 2];
+        const float bx = geom.positions[i1 * 3 + 0], by = geom.positions[i1 * 3 + 1], bz = geom.positions[i1 * 3 + 2];
+        const float cx = geom.positions[i2 * 3 + 0], cy = geom.positions[i2 * 3 + 1], cz = geom.positions[i2 * 3 + 2];
+        const float ux = bx - ax, uy = by - ay, uz = bz - az;
+        const float wx = cx - ax, wy = cy - ay, wz = cz - az;
+        const float nx = uy * wz - uz * wy;
+        const float ny = uz * wx - ux * wz;
+        const float nz = ux * wy - uy * wx;
+        for (const uint32_t idx : {i0, i1, i2})
         {
-          if (!inst)
-            continue;
-          appendObjectByInstance(inst->get_transformation().get_matrix(), inst);
+          geom.normals[idx * 3 + 0] += nx;
+          geom.normals[idx * 3 + 1] += ny;
+          geom.normals[idx * 3 + 2] += nz;
         }
       }
-      else
+      for (size_t vi = 0; vi < vertexCount; ++vi)
       {
-        appendObjectByInstance(Slic3r::Transform3d::Identity(), nullptr);
+        const float nx = geom.normals[vi * 3 + 0];
+        const float ny = geom.normals[vi * 3 + 1];
+        const float nz = geom.normals[vi * 3 + 2];
+        const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 1e-12f)
+        {
+          geom.normals[vi * 3 + 0] = nx / len;
+          geom.normals[vi * 3 + 1] = ny / len;
+          geom.normals[vi * 3 + 2] = nz / len;
+        }
+        else
+        {
+          geom.normals[vi * 3 + 0] = 0.0f;
+          geom.normals[vi * 3 + 1] = 1.0f;
+          geom.normals[vi * 3 + 2] = 0.0f;
+        }
+      }
+
+      const int32_t geomId = int32_t(geometries.size());
+      geometries.push_back(std::move(geom));
+      geometryIndexByVolume.emplace(vol, geomId);
+      return geomId;
+    };
+
+    // Row-major GL matrix from the slic3r combined transform, with the
+    // slic3r(x,y,z)->GL(x,z,y) axis swap folded in (GL row i picks the
+    // slic3r row that feeds GL axis i).
+    auto fillGlMatrix = [&](float (&m)[16], const Slic3r::Transform3d &combined)
+    {
+      const auto &c = combined.matrix();
+      m[0] = float(c(0, 0)); m[1] = float(c(0, 1)); m[2] = float(c(0, 2)); m[3] = float(c(0, 3));
+      m[4] = float(c(2, 0)); m[5] = float(c(2, 1)); m[6] = float(c(2, 2)); m[7] = float(c(2, 3));
+      m[8] = float(c(1, 0)); m[9] = float(c(1, 1)); m[10] = float(c(1, 2)); m[11] = float(c(1, 3));
+      m[12] = 0.0f; m[13] = 0.0f; m[14] = 0.0f; m[15] = 1.0f;
+    };
+
+    // Walk order matches collectMeshBatchIdentities (objects -> instances ->
+    // volumes, hasRenderableTriangle filter) so the batch section stays
+    // index-aligned with the meshBatch* accessor arrays and the renderer's
+    // parallel metadata channels.
+    for (int objectIndex = 0; objectIndex < int(model_->objects.size()); ++objectIndex)
+    {
+      const Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+      if (!obj)
+        continue;
+      const int instanceCount = obj->instances.empty() ? 1 : int(obj->instances.size());
+      for (int instanceIndex = 0; instanceIndex < instanceCount; ++instanceIndex)
+      {
+        const Slic3r::ModelInstance *inst =
+            obj->instances.empty() ? nullptr : obj->instances[size_t(instanceIndex)];
+        if (!obj->instances.empty() && !inst)
+          continue;
+        const int32_t instanceObjectId = makeStableObjectId(obj, inst);
+        const Slic3r::Transform3d instMat =
+            inst ? inst->get_transformation().get_matrix()
+                 : Slic3r::Transform3d::Identity();
+        for (int volumeIndex = 0; volumeIndex < int(obj->volumes.size()); ++volumeIndex)
+        {
+          const Slic3r::ModelVolume *vol = obj->volumes[size_t(volumeIndex)];
+          if (!vol || !hasRenderableTriangle(vol))
+            continue;
+
+          BatchData batch;
+          batch.renderObjectId = instanceObjectId;
+          batch.sourceObjectIndex = int32_t(objectIndex);
+          batch.volumeIndex = int32_t(volumeIndex);
+          batch.instanceIndex = int32_t(instanceIndex);
+          batch.geomId = ensureGeometry(vol);
+          batch.volumeType = int32_t(vol->type());
+          batch.extruderId = int32_t(vol->extruder_id());
+          batch.printable = (obj->instances.empty() || inst->printable) ? 1 : 0;
+          fillGlMatrix(batch.matrix,
+                       instMat * vol->get_transformation().get_matrix());
+          batches.push_back(std::move(batch));
+        }
       }
     }
 
     if (batches.empty())
       return {};
 
-    // Auto-normalize model placement onto build plate:
-    // keep relative arrangement, move global center to (110, *, 110)
-    // and make lowest Y rest on the plate (Y=0).
+    // ── World bbox from transformed geometry-box corners ─────────────────────
+    // Affine transforms map a box's extrema to the corner images, so the
+    // corner union equals the v1 per-vertex min/max exactly.
+    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
+    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+    for (const BatchData &batch : batches)
+    {
+      const GeometryData &geom = geometries[size_t(batch.geomId)];
+      const float *m = batch.matrix;
+      for (int corner = 0; corner < 8; ++corner)
+      {
+        const float x = (corner & 1) ? geom.localMax[0] : geom.localMin[0];
+        const float y = (corner & 2) ? geom.localMax[1] : geom.localMin[1];
+        const float z = (corner & 4) ? geom.localMax[2] : geom.localMin[2];
+        const float gx = m[0] * x + m[1] * y + m[2] * z + m[3];
+        const float gy = m[4] * x + m[5] * y + m[6] * z + m[7];
+        const float gz = m[8] * x + m[9] * y + m[10] * z + m[11];
+        bminX = std::min(bminX, gx);
+        bmaxX = std::max(bmaxX, gx);
+        bminY = std::min(bminY, gy);
+        bmaxY = std::max(bmaxY, gy);
+        bminZ = std::min(bminZ, gz);
+        bmaxZ = std::max(bmaxZ, gz);
+      }
+    }
+
+    // Auto-normalize model placement onto build plate (v1 semantics): keep
+    // relative arrangement, move global center to (110, *, 110) and rest the
+    // lowest point on the plate. The offsets fold into each matrix's
+    // translation column instead of being baked into vertices.
     const float centerX = (bminX + bmaxX) * 0.5f;
     const float centerZ = (bminZ + bmaxZ) * 0.5f;
     const float offsetX = 110.0f - centerX;
@@ -10975,16 +11502,12 @@ QByteArray ProjectServiceMock::meshData() const
 
     if (offsetX != 0.0f || offsetY != 0.0f || offsetZ != 0.0f)
     {
-      for (auto &batch : batches)
+      for (BatchData &batch : batches)
       {
-        for (size_t vi = 0; vi + 2 < batch.verts.size(); vi += 3)
-        {
-          batch.verts[vi + 0] += offsetX;
-          batch.verts[vi + 1] += offsetY;
-          batch.verts[vi + 2] += offsetZ;
-        }
+        batch.matrix[3] += offsetX;  // GL X
+        batch.matrix[7] += offsetY;  // GL Y (height)
+        batch.matrix[11] += offsetZ; // GL Z
       }
-
       bminX += offsetX;
       bmaxX += offsetX;
       bminY += offsetY;
@@ -10993,42 +11516,44 @@ QByteArray ProjectServiceMock::meshData() const
       bmaxZ += offsetZ;
     }
 
-    // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
-    if (batches.size() > size_t(std::numeric_limits<int32_t>::max()))
+    // ── Size calculation and pack ────────────────────────────────────────────
+    if (batches.size() > size_t(std::numeric_limits<int32_t>::max())
+        || geometries.size() > size_t(std::numeric_limits<int32_t>::max()))
     {
-      qWarning("[ProjectService] meshData aborted: too many batches (%zu)", batches.size());
+      qWarning("[ProjectService] meshData aborted: too many entries (geoms=%zu batches=%zu)",
+               geometries.size(), batches.size());
       return {};
     }
 
-    int32_t objCount = static_cast<int32_t>(batches.size());
-    qsizetype totalBytes = static_cast<qsizetype>(sizeof(int32_t)); // objectCount header
-    for (const auto &b : batches)
+    qsizetype totalBytes = 3 * static_cast<qsizetype>(sizeof(int32_t)); // magic + counts
+    for (const GeometryData &geom : geometries)
     {
-      const qsizetype dataBytes = static_cast<qsizetype>(b.verts.size()) * static_cast<qsizetype>(sizeof(float));
-      if (dataBytes < 0 || dataBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
+      const qsizetype geomBytes = 3 * static_cast<qsizetype>(sizeof(int32_t))
+          + static_cast<qsizetype>(geom.positions.size()) * static_cast<qsizetype>(sizeof(float))
+          + static_cast<qsizetype>(geom.indices.size()) * static_cast<qsizetype>(sizeof(uint32_t))
+          + static_cast<qsizetype>(geom.normals.size()) * static_cast<qsizetype>(sizeof(float));
+      if (geomBytes < 0 || geomBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
       {
-        qWarning("[ProjectService] meshData aborted: size overflow while packing vertices");
+        qWarning("[ProjectService] meshData aborted: size overflow while packing geometry");
         return {};
       }
-      const qsizetype perObjBytes = static_cast<qsizetype>(2 * sizeof(int32_t));
-      if (perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - dataBytes)
-      {
-        qWarning("[ProjectService] meshData aborted: size overflow while packing object header");
-        return {};
-      }
-      totalBytes += perObjBytes + dataBytes;
+      totalBytes += geomBytes;
     }
-    const qsizetype trailerBytes = static_cast<qsizetype>(6 * sizeof(float));
-    if (trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
+    const qsizetype batchBytes = static_cast<qsizetype>(batches.size())
+        * (8 * static_cast<qsizetype>(sizeof(int32_t)) + 16 * static_cast<qsizetype>(sizeof(float)));
+    const qsizetype trailerBytes = 6 * static_cast<qsizetype>(sizeof(float));
+    if (batchBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes
+        || trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - batchBytes)
     {
-      qWarning("[ProjectService] meshData aborted: size overflow while packing bbox");
+      qWarning("[ProjectService] meshData aborted: size overflow while packing batches");
       return {};
     }
-    totalBytes += trailerBytes;
+    totalBytes += batchBytes + trailerBytes;
 
     if (totalBytes <= 0 || totalBytes > (std::numeric_limits<int>::max)())
     {
-      qWarning("[ProjectService] meshData aborted: invalid total buffer size (%lld)", static_cast<long long>(totalBytes));
+      qWarning("[ProjectService] meshData aborted: invalid total buffer size (%lld)",
+               static_cast<long long>(totalBytes));
       return {};
     }
 
@@ -11036,27 +11561,63 @@ QByteArray ProjectServiceMock::meshData() const
     buf.resize(static_cast<int>(totalBytes));
     char *p = buf.data();
 
-    // objectCount
+    const char magic[4] = {'O', 'M', 'D', '2'};
+    memcpy(p, magic, sizeof(magic));
+    p += sizeof(magic);
+    const int32_t geomCount = static_cast<int32_t>(geometries.size());
+    memcpy(p, &geomCount, sizeof(int32_t));
+    p += sizeof(int32_t);
+    const int32_t objCount = static_cast<int32_t>(batches.size());
     memcpy(p, &objCount, sizeof(int32_t));
     p += sizeof(int32_t);
 
-    for (const auto &b : batches)
+    for (int32_t geomId = 0; geomId < geomCount; ++geomId)
     {
-      int32_t triCount = static_cast<int32_t>(b.verts.size() / 9);
-      memcpy(p, &b.objectId, sizeof(int32_t));
+      const GeometryData &geom = geometries[size_t(geomId)];
+      const int32_t vertexCount = static_cast<int32_t>(geom.positions.size() / 3);
+      const int32_t indexCount = static_cast<int32_t>(geom.indices.size());
+      memcpy(p, &geomId, sizeof(int32_t));
       p += sizeof(int32_t);
-      memcpy(p, &triCount, sizeof(int32_t));
+      memcpy(p, &vertexCount, sizeof(int32_t));
       p += sizeof(int32_t);
-      memcpy(p, b.verts.data(), b.verts.size() * sizeof(float));
-      p += static_cast<ptrdiff_t>(b.verts.size() * sizeof(float));
+      memcpy(p, &indexCount, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, geom.positions.data(), geom.positions.size() * sizeof(float));
+      p += static_cast<ptrdiff_t>(geom.positions.size() * sizeof(float));
+      memcpy(p, geom.indices.data(), geom.indices.size() * sizeof(uint32_t));
+      p += static_cast<ptrdiff_t>(geom.indices.size() * sizeof(uint32_t));
+      memcpy(p, geom.normals.data(), geom.normals.size() * sizeof(float));
+      p += static_cast<ptrdiff_t>(geom.normals.size() * sizeof(float));
     }
 
-    // bbox trailer
+    for (const BatchData &batch : batches)
+    {
+      memcpy(p, &batch.renderObjectId, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &batch.sourceObjectIndex, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &batch.volumeIndex, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &batch.instanceIndex, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &batch.geomId, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, batch.matrix, 16 * sizeof(float));
+      p += static_cast<ptrdiff_t>(16 * sizeof(float));
+      memcpy(p, &batch.volumeType, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &batch.extruderId, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &batch.printable, sizeof(int32_t));
+      p += sizeof(int32_t);
+    }
+
+    // bbox trailer (GL world)
     const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
     memcpy(p, bbox, 6 * sizeof(float));
 
-    qInfo("[ProjectService] meshData: %d batches, bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
-          objCount, bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
+    qInfo("[ProjectService] meshData: v2 geoms=%d batches=%d bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
+          geomCount, objCount, bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
     return buf;
   }
   catch (const std::exception &ex)

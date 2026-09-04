@@ -9,29 +9,63 @@ namespace
     bytes.append(reinterpret_cast<const char *>(&value), sizeof(value));
   }
 
+  void appendUint32(QByteArray &bytes, quint32 value)
+  {
+    bytes.append(reinterpret_cast<const char *>(&value), sizeof(value));
+  }
+
   void appendFloat(QByteArray &bytes, float value)
   {
     bytes.append(reinterpret_cast<const char *>(&value), sizeof(value));
   }
 
-  void appendTriangle(QByteArray &bytes,
-                      int objectId,
-                      const QList<float> &vertices)
+  // Wave 2b (perf): TLV v2 packet builder — "OMD2", counts, one indexed
+  // geometry per batch (a single triangle, identity matrix), identity +
+  // render-channel fields inlined in the batch section, 24-byte bbox
+  // trailer (docs/perf-wave2b-design.md). The setModelMeshData identity
+  // array parameters are ignored by the v2 decoder (blob is authoritative)
+  // but stay in the call sites for API compatibility.
+  QByteArray packedMeshWithBatches(
+      const QList<int> &renderObjectIds,
+      const QList<int> &sourceObjectIndices,
+      const QList<QList<float>> &triangles,
+      const QList<int> &volumeTypes = {},
+      const QList<int> &extruderIds = {},
+      const QList<int> &printableFlags = {})
   {
-    appendInt32(bytes, objectId);
-    appendInt32(bytes, 1);
-    for (float value : vertices)
-      appendFloat(bytes, value);
-  }
-
-  QByteArray packedMeshWithBatches(const QList<int> &objectIds,
-                                   const QList<QList<float>> &triangles)
-  {
+    const int count = renderObjectIds.size();
     QByteArray bytes;
-    appendInt32(bytes, objectIds.size());
-    for (int i = 0; i < objectIds.size(); ++i)
-      appendTriangle(bytes, objectIds.at(i), triangles.at(i));
-
+    bytes.append(QStringLiteral("OMD2").toUtf8());
+    appendInt32(bytes, count); // geometryCount
+    appendInt32(bytes, count); // batchCount
+    for (int i = 0; i < count; ++i)
+    {
+      appendInt32(bytes, i); // geomId == geometry index
+      appendInt32(bytes, 3); // vertexCount
+      appendInt32(bytes, 3); // indexCount
+      for (float value : triangles.at(i))
+        appendFloat(bytes, value);
+      appendUint32(bytes, 0);
+      appendUint32(bytes, 1);
+      appendUint32(bytes, 2);
+      for (int k = 0; k < 9; ++k)
+        appendFloat(bytes, 0.0f); // normals (unused by the soup path)
+    }
+    const float identity[16] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                                0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    for (int i = 0; i < count; ++i)
+    {
+      appendInt32(bytes, renderObjectIds.at(i));
+      appendInt32(bytes, sourceObjectIndices.at(i));
+      appendInt32(bytes, 0); // volumeIndex
+      appendInt32(bytes, 0); // instanceIndex
+      appendInt32(bytes, i); // geomId
+      for (float value : identity)
+        appendFloat(bytes, value);
+      appendInt32(bytes, volumeTypes.isEmpty() ? 0 : volumeTypes.at(i));
+      appendInt32(bytes, extruderIds.isEmpty() ? 1 : extruderIds.at(i));
+      appendInt32(bytes, printableFlags.isEmpty() ? 1 : printableFlags.at(i));
+    }
     appendFloat(bytes, -10.0f);
     appendFloat(bytes, -20.0f);
     appendFloat(bytes, -30.0f);
@@ -250,6 +284,7 @@ void PrepareSceneDataTests::modelBatchesParsePackedMeshWithSourceIndices()
 
   const QByteArray mesh = packedMeshWithBatches(
       QList<int>{101, 202},
+      QList<int>{4, 7},
       QList<QList<float>>{
           QList<float>{0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 20.0f, 0.0f},
           QList<float>{30.0f, 0.0f, 0.0f, 40.0f, 0.0f, 0.0f, 30.0f, 20.0f, 10.0f}});
@@ -282,6 +317,7 @@ void PrepareSceneDataTests::modelBatchesRejectMalformedPayloads()
   PrepareSceneData scene;
   scene.clearDirtyFlags();
 
+  // Non-v2 payloads (no OMD2 magic) are rejected outright.
   QByteArray truncated;
   appendInt32(truncated, 1);
   appendInt32(truncated, 123);
@@ -295,10 +331,16 @@ void PrepareSceneDataTests::modelBatchesRejectMalformedPayloads()
   QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh) != 0);
 
   scene.clearDirtyFlags();
-  const QByteArray valid = packedMeshWithBatches(
+  // A v2 packet whose batch references a geometry id outside the geometry
+  // section is rejected (the header claims 1 geometry, the batch points at
+  // id 9). Batch section starts at 12 (header) + 96 (one geometry entry).
+  QByteArray badGeomRef = packedMeshWithBatches(
       QList<int>{11},
+      QList<int>{0},
       QList<QList<float>>{QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f}});
-  scene.setModelMeshData(valid, QList<int>{0, 1}, QList<int>{0});
+  qint32 poisoned = 9;
+  memcpy(badGeomRef.data() + 124, &poisoned, sizeof(poisoned));
+  scene.setModelMeshData(badGeomRef, QList<int>{0}, QList<int>{0});
   QVERIFY(scene.modelVertices().isEmpty());
   QVERIFY(scene.modelBatches().isEmpty());
   QVERIFY(!scene.hasModelBounds());
@@ -308,10 +350,15 @@ void PrepareSceneDataTests::modelBatchesRejectMalformedPayloads()
 void PrepareSceneDataTests::modelBatchesRejectMisalignedIdentityMetadata()
 {
   PrepareSceneData scene;
-  const QByteArray mesh = packedMeshWithBatches(
+  // v2 carries identity inside the blob, so array misalignment no longer
+  // exists; the equivalent hard failure is a truncated batch section (the
+  // header promises a batch but the payload ends mid-matrix).
+  QByteArray truncatedBatch = packedMeshWithBatches(
       QList<int>{10},
+      QList<int>{0},
       QList<QList<float>>{QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f}});
-  scene.setModelMeshData(mesh, QList<int>{1}, QList<int>{0, 1},
+  truncatedBatch.truncate(130);
+  scene.setModelMeshData(truncatedBatch, QList<int>{1}, QList<int>{0, 1},
                          QList<int>{0}, QList<int>{1});
   QVERIFY(scene.modelBatches().isEmpty());
   QVERIFY(scene.modelVertices().isEmpty());
@@ -340,6 +387,7 @@ void PrepareSceneDataTests::activePlateFilteringKeepsOnlyCurrentPlateSources()
 
   const QByteArray mesh = packedMeshWithBatches(
       QList<int>{10, 20, 30},
+      QList<int>{0, 1, 2},
       QList<QList<float>>{
           QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f},
           QList<float>{5.0f, 0.0f, 0.0f, 6.0f, 0.0f, 0.0f, 5.0f, 1.0f, 0.0f},
@@ -363,6 +411,7 @@ void PrepareSceneDataTests::emptyActivePlateDoesNotFallbackToAllModelBatches()
 
   const QByteArray mesh = packedMeshWithBatches(
       QList<int>{10, 20},
+      QList<int>{0, 1},
       QList<QList<float>>{
           QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f},
           QList<float>{5.0f, 0.0f, 0.0f, 6.0f, 0.0f, 0.0f, 5.0f, 1.0f, 0.0f}});
@@ -380,6 +429,7 @@ void PrepareSceneDataTests::selectionAndHoverDoNotDirtyModelGeometry()
   PrepareSceneData scene;
   const QByteArray mesh = packedMeshWithBatches(
       QList<int>{10},
+      QList<int>{5},
       QList<QList<float>>{QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f}});
   scene.setModelMeshData(mesh, QList<int>{5}, QList<int>{5});
   scene.clearDirtyFlags();
@@ -490,15 +540,17 @@ void PrepareSceneDataTests::modelColorsFollowUpstreamVolumeSemantics()
 {
   const float kTri[9] = {0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 10.0f, 0.0f};
   const QList<float> triangle{kTri, kTri + 9};
-  const QByteArray mesh = packedMeshWithBatches(
-      QList<int>{1, 2, 3, 4, 5, 6, 7},
-      QList<QList<float>>{triangle, triangle, triangle, triangle,
-                          triangle, triangle, triangle});
   // Batches: 0=part extruder2, 1=part extruder out-of-range (clamp to 1),
   // 2=negative, 3=modifier, 4=blocker, 5=enforcer, 6=unprintable part.
-  const QList<int> types{0, 0, 1, 2, 3, 4, 0};
-  const QList<int> extruders{2, 99, 1, 1, 1, 1, 1};
-  const QList<int> printable{1, 1, 1, 1, 1, 1, 0};
+  // v2 embeds the render-channel fields in the packet.
+  const QByteArray mesh = packedMeshWithBatches(
+      QList<int>{1, 2, 3, 4, 5, 6, 7},
+      QList<int>{0, 1, 2, 3, 4, 5, 6},
+      QList<QList<float>>{triangle, triangle, triangle, triangle,
+                          triangle, triangle, triangle},
+      QList<int>{0, 0, 1, 2, 3, 4, 0},
+      QList<int>{2, 99, 1, 1, 1, 1, 1},
+      QList<int>{1, 1, 1, 1, 1, 1, 0});
   // Filament colors: extruder1 = near-black (0.05), extruder2 = red.
   const QList<QVector4D> colors{
       QVector4D(0.05f, 0.05f, 0.05f, 1.0f),
@@ -510,7 +562,7 @@ void PrepareSceneDataTests::modelColorsFollowUpstreamVolumeSemantics()
                          QList<int>{0, 1, 2, 3, 4, 5, 6},
                          QList<int>{0, 1, 2, 3, 4, 5, 6},
                          QList<int>{0, 1, 2, 3, 4, 5, 6},
-                         types, extruders, printable, colors);
+                         QList<int>(), QList<int>(), QList<int>(), colors);
 
   const auto &batches = scene.modelBatches();
   QCOMPARE(batches.size(), 7);
@@ -546,10 +598,16 @@ void PrepareSceneDataTests::modelColorsFollowUpstreamVolumeSemantics()
   QCOMPARE(scene.modelVertices().at(18).g, 0.2f);
   QCOMPARE(scene.modelVertices().at(18).a, 0.5f);
 
-  // Without render channels (the picking scene form) the neutral fallback
-  // keeps every batch opaque.
+  // A packet with the default render channels (model part, extruder 1,
+  // printable) keeps the neutral fallback when no filament colors are
+  // supplied: every batch opaque gray.
   PrepareSceneData neutral;
-  neutral.setModelMeshData(mesh, QList<int>{0, 1, 2, 3, 4, 5, 6},
+  const QByteArray plain = packedMeshWithBatches(
+      QList<int>{1, 2, 3, 4, 5, 6, 7},
+      QList<int>{0, 1, 2, 3, 4, 5, 6},
+      QList<QList<float>>{triangle, triangle, triangle, triangle,
+                          triangle, triangle, triangle});
+  neutral.setModelMeshData(plain, QList<int>{0, 1, 2, 3, 4, 5, 6},
                            QList<int>{0, 1, 2, 3, 4, 5, 6},
                            QList<int>{0, 1, 2, 3, 4, 5, 6},
                            QList<int>{0, 1, 2, 3, 4, 5, 6});
@@ -686,36 +744,26 @@ void PrepareSceneDataTests::printVolumeUniformAndErrorBackgroundState()
 
   // Fully inside object -> no error background.
   QByteArray inside = packedMeshWithBatches(
-      QList<int>{1}, QList<QList<float>>{triangleAt(10.0f, 10.0f, 30.0f, 40.0f)});
+      QList<int>{1}, QList<int>{0},
+      QList<QList<float>>{triangleAt(10.0f, 10.0f, 30.0f, 40.0f)});
   scene.setModelMeshData(inside, QList<int>{0}, QList<int>{0},
                          QList<int>{0}, QList<int>{0});
   QVERIFY2(!scene.anyVolumeOutside(), "inside object must not turn the background red");
 
   // Object crossing the +X plate edge -> error background.
+  const QList<float> outsideTri = triangleAt(210.0f, 10.0f, 230.0f, 40.0f);
   QByteArray outside = packedMeshWithBatches(
-      QList<int>{1}, QList<QList<float>>{triangleAt(210.0f, 10.0f, 230.0f, 40.0f)});
+      QList<int>{1}, QList<int>{0}, QList<QList<float>>{outsideTri});
   scene.setModelMeshData(outside, QList<int>{0}, QList<int>{0},
                          QList<int>{0}, QList<int>{0});
   QVERIFY2(scene.anyVolumeOutside(), "object over the plate edge must turn the background red");
 
   // Object fully below the bed plane -> Below state counts as outside
   // (volume_state_bbox: max z <= -SceneEpsilon, BuildVolume.cpp:308-320).
-  QByteArray below;
-  {
-    appendInt32(below, 1);
-    appendInt32(below, 1);
-    appendInt32(below, 1);
-    const QList<float> sunk{-10.0f, -5.0f, 10.0f, 10.0f, -5.0f, 10.0f,
-                            -10.0f, -1.0f, 20.0f};
-    for (float value : sunk)
-      appendFloat(below, value);
-    appendFloat(below, -10.0f);
-    appendFloat(below, -20.0f);
-    appendFloat(below, -30.0f);
-    appendFloat(below, 40.0f);
-    appendFloat(below, 50.0f);
-    appendFloat(below, 60.0f);
-  }
+  const QList<float> sunk{-10.0f, -5.0f, 10.0f, 10.0f, -5.0f, 10.0f,
+                          -10.0f, -1.0f, 20.0f};
+  QByteArray below = packedMeshWithBatches(
+      QList<int>{1}, QList<int>{0}, QList<QList<float>>{sunk});
   scene.setModelMeshData(below, QList<int>{0}, QList<int>{0},
                          QList<int>{0}, QList<int>{0});
   QVERIFY2(scene.anyVolumeOutside(), "object fully below the bed must turn the background red");
@@ -726,11 +774,11 @@ void PrepareSceneDataTests::printVolumeUniformAndErrorBackgroundState()
   PrepareSceneData modifiers;
   modifiers.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
   modifiers.setPlateContext(0, 1, {});
-  modifiers.setModelMeshData(outside, QList<int>{0}, QList<int>{0},
-                             QList<int>{0}, QList<int>{0},
-                             QList<int>{1} /* MODEL_NEGTIVE */,
-                             QList<int>{1}, QList<int>{1},
-                             QList<QVector4D>{QVector4D(1.0f, 0.0f, 0.0f, 1.0f)});
+  const QByteArray outsideNegative = packedMeshWithBatches(
+      QList<int>{1}, QList<int>{0}, QList<QList<float>>{outsideTri},
+      QList<int>{1} /* MODEL_NEGTIVE */, QList<int>{1}, QList<int>{1});
+  modifiers.setModelMeshData(outsideNegative, QList<int>{0}, QList<int>{0},
+                             QList<int>{0}, QList<int>{0});
   QVERIFY2(!modifiers.anyVolumeOutside(),
            "negative volumes must not participate in the outside check");
 }
@@ -747,7 +795,8 @@ void PrepareSceneDataTests::sinkingContoursSliceSinkingBatchesAtBedPlane()
   const QList<float> aboveTri{-10.0f, 5.0f, 0.0f, 10.0f, 5.0f, 0.0f,
                               0.0f, 15.0f, 0.0f};
   const QByteArray mesh = packedMeshWithBatches(
-      QList<int>{1, 2}, QList<QList<float>>{sinkingTri, aboveTri});
+      QList<int>{1, 2}, QList<int>{0, 1},
+      QList<QList<float>>{sinkingTri, aboveTri});
   scene.setModelMeshData(mesh, QList<int>{0, 1}, QList<int>{0, 1},
                          QList<int>{0, 1}, QList<int>{0, 1});
 
@@ -773,7 +822,7 @@ void PrepareSceneDataTests::sinkingContoursSliceSinkingBatchesAtBedPlane()
 
   // A mesh change that lifts the object clears the bands.
   scene.setModelMeshData(packedMeshWithBatches(
-                             QList<int>{1, 2},
+                             QList<int>{1, 2}, QList<int>{0, 1},
                              QList<QList<float>>{aboveTri, aboveTri}),
                          QList<int>{0, 1}, QList<int>{0, 1},
                          QList<int>{0, 1}, QList<int>{0, 1});

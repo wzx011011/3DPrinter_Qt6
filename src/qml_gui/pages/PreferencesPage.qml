@@ -832,6 +832,27 @@ Item {
                         }
                     }
 
+                    // P4.1: upstream "Skip AMS blacklist check"
+                    // (Preferences.cpp:1195, skip_ams_blacklist_check). The AMS
+                    // device flow is externally blocked, so the flag only
+                    // persists until that integration lands.
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("跳过 AMS 黑名单检查"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxSwitch {
+                            checked: root.settingsVm.skipAmsBlacklistCheck
+                            onToggled: root.settingsVm.setSkipAmsBlacklistCheck(checked)
+                        }
+                    }
+
+                    Text {
+                        // notYetEffectiveHint: AMS 上传/打印流程未迁移（外部阻
+                        // 塞），该开关当前仅持久化。
+                        text: qsTr("AMS 相关流程依赖未迁移的设备服务，此开关当前仅保存设置。")
+                        color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
+                        Layout.preferredWidth: 500
+                    }
+
                     Text {
                         // notYetEffectiveHint: developerMode IS effective (it
                         // shows/hides this whole category); the knobs below

@@ -52,21 +52,44 @@ CxPopup {
     // selected value is always one of the 3 concrete modes.
     property int selectedMode: root.fmmAutoForFlush
 
+    // P2.1: manual map editor state. manualMaps[i] = the 1-based group id for
+    // extruder i+1 (upstream PlateData::filament_maps, bbs_3mf.hpp:98).
+    // Seeded from the plate's stored map on open (identity fallback).
+    property var manualMaps: []
+    readonly property int extruderCount: root.editorVm && root.editorVm.plateExtruderCount
+                                         ? Math.max(1, root.editorVm.plateExtruderCount(root.editorVm.currentPlateIndex))
+                                         : 1
+
     function openForCurrentPlate() {
         if (!root.editorVm) return
-        const svc = root.editorVm.projectService ? root.editorVm.projectService
-                                                  : null
         const plateIdx = root.editorVm.currentPlateIndex
-        // Seed selectedMode from the plate's stored mode. The inherit-sentinel
-        // (value 3) resolves to AutoForFlush in the UI since the popup only
-        // offers the 3 concrete modes (anti-feature: no 4th radio).
+        // Seed selectedMode from the plate's stored mode (P2.1: through the
+        // ViewModel bridge -- QML never touches the service directly). The
+        // inherit-sentinel (value 3) resolves to AutoForFlush in the UI since
+        // the popup only offers the 3 concrete modes (anti-feature: no 4th radio).
         let stored = root.fmmAutoForFlush
-        if (svc && svc.plateFilamentMapMode) {
-            const raw = svc.plateFilamentMapMode(plateIdx)
+        if (root.editorVm.plateFilamentMapMode) {
+            const raw = root.editorVm.plateFilamentMapMode(plateIdx)
             stored = (raw === 3 /* inherit-sentinel */) ? root.fmmAutoForFlush : raw
         }
         root.selectedMode = stored
+        // P2.1: seed the manual map from the stored per-extruder groups,
+        // falling back to the identity map (extruder i -> group i+1).
+        let seeded = []
+        const storedMaps = root.editorVm.plateFilamentMaps ? root.editorVm.plateFilamentMaps(plateIdx) : []
+        for (let i = 0; i < root.extruderCount; ++i)
+            seeded.push(storedMaps.length > i ? storedMaps[i] : (i + 1))
+        root.manualMaps = seeded
         root.open()
+    }
+
+    // P2.1: write the edited per-extruder groups together with the manual mode
+    // (upstream PlateData::filament_maps consumed by Print::get_filament_maps).
+    function applyManualMap() {
+        if (!root.editorVm) return
+        const plateIdx = root.editorVm.currentPlateIndex
+        if (root.editorVm.setPlateFilamentMap)
+            root.editorVm.setPlateFilamentMap(plateIdx, root.fmmManual, root.manualMaps)
     }
 
     onOpened: openForCurrentPlate()
@@ -170,6 +193,88 @@ CxPopup {
                     wrapMode: Text.WordWrap
                 }
             }
+        }
+
+        // P2.1: manual per-extruder group editor. Shown when 自定义 is
+        // selected; each extruder gets a group id (1..extruderCount). Groups
+        // mirror the upstream filament_map semantics: extruders sharing a
+        // group print together, and Print::get_filament_maps consumes the
+        // stored vector at slice time.
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spacingSM
+            visible: root.selectedMode === root.fmmManual
+            height: manualCol.implicitHeight + 12
+            radius: Theme.radiusMD
+            color: Theme.bgBase
+            border.color: Theme.borderDefault
+            border.width: 1
+
+            ColumnLayout {
+                id: manualCol
+                anchors.fill: parent
+                anchors.margins: Theme.spacingSM
+                spacing: Theme.spacingXS
+
+                Text {
+                    text: qsTr("手动分配（耗材 → 分组）")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
+                }
+
+                Repeater {
+                    model: root.extruderCount
+                    delegate: RowLayout {
+                        required property int index
+                        spacing: Theme.spacingSM
+                        Layout.fillWidth: true
+
+                        Text {
+                            text: qsTr("耗材 %1").arg(index + 1)
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeSM
+                            Layout.preferredWidth: 64
+                        }
+                        CxButton {
+                            text: "−"
+                            onClicked: {
+                                const maps = root.manualMaps.slice()
+                                if (maps[index] > 1) {
+                                    maps[index] = maps[index] - 1
+                                    root.manualMaps = maps
+                                }
+                            }
+                        }
+                        Text {
+                            text: String(root.manualMaps.length > index ? root.manualMaps[index] : (index + 1))
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeSM
+                            font.family: "Consolas, monospace"
+                            Layout.preferredWidth: 20
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        CxButton {
+                            text: "+"
+                            onClicked: {
+                                const maps = root.manualMaps.slice()
+                                if (maps[index] < root.extruderCount) {
+                                    maps[index] = maps[index] + 1
+                                    root.manualMaps = maps
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // P2.1: apply the edited map (manual mode only).
+        CxButton {
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spacingXS
+            visible: root.selectedMode === root.fmmManual
+            text: qsTr("应用映射")
+            onClicked: root.applyManualMap()
         }
 
         RowLayout {

@@ -834,6 +834,14 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
             loop.quit();
         });
 
+        // Wave 3a (perf): the CLI knows its --output-dir target up front, so
+        // export_gcode writes straight to the final path — no slice_cache
+        // temp file + copy (the export block below is skipped when the
+        // paths already match).
+        const QString gcodeDest = outDir + QStringLiteral("/")
+            + sliceService_->defaultExportGCodeFileName(plate);
+        sliceService_->setDirectOutputPath(gcodeDest);
+
         sliceService_->startSlice(projectService_->projectName());
         loop.exec();
 
@@ -851,8 +859,14 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
             err << "Error: no G-code output from slice\n";
             return CLI_SLICING_ERROR;
         }
-        const QString gcodeDest = outDir + QStringLiteral("/")
-            + sliceService_->defaultExportGCodeFileName(plate);
+        if (QDir::cleanPath(gcodeSrc) == QDir::cleanPath(gcodeDest)) {
+            // Direct write already landed the file at the target.
+            if (!quiet_)
+                out << "G-code written: " << gcodeDest << "\n";
+            if (slicedGcodes)
+                slicedGcodes->insert(plate, gcodeDest);
+            continue;
+        }
         // Phase 239 (ENGN-03): the G-code copy runs on a QtConcurrent worker
         // (exportGCodeToPath returns once the export STARTS), so wait for the
         // finished/failed signal in a fresh event loop -- mirrors the slice

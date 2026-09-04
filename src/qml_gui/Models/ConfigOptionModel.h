@@ -146,6 +146,11 @@ public:
   Q_INVOKABLE QStringList processPageNames() const;
   Q_INVOKABLE QStringList processGroupsForPage(const QString &page) const;
   Q_INVOKABLE QStringList processMappingErrors() const;
+  /// P4.3: combined machine + filament manifest audit errors (same format as
+  /// processMappingErrors). Empty when every upstream Preset::printer_options()
+  /// / filament_options() key is mapped (or exempted as a non-UI field) and
+  /// every manifest key exists upstream.
+  Q_INVOKABLE QStringList tierMappingErrors() const;
   Q_INVOKABLE QList<int> orderedProcessIndicesForGroup(const QList<int> &candidateIndices,
                                                         const QString &page,
                                                         const QString &group) const;

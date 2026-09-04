@@ -5,7 +5,12 @@ import ".."
 MenuItem {
     id: root
 
+    // Width floor from the qtquickcontrols2 Basic MenuItem template
+    // (background implicitWidth 200). Without it a customized background
+    // reports zero implicit width and the owning CxMenu can collapse to
+    // zero width. Height is left content-driven to keep rows compact.
     background: Rectangle {
+        implicitWidth: 200
         color: {
             if (!root.enabled) return "transparent"
             if (root.highlighted) return root.pressed ? Theme.bgPressed : Theme.bgHover

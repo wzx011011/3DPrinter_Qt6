@@ -7,7 +7,7 @@
 //
 // 本组件为 main.qml 顶层 ApplicationWindow 内的标题栏区域（不是独立 Window）。
 // 它包含：Logo + [File ▾] + [▾] + Save/Undo/Redo/Calibration + 占位按钮 + 9-tab TabBar
-//         + side_tools(Slice/Print/FilamentGroupPopup 占位) + CenteredTitle + Bell + 窗口控制
+//         + side_tools(Slice/Print 占位) + CenteredTitle + Bell + 窗口控制
 //
 // 所有 Tab 切换通过 backend.requestSelectTab(backend.TabPosition.tpX)（Plan 02-01 提供）。
 // 所有页面索引通过 backend.TabPosition 枚举引用——禁止硬编码整数（Pitfall 1）。
@@ -35,6 +35,10 @@ Item {
     signal newProjectRequested()
     signal openProjectRequested(string filePath)
     signal saveAsRequested()
+    /// R-P0.6: quit requests route to main.qml's guarded requestQuit() -- the
+    /// topbar must never call Qt.quit() directly (it bypasses the dirty-
+    /// project confirm, upstream MainFrame.cpp:443 close_with_confirm).
+    signal quitRequested()
     signal importModelRequested(string nameFilter)
     signal exportGcodeRequested()
     signal exportAllGcodeRequested()
@@ -116,7 +120,7 @@ Item {
                 MenuItem { text: qsTr("新建项目"); onTriggered: root.newProjectRequested() }
                 MenuItem { text: qsTr("打开项目..."); onTriggered: root.openProjectRequested("") }
                 MenuItem { text: qsTr("保存项目"); onTriggered: if (!backend.topbarSaveProject()) root.saveAsRequested() }
-                MenuItem { text: qsTr("退出"); onTriggered: Qt.quit() }
+                MenuItem { text: qsTr("退出"); onTriggered: root.quitRequested() }
             }
             Menu {
                 title: qsTr("编辑")
@@ -425,19 +429,6 @@ Item {
                     onClicked: root.printRequested()
                 }
 
-                // Phase 110 (FMAP-03): FilamentGroupPopup trigger. Opens the
-                // CxPopup-based 3-mode selector (AutoForFlush / AutoForMatch /
-                // Manual). fmmDefault is the per-plate inherit-sentinel and is
-                // NOT surfaced as a 4th radio (anti-feature per FEATURES.md).
-                CxIconButton {
-                    cxStyle: CxIconButton.Style.Chrome
-                    buttonSize: 30
-                    iconSize: 16
-                    iconSource: "qrc:/qml/assets/icons/box.svg"
-                    toolTipText: qsTr("Filament Group")
-                    enabled: backend.editorViewModel != null
-                    onClicked: filamentGroupPopup.openForCurrentPlate()
-                }
             }
 
             // CenteredTitle (对齐上游 BBLTopbar.cpp:43-94 CenteredTitle 类)
@@ -701,15 +692,6 @@ Item {
         }
     }
 
-    // Phase 110 (FMAP-03): FilamentGroupPopup instance. Bound to the
-    // BackendContext EditorViewModel so the popup can read the Phase 108
-    // auto-recommended map preview and write the selected mode back.
-    FilamentGroupPopup {
-        id: filamentGroupPopup
-        parent: Overlay.overlay
-        editorVm: backend.editorViewModel
-    }
-
     // ── TitleBarDivider 复用组件 ────────────────────────────────────────
     component TitleBarDivider: Rectangle {
         implicitWidth: 1
@@ -868,7 +850,7 @@ Item {
 
         CxMenuItem {
             text: qsTr("退出")
-            onTriggered: Qt.quit()
+            onTriggered: root.quitRequested()
         }
     }
 

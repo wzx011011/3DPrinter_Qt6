@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QMatrix4x4>
 #include <QVariant>
 #include <QVector4D>
 #include <QtGlobal>
@@ -220,6 +221,25 @@ public:
   const QList<ModelVertex> &bedLimitVertices() const;
   const QList<ModelVertex> &modelVertices() const;
   const QList<ModelBatch> &modelBatches() const;
+  // Wave 2b (perf): the v2 TLV decode keeps the indexed geometry + per-batch
+  // world matrices for the renderer's indexed draws (docs/perf-wave2b-design.md);
+  // modelVertices()/modelBatches() remain the compat world-space soup.
+  struct ModelGeometry
+  {
+    QList<float> positions;   // slic3r-local xyz triples
+    QList<float> normals;     // normalized per-vertex, local space
+    QList<quint32> indices;   // canonical triangle indices
+  };
+  struct ModelBatchMeta
+  {
+    int geomId = 0;
+    QMatrix4x4 matrix;        // row-major GL world matrix (axis swap folded in)
+    int volumeType = 0;
+    int extruderId = 1;
+    bool printable = true;
+  };
+  const QList<ModelGeometry> &modelGeometries() const { return m_modelGeometries; }
+  const QList<ModelBatchMeta> &modelBatchMeta() const { return m_modelBatchMeta; }
   const ModelBounds &modelBounds() const;
   bool hasModelBounds() const;
   int selectedSourceObjectIndex() const;
@@ -305,6 +325,9 @@ private:
   QList<ModelVertex> m_bedLimitVertices;
   QList<ModelVertex> m_modelVertices;
   QList<ModelBatch> m_modelBatches;
+  // Wave 2b (perf): v2 decode side-channel for indexed rendering.
+  QList<ModelGeometry> m_modelGeometries;
+  QList<ModelBatchMeta> m_modelBatchMeta;
   ModelBounds m_modelBounds;
   bool m_hasModelBounds = false;
   int m_selectedSourceObjectIndex = -1;

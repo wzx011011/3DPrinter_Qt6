@@ -77,6 +77,8 @@ class PartPlateTests final : public QObject {
   void plateListInstanceLookupAndReadinessAggregation();
   // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
   void deletePlateMigratesInstancesToNeighbor();
+  // ── P0.5.5b: stable print identity survives reorder and deletion ─────────
+  void stablePrintIdentitySurvivesReorderAndDeletion();
   // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
   void allPlatesAggregateReadinessTruthTables();
 #ifdef HAS_LIBSLIC3R
@@ -99,6 +101,11 @@ class PartPlateTests final : public QObject {
 
   // ── FMAP-01/03 tests (v3.2 Phase 31) ────────────────────────────────────
   void filamentMapManualAssignment();  // PartPlate + service (no libslic3r needed)
+#ifdef HAS_LIBSLIC3R
+  void filamentMapSynchronizesLiveConfig();  // P2.1: setter feeds SliceService config
+#else
+  void filamentMapSynchronizesLiveConfig() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
 
   // ── Phase 107 FMAP-02 (enum widening + 3MF migration) ──────────────────
   // (a) the 4-value enum maps to the correct ints (no libslic3r); the 3MF
@@ -546,6 +553,32 @@ void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
   QVERIFY(outside.plate(0)->canSlice());
 }
 
+void PartPlateTests::stablePrintIdentitySurvivesReorderAndDeletion() {
+  ProjectServiceMock service;
+  QVERIFY(service.addPlate());
+  QVERIFY(service.addPlate());
+  QCOMPARE(service.plateCount(), 3);
+
+  const int id0 = service.platePrintId(0);
+  const int id1 = service.platePrintId(1);
+  const int id2 = service.platePrintId(2);
+  QVERIFY(id0 >= 0);
+  QVERIFY(id1 > id0);
+  QVERIFY(id2 > id1);
+
+  QVERIFY(service.movePlate(0, 2));
+  QCOMPARE(service.platePrintId(2), id0);
+  QCOMPARE(service.platePrintId(0), id1);
+  QCOMPARE(service.platePrintId(1), id2);
+  QCOMPARE(service.plateIndexForPrintId(id0), 2);
+
+  QVERIFY(service.deletePlate(1));
+  QCOMPARE(service.plateIndexForPrintId(id2), -1);
+  QCOMPARE(service.platePrintId(1), id0);
+  QVERIFY(service.addPlate());
+  QVERIFY(service.platePrintId(2) > id2);
+}
+
 void PartPlateTests::allPlatesAggregateReadinessTruthTables() {
   // B3 truth tables for the upstream PartPlate.cpp:4989-5044 aggregates.
   // Domain-only: the validity flag stands in for the service-side result
@@ -938,6 +971,35 @@ void PartPlateTests::filamentMapManualAssignment() {
                999, int(OWzx::FilamentMapMode::fmmManual), QList<int>{1}),
            "setPlateFilamentMap must fail on invalid plate index");
 }
+
+#ifdef HAS_LIBSLIC3R
+void PartPlateTests::filamentMapSynchronizesLiveConfig() {
+  // P2.1: setPlateFilamentMap must update the DynamicPrintConfig consumed by
+  // SliceService, not only the parallel PartPlate metadata fields.
+  ProjectServiceMock service;
+  const QList<int> maps{2, 1, 3};
+  QVERIFY2(service.setPlateFilamentMap(
+               0, int(OWzx::FilamentMapMode::fmmManual), maps),
+           "setPlateFilamentMap must succeed on a valid plate");
+
+  const Slic3r::DynamicPrintConfig *config = service.plateDynamicConfig(0);
+  QVERIFY2(config != nullptr, "plateDynamicConfig must return the live plate config");
+  const auto *modeOpt = config->option("filament_map_mode");
+  QVERIFY2(modeOpt != nullptr, "live config must contain filament_map_mode");
+  QCOMPARE(int(modeOpt->getInt()), int(OWzx::FilamentMapMode::fmmManual));
+  const auto *mapOpt = config->option<Slic3r::ConfigOptionInts>("filament_map");
+  QVERIFY2(mapOpt != nullptr, "live config must contain filament_map");
+  QCOMPARE(mapOpt->values, std::vector<int>({2, 1, 3}));
+
+  QVERIFY2(service.setPlateFilamentMap(
+               0, int(OWzx::FilamentMapMode::fmmAutoForFlush), QList<int>()),
+           "setPlateFilamentMap must accept an empty map");
+  QCOMPARE(int(config->option("filament_map_mode")->getInt()),
+           int(OWzx::FilamentMapMode::fmmAutoForFlush));
+  QVERIFY2(config->option<Slic3r::ConfigOptionInts>("filament_map")->values.empty(),
+           "empty map updates must clear the live config array");
+}
+#endif  // HAS_LIBSLIC3R
 
 void PartPlateTests::filamentMapModeEnumWidenedAnd3MFMigrates() {
   // FMAP-02 (FM-05 part a): the 4-value FilamentMapMode exists and maps to the

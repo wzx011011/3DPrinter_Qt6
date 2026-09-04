@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QVector>
 #include <QVector3D>
 
 #include "qml_gui/Renderer/PrepareSceneData.h"
@@ -34,7 +35,63 @@ public:
     }
   };
 
+  // Wave 2 (perf): flat AABB BVH over one batch's triangle soup. Upstream
+  // picking is backed by AABBMesh's BVH (MeshUtils.hpp:159-167,
+  // SceneRaycaster.cpp:99-170); the Qt port's hover/press pick previously
+  // brute-forced every triangle per mouse move (measured 33 ms/ray at 2M
+  // triangles, docs/perf-baseline.md). Build once per mesh change, raycast
+  // per event: same Moller-Trumbore math, ordered BVH traversal instead of a
+  // linear sweep.
+  class Bvh
+  {
+  public:
+    // vertices[firstVertex, firstVertex+vertexCount) is a triangle soup
+    // (vertexCount % 3 == 0). Returns an empty Bvh for invalid ranges.
+    static Bvh build(const QList<PrepareSceneData::ModelVertex> &vertices,
+                     int firstVertex, int vertexCount);
+
+    bool isEmpty() const { return m_nodes.isEmpty(); }
+
+    // Nearest hit along the (normalized) ray closer than maxDistance.
+    // Updates hitPosition/hitDistance; returns false when nothing hit.
+    bool raycast(const QList<PrepareSceneData::ModelVertex> &vertices,
+                 const QVector3D &origin, const QVector3D &direction,
+                 float maxDistance,
+                 QVector3D *hitPosition, float *hitDistance) const;
+
+  private:
+    struct Node
+    {
+      float minX = 0.0f, minY = 0.0f, minZ = 0.0f;
+      float maxX = 0.0f, maxY = 0.0f, maxZ = 0.0f;
+      qint32 left = -1;      // < 0 => leaf (triStart/triCount valid)
+      qint32 right = -1;
+      qint32 triStart = 0;   // leaf: range into m_triangles
+      qint32 triCount = 0;
+    };
+
+    QVector<Node> m_nodes;
+    QVector<qint32> m_triangles; // local triangle index (0-based in range)
+    int m_firstVertex = 0;
+  };
+
   static Hit pick(
+      const QVector3D &rayOrigin,
+      const QVector3D &rayDirection,
+      const QList<PrepareSceneData::ModelVertex> &vertices,
+      const QList<PrepareSceneData::ModelBatch> &batches);
+
+  // Accelerated variant: batchBvhs[i] accelerates batches[i] (empty Bvh =>
+  // that batch falls back to the brute-force sweep). Identical hit
+  // semantics to the 4-argument pick.
+  static Hit pick(
+      const QVector3D &rayOrigin,
+      const QVector3D &rayDirection,
+      const QList<PrepareSceneData::ModelVertex> &vertices,
+      const QList<PrepareSceneData::ModelBatch> &batches,
+      const QVector<Bvh> &batchBvhs);
+
+  static int pickSourceObject(
       const QVector3D &rayOrigin,
       const QVector3D &rayDirection,
       const QList<PrepareSceneData::ModelVertex> &vertices,
@@ -44,7 +101,8 @@ public:
       const QVector3D &rayOrigin,
       const QVector3D &rayDirection,
       const QList<PrepareSceneData::ModelVertex> &vertices,
-      const QList<PrepareSceneData::ModelBatch> &batches);
+      const QList<PrepareSceneData::ModelBatch> &batches,
+      const QVector<Bvh> &batchBvhs);
 
 private:
   ObjectPicking() = delete;

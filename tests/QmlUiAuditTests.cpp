@@ -9,10 +9,16 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 #include <QtTest>
+#include <utility>
+#include <vector>
 
 class QmlUiAuditTests final : public QObject
 {
@@ -507,6 +513,10 @@ private slots:
   // Phase 122 (PAINT-04): Support/Seam painted facets write to ModelVolume
   // FacetsAnnotation (supported_facets/seam_facets) so the slice consumes them.
   void supportAndSeamPaintFeedsSlice();
+  // P11.B2.3 (upstream 1d61962ea7): Support Painting Vertical/Horizontal
+  // axis-lock checkboxes reach the drag constraint in RhiViewport (upstream
+  // GLGizmoPainterBase.cpp:738-743).
+  void supportPaintAxisLocksWired();
   // Phase 123 (PAINT-05): MMU segmentation paint writes to
   // mmu_segmentation_facets + clearMmuSegmentation implemented (no TODO stub).
   void mmuSegmentationPaintFeedsSlice();
@@ -711,6 +721,16 @@ private slots:
   // unit-inference plumbing, project-config restore routing, and sliced-file
   // export surface.
   void viewMenuShortcutsAndImportSourceAudit();
+  // P7.2 (navigation baseline): the main.qml StackLayout must keep the
+  // upstream 9-slot surface (Plater single-instance contract for
+  // Prepare+Preview, placeholder slots hidden), every routed page file must
+  // exist, and the navigation entry must go through backend.requestSelectTab.
+  void pageNavigationBaselineMatchesUpstreamSurface();
+  // P7.2 (upstream parity baseline): every anchor in
+  // tests/data/upstream_parity_baseline.json must resolve -- the Qt
+  // counterpart file contains the symbol and the locking test exists in the
+  // named test source. Guards the baseline against silent rot.
+  void upstreamParityBaselineEntriesResolveInSource();
   // Phase 238 (PREV-01..07): preview completion source audits -- ghost
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
@@ -3141,6 +3161,115 @@ void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
   QVERIFY2(preparePage.contains(QStringLiteral("supportPaintOnOverhangsOnly = checked")),
            "GIZ-02: the overhang-only toggle must write the existing property");
 
+  // ── P2.3-1: cross-section (clipping) plane brush ─────────────────────
+  // Upstream truth: ObjectClipper::set_position_by_ratio builds the plane
+  // from -camera forward + the instance-bounding-box radius; get_clipping_
+  // plane_in_volume_coordinates carries it into the volume and threads it
+  // into every select_patch / seed_fill call (GLGizmoPainterBase.cpp:724-728,
+  // 616). The ViewModel owns the slider position (m_clp_ratio), the viewport
+  // supplies the camera look direction, and the QML panel hosts the slider +
+  // reset (upstream ResetClippingPlane).
+  QVERIFY2(vmHeader.contains(QStringLiteral("paintClippingPosition")),
+           "P2.3-1: the ViewModel must expose the clipping slider position");
+  QVERIFY2(vmCpp.contains(QStringLiteral("buildVolumeClippingPlane")),
+           "P2.3-1: the ViewModel must build the volume-coordinate plane");
+  QVERIFY2(vmCpp.contains(QStringLiteral("is_mesh_point_clipped")),
+           "P2.3-1: hits on the clipped side must be rejected before painting");
+  QVERIFY2(paintEngineCpp.contains(QStringLiteral("ClippingPlane")),
+           "P2.3-1: PaintEngine must thread the plane into the cursor/seed fill");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("cameraForward")),
+           "P2.3-1: the viewport must carry the camera look direction");
+  QVERIFY2(preparePage.contains(QStringLiteral("paintClippingPosition = value / 100.0")),
+           "P2.3-1: the clipping slider must write the ViewModel position");
+  QVERIFY2(preparePage.contains(QStringLiteral("resetPaintClippingPlane()")),
+           "P2.3-1: the clipping reset must route to the ViewModel");
+
+  // ── P2.3-2: staged seed-fill preview visualization ───────────────────
+  // Upstream renders the staged seed region brightened x1.25
+  // (get_seed_fill_color, GLGizmoPainterBase.cpp:1123-1131). The ViewModel
+  // exposes the staged region through PaintEngine::getSeedSelection and emits
+  // it into the overlay stream as a negative state marker; the renderer
+  // brightens the matching base color.
+  QVERIFY2(paintEngineCpp.contains(QStringLiteral("getSeedSelection")),
+           "P2.3-2: PaintEngine must expose the staged seed region");
+  QVERIFY2(vmCpp.contains(QStringLiteral("hasSeedSelection")),
+           "P2.3-2: the overlay must gate on the staged seed region");
+  QVERIFY2(vmCpp.contains(QStringLiteral("markerState = -std::clamp")),
+           "P2.3-2: staged facets must carry the negative-state marker");
+  QVERIFY2(readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"))
+               .contains(QStringLiteral("state < 0")),
+           "P2.3-2: the renderer must brighten the staged-seed marker color");
+
+  // ── P2.3-3: support preview from the slice ───────────────────────────
+  // Upstream slices inside the FDM supports gizmo and renders the resulting
+  // SupportLayer::support_fills extrusions as a gray preview volume
+  // (GLGizmoFdmSupports.cpp:826-928). The Qt pipe captures the same extrusion
+  // polylines in the slice worker and renders them as gray lines while the
+  // support-paint gizmo is active.
+  QVERIFY2(readSource(QStringLiteral("src/core/services/SliceService.cpp"))
+               .contains(QStringLiteral("support_fills.entities")),
+           "P2.3-3: the slice worker must capture support_fills extrusions");
+  QVERIFY2(vmCpp.contains(QStringLiteral("onSupportPreviewReady")),
+           "P2.3-3: the ViewModel must receive the support preview pipe");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("supportPreviewData")),
+           "P2.3-3: the viewport must expose the support preview pipe");
+  QVERIFY2(readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"))
+               .contains(QStringLiteral("uploadSupportPreviewBuffer")),
+           "P2.3-3: the renderer must upload the support preview lines");
+  QVERIFY2(preparePage.contains(QStringLiteral("supportPreviewData:")),
+           "P2.3-3: QML must bind the support preview pipe");
+
+  // ── P2.3-5: MMU height-range / edge detection / gap-area tools ──────
+  QVERIFY2(paintEngineCpp.contains(QStringLiteral("paintHeightRangeAt")),
+           "P2.3-5: PaintEngine must drive the upstream HEIGHT_RANGE brush");
+  QVERIFY2(paintEngineCpp.contains(QStringLiteral("getGapFragments")),
+           "P2.3-5: PaintEngine must expose the gap-area fragments");
+  QVERIFY2(vmHeader.contains(QStringLiteral("paintEdgeDetection")),
+           "P2.3-5: the ViewModel must expose the edge-detection toggle");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("heightRangePickRequested")),
+           "P2.3-5: the viewport must emit the height-range pick");
+  QVERIFY2(preparePage.contains(QStringLiteral("高度范围")),
+           "P2.3-5: the MMU panel must host the height-range tool");
+  QVERIFY2(preparePage.contains(QStringLiteral("边检测")),
+           "P2.3-5: the MMU panel must host the edge-detection checkbox");
+  QVERIFY2(preparePage.contains(QStringLiteral("缝隙面积")),
+           "P2.3-5: the panels must host the upstream gap-area slider");
+
+  // ── P2.1: manual filament-map editing (FilamentGroupPopup) ──────────
+  QVERIFY2(vmHeader.contains(QStringLiteral("setPlateFilamentMap(int plateIndex, int mode")),
+           "P2.1: the ViewModel must bridge the full manual map write");
+  QVERIFY2(readSource(QStringLiteral("src/qml_gui/dialogs/FilamentGroupPopup.qml"))
+               .contains(QStringLiteral("applyManualMap")),
+           "P2.1: the popup must apply the edited per-extruder groups");
+
+  // ── P4.1: develop-mode section parity (skip AMS blacklist check) ────
+  QVERIFY2(readSource(QStringLiteral("src/core/viewmodels/SettingsViewModel.cpp"))
+               .contains(QStringLiteral("setSkipAmsBlacklistCheck")),
+           "P4.1: the ViewModel must persist skip_ams_blacklist_check");
+  QVERIFY2(readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"))
+               .contains(QStringLiteral("跳过 AMS 黑名单检查")),
+           "P4.1: the developer category must host the AMS blacklist toggle");
+
+  // ── P2.7: Emboss default placeholder parity ─────────────────────────
+  // Upstream GLGizmoEmboss.cpp:500 seeds the text box with
+  // _u8L("Embossed text"); the Qt6 textContent member carries the same seed.
+  QVERIFY2(vmHeader.contains(QStringLiteral("Embossed text")),
+           "P2.7: the text-emboss default placeholder must match upstream");
+
+  // ── P2.7: Emboss volume-type selector (registered diff closure) ─────
+  // Upstream GLGizmoEmboss routes new text volumes by volume_type
+  // (ModelPart / NegativeVolume / ParameterModifier).
+  QVERIFY2(vmHeader.contains(QStringLiteral("embossVolumeType")),
+           "P2.7: the ViewModel must expose the emboss volume-type selector");
+  QVERIFY2(preparePage.contains(QStringLiteral("embossVolumeType = modelData.val")),
+           "P2.7: the Emboss panel must host the volume-type selector");
+
+  // ── P2.3-4: paint panel item parity with the upstream imgui panels ──
+  QVERIFY2(preparePage.contains(QStringLiteral("擦除")),
+           "P2.3-4: the support panel must offer the upstream remove tool");
+  QVERIFY2(preparePage.contains(QStringLiteral("resetPaintClippingPlane()")),
+           "P2.3-4: the seam/MMU clipping rows must reuse the reset action");
+
   // ── GIZ-03: flatten face pick ─────────────────────────────────────────
   QVERIFY2(vmHeader.contains(QStringLiteral("flattenPickFace")),
            "GIZ-03: the ViewModel must expose the flatten face pick");
@@ -3923,7 +4052,7 @@ void QmlUiAuditTests::rhiViewportRendererComputePreviewDrawRangeAppliesRoleFilte
            "computePreviewDrawRanges must append separate visible ranges");
   QVERIFY2(rendererSource.contains(QStringLiteral("for (const PreviewDrawRange &range : drawRanges)")),
            "render() must iterate all visible preview draw ranges");
-  QVERIFY2(rendererSource.contains(QStringLiteral("cb->draw(range.vertexCount, 1, range.firstVertex)")),
+  QVERIFY2(rendererSource.contains(QStringLiteral("cb->drawIndexed(range.vertexCount, 1, range.firstVertex)")),
            "render() must draw each visible range independently");
 }
 
@@ -5062,8 +5191,10 @@ void QmlUiAuditTests::wipeTowerReadbackAndRenderAnchorsPresent()
   //     activePrint_.store(nullptr) (where the Print is invalidated). The
   //     capturedGeometry.valid = true marker confirms the valid path is set
   //     inside that window. No Print* may escape the worker.
-  QVERIFY2(sliceService.contains(QStringLiteral("print.process()")),
-           "WT-READBACK-POINT: SliceService must call print.process() before reading wipe_tower_data");
+  // Wave 4a (perf): the call is now print.process(&cachedTimeCost, reusePrint)
+  // (use_cache for incremental reslices) — same readback-ordering guarantee.
+  QVERIFY2(sliceService.contains(QStringLiteral("print.process(&cachedTimeCost")),
+           "WT-READBACK-POINT: SliceService must call print.process(...) before reading wipe_tower_data");
   QVERIFY2(sliceService.contains(QStringLiteral("activePrint_.store(nullptr")),
            "WT-READBACK-POINT: SliceService must invalidate the Print via activePrint_.store(nullptr) after readback");
   QVERIFY2(sliceService.contains(QStringLiteral("capturedGeometry.valid = true")),
@@ -5667,6 +5798,10 @@ void QmlUiAuditTests::filamentGroupPopupSurfacesThreeModesNotFour()
            "FMAP-03: src/qml_gui/dialogs/FilamentGroupPopup.qml must exist and be readable");
   const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
   QVERIFY2(!qmlQrc.isEmpty(), "Unable to read qml.qrc");
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
   const QString partPlateHeader = readSource(QStringLiteral("src/core/model/PartPlate.h"));
@@ -5680,9 +5815,19 @@ void QmlUiAuditTests::filamentGroupPopupSurfacesThreeModesNotFour()
   QVERIFY2(qmlQrc.contains(QStringLiteral("dialogs/FilamentGroupPopup.qml")),
            "FMAP-03/FP-06: FilamentGroupPopup.qml must be registered in qml.qrc");
 
-  // FMAP-03 / FP-02 (wired into the topbar so the popup is reachable).
-  QVERIFY2(topbar.contains(QStringLiteral("FilamentGroupPopup")),
-           "FMAP-03/FP-02: BBLTopbar must reference FilamentGroupPopup (the popup trigger)");
+  // FMAP-03 / FP-02: this is a Prepare-only workflow control. The visible
+  // GLToolbars action must route to a PreparePage-owned popup; the topbar's
+  // sideTools row is hidden and must not retain an unreachable duplicate.
+  QVERIFY2(glToolbars.contains(QStringLiteral("signal filamentGroupRequested()")),
+           "FMAP-03/FP-02: GLToolbars must expose the filament-group action signal");
+  QVERIFY2(glToolbars.contains(QStringLiteral("onClicked: root.filamentGroupRequested()")),
+           "FMAP-03/FP-02: the visible Prepare toolbar action must request the filament group popup");
+  QVERIFY2(preparePage.contains(QStringLiteral("FilamentGroupPopup {"))
+           && preparePage.contains(QStringLiteral("id: filamentGroupPopup"))
+           && preparePage.contains(QStringLiteral("onFilamentGroupRequested: filamentGroupPopup.openForCurrentPlate()")),
+           "FMAP-03/FP-02: PreparePage must own the popup and route the visible toolbar action to openForCurrentPlate()");
+  QVERIFY2(!topbar.contains(QStringLiteral("FilamentGroupPopup")),
+           "FMAP-03/FP-02: BBLTopbar must not retain a trigger inside hidden sideTools");
 
   // FMAP-03 / FP-01 (the 3 selectable modes appear). The popup must reference
   // all 3 concrete enum values AND bind the Phase 108 auto-recommended preview.
@@ -7014,6 +7159,90 @@ void QmlUiAuditTests::supportAndSeamPaintFeedsSlice()
   // PAINT-04/SS-03: clear stubs implemented (no longer TODO-only).
   QVERIFY2(!evm.contains(QStringLiteral("TODO: Implement actual clear logic")),
            "PAINT-04/SS-03: clearSupportPaintOnSelection TODO stub must be implemented");
+
+  // P2.3 (PAINT-KIND/SS-04): the PaintEngine cache + API are kind-aware so
+  // Support/Seam/MMU selectors stay isolated (upstream per-gizmo
+  // m_triangle_selectors, GLGizmoPainterBase.hpp:247). A regression to a
+  // kind-blind (object, volume)-only key reintroduces cross-kind state
+  // contamination and fails here.
+  const QString paintEngineH = readSource(QStringLiteral("src/core/rendering/PaintEngine.h"));
+  QVERIFY2(!paintEngineH.isEmpty(), "Unable to read PaintEngine.h");
+  QVERIFY2(paintEngineH.contains(QStringLiteral("enum class PaintKind : int")),
+           "PAINT-KIND/SS-04: PaintEngine.h must declare the canonical OWzx::PaintKind enum");
+  QVERIFY2(paintEngineH.contains(QStringLiteral("paintAt(int objectIndex, int volumeIndex, PaintKind kind")) &&
+           paintEngineH.contains(QStringLiteral("cachedSelectorForVolume(")) &&
+           paintEngineH.contains(QStringLiteral("int objectIndex, int volumeIndex, PaintKind kind")),
+           "PAINT-KIND/SS-04: PaintEngine paintAt/cachedSelectorForVolume must take the paint kind");
+  QVERIFY2(paintEngineH.contains(QStringLiteral("using Key = std::tuple<int, int, PaintKind>;")),
+           "PAINT-KIND/SS-04: the PaintEngine cache key must include the paint kind");
+
+  // PAINT-KIND/SS-05: EditorViewModel routes the ACTIVE kind into the engine
+  // (paint / commit / smart fill / resync / overlay) instead of assuming
+  // Support.
+  QVERIFY2(evm.contains(QStringLiteral("m_paintEngine->paintAt(")) &&
+           evm.contains(QStringLiteral("m_paintEngine->smartFillAt(")) &&
+           evm.contains(QStringLiteral("static_cast<OWzx::PaintKind>(")),
+           "PAINT-KIND/SS-05: EditorViewModel must pass the active paint kind to PaintEngine");
+  QVERIFY2(evm.contains(QStringLiteral("const qint32 modeLabel = qint32(")),
+           "PAINT-KIND/SS-05: paintOverlayData modeLabel must derive from the active kind (no hardcoded Support label)");
+
+  // PAINT-KIND/SS-06: PreparePage assigns activePaintKind when the gizmo
+  // switches (Support=0 / Seam=1 / MMU=2) -- without this the Seam gizmo
+  // painted into supported_facets.
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.activePaintKind = 0")) &&
+           preparePage.contains(QStringLiteral("root.editorVm.activePaintKind = 1")) &&
+           preparePage.contains(QStringLiteral("root.editorVm.activePaintKind = 2")),
+           "PAINT-KIND/SS-06: PreparePage must assign activePaintKind for the Support/Seam/MMU gizmos");
+}
+
+// P11.B2.3 (upstream 1d61962ea7): Support Painting gains the Vertical /
+// Horizontal axis-lock checkboxes. The chain must be complete end to end:
+// the EditorViewModel properties (mutually exclusive setters mirror the
+// upstream bbl_checkbox branches), the visible Support-panel checkboxes, the
+// RhiViewport bindings, and the drag constraint that freezes the pick screen
+// axis at the last click (GLGizmoPainterBase.cpp:738-743).
+void QmlUiAuditTests::supportPaintAxisLocksWired()
+{
+  const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString rhiH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString rhiCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(!evmH.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!rhiH.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!rhiCpp.isEmpty(), "Unable to read RhiViewport.cpp");
+
+  // LOCK-01: ViewModel properties exist and are mutually exclusive.
+  QVERIFY2(evmH.contains(QStringLiteral("paintVerticalOnly")) &&
+           evmH.contains(QStringLiteral("paintHorizontalOnly")),
+           "LOCK-01: EditorViewModel must expose paintVerticalOnly/paintHorizontalOnly");
+  QVERIFY2(evm.contains(QStringLiteral("m_paintHorizontalOnly = false;")) &&
+           evm.contains(QStringLiteral("m_paintVerticalOnly = false;")),
+           "LOCK-01: enabling one axis lock must clear the other (mutual exclusion)");
+
+  // LOCK-02: the visible Support panel surfaces both checkboxes.
+  QVERIFY2(preparePage.contains(QStringLiteral("qsTr(\"垂直\")")) &&
+           preparePage.contains(QStringLiteral("qsTr(\"水平\")")),
+           "LOCK-02: PreparePage Support panel must show the Vertical/Horizontal checkboxes");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.paintVerticalOnly = checked")) &&
+           preparePage.contains(QStringLiteral("root.editorVm.paintHorizontalOnly = checked")),
+           "LOCK-02: the checkboxes must write back to the ViewModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("paintVerticalOnly: root.editorVm ? root.editorVm.paintVerticalOnly : false")),
+           "LOCK-02: RhiViewport.paintVerticalOnly must bind to the ViewModel");
+
+  // LOCK-03: the drag constraint freezes the pick axis at the last click.
+  QVERIFY2(rhiH.contains(QStringLiteral("m_paintLastClickX")) &&
+           rhiH.contains(QStringLiteral("m_paintLastClickY")),
+           "LOCK-03: RhiViewport must keep the last-click anchor");
+  QVERIFY2(rhiCpp.contains(QStringLiteral("lockedPosition.setX(m_paintLastClickX)")) &&
+           rhiCpp.contains(QStringLiteral("lockedPosition.setY(m_paintLastClickY)")),
+           "LOCK-03: the BRUSH drag must freeze the locked screen axis (upstream GLGizmoPainterBase.cpp:738-743)");
+  QVERIFY2(rhiCpp.contains(QStringLiteral("m_paintLastClickX = float(event->position().x())")),
+           "LOCK-03: the press path must refresh the axis-lock anchor");
 }
 
 void QmlUiAuditTests::mmuSegmentationPaintFeedsSlice()
@@ -8231,12 +8460,13 @@ void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
            "EMBO-F01: EditorViewModel forwarding sites must call setEmbossBoldness");
 
   // (7) addSvgVolume accepts the depth-modifier param + applies it.
-  QVERIFY2(projH.contains(QStringLiteral("addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f)")),
-           "EMBO-F02: ProjectServiceMock::addSvgVolume must accept the depthModifier param");
+  // P2.7: the signature also carries the xyScale param (Size input).
+  QVERIFY2(projH.contains(QStringLiteral("addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f, float xyScale = 1.0f)")),
+           "EMBO-F02: ProjectServiceMock::addSvgVolume must accept the depthModifier + xyScale params");
   QVERIFY2(projCpp.contains(QStringLiteral("set_scaling_factor")),
            "EMBO-F02: addSvgVolume must apply the modifier via the volume's Z scaling factor");
-  QVERIFY2(editorCpp.contains(QStringLiteral("addSvgVolume(idx, m_svgFilePath, m_svgDepthModifier)")),
-           "EMBO-F02: importSVG must forward m_svgDepthModifier to addSvgVolume");
+  QVERIFY2(editorCpp.contains(QStringLiteral("addSvgVolume(idx, m_svgFilePath, m_svgDepthModifier, m_svgScale)")),
+           "EMBO-F02/P2.7: importSVG must forward depth modifier AND the svgScale XY size input");
 
   // (8) PreparePage Emboss panel exposes the 4 new style controls.
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.embossBoldness")),
@@ -9859,6 +10089,162 @@ void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
 }
 
 QTEST_MAIN(QmlUiAuditTests)
+// ── P7.2: page navigation baseline ────────────────────────────────────────
+// The main.qml StackLayout mirrors the upstream 9-slot tab surface
+// (tpHome..tpPreferences). Prepare and Preview share ONE Plater instance
+// (upstream Plater.cpp single wxPanel, ARCH-05); placeholder slots must stay
+// hidden; every routed page file must exist; navigation must run through
+// backend.requestSelectTab (no ad-hoc page index writes in QML).
+void QmlUiAuditTests::pageNavigationBaselineMatchesUpstreamSurface()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  const QString backendHeader =
+      readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
+  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  QVERIFY2(!mainQml.isEmpty(), "P7.2: unable to read main.qml");
+  QVERIFY2(!backendHeader.isEmpty(), "P7.2: unable to read BackendContext.h");
+
+  // Tab surface: 9 semantic slots in upstream order.
+  const std::vector<std::pair<const char *, const char *>> slotMarkers = {
+      {"tpHome = 0,", "Page 0 (tpHome)"},
+      {"tp3DEditor = 1,", "Page 1 (tp3DEditor)"},
+      {"tpPreview = 2,", "Page 2 slot"},
+      {"tpDevice = 3,", "Page 3 (tpDevice)"},
+      {"tpMultiDevice = 4,", "Page 4 (tpMultiDevice)"},
+      {"tpProject = 5,", "Page 5 (tpProject)"},
+      {"tpCalibration = 6,", "Page 6 (tpCalibration)"},
+      {"tpPlaceholder1 = 7,", "Page 7 (tpPlaceholder1)"},
+      {"tpPreferences = 8,", "Page 8 (tpPreferences)"},
+  };
+  int backendCursor = -1;
+  int mainCursor = -1;
+  for (const auto &slot : slotMarkers) {
+    const int enumPos = backendHeader.indexOf(QString::fromLatin1(slot.first));
+    QVERIFY2(enumPos >= 0,
+             qPrintable(QStringLiteral("P7.2: tab enum slot missing: %1")
+                            .arg(slot.first)));
+    QVERIFY2(enumPos > backendCursor,
+             "P7.2: tab enum slots must stay in upstream order");
+    backendCursor = enumPos;
+
+    const int pagePos = mainQml.indexOf(QString::fromLatin1(slot.second));
+    QVERIFY2(pagePos >= 0,
+             qPrintable(QStringLiteral("P7.2: main.qml slot marker missing: %1")
+                            .arg(slot.second)));
+    QVERIFY2(pagePos > mainCursor,
+             "P7.2: main.qml slots must stay in upstream order");
+    mainCursor = pagePos;
+  }
+
+  // Plater single-instance contract (upstream Plater.cpp single wxPanel):
+  // Prepare (tp3DEditor) and Preview (tpPreview) both land on slot 1.
+  QVERIFY2(mainQml.contains(QStringLiteral("两 tab 都落到 slot 1")),
+           "P7.2: tp3DEditor and tpPreview must both map to the Plater slot");
+  QVERIFY2(mainQml.contains(QStringLiteral("ARCH-05")),
+           "P7.2: the Plater single-instance comment anchor must stay");
+
+  // Placeholder slots stay invisible (dead-slot contract).
+  const int placeholder2 =
+      mainQml.indexOf(QStringLiteral("Page 2 slot"));
+  const int placeholderVisible =
+      mainQml.indexOf(QStringLiteral("visible: false"), placeholder2);
+  QVERIFY2(placeholderVisible >= 0 && placeholderVisible < placeholder2 + 900,
+           "P7.2: the preview placeholder slot must stay visible:false");
+  const int placeholder7 =
+      mainQml.indexOf(QStringLiteral("Page 7 (tpPlaceholder1)"));
+  const int placeholder7Visible =
+      mainQml.indexOf(QStringLiteral("visible: false"), placeholder7);
+  QVERIFY2(placeholder7Visible >= 0 && placeholder7Visible < placeholder7 + 900,
+           "P7.2: the placeholder-7 slot must stay visible:false");
+
+  // Every routed page file exists and is registered in qml.qrc.
+  const QStringList pageFiles = {
+      QStringLiteral("src/qml_gui/pages/HomePage.qml"),
+      QStringLiteral("src/qml_gui/pages/Plater.qml"),
+      QStringLiteral("src/qml_gui/pages/PreparePage.qml"),
+      QStringLiteral("src/qml_gui/pages/PreviewPage.qml"),
+      QStringLiteral("src/qml_gui/pages/MonitorPage.qml"),
+      QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"),
+      QStringLiteral("src/qml_gui/pages/ProjectPage.qml"),
+      QStringLiteral("src/qml_gui/pages/CalibrationPage.qml"),
+      QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"),
+  };
+  for (const QString &page : pageFiles) {
+    QVERIFY2(!readSource(page).isEmpty(),
+             qPrintable(QStringLiteral("P7.2: routed page file missing: %1")
+                            .arg(page)));
+    const QString qrcName = page.mid(page.lastIndexOf('/') + 1);
+    QVERIFY2(qrc.contains(qrcName),
+             qPrintable(QStringLiteral("P7.2: page not registered in qml.qrc: %1")
+                            .arg(qrcName)));
+  }
+
+  // Navigation entry: page switches go through backend.requestSelectTab.
+  QVERIFY2(backendHeader.contains(QStringLiteral("requestSelectTab")),
+           "P7.2: navigation must route through backend.requestSelectTab");
+
+  // Upstream naming anchor: the device tab keeps its upstream lineage note.
+  QVERIFY2(backendHeader.contains(QStringLiteral("upstream: tpMonitor")),
+           "P7.2: the tpDevice upstream-lineage comment anchor must stay");
+}
+
+// ── P7.2: upstream parity baseline resolution ────────────────────────────
+// tests/data/upstream_parity_baseline.json maps upstream behavior points to
+// Qt6 counterparts + locking tests. Every entry must resolve against the
+// current sources, so a refactor that drops a behavior (or its test) fails
+// here instead of silently rotting the baseline.
+void QmlUiAuditTests::upstreamParityBaselineEntriesResolveInSource()
+{
+  const QString json = readSource(
+      QStringLiteral("tests/data/upstream_parity_baseline.json"));
+  QVERIFY2(!json.isEmpty(),
+           "P7.2: unable to read tests/data/upstream_parity_baseline.json");
+
+  QJsonParseError parseError{};
+  const QJsonDocument doc =
+      QJsonDocument::fromJson(json.toUtf8(), &parseError);
+  QVERIFY2(parseError.error == QJsonParseError::NoError && doc.isObject(),
+           qPrintable(QStringLiteral("P7.2: baseline JSON parse failed: %1")
+                          .arg(parseError.errorString())));
+
+  const QJsonArray anchors =
+      doc.object().value(QStringLiteral("anchors")).toArray();
+  QVERIFY2(anchors.size() >= 20,
+           "P7.2: the parity baseline must keep at least 20 anchors");
+
+  for (const QJsonValue &value : anchors) {
+    const QJsonObject anchor = value.toObject();
+    const QString area = anchor.value(QStringLiteral("area")).toString();
+    const QString qtFile =
+        anchor.value(QStringLiteral("qtFile")).toString();
+    const QString qtSymbol =
+        anchor.value(QStringLiteral("qtSymbol")).toString();
+    const QString lockTest =
+        anchor.value(QStringLiteral("lockTest")).toString();
+    const QString lockTestFile =
+        anchor.value(QStringLiteral("lockTestFile")).toString();
+    QVERIFY2(!qtFile.isEmpty() && !qtSymbol.isEmpty() && !lockTest.isEmpty()
+                 && !lockTestFile.isEmpty(),
+             qPrintable(QStringLiteral(
+                            "P7.2: baseline anchor incomplete fields: %1")
+                            .arg(area)));
+
+    const QString qtSource = readSource(qtFile);
+    QVERIFY2(qtSource.contains(qtSymbol),
+             qPrintable(QStringLiteral(
+                            "P7.2: baseline anchor '%1' symbol '%2' missing from %3")
+                            .arg(area, qtSymbol, qtFile)));
+
+    // The locking test must exist in the NAMED file (exact placement), not
+    // just anywhere in the tree.
+    const QString lockSource = readSource(lockTestFile);
+    QVERIFY2(lockSource.contains(lockTest),
+             qPrintable(QStringLiteral(
+                            "P7.2: baseline anchor '%1' lock test '%2' missing from %3")
+                            .arg(area, lockTest, lockTestFile)));
+  }
+}
+
 #include "QmlUiAuditTests.moc"
 
 
@@ -10263,10 +10649,14 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
 {
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString kbDialog = readSource(QStringLiteral("src/qml_gui/dialogs/KBShortcutsDialog.qml"));
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!kbDialog.isEmpty(), "Unable to read KBShortcutsDialog.qml");
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
 
@@ -10379,6 +10769,31 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-02: Ctrl+P must open Preferences (upstream KBShortcutsDialog.cpp:197)");
   QVERIFY2(mainQml.contains(QStringLiteral("backend.editorViewModel.clearWorkspace()")),
            "VIEW-02: delete-all confirm must run EditorViewModel::clearWorkspace");
+
+  // P2.2: the visible Prepare viewport toolbar exposes one icon-first delete-all
+  // request. Confirmation stays centralized in main.qml, with no second clear
+  // implementation or per-plate removeAllOnPlate route.
+  QVERIFY2(glToolbars.contains(QStringLiteral("signal deleteAllRequested()"))
+               && glToolbars.contains(QStringLiteral("iconName: \"trash.svg\""))
+               && glToolbars.contains(QStringLiteral("toolTipText: root.editorVm && root.editorVm.modelCount > 0"))
+               && glToolbars.contains(QStringLiteral("enabled: root.editorVm && root.editorVm.modelCount > 0"))
+               && glToolbars.contains(QStringLiteral("onClicked: root.deleteAllRequested()")),
+           "P2.2: visible GLToolbars must expose a gated icon-first delete-all signal");
+  QVERIFY2(preparePage.contains(QStringLiteral("signal deleteAllRequested()"))
+               && preparePage.contains(QStringLiteral("onDeleteAllRequested: root.deleteAllRequested()")),
+           "P2.2: PreparePage must forward the visible toolbar delete-all request");
+  QVERIFY2(mainQml.contains(QStringLiteral("target: plater.preparePageRef"))
+               && mainQml.contains(QStringLiteral("function onDeleteAllRequested() { deleteAllConfirm.open() }"))
+               && mainQml.contains(QStringLiteral("onAccepted: if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()")),
+           "P2.2: PreparePage delete-all must use main.qml's shared confirmation and clearWorkspace");
+  QVERIFY2(!glToolbars.contains(QStringLiteral("removeAllOnPlate"))
+               && !preparePage.contains(QStringLiteral("onDeleteAllRequested: root.editorVm.clearWorkspace()")),
+           "P2.2: delete-all toolbar routing must not duplicate destructive logic");
+  QVERIFY2(!topbar.contains(QStringLiteral("visible: false"))
+               || !topbar.contains(QStringLiteral("hiddenTopbarDeleteAll")),
+           "P2.2: no hidden-topbar delete-all duplicate may be introduced");
+  QVERIFY2(mainQml.contains(QStringLiteral("onDeleteAllRequested: deleteAllConfirm.open()")),
+           "P2.2: existing topbar delete-all entry must keep the shared confirmation path");
   QVERIFY2(mainQml.contains(QStringLiteral("requestExportGcode3mf(")),
            "VIEW-06: the sliced-file dialog must call requestExportGcode3mf");
 

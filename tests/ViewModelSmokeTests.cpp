@@ -9,6 +9,7 @@
 #include <QSignalSpy>
 #include <QDir>
 #include <QFile>
+#include <QDataStream>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -343,6 +344,19 @@ private slots:
   void configDeleteCurrentPresetFallsBackToDefault();
   void filamentSlotVectorResizesAndPersistsWithProject();
   void sourceMappedProcessHierarchyMatchesTabPrint();
+  // P4.3 (real Tab data): the machine + filament tier manifests must cover
+  // the upstream Preset::printer_options() / filament_options() sets with no
+  // unmapped keys and no stale manifest entries (tierMappingErrors empty).
+  void configTierManifestAuditsCoverUpstreamPresetOptions();
+  // P2.1: the manual filament-map bridge round-trips the per-extruder group
+  // ids through ProjectServiceMock::setPlateFilamentMap (which syncs the live
+  // PartPlate::config) and rejects invalid plate indices.
+  void manualFilamentMapBridgeRoundTripsToService();
+  // P2.7 (registered diff closure): the Emboss volume_type selection routes
+  // NEW text volumes to ModelPart (default) / NegativeVolume /
+  // ParameterModifier (upstream GLGizmoEmboss volume_type), verifiable via
+  // ProjectServiceMock::volumeType.
+  void textVolumeTypeRoutesNewVolumes();
   // v3.0 Phase 16-01: PartPlate/PartPlateList domain model (pure-data, no libslic3r dep)
   void partPlateInstanceMembershipTracksObjectInstancePairs();
   void partPlateSliceStateMachineGatesCanSlice();
@@ -389,6 +403,9 @@ private slots:
   void prepareMoveSelectionToPlateUsesSourceSelection();
   void prepareVisibleObjectActionsMapToSourceObjects();
   void viewportContextSelectionSynchronizesBeforeMenuRouting();
+  // Right-clicking a plate must not switch the active plate nor recompute
+  // the fit hint (the camera must stay where the user put it).
+  void plateContextMenuDoesNotSwitchPlateOrRefit();
   void prepareContextMenuActionsAreRealAndPlateScoped();
   void prepareContextPlateReplacementIsScopedToTargetPlate();
   void prepareContextTargetedImportAndHandyModelsStayOnPlate();
@@ -489,6 +506,43 @@ private slots:
   // renderer. Mirrors the Phase 114 MeasureEngine readback pattern (synthetic
   // input + pure helper assertion).
   void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
+  // P2.3-1 (clipping-plane brush): an active cross-section plane rejects the
+  // stroke on the clipped side while the visible side still paints (upstream
+  // threads get_clipping_plane_in_volume_coordinates into every select_patch,
+  // GLGizmoPainterBase.cpp:724-728; is_facet_clipped, TriangleSelector.cpp:
+  // 309-316). The inactive plane keeps the unclipped behavior.
+  void paintEngineClippingPlaneLimitsBrushToVisibleSide();
+  // P2.3-2 (seed-fill preview): a smart-fill click STAGES a region that is
+  // readable via getSeedSelection/hasSeedSelection before the next click
+  // commits it (upstream seed_fill_select_triangles stages,
+  // seed_fill_apply_on_triangles commits, TriangleSelector.cpp:319-386,
+  // 1904-1917; the GUI renders the staged leaves brightened).
+  void seedFillStagedRegionReadableBeforeCommit();
+  // P2.3-5 (height-range / gap-area / edge detection): the HEIGHT_RANGE brush
+  // paints only the facets inside the world-Z band (upstream
+  // GLGizmoPainterBase.cpp:726-733), gap fragments are leaves below the
+  // gap-area threshold (TrianglePatch::is_fragment), and a -1 deg seed angle
+  // (edge detection off) stops region growth at the 20-degree bend.
+  void paintHeightRangeGapFragmentsAndEdgeDetectionMatchUpstream();
+  // P2.3 (PAINT-KIND): Support/Seam/MMU selector isolation. Paints one facet
+  // under Support and a different facet under Seam on the SAME (object,
+  // volume), then asserts each kind's selector holds ONLY its own stroke and
+  // that clearing Seam leaves Support intact (upstream: per-gizmo
+  // m_triangle_selectors, GLGizmoPainterBase.hpp:247).
+  void paintKindsKeepSeparateSelectors();
+  // P2.7 (MMU): an MMU (ExtruderN) stroke committed through the Phase 122/123
+  // bridge lands in mmu_segmentation_facets ONLY -- supported_facets /
+  // seam_facets stay untouched (upstream GLGizmoMmuSegmentation.cpp:700).
+  void mmuKindPaintWritesMmuAnnotationOnly();
+  // P2.7 (BOOLEAN-VOLUME): the volume-level MeshBoolean path. An MCUT
+  // difference on (obj0.vol0, obj1.vol0) appends a renamed result volume to
+  // the source object, drops the old source volume, and with deleteInput the
+  // emptied tool object disappears (upstream GLGizmoMeshBoolean.cpp:347-461).
+  void meshBooleanVolumeLevelReplacesSourceVolume();
+  // P2.7 (FaceDetector): real exterior-face recognition via libslic3r
+  // FaceDetector — a ray grid over the merged object marks exactly the
+  // outward-facing facets, so a 20mm cube reports ALL of its triangles.
+  void faceDetectorRecognizesAllCubeFacetsAsExterior();
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
   // the key viewmodel/service APIs landed by Phases 196-202 are callable at
   // the C++ boundary: EditorViewModel::embossRunning, SliceService::sliceState,
@@ -503,6 +557,9 @@ private slots:
   // mesh + name + transform + plate; redo re-deletes by captured identity,
   // not by name). Upstream truth: Plater::_take_snapshot whole-model undo.
   void deleteUndoRestoresFullObject();
+  // Wave 4b (perf): the heavy-payload budget must evict the OLDEST entries
+  // (shrinking QUndoStack limit) without breaking undo/redo ordering.
+  void undoMemoryBudgetEvictsOldestHeavyCommands();
   // v5.16 (UNDO-05): copy/paste keeps mesh fidelity. copySelectedObjects
   // captures per-object 3MF snapshots; pasteObjects restores them (mesh +
   // volumes) with a +5mm X anti-overlap offset; undo/redo of the paste
@@ -4700,12 +4757,16 @@ void ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting(
   QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
   QCOMPARE(editor.contextMenuFamily(), 4);
   QCOMPARE(editor.contextPlateIndex(), 1);
-  QCOMPARE(editor.currentPlateIndex(), 1);
+  // Wave (UX fix): right-clicking a plate is a PURE menu request — the
+  // active plate must NOT change (upstream parity), so the camera never
+  // refits under the cursor.
+  QCOMPARE(editor.currentPlateIndex(), 0);
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
 
   QCOMPARE(editor.synchronizeViewportContext(3, -1, -1, -1, -1), 0);
   QCOMPARE(editor.contextMenuFamily(), 0);
-  QCOMPARE(editor.contextPlateIndex(), 1);
+  // Empty inherits the ACTIVE plate, which no longer changed above.
+  QCOMPARE(editor.contextPlateIndex(), 0);
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
 }
 
@@ -6914,7 +6975,8 @@ void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt(
   QVERIFY2(engine.cachedSelectorCount() == 0,
            "PAINT-01/TS-03: PaintEngine cache must start empty");
   const bool painted = engine.paintAt(
-      /*obj=*/0, /*vol=*/0, /*facetIdx=*/0, facet0Center,
+      /*obj=*/0, /*vol=*/0, /*kind=*/OWzx::PaintKind::Support,
+      /*facetIdx=*/0, facet0Center,
       /*brushRadius=*/2.0f, OWzx::PaintCursorType::Sphere,
       Slic3r::EnforcerBlockerType::ENFORCER, trafo,
       /*cameraPosMeshLocal=*/Slic3r::Vec3f(0.5f, 0.5f, 10.f));
@@ -6922,9 +6984,11 @@ void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt(
            "PAINT-01/TS-04: paintAt must return true when the selector exists");
   QVERIFY2(engine.cachedSelectorCount() == 1,
            "PAINT-01/TS-03: PaintEngine cache must hold 1 selector after paintAt");
-  QVERIFY2(engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+  QVERIFY2(engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                            Slic3r::EnforcerBlockerType::ENFORCER),
            "PAINT-01/TS-04: PaintEngine.hasFacets(Enforcer) must be true after paintAt");
-  auto paintedIts = engine.getFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER);
+  auto paintedIts = engine.getFacets(0, 0, OWzx::PaintKind::Support,
+                                     Slic3r::EnforcerBlockerType::ENFORCER);
   QVERIFY2(paintedIts != nullptr,
            "PAINT-01/TS-03: PaintEngine.getFacets must return a non-null shared_ptr<ITS>");
   QVERIFY2(!paintedIts->indices.empty(),
@@ -6934,13 +6998,540 @@ void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt(
   engine.clearObject(0);
   QVERIFY2(engine.cachedSelectorCount() == 0,
            "PAINT-01/TS-03: PaintEngine cache must be empty after clearObject");
-  QVERIFY2(!engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+  QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                             Slic3r::EnforcerBlockerType::ENFORCER),
            "PAINT-01/TS-03: PaintEngine.hasFacets must be false after clearObject");
 }
 #else
 void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt()
 {
   QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintEngineClippingPlaneLimitsBrushToVisibleSide()
+{
+  // P2.3-1: an active mesh-local cross-section plane must reject strokes on
+  // the clipped side. Synthesize two unit squares -- facet pair at z=0
+  // (visible) and at z=10 (clipped) -- and a plane {normal=(0,0,1), offset=5}
+  // (a vertex is clipped when normal.dot(v) - offset > 0, TriangleSelector.hpp:
+  // 65). Upstream rejects a facet when ANY vertex is clipped
+  // (is_facet_clipped, TriangleSelector.cpp:309-316) and the cursor carries
+  // the same filter (Cursor::clipping_plane, TriangleSelector.hpp:96).
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),   // bottom square
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 0.f, 10.f),  // top square (clipped side)
+    Slic3r::Vec3f(1.f, 0.f, 10.f),
+    Slic3r::Vec3f(1.f, 1.f, 10.f),
+    Slic3r::Vec3f(0.f, 1.f, 10.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),  // facet 0: bottom (visible)
+    Slic3r::Vec3i32(0, 2, 3),
+    Slic3r::Vec3i32(4, 5, 6),  // facet 2: top (clipped)
+    Slic3r::Vec3i32(4, 6, 7)
+  };
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+  const Slic3r::Vec3f bottomCenter(0.5f, 0.5f, 0.f);
+  const Slic3r::Vec3f topCenter(0.5f, 0.5f, 10.f);
+  // Camera above the stroke (production passes the real view position; a
+  // distinct source keeps the cursor direction well-defined).
+  const Slic3r::Vec3f bottomCamera(0.5f, 0.5f, 10.f);
+  const Slic3r::Vec3f topCamera(0.5f, 0.5f, 20.f);
+
+  // (a) Inactive plane (default): both sides paint as before.
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Support, 2, topCenter,
+                          2.0f, OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::ENFORCER, trafo, topCamera),
+           "P2.3-1: paintAt with an inactive plane must paint the top facet");
+  QVERIFY2(engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                            Slic3r::EnforcerBlockerType::ENFORCER),
+           "P2.3-1: inactive-plane stroke must leave Enforcer facets");
+
+  // Reset and repeat with the plane active: the top facet sits on the clipped
+  // side, so the stroke must not stamp anything.
+  engine.clearObject(0);
+  const Slic3r::TriangleSelector::ClippingPlane activePlane(
+      std::array<float, 4>{0.f, 0.f, 1.f, 5.f});
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Support, 2, topCenter,
+                          2.0f, OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::ENFORCER, trafo, topCamera,
+                          0.f, activePlane),
+           "P2.3-1: paintAt on the clipped side must still run (no-op result)");
+  QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                             Slic3r::EnforcerBlockerType::ENFORCER),
+           "P2.3-1: clipped-side stroke must stamp NO Enforcer facets");
+
+  // (b) The visible side still paints under the same active plane.
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Support, 0, bottomCenter,
+                          2.0f, OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::ENFORCER, trafo, bottomCamera,
+                          0.f, activePlane),
+           "P2.3-1: paintAt on the visible side must run");
+  QVERIFY2(engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                            Slic3r::EnforcerBlockerType::ENFORCER),
+           "P2.3-1: visible-side stroke must leave Enforcer facets");
+
+  // (c) Smart fill honours the plane the same way (seed_fill_select_
+  // triangles takes the plane upstream, GLGizmoPainterBase.cpp:616).
+  engine.clearObject(0);
+  QVERIFY2(engine.smartFillAt(0, 0, OWzx::PaintKind::Support, 2, topCenter,
+                              30.f, 0.f,
+                              Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+                              activePlane),
+           "P2.3-1: smartFillAt on the clipped side must still run");
+  QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                             Slic3r::EnforcerBlockerType::ENFORCER),
+           "P2.3-1: clipped-side smart fill must stamp NO Enforcer facets");
+}
+#else
+void ViewModelSmokeTests::paintEngineClippingPlaneLimitsBrushToVisibleSide()
+{
+  QSKIP("PaintEngine clipping-plane test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::seedFillStagedRegionReadableBeforeCommit()
+{
+  // P2.3-2: the staged seed region must be observable before commit (the
+  // preview channel), and the second click commits the first region while
+  // staging the second (upstream SMART_FILL click ordering).
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),  // facet 0
+    Slic3r::Vec3i32(0, 2, 3)   // facet 1
+  };
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+  const Slic3r::Vec3f cam(0.5f, 0.5f, 10.f);
+  QVERIFY2(!engine.hasSeedSelection(0, 0, OWzx::PaintKind::Support),
+           "P2.3-2: nothing staged before any smart fill");
+
+  // First click: stage the angle-bounded region under facet 0.
+  QVERIFY2(engine.smartFillAt(0, 0, OWzx::PaintKind::Support, 0,
+                              Slic3r::Vec3f(0.25f, 0.25f, 0.f), 30.f, 0.f,
+                              Slic3r::EnforcerBlockerType::ENFORCER, trafo),
+           "P2.3-2: first smart-fill click must run");
+  QVERIFY2(engine.hasSeedSelection(0, 0, OWzx::PaintKind::Support),
+           "P2.3-2: the clicked region must be staged after the first click");
+  auto staged = engine.getSeedSelection(0, 0, OWzx::PaintKind::Support);
+  QVERIFY2(staged && !staged->indices.empty(),
+           "P2.3-2: getSeedSelection must return the staged region");
+  QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                             Slic3r::EnforcerBlockerType::ENFORCER),
+           "P2.3-2: staged region must NOT be committed yet");
+
+  // Second click: commits the staged region, then stages the region under
+  // facet 1 (both facets are angle-connected at 30 deg through the shared
+  // edge, so the committed area is non-empty and the new staging covers the
+  // remainder).
+  QVERIFY2(engine.smartFillAt(0, 0, OWzx::PaintKind::Support, 1,
+                              Slic3r::Vec3f(0.75f, 0.75f, 0.f), 30.f, 0.f,
+                              Slic3r::EnforcerBlockerType::ENFORCER, trafo),
+           "P2.3-2: second smart-fill click must run");
+  QVERIFY2(engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                            Slic3r::EnforcerBlockerType::ENFORCER),
+           "P2.3-2: the first click's region must be committed by the second click");
+  QVERIFY2(engine.hasSeedSelection(0, 0, OWzx::PaintKind::Support),
+           "P2.3-2: the second click must stage a new region");
+}
+#else
+void ViewModelSmokeTests::seedFillStagedRegionReadableBeforeCommit()
+{
+  QSKIP("Seed-fill staging test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintHeightRangeGapFragmentsAndEdgeDetectionMatchUpstream()
+{
+  // (a) Height-range paint: two squares at z=0 / z=10. A band anchored at
+  // the bottom (z=0, height 0.5) paints only the bottom square; a band at
+  // z=9.9 paints only the top square (upstream HEIGHT_RANGE semantics).
+  indexed_triangle_set twoPlanes;
+  twoPlanes.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 0.f, 10.f),
+    Slic3r::Vec3f(1.f, 0.f, 10.f),
+    Slic3r::Vec3f(1.f, 1.f, 10.f),
+    Slic3r::Vec3f(0.f, 1.f, 10.f)
+  };
+  twoPlanes.indices = {
+    Slic3r::Vec3i32(0, 1, 2),
+    Slic3r::Vec3i32(0, 2, 3),
+    Slic3r::Vec3i32(4, 5, 6),
+    Slic3r::Vec3i32(4, 6, 7)
+  };
+  auto planeMesh = std::make_shared<Slic3r::TriangleMesh>(twoPlanes);
+  OWzx::PaintEngine planeEngine([planeMesh](int, int) { return planeMesh; });
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+  const Slic3r::Vec3f cam(0.5f, 0.5f, 20.f);
+
+  QVERIFY2(planeEngine.paintHeightRangeAt(
+               0, 0, OWzx::PaintKind::Support, /*hitWorldZ=*/0.f,
+               /*height=*/0.5f, Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+               cam),
+           "P2.3-5: bottom-band height-range paint must run");
+  auto bottomIts = planeEngine.getFacets(0, 0, OWzx::PaintKind::Support,
+                                         Slic3r::EnforcerBlockerType::ENFORCER);
+  QVERIFY2(bottomIts && !bottomIts->indices.empty(),
+           "P2.3-5: the bottom band must paint the bottom square");
+  for (const auto &v : bottomIts->vertices)
+    QVERIFY2(v.z() < 0.5f,
+             "P2.3-5: the top square must be outside the bottom band");
+
+  planeEngine.clearObject(0);
+  QVERIFY2(planeEngine.paintHeightRangeAt(
+               0, 0, OWzx::PaintKind::Support, /*hitWorldZ=*/9.9f,
+               /*height=*/0.5f, Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+               cam),
+           "P2.3-5: top-band height-range paint must run");
+  auto topIts = planeEngine.getFacets(0, 0, OWzx::PaintKind::Support,
+                                      Slic3r::EnforcerBlockerType::ENFORCER);
+  QVERIFY2(topIts && !topIts->indices.empty(),
+           "P2.3-5: the top band must paint the top square");
+  for (const auto &v : topIts->vertices)
+    QVERIFY2(v.z() > 9.5f,
+             "P2.3-5: the bottom square must be outside the top band");
+
+  // (b) Gap fragments: one unit square (0.5 mm2 per triangle) plus one
+  // 10x10 triangle (50 mm2). Threshold 1 mm2 flags only the small triangles;
+  // threshold 0 (upstream GapAreaMin) flags nothing.
+  indexed_triangle_set gapIts;
+  gapIts.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f),
+    Slic3r::Vec3f(20.f, 0.f, 0.f),
+    Slic3r::Vec3f(30.f, 0.f, 0.f),
+    Slic3r::Vec3f(20.f, 10.f, 0.f)
+  };
+  gapIts.indices = {
+    Slic3r::Vec3i32(0, 1, 2),   // 0.5 mm2
+    Slic3r::Vec3i32(0, 2, 3),   // 0.5 mm2
+    Slic3r::Vec3i32(4, 5, 6)    // 50 mm2
+  };
+  auto gapMesh = std::make_shared<Slic3r::TriangleMesh>(gapIts);
+  OWzx::PaintEngine gapEngine([gapMesh](int, int) { return gapMesh; });
+  auto fragments = gapEngine.getGapFragments(0, 0, OWzx::PaintKind::Support,
+                                             1.0f);
+  QVERIFY2(fragments && fragments->indices.size() == 2,
+           "P2.3-5: fragments below 1 mm2 must be exactly the two small triangles");
+  auto none = gapEngine.getGapFragments(0, 0, OWzx::PaintKind::Support, 0.f);
+  QVERIFY2(none && none->indices.empty(),
+           "P2.3-5: a zero threshold (upstream GapAreaMin) must flag no fragments");
+
+  // (c) Edge detection off (seed angle -1): the region growth must stop at
+  // the 20-degree bend (normal dot cos20=0.94 < cos(1deg)), while a 30-degree
+  // angle crosses it (0.94 >= cos30=0.866). Facet 1 shares the v0-v1 edge
+  // with REVERSED winding (manifold neighbour) and bends downward, keeping
+  // its normal within 20 degrees of facet 0's.
+  indexed_triangle_set bentIts;
+  const float s20 = 0.34202f, c20 = 0.93969f;
+  bentIts.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(1.f, -c20, -s20)
+  };
+  bentIts.indices = {
+    Slic3r::Vec3i32(0, 1, 2),   // horizontal facet (normal +Z)
+    Slic3r::Vec3i32(1, 0, 3)    // bent 20 deg, shares the 0-1 edge reversed
+  };
+  auto bentMesh = std::make_shared<Slic3r::TriangleMesh>(bentIts);
+  OWzx::PaintEngine bentEngine([bentMesh](int, int) { return bentMesh; });
+  const Slic3r::Vec3f seedHit(0.3f, 0.3f, 0.f);
+
+  QVERIFY2(bentEngine.smartFillAt(0, 0, OWzx::PaintKind::Support, 0, seedHit,
+                                  -1.f, 0.f,
+                                  Slic3r::EnforcerBlockerType::ENFORCER, trafo),
+           "P2.3-5: edge-detection-off smart fill must run");
+  auto narrowStaged = bentEngine.getSeedSelection(0, 0, OWzx::PaintKind::Support);
+  QVERIFY2(narrowStaged && narrowStaged->indices.size() == 1,
+           "P2.3-5: angle -1 must stage only the seed facet (growth blocked at the bend)");
+
+  bentEngine.clearObject(0);
+  QVERIFY2(bentEngine.smartFillAt(0, 0, OWzx::PaintKind::Support, 0, seedHit,
+                                  30.f, 0.f,
+                                  Slic3r::EnforcerBlockerType::ENFORCER, trafo),
+           "P2.3-5: 30-degree smart fill must run");
+  auto wideStaged = bentEngine.getSeedSelection(0, 0, OWzx::PaintKind::Support);
+  QVERIFY2(wideStaged && wideStaged->indices.size() == 2,
+           "P2.3-5: a 30-degree angle must grow across the 20-degree bend");
+}
+#else
+void ViewModelSmokeTests::paintHeightRangeGapFragmentsAndEdgeDetectionMatchUpstream()
+{
+  QSKIP("Height-range/gap-fragment test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintKindsKeepSeparateSelectors()
+{
+  // P2.3 (PAINT-KIND): the PaintEngine cache is keyed by (object, volume,
+  // KIND). A Support stroke must never surface in the Seam selector and vice
+  // versa -- upstream each painter gizmo deserializes/serializes only its own
+  // FacetsAnnotation (GLGizmoFdmSupports.cpp:617 supported_facets,
+  // GLGizmoSeam.cpp:368 seam_facets).
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),  // facet 0: lower-right triangle
+    Slic3r::Vec3i32(0, 2, 3)   // facet 1: upper-left triangle
+  };
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  const Slic3r::Vec3f facet1Center = (its.vertices[0] + its.vertices[2] +
+                                      its.vertices[3]) / 3.f;
+
+  // Brush radius 2.0 covers the whole unit square from any centroid (the
+  // existing PAINT-01 test proves that radius paints reliably). Isolation is
+  // proven by CACHE separation, not by per-facet coverage: under the old
+  // shared (object, volume) key, the Seam kind would already see the Support
+  // stroke, and clearing Seam would wipe Support too.
+  const float kBrush = 2.0f;
+
+  // 1) Paint ENFORCER under Support.
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Support, /*facetIdx=*/0,
+                          facet0Center, kBrush,
+                          OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+                          facet0Center),
+           "PAINT-KIND: Support paintAt must succeed");
+  auto supportIts = engine.getFacets(0, 0, OWzx::PaintKind::Support,
+                                     Slic3r::EnforcerBlockerType::ENFORCER);
+  QVERIFY2(supportIts != nullptr && !supportIts->indices.empty(),
+           "PAINT-KIND: Support selector must hold its own stroke");
+
+  // 2) The Seam selector is a DIFFERENT cache entry and must NOT see the
+  // Support stroke (the shared-selector bug surfaced it here).
+  QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Seam,
+                             Slic3r::EnforcerBlockerType::ENFORCER),
+           "PAINT-KIND: Seam selector must start empty (no Support leak)");
+
+  // 3) Paint + clear under Seam. Two kinds on the same volume => two cache
+  // entries.
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Seam, /*facetIdx=*/1,
+                          facet1Center, kBrush,
+                          OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+                          facet1Center),
+           "PAINT-KIND: Seam paintAt must succeed");
+  QCOMPARE(int(engine.cachedSelectorCount()), 2);
+  QVERIFY2(engine.hasFacets(0, 0, OWzx::PaintKind::Seam,
+                            Slic3r::EnforcerBlockerType::ENFORCER),
+           "PAINT-KIND: Seam stroke must land in the Seam selector");
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Seam, /*facetIdx=*/1,
+                          facet1Center, kBrush,
+                          OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::NONE, trafo,
+                          facet1Center),
+           "PAINT-KIND: Seam None repaint must succeed");
+  QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Seam,
+                             Slic3r::EnforcerBlockerType::ENFORCER),
+           "PAINT-KIND: Seam clear must remove the Seam stroke");
+
+  // 4) The Seam clear ran on the Seam selector only: Support survives
+  // byte-identical.
+  auto supportAfterClear = engine.getFacets(0, 0, OWzx::PaintKind::Support,
+                                            Slic3r::EnforcerBlockerType::ENFORCER);
+  QVERIFY2(supportAfterClear != nullptr &&
+               supportAfterClear->vertices == supportIts->vertices &&
+               supportAfterClear->indices == supportIts->indices,
+           "PAINT-KIND: clearing Seam must not touch the Support selector");
+}
+#else
+void ViewModelSmokeTests::paintKindsKeepSeparateSelectors()
+{
+  QSKIP("Paint kind isolation test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::mmuKindPaintWritesMmuAnnotationOnly()
+{
+  // P2.7 (MMU per-triangle painting): the kind-aware PaintEngine + Phase
+  // 122/123 FacetsAnnotation bridge must carry an MMU ExtruderN stroke into
+  // mmu_segmentation_facets ONLY. Upstream truth: GLGizmoMmuSegmentation::
+  // update_model_object writes mv->mmu_segmentation_facets (cpp:700) and
+  // never touches supported/seam annotations.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+                                  .filePath(QStringLiteral("tests/data/test_model.stl"));
+  // loadFile is async: wait for loadFinished before touching the model, and
+  // use the editor load path so the per-volume mesh cache is in place.
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(editor.loadFile(fixturePath), "fixture import must start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "fixture import must complete");
+  QVERIFY2(project.volumeMeshTriangleMesh(0, 0) != nullptr,
+           "MMU-PAINT: fixture volume mesh must exist");
+
+  // Synthetic mesh drives the selector (same pattern as PAINT-01): a
+  // 2-triangle square in the XY plane is enough geometry to carry a stroke.
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),
+    Slic3r::Vec3i32(0, 2, 3)
+  };
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+
+  // MMU stroke: extruder 3 (EnforcerBlockerType value 3; Extruder1==ENFORCER,
+  // Extruder2==BLOCKER, so value 3 is a real MMU extruder assignment).
+  QVERIFY2(engine.paintAt(0, 0, OWzx::PaintKind::Mmu, /*facetIdx=*/0,
+                          facet0Center, /*brushRadius=*/2.0f,
+                          OWzx::PaintCursorType::Sphere,
+                          Slic3r::EnforcerBlockerType::Extruder3, trafo,
+                          facet0Center),
+           "MMU-PAINT: Mmu paintAt must succeed");
+  const Slic3r::TriangleSelector *mmuSelector =
+      engine.cachedSelectorForVolume(0, 0, OWzx::PaintKind::Mmu);
+  QVERIFY2(mmuSelector != nullptr, "MMU-PAINT: Mmu selector must be cached");
+
+  // Commit through the Phase 122/123 bridge onto the real ModelVolume.
+  QVERIFY2(project.writePaintToModelVolume(0, 0, PaintKind::Mmu, *mmuSelector),
+           "MMU-PAINT: writePaintToModelVolume(Mmu) must succeed");
+
+  // Read back the per-kind annotation payloads: triangles_to_split count.
+  auto splitCount = [](const QByteArray &buffer) -> qint32 {
+    QDataStream ds(buffer);
+    quint32 magic = 0, version = 0;
+    qint32 n = 0;
+    ds >> magic >> version >> n;
+    return ds.status() == QDataStream::Ok ? n : -1;
+  };
+
+  QVERIFY2(splitCount(project.capturePaintSnapshot(0, 0, int(PaintKind::Mmu))) > 0,
+           "MMU-PAINT: mmu_segmentation_facets must carry the stroke");
+  QCOMPARE(splitCount(project.capturePaintSnapshot(0, 0, int(PaintKind::Support))),
+           qint32(0));
+  QCOMPARE(splitCount(project.capturePaintSnapshot(0, 0, int(PaintKind::Seam))),
+           qint32(0));
+}
+#else
+void ViewModelSmokeTests::mmuKindPaintWritesMmuAnnotationOnly()
+{
+  QSKIP("MMU paint test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::meshBooleanVolumeLevelReplacesSourceVolume()
+{
+  // P2.7 (BOOLEAN-VOLUME): upstream GLGizmoMeshBoolean runs the boolean on
+  // the two selected ModelVolumes with MeshBoolean::mcut::make_boolean
+  // (cpp:347-391), appends "<old> - <op>" to the source object and deletes
+  // the consumed source volume (generate_new_volume, cpp:423-461). The
+  // "Delete input" checkbox additionally drops the tool volume.
+  // Two primitives whose volume meshes overlap in object-local space (the
+  // boolean operands carry the VOLUME transform only, mirroring upstream —
+  // cube [0,20]³ and sphere [-10,10] intersect). MCUT returns an empty result
+  // for disjoint inputs, so overlap is a hard precondition here (upstream
+  // pushes a warning notification in that case).
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // cube [0,20]
+  QVERIFY(project.addPrimitiveToPlate(1) >= 0);   // sphere r=10
+  QCOMPARE(project.modelCount(), 2);
+  const QString srcName = project.objectNames().value(0);
+
+  // Difference WITH delete input: tool object empties and disappears.
+  const int resultIndex =
+      project.meshBooleanVolumes(0, -1, 1, -1, /*operation=*/1, /*deleteInput=*/true);
+  QVERIFY2(resultIndex >= 0, "volume-level difference must succeed");
+  QCOMPARE(resultIndex, 0);
+  QCOMPARE(project.modelCount(), 1);
+  // The consumed source volume was replaced by "<old> - difference"...
+  QVERIFY2(project.objectNames().value(0).startsWith(srcName),
+           "source object must keep its base name");
+  // ...and the real model now holds the result volume in object 0.
+  QVERIFY2(project.volumeMeshTriangleMesh(0, 0) != nullptr,
+           "result volume mesh must exist after the boolean");
+
+  // Difference WITHOUT delete input: the tool object survives untouched.
+  QVERIFY2(project.addPrimitiveToPlate(0) >= 0, "second tool primitive must be added");
+  QCOMPARE(project.modelCount(), 2);
+  const int keepIndex =
+      project.meshBooleanVolumes(0, -1, 1, -1, /*operation=*/1, /*deleteInput=*/false);
+  QVERIFY2(keepIndex >= 0, "volume-level difference (keep input) must succeed");
+  QCOMPARE(project.modelCount(), 2);
+  QVERIFY2(project.volumeMeshTriangleMesh(1, 0) != nullptr,
+           "tool volume must survive when Delete input is off");
+}
+#else
+void ViewModelSmokeTests::meshBooleanVolumeLevelReplacesSourceVolume()
+{
+  QSKIP("MeshBoolean volume test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::faceDetectorRecognizesAllCubeFacetsAsExterior()
+{
+  // P2.7 (FaceDetector): upstream Slic3r::FaceDetector::detect_exterior_face
+  // (FaceDetector.cpp) ray-marches ±X/±Y/±Z over the merged object at the
+  // sample interval and marks every hit facet eExteriorAppearance. A convex
+  // 20mm cube has no interior facets, so EVERY triangle must be recognized:
+  // its_make_cube(20,20,20) = 12 triangles.
+  ProjectServiceMock project;
+  QCOMPARE(project.addPrimitiveToPlate(0) >= 0, true);  // 20mm cube
+  const int exterior = project.detectExteriorFaces(0, /*sampleInterval=*/1.0);
+  QVERIFY2(exterior > 0, "FaceDetector must recognize exterior facets");
+  QCOMPARE(exterior, 12);
+  // A ray grid that misses nothing also holds at a coarser interval.
+  QVERIFY2(project.detectExteriorFaces(0, /*sampleInterval=*/5.0) >= 6,
+           "coarser grid must still mark the six cube faces");
+  QVERIFY2(project.detectExteriorFaces(0, /*sampleInterval=*/1.0) == exterior,
+           "recognition must be deterministic for the same interval");
+  // Invalid inputs fail closed.
+  QCOMPARE(project.detectExteriorFaces(999, 1.0), -1);
+  QCOMPARE(project.detectExteriorFaces(0, 0.0), -1);
+}
+#else
+void ViewModelSmokeTests::faceDetectorRecognizesAllCubeFacetsAsExterior()
+{
+  QSKIP("FaceDetector test requires HAS_LIBSLIC3R -- skipping");
 }
 #endif
 
@@ -7170,6 +7761,96 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
   QVERIFY(filament);
   QVERIFY(machine->pageNames().contains(QStringLiteral("Basic information")));
   QVERIFY(filament->pageNames().contains(QStringLiteral("Cooling")));
+}
+
+// P4.3 (real Tab data): the machine + filament tier manifests must cover the
+// upstream Preset option sets with no unmapped keys and no stale entries.
+void ViewModelSmokeTests::configTierManifestAuditsCoverUpstreamPresetOptions()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("tier manifest audit requires libslic3r (Preset::printer_options)");
+#else
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("TierManifestAudit"));
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  ConfigViewModel config(&preset, &project);
+  auto *machine = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  auto *filament = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(machine);
+  QVERIFY(filament);
+
+  const QStringList errors = machine->tierMappingErrors();
+  QVERIFY2(errors.isEmpty(),
+           qPrintable(QStringLiteral("tier manifest audit failed: %1")
+                          .arg(errors.join(QStringLiteral("; ")))));
+#endif
+}
+
+// P2.1: the manual filament-map bridge round-trips the per-extruder group ids
+// through ProjectServiceMock::setPlateFilamentMap (which also syncs the live
+// PartPlate::config consumed by plateDynamicConfig at slice time) and rejects
+// invalid plate indices.
+void ViewModelSmokeTests::manualFilamentMapBridgeRoundTripsToService()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVariantList maps{2, 1, 2, 1};
+  QVERIFY2(editor.setPlateFilamentMap(0, 2 /*fmmManual*/, maps),
+           "P2.1: the manual map write must succeed on plate 0");
+  QCOMPARE(editor.plateFilamentMapMode(0), 2);
+  const QVariantList stored = editor.plateFilamentMaps(0);
+  QCOMPARE(stored.size(), 4);
+  for (int i = 0; i < 4; ++i)
+    QCOMPARE(stored.at(i).toInt(), maps.at(i).toInt());
+
+  QVERIFY2(!editor.setPlateFilamentMap(-1, 2, maps),
+           "P2.1: an out-of-range plate index must be rejected");
+  QVERIFY2(editor.plateFilamentMaps(-1).isEmpty(),
+           "P2.1: an out-of-range plate read must return an empty map");
+}
+
+// P2.7 (registered diff closure): the Emboss volume_type selection routes NEW
+// text volumes to ModelPart (default) / NegativeVolume / ParameterModifier —
+// the upstream GLGizmoEmboss volume_type selector. Verified through the real
+// libslic3r volume type via ProjectServiceMock::volumeType.
+void ViewModelSmokeTests::textVolumeTypeRoutesNewVolumes()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("text volume-type routing requires libslic3r (text2shapes pipeline)");
+#else
+  ProjectServiceMock project;
+  QVERIFY2(project.addObject(QStringLiteral("TypeHost")) >= 0,
+           "P2.7: the host object must be created for text adds");
+  const int volIndex = project.objectVolumeCount(0);
+  QVERIFY2(volIndex >= 0, "the host object must expose its volume list");
+
+  // (a) Default: ModelPart (0) — the historical single-type behaviour.
+  QVERIFY2(project.addTextVolume(0, QStringLiteral("TYPE_A")),
+           "P2.7: default-type text add must succeed");
+  QCOMPARE(project.volumeType(0, volIndex), 0);
+
+  // (b) NegativeVolume (1): text as a cut-out.
+  project.setTextVolumeType(1);
+  QCOMPARE(project.textVolumeType(), 1);
+  QVERIFY2(project.addTextVolume(0, QStringLiteral("TYPE_B")),
+           "P2.7: negative-type text add must succeed");
+  QCOMPARE(project.volumeType(0, volIndex + 1), 1);
+
+  // (c) ParameterModifier (2).
+  project.setTextVolumeType(2);
+  QVERIFY2(project.addTextVolume(0, QStringLiteral("TYPE_C")),
+           "P2.7: modifier-type text add must succeed");
+  QCOMPARE(project.volumeType(0, volIndex + 2), 2);
+
+  // (d) Out-of-range selection clamps back to ModelPart semantics.
+  project.setTextVolumeType(9);
+  QVERIFY2(project.addTextVolume(0, QStringLiteral("TYPE_D")),
+           "P2.7: out-of-range-type text add must still succeed");
+  QCOMPARE(project.volumeType(0, volIndex + 3), 0);
+#endif
 }
 
 // -- v5.16 Phase 234 (UNDO-01): delete-object undo restores the full object --
@@ -8047,16 +8728,18 @@ void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
     auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
     OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
     const bool first = engine.smartFillAt(
-        0, 0, 0, facet0Center, 30.f, 0.f,
+        0, 0, OWzx::PaintKind::Support, 0, facet0Center, 30.f, 0.f,
         Slic3r::EnforcerBlockerType::ENFORCER, trafo);
     QVERIFY2(first, "GIZ-02: smartFillAt must accept the first valid seed");
-    QVERIFY2(!engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+    QVERIFY2(!engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                               Slic3r::EnforcerBlockerType::ENFORCER),
              "GIZ-02: the first wrapper click must only stage the region");
     const bool second = engine.smartFillAt(
-        0, 0, 0, facet0Center, 30.f, 0.f,
+        0, 0, OWzx::PaintKind::Support, 0, facet0Center, 30.f, 0.f,
         Slic3r::EnforcerBlockerType::ENFORCER, trafo);
     QVERIFY2(second, "GIZ-02: smartFillAt must accept the second valid seed");
-    QVERIFY2(engine.hasFacets(0, 0, Slic3r::EnforcerBlockerType::ENFORCER),
+    QVERIFY2(engine.hasFacets(0, 0, OWzx::PaintKind::Support,
+                              Slic3r::EnforcerBlockerType::ENFORCER),
              "GIZ-02: the second wrapper click must apply the prior region");
   }
 }
@@ -8540,4 +9223,79 @@ void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 #endif
 
 QTEST_MAIN(ViewModelSmokeTests)
+
+// Wave 4b (perf): budget enforcement test. Pushes heavy commands past a tiny
+// budget; the manager must clear the history (Qt6 QUndoStack cannot evict
+// from the bottom of a non-empty stack) so memory stops growing.
+// Hermetic: tiny custom commands, no service/model needed.
+namespace {
+class BudgetProbeCommand final : public QUndoCommand, public IHeavyCommand
+{
+public:
+  BudgetProbeCommand(int id, qint64 bytes, QVector<int> *applied)
+      : m_id(id), m_bytes(bytes), m_applied(applied) {}
+  void redo() override { m_applied->append(m_id); }
+  void undo() override { m_applied->removeAll(m_id); }
+  qint64 heavyBytes() const override { return m_bytes; }
+
+private:
+  int m_id;
+  qint64 m_bytes;
+  QVector<int> *m_applied;
+};
+} // namespace
+
+void ViewModelSmokeTests::undoMemoryBudgetEvictsOldestHeavyCommands()
+{
+  UndoRedoManager manager;
+  const qint64 budget = 1000;
+  manager.setMemoryBudgetBytes(budget);
+  QCOMPARE(manager.memoryBudgetBytes(), budget);
+
+  QVector<int> applied;
+  // 3 x 600 B against a 1000 B budget: the third push crosses the budget and
+  // clears the history (documented Qt6 delta vs upstream drop-oldest).
+  manager.push(new BudgetProbeCommand(1, 600, &applied));
+  QVERIFY(manager.canUndo());
+  QVERIFY(manager.heavyBytes() >= 600);
+  manager.push(new BudgetProbeCommand(2, 600, &applied));
+  QVERIFY2(!manager.canUndo(),
+           "crossing the memory budget must clear the undo history");
+  QCOMPARE(manager.heavyBytes(), 0);
+  manager.push(new BudgetProbeCommand(3, 600, &applied));
+  QVERIFY(manager.canUndo());
+
+  // State is untouched by the history clear; undo only affects commands
+  // pushed after it.
+  QVERIFY(applied.contains(1));
+  QVERIFY(applied.contains(2));
+  manager.undo();
+  QVERIFY(!applied.contains(3));
+  QVERIFY(applied.contains(2));
+  manager.redo();
+  QVERIFY(applied.contains(3));
+}
+
+
+void ViewModelSmokeTests::plateContextMenuDoesNotSwitchPlateOrRefit()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPlate());
+  QCOMPARE(editor.currentPlateIndex(), 0);
+
+  const QVector4D fitBefore = editor.fitHint();
+  QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
+  QCOMPARE(editor.contextMenuFamily(), 4);
+  QCOMPARE(editor.contextPlateIndex(), 1);
+  // The active plate and the fit hint must be untouched by a plate
+  // right-click (the old behavior re-ran requestFitView via stateChanged,
+  // zooming the view under the cursor).
+  QCOMPARE(editor.currentPlateIndex(), 0);
+  QCOMPARE(editor.fitHint(), fitBefore);
+}
+
 #include "ViewModelSmokeTests.moc"

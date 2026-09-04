@@ -1,0 +1,4 @@
+diff --git a/src/core/services/ProjectServiceMock.cpp b/src/core/services/ProjectServiceMock.cpp
+index 7a27122..b6d49d9 100644
+--- a/src/core/services/ProjectServiceMock.cpp
++++ b/src/core/services/ProjectServiceMock.cpp

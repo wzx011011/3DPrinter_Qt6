@@ -358,6 +358,13 @@ public:
   void setSupportPaintCursorType(int type);
   int supportPaintToolType() const;
   void setSupportPaintToolType(int type);
+  // P11.B2.3 (upstream 1d61962ea7): Vertical/Horizontal axis-lock checkboxes
+  // (GLGizmoPainterBase.hpp:290-291, drag constraint at PainterBase.cpp:738-743).
+  // Mutually exclusive: enabling one clears the other.
+  bool paintVerticalOnly() const;
+  void setPaintVerticalOnly(bool v);
+  bool paintHorizontalOnly() const;
+  void setPaintHorizontalOnly(bool v);
   float supportPaintCursorRadius() const;
   void setSupportPaintCursorRadius(float radius);
   int activePaintKind() const;
@@ -368,8 +375,39 @@ public:
   void setSupportPaintSmartFillAngle(float angle);
   float supportPaintGapArea() const;
   void setSupportPaintGapArea(float area);
+  /// P2.3-5: MMU edge detection (upstream m_detect_geometry_edge, default
+  /// true; when disabled the smart-fill angle is forced to -1 which stops
+  /// region growth at near-planar neighbours, GLGizmoMmuSegmentation.cpp:621-
+  /// 643).
+  bool paintEdgeDetection() const;
+  void setPaintEdgeDetection(bool on);
+  /// P2.3-5: height-range brush span in mm (upstream m_cursor_height,
+  /// default 0.2, range 0.1..8, GLGizmoPainterBase.hpp:239-244).
+  float paintHeightRange() const;
+  void setPaintHeightRange(float h);
+  /// P2.3-5: MMU edge detection off forces the smart-fill angle to -1
+  /// (upstream GLGizmoMmuSegmentation.cpp:640-643). Shared by both smart-fill
+  /// entry points.
+  float effectiveSeedFillAngle(double requestedAngle) const;
+  /// P2.3-5: height-range paint entry (upstream HEIGHT_RANGE tool click,
+  /// GLGizmoPainterBase.cpp:726-733). Paints every facet whose world Z falls
+  /// in [hitZ, hitZ + height]; the hit Z comes from the stage-2 raycast.
+  Q_INVOKABLE bool paintHeightRangeAt(int state, double height,
+                                      int pickedSourceIndex,
+                                      QVector3D rayOrigin, QVector3D rayDir,
+                                      QVector3D cameraPosition,
+                                      QVector3D cameraForward);
   bool supportPaintOnOverhangsOnly() const;
   void setSupportPaintOnOverhangsOnly(bool on);
+  /// P2.3-1: cross-section (clipping) plane position for the painter gizmos,
+  /// 0..1 (upstream ObjectClipper m_clp_ratio; 0 = clipping off). While > 0
+  /// the brush paints only facets on the visible side of the plane and hits
+  /// on the clipped side are rejected.
+  double paintClippingPosition() const { return m_paintClippingPosition; }
+  void setPaintClippingPosition(double pos);
+  /// P2.3-1: reset the plane to 0 (upstream SLAGizmoEventType::
+  /// ResetClippingPlane, GLGizmoPainterBase.cpp:643).
+  Q_INVOKABLE void resetPaintClippingPlane();
   /// Phase 240 (GIZ-02): overhang filter angle in degrees (upstream
   /// m_highlight_by_angle_threshold_deg, GLGizmoPainterBase.hpp:280; sourced
   /// upstream from the object's support threshold config via
@@ -408,12 +446,17 @@ public:
   // world mm. cursorType is PaintCursorType (0=Circle,1=Sphere).
   //
   // Returns true when a facet was hit and the selector was painted.
+  // cameraForward (P2.3-1) is the viewport camera look direction (world
+  // space) — upstream builds the cross-section plane normal from
+  // -camera.get_dir_forward() (ObjectClipper::set_position_by_ratio,
+  // GLGizmosCommon.cpp:346).
   Q_INVOKABLE bool paintAtFacet(int obj, int vol, int facetIdx,
                                 double hitX, double hitY, double hitZ,
                                 int state, double brushRadius, int cursorType,
                                 int pickedSourceIndex,
                                 QVector3D rayOrigin, QVector3D rayDir,
-                                QVector3D cameraPosition);
+                                QVector3D cameraPosition,
+                                QVector3D cameraForward);
   /// Phase 240 (GIZ-02): smart (seed) fill pick entry. Same two-stage pick
   /// contract as paintAtFacet, but instead of the brush cursor it drives
   /// TriangleSelector::seed_fill_select_triangles + seed_fill_apply_on_
@@ -428,7 +471,8 @@ public:
                                     bool overhangsOnly,
                                     double overhangAngle,
                                     int pickedSourceIndex,
-                                    QVector3D rayOrigin, QVector3D rayDir);
+                                    QVector3D rayOrigin, QVector3D rayDir,
+                                    QVector3D cameraForward);
   /// Phase 120 (PAINT-01): drop all PaintEngine selectors for one object.
   /// Called on gizmo-exit cleanup (mirrors GLGizmoPainterBase on_exit).
   Q_INVOKABLE void clearPaintOnObject(int objectIndex);
@@ -448,6 +492,8 @@ public:
   // world-transformed byte stream for the RHI overlay renderer + Software
   // mirror. See the Q_PROPERTY comment above for the wire format.
   QByteArray paintOverlayData() const;
+  // P2.3-3: support preview byte-pipe getter (see the Q_PROPERTY).
+  QByteArray supportPreviewData() const;
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors as hex strings
   // (matches PreviewViewModel::extruderColor). Used by the overlay renderer to
   // color ExtruderN facets.
@@ -533,6 +579,8 @@ public:
   QString embossText() const;
   void setEmbossText(const QString &t);
   float embossHeight() const;
+  int embossVolumeType() const;
+  void setEmbossVolumeType(int type);
   void setEmbossHeight(float h);
   float embossDepth() const;
   void setEmbossDepth(float d);
@@ -584,6 +632,10 @@ public:
   /// ── MeshBoolean gizmo properties (对齐上游 GLGizmoMeshBoolean) ──
   int booleanOperation() const; // 0=union, 1=diff, 2=intersect
   void setBooleanOperation(int op);
+  // P2.7 (BOOLEAN-VOLUME): upstream "Delete input" checkbox
+  // (GLGizmoMeshBoolean.cpp:358/376; union always drops its inputs).
+  bool booleanDeleteInput() const;
+  void setBooleanDeleteInput(bool v);
   Q_INVOKABLE bool booleanExecute();
 
   /// ── AdvancedCut gizmo properties (对齐上游 GLGizmoAdvancedCut) ──
@@ -612,10 +664,12 @@ public:
   Q_INVOKABLE bool clearAdvancedCutConnectors();
 
   /// ── FaceDetector gizmo properties (对齐上游 GLGizmoFaceDetector) ──
-  float faceDetectorAngle() const;
+  /// P2.7: real exterior-face recognition via libslic3r FaceDetector
+  /// (FaceDetector.cpp ray grid over ±X/±Y/±Z at the sample interval).
+  double faceDetectorSampleInterval() const;
+  void setFaceDetectorSampleInterval(double v);
   int faceDetectorResultCount() const;
-  void setFaceDetectorAngle(float a);
-  Q_INVOKABLE bool detectFlatFaces();
+  Q_INVOKABLE bool performFaceRecognition();
 
   /// ── Text gizmo properties (对齐上游 GLGizmoText) ──
   QString textContent() const;
@@ -932,13 +986,22 @@ public:
   Q_PROPERTY(int supportPaintTool READ supportPaintTool WRITE setSupportPaintTool NOTIFY stateChanged)
   Q_PROPERTY(int supportPaintCursorType READ supportPaintCursorType WRITE setSupportPaintCursorType NOTIFY stateChanged)
   Q_PROPERTY(int supportPaintToolType READ supportPaintToolType WRITE setSupportPaintToolType NOTIFY stateChanged)
+  // P11.B2.3: Support Painting axis locks (upstream 1d61962ea7).
+  Q_PROPERTY(bool paintVerticalOnly READ paintVerticalOnly WRITE setPaintVerticalOnly NOTIFY stateChanged)
+  Q_PROPERTY(bool paintHorizontalOnly READ paintHorizontalOnly WRITE setPaintHorizontalOnly NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintCursorRadius READ supportPaintCursorRadius WRITE setSupportPaintCursorRadius NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintAngleThreshold READ supportPaintAngleThreshold WRITE setSupportPaintAngleThreshold NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY stateChanged)
+  /// P2.3-5: MMU edge-detection checkbox + height-range brush span.
+  Q_PROPERTY(bool paintEdgeDetection READ paintEdgeDetection WRITE setPaintEdgeDetection NOTIFY stateChanged)
+  Q_PROPERTY(float paintHeightRange READ paintHeightRange WRITE setPaintHeightRange NOTIFY stateChanged)
   Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
   /// Phase 240 (GIZ-02): overhang filter angle (see supportPaintOverhangAngle).
   Q_PROPERTY(float supportPaintOverhangAngle READ supportPaintOverhangAngle WRITE setSupportPaintOverhangAngle NOTIFY stateChanged)
+  /// P2.3-1: cross-section plane slider for the painter gizmos, 0..1
+  /// (0 = off) — upstream ObjectClipper m_clp_ratio.
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition NOTIFY stateChanged)
   Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY stateChanged)
   Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY stateChanged)
   /// 支撑绘制数据（对齐上游 GLGizmoFdmSupports paint state）
@@ -955,6 +1018,9 @@ public:
   // drives PaintEngine::getFacets per (object, volume) for the active gizmo's
   // state set so the renderer reuses the mesh pipeline (GizmoVertex fill).
   Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData NOTIFY paintDataChanged)
+  /// P2.3-3: support preview line segments (measure-overlay byte format) fed
+  /// from SliceService::supportPreviewReady; cleared when painted facets change.
+  Q_PROPERTY(QByteArray supportPreviewData READ supportPreviewData NOTIFY supportPreviewDataChanged)
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors so the overlay
   // renderer can map ExtruderN -> a real color (mirrors PreviewViewModel::
   // extruderColor, upstream 8-color cycle). Exposed as a hex-string list so QML
@@ -997,6 +1063,11 @@ public:
   Q_PROPERTY(QString embossText READ embossText WRITE setEmbossText NOTIFY stateChanged)
   Q_PROPERTY(float embossHeight READ embossHeight WRITE setEmbossHeight NOTIFY stateChanged)
   Q_PROPERTY(float embossDepth READ embossDepth WRITE setEmbossDepth NOTIFY stateChanged)
+  /// P2.7 (registered diff closure): volume type for NEW text volumes
+  /// (upstream Emboss volume_type selector): 0=ModelPart (default),
+  /// 1=NegativeVolume, 2=ParameterModifier. Delegates to
+  /// ProjectServiceMock::setTextVolumeType so addTextVolume routes the type.
+  Q_PROPERTY(int embossVolumeType READ embossVolumeType WRITE setEmbossVolumeType NOTIFY stateChanged)
   /// Phase 144 (EMB-01): user-selected font path (empty = default system font).
   Q_PROPERTY(QString embossFontPath READ embossFontPath WRITE setEmbossFontPath NOTIFY stateChanged)
   /// Phase 158 (EMBO-F01): style axes. boldness + italic map to upstream
@@ -1017,6 +1088,7 @@ public:
   Q_PROPERTY(float svgDepthModifier READ svgDepthModifier WRITE setSvgDepthModifier NOTIFY stateChanged)
   /// MeshBoolean 设置（对齐上游 GLGizmoMeshBoolean）
   Q_PROPERTY(int booleanOperation READ booleanOperation WRITE setBooleanOperation NOTIFY stateChanged)
+  Q_PROPERTY(bool booleanDeleteInput READ booleanDeleteInput WRITE setBooleanDeleteInput NOTIFY stateChanged)
   /// AdvancedCut 设置（对齐上游 GLGizmoAdvancedCut）
   Q_PROPERTY(int advCutAxis READ advCutAxis WRITE setAdvCutAxis NOTIFY stateChanged)
   Q_PROPERTY(float advCutPosition READ advCutPosition WRITE setAdvCutPosition NOTIFY stateChanged)
@@ -1028,9 +1100,9 @@ public:
   /// [uint32 count][GizmoVertex...] format as hollowMarkerData; one
   /// axis-aligned cylinder per pin, world space).
   Q_PROPERTY(QByteArray advancedCutMarkerData READ advancedCutMarkerData NOTIFY advancedCutConnectorDataChanged)
-  /// FaceDetector 设置（对齐上游 GLGizmoFaceDetector）
-  Q_PROPERTY(float faceDetectorAngle READ faceDetectorAngle WRITE setFaceDetectorAngle NOTIFY stateChanged)
-  /// v5.12 gap-closure: number of flat faces found by detectFlatFaces.
+  /// FaceDetector 设置（对齐上游 GLGizmoFaceDetector：Sample interval 输入）
+  Q_PROPERTY(double faceDetectorSampleInterval READ faceDetectorSampleInterval WRITE setFaceDetectorSampleInterval NOTIFY stateChanged)
+  /// Number of exterior facets found by performFaceRecognition.
   Q_PROPERTY(int faceDetectorResultCount READ faceDetectorResultCount NOTIFY stateChanged)
   /// Text 设置（对齐上游 GLGizmoText）
   Q_PROPERTY(QString textContent READ textContent WRITE setTextContent NOTIFY stateChanged)
@@ -1116,6 +1188,16 @@ public:
   // surface refreshes; the popup reads the Phase 108 auto* Q_PROPERTYs for the
   // auto-recommended preview.
   Q_INVOKABLE bool setPlateFilamentMapMode(int plateIndex, int mode);
+  /// P2.1: full manual filament-map write (mode + per-extruder group ids).
+  /// maps[i] = the 1-based group id for extruder i+1 (upstream
+  /// PlateData::filament_maps, bbs_3mf.hpp:98). Delegates to
+  /// ProjectServiceMock::setPlateFilamentMap (which syncs the live
+  /// PartPlate::config) and invalidates the plate's slice result.
+  Q_INVOKABLE bool setPlateFilamentMap(int plateIndex, int mode,
+                                       const QVariantList &maps);
+  /// P2.1: per-extruder group ids stored for the plate (1-based; empty when
+  /// unset). Feeds the manual-map editor in FilamentGroupPopup.
+  Q_INVOKABLE QVariantList plateFilamentMaps(int plateIndex) const;
   Q_INVOKABLE int plateFilamentMapMode(int plateIndex) const;
   /// 查询指定平板是否有有效切片结果
   Q_INVOKABLE bool isPlateSliced(int plateIndex) const;
@@ -1661,10 +1743,18 @@ private slots:
   /// map leaks to the Phase 110 UI). Always emits filamentMapChanged() so the
   /// QML bindings refresh.
   void onFilamentMapReady(const FilamentMapResult &result);
+  /// P2.3-3: receives the captured-by-value support preview polylines
+  /// delivered by SliceService::supportPreviewReady on the GUI thread. Packs
+  /// the segments into the measure-overlay byte format
+  /// ([int32 count][6 floats per segment]) for the viewport pipe; an invalid
+  /// payload clears any stale preview.
+  void onSupportPreviewReady(const SupportPreviewData &preview);
 
 signals:
   void stateChanged();
   void paintDataChanged();
+  /// P2.3-3: the support preview byte pipe changed (new slice or stale clear).
+  void supportPreviewDataChanged();
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();
@@ -1852,7 +1942,7 @@ private:
   int m_connectorType = 0;        ///< 0=Plug, 1=Dowel, 2=Snap
   int m_connectorStyle = 0;       ///< 0=Prism, 1=Frustum
   int m_connectorShape = 3;       ///< 0=Triangle, 1=Square, 2=Hexagon, 3=Circle
-  float m_connectorSize = 5.0f;   ///< 连接器尺寸 mm
+  float m_connectorSize = 2.5f;   ///< 连接器尺寸 mm（上游 connector_size 默认 2.5）
   /// v5.12 gap-closure: independent groove params (对齐上游 Cut::Groove).
   /// When >0, override the connectorSize-derived defaults. grooveFlapsAngle
   /// is in degrees from QML; advCutSelected converts to radians.
@@ -1918,13 +2008,25 @@ private:
   // Support painting (对齐上游 GLGizmoFdmSupports)
   int m_activePaintKind = 0;               ///< 0=Support, 1=Seam, 2=Mmu (Phase 122/123 write-back routing)
   int m_supportPaintTool = 1;              ///< 0=None, 1=Enforcer, 2=Blocker
+  // P11.B2.3: axis locks (upstream GLGizmoPainterBase m_vertical_only /
+  // m_horizontal_only, mutually exclusive).
+  bool m_paintVerticalOnly = false;
+  bool m_paintHorizontalOnly = false;
   int m_supportPaintCursorType = 0;        ///< 0=Circle, 1=Sphere, 2=Pointer, 3=HeightRange, 4=GapFill
   int m_supportPaintToolType = 0;          ///< 0=Brush, 1=BucketFill, 2=SmartFill, 3=GapFill
   float m_supportPaintCursorRadius = 5.0f; ///< Brush radius in mm
   float m_supportPaintAngleThreshold = 45.0f; ///< Overhang highlight angle
   float m_supportPaintSmartFillAngle = 30.0f; ///< Smart fill angle threshold
   float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold
+  bool m_paintEdgeDetection = true; ///< P2.3-5 MMU edge detection (upstream default true)
+  float m_paintHeightRange = 0.2f;  ///< P2.3-5 height-range span mm (upstream 0.2, 0.1..8)
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
+  double m_paintClippingPosition = 0.0; ///< P2.3-1 cross-section slider, 0 = off
+  /// P2.3-2: EnforcerBlockerType the staged seed-fill region will commit with
+  /// (drives the preview marker color: negative state in the overlay stream).
+  int m_lastSmartFillState = 1;
+  /// P2.3-3: support preview byte pipe ([int32 count][6 floats per segment]).
+  QByteArray m_supportPreviewData;
   float m_supportPaintOverhangAngle = 0.0f;   ///< GIZ-02 overhang filter angle (deg)
   bool m_supportEnable = false;            ///< Support enabled flag
   int m_supportType = 0;                   ///< 0=normal, 1=tree
@@ -1955,7 +2057,7 @@ private:
   bool m_drillOneLayerOnly = false;
   // Emboss (对齐上游 GLGizmoEmboss)
   QString m_embossText;
-  float m_embossHeight = 2.0f;
+  float m_embossHeight = 10.0f;  ///< 上游 FontProp.size_in_mm 默认 10 mm
   float m_embossDepth = 1.0f;
   QString m_embossFontPath; // Phase 144 (EMB-01): empty = default system font
   // Phase 158 (EMBO-F01): style axes. boldness + italic map to FontProp;
@@ -1971,6 +2073,7 @@ private:
   float m_svgDepthModifier = 1.0f;
   // MeshBoolean (对齐上游 GLGizmoMeshBoolean)
   int m_booleanOperation = 1;             ///< 0=union, 1=diff, 2=intersect
+  bool m_booleanDeleteInput = false;      ///< upstream "Delete input" checkbox
 
   // Phase 69: move-gizmo drag coalescing state.
   bool m_gizmoMoveDragActive = false;
@@ -2000,11 +2103,13 @@ private:
   int m_simplifyPreviewWantedCount = 0;
   float m_simplifyPreviewMaxError = 0.f;
   // FaceDetector (对齐上游 GLGizmoFaceDetector)
-  float m_faceDetectorAngle = 5.0f;
-  int m_faceDetectorResultCount = 0;  ///< v5.12: faces found by detectFlatFaces
+  double m_faceDetectorSampleInterval = 0.5;  ///< upstream m_sample_interval
+  int m_faceDetectorResultCount = 0;  ///< exterior facets found by performFaceRecognition
   // Text (对齐上游 GLGizmoText)
-  QString m_textContent;
-  float m_textSize = 20.0f;
+  /// P2.7: default placeholder matches upstream GLGizmoEmboss.cpp:500
+  /// (m_text = _u8L("Embossed text")).
+  QString m_textContent = QStringLiteral("Embossed text");
+  float m_textSize = 16.0f;  ///< 上游 GLGizmoText font_size 默认 16
   // SVG (对齐上游 GLGizmoSVG)
   QString m_svgFilePath;
   float m_svgScale = 1.0f;

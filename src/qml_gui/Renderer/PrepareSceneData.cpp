@@ -1,5 +1,7 @@
 #include "PrepareSceneData.h"
 
+#include "core/util/PerfLog.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -238,150 +240,280 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchPrintableFlags,
                                         const QList<QVector4D> &extruderColors)
 {
+  // OWZX_PERF_LOG gated: the TLV decode + per-vertex CPU expansion is the
+  // per-page scene stage tracked by the perf evaluation (docs/perf-baseline.md).
+  const PerfLog::Scope perfScope("scene.expand");
   clearModelGeometry();
 
-  qint32 objectCount = 0;
-  qsizetype offset = 0;
-  // P15.1 (COLOR): the render-channel arrays are optional (the picking scene
-  // passes none); when present they must cover every batch.
-  bool valid = readValue(meshData, offset, objectCount)
-      && objectCount >= 0
-      && objectCount <= kMaxPackedObjects
-      && batchSourceObjectIndices.size() == objectCount
-      && batchVolumeIndices.size() == objectCount
-      && batchInstanceIndices.size() == objectCount
-      && (batchVolumeTypes.isEmpty()
-          || (batchVolumeTypes.size() == objectCount
-              && batchExtruderIds.size() == objectCount
-              && batchPrintableFlags.size() == objectCount));
+  qint32 geometryCount = 0;
+  qint32 batchCount = 0;
+  // Wave 2b (perf): TLV v2 decode — magic "OMD2", counts, indexed geometry
+  // section, batch section with world matrices, 24-byte bbox trailer
+  // (docs/perf-wave2b-design.md). The v1 de-indexed format is gone; the
+  // world-space soup below is the compatibility expansion consumed by the
+  // current renderer, SoftwareViewport and picking, while m_modelGeometries
+  // / m_modelBatchMeta keep the indexed data for the renderer's indexed
+  // draws.
+  bool valid = meshData.size() >= 16
+      && meshData.at(0) == 'O' && meshData.at(1) == 'M'
+      && meshData.at(2) == 'D' && meshData.at(3) == '2';
+  qsizetype offset = 4;
+  valid = valid
+      && readValue(meshData, offset, geometryCount)
+      && readValue(meshData, offset, batchCount)
+      && geometryCount >= 0 && geometryCount <= kMaxPackedObjects
+      && batchCount >= 0 && batchCount <= kMaxPackedObjects;
 
-  if (valid) {
-    m_modelVertices.reserve(std::min<qsizetype>(meshData.size() / kPackedVertexBytes, 1000000));
-  }
+  struct DecodedGeometry
+  {
+    qint32 vertexCount = 0;
+    qint32 indexCount = 0;
+    QList<float> positions;
+    QList<float> normals;
+    QList<quint32> indices;
+  };
+  QVector<DecodedGeometry> geometries;
+  if (valid)
+    geometries.resize(geometryCount);
 
-  for (qint32 objectIndex = 0; valid && objectIndex < objectCount; ++objectIndex) {
-    qint32 renderObjectId = 0;
-    qint32 triangleCount = 0;
-    valid = readValue(meshData, offset, renderObjectId)
-        && readValue(meshData, offset, triangleCount)
-        && triangleCount >= 0
-        && triangleCount <= kMaxPackedTrianglesPerBatch;
+  for (qint32 g = 0; valid && g < geometryCount; ++g) {
+    qint32 geomId = -1;
+    qint32 vertexCount = 0;
+    qint32 indexCount = 0;
+    valid = readValue(meshData, offset, geomId)
+        && readValue(meshData, offset, vertexCount)
+        && readValue(meshData, offset, indexCount)
+        && geomId == g // the geometry section is ordered by id
+        && vertexCount >= 0 && vertexCount <= kMaxPackedTrianglesPerBatch
+        && indexCount >= 0 && (indexCount % 3) == 0
+        && indexCount <= kMaxPackedTrianglesPerBatch * 3;
     if (!valid)
       break;
 
-    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
-    const qsizetype payloadBytes = vertexCount * kPackedVertexBytes;
-    if (payloadBytes < 0 || meshData.size() - offset < payloadBytes) {
+    const qsizetype positionBytes = qsizetype(vertexCount) * 3 * 4;
+    const qsizetype indexBytes = qsizetype(indexCount) * 4;
+    const qsizetype normalBytes = positionBytes;
+    if (meshData.size() - offset < positionBytes + indexBytes + normalBytes) {
       valid = false;
       break;
     }
+    DecodedGeometry &geom = geometries[g];
+    geom.vertexCount = vertexCount;
+    geom.indexCount = indexCount;
+    geom.positions.resize(int(vertexCount) * 3);
+    std::memcpy(geom.positions.data(), meshData.constData() + offset, size_t(positionBytes));
+    offset += positionBytes;
+    geom.indices.resize(int(indexCount));
+    std::memcpy(geom.indices.data(), meshData.constData() + offset, size_t(indexBytes));
+    offset += indexBytes;
+    geom.normals.resize(int(vertexCount) * 3);
+    std::memcpy(geom.normals.data(), meshData.constData() + offset, size_t(normalBytes));
+    offset += normalBytes;
+  }
 
-    const int sourceObjectIndex = batchSourceObjectIndices.at(objectIndex);
-    const int volumeIndex = batchVolumeIndices.at(objectIndex);
-    const int instanceIndex = batchInstanceIndices.at(objectIndex);
-    if (sourceObjectIndex < 0 || volumeIndex < 0 || instanceIndex < 0) {
+  struct DecodedBatch
+  {
+    qint32 renderObjectId = 0;
+    qint32 sourceObjectIndex = -1;
+    qint32 volumeIndex = -1;
+    qint32 instanceIndex = -1;
+    qint32 geomId = 0;
+    float matrix[16] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    qint32 volumeType = 0;
+    qint32 extruderId = 1;
+    qint32 printable = 1;
+  };
+  QVector<DecodedBatch> decodedBatches;
+  if (valid)
+    decodedBatches.resize(batchCount);
+
+  qsizetype totalSoupVertices = 0;
+  for (qint32 b = 0; valid && b < batchCount; ++b) {
+    DecodedBatch &batch = decodedBatches[b];
+    valid = readValue(meshData, offset, batch.renderObjectId)
+        && readValue(meshData, offset, batch.sourceObjectIndex)
+        && readValue(meshData, offset, batch.volumeIndex)
+        && readValue(meshData, offset, batch.instanceIndex)
+        && readValue(meshData, offset, batch.geomId)
+        && batch.sourceObjectIndex >= 0
+        && batch.volumeIndex >= 0
+        && batch.instanceIndex >= 0
+        && batch.geomId >= 0 && batch.geomId < geometryCount
+        && batch.extruderId >= 0;
+    if (!valid)
+      break;
+    const qsizetype matrixBytes = 16 * qsizetype(sizeof(float));
+    if (meshData.size() - offset < matrixBytes) {
       valid = false;
       break;
     }
-    const bool active = activeSourceContains(activeSourceObjectIndices, sourceObjectIndex);
-    ModelBatch batch;
-    batch.renderObjectId = renderObjectId;
-    batch.sourceObjectIndex = sourceObjectIndex;
-    batch.volumeIndex = volumeIndex;
-    batch.instanceIndex = instanceIndex;
-    batch.firstVertex = m_modelVertices.size();
-    batch.vertexCount = int(vertexCount);
-    bool batchHasBounds = false;
+    std::memcpy(batch.matrix, meshData.constData() + offset, size_t(matrixBytes));
+    offset += matrixBytes;
+    for (float component : batch.matrix) {
+      if (!std::isfinite(component)) {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid)
+      break;
+    valid = valid
+        && readValue(meshData, offset, batch.volumeType)
+        && readValue(meshData, offset, batch.extruderId)
+        && readValue(meshData, offset, batch.printable);
+    if (!valid)
+      break;
+    totalSoupVertices += geometries.at(batch.geomId).indexCount;
+  }
+
+  if (valid) {
+    m_modelVertices.reserve(std::min<qsizetype>(totalSoupVertices, 12000000));
+    m_modelGeometries.reserve(geometryCount);
+    for (const DecodedGeometry &geom : geometries) {
+      ModelGeometry out;
+      out.positions = geom.positions;
+      out.normals = geom.normals;
+      out.indices = geom.indices;
+      m_modelGeometries.append(std::move(out));
+    }
+  }
+
+  for (qint32 b = 0; valid && b < batchCount; ++b) {
+    const DecodedBatch &decoded = decodedBatches.at(b);
+    const DecodedGeometry &geom = geometries.at(decoded.geomId);
+
+    const bool active =
+        activeSourceContains(activeSourceObjectIndices, decoded.sourceObjectIndex);
+
     // P15.1/15.2 (COLOR): upstream model coloring — color_from_model_volume
     // (3DScene.cpp:306-334) for the special volume types, then
     // update_colors_by_extruder (:1184-1235, filament_colour[extruder-1]
     // with the index clamped to 0) for model parts; NEUTRAL_COLOR fallback
-    // when no filament colors are available.
+    // when no filament colors are available. Identity fields come from the
+    // v2 batch section; the legacy parallel-array parameters are ignored
+    // (the blob is authoritative).
     float r = 0.8f;
     float g = 0.8f;
-    float b = 0.8f;
+    float blue = 0.8f;
     float a = 1.0f;
-    if (!batchVolumeTypes.isEmpty()) {
-      const int volumeType = batchVolumeTypes.at(objectIndex);
-      const int extruderId = batchExtruderIds.at(objectIndex);
-      const bool printable = batchPrintableFlags.at(objectIndex) != 0;
-      switch (volumeType) {
-      case 1: r = 0.3f; g = 0.3f; b = 0.3f; a = 0.4f; break; // MODEL_NEGTIVE_COL
-      case 2: r = 1.0f; g = 1.0f; b = 0.0f; a = 0.6f; break; // MODEL_MIDIFIER_COL
-      case 3: r = 1.0f; g = 0.3f; b = 0.3f; a = 0.4f; break; // SUPPORT_BLOCKER_COL
-      case 4: r = 0.3f; g = 0.3f; b = 1.0f; a = 0.4f; break; // SUPPORT_ENFORCER_COL
-      default: {
-        if (!extruderColors.isEmpty()) {
-          int colorIndex = extruderId - 1;
-          if (colorIndex < 0 || colorIndex >= extruderColors.size())
-            colorIndex = 0;
-          const QVector4D color = extruderColors.at(colorIndex);
-          r = color.x();
-          g = color.y();
-          b = color.z();
-          a = color.w() > 0.0f ? color.w() : 1.0f;
-        }
-        if (!printable) { // UNPRINTABLE_COLOR (3DScene.cpp:170)
-          r = 0.0f; g = 0.0f; b = 0.0f; a = 0.5f;
-        }
-        break;
+    const int volumeType = int(decoded.volumeType);
+    const int extruderId = int(decoded.extruderId);
+    const bool printable = decoded.printable != 0;
+    switch (volumeType) {
+    case 1: r = 0.3f; g = 0.3f; blue = 0.3f; a = 0.4f; break; // MODEL_NEGTIVE_COL
+    case 2: r = 1.0f; g = 1.0f; blue = 0.0f; a = 0.6f; break; // MODEL_MIDIFIER_COL
+    case 3: r = 1.0f; g = 0.3f; blue = 0.3f; a = 0.4f; break; // SUPPORT_BLOCKER_COL
+    case 4: r = 0.3f; g = 0.3f; blue = 1.0f; a = 0.4f; break; // SUPPORT_ENFORCER_COL
+    default: {
+      if (!extruderColors.isEmpty()) {
+        int colorIndex = extruderId - 1;
+        if (colorIndex < 0 || colorIndex >= extruderColors.size())
+          colorIndex = 0;
+        const QVector4D color = extruderColors.at(colorIndex);
+        r = color.x();
+        g = color.y();
+        blue = color.z();
+        a = color.w() > 0.0f ? color.w() : 1.0f;
       }
+      if (!printable) { // UNPRINTABLE_COLOR (3DScene.cpp:170)
+        r = 0.0f; g = 0.0f; blue = 0.0f; a = 0.5f;
       }
-      // adjust_color_for_rendering (3DScene.cpp:93-103): fully transparent
-      // materials render white @0.3 alpha, near-black lifts to 0.2 so black
-      // filament stays visible on the dark theme.
-      if (a < 0.1f) {
-        r = 1.0f; g = 1.0f; b = 1.0f; a = 0.3f;
-      } else if (r < 0.2f && g < 0.2f && b < 0.2f) {
-        r = 0.2f; g = 0.2f; b = 0.2f;
-      }
+      break;
     }
+    }
+    // adjust_color_for_rendering (3DScene.cpp:93-103): fully transparent
+    // materials render white @0.3 alpha, near-black lifts to 0.2 so black
+    // filament stays visible on the dark theme.
+    if (a < 0.1f) {
+      r = 1.0f; g = 1.0f; blue = 1.0f; a = 0.3f;
+    } else if (r < 0.2f && g < 0.2f && blue < 0.2f) {
+      r = 0.2f; g = 0.2f; blue = 0.2f;
+    }
+
+    ModelBatchMeta meta;
+    meta.geomId = int(decoded.geomId);
+    meta.matrix = QMatrix4x4(decoded.matrix, 4, 4);
+    meta.volumeType = volumeType;
+    meta.extruderId = extruderId;
+    meta.printable = printable;
+
+    ModelBatch batch;
+    batch.renderObjectId = int(decoded.renderObjectId);
+    batch.sourceObjectIndex = int(decoded.sourceObjectIndex);
+    batch.volumeIndex = int(decoded.volumeIndex);
+    batch.instanceIndex = int(decoded.instanceIndex);
+    batch.firstVertex = m_modelVertices.size();
     batch.translucent = a < 0.999f;
-    // P15.3 (OUTOFBED): ProjectVolumeType for the outside-state gate.
-    batch.volumeType = batchVolumeTypes.isEmpty() ? 0
-                                                  : batchVolumeTypes.at(objectIndex);
+    batch.volumeType = volumeType;
+    bool batchHasBounds = false;
 
-    for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-      float x = 0.0f;
-      float y = 0.0f;
-      float z = 0.0f;
-      valid = readValue(meshData, offset, x)
-          && readValue(meshData, offset, y)
-          && readValue(meshData, offset, z)
-          && std::isfinite(x)
-          && std::isfinite(y)
-          && std::isfinite(z);
-      if (!valid)
+    // P15.10 (MIRROR): the GL matrix folds in the slic3r->GL axis swap
+    // (det -1), so det(M3) > 0 marks a mirrored instance — the compat soup
+    // flips two triangle vertices to keep the winding/orientation semantics
+    // of the v1 bake (upstream glFrontFace(GL_CW), 3DScene.cpp:520-521).
+    const float *m = decoded.matrix;
+    const float detM3 =
+        m[0] * (m[5] * m[10] - m[6] * m[9])
+        - m[1] * (m[4] * m[10] - m[6] * m[8])
+        + m[2] * (m[4] * m[9] - m[5] * m[8]);
+    const bool mirrored = detM3 > 0.0f;
+
+    const qsizetype triangleCount = qsizetype(geom.indexCount) / 3;
+    for (qsizetype t = 0; t < triangleCount; ++t) {
+      const quint32 i0 = geom.indices.at(int(t * 3 + 0));
+      const quint32 i1 = mirrored ? geom.indices.at(int(t * 3 + 2))
+                                  : geom.indices.at(int(t * 3 + 1));
+      const quint32 i2 = mirrored ? geom.indices.at(int(t * 3 + 1))
+                                  : geom.indices.at(int(t * 3 + 2));
+      if (i0 >= quint32(geom.vertexCount) || i1 >= quint32(geom.vertexCount)
+          || i2 >= quint32(geom.vertexCount)) {
+        valid = false;
         break;
-
+      }
       if (!active)
         continue;
-
-      const ModelVertex vertex{x, y, z, r, g, b, a};
-      m_modelVertices.append(vertex);
-      if (!batchHasBounds) {
-        batch.bounds = ModelBounds{x, y, z, x, y, z};
-        batchHasBounds = true;
-      } else {
-        batch.bounds.minX = std::min(batch.bounds.minX, x);
-        batch.bounds.minY = std::min(batch.bounds.minY, y);
-        batch.bounds.minZ = std::min(batch.bounds.minZ, z);
-        batch.bounds.maxX = std::max(batch.bounds.maxX, x);
-        batch.bounds.maxY = std::max(batch.bounds.maxY, y);
-        batch.bounds.maxZ = std::max(batch.bounds.maxZ, z);
+      for (const quint32 vi : {i0, i1, i2}) {
+        const float lx = geom.positions.at(int(vi) * 3 + 0);
+        const float ly = geom.positions.at(int(vi) * 3 + 1);
+        const float lz = geom.positions.at(int(vi) * 3 + 2);
+        const float x = m[0] * lx + m[1] * ly + m[2] * lz + m[3];
+        const float y = m[4] * lx + m[5] * ly + m[6] * lz + m[7];
+        const float z = m[8] * lx + m[9] * ly + m[10] * lz + m[11];
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+          valid = false;
+          break;
+        }
+        const ModelVertex vertex{x, y, z, r, g, blue, a};
+        m_modelVertices.append(vertex);
+        if (!batchHasBounds) {
+          batch.bounds = ModelBounds{x, y, z, x, y, z};
+          batchHasBounds = true;
+        } else {
+          batch.bounds.minX = std::min(batch.bounds.minX, x);
+          batch.bounds.minY = std::min(batch.bounds.minY, y);
+          batch.bounds.minZ = std::min(batch.bounds.minZ, z);
+          batch.bounds.maxX = std::max(batch.bounds.maxX, x);
+          batch.bounds.maxY = std::max(batch.bounds.maxY, y);
+          batch.bounds.maxZ = std::max(batch.bounds.maxZ, z);
+        }
+        updateModelBounds(vertex);
       }
-      updateModelBounds(vertex);
+      if (!valid)
+        break;
     }
 
     if (valid && active) {
       batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
-      if (batch.vertexCount > 0)
+      if (batch.vertexCount > 0) {
         m_modelBatches.append(batch);
+        m_modelBatchMeta.append(meta);
+      }
     }
   }
 
   if (valid) {
-    if (meshData.size() - offset < kPackedTrailerBytes)
+    if (meshData.size() - offset != kPackedTrailerBytes)
       valid = false;
     else
       offset += kPackedTrailerBytes;
@@ -859,6 +991,9 @@ void PrepareSceneData::clearModelGeometry()
 {
   m_modelVertices.clear();
   m_modelBatches.clear();
+  // Wave 2b (perf): indexed-decode side-channel follows the batches.
+  m_modelGeometries.clear();
+  m_modelBatchMeta.clear();
   m_modelBounds = ModelBounds{};
   m_hasModelBounds = false;
   // P15.5 (SINK)/P15.3 (OUTOFBED): derived state follows the batches.

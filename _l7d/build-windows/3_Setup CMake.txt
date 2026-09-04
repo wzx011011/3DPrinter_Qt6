@@ -1,0 +1,51 @@
+﻿2026-08-15T05:01:33.2956909Z ##[group]Run lukka/get-cmake@latest
+2026-08-15T05:01:33.2957280Z with:
+2026-08-15T05:01:33.2957474Z   cmakeVersion: ~3.31.0
+2026-08-15T05:01:33.2957705Z   useLocalCache: true
+2026-08-15T05:01:33.2957900Z   useCloudCache: true
+2026-08-15T05:01:33.2958075Z env:
+2026-08-15T05:01:33.2958246Z   TAG_NAME: v5.16
+2026-08-15T05:01:33.2958629Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T05:01:33.2959278Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T05:01:33.2959864Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T05:01:33.2960379Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T05:01:33.2960729Z ##[endgroup]
+2026-08-15T05:01:33.4699968Z useCloudCache:true
+2026-08-15T05:01:33.4700443Z useLocalCache:true
+2026-08-15T05:01:33.4700818Z user defined cmake version:~3.31.0
+2026-08-15T05:01:33.4701361Z user defined ninja version:
+2026-08-15T05:01:33.4701697Z cmake version:~3.31.0
+2026-08-15T05:01:33.4702056Z ninja version:latest
+2026-08-15T05:01:33.4747436Z ##[group]Computing cache key from the downloads' URLs
+2026-08-15T05:01:33.4747894Z Cache key: '60786817'.
+2026-08-15T05:01:33.4749422Z Local install root: 'D:\a\_temp\60786817''.
+2026-08-15T05:01:33.4749959Z ##[endgroup]
+2026-08-15T05:01:33.4750365Z ##[group]Restoring from local GitHub runner cache using key '60786817'
+2026-08-15T05:01:33.4758906Z Local cache miss.
+2026-08-15T05:01:33.4759444Z ##[endgroup]
+2026-08-15T05:01:33.4767456Z ##[group]Restoring from GitHub cloud cache using key '60786817' into 'D:\a\_temp\60786817'
+2026-08-15T05:01:33.7793437Z Cloud cache miss.
+2026-08-15T05:01:33.7794024Z ##[endgroup]
+2026-08-15T05:01:33.7795413Z ##[group]Downloading and extracting CMake
+2026-08-15T05:01:34.3631199Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command "$ErrorActionPreference = 'Stop' ; try { Add-Type -AssemblyName System.IO.Compression.ZipFile } catch { } ; try { [System.IO.Compression.ZipFile]::ExtractToDirectory('D:\a\_temp\a5675625-37f5-4415-99a2-3addb90e569f', 'D:\a\_temp\60786817', $true) } catch { if (($_.Exception.GetType().FullName -eq 'System.Management.Automation.MethodException') -or ($_.Exception.GetType().FullName -eq 'System.Management.Automation.RuntimeException') ){ Expand-Archive -LiteralPath 'D:\a\_temp\a5675625-37f5-4415-99a2-3addb90e569f' -DestinationPath 'D:\a\_temp\60786817' -Force } else { throw $_ } } ;"
+2026-08-15T05:01:36.3175606Z ##[endgroup]
+2026-08-15T05:01:36.3176073Z ##[group]Downloading and extracting Ninja
+2026-08-15T05:01:36.6281287Z [command]"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command "$ErrorActionPreference = 'Stop' ; try { Add-Type -AssemblyName System.IO.Compression.ZipFile } catch { } ; try { [System.IO.Compression.ZipFile]::ExtractToDirectory('D:\a\_temp\b4c0bc6b-b884-4d57-bad5-6a7bdf2948b8', 'D:\a\_temp\60786817', $true) } catch { if (($_.Exception.GetType().FullName -eq 'System.Management.Automation.MethodException') -or ($_.Exception.GetType().FullName -eq 'System.Management.Automation.RuntimeException') ){ Expand-Archive -LiteralPath 'D:\a\_temp\b4c0bc6b-b884-4d57-bad5-6a7bdf2948b8' -DestinationPath 'D:\a\_temp\60786817' -Force } else { throw $_ } } ;"
+2026-08-15T05:01:36.9389256Z ##[endgroup]
+2026-08-15T05:01:36.9391405Z ##[group]Add CMake and Ninja to PATH
+2026-08-15T05:01:36.9391960Z CMake path: 'D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\'
+2026-08-15T05:01:36.9400086Z Ninja path: 'D:\a\_temp\60786817'
+2026-08-15T05:01:36.9408103Z ##[group]Validating the installed CMake and Ninja
+2026-08-15T05:01:37.0643053Z CMake actual path is: 'D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\cmake.exe'
+2026-08-15T05:01:37.0643627Z Ninja actual path is: 'D:\a\_temp\60786817\ninja.exe'
+2026-08-15T05:01:37.0644211Z ##[endgroup]
+2026-08-15T05:01:37.0647403Z ##[endgroup]
+2026-08-15T05:01:37.0647820Z ##[group]Saving to GitHub cloud cache using key '60786817'
+2026-08-15T05:01:37.1341373Z [command]"C:\Program Files\Git\usr\bin\tar.exe" --posix -cf cache.tzst --exclude cache.tzst -P -C D:/a/3DPrinter_Qt6/3DPrinter_Qt6 --files-from manifest.txt --force-local --use-compress-program "zstd -T0"
+2026-08-15T05:01:39.6808747Z Sent 39103697 of 39103697 (100.0%), 37.1 MBs/sec
+2026-08-15T05:01:39.9094259Z Saved 'D:\a\_temp\60786817' to the GitHub cache service with key '60786817'.
+2026-08-15T05:01:39.9094937Z ##[endgroup]
+2026-08-15T05:01:39.9095417Z ##[group]Saving to local cache using key '60786817' from 'D:\a\_temp\60786817'
+2026-08-15T05:01:51.4536660Z Saved 'D:\a\_temp\60786817' to the local GitHub runner cache with key '60786817'.
+2026-08-15T05:01:51.4537315Z ##[endgroup]
+2026-08-15T05:01:51.4537518Z get-cmake action execution succeeded

@@ -32,6 +32,9 @@ Item {
 
     signal addModelRequested()
     signal sliceRequested()
+    signal filamentGroupRequested()
+    // UI-only request; the shell owns confirmation and workspace clearing.
+    signal deleteAllRequested()
 
     function canUseGizmo(mode) {
         return !!root.editorVm && ((root.editorVm.availableGizmoMask & (1 << mode)) !== 0)
@@ -124,6 +127,13 @@ Item {
                 }
 
                 ActionToolButton {
+                    iconName: "box.svg"
+                    toolTipText: qsTr("耗材分组")
+                    enabled: root.editorVm !== null
+                    onClicked: root.filamentGroupRequested()
+                }
+
+                ActionToolButton {
                     iconName: "mirror.svg"
                     toolTipText: root.gizmoTip(qsTr("Auto orient"), GLViewport.GizmoRotate)
                     enabled: root.canUseGizmo(GLViewport.GizmoRotate)
@@ -166,6 +176,15 @@ Item {
                                  : qsTr("Select one or more objects")
                     enabled: root.editorVm && root.editorVm.canDeleteSelection
                     onClicked: root.editorVm.deleteSelection()
+                }
+
+                ActionToolButton {
+                    iconName: "trash.svg"
+                    toolTipText: root.editorVm && root.editorVm.modelCount > 0
+                                 ? qsTr("Delete all")
+                                 : qsTr("Workspace is empty")
+                    enabled: root.editorVm && root.editorVm.modelCount > 0
+                    onClicked: root.deleteAllRequested()
                 }
 
                 ActionToolButton {

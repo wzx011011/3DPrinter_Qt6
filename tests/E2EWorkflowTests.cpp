@@ -116,6 +116,15 @@ private slots:
   // Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-07.
   void testSettingsEditInvalidatesSlice();
   void testDirtyOverridesPersistAcrossProjectSaveRestore();
+  // P2.3-3: the support preview byte pipe. A valid SupportPreviewData packs
+  // into [int32 segmentCount][6 floats per segment]; an invalid payload clears
+  // any stale pipe contents (the WTREAD-02 gate pattern).
+  void supportPreviewPipePacksSegmentsAndClearsOnInvalid();
+  // P7.1 (device-independent end-to-end): import -> transform -> slice ->
+  // save project -> clear -> load project -> state restored -> re-slice.
+  // Mirrors the upstream Plater::load_project / save_project workflow without
+  // any device flow.
+  void projectLifecycleFullCyclePreservesStateAndReslices();
 
 private:
   bool hasLibslic3r() const;
@@ -328,11 +337,12 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
   QVERIFY2(QFileInfo::exists(outputPath),
            qPrintable(QStringLiteral("G-code file should exist: %1").arg(outputPath)));
 
-  // Verify estimated time label format (HH:MM:SS)
+  // Verify estimated time label uses the upstream compact DHMS format
+  // (get_bbl_time_dhms: NdNhNmNs / NhNmNs / NmNs / Ns).
   const QString timeLabel = slice.estimatedTimeLabel();
   QVERIFY2(!timeLabel.isEmpty(), "estimated time label should be non-empty");
-  QVERIFY2(timeLabel.contains(QLatin1Char(':')),
-           qPrintable(QStringLiteral("time label should be HH:MM:SS format: %1").arg(timeLabel)));
+  QVERIFY2(timeLabel.contains(QLatin1Char('s')) && !timeLabel.contains(QLatin1Char(':')),
+           qPrintable(QStringLiteral("time label should be compact DHMS format: %1").arg(timeLabel)));
 
   // Verify at least one result field is populated
   const bool hasResult = !slice.resultWeightLabel().isEmpty() ||
@@ -1822,6 +1832,147 @@ void E2EWorkflowTests::testDirtyOverridesPersistAcrossProjectSaveRestore()
   const QHash<QString, QVariant> restored = config2.mergedConfigValues();
   QVERIFY2(restored.contains(key), "Restored config must include the edited key");
   QCOMPARE(restored.value(key), mutated);
+}
+
+void E2EWorkflowTests::supportPreviewPipePacksSegmentsAndClearsOnInvalid()
+{
+  // P2.3-3: the slice worker captures support_fills polylines by value and
+  // delivers them via supportPreviewReady; the ViewModel packs the segments
+  // into the measure-overlay byte format for the viewport line pipe. An
+  // invalid payload (no supports generated) clears stale content — the same
+  // gate the wipe-tower WTREAD-02 handling applies.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QSignalSpy changedSpy(&editor, &EditorViewModel::supportPreviewDataChanged);
+  QVERIFY(changedSpy.isValid());
+
+  SupportPreviewData preview;
+  preview.valid = true;
+  preview.segmentCount = 2;
+  preview.segmentVerts = {0.f, 0.f, 0.2f, 10.f, 0.f, 0.2f,
+                          10.f, 0.f, 0.2f, 10.f, 10.f, 0.2f};
+  emit slice.supportPreviewReady(preview);
+
+  const QByteArray bytes = editor.supportPreviewData();
+  qint32 count = 0;
+  std::memcpy(&count, bytes.constData(), sizeof(qint32));
+  QCOMPARE(count, 2);
+  QCOMPARE(bytes.size(), int(sizeof(qint32) + 2 * 6 * sizeof(float)));
+  QCOMPARE(changedSpy.count(), 1);
+
+  SupportPreviewData invalid;
+  emit slice.supportPreviewReady(invalid);
+  QVERIFY(editor.supportPreviewData().isEmpty());
+  QCOMPARE(changedSpy.count(), 2);
+
+  // An invalid payload when the pipe is already empty must NOT emit again.
+  emit slice.supportPreviewReady(invalid);
+  QCOMPARE(changedSpy.count(), 2);
+}
+
+void E2EWorkflowTests::projectLifecycleFullCyclePreservesStateAndReslices()
+{
+  // P7.1 (device-independent): the upstream Plater save_project/load_project
+  // workflow. Import a real model, move it, slice, save the project archive,
+  // wipe the session, load the archive back, assert the state survived, and
+  // re-slice the loaded project.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+
+  QVERIFY(project.loadFile(kStlPath));
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  const int objectCount = project.modelCount();
+  QVERIFY2(objectCount >= 1, "the imported model must expose at least one object");
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+
+  // Move the first object: the project archive must carry the transform.
+  const QVector3D before = project.objectPosition(0);
+  const QVector3D moved(before.x() + 3.0f, before.y() - 2.0f, before.z());
+  QVERIFY(project.setObjectPosition(0, moved.x(), moved.y(), moved.z()));
+
+  // Geometric parity reference (P7.1): world-space bbox center is the
+  // representation-stable quantity. The 3MF reader folds the volume matrix
+  // translation into the instance offset, so raw objectPosition() values
+  // legitimately differ across save/load while the world placement stays
+  // exact (upstream load_project parity is about world placement).
+  auto bboxCenter = [&project](int idx) {
+    const QVariantMap box = project.selectionWorldBoundingBox({idx});
+    return QVector3D(
+        float((box.value(QStringLiteral("minX")).toDouble()
+               + box.value(QStringLiteral("maxX")).toDouble()) * 0.5),
+        float((box.value(QStringLiteral("minY")).toDouble()
+               + box.value(QStringLiteral("maxY")).toDouble()) * 0.5),
+        float((box.value(QStringLiteral("minZ")).toDouble()
+               + box.value(QStringLiteral("maxZ")).toDouble()) * 0.5));
+  };
+  const QVector3D centerBeforeSave = bboxCenter(0);
+
+  // First slice on the live session.
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  slice.startSlice(QStringLiteral("e2e_project_cycle_1"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP(QString("Slice failed: %1").arg(failedSpy.first().at(0).toString())
+              .toUtf8()
+              .constData());
+
+  // Save the project archive (real 3MF branch).
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString projectPath = QDir(dir.path()).filePath(QStringLiteral("cycle.3mf"));
+  QVERIFY2(project.saveProjectAs(projectPath),
+           "saveProjectAs must succeed for the loaded model");
+  QVERIFY(QFileInfo::exists(projectPath));
+
+  // Wipe the session and load the archive back through the same entry the
+  // Open-Project action uses (3MF first).
+  project.clearProject();
+  QCOMPARE(project.modelCount(), 0);
+  QSignalSpy reloadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(reloadSpy.isValid());
+  QVERIFY(project.loadFile(projectPath));
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+
+  QVERIFY2(project.modelCount() == objectCount,
+           "the loaded project must restore the object count");
+
+  // Geometric parity: the world-space bbox center must match the pre-save
+  // placement within 0.5 mm (the reader folds the volume matrix translation
+  // into the instance offset, so the world placement — not the raw offset —
+  // is the upstream-visible quantity; verified identical on all three axes).
+  const QVector3D centerAfterLoad = bboxCenter(0);
+  QVERIFY2(qAbs(centerAfterLoad.x() - centerBeforeSave.x()) < 0.5f
+               && qAbs(centerAfterLoad.y() - centerBeforeSave.y()) < 0.5f
+               && qAbs(centerAfterLoad.z() - centerBeforeSave.z()) < 0.5f,
+           qPrintable(QStringLiteral(
+                          "world placement must survive: (%1, %2, %3) vs (%4, %5, %6)")
+                          .arg(centerAfterLoad.x())
+                          .arg(centerAfterLoad.y())
+                          .arg(centerAfterLoad.z())
+                          .arg(centerBeforeSave.x())
+                          .arg(centerBeforeSave.y())
+                          .arg(centerBeforeSave.z())));
+
+  // Re-slice the loaded project.
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  QSignalSpy finishedSpy2(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy2(&slice, &SliceService::sliceFailed);
+  slice.startSlice(QStringLiteral("e2e_project_cycle_2"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy2.count() > 0 || failedSpy2.count() > 0, 120000);
+  QVERIFY2(failedSpy2.count() == 0,
+           "re-slicing the loaded project must succeed");
+
+  // Cleanup generated G-code.
+  const QString output2 = slice.outputPath();
+  if (QFileInfo::exists(output2))
+    QFile::remove(output2);
 }
 
 QTEST_MAIN(E2EWorkflowTests)

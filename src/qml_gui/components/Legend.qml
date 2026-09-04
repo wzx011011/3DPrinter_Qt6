@@ -129,12 +129,15 @@ Item {
 
                     // P17.3: the upstream min/max endpoints (legendGradient*
                     // Labels) remain bound for the collapsed two-value readout.
+                    // P11.B2.2 (upstream bec1ce706c): the imperial suffix is the
+                    // disambiguated "in — inches unit" translation, not a bare
+                    // "in" (GLGizmoMeasure.cpp _CTX_utf8("in", "inches")).
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
                             // P17.10: min endpoint converts under imperial.
                             text: root.imperialUnits
-                                      ? root.lengthValue(root.previewVm ? root.previewVm.legendGradientMinLabel : "--") + " in"
+                                      ? root.lengthValue(root.previewVm ? root.previewVm.legendGradientMinLabel : "--") + " " + qsTr("in", "inches unit")
                                       : (root.previewVm ? root.previewVm.legendGradientMinLabel : "--")
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS
@@ -143,7 +146,7 @@ Item {
                         Item { Layout.fillWidth: true }
                         Text {
                             text: root.imperialUnits
-                                      ? root.lengthValue(root.previewVm ? root.previewVm.legendGradientMaxLabel : "--") + " in"
+                                      ? root.lengthValue(root.previewVm ? root.previewVm.legendGradientMaxLabel : "--") + " " + qsTr("in", "inches unit")
                                       : (root.previewVm ? root.previewVm.legendGradientMaxLabel : "--")
                             color: Theme.textPrimary
                             font.pixelSize: Theme.fontSizeXS

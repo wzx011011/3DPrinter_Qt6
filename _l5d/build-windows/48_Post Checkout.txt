@@ -1,0 +1,21 @@
+﻿2026-08-15T01:37:28.0749356Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-15T01:37:28.0750649Z Post job cleanup.
+2026-08-15T01:37:28.2871738Z [command]"C:\Program Files\Git\bin\git.exe" version
+2026-08-15T01:37:28.3142477Z git version 2.55.0.windows.3
+2026-08-15T01:37:28.3215134Z Temporarily overriding HOME='D:\a\_temp\f5201bb3-e354-47a8-b24c-ffbbfef93092' before making global git config changes
+2026-08-15T01:37:28.3216256Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-15T01:37:28.3229093Z [command]"C:\Program Files\Git\bin\git.exe" config --global --add safe.directory D:\a\3DPrinter_Qt6\3DPrinter_Qt6
+2026-08-15T01:37:28.3522563Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp core\.sshCommand
+2026-08-15T01:37:28.3767311Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :\""
+2026-08-15T01:37:28.8331161Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:37:28.9075868Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-15T01:37:28.9273169Z http.https://github.com/.extraheader
+2026-08-15T01:37:28.9311414Z [command]"C:\Program Files\Git\bin\git.exe" config --local --unset-all http.https://github.com/.extraheader
+2026-08-15T01:37:28.9541124Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "sh -c \"git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :\""
+2026-08-15T01:37:29.4024832Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:37:29.4527149Z http.https://github.com/.extraheader
+2026-08-15T01:37:29.4976809Z [command]"C:\Program Files\Git\bin\git.exe" config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-15T01:37:29.5211542Z [command]"C:\Program Files\Git\bin\git.exe" submodule foreach --recursive "git config --local --show-origin --name-only --get-regexp remote.origin.url"
+2026-08-15T01:37:29.9536509Z Entering 'third_party/OrcaSlicer'
+2026-08-15T01:37:29.9814158Z file:D:/a/3DPrinter_Qt6/3DPrinter_Qt6/.git/modules/third_party/OrcaSlicer/config	remote.origin.url
+2026-08-15T01:37:30.0035602Z [command]"C:\Program Files\Git\bin\git.exe" config --file D:/a/3DPrinter_Qt6/3DPrinter_Qt6/.git/modules/third_party/OrcaSlicer/config --name-only --get-regexp ^includeIf\.gitdir:

@@ -43,22 +43,53 @@ namespace
 
   QByteArray modelPacket()
   {
+    // Wave 2b (perf): TLV v2 packet (docs/perf-wave2b-design.md) — one
+    // geometry (single triangle), one batch, identity matrix.
     QByteArray packet;
-    const qint32 objectCount = 1;
-    const qint32 renderId = 101;
-    const qint32 triangleCount = 1;
+    const auto appendInt32 = [&packet](qint32 value) {
+      packet.append(reinterpret_cast<const char *>(&value), sizeof(value));
+    };
+    const auto appendUint32 = [&packet](quint32 value) {
+      packet.append(reinterpret_cast<const char *>(&value), sizeof(value));
+    };
+    const auto appendFloat = [&packet](float value) {
+      packet.append(reinterpret_cast<const char *>(&value), sizeof(value));
+    };
+
+    packet.append(QStringLiteral("OMD2").toUtf8());
+    appendInt32(1); // geometryCount
+    appendInt32(1); // batchCount
+    appendInt32(0); // geomId
+    appendInt32(3); // vertexCount
+    appendInt32(3); // indexCount
     const float vertices[] = {
         -60.0f, 0.0f, -60.0f,
          60.0f, 0.0f, -60.0f,
           0.0f, 0.0f,  60.0f};
-    appendValue(packet, objectCount);
-    appendValue(packet, renderId);
-    appendValue(packet, triangleCount);
-    packet.append(reinterpret_cast<const char *>(vertices), sizeof(vertices));
+    for (float value : vertices)
+      appendFloat(value);
+    appendUint32(0);
+    appendUint32(1);
+    appendUint32(2);
+    for (int k = 0; k < 9; ++k)
+      appendFloat(0.0f); // normals (unused by the soup path)
+    appendInt32(101); // renderObjectId
+    appendInt32(7);   // sourceObjectIndex
+    appendInt32(2);   // volumeIndex
+    appendInt32(3);   // instanceIndex
+    appendInt32(0);   // geomId
+    const float identity[16] = {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+                                0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
+    for (float value : identity)
+      appendFloat(value);
+    appendInt32(0); // volumeType
+    appendInt32(1); // extruderId
+    appendInt32(1); // printable
     const float bounds[] = {
         -60.0f, 0.0f, -60.0f,
          60.0f, 0.0f,  60.0f};
-    packet.append(reinterpret_cast<const char *>(bounds), sizeof(bounds));
+    for (float value : bounds)
+      appendFloat(value);
     return packet;
   }
 

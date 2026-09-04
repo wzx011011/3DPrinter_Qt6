@@ -1,0 +1,412 @@
+
+Microsoft (R) Windows Debugger Version 10.0.17763.132 AMD64
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+CommandLine: ./OWzxSlicer.exe --skip-first-run --load-model E:/ai/3DPrinter_Qt6/build/perf_models/bench_sphere_2m.stl
+Symbol search path is: srv*
+Executable search path is: 
+ModLoad: 00007ff6`2e170000 00007ff6`30bb3000   OWzxSlicer.exe
+ModLoad: 00007ffa`7f3c0000 00007ffa`7f626000   ntdll.dll
+ModLoad: 00007ffa`7d460000 00007ffa`7d529000   C:\WINDOWS\System32\KERNEL32.DLL
+ModLoad: 00007ffa`7c8e0000 00007ffa`7ccdf000   C:\WINDOWS\System32\KERNELBASE.dll
+ModLoad: 00007ffa`786c0000 00007ffa`7875f000   C:\WINDOWS\SYSTEM32\apphelp.dll
+ModLoad: 00007ffa`7edd0000 00007ffa`7ef96000   C:\WINDOWS\System32\USER32.dll
+ModLoad: 00007ffa`7c5d0000 00007ffa`7c5f7000   C:\WINDOWS\System32\win32u.dll
+ModLoad: 00007ff9`eb430000 00007ff9`eb4cb000   E:\ai\3DPrinter_Qt6\build\Qt6Svg.dll
+ModLoad: 00007ff9`b3360000 00007ff9`b3998000   E:\ai\3DPrinter_Qt6\build\Qt6Quick.dll
+ModLoad: 00007ffa`7eda0000 00007ffa`7edcb000   C:\WINDOWS\System32\GDI32.dll
+ModLoad: 00007ffa`7cfc0000 00007ffa`7d0e9000   C:\WINDOWS\System32\gdi32full.dll
+ModLoad: 00007ffa`7cdb0000 00007ffa`7ce53000   C:\WINDOWS\System32\msvcp_win.dll
+ModLoad: 00007ffa`7ce60000 00007ffa`7cfac000   C:\WINDOWS\System32\ucrtbase.dll
+ModLoad: 00007ffa`7d530000 00007ffa`7d5b2000   C:\WINDOWS\System32\WS2_32.dll
+ModLoad: 00007ff9`9c5d0000 00007ff9`9cf9a000   E:\ai\3DPrinter_Qt6\build\Qt6Core.dll
+ModLoad: 00007ff9`b2160000 00007ff9`b2a83000   E:\ai\3DPrinter_Qt6\build\Qt6Gui.dll
+ModLoad: 00007ff9`d3190000 00007ff9`d3218000   E:\ai\3DPrinter_Qt6\build\MSVCP140.dll
+ModLoad: 00007ffa`7d0f0000 00007ffa`7d208000   C:\WINDOWS\System32\RPCRT4.dll
+ModLoad: 00007ffa`7f070000 00007ffa`7f12c000   C:\WINDOWS\System32\ADVAPI32.dll
+ModLoad: 00007ffa`39860000 00007ffa`3987e000   E:\ai\3DPrinter_Qt6\build\VCRUNTIME140.dll
+ModLoad: 00007ffa`7d620000 00007ffa`7d6c9000   C:\WINDOWS\System32\msvcrt.dll
+ModLoad: 00007ffa`7d210000 00007ffa`7d3a9000   C:\WINDOWS\System32\ole32.dll
+ModLoad: 00007ffa`679b0000 00007ffa`679bb000   E:\ai\3DPrinter_Qt6\build\VCRUNTIME140_1.dll
+ModLoad: 00007ffa`7d3b0000 00007ffa`7d45a000   C:\WINDOWS\System32\sechost.dll
+ModLoad: 00007ffa`7e450000 00007ffa`7ebd8000   C:\WINDOWS\System32\SHELL32.dll
+ModLoad: 00007ffa`7dd30000 00007ffa`7e0b5000   C:\WINDOWS\System32\combase.dll
+ModLoad: 00007ffa`2d0a0000 00007ffa`2d0c9000   E:\ai\3DPrinter_Qt6\build\Qt6QmlMeta.dll
+ModLoad: 00007ffa`7c750000 00007ffa`7c8ce000   C:\WINDOWS\System32\CRYPT32.dll
+ModLoad: 00007ffa`7e250000 00007ffa`7e329000   C:\WINDOWS\System32\OLEAUT32.dll
+ModLoad: 00007ff9`b3260000 00007ff9`b3352000   E:\ai\3DPrinter_Qt6\build\Qt6QmlModels.dll
+ModLoad: 00007ff9`ad860000 00007ff9`ada44000   E:\ai\3DPrinter_Qt6\build\Qt6OpenGL.dll
+ModLoad: 00007ff9`b2b80000 00007ff9`b2d32000   E:\ai\3DPrinter_Qt6\build\Qt6Network.dll
+ModLoad: 00007ffa`67950000 00007ffa`67959000   E:\ai\3DPrinter_Qt6\build\MSVCP140_1.dll
+ModLoad: 00007ffa`2a660000 00007ffa`2a6a4000   E:\ai\3DPrinter_Qt6\build\MSVCP140_2.dll
+ModLoad: 00007ff9`b2d40000 00007ff9`b3259000   E:\ai\3DPrinter_Qt6\build\Qt6Qml.dll
+ModLoad: 00007ff9`acdd0000 00007ff9`ad0cf000   E:\ai\3DPrinter_Qt6\build\avformat-59.dll
+ModLoad: 00007ff9`9a930000 00007ff9`9ab5f000   E:\ai\3DPrinter_Qt6\build\avutil-57.dll
+ModLoad: 00007ff9`b1ae0000 00007ff9`b1ba9000   E:\ai\3DPrinter_Qt6\build\swscale-6.dll
+ModLoad: 00007ffa`003d0000 00007ffa`0040e000   E:\ai\3DPrinter_Qt6\build\Qt6WebChannel.dll
+ModLoad: 00007ff9`9ab60000 00007ff9`9c5c3000   E:\ai\3DPrinter_Qt6\build\avcodec-59.dll
+ModLoad: 00007ffa`641b0000 00007ffa`641d1000   C:\WINDOWS\SYSTEM32\MPR.dll
+ModLoad: 00007ffa`7b8c0000 00007ffa`7b8f2000   C:\WINDOWS\SYSTEM32\USERENV.dll
+ModLoad: 00007ffa`7acc0000 00007ffa`7ad10000   C:\WINDOWS\SYSTEM32\AUTHZ.dll
+ModLoad: 00007ffa`70e70000 00007ffa`70e8a000   C:\WINDOWS\SYSTEM32\NETAPI32.dll
+ModLoad: 00007ffa`79c80000 00007ffa`79ee0000   C:\WINDOWS\SYSTEM32\d3d11.dll
+ModLoad: 00007ffa`79ef0000 00007ffa`7a02a000   C:\WINDOWS\SYSTEM32\dxgi.dll
+ModLoad: 00007ffa`72770000 00007ffa`72793000   C:\WINDOWS\SYSTEM32\d3d12.dll
+ModLoad: 00000000`6acc0000 00000000`6ad33000   E:\ai\3DPrinter_Qt6\build\libgmp-10.dll
+ModLoad: 00000000`6f540000 00000000`6f5a1000   E:\ai\3DPrinter_Qt6\build\libmpfr-4.dll
+ModLoad: 00007ff9`b1a20000 00007ff9`b1adb000   E:\ai\3DPrinter_Qt6\build\TKXCAF.dll
+ModLoad: 00007ff9`d21d0000 00007ff9`d2270000   E:\ai\3DPrinter_Qt6\build\TKXDESTEP.dll
+ModLoad: 00007ff9`ad7c0000 00007ff9`ad85e000   E:\ai\3DPrinter_Qt6\build\TKLCAF.dll
+ModLoad: 00007ff9`b6510000 00007ff9`b659f000   E:\ai\3DPrinter_Qt6\build\TKMesh.dll
+ModLoad: 00007ff9`ed840000 00007ff9`ed88b000   E:\ai\3DPrinter_Qt6\build\TKPrim.dll
+ModLoad: 00007ff9`9a710000 00007ff9`9a928000   E:\ai\3DPrinter_Qt6\build\TKTopAlgo.dll
+ModLoad: 00007ffa`787f0000 00007ffa`78898000   C:\WINDOWS\SYSTEM32\UxTheme.dll
+ModLoad: 00007ff9`9a640000 00007ff9`9a70f000   E:\ai\3DPrinter_Qt6\build\TKBRep.dll
+ModLoad: 00007ffa`794d0000 00007ffa`79737000   C:\WINDOWS\SYSTEM32\DWrite.dll
+ModLoad: 00007ff9`9a4b0000 00007ff9`9a632000   E:\ai\3DPrinter_Qt6\build\TKMath.dll
+ModLoad: 00007ff9`99940000 00007ff9`99ad0000   E:\ai\3DPrinter_Qt6\build\TKernel.dll
+ModLoad: 00007ffa`7c4c0000 00007ffa`7c4ea000   C:\WINDOWS\SYSTEM32\bcrypt.dll
+ModLoad: 00007ffa`72390000 00007ffa`7239b000   C:\WINDOWS\SYSTEM32\VERSION.dll
+ModLoad: 00000297`7b890000 00000297`7b899000   E:\ai\3DPrinter_Qt6\build\icuuc.dll
+ModLoad: 00007ffa`6a710000 00007ffa`6a746000   C:\WINDOWS\SYSTEM32\WINMM.dll
+ModLoad: 00007ffa`338f0000 00007ffa`33904000   E:\ai\3DPrinter_Qt6\build\Qt6QmlWorkerScript.dll
+ModLoad: 00007ffa`663f0000 00007ffa`663f7000   E:\ai\3DPrinter_Qt6\build\MSVCP140_CODECVT_IDS.dll
+ModLoad: 00007ffa`79a30000 00007ffa`79c72000   C:\WINDOWS\SYSTEM32\dbghelp.dll
+ModLoad: 00007ffa`788f0000 00007ffa`7891f000   C:\WINDOWS\SYSTEM32\dwmapi.dll
+ModLoad: 00007ffa`7ad20000 00007ffa`7ae78000   C:\WINDOWS\SYSTEM32\DNSAPI.dll
+ModLoad: 00007ffa`7ac80000 00007ffa`7acb3000   C:\WINDOWS\SYSTEM32\IPHLPAPI.DLL
+ModLoad: 00007ffa`78770000 00007ffa`7877d000   C:\WINDOWS\SYSTEM32\Secur32.dll
+ModLoad: 00007ffa`74b60000 00007ffa`74c88000   C:\WINDOWS\SYSTEM32\WINHTTP.dll
+ModLoad: 00007ff9`9a370000 00007ff9`9a4ac000   E:\ai\3DPrinter_Qt6\build\iconv-2.dll
+ModLoad: 00007ffa`30900000 00007ffa`3091a000   E:\ai\3DPrinter_Qt6\build\zlib1.dll
+ModLoad: 00007ff9`997d0000 00007ff9`99936000   E:\ai\3DPrinter_Qt6\build\libxml2.dll
+ModLoad: 00007ffa`300d0000 00007ffa`300e8000   E:\ai\3DPrinter_Qt6\build\bz2.dll
+ModLoad: 00007ff9`996f0000 00007ff9`997c9000   E:\ai\3DPrinter_Qt6\build\modplug.dll
+ModLoad: 00007ff9`99620000 00007ff9`996e2000   E:\ai\3DPrinter_Qt6\build\ssh.dll
+ModLoad: 00007ffa`65ae0000 00007ffa`65aec000   E:\ai\3DPrinter_Qt6\build\OpenCL.dll
+ModLoad: 00007ff9`edec0000 00007ff9`edef3000   E:\ai\3DPrinter_Qt6\build\swresample-4.dll
+ModLoad: 00007ff9`ecac0000 00007ff9`ecaea000   E:\ai\3DPrinter_Qt6\build\lzma.dll
+ModLoad: 00007ffa`30090000 00007ffa`300a6000   E:\ai\3DPrinter_Qt6\build\snappy.dll
+ModLoad: 00007ff9`994d0000 00007ff9`99614000   E:\ai\3DPrinter_Qt6\build\dav1d.dll
+ModLoad: 00007ff9`98a50000 00007ff9`9942b000   E:\ai\3DPrinter_Qt6\build\aom.dll
+ModLoad: 00007ffa`2a640000 00007ffa`2a65a000   E:\ai\3DPrinter_Qt6\build\ilbc.dll
+ModLoad: 00007ff9`b5dc0000 00007ff9`b5e4b000   E:\ai\3DPrinter_Qt6\build\libmp3lame.DLL
+ModLoad: 00007ff9`cbd50000 00007ff9`cbda1000   E:\ai\3DPrinter_Qt6\build\openjp2.dll
+ModLoad: 00007ff9`cb100000 00007ff9`cb167000   E:\ai\3DPrinter_Qt6\build\opus.dll
+ModLoad: 00007ff9`cbcf0000 00007ff9`cbd17000   E:\ai\3DPrinter_Qt6\build\libspeex.dll
+ModLoad: 00007ff9`eb1c0000 00007ff9`eb1ec000   E:\ai\3DPrinter_Qt6\build\theoraenc.dll
+ModLoad: 00007ffa`10c10000 00007ffa`10c24000   E:\ai\3DPrinter_Qt6\build\theoradec.dll
+ModLoad: 00007ff9`ad700000 00007ff9`ad7b2000   E:\ai\3DPrinter_Qt6\build\vorbis.dll
+ModLoad: 00007ff9`98870000 00007ff9`988fd000   E:\ai\3DPrinter_Qt6\build\vorbisenc.dll
+ModLoad: 00007ff9`ca570000 00007ff9`ca5d1000   E:\ai\3DPrinter_Qt6\build\webp.dll
+ModLoad: 00007ff9`987a0000 00007ff9`98866000   E:\ai\3DPrinter_Qt6\build\openh264-6.dll
+ModLoad: 00007ffa`67c80000 00007ffa`67ea4000   C:\WINDOWS\SYSTEM32\MFPlat.DLL
+ModLoad: 00007ff9`cb7c0000 00007ff9`cb7f2000   E:\ai\3DPrinter_Qt6\build\TKVCAF.dll
+ModLoad: 00007ffa`7c450000 00007ffa`7c4ae000   C:\WINDOWS\SYSTEM32\powrprof.dll
+ModLoad: 00007ff9`98550000 00007ff9`9879a000   E:\ai\3DPrinter_Qt6\build\TKV3d.dll
+ModLoad: 00007ff9`98450000 00007ff9`98542000   E:\ai\3DPrinter_Qt6\build\TKService.dll
+ModLoad: 00007ff9`b87f0000 00007ff9`b886d000   E:\ai\3DPrinter_Qt6\build\TKCAF.dll
+ModLoad: 00007ff9`b8760000 00007ff9`b87a4000   E:\ai\3DPrinter_Qt6\build\TKCDF.dll
+ModLoad: 00007ff9`98380000 00007ff9`98449000   E:\ai\3DPrinter_Qt6\build\TKG3d.dll
+ModLoad: 00007ff9`98100000 00007ff9`9837b000   E:\ai\3DPrinter_Qt6\build\TKSTEP.dll
+ModLoad: 00007ff9`97ff0000 00007ff9`980f4000   E:\ai\3DPrinter_Qt6\build\TKSTEPAttr.dll
+ModLoad: 00007ff9`97e70000 00007ff9`97fe5000   E:\ai\3DPrinter_Qt6\build\TKSTEPBase.dll
+ModLoad: 00007ff9`97ca0000 00007ff9`97e61000   E:\ai\3DPrinter_Qt6\build\TKXSBase.dll
+ModLoad: 00007ff9`97a40000 00007ff9`97c91000   E:\ai\3DPrinter_Qt6\build\TKShHealing.dll
+ModLoad: 00000297`7ba70000 00000297`7bcc1000   E:\ai\3DPrinter_Qt6\build\TKShHealing.dll
+ModLoad: 00007ff9`95fa0000 00007ff9`96314000   E:\ai\3DPrinter_Qt6\build\TKGeomBase.dll
+ModLoad: 00007ff9`b63c0000 00007ff9`b6405000   E:\ai\3DPrinter_Qt6\build\TKG2d.dll
+ModLoad: 00000297`7ba90000 00000297`7bad5000   E:\ai\3DPrinter_Qt6\build\TKG2d.dll
+ModLoad: 00007ff9`94cb0000 00007ff9`9501d000   E:\ai\3DPrinter_Qt6\build\TKGeomAlgo.dll
+ModLoad: 00007ffa`65ab0000 00007ffa`65aba000   C:\WINDOWS\SYSTEM32\WSOCK32.dll
+ModLoad: 00007ffa`7b630000 00007ffa`7b63d000   C:\WINDOWS\SYSTEM32\DSPARSE.dll
+ModLoad: 00007ff9`b20f0000 00007ff9`b215b000   E:\ai\3DPrinter_Qt6\build\soxr.dll
+ModLoad: 00007ffa`7c130000 00007ffa`7c182000   C:\WINDOWS\SYSTEM32\CFGMGR32.dll
+ModLoad: 00007ffa`04610000 00007ffa`04630000   E:\ai\3DPrinter_Qt6\build\pthreadVC3.dll
+ModLoad: 00000297`7bac0000 00000297`7bacd000   E:\ai\3DPrinter_Qt6\build\ogg.dll
+ModLoad: 00007ffa`63960000 00007ffa`6396d000   E:\ai\3DPrinter_Qt6\build\ogg.dll
+ModLoad: 00007ff9`97960000 00007ff9`97a38000   E:\ai\3DPrinter_Qt6\build\TKHLR.dll
+ModLoad: 00007ff9`978b0000 00007ff9`97959000   E:\ai\3DPrinter_Qt6\build\freetype.dll
+ModLoad: 00007ff9`94ac0000 00007ff9`94ca5000   E:\ai\3DPrinter_Qt6\build\TKBO.dll
+ModLoad: 00007ff9`989e0000 00007ff9`98a47000   E:\ai\3DPrinter_Qt6\build\TKSTEP209.dll
+ModLoad: 00007ffa`7b530000 00007ffa`7b579000   C:\WINDOWS\SYSTEM32\SSPICLI.DLL
+ModLoad: 00000297`7bb10000 00000297`7bb59000   C:\WINDOWS\SYSTEM32\SSPICLI.DLL
+ModLoad: 00007ffa`66e00000 00007ffa`66e3b000   C:\WINDOWS\SYSTEM32\dbgcore.DLL
+ModLoad: 00007ff9`ca160000 00007ff9`ca195000   E:\ai\3DPrinter_Qt6\build\libpng16.dll
+ModLoad: 00007ffa`4c130000 00007ffa`4c140000   E:\ai\3DPrinter_Qt6\build\brotlidec.dll
+ModLoad: 00007ff9`b88b0000 00007ff9`b88d7000   E:\ai\3DPrinter_Qt6\build\brotlicommon.dll
+ModLoad: 00000297`7bb40000 00000297`7bb49000   E:\ai\3DPrinter_Qt6\build\icuuc.dll
+ModLoad: 00007ffa`7ba70000 00007ffa`7ba7c000   C:\WINDOWS\SYSTEM32\CRYPTBASE.DLL
+ModLoad: 00007ffa`7abd0000 00007ffa`7abdd000   C:\WINDOWS\SYSTEM32\NETUTILS.DLL
+ModLoad: 00007ffa`70010000 00007ffa`70039000   C:\WINDOWS\SYSTEM32\SRVCLI.DLL
+ModLoad: 00007ffa`5a9e0000 00007ffa`5ac7f000   C:\WINDOWS\SYSTEM32\icu.DLL
+ModLoad: 00007ffa`7c430000 00007ffa`7c445000   C:\WINDOWS\SYSTEM32\UMPDC.dll
+ModLoad: 00007ffa`7f140000 00007ffa`7f172000   C:\WINDOWS\System32\IMM32.DLL
+ModLoad: 00007ffa`7ccf0000 00007ffa`7cd9c000   C:\WINDOWS\System32\bcryptPrimitives.dll
+ModLoad: 00007ffa`7dce0000 00007ffa`7dcea000   C:\WINDOWS\System32\NSI.dll
+ModLoad: 00007ffa`68f30000 00007ffa`68f6b000   C:\WINDOWS\SYSTEM32\RTWorkQ.DLL
+ModLoad: 00007ffa`7db60000 00007ffa`7dc59000   C:\WINDOWS\System32\shcore.dll
+ModLoad: 00007ffa`7bc30000 00007ffa`7bc4b000   C:\WINDOWS\SYSTEM32\CRYPTSP.dll
+ModLoad: 00007ffa`7b1e0000 00007ffa`7b219000   C:\WINDOWS\system32\rsaenh.dll
+[2026-09-03 06:09:39.610148] [0x000070d0] [trace]   Initializing StaticPrintConfigs
+ModLoad: 00007ff9`97800000 00007ff9`978a9000   E:\ai\3DPrinter_Qt6\build\Qt6WebEngineQuick.dll
+ModLoad: 00007ff9`ffde0000 00007ff9`ffdf1000   E:\ai\3DPrinter_Qt6\build\Qt6WebChannelQuick.dll
+ModLoad: 00007ff9`500e0000 00007ff9`5c3d5000   E:\ai\3DPrinter_Qt6\build\Qt6WebEngineCore.dll
+ModLoad: 00007ffa`7eca0000 00007ffa`7ed95000   C:\WINDOWS\System32\COMDLG32.dll
+ModLoad: 00007ffa`7f000000 00007ffa`7f066000   C:\WINDOWS\System32\SHLWAPI.dll
+ModLoad: 00007ffa`7d6d0000 00007ffa`7db57000   C:\WINDOWS\System32\SETUPAPI.dll
+ModLoad: 00007ffa`61ec0000 00007ffa`61f75000   C:\WINDOWS\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_5.82.26100.8328_none_87eede957a2ccddd\COMCTL32.dll
+ModLoad: 00007ffa`619c0000 00007ffa`61a6f000   C:\WINDOWS\SYSTEM32\WINSPOOL.DRV
+ModLoad: 00007ffa`78790000 00007ffa`787b9000   C:\WINDOWS\SYSTEM32\WTSAPI32.dll
+ModLoad: 00007ffa`746d0000 00007ffa`746f5000   C:\WINDOWS\SYSTEM32\dhcpcsvc.DLL
+ModLoad: 00007ffa`7bda0000 00007ffa`7bdd0000   C:\WINDOWS\SYSTEM32\ncrypt.dll
+ModLoad: 00007ff9`f1ac0000 00007ff9`f1ae5000   C:\WINDOWS\SYSTEM32\FONTSUB.dll
+ModLoad: 00007ffa`767f0000 00007ffa`768e4000   C:\WINDOWS\SYSTEM32\PROPSYS.dll
+ModLoad: 00007ffa`66500000 00007ffa`66558000   C:\WINDOWS\SYSTEM32\pdh.dll
+ModLoad: 00007ffa`6d620000 00007ffa`6d7fd000   C:\WINDOWS\SYSTEM32\urlmon.dll
+ModLoad: 00007ffa`59670000 00007ffa`596b6000   C:\WINDOWS\SYSTEM32\bthprops.cpl
+ModLoad: 00007ffa`5a820000 00007ffa`5a9d2000   C:\WINDOWS\SYSTEM32\d3d9.dll
+ModLoad: 00007ffa`7a900000 00007ffa`7a90f000   C:\WINDOWS\SYSTEM32\HID.DLL
+ModLoad: 00007ff9`95f20000 00007ff9`95f9e000   E:\ai\3DPrinter_Qt6\build\Qt6Positioning.dll
+ModLoad: 00007ffa`72750000 00007ffa`7275d000   C:\WINDOWS\SYSTEM32\WINUSB.DLL
+ModLoad: 00007ffa`70040000 00007ffa`70304000   C:\WINDOWS\SYSTEM32\iertutil.dll
+ModLoad: 00007ffa`7a060000 00007ffa`7a8fb000   C:\WINDOWS\SYSTEM32\windows.storage.dll
+ModLoad: 00007ffa`78e40000 00007ffa`78e85000   C:\WINDOWS\SYSTEM32\dxcore.dll
+ModLoad: 00007ffa`7c1b0000 00007ffa`7c1ba000   C:\WINDOWS\SYSTEM32\DPAPI.DLL
+ModLoad: 00007ffa`76ae0000 00007ffa`76b1c000   C:\WINDOWS\SYSTEM32\bluetoothapis.dll
+ModLoad: 00007ffa`7c0f0000 00007ffa`7c11f000   C:\WINDOWS\SYSTEM32\DEVOBJ.dll
+ModLoad: 00007ffa`7bd50000 00007ffa`7bd8f000   C:\WINDOWS\SYSTEM32\NTASN1.dll
+ModLoad: 00007ffa`63450000 00007ffa`636e1000   C:\WINDOWS\WinSxS\amd64_microsoft.windows.common-controls_6595b64144ccf1df_6.0.26100.8972_none_3e0da176e32f9d4b\comctl32.dll
+ModLoad: 00007ffa`7c4f0000 00007ffa`7c519000   C:\WINDOWS\SYSTEM32\profapi.dll
+QCoreApplication::applicationDirPath: Please instantiate the QApplication object first
+ModLoad: 00007ffa`78c70000 00007ffa`78c84000   C:\WINDOWS\SYSTEM32\resourcepolicyclient.dll
+ModLoad: 00007ffa`73470000 00007ffa`734cf000   C:\WINDOWS\SYSTEM32\directxdatabasehelper.dll
+ModLoad: 00007ffa`7b280000 00007ffa`7b29b000   C:\WINDOWS\SYSTEM32\kernel.appcore.dll
+ModLoad: 00007ffa`6a750000 00007ffa`6d424000   C:\WINDOWS\System32\DriverStore\FileRepository\u0203347.inf_amd64_81fd85464030074e\B026372\amdxx64.dll
+ModLoad: 00007ffa`6a0a0000 00007ffa`6a0c3000   C:\WINDOWS\system32\atidxx64.dll
+ModLoad: 00000000`73630000 00000000`73784000   C:\WINDOWS\System32\DriverStore\FileRepository\u0203347.inf_amd64_81fd85464030074e\B026372\amdenc64.dll
+ModLoad: 00007ffa`6a060000 00007ffa`6a09e000   C:\WINDOWS\System32\DriverStore\FileRepository\u0203347.inf_amd64_81fd85464030074e\B026372\amdihk64.dll
+QCoreApplication::applicationDirPath: Please instantiate the QApplication object first
+ModLoad: 00007ff9`95e20000 00007ff9`95f16000   E:\ai\3DPrinter_Qt6\build\platforms\qwindows.dll
+ModLoad: 00007ffa`5a3f0000 00007ffa`5a80f000   C:\WINDOWS\SYSTEM32\UIAutomationCore.DLL
+ModLoad: 00007ffa`7e0e0000 00007ffa`7e23d000   C:\WINDOWS\System32\MSCTF.dll
+qt.qpa.screen: "Unable to open monitor interface to \\\\.\\DISPLAY2:" "Unknown error 0xe0000225."
+ModLoad: 00007ffa`7c600000 00007ffa`7c683000   C:\WINDOWS\System32\WINTRUST.dll
+ModLoad: 00007ffa`7bca0000 00007ffa`7bcb3000   C:\WINDOWS\SYSTEM32\MSASN1.dll
+ModLoad: 00007ffa`7ebe0000 00007ffa`7ec8e000   C:\WINDOWS\System32\clbcatq.dll
+ModLoad: 00007ffa`6f140000 00007ffa`6f299000   C:\Windows\System32\Windows.UI.dll
+ModLoad: 00007ffa`6dc70000 00007ffa`6ddc1000   C:\Windows\System32\Windows.UI.Immersive.dll
+[AppSettings] loaded: bed=200.0x200.0
+ModLoad: 00007ffa`7b810000 00007ffa`7b87c000   C:\WINDOWS\system32\mswsock.dll
+[Backend] Loaded 38 hints from hints.json
+ModLoad: 00007ffa`6a170000 00007ffa`6a39a000   C:\Windows\System32\Windows.Globalization.dll
+ModLoad: 00007ffa`75d00000 00007ffa`75e6a000   C:\Windows\System32\wintypes.dll
+ModLoad: 00007ffa`6fcd0000 00007ffa`6fd2e000   C:\Windows\System32\Bcp47Langs.dll
+ModLoad: 00007ffa`687d0000 00007ffa`6888f000   C:\Windows\System32\Windows.FileExplorer.Common.dll
+ModLoad: 00007ffa`647b0000 00007ffa`647c7000   C:\WINDOWS\SYSTEM32\virtdisk.dll
+ModLoad: 00007ffa`64a20000 00007ffa`64b9f000   C:\WINDOWS\SYSTEM32\windows.system.launcher.dll
+ModLoad: 00007ffa`67a30000 00007ffa`67a4b000   C:\WINDOWS\system32\NetworkExplorer.dll
+ModLoad: 00007ffa`64a20000 00007ffa`64b9f000   C:\WINDOWS\SYSTEM32\windows.system.launcher.dll
+ModLoad: 00007ffa`4ba80000 00007ffa`4ba8c000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Controls\qtquickcontrols2plugin.dll
+ModLoad: 00007ff9`d3300000 00007ff9`d331a000   E:\ai\3DPrinter_Qt6\build\Qt6QuickControls2.dll
+ModLoad: 00007ff9`92a30000 00007ff9`92c1a000   E:\ai\3DPrinter_Qt6\build\Qt6QuickTemplates2.dll
+ModLoad: 00007ffa`4b910000 00007ffa`4b91a000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Controls\Basic\qtquickcontrols2basicstyleplugin.dll
+ModLoad: 00007ff9`92360000 00007ff9`92519000   E:\ai\3DPrinter_Qt6\build\Qt6QuickControls2Basic.dll
+ModLoad: 00007ffa`48b90000 00007ffa`48b9a000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Layouts\qquicklayoutsplugin.dll
+ModLoad: 00007ff9`b2b30000 00007ff9`b2b7d000   E:\ai\3DPrinter_Qt6\build\Qt6QuickLayouts.dll
+ModLoad: 00007ffa`48a40000 00007ffa`48a4a000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Dialogs\qtquickdialogsplugin.dll
+ModLoad: 00007ff9`b19f0000 00007ff9`b1a18000   E:\ai\3DPrinter_Qt6\build\Qt6QuickDialogs2.dll
+ModLoad: 00007ffa`45d60000 00007ffa`45d6e000   E:\ai\3DPrinter_Qt6\build\Qt6QuickDialogs2Utils.dll
+ModLoad: 00007ff9`92090000 00007ff9`92354000   E:\ai\3DPrinter_Qt6\build\Qt6QuickDialogs2QuickImpl.dll
+ModLoad: 00007ff9`977b0000 00007ff9`977fa000   E:\ai\3DPrinter_Qt6\build\Qt6QuickControls2Impl.dll
+ModLoad: 00007ffa`45bb0000 00007ffa`45bba000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Window\quickwindowplugin.dll
+ModLoad: 00007ffa`30290000 00007ffa`3029a000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Templates\qtquicktemplates2plugin.dll
+ModLoad: 00007ff9`d3180000 00007ff9`d318a000   E:\ai\3DPrinter_Qt6\build\qml\QtQuick\Controls\Basic\impl\qtquickcontrols2basicstyleimplplugin.dll
+ModLoad: 00007ff9`acdb0000 00007ff9`acdc1000   E:\ai\3DPrinter_Qt6\build\Qt6QuickControls2BasicStyleImpl.dll
+ModLoad: 00007ff9`cbd40000 00007ff9`cbd4b000   E:\ai\3DPrinter_Qt6\build\qml\QtWebEngine\qtwebenginequickplugin.dll
+ModLoad: 00007ff9`cbce0000 00007ff9`cbcee000   E:\ai\3DPrinter_Qt6\build\imageformats\qgif.dll
+ModLoad: 00007ff9`cb7b0000 00007ff9`cb7c0000   E:\ai\3DPrinter_Qt6\build\imageformats\qicns.dll
+ModLoad: 00007ff9`cb0f0000 00007ff9`cb0fd000   E:\ai\3DPrinter_Qt6\build\imageformats\qico.dll
+ModLoad: 00007ff9`91ff0000 00007ff9`92084000   E:\ai\3DPrinter_Qt6\build\imageformats\qjpeg.dll
+ModLoad: 00007ff9`b6690000 00007ff9`b669c000   E:\ai\3DPrinter_Qt6\build\imageformats\qsvg.dll
+ModLoad: 00007ff9`b63b0000 00007ff9`b63bc000   E:\ai\3DPrinter_Qt6\build\imageformats\qtga.dll
+ModLoad: 00007ff9`94090000 00007ff9`940fe000   E:\ai\3DPrinter_Qt6\build\imageformats\qtiff.dll
+ModLoad: 00007ff9`b2b20000 00007ff9`b2b2c000   E:\ai\3DPrinter_Qt6\build\imageformats\qwbmp.dll
+ModLoad: 00007ff9`91f60000 00007ff9`91fed000   E:\ai\3DPrinter_Qt6\build\imageformats\qwebp.dll
+(8124.70d0): C++ EH exception - code e06d7363 (first chance)
+(8124.70d0): C++ EH exception - code e06d7363 (first chance)
+(8124.70d0): C++ EH exception - code e06d7363 (first chance)
+(8124.70d0): C++ EH exception - code e06d7363 (first chance)
+qrc:/qml/pages/PreparePage.qml:4182:17: QML CxCheckBox: Binding loop detected for property "checked":
+qrc:/qml/pages/PreparePage.qml:4182:50
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:11:5
+qrc:/qml/dialogs/SettingsDialog.qml:556:29: QML TabButton: Binding loop detected for property "width"
+(8124.70d0): C++ EH exception - code e06d7363 (first chance)
+ModLoad: 00007ffa`039e0000 00007ffa`039ff000   C:\WINDOWS\System32\DriverStore\FileRepository\u0203347.inf_amd64_81fd85464030074e\B026372\atidx9loader64.dll
+ModLoad: 00007ffa`012f0000 00007ffa`039d5000   C:\WINDOWS\System32\DriverStore\FileRepository\u0203347.inf_amd64_81fd85464030074e\B026372\AMDXN64.DLL
+ModLoad: 00007ffa`6a060000 00007ffa`6a09e000   C:\WINDOWS\System32\DriverStore\FileRepository\u0203347.inf_amd64_81fd85464030074e\B026372\amdihk64.dll
+ModLoad: 00007ffa`78c70000 00007ffa`78c84000   C:\WINDOWS\SYSTEM32\resourcepolicyclient.dll
+ModLoad: 00007ffa`3f7c0000 00007ffa`3f81c000   C:\WINDOWS\system32\dataexchange.dll
+ModLoad: 00007ffa`719c0000 00007ffa`71c10000   C:\WINDOWS\system32\twinapi.appcore.dll
+ModLoad: 00007ffa`68f70000 00007ffa`690b6000   C:\WINDOWS\SYSTEM32\textinputframework.dll
+qrc:/qml/dialogs/SettingsDialog.qml:763:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:763:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:763:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:763:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:763:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:763:41: Unable to assign QString to int
+qrc:/qml/pages/HomePage.qml:370: ReferenceError: loginError is not defined
+qrc:/qml/pages/HomePage.qml:367: ReferenceError: loginError is not defined
+qrc:/qml/pages/HomePage.qml:464: ReferenceError: bindError is not defined
+qrc:/qml/pages/HomePage.qml:461: ReferenceError: bindError is not defined
+qrc:/qml/dialogs/SysInfoDialog.qml:75: ReferenceError: index is not defined
+qrc:/qml/dialogs/ObjColorDialog.qml:115: ReferenceError: extruderList is not defined
+qrc:/qml/dialogs/ObjColorDialog.qml:129: ReferenceError: extruderList is not defined
+qrc:/qml/dialogs/ObjColorDialog.qml:135: ReferenceError: extruderList is not defined
+qrc:/qml/pages/PreparePage.qml:2888:25: Unable to assign [undefined] to bool
+qrc:/qml/pages/AssemblePage.qml:162:9: Unable to assign [undefined] to int
+[ProjectService] import start path=E:/ai/3DPrinter_Qt6/build/perf_models/bench_sphere_2m.stl ext=stl
+[Latency] slow "topbar-import-model" 262 ms "E:/ai/3DPrinter_Qt6/build/perf_models/bench_sphere_2m.stl"
+(8124.70d0): Access violation - code c0000005 (first chance)
+First chance exceptions are reported before any exception handling.
+This exception may be expected and handled.
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for E:\ai\3DPrinter_Qt6\build\Qt6Core.dll - 
+Qt6Core!QObjectPrivate::removeConnection+0x28:
+00007ff9`9c6c9388 4c8b4928        mov     r9,qword ptr [rcx+28h] ds:ffffffff`0000002e=????????????????
+0:000> cdb: Reading initial command 'g; .echo ===CRASH===; kv 25; q'
+(8124.70d0): Access violation - code c0000005 (!!! second chance !!!)
+===CRASH===
+Child-SP          RetAddr           : Args to Child                                                           : Call Site
+000000be`5fbbbbc0 00007ff9`9c6c27c4 : 00000297`09dd9420 ffffffff`00000006 000000be`5fbbbd89 00000297`09ca94e0 : Qt6Core!QObjectPrivate::removeConnection+0x28
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for OWzxSlicer.exe - 
+000000be`5fbbbc40 00007ff6`2e67b420 : 00000297`015d4a70 00000297`09ca94e0 00000000`05000009 00000297`3164cb90 : Qt6Core!QObject::disconnect+0x34
+000000be`5fbbbc80 00007ff9`9c6c780b : 00000297`015d4a70 000000be`5fbbbe00 00000297`3164cb60 00000297`7b600000 : OWzxSlicer+0x50b420
+000000be`5fbbbcb0 00007ff9`9c6c55b7 : 00000000`00000000 00000297`09ca94e0 000000be`5fbbc0c9 00007ffa`7f3e22e8 : Qt6Core!QMetaCallEvent::placeMetaCall+0x3b
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for E:\ai\3DPrinter_Qt6\build\Qt6Quick.dll - 
+000000be`5fbbbcf0 00007ff9`b34640c3 : 00000297`09ca94e0 00000000`00000000 00000297`015d4a70 00000297`09c9aef0 : Qt6Core!QObject::event+0x187
+000000be`5fbbbdf0 00007ff9`9c679aeb : 00000297`09ca94e0 00000297`015d4a70 00000297`015d4a70 00000297`015d4a70 : Qt6Quick!QQuickWindow::event+0x1633
+000000be`5fbbc130 00007ff9`9c679c01 : 00000297`09ca94e0 00000000`00000001 00000297`015d4a70 00000297`7d954ed0 : Qt6Core!QCoreApplication::notify+0xbb
+000000be`5fbbc180 00007ff9`9c67c423 : 00000000`00000000 00000297`7d954f08 00000297`7d954ed0 00000297`7d954ed0 : Qt6Core!QCoreApplication::notifyInternal2+0x101
+*** ERROR: Symbol file could not be found.  Defaulted to export symbols for E:\ai\3DPrinter_Qt6\build\Qt6Gui.dll - 
+000000be`5fbbc1f0 00007ff9`b2525e5f : 00000297`7d9cd060 00000297`7d9cd060 00000000`00000003 00000297`015d4a70 : Qt6Core!QCoreApplicationPrivate::sendPostedEvents+0x203
+000000be`5fbbc2e0 00007ff9`9c8191c0 : 00000000`000000a4 000000be`5fbbc410 00000297`015d44b0 00007ff9`b2e927fc : Qt6Gui!QWindowsGuiEventDispatcher::sendPostedEvents+0xf
+000000be`5fbbc310 00007ff9`b2525dd9 : 000000be`5fbbf580 00000000`00000000 00000297`015d44b0 00000297`7d9cd060 : Qt6Core!QEventDispatcherWin32::processEvents+0x90
+000000be`5fbbf490 00007ff9`9c680604 : 00000000`000000a4 00000297`015d44b0 00000297`7d954fa0 00007ff9`b370d2f0 : Qt6Gui!QWindowsGuiEventDispatcher::processEvents+0x19
+000000be`5fbbf4c0 00007ff9`9c67812a : 000000be`5fbbf580 00000297`7d954ed0 00000297`7d954ed0 000000be`5fbbf6c0 : Qt6Core!QEventLoop::exec+0x1c4
+000000be`5fbbf560 00007ff6`2e680647 : 00000297`015d40a0 0001a065`e33d294f 00000297`08362720 00000297`015fac90 : Qt6Core!QCoreApplication::exec+0x16a
+000000be`5fbbf5c0 00007ff6`2feb87b0 : 00000000`00000002 00000000`00000002 00000000`0000000a 00000297`7b60c786 : OWzxSlicer+0x510647
+000000be`5fbbfda0 00007ff6`2feb751e : 00000000`00000004 00000000`00000000 00000000`00000000 00000000`00000000 : OWzxSlicer!BRepExtrema_SelfIntersection::`default constructor closure'+0xf99bf0
+000000be`5fbbfe30 00007ffa`7d48ccb7 : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : OWzxSlicer!BRepExtrema_SelfIntersection::`default constructor closure'+0xf9895e
+000000be`5fbbfe70 00007ffa`7f46ad6c : 00000000`00000000 00000000`00000000 000004f0`fffffb30 000004d0`fffffb30 : KERNEL32!BaseThreadInitThunk+0x17
+000000be`5fbbfea0 00000000`00000000 : 00000000`00000000 00000000`00000000 00000000`00000000 00000000`00000000 : ntdll!RtlUserThreadStart+0x2c
+quit:
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\atlmfc.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\concurrency.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\cpp_rest.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\stl.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Data.Json.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Geolocation.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Devices.Sensors.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\Windows.Media.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\windows.natvis'
+NatVis script unloaded from 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\Visualizers\winrt.natvis'

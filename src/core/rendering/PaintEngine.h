@@ -60,6 +60,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <tuple>
 #include <utility>
 
 #ifdef HAS_LIBSLIC3R
@@ -67,6 +68,28 @@
 #include <libslic3r/TriangleSelector.hpp>
 #include <libslic3r/TriangleMesh.hpp>  // TriangleMesh, indexed_triangle_set
 #endif
+
+namespace OWzx {
+
+// Paint kind: which painter gizmo a selector belongs to. The canonical enum
+// for the whole paint pipeline (ProjectServiceMock.h aliases ::PaintKind to
+// this). It bridges the TriangleSelector into one of the three ModelVolume
+// FacetsAnnotation members (upstream update_model_object:
+// GLGizmoFdmSupports.cpp:577, GLGizmoSeam.cpp:315,
+// GLGizmoMmuSegmentation.cpp:700). Upstream each painter gizmo owns its OWN
+// TriangleSelector (GLGizmoPainterBase.hpp:247 m_triangle_selectors is
+// per-gizmo state), so selectors must never be shared across kinds.
+// Declared outside the HAS_LIBSLIC3R guard: it is a plain enum with no
+// libslic3r dependency, and the service-layer API signatures reference it
+// unconditionally.
+enum class PaintKind : int
+{
+  Support = 0,
+  Seam = 1,
+  Mmu = 2
+};
+
+} // namespace OWzx
 
 #ifdef HAS_LIBSLIC3R
 namespace OWzx {
@@ -76,8 +99,9 @@ namespace OWzx {
 // SinglePointCursor shapes). HeightRange / Capsule are Phase 121+ (brush UI).
 enum class PaintCursorType : int
 {
-  Circle = 0,  // TriangleSelector::CursorType::CIRCLE
-  Sphere = 1   // TriangleSelector::CursorType::SPHERE
+  Circle = 0,      // TriangleSelector::CursorType::CIRCLE
+  Sphere = 1,      // TriangleSelector::CursorType::SPHERE
+  HeightRange = 2  // TriangleSelector::CursorType::HEIGHT_RANGE (MMU tool)
 };
 
 // PaintEngine -- per-volume TriangleSelector owner + select_patch driver.
@@ -89,12 +113,15 @@ enum class PaintCursorType : int
 // callable is the SAME mesh the ModelVolume owns (aliasing shared_ptr), so the
 // TriangleMesh outlives every selector that references it.
 //
-// CACHE (TS-03): one TriangleSelector per (objectIndex, volumeIndex), built
-// lazily on the first paintAt() call and reconstructed ONLY when
+// CACHE (TS-03): one TriangleSelector per (objectIndex, volumeIndex, kind),
+// built lazily on the first paintAt() call and reconstructed ONLY when
 // invalidate()/invalidateVolume()/clearObject() is called (the model change
 // signal). No reconstruction happens on cursor move (pitfall 7 -- the
 // TriangleSelector ctor indexes the mesh; rebuilding per-frame melts the
-// framerate).
+// framerate). The kind dimension mirrors upstream: GLGizmoFdmSupports,
+// GLGizmoSeam, and GLGizmoMmuSegmentation each own separate selectors
+// (GLGizmoPainterBase.hpp:247), so Support state never leaks into Seam or
+// MMU annotations.
 class PaintEngine
 {
 public:
@@ -114,19 +141,21 @@ public:
   // is complete.
   ~PaintEngine();
 
-  // Lazily fetch-or-build the TriangleSelector for one volume. Returns a raw
-  // pointer (non-owning) to the cached selector, or nullptr if the mesh source
-  // has no mesh for that (object, volume) pair. The selector stays owned by
-  // this engine; callers MUST NOT delete it.
+  // Lazily fetch-or-build the TriangleSelector for one volume + paint kind.
+  // Returns a raw pointer (non-owning) to the cached selector, or nullptr if
+  // the mesh source has no mesh for that (object, volume) pair. The selector
+  // stays owned by this engine; callers MUST NOT delete it.
   Slic3r::TriangleSelector *ensureSelector(
-      int objectIndex, int volumeIndex,
+      int objectIndex, int volumeIndex, PaintKind kind,
       const std::shared_ptr<const Slic3r::TriangleMesh> &meshSharedPtr);
 
   // Convenience overload: pulls the mesh from the injected source then calls
   // the overload above. Used by paintAt + the ViewModel.
-  Slic3r::TriangleSelector *ensureSelector(int objectIndex, int volumeIndex);
+  Slic3r::TriangleSelector *ensureSelector(int objectIndex, int volumeIndex,
+                                           PaintKind kind);
 
-  // Drive select_patch on the (lazily-built) selector for (object, volume).
+  // Drive select_patch on the (lazily-built) selector for (object, volume,
+  // kind).
   //
   // facetIdx:    the ITS triangle index the ray hit (SceneRaycasterHit::
   //              facetIdx) -- select_patch's facet_start.
@@ -146,13 +175,22 @@ public:
   //
   // Returns true if the selector exists (or was built) AND select_patch ran.
   // Returns false if the mesh source had no mesh for the (object, volume).
-  bool paintAt(int objectIndex, int volumeIndex, int facetIdx,
+  //
+  // clippingPlane (P2.3-1): mesh-local cross-section plane limiting painting
+  // to facets on the visible side (upstream threads
+  // get_clipping_plane_in_volume_coordinates() into every select_patch,
+  // GLGizmoPainterBase.cpp:724-728). Default-constructed = inactive
+  // (offset FLT_MAX, TriangleSelector.hpp:63) so existing callers keep the
+  // unclipped behavior.
+  bool paintAt(int objectIndex, int volumeIndex, PaintKind kind, int facetIdx,
                const Slic3r::Vec3f &meshLocalHit,
                float brushRadius, PaintCursorType cursor,
                Slic3r::EnforcerBlockerType state,
                const Slic3r::Transform3d &trafo,
                const Slic3r::Vec3f &cameraPosMeshLocal,
-               float highlightByAngleDeg = 0.f);
+               float highlightByAngleDeg = 0.f,
+               const Slic3r::TriangleSelector::ClippingPlane &clippingPlane =
+                   Slic3r::TriangleSelector::ClippingPlane());
 
   // Phase 240 (GIZ-02): smart (seed) fill. Mirrors the upstream SMART_FILL
   // tool click path (GLGizmoPainterBase.cpp:773-781): seed_fill_select_
@@ -166,23 +204,58 @@ public:
   // highlightByAngleDeg: overhang filter angle in degrees, 0 = off
   //                     (upstream m_paint_on_overhangs_only ?
   //                     m_highlight_by_angle_threshold_deg : 0.f).
-  bool smartFillAt(int objectIndex, int volumeIndex, int facetIdx,
+  bool smartFillAt(int objectIndex, int volumeIndex, PaintKind kind,
+                   int facetIdx,
                    const Slic3r::Vec3f &meshLocalHit,
                    float seedFillAngle, float highlightByAngleDeg,
                    Slic3r::EnforcerBlockerType state,
-                   const Slic3r::Transform3d &trafo);
+                   const Slic3r::Transform3d &trafo,
+                   const Slic3r::TriangleSelector::ClippingPlane &clippingPlane =
+                       Slic3r::TriangleSelector::ClippingPlane());
+
+  // P2.3-5 (MMU height-range tool): paint every facet whose world Z falls in
+  // [hitWorldZ, hitWorldZ + height]. Mirrors the upstream HEIGHT_RANGE brush
+  // (GLGizmoPainterBase.cpp:726-733): SinglePointCursor::cursor_factory with
+  // the world-space bottom Z builds a HeightRange cursor; select_patch's
+  // hr_cursor branch then scans ALL mesh facets for the range (facetIdx is
+  // carried for contract symmetry but not used by the hr branch).
+  bool paintHeightRangeAt(int objectIndex, int volumeIndex, PaintKind kind,
+                          float hitWorldZ, float height,
+                          Slic3r::EnforcerBlockerType state,
+                          const Slic3r::Transform3d &trafo,
+                          const Slic3r::Vec3f &cameraPosMeshLocal,
+                          const Slic3r::TriangleSelector::ClippingPlane &clippingPlane =
+                              Slic3r::TriangleSelector::ClippingPlane());
 
   // Read the facets currently marked with `state` as an indexed_triangle_set.
   // Wraps TriangleSelector::get_facets (TriangleSelector.hpp:333). Returns a
   // shared_ptr so the caller can hand it to the overlay renderer (Phase 121)
-  // without copying. Returns nullptr if no selector exists for the pair.
+  // without copying. Returns nullptr if no selector exists for the triple.
   std::shared_ptr<indexed_triangle_set>
-  getFacets(int objectIndex, int volumeIndex,
+  getFacets(int objectIndex, int volumeIndex, PaintKind kind,
             Slic3r::EnforcerBlockerType state);
+
+  // P2.3-5: STAGED seed-fill region readback (see getSeedSelection above for
+  // the upstream reference) — declared with the reader cluster below.
+  std::shared_ptr<indexed_triangle_set>
+  getSeedSelection(int objectIndex, int volumeIndex, PaintKind kind);
+
+  // Is anything staged in the seed-fill region for this triple? False when no
+  // selector exists.
+  bool hasSeedSelection(int objectIndex, int volumeIndex, PaintKind kind) const;
+
+  // P2.3-5 (gap-area tool): facets whose area is below gapAreaMm2 (upstream
+  // TrianglePatch::is_fragment, area < TriangleSelectorPatch::gap_area,
+  // GLGizmoPainterBase.cpp:1234-1236; gap area range 0..5 mm2, step 0.2).
+  // Returns the compact ITS of fragment leaves, or nullptr when no selector
+  // exists for the triple.
+  std::shared_ptr<indexed_triangle_set>
+  getGapFragments(int objectIndex, int volumeIndex, PaintKind kind,
+                  float gapAreaMm2);
 
   // Does any facet carry `state`? Wraps TriangleSelector::has_facets
   // (TriangleSelector.hpp:329). Returns false if no selector exists.
-  bool hasFacets(int objectIndex, int volumeIndex,
+  bool hasFacets(int objectIndex, int volumeIndex, PaintKind kind,
                  Slic3r::EnforcerBlockerType state) const;
 
   // Drop every cached selector. Call on model change (load / cut / boolean /
@@ -190,46 +263,50 @@ public:
   // lazily rebuilds only the volumes it touches.
   void invalidate() { m_cache.clear(); }
 
-  // Drop every cached selector for one object (all its volumes). Used on
-  // gizmo-exit cleanup (clearPaintOnObject) so a re-enter rebuilds fresh.
+  // Drop every cached selector for one object (all its volumes + kinds). Used
+  // on gizmo-exit cleanup (clearPaintOnObject) so a re-enter rebuilds fresh.
   void clearObject(int objectIndex);
 
-  // Drop the cache entry for a single volume (granular invalidation).
-  void invalidateVolume(int objectIndex, int volumeIndex)
+  // Drop the cache entry for a single volume + kind (granular invalidation).
+  void invalidateVolume(int objectIndex, int volumeIndex, PaintKind kind)
   {
-    m_cache.erase(volumeKey(objectIndex, volumeIndex));
+    m_cache.erase(volumeKey(objectIndex, volumeIndex, kind));
   }
 
   // Serialize the per-volume paint state (TriangleSelector.hpp:357). Returns
-  // nullopt if no selector exists for the pair. The wiring to 3MF save/load
+  // nullopt if no selector exists for the triple. The wiring to 3MF save/load
   // is Phase 122/123; this just exposes the upstream API.
   std::optional<Slic3r::TriangleSelector::TriangleSplittingData>
-  serialize(int objectIndex, int volumeIndex) const;
+  serialize(int objectIndex, int volumeIndex, PaintKind kind) const;
 
-  // Deserialize into the (lazily-built) selector for (object, volume).
+  // Deserialize into the (lazily-built) selector for (object, volume, kind).
   // Wraps TriangleSelector::deserialize (TriangleSelector.hpp:360). Returns
-  // false if the mesh source had no mesh for the pair (cannot build selector).
-  bool deserialize(int objectIndex, int volumeIndex,
+  // false if the mesh source had no mesh for the triple (cannot build
+  // selector).
+  bool deserialize(int objectIndex, int volumeIndex, PaintKind kind,
                    const Slic3r::TriangleSelector::TriangleSplittingData &data);
 
   // Number of currently-cached selectors (diagnostic / test hook).
   std::size_t cachedSelectorCount() const { return m_cache.size(); }
 
-  // Read-only access to the cached selector for one volume, WITHOUT building.
-  // Returns nullptr if no selector has been built for the (object, volume) pair
-  // (e.g. nothing painted yet). Used by the Phase 122/123 write-back that feeds
-  // ModelVolume::supported_facets / seam_facets / mmu_segmentation_facets
-  // (FacetsAnnotation::set takes a const TriangleSelector&). The pointer stays
-  // owned by this engine; callers MUST NOT delete it.
+  // Read-only access to the cached selector for one volume + kind, WITHOUT
+  // building. Returns nullptr if no selector has been built for the
+  // (object, volume, kind) triple (e.g. nothing painted yet). Used by the
+  // Phase 122/123 write-back that feeds ModelVolume::supported_facets /
+  // seam_facets / mmu_segmentation_facets (FacetsAnnotation::set takes a
+  // const TriangleSelector&). The pointer stays owned by this engine; callers
+  // MUST NOT delete it.
   const Slic3r::TriangleSelector *cachedSelectorForVolume(
-      int objectIndex, int volumeIndex) const;
+      int objectIndex, int volumeIndex, PaintKind kind) const;
 
 private:
-  using Key = std::pair<int, int>;
+  // (objectIndex, volumeIndex, kind) -- one selector per triple. std::tuple
+  // has a lexicographic operator< so it works as a std::map key.
+  using Key = std::tuple<int, int, PaintKind>;
 
-  static Key volumeKey(int objectIndex, int volumeIndex)
+  static Key volumeKey(int objectIndex, int volumeIndex, PaintKind kind)
   {
-    return std::make_pair(objectIndex, volumeIndex);
+    return std::make_tuple(objectIndex, volumeIndex, kind);
   }
 
   // One cache entry bundles the TriangleSelector with the shared_ptr that
@@ -269,7 +346,9 @@ void applyPaintToSelector(Slic3r::TriangleSelector &selector,
                           Slic3r::EnforcerBlockerType state,
                           const Slic3r::Transform3d &trafo,
                           const Slic3r::Vec3f &cameraPosMeshLocal,
-                          float highlightByAngleDeg = 0.f);
+                          float highlightByAngleDeg = 0.f,
+                          const Slic3r::TriangleSelector::ClippingPlane &clippingPlane =
+                              Slic3r::TriangleSelector::ClippingPlane());
 
 // Phase 240 (GIZ-02): pure smart-fill helper extracted for unit testing
 // (same TS-08 pattern as applyPaintToSelector). Drives the upstream
@@ -280,7 +359,9 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                               const Slic3r::Vec3f &meshLocalHit,
                               float seedFillAngle, float highlightByAngleDeg,
                               Slic3r::EnforcerBlockerType state,
-                              const Slic3r::Transform3d &trafo);
+                              const Slic3r::Transform3d &trafo,
+                              const Slic3r::TriangleSelector::ClippingPlane &clippingPlane =
+                                  Slic3r::TriangleSelector::ClippingPlane());
 
 } // namespace OWzx
 #endif // HAS_LIBSLIC3R

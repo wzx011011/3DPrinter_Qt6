@@ -760,6 +760,21 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # Perf evaluation stage benchmark (scripts/perf/, docs/perf-baseline.md).
+    # NOT a pass/fail gate and NOT ctest-registered on purpose: invoke via
+    # scripts/perf/run_stage_bench.ps1 after generating the benchmark models.
+    qt_add_executable(PerfBench
+        tests/PerfBench.cpp
+        src/qml_gui/Renderer/PrepareSceneData.cpp
+        src/qml_gui/Renderer/PrepareSceneData.h
+        src/qml_gui/Renderer/ViewportContextHit.h
+    )
+    target_include_directories(PerfBench PRIVATE src)
+    target_link_libraries(PerfBench PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    target_link_options(PerfBench PRIVATE /FORCE:MULTIPLE)
+
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────

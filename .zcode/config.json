@@ -6,6 +6,12 @@
         "url": "https://mcp.figma.com/mcp",
         "enabled": true,
         "timeoutMs": 60000
+      },
+      "qt-docs": {
+        "type": "http",
+        "url": "https://qt-docs-mcp.qt.io/mcp",
+        "enabled": true,
+        "timeoutMs": 60000
       }
     }
   }

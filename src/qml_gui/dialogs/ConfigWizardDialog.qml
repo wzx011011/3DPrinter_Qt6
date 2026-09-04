@@ -315,7 +315,7 @@ CxDialog {
                                     color: Theme.statusWarning; font.pixelSize: Theme.fontSizeMD; font.bold: true
                                     text: {
                                         var t = currentNozzleTemp();
-                                        return t >= 0 ? (t + "°C") : "--";
+                                        return t >= 0 ? (t + "℃") : "--";
                                     }
                                 }
                             }
@@ -327,7 +327,7 @@ CxDialog {
                                     color: Theme.statusInfo; font.pixelSize: Theme.fontSizeMD; font.bold: true
                                     text: {
                                         var t = currentBedTemp();
-                                        return t >= 0 ? (t + "°C") : "--";
+                                        return t >= 0 ? (t + "℃") : "--";
                                     }
                                 }
                             }
@@ -411,7 +411,7 @@ CxDialog {
                                     color: Theme.statusWarning; font.pixelSize: Theme.fontSizeSM
                                     text: {
                                         var t = currentNozzleTemp();
-                                        return t >= 0 ? (t + "°C") : "--";
+                                        return t >= 0 ? (t + "℃") : "--";
                                     }
                                 }
                             }

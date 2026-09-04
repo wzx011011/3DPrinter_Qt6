@@ -54,6 +54,10 @@ class SettingsViewModel : public QObject
   /// 开发者模式（对齐上游 PreferencesDialog::create_debug_page）。Gates the
   /// Preferences Developer category visibility (Phase 241 PAGE-04 consumer).
   Q_PROPERTY(bool developerMode READ developerMode WRITE setDeveloperMode NOTIFY settingsChanged)
+  /// P4.1: upstream "Skip AMS blacklist check" (Preferences.cpp:1195,
+  /// skip_ams_blacklist_check). AMS device flow is externally blocked, so the
+  /// flag persists until that integration lands.
+  Q_PROPERTY(bool skipAmsBlacklistCheck READ skipAmsBlacklistCheck WRITE setSkipAmsBlacklistCheck NOTIFY settingsChanged)
   /// 调试覆盖层
   Q_PROPERTY(bool showDebugOverlay READ showDebugOverlay WRITE setShowDebugOverlay NOTIFY settingsChanged)
   /// 日志级别（对齐上游 GUI_App log level）: 0=Error, 1=Warning, 2=Info, 3=Debug, 4=Trace
@@ -121,6 +125,8 @@ public:
   int autoDismissSec() const { return m_autoDismissSec; }
   bool showProgressNotifications() const { return m_showProgressNotifications; }
   bool developerMode() const { return m_developerMode; }
+  bool skipAmsBlacklistCheck() const { return m_skipAmsBlacklistCheck; }
+  void setSkipAmsBlacklistCheck(bool v);
   bool showDebugOverlay() const { return m_showDebugOverlay; }
   int logLevel() const { return m_logLevel; }
   bool verboseGcode() const { return m_verboseGcode; }
@@ -237,6 +243,7 @@ private:
   int m_autoDismissSec = 5;
   bool m_showProgressNotifications = true;
   bool m_developerMode = false;
+  bool m_skipAmsBlacklistCheck = false;
   bool m_showDebugOverlay = false;
   int m_logLevel = 2;            // Info
   bool m_verboseGcode = false;

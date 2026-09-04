@@ -30,6 +30,19 @@ const PartPlate* PartPlateList::plate(int index) const {
   return m_plate_list[index].get();
 }
 
+int PartPlateList::printIdForPlateIndex(int index) const {
+  const PartPlate* p = plate(index);
+  return p ? p->printIndex() : -1;
+}
+
+int PartPlateList::plateIndexForPrintId(int printId) const {
+  for (int i = 0; i < plateCount(); ++i) {
+    if (m_plate_list[i]->printIndex() == printId)
+      return i;
+  }
+  return -1;
+}
+
 void PartPlateList::setCurrentPlateIndex(int index) {
   if (index < 0 || index >= plateCount()) return;
   m_current_plate = index;
@@ -39,6 +52,7 @@ PartPlate* PartPlateList::createPlate() {
   // Upstream create_plate guards against exceeding MAX_PLATE_COUNT.
   if (plateCount() >= kMaxPlateCount) return nullptr;
   auto p = std::make_unique<PartPlate>(plateCount());
+  p->setPrintIndex(m_next_print_id++);
   PartPlate* raw = p.get();
   m_plate_list.push_back(std::move(p));
   // Keep grid geometry consistent with the new count (Phase 29 D-29-4).

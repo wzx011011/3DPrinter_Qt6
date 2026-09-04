@@ -61,6 +61,11 @@ class PartPlateList {
   PartPlate* plate(int index);
   const PartPlate* plate(int index) const;
 
+  /// Stable identity for the print/result owned by a plate. Assigned exactly
+  /// once at creation and never changed when vector indices are reindexed.
+  int printIdForPlateIndex(int index) const;
+  int plateIndexForPrintId(int printId) const;
+
   PartPlate* currentPlate() { return plate(m_current_plate); }
   const PartPlate* currentPlate() const { return plate(m_current_plate); }
 
@@ -178,6 +183,7 @@ class PartPlateList {
   /// Owns the plates (mirrors upstream m_plate_list ownership).
   std::vector<std::unique_ptr<PartPlate>> m_plate_list;
   int m_current_plate = 0;
+  int m_next_print_id = 0;
 
   /// Plate-grid geometry (mirrors upstream PartPlate.hpp:569-576).
   int m_plate_count = 0;

@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "core/model/PartPlateList.h"
+#include "core/rendering/PaintEngine.h"  // OWzx::PaintKind (canonical paint-kind enum)
 
 #ifdef HAS_LIBSLIC3R
 // Phase 112 (MEASURE-01): indexed_triangle_set lives at GLOBAL scope in
@@ -38,10 +39,12 @@ enum class MockVolumeType {
 };
 
 /// Paint kind for the Phase 122/123 TriangleSelector -> FacetsAnnotation bridge.
-/// Mirrors upstream update_model_object (GLGizmoFdmSupports.cpp:577,
-/// GLGizmoSeam.cpp:315, GLGizmoMmuSegmentation.cpp:700) which writes the
-/// TriangleSelector into one of three ModelVolume FacetsAnnotation members.
-enum class PaintKind { Support, Seam, Mmu };
+/// Canonical enum lives at OWzx::PaintKind (core/rendering/PaintEngine.h --
+/// the rendering layer owns the per-kind selector cache). Mirrors upstream
+/// update_model_object (GLGizmoFdmSupports.cpp:577, GLGizmoSeam.cpp:315,
+/// GLGizmoMmuSegmentation.cpp:700) which writes the TriangleSelector into one
+/// of three ModelVolume FacetsAnnotation members.
+using PaintKind = OWzx::PaintKind;
 
 /// Mock volume data entry
 struct MockVolumeEntry {
@@ -231,6 +234,9 @@ public:
   /// Internal bridge keeping the PartPlate domain validity flag in sync with
   /// SliceService's per-plate result store (not exposed to QML).
   void setPlateSliceResultValid(int plateIndex, bool valid);
+  int platePrintId(int plateIndex) const;
+  int plateIndexForPrintId(int printId) const;
+  void setPlateSliceResultValidByPrintId(int printId, bool valid);
   void setAllSliceResultsValid(bool valid);
 
   // v3.2 Phase 31 (FMAP-03, Manual mode) + v4.5 Phase 107 (FMAP-02): per-plate
@@ -270,6 +276,12 @@ public:
   // v3.0 Phase 19 (D-15): per-plate DynamicPrintConfig for slice config merge.
   // Returns Slic3r::DynamicPrintConfig* (forward-declared in the HAS_LIBSLIC3R block).
   const ::Slic3r::DynamicPrintConfig *plateDynamicConfig(int plateIndex) const;
+  /// Wave 4a (perf): FNV-1a fingerprint of the CURRENT plate's sliceable
+  /// geometry (object/volume/instance counts, per-volume triangle+vertex
+  /// counts and serialized transforms). Cheap O(objects) walk used by
+  /// SliceService to decide whether the persistent per-plate Print can be
+  /// incrementally re-applied. Returns 0 when nothing is sliceable.
+  quint64 currentPlateGeometrySignature() const;
 #endif
   Q_INVOKABLE QList<int> plateObjectIndices(int plateIndex) const;
   Q_INVOKABLE QList<int> currentPlateObjectIndices() const;
@@ -361,6 +373,16 @@ public:
   /// 添加文字浮雕 volume（对齐上游 GLGizmoText）
   /// Mock 模式：创建 TextEmboss 类型 volume
   Q_INVOKABLE bool addTextVolume(int objectIndex, const QString &text);
+  /// P2.7 (registered diff closure): volume type for NEW text volumes —
+  /// mirrors the upstream Emboss gizmo's volume_type selection: 0=ModelPart
+  /// (default), 1=NegativeVolume (text as a cut-out), 2=ParameterModifier.
+  /// Out-of-range values are clamped at the worker.
+  Q_INVOKABLE void setTextVolumeType(int type) { m_textVolumeType = type; }
+  Q_INVOKABLE int textVolumeType() const { return m_textVolumeType; }
+  /// Resolved libslic3r ModelVolumeType int for one volume (0=ModelPart,
+  /// 1=NegativeVolume, 2=ParameterModifier, 5=TextEmboss, ...); -1 when the
+  /// object/volume does not resolve. Feeds the emboss type-selector test.
+  Q_INVOKABLE int volumeType(int objectIndex, int volumeIndex) const;
   /// Phase 145 (EMB-03): async variant of addTextVolume. Spawns a Qt Concurrent
   /// worker that runs the text2shapes + polygons2model pipeline off the GUI
   /// thread; result is delivered via the embossVolumeAdded signal on the GUI
@@ -415,7 +437,7 @@ public:
   /// Mock 模式：创建 SvgEmboss 类型 volume
   /// Phase 158 (EMBO-F02): depthModifier scales the imported mesh's Z extent
   /// (1.0 = no change, 2.0 = double depth). Default 1.0 preserves backward compat.
-  Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f);
+  Q_INVOKABLE bool addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f, float xyScale = 1.0f);
   /// 简化对象网格（对齐上游 GLGizmoSimplify → its_quadric_edge_collapse）
   /// wantedCount: 目标三角面数 (0=不限制), maxError: 最大误差 (0=不限制)
   Q_INVOKABLE bool simplifyObject(int objectIndex, int wantedCount, float maxError);
@@ -480,6 +502,21 @@ public:
   /// operation: 0=union(A+B), 1=difference(A-B), 2=intersection(A∩B)
   /// Replaces srcObject mesh with the result, deletes toolObject
   Q_INVOKABLE bool meshBoolean(int srcObjectIndex, int toolObjectIndex, int operation);
+  // P2.7 (BOOLEAN-VOLUME): upstream GLGizmoMeshBoolean operates on two ModelVolumes
+  // (m_src.mv / m_tool.mv) via MeshBoolean::mcut::make_boolean and appends a
+  // result volume to the source object (name "<old> - union|difference|intersection",
+  // GLGizmoMeshBoolean.cpp:423-448). Volume index -1 resolves to the object's
+  // first model_part volume. Returns the resulting SOURCE object index (it may
+  // shift when the emptied tool object is removed) or -1 on failure.
+  int meshBooleanVolumes(int srcObjectIndex, int srcVolumeIndex,
+                         int toolObjectIndex, int toolVolumeIndex,
+                         int operation, bool deleteInput);
+  // P2.7 (FaceDetector): real exterior-face recognition via
+  // Slic3r::FaceDetector::detect_exterior_face (FaceDetector.cpp) — ray
+  // grid over the merged object at sampleInterval, marking hit facets
+  // eExteriorAppearance (GLGizmoFaceDetector.cpp display_exterior_face
+  // consumes the same property). Returns the exterior facet count, or -1.
+  int detectExteriorFaces(int objectIndex, double sampleInterval);
   /// 钻孔操作（对齐上游 GLGizmoDrill → sla::hollow_mesh_and_drill / MeshBoolean::cgal::minus）
   /// shape: 0=Circle(cylinder), 1=Triangle(triPrism), 2=Square(cube)
   /// direction: 0=Normal(top-down), 1=Bottom-up, 2=Both
@@ -885,6 +922,8 @@ signals:
   void projectChanged();
   void plateDataLoaded(int plateCount);
   void plateSelectionChanged();
+  /// Emitted after a plate's stable print identity has been removed.
+  void plateRemoved(int printId);
   void loadingChanged();
   void loadProgressChanged();
   void loadProgressUpdated(int progress, const QString &stageText);
@@ -947,6 +986,10 @@ private:
   /// used inline). Writes the model + plate list + per-plate thumbnails.
   /// Returns false on failure (lastError_ set).
   bool storeProject3mf(const QString &filePath);
+  /// R-P0.4: OWzx plate filament-state sidecar shared by saveProject and
+  /// saveProjectAs so every save path writes the identical project payload.
+  /// Returns false on failure (lastError_ set).
+  bool writePlateFilamentStateSidecar(const QString &filePath);
   /// Mock-mode per-object scoped overrides (objectIndex → key-value map)
   QHash<int, QHash<QString, QVariant>> m_mockObjectOverrides;
   /// Mock-mode per-volume scoped overrides ((objectIndex << 16 | volumeIndex) → key-value map)
@@ -958,6 +1001,9 @@ private:
   QHash<int, QHash<QString, QVariant>> m_mockPlateOverrides;
   /// Mock-mode per-object volume data (objectIndex → list of MockVolumeEntry)
   QHash<int, QList<MockVolumeEntry>> m_mockVolumes;
+  /// P2.7: ModelVolumeType int applied to NEW text volumes (see
+  /// setTextVolumeType); 0 = ModelPart (the upstream default).
+  int m_textVolumeType = 0;
   /// Mock-mode per-object layer ranges (objectIndex → list of MockLayerRange)
   QHash<int, QList<MockLayerRange>> m_mockLayerRanges;
 

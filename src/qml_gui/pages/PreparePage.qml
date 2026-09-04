@@ -43,6 +43,8 @@ Item {
     // sidebar 操作回调 (转发到 backend, 由 main.qml 注入)
     property var sidebarToggleRequested: null
     property var sidebarWidthChanged: null
+    // UI-only forwarding signal; main.qml owns the shared delete-all confirm.
+    signal deleteAllRequested()
     focus: true
 
     // Phase 169 (XD-01): shared destructive-action confirm dialog. Used by
@@ -1085,6 +1087,12 @@ Item {
         editorVm: root.editorVm
     }
 
+    FilamentGroupPopup {
+        id: filamentGroupPopup
+        parent: Overlay.overlay
+        editorVm: root.editorVm
+    }
+
     // 排列设置弹出面板（对齐上游 ArrangeSettings popup）
     CxPopup {
         id: arrangeSettingsPopup
@@ -1524,6 +1532,8 @@ Item {
                     viewport3d: viewport3d
                     onAddModelRequested: openFileDlg.open()
                     onSliceRequested: if (root.editorVm) root.editorVm.requestSlice()
+                    onFilamentGroupRequested: filamentGroupPopup.openForCurrentPlate()
+                    onDeleteAllRequested: root.deleteAllRequested()
                 }
                 GLViewport {
                     id: viewport3d
@@ -1604,6 +1614,9 @@ Item {
                     // brushButtonState are driven by the C++ mouse handlers inside
                     // RhiViewport (updateBrushCursorState) -- NOT bound from QML.
                     paintOverlayData: root.editorVm ? root.editorVm.paintOverlayData : null
+                    // P2.3-3: support preview line segments (from the slice
+                    // worker's support_fills capture; same byte-pipe pattern).
+                    supportPreviewData: root.editorVm ? root.editorVm.supportPreviewData : null
                     // Phase HOLLOW: drain-hole marker disc byte stream
                     // (same byte-pipe pattern as paintOverlayData).
                     hollowMarkerData: root.editorVm ? root.editorVm.hollowMarkerData : null
@@ -1612,11 +1625,27 @@ Item {
                     // Phase 220 (HOLLOW-REFRESH): when entering the Hollow
                     // gizmo, rebuild the marker stream so drain holes loaded
                     // from 3MF render without a place/delete first.
-                    onGizmoModeChanged: if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
-                        root.editorVm.refreshHollowMarkers()
-                    // v5.13: entering AdvancedCut rebuilds the pin markers.
-                    else if (gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm)
-                        root.editorVm.refreshAdvancedCutConnectors()
+                    onGizmoModeChanged: {
+                        if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
+                            root.editorVm.refreshHollowMarkers()
+                        // v5.13: entering AdvancedCut rebuilds the pin markers.
+                        else if (gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm)
+                            root.editorVm.refreshAdvancedCutConnectors()
+                        // P2.3 (PAINT-KIND): route the active paint kind from
+                        // the gizmo so Support/Seam/MMU strokes hit their own
+                        // selector (upstream: each painter gizmo owns its
+                        // TriangleSelector, GLGizmoPainterBase.hpp:247; the
+                        // EditorViewModel comment on activePaintKind already
+                        // documented this mapping).
+                        if (root.editorVm) {
+                            if (gizmoMode === GLViewport.GizmoSupportPaint)
+                                root.editorVm.activePaintKind = 0
+                            else if (gizmoMode === GLViewport.GizmoSeamPaint)
+                                root.editorVm.activePaintKind = 1
+                            else if (gizmoMode === GLViewport.GizmoMmuSegmentation)
+                                root.editorVm.activePaintKind = 2
+                        }
+                    }
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     // v5.12: camera preferences wired from settingsViewModel
                     reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
@@ -1638,6 +1667,10 @@ Item {
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
                     paintState: root.editorVm ? _activePaintState() : 1
+                    // P11.B2.3: axis locks for the paint brush (upstream
+                    // 1d61962ea7; constraint applied in RhiViewport during drags).
+                    paintVerticalOnly: root.editorVm ? root.editorVm.paintVerticalOnly : false
+                    paintHorizontalOnly: root.editorVm ? root.editorVm.paintHorizontalOnly : false
                     currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
                     plateCount: root.editorVm ? root.editorVm.plateCount : 0
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
@@ -1731,17 +1764,24 @@ Item {
                     // Phase 240 (GIZ-02): smart-fill picks arrive on the
                     // dedicated smartFillPickRequested signal (brush picks keep
                     // this one; the trailing smartFill flag is always 0 here).
-                    onPaintPickRequested: function(worldOrigin, worldDirection, cameraPosition, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
+                    onPaintPickRequested: function(worldOrigin, worldDirection, cameraPosition, cameraForward, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
                         if (root.editorVm && !smartFill)
-                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition)
+                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition, cameraForward)
                     }
                     // Phase 240 (GIZ-02): smart (seed) fill pick -- routed to
                     // EditorViewModel::smartFillAtFacet (upstream SMART_FILL
                     // tool: seed_fill_select_triangles + seed_fill_apply_on_
                     // triangles). Opaque-forward contract as above.
-                    onSmartFillPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, paintState, smartFillAngle, overhangsOnly, overhangAngle) {
+                    onSmartFillPickRequested: function(worldOrigin, worldDirection, cameraForward, pickedSourceIndex, paintState, smartFillAngle, overhangsOnly, overhangAngle) {
                         if (root.editorVm)
-                            root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection)
+                            root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection, cameraForward)
+                    }
+                    // P2.3-5: height-range pick (upstream HEIGHT_RANGE tool) --
+                    // routed to EditorViewModel::paintHeightRangeAt. Opaque
+                    // forward as above.
+                    onHeightRangePickRequested: function(worldOrigin, worldDirection, cameraPosition, cameraForward, pickedSourceIndex, paintState, height) {
+                        if (root.editorVm)
+                            root.editorVm.paintHeightRangeAt(paintState, height, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition, cameraForward)
                     }
                     // Phase 240 (GIZ-03): flatten hover highlight + click-to-
                     // place. The ViewModel runs the stage-2 pick; hover updates
@@ -1823,6 +1863,8 @@ Item {
                     smartFillAngle: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
                     paintOnOverhangsOnly: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
                     paintOverhangAngle: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
+                    // P2.3-5: height-range band span for the height-range tool.
+                    brushHeightRange: root.editorVm ? root.editorVm.paintHeightRange : 0.2
 
                     // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
                     Shortcut {
@@ -1832,6 +1874,28 @@ Item {
                     Shortcut {
                         sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
                         onActivated: root.redoFromTopbar()
+                    }
+                    // v5.17 (FPS overlay): upstream render-statistics parity
+                    // (Ctrl+Shift+Space toggles the FPS readout,
+                    // GLCanvas3D.cpp:3486). Present on both the RHI and the
+                    // software canvas (GLViewport resolves to either).
+                    Shortcut {
+                        sequence: "Ctrl+Shift+Space"
+                        onActivated: viewport3d.showFps = !viewport3d.showFps
+                    }
+                    Text {
+                        id: fpsOverlayLabel
+                        visible: viewport3d.showFps
+                        text: qsTr("FPS: %1").arg(viewport3d.fps)
+                        color: "#ffd24d"
+                        font.pixelSize: Math.max(12, root.height * 0.018)
+                        font.bold: true
+                        anchors.left: parent.left
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 28
+                        z: 400
+                        // Pure presentation: the rate is measured in the
+                        // viewport item itself (render()/paint() counts).
                     }
 
                     Connections {
@@ -2117,43 +2181,45 @@ Item {
                 }
 
                 // Tool selector (对齐上游 GLGizmoFdmSupports m_current_tool):
-                // 1=Enforcer (green), 2=Blocker (red). Bound to supportPaintTool.
+                // 1=Enforcer (green), 2=Blocker (red), 0=Erase (upstream
+                // remove tool paints None). Bound to supportPaintTool.
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
-                        model: [qsTr("强制"), qsTr("阻止")]
+                        model: [{label: qsTr("强制"), val: 1}, {label: qsTr("阻止"), val: 2}, {label: qsTr("擦除"), val: 0}]
                         delegate: Rectangle {
                             required property var modelData
-                            required property int index
-                            width: 72; height: 24; radius: 4
-                            color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
+                            width: 68; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintTool === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintTool === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.textTertiary
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintTool === modelData.val ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeXS
                             }
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.supportPaintTool = index + 1
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintTool = modelData.val
                             }
                         }
                     }
                 }
 
                 // Tool type selector (Phase 240 GIZ-02, upstream
-                // GLGizmoPainterBase ToolType): 0=Brush, 2=SmartFill. Selecting
-                // SmartFill makes clicks seed-fill (Shift+click also triggers a
-                // seed fill regardless of the tool).
+                // GLGizmoPainterBase ToolType): 0=Brush, 2=SmartFill,
+                // 3=GapFill (P2.3-5: shows the small-facet fragments below
+                // the gap-area threshold). Selecting SmartFill makes clicks
+                // seed-fill (Shift+click also triggers a seed fill
+                // regardless of the tool).
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
-                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}]
+                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}, {label: qsTr("缝隙填充"), val: 3}]
                         delegate: Rectangle {
                             required property var modelData
                             width: 76; height: 24; radius: 4
@@ -2172,6 +2238,27 @@ Item {
                                 onClicked: if (root.editorVm) root.editorVm.supportPaintToolType = modelData.val
                             }
                         }
+                    }
+                }
+
+                // P11.B2.3: Vertical/Horizontal axis locks (upstream 1d61962ea7,
+                // GLGizmoPainterBase m_vertical_only / m_horizontal_only). The
+                // ViewModel setters keep them mutually exclusive; the locks
+                // constrain BRUSH drags to the last click's screen axis.
+                Row {
+                    spacing: 8
+                    Layout.alignment: Qt.AlignHCenter
+                    CxCheckBox {
+                        text: qsTr("垂直")
+                        font.pixelSize: Theme.fontSizeXS
+                        checked: root.editorVm ? root.editorVm.paintVerticalOnly : false
+                        onToggled: if (root.editorVm) root.editorVm.paintVerticalOnly = checked
+                    }
+                    CxCheckBox {
+                        text: qsTr("水平")
+                        font.pixelSize: Theme.fontSizeXS
+                        checked: root.editorVm ? root.editorVm.paintHorizontalOnly : false
+                        onToggled: if (root.editorVm) root.editorVm.paintHorizontalOnly = checked
                     }
                 }
 
@@ -2223,6 +2310,59 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 32
+                    }
+                }
+
+                // P2.3-5: gap-area threshold (upstream TriangleSelectorPatch
+                // gap_area 0..5 mm2 step 0.2, GapAreaMin default). With the
+                // gap-fill tool active, facets below the threshold are shown
+                // as amber fragments.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.supportPaintToolType === 3
+                    Text { text: qsTr("缝隙面积:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 5; stepSize: 0.2
+                        value: root.editorVm ? root.editorVm.supportPaintGapArea : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintGapArea = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.supportPaintGapArea : 0).toFixed(1)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                }
+
+                // P2.3-1: cross-section (clipping) plane slider (upstream
+                // ObjectClipper m_clp_ratio surfaced through the gizmo's
+                // ClippingPlaneWidget; 0 = off). While > 0 the brush paints
+                // only the visible side of the section and hits on the clipped
+                // side are rejected.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
                 }
 
@@ -2722,13 +2862,13 @@ Item {
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
                     Text { text: qsTr("尺寸:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     CxSlider {
-                        from: 2; to: 20; stepSize: 0.5
-                        value: root.editorVm ? root.editorVm.connectorSize : 5
+                        from: 1; to: 20; stepSize: 0.5
+                        value: root.editorVm ? root.editorVm.connectorSize : 2.5
                         implicitWidth: 80
                         onMoved: if (root.editorVm) root.editorVm.connectorSize = value
                     }
                     Text {
-                        text: root.editorVm ? root.editorVm.connectorSize.toFixed(1) : "5.0"
+                        text: root.editorVm ? root.editorVm.connectorSize.toFixed(1) : "2.5"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
@@ -3013,6 +3153,63 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 30
+                    }
+                }
+
+                // P2.3-4: cursor type (upstream seam panel "cursor_type":
+                // circle/sphere buttons, GLGizmoSeam::on_render_input_window).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("光标:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    Repeater {
+                        model: [{label: qsTr("圆形"), val: 0}, {label: qsTr("球体"), val: 1}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 52; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // P2.3-4: cross-section slider (upstream seam panel
+                // "clipping_of_view" + "reset_direction"; shares the ViewModel
+                // paintClippingPosition with the support panel — the plane is
+                // gizmo-wide state, GLGizmoPainterBase).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
                 }
 
@@ -3568,6 +3765,95 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                 }
 
+                // P2.3-5: tool row (upstream MMU panel tools: paint / smart
+                // fill / height range). Shares supportPaintToolType with the
+                // support panel -- the viewport dispatch reads the same tool.
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}, {label: qsTr("高度范围"), val: 3}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 76; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintToolType = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // P2.3-5: edge detection checkbox (upstream
+                // m_detect_geometry_edge; off forces the smart-fill angle to
+                // -1 so region growth stops at near-planar neighbours).
+                CxCheckBox {
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.supportPaintToolType === 2
+                    text: qsTr("边检测")
+                    checked: root.editorVm ? root.editorVm.paintEdgeDetection : true
+                    onToggled: if (root.editorVm) root.editorVm.paintEdgeDetection = checked
+                }
+
+                // P2.3-5: height-range span slider (upstream m_cursor_height,
+                // 0.1..8 mm; facets in [hit z, hit z + span] are painted).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.supportPaintToolType === 3
+                    Text { text: qsTr("高度范围:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0.1; to: 8; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.paintHeightRange : 0.2
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintHeightRange = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintHeightRange : 0.2).toFixed(1) + "mm"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 44
+                    }
+                }
+
+                // P2.3-4: cross-section slider (upstream MMU panel
+                // "clipping_of_view" + "reset_direction"; shares the
+                // ViewModel paintClippingPosition with the other paint gizmos).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
+                    }
+                }
+
                 // 清除分段按钮（对齐上游 reset triangle painting）
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
@@ -3696,10 +3982,13 @@ Item {
                 }
 
                 Text { text: qsTr("高度"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossHeight : 2; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossHeight = value }
+                // P2.7: upstream default glyph height is 10 mm (FontProp.size_in_mm).
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossHeight : 10; from: 1; to: 100; onValueModified: if (root.editorVm) root.editorVm.embossHeight = value }
 
                 Text { text: qsTr("深度"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossDepth : 1; from: 1; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossDepth = value }
+                // P2.7: upstream projection depth defaults to 1 mm and may be
+                // negative (engrave direction).
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.embossDepth : 1; from: -20; to: 20; onValueModified: if (root.editorVm) root.editorVm.embossDepth = value }
 
                 // Phase 158 (EMBO-F01): style controls — boldness slider + italic
                 // checkbox + use-surface / curve-projection toggles. Boldness +
@@ -3831,6 +4120,11 @@ Item {
 
                 Text { text: qsTr("运算类型"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxComboBox { Layout.preferredWidth: 100; model: [qsTr("并集"), qsTr("差集"), qsTr("交集")]; currentIndex: root.editorVm ? root.editorVm.booleanOperation : 1; onActivated: if (root.editorVm) root.editorVm.booleanOperation = currentIndex }
+
+                // P2.7 (BOOLEAN-VOLUME): upstream "Delete input" checkbox
+                // (GLGizmoMeshBoolean.cpp:358/376). Union always drops its
+                // inputs regardless of this switch.
+                CxCheckBox { text: qsTr("删除输入"); checked: root.editorVm ? root.editorVm.booleanDeleteInput : false; onToggled: if (root.editorVm) root.editorVm.booleanDeleteInput = checked }
 
                 Text { text: qsTr("需选中 2 个以上对象"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter }
 
@@ -3973,19 +4267,28 @@ Item {
 
                 Text { text: qsTr("面检测"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
-                Text { text: qsTr("角度阈值"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.faceDetectorAngle : 5; from: 1; to: 90; onValueModified: if (root.editorVm) root.editorVm.faceDetectorAngle = value }
+                // P2.7: upstream input is "Sample interval" (GLGizmoFaceDetector
+                // .cpp m_sample_interval, default 0.5) — the sampling grid step
+                // for the exterior-face recognition engine.
+                Text { text: qsTr("采样间隔"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.faceDetectorSampleInterval : 0.5; from: 1; to: 100; onValueModified: if (root.editorVm) root.editorVm.faceDetectorSampleInterval = value / 10.0 }
 
-                Text { text: qsTr("检测与 Z 轴平行的平面"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter }
+                Text { text: qsTr("识别模型外表面面片"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter }
+                Text {
+                    text: root.editorVm && root.editorVm.faceDetectorResultCount > 0
+                          ? qsTr("外表面面片: %1").arg(root.editorVm.faceDetectorResultCount)
+                          : ""
+                    color: Theme.statusInfo; font.pixelSize: Theme.fontSizeXS; Layout.alignment: Qt.AlignHCenter
+                }
 
                 // Phase 173 (CL-03): migrated from Rectangle+Text+MouseArea
                 // pseudo-button to CxButton (compact Secondary).
                 CxButton {
                     Layout.alignment: Qt.AlignHCenter
-                    text: qsTr("执行检测")
+                    text: qsTr("执行识别")
                     compact: true
                     cxStyle: CxButton.Style.Secondary
-                    onClicked: if (root.editorVm) root.editorVm.detectFlatFaces()
+                    onClicked: if (root.editorVm) root.editorVm.performFaceRecognition()
                 }
             }
         }
@@ -4010,7 +4313,39 @@ Item {
                 Text { text: qsTr("文字工具"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
                 Text { text: qsTr("文本内容"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                // P2.7: default placeholder "Embossed text" matches upstream
+                // GLGizmoEmboss.cpp:500 (m_text = _u8L("Embossed text")).
                 CxTextField { Layout.preferredWidth: 120; implicitHeight: 22; font.pixelSize: Theme.fontSizeXS; text: root.editorVm ? root.editorVm.textContent : ""; onEditingFinished: if (root.editorVm) root.editorVm.textContent = text }
+
+                // P2.7 (registered diff closure): volume type selector —
+                // upstream Emboss volume_type (ModelPart / NegativeVolume /
+                // ParameterModifier); routes new text volumes at add time.
+                RowLayout {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("类型:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    Repeater {
+                        model: [{label: qsTr("模型"), val: 0}, {label: qsTr("负体积"), val: 1}, {label: qsTr("修改器"), val: 2}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 56; height: 22; radius: 4
+                            color: root.editorVm && root.editorVm.embossVolumeType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.embossVolumeType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.embossVolumeType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.embossVolumeType = modelData.val
+                            }
+                        }
+                    }
+                }
 
                 Text { text: qsTr("字号"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.textSize : 20; from: 1; to: 200; onValueModified: if (root.editorVm) root.editorVm.textSize = value }

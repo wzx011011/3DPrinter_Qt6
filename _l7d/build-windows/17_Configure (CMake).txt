@@ -1,0 +1,246 @@
+﻿2026-08-15T05:02:53.4420166Z ##[group]Run cmake -S . -B build -G Ninja `
+2026-08-15T05:02:53.4420657Z [36;1mcmake -S . -B build -G Ninja `[0m
+2026-08-15T05:02:53.4420964Z [36;1m  -DCMAKE_BUILD_TYPE=Release `[0m
+2026-08-15T05:02:53.4421246Z [36;1m  -DBUILD_LIBSLIC3R=ON `[0m
+2026-08-15T05:02:53.4421517Z [36;1m  -DLIBSLIC3R_FROM_SOURCE=ON `[0m
+2026-08-15T05:02:53.4421793Z [36;1m  -DOWZX_QML_GUI=ON `[0m
+2026-08-15T05:02:53.4422089Z [36;1m  -DDEPS_PREFIX="$env:DEPS_PREFIX" `[0m
+2026-08-15T05:02:53.4422479Z [36;1m  -DVCPKG_INSTALLED_DIR="$env:VCPKG_INSTALLED_DIR" `[0m
+2026-08-15T05:02:53.4422877Z [36;1m  -DPAHO_MQTT_PREFIX="$env:PAHO_MQTT_PREFIX"[0m
+2026-08-15T05:02:53.4456917Z shell: C:\Program Files\PowerShell\7\pwsh.EXE -command ". '{0}'"
+2026-08-15T05:02:53.4457287Z env:
+2026-08-15T05:02:53.4457476Z   TAG_NAME: v5.16
+2026-08-15T05:02:53.4457877Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T05:02:53.4458565Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T05:02:53.4459195Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T05:02:53.4459724Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T05:02:53.4460121Z   CommandPromptType: Native
+2026-08-15T05:02:53.4460502Z   DevEnvDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\
+2026-08-15T05:02:53.4461035Z   ExtensionSdkDir: C:\Program Files (x86)\Microsoft SDKs\Windows Kits\10\ExtensionSDKs
+2026-08-15T05:02:53.4463375Z   EXTERNAL_INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:02:53.4465690Z   Framework40Version: v4.0
+2026-08-15T05:02:53.4465987Z   FrameworkDir: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:02:53.4466340Z   FrameworkDir64: C:\Windows\Microsoft.NET\Framework64\
+2026-08-15T05:02:53.4466656Z   FrameworkVersion: v4.0.30319
+2026-08-15T05:02:53.4466897Z   FrameworkVersion64: v4.0.30319
+2026-08-15T05:02:53.4467434Z   FSHARPINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools
+2026-08-15T05:02:53.4468038Z   HTMLHelpDir: C:\Program Files (x86)\HTML Help Workshop
+2026-08-15T05:02:53.4468532Z   IFCPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ifc\x64
+2026-08-15T05:02:53.4470797Z   INCLUDE: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\include;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\VS\include;C:\Program Files (x86)\Windows Kits\10\include\10.0.26100.0\ucrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\um;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\shared;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\winrt;C:\Program Files (x86)\Windows Kits\10\\include\10.0.26100.0\\cppwinrt;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um
+2026-08-15T05:02:53.4472874Z   is_x64_arch: true
+2026-08-15T05:02:53.4474062Z   LIB: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\lib\um\x64;C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64;C:\Program Files (x86)\Windows Kits\10\\lib\10.0.26100.0\\um\x64
+2026-08-15T05:02:53.4478288Z   LIBPATH: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\ATLMFC\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\x86\store\references;C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0;C:\Windows\Microsoft.NET\Framework64\v4.0.30319
+2026-08-15T05:02:53.4479932Z   NETFXSDKDir: C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\
+2026-08-15T05:02:53.4494359Z   Path: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\bin\HostX64\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\VCPackages;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\bin\Roslyn;C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\;C:\Program Files (x86)\HTML Help Workshop;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\FSharp\Tools;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Team Tools\DiagnosticsHub\Collector;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\Extensions\Microsoft\CodeCoverage.Console;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\Llvm\x64\bin;C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\\x64;C:\Program Files (x86)\Windows Kits\10\bin\\x64;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\\MSBuild\Current\Bin\amd64;C:\Windows\Microsoft.NET\Framework64\v4.0.30319;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\;D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\Linux\bin\ConnectionManagerExe;C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:02:53.4509451Z   Platform: x64
+2026-08-15T05:02:53.4509670Z   UCRTVersion: 10.0.26100.0
+2026-08-15T05:02:53.4509988Z   UniversalCRTSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:02:53.4510488Z   VCIDEInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\VC\
+2026-08-15T05:02:53.4511030Z   VCINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\
+2026-08-15T05:02:53.4511520Z   VCPKG_ROOT: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\vcpkg
+2026-08-15T05:02:53.4512097Z   VCToolsInstallDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\
+2026-08-15T05:02:53.4512872Z   VCToolsRedistDir: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC\14.44.35112\
+2026-08-15T05:02:53.4513355Z   VCToolsVersion: 14.44.35207
+2026-08-15T05:02:53.4513599Z   VisualStudioVersion: 17.0
+2026-08-15T05:02:53.4513992Z   VS170COMNTOOLS: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\
+2026-08-15T05:02:53.4514401Z   VSCMD_ARG_app_plat: Desktop
+2026-08-15T05:02:53.4514633Z   VSCMD_ARG_HOST_ARCH: x64
+2026-08-15T05:02:53.4514871Z   VSCMD_ARG_TGT_ARCH: x64
+2026-08-15T05:02:53.4515090Z   VSCMD_VER: 17.14.37
+2026-08-15T05:02:53.4515405Z   VSINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\
+2026-08-15T05:02:53.4515888Z   VSSDK150INSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:02:53.4516384Z   VSSDKINSTALL: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VSSDK
+2026-08-15T05:02:53.4517070Z   WindowsLibPath: C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0;C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0
+2026-08-15T05:02:53.4517731Z   WindowsSdkBinPath: C:\Program Files (x86)\Windows Kits\10\bin\
+2026-08-15T05:02:53.4518115Z   WindowsSdkDir: C:\Program Files (x86)\Windows Kits\10\
+2026-08-15T05:02:53.4518432Z   WindowsSDKLibVersion: 10.0.26100.0\
+2026-08-15T05:02:53.4518810Z   WindowsSdkVerBinPath: C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\
+2026-08-15T05:02:53.4519204Z   WindowsSDKVersion: 10.0.26100.0\
+2026-08-15T05:02:53.4519655Z   WindowsSDK_ExecutablePath_x64: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\
+2026-08-15T05:02:53.4520331Z   WindowsSDK_ExecutablePath_x86: C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\
+2026-08-15T05:02:53.4520783Z   __DOTNET_ADD_64BIT: 1
+2026-08-15T05:02:53.4521010Z   __DOTNET_PREFERRED_BITNESS: 64
+2026-08-15T05:02:53.4529856Z   __VSCMD_PREINIT_PATH: D:\a\_temp\60786817;D:\a\_temp\60786817\cmake-3.31.12-windows-x86_64\bin\;C:\Program Files\MongoDB\Server\7.0\bin;C:\aliyun-cli;C:\vcpkg;C:\Program Files (x86)\NSIS\;C:\tools\zstd;C:\Program Files\Mercurial\;C:\hostedtoolcache\windows\stack\3.11.1\x64;C:\cabal\bin;C:\\ghcup\bin;C:\mingw64\bin;C:\Program Files\dotnet;C:\Program Files\MySQL\MySQL Server 8.0\bin;C:\Program Files\R\R-4.6.1\bin\x64;C:\SeleniumWebDrivers\GeckoDriver;C:\SeleniumWebDrivers\EdgeDriver\;C:\SeleniumWebDrivers\ChromeDriver;C:\Program Files (x86)\sbt\bin;C:\Program Files (x86)\GitHub CLI;C:\Program Files\Git\bin;C:\Program Files (x86)\pipx_bin;C:\npm\prefix;C:\hostedtoolcache\windows\go\1.24.13\x64\bin;C:\hostedtoolcache\windows\Python\3.12.10\x64\Scripts;C:\hostedtoolcache\windows\Python\3.12.10\x64;C:\hostedtoolcache\windows\Ruby\3.3.12\x64\bin;C:\Program Files\OpenSSL\bin;C:\tools\kotlinc\bin;C:\hostedtoolcache\windows\Java_Temurin-Hotspot_jdk\8.0.502-7\x64\bin;C:\Program Files\ImageMagick-7.1.2-Q16-HDRI;C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin;C:\ProgramData\kind;C:\ProgramData\Chocolatey\bin;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Windows\System32\OpenSSH\;C:\Program Files\dotnet\;C:\Program Files\PowerShell\7\;C:\Program Files\Microsoft\Web Platform Installer\;C:\Program Files\TortoiseSVN\bin;C:\Program Files\Microsoft SQL Server\Client SDK\ODBC\170\Tools\Binn\;C:\Program Files\Microsoft SQL Server\150\Tools\Binn\;C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit\;C:\Program Files (x86)\WiX Toolset v3.14\bin;C:\Program Files\Microsoft SQL Server\130\DTS\Binn\;C:\Program Files\Microsoft SQL Server\140\DTS\Binn\;C:\Program Files\Microsoft SQL Server\150\DTS\Binn\;C:\Program Files\Microsoft SQL Server\160\DTS\Binn\;C:\Program Files\Microsoft SQL Server\170\DTS\Binn\;C:\Strawberry\c\bin;C:\Strawberry\perl\site\bin;C:\Strawberry\perl\bin;C:\ProgramData\chocolatey\lib\pulumi\tools\Pulumi\bin;C:\Program Files\CMake\bin;C:\ProgramData\chocolatey\lib\maven\apache-maven-3.9.16\bin;C:\Program Files\Microsoft Service Fabric\bin\Fabric\Fabric.Code;C:\Program Files\Microsoft SDKs\Service Fabric\Tools\ServiceFabricLocalClusterManager;C:\Program Files\nodejs\;C:\Program Files\Git\cmd;C:\Program Files\Git\mingw64\bin;C:\Program Files\Git\usr\bin;C:\Program Files\GitHub CLI\;c:\tools\php;C:\Program Files (x86)\sbt\bin;C:\Program Files\Amazon\AWSCLIV2\;C:\Program Files\Amazon\SessionManagerPlugin\bin\;C:\Program Files\Amazon\AWSSAMCLI\bin\;C:\Program Files\Microsoft SQL Server\130\Tools\Binn\;C:\Program Files\mongosh\;C:\Program Files\LLVM\bin;C:\Program Files (x86)\LLVM\bin;C:\Users\runneradmin\.dotnet\tools;C:\Users\runneradmin\.cargo\bin;C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps;C:\Program Files (x86)\Microsoft Visual Studio\Installer
+2026-08-15T05:02:53.4539057Z   pythonLocation: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:02:53.4539527Z   PKG_CONFIG_PATH: C:\hostedtoolcache\windows\Python\3.12.10\x64/lib/pkgconfig
+2026-08-15T05:02:53.4539961Z   Python_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:02:53.4540365Z   Python2_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:02:53.4540766Z   Python3_ROOT_DIR: C:\hostedtoolcache\windows\Python\3.12.10\x64
+2026-08-15T05:02:53.4541134Z   QT_ROOT_DIR: D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64
+2026-08-15T05:02:53.4541494Z   QT_PLUGIN_PATH: D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\plugins
+2026-08-15T05:02:53.4541881Z   QML2_IMPORT_PATH: D:\a\3DPrinter_Qt6\Qt\6.10.0\msvc2022_64\qml
+2026-08-15T05:02:53.4542387Z   ORCA_DEPS_CACHE_KEY: windows-orcaslicer-deps-v2-62f4a79f3fa20dee04e79fbe1ac55d4be6f0c2a6
+2026-08-15T05:02:53.4542836Z ##[endgroup]
+2026-08-15T05:02:58.0973233Z -- The C compiler identification is MSVC 19.44.35228.0
+2026-08-15T05:02:58.7618276Z -- The CXX compiler identification is MSVC 19.44.35228.0
+2026-08-15T05:02:58.7793364Z -- Detecting C compiler ABI info
+2026-08-15T05:03:00.0581953Z -- Detecting C compiler ABI info - done
+2026-08-15T05:03:00.0892030Z -- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+2026-08-15T05:03:00.0896367Z -- Detecting C compile features
+2026-08-15T05:03:00.0903551Z -- Detecting C compile features - done
+2026-08-15T05:03:00.0989639Z -- Detecting CXX compiler ABI info
+2026-08-15T05:03:00.4065914Z -- Detecting CXX compiler ABI info - done
+2026-08-15T05:03:00.4202897Z -- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+2026-08-15T05:03:00.4206692Z -- Detecting CXX compile features
+2026-08-15T05:03:00.4218323Z -- Detecting CXX compile features - done
+2026-08-15T05:03:00.6799088Z -- === Building libslic3r FROM SOURCE ===
+2026-08-15T05:03:00.6807190Z -- === BuildLibslic3rFromSource: Compiling libslic3r from source ===
+2026-08-15T05:03:00.7125478Z CMake Warning (dev) at cmake/BuildLibslic3rFromSource.cmake:382 (find_package):
+2026-08-15T05:03:00.7126137Z   Policy CMP0167 is not set: The FindBoost module is removed.  Run "cmake
+2026-08-15T05:03:00.7126701Z   --help-policy CMP0167" for policy details.  Use the cmake_policy command to
+2026-08-15T05:03:00.7127139Z   set the policy and suppress this warning.
+2026-08-15T05:03:00.7127345Z 
+2026-08-15T05:03:00.7127452Z Call Stack (most recent call first):
+2026-08-15T05:03:00.7127725Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:00.7128072Z This warning is for project developers.  Use -Wno-dev to suppress it.
+2026-08-15T05:03:00.7128354Z 
+2026-08-15T05:03:02.3786935Z -- Found Boost: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/Boost-1.84.0/BoostConfig.cmake (found suitable version "1.84.0", minimum required is "1.84") found components: system filesystem thread log log_setup locale regex chrono atomic date_time iostreams program_options
+2026-08-15T05:03:02.3916076Z -- Found OpenSSL: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/libcrypto.lib (found version "1.1.1w")
+2026-08-15T05:03:02.3961078Z -- Found ZLIB: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/zlib.lib (found version "1.2.13")
+2026-08-15T05:03:02.4513590Z -- Found PNG: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/libpng16_static.lib (found version "1.6.35")
+2026-08-15T05:03:02.4823786Z -- Found JPEG: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/jpeg-static.lib (found version "62")
+2026-08-15T05:03:03.5256460Z -- Found EXPAT: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/expat.lib (found version "2.5.0")
+2026-08-15T05:03:03.9291489Z -- draco not found; continuing without draco link target
+2026-08-15T05:03:04.0309084Z -- libnoise not found; continuing without a binary dependency
+2026-08-15T05:03:04.0329731Z CMake Warning at third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGALConfig.cmake:92 (message):
+2026-08-15T05:03:04.0330891Z   CGAL_DATA_DIR cannot be deduced, set the variable CGAL_DATA_DIR to set the
+2026-08-15T05:03:04.0331534Z   default value of CGAL::data_file_path()
+2026-08-15T05:03:04.0331945Z Call Stack (most recent call first):
+2026-08-15T05:03:04.0332420Z   cmake/BuildLibslic3rFromSource.cmake:473 (find_package)
+2026-08-15T05:03:04.0332897Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:04.0333155Z 
+2026-08-15T05:03:04.0333166Z 
+2026-08-15T05:03:04.0496979Z CMake Warning (dev) at third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGAL_Common.cmake:30 (exec_program):
+2026-08-15T05:03:04.0498104Z   Policy CMP0153 is not set: The exec_program command should not be called.
+2026-08-15T05:03:04.0498946Z   Run "cmake --help-policy CMP0153" for policy details.  Use the cmake_policy
+2026-08-15T05:03:04.0499870Z   command to set the policy and suppress this warning.
+2026-08-15T05:03:04.0500530Z 
+2026-08-15T05:03:04.0500976Z   Use execute_process() instead.
+2026-08-15T05:03:04.0501376Z Call Stack (most recent call first):
+2026-08-15T05:03:04.0503040Z   third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGALConfig.cmake:110 (include)
+2026-08-15T05:03:04.0503629Z   cmake/BuildLibslic3rFromSource.cmake:473 (find_package)
+2026-08-15T05:03:04.0503966Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:04.0504315Z This warning is for project developers.  Use -Wno-dev to suppress it.
+2026-08-15T05:03:04.0504589Z 
+2026-08-15T05:03:04.0733843Z -- Visual Leak Detector (VLD) is not found.
+2026-08-15T05:03:04.0736961Z -- Using header-only CGAL
+2026-08-15T05:03:04.1266386Z -- Targetting Ninja
+2026-08-15T05:03:04.1266911Z -- Target build environment supports auto-linking
+2026-08-15T05:03:04.1267284Z -- Using VC toolset 143.
+2026-08-15T05:03:04.1269680Z -- Found GMP: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/libgmp-10.lib
+2026-08-15T05:03:04.1289315Z -- Found MPFR: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/libmpfr-4.lib
+2026-08-15T05:03:04.1623874Z CMake Warning (dev) at third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGAL_SetupBoost.cmake:20 (find_package):
+2026-08-15T05:03:04.1624727Z   Policy CMP0167 is not set: The FindBoost module is removed.  Run "cmake
+2026-08-15T05:03:04.1625266Z   --help-policy CMP0167" for policy details.  Use the cmake_policy command to
+2026-08-15T05:03:04.1625694Z   set the policy and suppress this warning.
+2026-08-15T05:03:04.1625903Z 
+2026-08-15T05:03:04.1625998Z Call Stack (most recent call first):
+2026-08-15T05:03:04.1626570Z   third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGAL_SetupCGALDependencies.cmake:47 (include)
+2026-08-15T05:03:04.1627334Z   third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGALConfig.cmake:153 (include)
+2026-08-15T05:03:04.1627908Z   cmake/BuildLibslic3rFromSource.cmake:473 (find_package)
+2026-08-15T05:03:04.1628571Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:04.1628943Z This warning is for project developers.  Use -Wno-dev to suppress it.
+2026-08-15T05:03:04.1629215Z 
+2026-08-15T05:03:04.1684547Z -- Found Boost: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/Boost-1.84.0/BoostConfig.cmake (found suitable version "1.84.0", minimum required is "1.48")
+2026-08-15T05:03:04.1691794Z -- Boost include dirs: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/include/boost-1_84
+2026-08-15T05:03:04.1692447Z -- Boost libraries:    
+2026-08-15T05:03:04.1734034Z -- === BuildDepsFromSource: Compiling deps from source ===
+2026-08-15T05:03:04.2752888Z -- Using vendored Eigen headers: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/src/eigen
+2026-08-15T05:03:04.2777751Z CMake Warning at cmake/BuildDepsFromSource.cmake:267 (message):
+2026-08-15T05:03:04.2778272Z   libnest2d pre-built lib not found
+2026-08-15T05:03:04.2778596Z Call Stack (most recent call first):
+2026-08-15T05:03:04.2778947Z   cmake/BuildLibslic3rFromSource.cmake:478 (include)
+2026-08-15T05:03:04.2779276Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:04.2779433Z 
+2026-08-15T05:03:04.2779439Z 
+2026-08-15T05:03:04.3831404Z CMake Deprecation Warning at third_party/OrcaSlicer/src/qhull/CMakeLists.txt:35 (cmake_minimum_required):
+2026-08-15T05:03:04.3832144Z   Compatibility with CMake < 3.10 will be removed from a future version of
+2026-08-15T05:03:04.3832517Z   CMake.
+2026-08-15T05:03:04.3832626Z 
+2026-08-15T05:03:04.3832833Z   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+2026-08-15T05:03:04.3833323Z   to tell CMake that the project requires at least <min> but has been updated
+2026-08-15T05:03:04.3833747Z   to work with policies introduced by <max> or earlier.
+2026-08-15T05:03:04.3833969Z 
+2026-08-15T05:03:04.3833975Z 
+2026-08-15T05:03:04.3834086Z -- qhull Version: 7.2.0 (static linking)
+2026-08-15T05:03:04.3838145Z CMake Warning at cmake/BuildDepsFromSource.cmake:302 (message):
+2026-08-15T05:03:04.3839675Z   assimp pre-built lib not found at
+2026-08-15T05:03:04.3840249Z   D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/assimp-vc142-mt.lib
+2026-08-15T05:03:04.3840808Z Call Stack (most recent call first):
+2026-08-15T05:03:04.3841141Z   cmake/BuildLibslic3rFromSource.cmake:478 (include)
+2026-08-15T05:03:04.3841461Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:04.3841626Z 
+2026-08-15T05:03:04.3841631Z 
+2026-08-15T05:03:04.3841809Z CMake Warning at cmake/BuildDepsFromSource.cmake:312 (message):
+2026-08-15T05:03:04.3842185Z   cr_tpms_library pre-built lib not found at
+2026-08-15T05:03:04.3842726Z   D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local/lib/cr_tpms_library.lib
+2026-08-15T05:03:04.3843263Z Call Stack (most recent call first):
+2026-08-15T05:03:04.3843569Z   cmake/BuildLibslic3rFromSource.cmake:478 (include)
+2026-08-15T05:03:04.3843896Z   CMakeLists.txt:52 (include)
+2026-08-15T05:03:04.3844059Z 
+2026-08-15T05:03:04.3844065Z 
+2026-08-15T05:03:04.3844194Z -- === BuildDepsFromSource: ALL deps configured ===
+2026-08-15T05:03:04.3879096Z -- libslic3r: Precompiled header enabled (pchheader.hpp)
+2026-08-15T05:03:04.4073673Z -- === libslic3r: Compiled from source ===
+2026-08-15T05:03:04.4074388Z --     Source dir: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/third_party/OrcaSlicer/src/libslic3r
+2026-08-15T05:03:04.4074975Z --     Generated headers: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/build/libslic3r_generated
+2026-08-15T05:03:04.4528026Z -- Found Threads: TRUE
+2026-08-15T05:03:04.4726116Z -- Performing Test HAVE_STDATOMIC
+2026-08-15T05:03:05.3214354Z -- Performing Test HAVE_STDATOMIC - Success
+2026-08-15T05:03:05.3231148Z -- Found WrapAtomic: TRUE
+2026-08-15T05:03:05.7639976Z -- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+2026-08-15T05:03:05.8578883Z -- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+2026-08-15T05:03:05.8978629Z CMake Warning at D:/a/3DPrinter_Qt6/Qt/6.10.0/msvc2022_64/lib/cmake/Qt6/QtPublicDependencyHelpers.cmake:335 (message):
+2026-08-15T05:03:05.8979416Z   This project is using headers of the GuiPrivate module and will therefore
+2026-08-15T05:03:05.8979942Z   be tied to this specific Qt module build version.  Running this project
+2026-08-15T05:03:05.8980445Z   against other versions of the Qt modules may crash at any arbitrary point.
+2026-08-15T05:03:05.8980915Z   This is not a bug, but a result of using Qt internals.  You have been
+2026-08-15T05:03:05.8981299Z   warned!
+2026-08-15T05:03:05.8981412Z 
+2026-08-15T05:03:05.8981630Z   You can disable this warning by setting QT_NO_PRIVATE_MODULE_WARNING to ON.
+2026-08-15T05:03:05.8982022Z Call Stack (most recent call first):
+2026-08-15T05:03:05.8982641Z   D:/a/3DPrinter_Qt6/Qt/6.10.0/msvc2022_64/lib/cmake/Qt6GuiPrivate/Qt6GuiPrivateConfig.cmake:48 (_qt_internal_show_private_module_warning)
+2026-08-15T05:03:05.8983388Z   D:/a/3DPrinter_Qt6/Qt/6.10.0/msvc2022_64/lib/cmake/Qt6/Qt6Config.cmake:233 (find_package)
+2026-08-15T05:03:05.8983810Z   CMakeLists.txt:139 (find_package)
+2026-08-15T05:03:05.8995250Z 
+2026-08-15T05:03:05.8995266Z 
+2026-08-15T05:03:05.9235535Z CMake Warning at CMakeLists.txt:328 (message):
+2026-08-15T05:03:05.9235973Z   FFmpeg avcodec not found
+2026-08-15T05:03:05.9236209Z 
+2026-08-15T05:03:05.9236219Z 
+2026-08-15T05:03:05.9236408Z CMake Warning at CMakeLists.txt:328 (message):
+2026-08-15T05:03:05.9236767Z   FFmpeg avformat not found
+2026-08-15T05:03:05.9236931Z 
+2026-08-15T05:03:05.9236937Z 
+2026-08-15T05:03:05.9237834Z CMake Warning at CMakeLists.txt:328 (message):
+2026-08-15T05:03:05.9238292Z   FFmpeg avutil not found
+2026-08-15T05:03:05.9238530Z 
+2026-08-15T05:03:05.9238537Z 
+2026-08-15T05:03:05.9239340Z CMake Warning at CMakeLists.txt:328 (message):
+2026-08-15T05:03:05.9239796Z   FFmpeg swscale not found
+2026-08-15T05:03:05.9240020Z 
+2026-08-15T05:03:05.9240055Z 
+2026-08-15T05:03:05.9240171Z CMake Warning at CMakeLists.txt:336 (message):
+2026-08-15T05:03:05.9241466Z   FFmpeg headers/libs not found; RTSP camera stream decoding disabled
+2026-08-15T05:03:05.9241754Z 
+2026-08-15T05:03:05.9241759Z 
+2026-08-15T05:03:05.9301125Z src/qml_gui/Renderer/shaders/rhi_viewport.vert -> rhi_viewport.vert.qsb exposed as :/rhi_viewport/shaders/rhi_viewport.vert.qsb
+2026-08-15T05:03:05.9306085Z src/qml_gui/Renderer/shaders/rhi_viewport.frag -> rhi_viewport.frag.qsb exposed as :/rhi_viewport/shaders/rhi_viewport.frag.qsb
+2026-08-15T05:03:05.9310103Z src/qml_gui/Renderer/shaders/rhi_gizmo.vert -> rhi_gizmo.vert.qsb exposed as :/rhi_viewport/shaders/rhi_gizmo.vert.qsb
+2026-08-15T05:03:05.9314048Z src/qml_gui/Renderer/shaders/rhi_gizmo.frag -> rhi_gizmo.frag.qsb exposed as :/rhi_viewport/shaders/rhi_gizmo.frag.qsb
+2026-08-15T05:03:05.9317951Z src/qml_gui/Renderer/shaders/bed_texture.vert -> bed_texture.vert.qsb exposed as :/rhi_viewport/shaders/bed_texture.vert.qsb
+2026-08-15T05:03:05.9322061Z src/qml_gui/Renderer/shaders/bed_texture.frag -> bed_texture.frag.qsb exposed as :/rhi_viewport/shaders/bed_texture.frag.qsb
+2026-08-15T05:03:05.9325809Z src/qml_gui/Renderer/shaders/model_lit.vert -> model_lit.vert.qsb exposed as :/rhi_viewport/shaders/model_lit.vert.qsb
+2026-08-15T05:03:05.9329781Z src/qml_gui/Renderer/shaders/model_lit.frag -> model_lit.frag.qsb exposed as :/rhi_viewport/shaders/model_lit.frag.qsb
+2026-08-15T05:03:18.1136049Z -- Configuring done (24.4s)
+2026-08-15T05:03:18.1733398Z CMake Warning (dev) in third_party/OrcaSlicer/src/qhull/CMakeLists.txt:
+2026-08-15T05:03:18.1734102Z   AUTOGEN: No valid Qt version found for target qhullstatic.  AUTOMOC,
+2026-08-15T05:03:18.1734530Z   AUTOUIC and AUTORCC disabled.  Consider adding:
+2026-08-15T05:03:18.1734743Z 
+2026-08-15T05:03:18.1734877Z     find_package(Qt<QTVERSION> COMPONENTS Widgets)
+2026-08-15T05:03:18.1735098Z 
+2026-08-15T05:03:18.1735200Z   to your CMakeLists.txt file.
+2026-08-15T05:03:18.1735898Z This warning is for project developers.  Use -Wno-dev to suppress it.
+2026-08-15T05:03:18.1736202Z 
+2026-08-15T05:03:18.7725985Z -- Generating done (0.7s)
+2026-08-15T05:03:18.7746632Z -- Build files have been written to: D:/a/3DPrinter_Qt6/3DPrinter_Qt6/build

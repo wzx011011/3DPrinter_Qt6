@@ -1,0 +1,80 @@
+[vcvars] Dropped 9 PATH entries with spaces+parens that break vcvars64.bat batch parsing:
+[vcvars]   - F:\Program Files (x86)\VMware\VMware Workstation\bin
+[vcvars]   - C:\Program Files (x86)\Common Files\Intel\Shared Libraries\redist\intel64\compiler
+[vcvars]   - C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common
+[vcvars]   - C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit
+[vcvars]   - F:\Program Files (x86)\VMware\VMware Workstation\bin
+[vcvars]   - C:\Program Files (x86)\Windows Kits\10\Windows Performance Toolkit
+[vcvars]   - C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64
+[vcvars]   - C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64
+[vcvars]   - C:\Program Files (x86)\Windows Kits\10\bin\x64
+[Build] Upstream root: E:\ai\3DPrinter_Qt6\third_party\OrcaSlicer
+[Build] Deps prefix: E:\ai\3D-Printer\deps\build\OrcaSlicer_dep\usr\local
+[Build] Qt root: E:\Qt6.10
+[Build] Repo root: E:\ai\3DPrinter_Qt6
+[Build] Build dir: E:\ai\3DPrinter_Qt6\build
+[Build] MSVC compiler: C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.50.35717\bin\Hostx64\x64\cl.exe
+[Build] Ninja: C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe
+[Configure] CMake configure attempt 1
+-- === Building libslic3r FROM SOURCE ===
+-- === BuildLibslic3rFromSource: Compiling libslic3r from source ===
+-- Found Boost: E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/Boost-1.84.0/BoostConfig.cmake (found suitable version "1.84.0", minimum required is "1.84") found components: system filesystem thread log log_setup locale regex chrono atomic date_time iostreams program_options 
+-- libnoise not found; continuing without a binary dependency
+CMake Warning at E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/CGAL/CGALConfig.cmake:92 (message):
+  CGAL_DATA_DIR cannot be deduced, set the variable CGAL_DATA_DIR to set the
+  default value of CGAL::data_file_path()
+Call Stack (most recent call first):
+  cmake/BuildLibslic3rFromSource.cmake:473 (find_package)
+  CMakeLists.txt:52 (include)
+System.Management.Automation.RemoteException
+System.Management.Automation.RemoteException
+-- Visual Leak Detector (VLD) is not found.
+-- Using header-only CGAL
+-- Targetting Ninja
+-- Target build environment supports auto-linking
+-- Using VC toolset 142.
+-- Found Boost: E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local/lib/cmake/Boost-1.84.0/BoostConfig.cmake (found suitable version "1.84.0", minimum required is "1.48")  
+-- Boost include dirs: E:/ai/3D-Printer/deps/build/OrcaSlicer_dep/usr/local/include/boost-1_84
+-- Boost libraries:    
+-- === BuildDepsFromSource: Compiling deps from source ===
+-- === BuildDepsFromSource: ALL deps configured ===
+-- libslic3r: Precompiled header enabled (pchheader.hpp)
+-- === libslic3r: Compiled from source ===
+--     Source dir: E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/src/libslic3r
+--     Generated headers: E:/ai/3DPrinter_Qt6/build/libslic3r_generated
+CMake Warning at E:/Qt6.10/lib/cmake/Qt6/QtPublicCMakeVersionHelpers.cmake:42 (message):
+  The minimum required CMake version to use Qt is: '3.22'.  You have
+  explicitly chosen to require a lower minimum CMake version: '3.21'.  Using
+  Qt with this CMake version is not officially supported.  Use at your own
+  risk.
+Call Stack (most recent call first):
+  E:/Qt6.10/lib/cmake/Qt6/QtPublicCMakeVersionHelpers.cmake:91 (__qt_internal_warn_if_min_cmake_version_not_met)
+  E:/Qt6.10/lib/cmake/Qt6/Qt6Config.cmake:43 (__qt_internal_require_suitable_cmake_version_for_using_qt)
+  CMakeLists.txt:140 (find_package)
+System.Management.Automation.RemoteException
+System.Management.Automation.RemoteException
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+CMake Warning at E:/Qt6.10/lib/cmake/Qt6/QtPublicDependencyHelpers.cmake:335 (message):
+  This project is using headers of the GuiPrivate module and will therefore
+  be tied to this specific Qt module build version.  Running this project
+  against other versions of the Qt modules may crash at any arbitrary point.
+  This is not a bug, but a result of using Qt internals.  You have been
+  warned!
+System.Management.Automation.RemoteException
+  You can disable this warning by setting QT_NO_PRIVATE_MODULE_WARNING to ON.
+Call Stack (most recent call first):
+  E:/Qt6.10/lib/cmake/Qt6GuiPrivate/Qt6GuiPrivateConfig.cmake:48 (_qt_internal_show_private_module_warning)
+  E:/Qt6.10/lib/cmake/Qt6/Qt6Config.cmake:241 (find_package)
+  CMakeLists.txt:140 (find_package)
+System.Management.Automation.RemoteException
+System.Management.Automation.RemoteException
+src/qml_gui/Renderer/shaders/rhi_viewport.vert -> rhi_viewport.vert.qsb exposed as :/rhi_viewport/shaders/rhi_viewport.vert.qsb
+src/qml_gui/Renderer/shaders/rhi_viewport.frag -> rhi_viewport.frag.qsb exposed as :/rhi_viewport/shaders/rhi_viewport.frag.qsb
+src/qml_gui/Renderer/shaders/rhi_gizmo.vert -> rhi_gizmo.vert.qsb exposed as :/rhi_viewport/shaders/rhi_gizmo.vert.qsb
+src/qml_gui/Renderer/shaders/rhi_gizmo.frag -> rhi_gizmo.frag.qsb exposed as :/rhi_viewport/shaders/rhi_gizmo.frag.qsb
+src/qml_gui/Renderer/shaders/bed_texture.vert -> bed_texture.vert.qsb exposed as :/rhi_viewport/shaders/bed_texture.vert.qsb
+src/qml_gui/Renderer/shaders/bed_texture.frag -> bed_texture.frag.qsb exposed as :/rhi_viewport/shaders/bed_texture.frag.qsb
+src/qml_gui/Renderer/shaders/model_lit.vert -> model_lit.vert.qsb exposed as :/rhi_viewport/shaders/model_lit.vert.qsb
+src/qml_gui/Renderer/shaders/model_lit.frag -> model_lit.frag.qsb exposed as :/rhi_viewport/shaders/model_lit.frag.qsb
+[Configure] CMake configure failed with exit code -1

@@ -99,8 +99,27 @@ private:
 // now captures a single-object 3MF snapshot (captureFullObjectSnapshot) and
 /// restores via restoreFullObjectSnapshot; the old name-only addObject path
 /// stays as the mock-mode fallback (empty snapshot).
-class DeleteObjectsCommand : public QUndoCommand
+/// Wave 4b (perf): memory-budget hook. Heavy commands report their snapshot
+/// payload size so UndoRedoManager can evict the OLDEST entries once the
+/// tracked budget is exceeded (upstream UndoRedo::Stack set_memory_limit +
+/// release_least_recently_used, Utils/UndoRedo.hpp:126-134).
+class IHeavyCommand
 {
+public:
+  virtual ~IHeavyCommand() = default;
+  virtual qint64 heavyBytes() const = 0;
+};
+
+class DeleteObjectsCommand : public QUndoCommand, public IHeavyCommand
+{
+  qint64 heavyBytes() const override
+  {
+    qint64 total = 0;
+    for (const auto &entry : m_snapshots)
+      total += entry.full3mf.size();
+    return total;
+  }
+
 public:
   /// Takes ownership of deletion logic. The objects at indicesToDelete are
   /// captured before the actual deletion happens.
@@ -142,8 +161,10 @@ private:
 // of re-adding an empty one. undo deletes by index, falling back to a
 // name lookup when indices drifted (name collision risk is low: the object
 // was just added).
-class AddObjectCommand : public QUndoCommand
+class AddObjectCommand : public QUndoCommand, public IHeavyCommand
 {
+  qint64 heavyBytes() const override { return m_full3mf.size(); }
+
 public:
   /// objectIndex is the index returned by ProjectServiceMock::addObject() /
   /// restoreFullObjectSnapshot(). Must be constructed while the object still
@@ -252,8 +273,10 @@ private:
 // captureVolumeMeshSnapshot so undo rebuilds the real volume (the old
 // addVolume fallback created a mesh-less placeholder). Must be constructed
 // BEFORE the volume is deleted.
-class VolumeDeleteCommand : public QUndoCommand
+class VolumeDeleteCommand : public QUndoCommand, public IHeavyCommand
 {
+  qint64 heavyBytes() const override { return m_volumeMesh.size(); }
+
 public:
   VolumeDeleteCommand(int objectIndex, int volumeIndex,
                       ProjectServiceMock *service,
@@ -405,8 +428,11 @@ private:
 // GLGizmoEmboss takes an UndoRedo snapshot per emboss edit). Captures the
 // volume mesh snapshot BEFORE the update; undo restores it, redo re-applies
 // the AFTER snapshot (captured post-update via setAfterSnapshot).
-class UpdateVolumeMeshCommand : public QUndoCommand
+class UpdateVolumeMeshCommand : public QUndoCommand, public IHeavyCommand
 {
+  qint64 heavyBytes() const override
+  { return m_before.size() + m_after.size(); }
+
 public:
   UpdateVolumeMeshCommand(int objectIndex, int volumeIndex,
                           const QString &volumeName,
@@ -466,8 +492,11 @@ private:
 // membership + current index; DeletePlate additionally embeds per-object 3MF
 // snapshots via capturePlateListSnapshot(deep)) BEFORE the operation, capture
 // the state again AFTER it, and swap the two snapshots on undo/redo.
-class PlateCommand : public QUndoCommand
+class PlateCommand : public QUndoCommand, public IHeavyCommand
 {
+  qint64 heavyBytes() const override
+  { return m_before.size() + m_after.size(); }
+
 public:
   enum Action {
     AddPlate = 0,
@@ -576,8 +605,11 @@ private:
 /// plate-list snapshot (capturePlateListSnapshot(deep=true), the same
 /// fidelity DeletePlate undo uses) before the operation and swap the two
 /// snapshots on undo/redo.
-class SceneSnapshotCommand : public QUndoCommand
+class SceneSnapshotCommand : public QUndoCommand, public IHeavyCommand
 {
+  qint64 heavyBytes() const override
+  { return m_before.size() + m_after.size(); }
+
 public:
   /// Captures the BEFORE deep snapshot. Construct BEFORE the structural
   /// operation runs. \a text is the undo history label ("Assemble", ...).
@@ -632,8 +664,11 @@ private:
 /// before both (Plater::TakeSnapshot in convert_unit / reload paths). Qt6
 /// equivalent: capture a single-object 3MF snapshot before, run the in-place
 /// replacement, capture again, and swap by delete+restore-at-index.
-class ObjectSnapshotCommand : public QUndoCommand
+class ObjectSnapshotCommand : public QUndoCommand, public IHeavyCommand
 {
+  qint64 heavyBytes() const override
+  { return m_before.full3mf.size() + m_after.full3mf.size(); }
+
 public:
   /// Captures the BEFORE snapshot. Construct BEFORE the replacement runs.
   ObjectSnapshotCommand(int objectIndex, const QString &text,

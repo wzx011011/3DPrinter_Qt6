@@ -1,0 +1,124 @@
+[2026-08-17 01:05:36.977942] [0x00004918] [trace]   Initializing StaticPrintConfigs
+qt.qpa.screen: "Unable to open monitor interface to \\\\.\\DISPLAY1:" "Unknown error 0xe0000225."
+[AppSettings] loaded: bed=220.0x220.0
+[Backend] Loaded 38 hints from hints.json
+QString::arg: Argument missing: "±à¼­×Ô¶¨Òå G-code", "01.07.01.00"
+qrc:/qml/pages/PreparePage.qml:3711:17: QML CxCheckBox: Binding loop detected for property "checked":
+qrc:/qml/pages/PreparePage.qml:3711:50
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:512:17: QML TabBar: Binding loop detected for property "implicitWidth":
+qrc:/qt-project.org/imports/QtQuick/Controls/Basic/TabBar.qml:10:5
+qrc:/qml/dialogs/SettingsDialog.qml:534:29: QML TabButton: Binding loop detected for property "width"
+qrc:/qml/dialogs/SettingsDialog.qml:741:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:741:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:741:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:741:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:741:41: Unable to assign QString to int
+qrc:/qml/dialogs/SettingsDialog.qml:741:41: Unable to assign QString to int
+qrc:/qml/pages/HomePage.qml:377: ReferenceError: loginError is not defined
+qrc:/qml/pages/HomePage.qml:374: ReferenceError: loginError is not defined
+qrc:/qml/pages/HomePage.qml:471: ReferenceError: bindError is not defined
+qrc:/qml/pages/HomePage.qml:468: ReferenceError: bindError is not defined
+qrc:/qml/dialogs/SysInfoDialog.qml:75: ReferenceError: index is not defined
+qrc:/qml/dialogs/ObjColorDialog.qml:115: ReferenceError: extruderList is not defined
+qrc:/qml/dialogs/ObjColorDialog.qml:129: ReferenceError: extruderList is not defined
+qrc:/qml/dialogs/ObjColorDialog.qml:135: ReferenceError: extruderList is not defined
+qrc:/qml/pages/PreparePage.qml:2571:25: Unable to assign [undefined] to bool

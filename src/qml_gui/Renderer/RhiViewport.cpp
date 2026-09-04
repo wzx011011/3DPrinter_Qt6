@@ -4,10 +4,12 @@
 #include "core/rendering/GizmoMath.h"
 #include "core/rendering/NavigatorCube.h"
 #include "core/rendering/ObjectPicking.h"
+#include "core/util/PerfLog.h"
 
 #include <QBuffer>
 #include <QByteArray>
 #include <QColor>
+#include <QElapsedTimer>
 #include <QHoverEvent>
 #include <QImage>
 #include <QMouseEvent>
@@ -87,6 +89,25 @@ void RhiViewport::setExplosionRatio(float value)
   m_explosionRatio = value;
   emit explosionRatioChanged();
   update();
+}
+
+void RhiViewport::setShowFps(bool on)
+{
+  if (m_showFps == on)
+    return;
+  m_showFps = on;
+  m_showFpsAtomic.store(on, std::memory_order_relaxed);
+  emit showFpsChanged();
+  update();
+}
+
+void RhiViewport::setFpsFromRenderThread(int fps)
+{
+  // Runs on the GUI thread via the renderer's queued invokeMethod.
+  if (m_fps == fps)
+    return;
+  m_fps = fps;
+  emit fpsChanged();
 }
 
 void RhiViewport::setMeshData(const QByteArray &data)
@@ -771,6 +792,21 @@ void RhiViewport::setPaintOverlayData(const QByteArray &data)
   update();
 }
 
+// P2.3-3: support preview byte-pipe setter (same contract as setPaintOverlayData).
+void RhiViewport::setSupportPreviewData(const QByteArray &data)
+{
+  m_supportPreviewData = data;
+  update();
+}
+
+// P2.3-5: height-range band span setter (same stash + update() contract as
+// the other brush params).
+void RhiViewport::setBrushHeightRange(double h)
+{
+  m_brushHeightRange = h;
+  update();
+}
+
 void RhiViewport::setHollowMarkerData(const QByteArray &data)
 {
   m_hollowMarkerData = data;
@@ -1424,6 +1460,10 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
     updateBrushCursorState(event->position(), 1 /*left*/);
+    // P11.B2.3: anchor the axis lock at each press (upstream
+    // m_last_mouse_click is set on actual hits, GLGizmoPainterBase.cpp:746).
+    m_paintLastClickX = float(event->position().x());
+    m_paintLastClickY = float(event->position().y());
     // Phase 240 (GIZ-02): smart fill fires on PRESS only (a shift-drag keeps
     // the erase-brush path).
     m_paintClickPress = true;
@@ -1786,23 +1826,64 @@ bool RhiViewport::activeToolCapturesContextGesture() const
   return m_contextToolInputCaptured || m_gizmoDragging;
 }
 
-void RhiViewport::hoverMoveEvent(QHoverEvent *event)
+void RhiViewport::runHoverPickPass()
 {
-  // v5.16 (NAVIGATOR): cube hover highlight + face label (ImGuizmo hovered
-  // face recolor, ImGuizmo.cpp:2923-2925).
-  updateNavigatorHover(event->position(), false);
-  setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
+  // The expensive part of hover handling: object pick sweep + gizmo pick
+  // emits. Runs for the LATEST position only (callers coalesce).
+  const QPointF position = m_pendingHoverPosition;
+  setHoveredSourceObjectIndex(pickSourceObjectAt(position));
   // Phase 115 (MEASURE-04): drive the snap UX on mouse-move while the measure
   // gizmo is active. The ViewModel runs the two-stage pick + getFeature and
   // updates the readout live. Mirrors upstream GLGizmoMeasure on_mouse move.
-  emitMeasurePickIfActive(event->position(), event->modifiers());
+  emitMeasurePickIfActive(position, m_pendingHoverModifiers);
   // Phase 240 (GIZ-03): drive the flatten hover highlight on mouse-move
   // (upstream GLGizmoFlatten hover recolors the hovered plane,
   // GLGizmoFlatten.cpp:107).
-  emitFlattenPickIfActive(event->position(), /*click=*/false);
+  emitFlattenPickIfActive(position, /*click=*/false);
   // Phase 121 (PAINT-03/OV-05): track the brush-cursor position on hover so
   // the sphere cursor follows the mouse before a click (hover -> black cursor).
-  updateBrushCursorState(event->position(), 0 /*hover*/);
+  updateBrushCursorState(position, 0 /*hover*/);
+}
+
+void RhiViewport::hoverMoveEvent(QHoverEvent *event)
+{
+  // OWZX_PERF_LOG gated hover-pick cost stats: the whole hover pass below
+  // (brute-force triangle sweep + gizmo pick emits) is the per-mouse-move
+  // CPU cost tracked by the perf evaluation (docs/perf-baseline.md).
+  static QElapsedTimer perfHoverTimer;
+  const bool perfHover = PerfLog::enabled();
+  if (perfHover)
+    perfHoverTimer.start();
+  // v5.16 (NAVIGATOR): cube hover highlight + face label (ImGuizmo hovered
+  // face recolor, ImGuizmo.cpp:2923-2925). Cheap math, runs every event.
+  updateNavigatorHover(event->position(), false);
+  // Wave 1.4 (perf): coalesce the expensive pick pass to ~60 Hz — one
+  // trailing-edge timer keeps only the newest position.
+  m_pendingHoverPosition = event->position();
+  m_pendingHoverModifiers = event->modifiers();
+  if (!m_hoverPickQueued) {
+    m_hoverPickQueued = true;
+    QTimer::singleShot(16, this, [this, perfHover]() {
+      m_hoverPickQueued = false;
+      runHoverPickPass();
+      if (perfHover) {
+        static qint64 accumNs = 0;
+        static int count = 0;
+        static qint64 maxNs = 0;
+        const qint64 dt = perfHoverTimer.nsecsElapsed();
+        accumNs += dt;
+        ++count;
+        maxNs = std::max(maxNs, dt);
+        if (count >= 64) {
+          qInfo("[PERF] %-28s %10.2f ms avg | max=%6.2f | n=%d", "hover.pick",
+                double(accumNs) / 1e6 / count, double(maxNs) / 1e6, count);
+          accumNs = 0;
+          count = 0;
+          maxNs = 0;
+        }
+      }
+    });
+  }
   event->accept();
 }
 
@@ -1984,6 +2065,9 @@ void RhiViewport::updatePickingScene()
   m_pickScene.clearDirtyFlags();
   m_pickModelGeneration = m_modelGeneration;
   m_pickSceneGeneration = m_sceneGeneration;
+  // Wave 2 (perf): the pick scene was rebuilt from scratch, so the cached
+  // per-batch BVHs are stale (they index into the old vertex storage).
+  m_pickBvhsValid = false;
 }
 
 int RhiViewport::pickSourceObjectAt(const QPointF &position)
@@ -2000,10 +2084,30 @@ int RhiViewport::pickSourceObjectAt(const QPointF &position)
       m_camera.projMatrix(aspect),
       m_camera.viewMatrix());
 
+  ensurePickBvhs();
   return ObjectPicking::pickSourceObject(rayOrigin,
                                          rayDirection,
                                          m_pickScene.modelVertices(),
-                                         m_pickScene.modelBatches());
+                                         m_pickScene.modelBatches(),
+                                         m_pickBvhs);
+}
+
+// Wave 2 (perf): lazily build one AABB BVH per pick-scene batch after a
+// scene rebuild; the build is amortized over all subsequent hover/press
+// picks (docs/perf-baseline.md pick sweep: 33 ms/ray -> BVH traversal).
+void RhiViewport::ensurePickBvhs()
+{
+  if (m_pickBvhsValid)
+    return;
+  const QList<PrepareSceneData::ModelBatch> &batches = m_pickScene.modelBatches();
+  const QList<PrepareSceneData::ModelVertex> &vertices = m_pickScene.modelVertices();
+  m_pickBvhs.resize(batches.size());
+  for (int i = 0; i < batches.size(); ++i) {
+    m_pickBvhs[i] = ObjectPicking::Bvh::build(vertices,
+                                              batches.at(i).firstVertex,
+                                              batches.at(i).vertexCount);
+  }
+  m_pickBvhsValid = true;
 }
 
 ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
@@ -2021,8 +2125,10 @@ ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
   const auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
       float(position.x()), float(position.y()), viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
+  ensurePickBvhs();
   const ObjectPicking::Hit objectHit = ObjectPicking::pick(
-      rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
+      rayOrigin, rayDirection, m_pickScene.modelVertices(),
+      m_pickScene.modelBatches(), m_pickBvhs);
   if (objectHit.isValid()) {
     result.target = ViewportContextTarget::Part;
     result.sourceObjectIndex = objectHit.sourceObjectIndex;
@@ -2241,9 +2347,22 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
   if (!isPaintGizmo)
     return;
 
+  // P11.B2.3 (upstream 1d61962ea7 / GLGizmoPainterBase.cpp:738-743): during a
+  // BRUSH drag the Vertical lock freezes the screen X and the Horizontal lock
+  // freezes the screen Y at the last click position. Presses set the anchor
+  // and are never constrained.
+  QPointF lockedPosition = position;
+  if (!m_paintClickPress)
+  {
+    if (m_paintVerticalOnly)
+      lockedPosition.setX(m_paintLastClickX);
+    else if (m_paintHorizontalOnly)
+      lockedPosition.setY(m_paintLastClickY);
+  }
+
   // Stage-1: cheap ray->AABB prefilter (same pickSourceObjectAt the measure
   // path uses). Returns -1 when the ray misses every object's AABB.
-  const int pickedSourceIndex = pickSourceObjectAt(position);
+  const int pickedSourceIndex = pickSourceObjectAt(lockedPosition);
   if (pickedSourceIndex < 0)
     return;
 
@@ -2256,7 +2375,7 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
     return;
   const float aspect = float(viewSize.width()) / float(viewSize.height());
   auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
-      float(position.x()), float(position.y()),
+      float(lockedPosition.x()), float(lockedPosition.y()),
       viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
 
@@ -2273,9 +2392,24 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
   const int    paintState  = shiftHeld ? 2 : m_paintState;
   const bool   smartFill   = (shiftHeld || m_paintToolType == 2) && m_paintClickPress;
 
+  // P2.3-5: toolType 3 is tool-gizmo dependent (upstream: MMU's
+  // HeightRangeIcon paints a world-Z band; FDM supports' GapFillIcon is a
+  // filtered fragment view with the regular brush). Route the height-range
+  // pick only inside the MMU gizmo; the support gizmo keeps the brush
+  // dispatch so its fragment view stays paintable.
+  if (m_paintToolType == 3 && m_gizmoMode == GizmoMmuSegmentation
+      && m_paintClickPress && !shiftHeld) {
+    emit heightRangePickRequested(rayOrigin, rayDirection, m_camera.eye(),
+                                  m_camera.forwardVector(), pickedSourceIndex,
+                                  paintState, m_brushHeightRange);
+    return;
+  }
+
   if (smartFill) {
-    emit smartFillPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
-                                paintState, double(m_smartFillAngle),
+    emit smartFillPickRequested(rayOrigin, rayDirection,
+                                m_camera.forwardVector(),
+                                pickedSourceIndex, paintState,
+                                double(m_smartFillAngle),
                                 m_paintOnOverhangsOnly,
                                 double(m_paintOverhangAngle));
     return;
@@ -2284,6 +2418,7 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
   // Forward to QML opaquely (no ray math in QML -- same contract as
   // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
   emit paintPickRequested(rayOrigin, rayDirection, m_camera.eye(),
+                          m_camera.forwardVector(),
                           pickedSourceIndex, brushRadius, cursorType, paintState,
                           /*smartFill=*/0);
 }

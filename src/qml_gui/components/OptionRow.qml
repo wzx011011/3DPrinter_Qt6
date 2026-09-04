@@ -32,6 +32,41 @@ Item {
         if (sourceKey === "printer") return qsTr("Printer")
         return sourceKey
     }
+    // Visual-compare P7.1: the sidebar renders group titles verbatim from the
+    // option manifest (English, per the process-audit contract). The upstream
+    // zh_CN sidebar shows the localized group name, so map the common groups
+    // for display only — the manifest strings stay untouched for the audit.
+    function groupDisplay(group) {
+        var map = {
+            "Layer height": qsTr("层高"),
+            "Line width": qsTr("线宽"),
+            "Walls and surfaces": qsTr("墙壁和表面"),
+            "Precision": qsTr("精度"),
+            "Seam": qsTr("接缝"),
+            "Speed": qsTr("速度"),
+            "Acceleration": qsTr("加速度"),
+            "Jerk(XY)": qsTr("Jerk(XY)"),
+            "Top/bottom shells": qsTr("顶/底外壳"),
+            "Infill": qsTr("填充"),
+            "Advanced": qsTr("高级"),
+            "Support": qsTr("支撑"),
+            "Raft": qsTr("筏"),
+            "Support filament": qsTr("支撑耗材"),
+            "Tree supports": qsTr("树形支撑"),
+            "Prime tower": qsTr("擦料塔"),
+            "Filament for Features": qsTr("功能耗材"),
+            "Ooze prevention": qsTr("溢出防止"),
+            "Flush options": qsTr("冲刷选项"),
+            "Skirt": qsTr("裙边"),
+            "Brim": qsTr("裙边"),
+            "Special mode": qsTr("特殊模式"),
+            "G-code output": qsTr("G-code 输出"),
+            "Post-processing Scripts": qsTr("后处理脚本"),
+            "Notes": qsTr("备注")
+        }
+        if (map.hasOwnProperty(group)) return map[group]
+        return group
+    }
 
     function displayOptionLabel(key, label) {
         var labels = {
@@ -143,6 +178,15 @@ Item {
     readonly property int contentHeight: root.rowHeight
     readonly property int totalHeight: root.headerHeight + root.rowHeight
     readonly property int metadataLaneWidth: root.compact ? 88 : 112
+    // Visual-compare P7.1: the source badge only carries signal when the value
+    // is NOT at its default (upstream shows per-row source flags the same way).
+    // "default"/"" rows hide the whole badge lane so the value editor sits
+    // tight against the label like the upstream OptionsGroup row.
+    readonly property bool laneVisible: root.valueSource !== ""
+                                        && root.valueSource !== "default"
+                                        && (sourceBadge.visible || readOnlyBadge.visible
+                                            || nullableBadge.visible || vectorBadge.visible
+                                            || boundsBadge.visible)
     readonly property int controlColumnWidth:
         root.compact
         ? Math.max(root.compactEnumWidth, root.compactFieldWidth + 76)
@@ -172,7 +216,7 @@ Item {
             // decorative "+" box read as a dead clickable button.
 
             Text {
-                text: root.oGroup
+                text: root.groupDisplay(root.oGroup)
                 color: Theme.textSecondary
                 font.pixelSize: root.compact ? Theme.fontSizeSM : Theme.fontSizeMD
                 font.bold: true
@@ -238,15 +282,16 @@ Item {
 
             RowLayout {
                 id: metadataLane
-                Layout.preferredWidth: root.metadataLaneWidth
-                Layout.minimumWidth: root.metadataLaneWidth
-                Layout.maximumWidth: root.metadataLaneWidth
+                visible: root.laneVisible
+                Layout.preferredWidth: root.laneVisible ? root.metadataLaneWidth : 0
+                Layout.minimumWidth: root.laneVisible ? root.metadataLaneWidth : 0
+                Layout.maximumWidth: root.laneVisible ? root.metadataLaneWidth : 0
                 Layout.fillHeight: true
                 spacing: 4
 
                 CxBadge {
                     id: sourceBadge
-                    visible: root.valueSource !== ""
+                    visible: root.valueSource !== "" && root.valueSource !== "default"
                     label: root.displayValueSource(root.valueSource)
                     colorToken: Theme.textTertiary
                     fillToken: Theme.bgInset

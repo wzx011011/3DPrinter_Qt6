@@ -149,10 +149,11 @@ Rectangle {
 
             PixelHeader {
                 Layout.fillWidth: true
-                title: qsTr("耗材")
+                // Visual-compare P7.1: upstream names this section 耗材丝.
+                title: qsTr("耗材丝")
                 iconText: "F"
                 actionIcon: "qrc:/qml/assets/icons/settings.svg"
-                actionToolTip: qsTr("耗材设置")
+                actionToolTip: qsTr("耗材丝设置")
                 onActionTriggered: backend.forwardSettingsRequest("filament")
             }
 
@@ -506,6 +507,18 @@ Rectangle {
                 }
 
                 Component.onCompleted: root.rebuildParamsFilter()
+
+                // Visual-compare P7.1: oVal bindings call optValue() (a
+                // Q_INVOKABLE), which only re-evaluates when the delegate is
+                // recreated. If the model resets/repopulates AFTER the rows
+                // were built (async preset merge at startup), the value fields
+                // would stay blank forever — rebuild the filter (fresh index
+                // array -> delegate re-creation) whenever the model reloads.
+                Connections {
+                    target: root.paramsOptionModel
+                    function onModelReset() { root.rebuildParamsFilter() }
+                    function onRowsInserted() { root.rebuildParamsFilter() }
+                }
             }
 
             Item { Layout.preferredHeight: 18 }

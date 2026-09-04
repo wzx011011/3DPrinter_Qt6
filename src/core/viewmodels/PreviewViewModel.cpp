@@ -2,6 +2,7 @@
 
 #include "core/services/SliceService.h"
 #include "core/services/ProjectServiceMock.h"
+#include "core/util/PerfLog.h"
 #ifdef HAS_LIBSLIC3R
 // Phase 118 (TICK-02/TICK-03): libslic3r custom-g-code write-back path.
 #include <libslic3r/CustomGCode.hpp>
@@ -14,6 +15,8 @@
 #include <QTimer>
 #include <QFileInfo>
 #include <QHash>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QColor>
 #include <cstring>
 #include <cfloat>
@@ -411,10 +414,36 @@ namespace
     return false;
   }
 
+  // Cached compiled axis patterns. Constructing a QRegularExpression
+  // compiles the PCRE2 pattern (tens of microseconds each); doing that per
+  // parsed token made the whole-file gcode parse ~100x slower
+  // (docs/perf-baseline.md, preview.parse_loop baseline 87s / 460k lines).
+  // QRegularExpression::match() is const and reentrant on a shared instance.
+  struct AxisPatternTable
+  {
+    QRegularExpression re[26];
+    AxisPatternTable()
+    {
+      const QString pattern =
+          QStringLiteral("(?:^|\\s)%1([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))");
+      for (int i = 0; i < 26; ++i)
+        re[i].setPattern(pattern.arg(QChar(QLatin1Char('A' + i))));
+    }
+  };
+
   bool parseAxis(const QString &line, QChar axis, float &value)
   {
-    const QRegularExpression re(QStringLiteral("(?:^|\\s)%1([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))").arg(axis));
-    const auto m = re.match(line);
+    static const AxisPatternTable table;
+    const char16_t code = axis.unicode();
+    const QRegularExpression *pattern = nullptr;
+    QRegularExpression cold;
+    if (code >= u'A' && code <= u'Z')
+      pattern = &table.re[code - u'A'];
+    else {
+      cold.setPattern(QStringLiteral("(?:^|\\s)%1([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))").arg(axis));
+      pattern = &cold;
+    }
+    const auto m = pattern->match(line);
     if (!m.hasMatch())
       return false;
     bool ok = false;
@@ -427,7 +456,7 @@ namespace
 
   float parseSValue(const QString &line)
   {
-    const QRegularExpression re(QStringLiteral("\\bS(-?\\d+(?:\\.\\d+)?)\\b"));
+    static const QRegularExpression re(QStringLiteral("\\bS(-?\\d+(?:\\.\\d+)?)\\b"));
     const auto m = re.match(line);
     if (!m.hasMatch())
       return -1.f;
@@ -438,7 +467,7 @@ namespace
 
   float parseFValue(const QString &line)
   {
-    const QRegularExpression re(QStringLiteral("\\bF(-?\\d+(?:\\.\\d+)?)\\b"));
+    static const QRegularExpression re(QStringLiteral("\\bF(-?\\d+(?:\\.\\d+)?)\\b"));
     const auto m = re.match(line);
     if (!m.hasMatch())
       return -1.f;
@@ -449,9 +478,23 @@ namespace
 
   bool parseTaggedValue(const QString &line, const QString &tag, float &value)
   {
-    const QRegularExpression re(QStringLiteral("%1\\s*[:=]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))")
-                                     .arg(QRegularExpression::escape(tag)),
-                                 QRegularExpression::CaseInsensitiveOption);
+    // Tag patterns are a small fixed set; cache them (copies of
+    // QRegularExpression are cheap implicitly-shared handles) instead of
+    // recompiling per comment line.
+    static QMutex cacheMutex;
+    static QHash<QString, QRegularExpression> cache;
+    QRegularExpression re;
+    {
+      const QMutexLocker lock(&cacheMutex);
+      const auto it = cache.constFind(tag);
+      if (it != cache.constEnd())
+        re = it.value();
+      else
+        re = cache.insert(tag, QRegularExpression(
+            QStringLiteral("%1\\s*[:=]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))")
+                .arg(QRegularExpression::escape(tag)),
+            QRegularExpression::CaseInsensitiveOption)).value();
+    }
     const auto m = re.match(line);
     if (!m.hasMatch())
       return false;
@@ -472,7 +515,7 @@ namespace
 
   int parseToolToken(const QString &line, int fallback)
   {
-    const QRegularExpression re(QStringLiteral("\\bT(\\d+)\\b"),
+    static const QRegularExpression re(QStringLiteral("\\bT(\\d+)\\b"),
                                 QRegularExpression::CaseInsensitiveOption);
     const auto m = re.match(line);
     if (!m.hasMatch())
@@ -484,7 +527,7 @@ namespace
 
   QString parseColorToken(const QString &line)
   {
-    const QRegularExpression re(QStringLiteral("#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?"));
+    static const QRegularExpression re(QStringLiteral("#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?"));
     const auto m = re.match(line);
     return m.hasMatch() ? m.captured(0) : QString{};
   }
@@ -594,6 +637,15 @@ PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceServ
           {
     syncPreviewWithActiveResult();
     emit stateChanged(); });
+  // Wave 3b (perf): in-memory preview hand-off (upstream
+  // GCodeViewer::load(GCodeProcessorResult), GCodeViewer.hpp:803). Fires
+  // ahead of sliceFinished; applySlicePreview builds every preview container
+  // from the captured moves so the exported text file is not re-parsed.
+  connect(sliceService_, &SliceService::slicePreviewReady, this,
+          [this](const SlicePreviewData &data) {
+    applySlicePreview(data);
+    emit stateChanged();
+  });
   connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &time)
           {
     if (!time.isEmpty())
@@ -605,10 +657,12 @@ PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceServ
     emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceResultCleared, this, [this]()
           {
+    m_directPreviewValid = false;
     resetPreviewState();
     emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFailed, this, [this](const QString &)
           {
+    m_directPreviewValid = false;
     resetPreviewState();
     emit stateChanged(); });
 }
@@ -788,6 +842,9 @@ bool PreviewViewModel::loadGCodeForPreview(const QString &filePath)
     return false;
   }
 
+  // Wave 3b (perf): an externally loaded file overrides any in-memory
+  // slice preview (the file-parse path becomes this feature's own path).
+  m_directPreviewValid = false;
   rebuildFromGCode(info.absoluteFilePath());
   emit stateChanged();
   return !gcodePreviewData_.isEmpty();
@@ -812,7 +869,232 @@ void PreviewViewModel::syncPreviewWithActiveResult()
   const QString activeTime = sliceService_->estimatedTimeLabel();
   estimatedTime_ = activeTime.isEmpty() ? QStringLiteral("--:--:--") : activeTime;
   totalTime_ = estimatedTime_;
+  // Wave 3b (perf): the in-memory moves already built this preview on
+  // slicePreviewReady — skip the exported-file re-parse entirely.
+  if (m_directPreviewValid)
+    return;
   rebuildFromGCode(info.absoluteFilePath());
+}
+
+void PreviewViewModel::applySlicePreview(const SlicePreviewData &data)
+{
+  // Wave 3b (perf): direct in-memory build from the slice worker's
+  // GCodeProcessorResult mirror (upstream GCodeViewer::load,
+  // GCodeViewer.hpp:803). Produces the same container set as the text
+  // parser; documented deltas: per-move acceleration / jerk / pressure
+  // advance / M-code flow factors are not carried by the result (those
+  // view modes report data-unavailable), and the source-line window stays
+  // empty (the file view still loads via loadGCodeForPreview).
+  const PerfLog::Scope perfScope("preview.direct_build");
+  const QString preservedEstimatedTime = estimatedTime_;
+  resetPreviewState();
+  m_directPreviewValid = true;
+
+  const QString activeTime = sliceService_ ? sliceService_->estimatedTimeLabel()
+                                           : QString{};
+  estimatedTime_ = activeTime.isEmpty() ? preservedEstimatedTime : activeTime;
+  totalTime_ = estimatedTime_;
+
+  const int layerTotal = qMax(1, int(data.layerZs.size()));
+  m_layerZs = data.layerZs;
+  m_layerTimes.fill(0.0f, layerTotal);
+
+  segments_.reserve(data.moves.size() + 1);
+  m_moveAccumulatedTime.reserve(data.moves.size() + 1);
+
+  float px = 0.0f, py = 0.0f, pz = 0.0f;
+  int moveIndex = 0;
+  int extrudeMoves = 0;
+  int travelMoves = 0;
+  int toolChanges = 0;
+  double feedrateSum = 0.0;
+  int feedrateCount = 0;
+  double accTime = 0.0;
+  bool prepareCaptured = false;
+
+  for (const SlicePreviewMove &mv : data.moves) {
+    const int kind = int(mv.kind);
+    const int layerIdx = qBound(0, int(mv.layer), layerTotal - 1);
+
+    if (kind == 7) {
+      // Color/pause/custom marker: position update only (the text parser
+      // built tick marks for these; the direct path keeps the renderer's
+      // tick budget for retract/unretract/seam which the result carries
+      // natively).
+      px = mv.x; py = mv.y; pz = mv.z;
+      continue;
+    }
+    if (kind == 6) {
+      ++toolChanges;
+      m_toolChangePositions.push_back({moveIndex, int(mv.extruderId)});
+      px = mv.x; py = mv.y; pz = mv.z;
+      continue;
+    }
+    if (kind == 2 || kind == 3 || kind == 5) {
+      // Retract / unretract / seam tick at the current position (same
+      // kMarkerTickHeight stand-in as the parser).
+      StoredSegment seg;
+      seg.x1 = px; seg.y1 = py; seg.z1 = pz;
+      seg.x2 = px; seg.y2 = py; seg.z2 = pz + kMarkerTickHeight;
+      const float *kc = kindBaseColor(kind);
+      seg.baseR = kc[0]; seg.baseG = kc[1]; seg.baseB = kc[2];
+      seg.feedrate = 0.0f;
+      seg.fan_speed = mv.fanSpeed;
+      seg.temperature = mv.temperature;
+      seg.width = mv.width;
+      seg.height = mv.height;
+      seg.layer_time = m_layerTimes.at(layerIdx);
+      seg.acceleration = 0.0f;
+      seg.extruder_id = int(mv.extruderId);
+      seg.layer = layerIdx;
+      seg.move = moveIndex;
+      seg.isTravel = true;
+      seg.role = 0;
+      seg.kind = kind;
+      segments_.push_back(seg);
+      m_kindCounts[kind] += 1;
+      featureCount_[kindFeatureLabel(kind)] += 1;
+      m_moveAccumulatedTime.push_back(float(accTime));
+      ++moveIndex;
+      continue;
+    }
+
+    // Displacement kinds: 0 extrude, 1 travel, 4 wipe.
+    StoredSegment seg;
+    seg.x1 = px; seg.y1 = py; seg.z1 = pz;
+    seg.x2 = mv.x; seg.y2 = mv.y; seg.z2 = mv.z;
+    const int role = kind == 0 ? int(mv.role) : 0;
+    if (kind == 0) {
+      seg.baseR = kRoleColors[role][0];
+      seg.baseG = kRoleColors[role][1];
+      seg.baseB = kRoleColors[role][2];
+    } else {
+      const float *kc = kindBaseColor(kind);
+      seg.baseR = kc[0]; seg.baseG = kc[1]; seg.baseB = kc[2];
+      // P17.4: upstream travel_color tri-state by delta_extruder sign
+      // (GCodeViewer.cpp:3234-3236).
+      if (kind == 1) {
+        static const float kTravelExtrude[3] = {0.112f, 0.422f, 0.103f};
+        static const float kTravelRetract[3] = {0.505f, 0.064f, 0.028f};
+        if (mv.deltaExtruder < 0.0f) {
+          seg.baseR = kTravelRetract[0];
+          seg.baseG = kTravelRetract[1];
+          seg.baseB = kTravelRetract[2];
+        } else if (mv.deltaExtruder > 0.0f) {
+          seg.baseR = kTravelExtrude[0];
+          seg.baseG = kTravelExtrude[1];
+          seg.baseB = kTravelExtrude[2];
+        }
+      }
+    }
+    seg.feedrate = mv.feedrateMMPerMin;
+    seg.fan_speed = mv.fanSpeed;
+    seg.temperature = mv.temperature;
+    seg.width = mv.width;
+    seg.height = mv.height > 0.0f ? mv.height : mv.z;
+    seg.layer_time = m_layerTimes.at(layerIdx);
+    seg.acceleration = 0.0f;
+    seg.volumetric_rate = mv.volumetricRate;
+    seg.jerk = 0.0f;
+    seg.pressure_advance = 0.0f;
+    seg.actual_speed = mv.feedrateMMPerMin;
+    seg.actual_flow = 1.0f;
+    seg.extruder_id = int(mv.extruderId);
+    seg.layer = layerIdx;
+    seg.move = moveIndex;
+    seg.isTravel = (kind == 1 || kind == 4);
+    seg.role = role;
+    seg.kind = kind;
+    segments_.push_back(seg);
+
+    accTime += double(mv.timeSecs);
+    m_layerTimes[layerIdx] += mv.timeSecs;
+    m_moveAccumulatedTime.push_back(float(accTime));
+
+    if (kind == 0) {
+      ++extrudeMoves;
+      if (mv.feedrateMMPerMin > 0.0f) {
+        feedrateSum += mv.feedrateMMPerMin;
+        ++feedrateCount;
+      }
+      m_extruderUsedLength[int(mv.extruderId)] += std::max(0.0f, mv.deltaExtruder);
+      m_roleFilamentLength[role] += std::max(0.0f, mv.deltaExtruder);
+      if (role == 11 || role == 12 || role == 18)
+        m_filamentSplitLength[1] += std::max(0.0f, mv.deltaExtruder);
+      else if (role == 13)
+        m_filamentSplitLength[3] += std::max(0.0f, mv.deltaExtruder);
+      else
+        m_filamentSplitLength[0] += std::max(0.0f, mv.deltaExtruder);
+      featureCount_[QString::fromUtf8(kRoleLabels[role])] += 1;
+      if (!prepareCaptured) {
+        prepareTimeSeconds_ = float(accTime - mv.timeSecs);
+        prepareCaptured = true;
+      }
+    } else if (kind == 1) {
+      ++travelMoves;
+    }
+    m_kindCounts[kind] += 1;
+
+    px = mv.x; py = mv.y; pz = mv.z;
+    ++moveIndex;
+  }
+
+  moveCount_ = moveIndex;
+  layerCount_ = layerTotal;
+  extrudeMoveCount_ = extrudeMoves;
+  travelMoveCount_ = travelMoves;
+  toolChangeCount_ = toolChanges;
+  currentLayerMin_ = 0;
+  currentLayerMax_ = layerCount_ - 1;
+  currentMove_ = moveCount_;
+  for (float layerTime : m_layerTimes)
+    m_maxLayerTime = std::max(m_maxLayerTime, layerTime);
+
+  // Stats + labels (same formulas as the parser tail).
+  if (feedrateCount > 0)
+    avgSpeed_ = QStringLiteral("%1 mm/s").arg(feedrateSum / feedrateCount, 0, 'f', 1);
+  else
+    avgSpeed_ = QStringLiteral("--");
+
+  if (data.totalFilamentMm > 0.0) {
+    m_filamentDiameter = data.filamentDiameter;
+    filamentUsed_ = QStringLiteral("%1 m").arg(data.totalFilamentMm / 1000.0, 0, 'f', 2);
+    const double radius = data.filamentDiameter * 0.5;
+    const double volumeMm3 = data.totalFilamentMm * 3.14159265358979323846 * radius * radius;
+    const double weightG = volumeMm3 * data.filamentDensity * 0.001;
+    filamentWeight_ = QStringLiteral("%1 g").arg(weightG, 0, 'f', 1);
+    m_totalFilamentGrams = weightG;
+    m_extruderUsedWeight.clear();
+    for (auto it = m_extruderUsedLength.constBegin(); it != m_extruderUsedLength.constEnd(); ++it) {
+      const double vol = it.value() * 3.14159265358979323846 * radius * radius;
+      m_extruderUsedWeight[it.key()] = vol * data.filamentDensity * 0.001;
+    }
+  } else {
+    filamentUsed_ = QStringLiteral("--");
+    filamentWeight_ = QStringLiteral("--");
+    m_totalFilamentGrams = 0.0;
+  }
+  const QString costLabel = sliceService_ ? sliceService_->resultCostLabel() : QString{};
+  estimatedCost_ = costLabel.isEmpty() ? QStringLiteral("--") : costLabel;
+
+  // Role time breakdown (same accumulation source as the parser's
+  // TIME_ELAPSED path: per-move durations by canonical role).
+  m_roleTimes.clear();
+  for (auto it = data.roleTimeSecs.constBegin(); it != data.roleTimeSecs.constEnd(); ++it) {
+    if (it.value() <= 0.0)
+      continue;
+    RoleTimeEntry entry;
+    entry.name = QString::fromUtf8(kRoleLabels[qBound(0, int(it.key()), 18)]);
+    entry.timeSecs = it.value();
+    m_roleTimes.append(entry);
+  }
+
+  updateToolPositionData();
+  rebuildGcodeLineWindow();
+  recolorAndPackSegments();
+
+  qInfo("[PreviewViewModel] direct payload moves=%d layers=%d segments=%zu travelVisible=%d",
+        moveCount_, layerCount_, segments_.size(), showTravelMoves_ ? 1 : 0);
 }
 
 void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
@@ -1460,6 +1742,9 @@ void PreviewViewModel::resetPreviewState()
 
 void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 {
+  // OWZX_PERF_LOG gated: the full-file gcode re-parse is the post-slice
+  // stage tracked by the perf evaluation (docs/perf-baseline.md).
+  const PerfLog::Scope perfScope("preview.parse");
   const QString preservedEstimatedTime = estimatedTime_;
   const QString preservedTotalTime = totalTime_;
   resetPreviewState();
@@ -1576,6 +1861,12 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   };
 
   int sourceLineNumber = 0;
+  // OWZX_PERF_LOG gated sub-stage timing to attribute parse cost
+  // (docs/perf-baseline.md).
+  QElapsedTimer perfLoopTimer;
+  const bool perfLoop = PerfLog::enabled();
+  if (perfLoop)
+    perfLoopTimer.start();
   while (!file.atEnd())
   {
     const QString raw = QString::fromUtf8(file.readLine()).trimmed();
@@ -1610,7 +1901,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         currentType = raw.mid(6).trimmed();
       else
       {
-        const QRegularExpression featureRe(QStringLiteral("^;\\s*FEATURE\\s*:\\s*(.+)$"),
+        static const QRegularExpression featureRe(QStringLiteral("^;\\s*FEATURE\\s*:\\s*(.+)$"),
                                            QRegularExpression::CaseInsensitiveOption);
         const auto featureMatch = featureRe.match(raw);
         if (featureMatch.hasMatch())
@@ -1688,7 +1979,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         // Phase 238 (PREV-05): allow the "; key = value" spacing of the real
         // gcode config footer (the old [=:] without leading \s* never matched
         // "; filament_diameter = 1.75").
-        const QRegularExpression re(QLatin1String("filament_diameter\\s*[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
+        static const QRegularExpression re(QLatin1String("filament_diameter\\s*[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
         const auto m = re.match(raw);
         if (m.hasMatch())
         {
@@ -1699,7 +1990,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       }
       if (raw.contains(QStringLiteral("filament_density")))
       {
-        const QRegularExpression re(QLatin1String("filament_density\\s*[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
+        static const QRegularExpression re(QLatin1String("filament_density\\s*[=:]\\s*(\\d+(?:\\.\\d+)?)"), QRegularExpression::CaseInsensitiveOption);
         const auto m = re.match(raw);
         if (m.hasMatch())
         {
@@ -1714,7 +2005,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       // defaults to DEFAULT_FILAMENT_COST 29.99 (GCodeProcessor.cpp:49).
       if (raw.contains(QStringLiteral("filament_cost")))
       {
-        const QRegularExpression re(QLatin1String("filament_cost\\s*[=:]\\s*([\\d.,\\s]+)"), QRegularExpression::CaseInsensitiveOption);
+        static const QRegularExpression re(QLatin1String("filament_cost\\s*[=:]\\s*([\\d.,\\s]+)"), QRegularExpression::CaseInsensitiveOption);
         const auto m = re.match(raw);
         if (m.hasMatch())
         {
@@ -2281,6 +2572,10 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     processStraightMove(nx, ny, nz, ne, hasE);
   }
 
+  if (perfLoop)
+    PerfLog::event("preview.parse_loop", perfLoopTimer.nsecsElapsed(),
+                   QStringLiteral("lines=%1").arg(sourceLineNumber));
+
   moveCount_ = moveIndex;
   layerCount_ = qMax(1, hasPrintLayerZ ? layer + 1 : 1);
 
@@ -2473,8 +2768,15 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
             [](const RoleTimeEntry &a, const RoleTimeEntry &b) { return a.timeSecs > b.timeSecs; });
 
   updateToolPositionData();
+  if (perfLoop) {
+    PerfLog::event("preview.parse_postloop", perfLoopTimer.nsecsElapsed(),
+                   QStringLiteral("until_pack"));
+    perfLoopTimer.restart();
+  }
   rebuildGcodeLineWindow();
   recolorAndPackSegments();
+  if (perfLoop)
+    PerfLog::event("preview.parse_pack", perfLoopTimer.nsecsElapsed());
   // Phase 238 (PREV-05): honor the parsed "; estimated printing time"
   // comments. When the slice service did not supply a label, the normal-mode
   // comment becomes the total; the stealth total switches to the parsed

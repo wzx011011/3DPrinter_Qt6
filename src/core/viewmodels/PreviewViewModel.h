@@ -15,6 +15,9 @@ class QTimer;
 
 class SliceService;
 class ProjectServiceMock;
+/// Wave 3b (perf): POD mirror delivered by SliceService::slicePreviewReady
+/// (defined in SliceService.h).
+struct SlicePreviewData;
 
 class PreviewViewModel final : public QObject
 {
@@ -397,7 +400,14 @@ signals:
 private:
   void resetPreviewState();
   void rebuildFromGCode(const QString &filePath);
+  // Wave 3b (perf): builds the preview containers directly from the
+  // in-memory slice moves (upstream GCodeViewer::load(GCodeProcessorResult),
+  // GCodeViewer.hpp:803) — the exported text file is not re-parsed.
+  void applySlicePreview(const SlicePreviewData &data);
   void syncPreviewWithActiveResult();
+  // Wave 3b: true while the preview reflects the in-memory slice moves for
+  // the active result (syncPreviewWithActiveResult then skips the file parse).
+  bool m_directPreviewValid = false;
   void recolorAndPackSegments();
   void buildLegendItems(int mode, float minV, float maxV);
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;

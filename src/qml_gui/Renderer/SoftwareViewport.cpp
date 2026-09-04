@@ -1,6 +1,7 @@
 #include "SoftwareViewport.h"
 
 #include "core/rendering/ObjectPicking.h"
+#include "core/util/PerfLog.h"
 
 #include <QBuffer>
 #include <QMouseEvent>
@@ -8,6 +9,7 @@
 #include <QPainterPath>
 #include <QWheelEvent>
 #include <algorithm>
+#include <QElapsedTimer>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -465,7 +467,62 @@ void SoftwareViewport::requestThumbnailCapture(int, int size)
 
 void SoftwareViewport::paint(QPainter *painter)
 {
+  // OWZX_PERF_LOG gated paint stats (docs/perf-baseline.md): the software
+  // fallback is the ACTIVE path whenever the remote-session detection trips
+  // (e.g. always-on ToDesk/Sunlogin services), so it carries the same
+  // frame-time instrumentation as the RHI renderer.
+  static QElapsedTimer paintTimer;
+  static bool timerValid = false;
+  if (PerfLog::enabled()) {
+    if (!timerValid) {
+      paintTimer.start();
+      timerValid = true;
+    }
+  }
+  // v5.17 (FPS overlay): upstream render-statistics parity — paints per
+  // second, published twice a second (GUI thread, no marshalling needed).
+  static QElapsedTimer fpsTimer;
+  static int fpsFrames = 0;
+  if (!fpsTimer.isValid())
+    fpsTimer.start();
+  ++fpsFrames;
+  const qint64 paintStartNs =
+      PerfLog::enabled() ? paintTimer.nsecsElapsed() : 0;
   paintScene(painter, contentRect());
+  if (PerfLog::enabled() && paintStartNs > 0) {
+    static qint64 accumNs = 0;
+    static int count = 0;
+    static qint64 minNs = std::numeric_limits<qint64>::max();
+    static qint64 maxNs = 0;
+    const qint64 dt = paintTimer.nsecsElapsed() - paintStartNs;
+    accumNs += dt;
+    ++count;
+    minNs = std::min(minNs, dt);
+    maxNs = std::max(maxNs, dt);
+    if (count >= 120) {
+      PerfLog::event("swrender.frame", accumNs / count,
+                     QStringLiteral("min=%1 max=%2 n=%3")
+                         .arg(double(minNs) / 1e6, 0, 'f', 2)
+                         .arg(double(maxNs) / 1e6, 0, 'f', 2)
+                         .arg(count));
+      accumNs = 0;
+      count = 0;
+      minNs = std::numeric_limits<qint64>::max();
+      maxNs = 0;
+    }
+  }
+  {
+    const qint64 elapsedMs = fpsTimer.elapsed();
+    if (elapsedMs >= 500 && m_showFps) {
+      const int measuredFps = int(double(fpsFrames) * 1000.0 / double(elapsedMs));
+      fpsTimer.restart();
+      fpsFrames = 0;
+      if (m_fps != measuredFps) {
+        m_fps = measuredFps;
+        emit fpsChanged();
+      }
+    }
+  }
 }
 
 QRectF SoftwareViewport::contentRect() const
@@ -734,60 +791,222 @@ QPointF SoftwareViewport::project(const QVector3D &point) const
                  rect.center().y() + m_pan.y() - p.y() * scale);
 }
 
+// ── P7.1 parity stash setters + screen/bed mapping stubs ────────────────
+// The values are stored and repaint the software scene; the specific stream
+// rendering for these markers stays on the RHI backend. projectWorldToScreen
+// reuses the paint projection; screenToBedPoint is an approximate inverse on
+// the Y=0 bed plane (the software viewport is a fallback renderer, not a
+// picking surface).
+void SoftwareViewport::setSupportPreviewData(const QByteArray &data) { m_supportPreviewData = data; update(); }
+void SoftwareViewport::setHollowMarkerData(const QByteArray &data) { m_hollowMarkerData = data; update(); }
+void SoftwareViewport::setAdvancedCutMarkerData(const QByteArray &data) { m_advancedCutMarkerData = data; update(); }
+void SoftwareViewport::setMeasureOverlayData(const QByteArray &data) { m_measureOverlayData = data; update(); }
+void SoftwareViewport::setFlattenHoverData(const QByteArray &data) { m_flattenHoverData = data; update(); }
+void SoftwareViewport::setPaintToolType(int t) { m_paintToolType = t; update(); }
+void SoftwareViewport::setPaintState(int s) { m_paintState = s; update(); }
+void SoftwareViewport::setBrushCursorType(int t) { m_brushCursorType = t; update(); }
+void SoftwareViewport::setBrushHeightRange(double h) { m_brushHeightRange = h; update(); }
+void SoftwareViewport::setSmartFillAngle(double a) { m_smartFillAngle = a; update(); }
+void SoftwareViewport::setPaintOnOverhangsOnly(bool b) { m_paintOnOverhangsOnly = b; update(); }
+void SoftwareViewport::setPaintOverhangAngle(double a) { m_paintOverhangAngle = a; update(); }
+void SoftwareViewport::setCutRotationX(float v) { m_cutRotationX = v; update(); }
+void SoftwareViewport::setCutRotationY(float v) { m_cutRotationY = v; update(); }
+void SoftwareViewport::setCutRotationZ(float v) { m_cutRotationZ = v; update(); }
+
+// P7.1 mirrored-property stash setters (all inert; see the header note).
+void SoftwareViewport::setBedCaliLinesActive(bool b) { m_bedCaliLinesActive = b; update(); }
+void SoftwareViewport::setBedExcludeAreas(const QVariantList &list) { m_bedExcludeAreas = list; update(); }
+void SoftwareViewport::setBedHeightLimitActive(bool b) { m_bedHeightLimitActive = b; update(); }
+void SoftwareViewport::setBedHeightToLid(float v) { m_bedHeightToLid = v; update(); }
+void SoftwareViewport::setBedHeightToRod(float v) { m_bedHeightToRod = v; update(); }
+void SoftwareViewport::setBedModelMeshData(const QByteArray &data) { m_bedModelMeshData = data; update(); }
+void SoftwareViewport::setBedTypeImagesDir(const QString &dir) { m_bedTypeImagesDir = dir; update(); }
+void SoftwareViewport::setBedTypeTexturesActive(bool b) { m_bedTypeTexturesActive = b; update(); }
+void SoftwareViewport::setCameraNavStyle(int s) { m_cameraNavStyle = s; update(); }
+void SoftwareViewport::setCurrentPlateBedType(int t) { m_currentPlateBedType = t; update(); }
+void SoftwareViewport::setFreeCamera(bool b) { m_freeCamera = b; update(); }
+void SoftwareViewport::setMeshBatchExtruderIds(const QVariantList &list) { m_meshBatchExtruderIds = list; update(); }
+void SoftwareViewport::setMeshBatchPrintableFlags(const QVariantList &list) { m_meshBatchPrintableFlags = list; update(); }
+void SoftwareViewport::setMeshBatchVolumeTypes(const QVariantList &list) { m_meshBatchVolumeTypes = list; update(); }
+void SoftwareViewport::setNavigatorBottomOffset(int v) { m_navigatorBottomOffset = v; update(); }
+void SoftwareViewport::setPaintHorizontalOnly(bool b) { m_paintHorizontalOnly = b; update(); }
+void SoftwareViewport::setPaintVerticalOnly(bool b) { m_paintVerticalOnly = b; update(); }
+void SoftwareViewport::setReverseZoom(bool b) { m_reverseZoom = b; update(); }
+void SoftwareViewport::setRotationCenterHint(const QVariant &hint) { m_rotationCenterHint = hint; update(); }
+void SoftwareViewport::setSelectedSourceObjectIndices(const QVariantList &list) { m_selectedSourceObjectIndices = list; update(); }
+void SoftwareViewport::setSequentialClearanceActive(bool b) { m_sequentialClearanceActive = b; update(); }
+void SoftwareViewport::setSequentialClearanceFill(const QByteArray &data) { m_sequentialClearanceFill = data; update(); }
+void SoftwareViewport::setSequentialClearanceOutline(const QByteArray &data) { m_sequentialClearanceOutline = data; update(); }
+void SoftwareViewport::setSequentialClearancePreviewMode(bool b) { m_sequentialClearancePreviewMode = b; update(); }
+void SoftwareViewport::setSequentialHeightFill(const QByteArray &data) { m_sequentialHeightFill = data; update(); }
+void SoftwareViewport::setZoomToMouse(bool b) { m_zoomToMouse = b; update(); }
+void SoftwareViewport::setBedTextureUrl(const QUrl &url) { m_bedTextureUrl = url; }
+void SoftwareViewport::setHintLocalRotation(const QVariantList &list) { m_hintLocalRotation = list; update(); }
+void SoftwareViewport::setNavigatorEnabled(bool b) { m_navigatorEnabled = b; update(); }
+void SoftwareViewport::setUniformScale(bool b) { m_uniformScale = b; update(); }
+void SoftwareViewport::setRoleVisibility(const QVariantList &list) { m_roleVisibility = list; update(); }
+void SoftwareViewport::setExplosionRatio(float v) { m_explosionRatio = v; update(); }
+void SoftwareViewport::setAssemblyMeasureSelectedA(int v) { m_assemblyMeasureSelectedA = v; update(); }
+void SoftwareViewport::setAssemblyMeasureSelectedB(int v) { m_assemblyMeasureSelectedB = v; update(); }
+void SoftwareViewport::setAssembleOffsets(const QVariantList &list) { m_assembleOffsets = list; update(); }
+void SoftwareViewport::setAssembleRotations(const QVariantList &list) { m_assembleRotations = list; update(); }
+void SoftwareViewport::setAssembleScales(const QVariantList &list) { m_assembleScales = list; update(); }
+
+QPointF SoftwareViewport::projectWorldToScreen(float worldX, float worldY, float worldZ) const
+{
+  return project(QVector3D(worldX, worldY, worldZ));
+}
+
+QPointF SoftwareViewport::screenToBedPoint(qreal screenX, qreal screenY) const
+{
+  const QRectF rect = contentRect();
+  const float scale = (std::min(rect.width(), rect.height()) * 0.42f / std::max(30.f, m_radius)) * m_zoom;
+  if (scale <= 0.f)
+    return QPointF(m_center.x(), m_center.y());
+  const float sx = float(screenX) - (rect.center().x() + m_pan.x());
+  const float sy = float(screenY) - (rect.center().y() + m_pan.y());
+  // Approximate inverse for the default top-down paint frame: screen X maps
+  // to bed X, screen +Y maps to bed -Y (both divided by the paint scale).
+  // The rotation-aware inverse lives on the RHI picking path.
+  const float bedX = m_center.x() + sx / scale;
+  const float bedY = m_center.y() - sy / scale;
+  return QPointF(bedX, bedY);
+}
+
+void SoftwareViewport::setShowFps(bool on)
+{
+  if (m_showFps == on)
+    return;
+  m_showFps = on;
+  emit showFpsChanged();
+  update();
+}
+
 void SoftwareViewport::parseMeshData()
 {
+  // Wave 2b (perf): TLV v2 (docs/perf-wave2b-design.md) — indexed geometry
+  // per volume shared across instances + per-batch world matrices. Expanded
+  // here into world-space triangles for the software rasterizer (winding is
+  // irrelevant for flat painting, so mirrored batches keep the canonical
+  // index order).
   m_meshes.clear();
-  if (m_meshData.size() < int(sizeof(int32_t)))
+  if (m_meshData.size() < 12
+      || std::memcmp(m_meshData.constData(), "OMD2", 4) != 0)
     return;
 
   const char *p = m_meshData.constData();
   const char *end = p + m_meshData.size();
-  int32_t objectCount = 0;
-  memcpy(&objectCount, p, sizeof(int32_t));
+  p += 4;
+  int32_t geometryCount = 0;
+  int32_t batchCount = 0;
+  std::memcpy(&geometryCount, p, sizeof(int32_t));
   p += sizeof(int32_t);
-  if (objectCount <= 0 || objectCount > 10000)
+  std::memcpy(&batchCount, p, sizeof(int32_t));
+  p += sizeof(int32_t);
+  if (geometryCount <= 0 || geometryCount > 100000
+      || batchCount <= 0 || batchCount > 10000)
     return;
 
-  for (int32_t objectIndex = 0; objectIndex < objectCount; ++objectIndex)
+  struct ParsedGeometry
   {
-    if (p + 2 * int(sizeof(int32_t)) > end)
+    const float *positions = nullptr;
+    int32_t vertexCount = 0;
+    const uint32_t *indices = nullptr;
+    int32_t indexCount = 0;
+  };
+  QVector<ParsedGeometry> geometries;
+  geometries.resize(geometryCount);
+
+  for (int32_t g = 0; g < geometryCount; ++g)
+  {
+    if (p + 3 * int(sizeof(int32_t)) > end)
+      return;
+    int32_t geomId = 0;
+    int32_t vertexCount = 0;
+    int32_t indexCount = 0;
+    std::memcpy(&geomId, p, sizeof(int32_t));
+    p += sizeof(int32_t);
+    std::memcpy(&vertexCount, p, sizeof(int32_t));
+    p += sizeof(int32_t);
+    std::memcpy(&indexCount, p, sizeof(int32_t));
+    p += sizeof(int32_t);
+    const qsizetype positionBytes = qsizetype(vertexCount) * 3 * 4;
+    const qsizetype indexBytes = qsizetype(indexCount) * 4;
+    const qsizetype normalBytes = positionBytes;
+    if (geomId != g || vertexCount < 0 || indexCount < 0 || (indexCount % 3) != 0
+        || positionBytes + indexBytes + normalBytes > end - p)
+      return;
+    geometries[int(g)] = ParsedGeometry{
+        reinterpret_cast<const float *>(p), vertexCount,
+        reinterpret_cast<const uint32_t *>(p + positionBytes), indexCount};
+    p += positionBytes + indexBytes + normalBytes;
+  }
+
+  for (int32_t b = 0; b < batchCount; ++b)
+  {
+    constexpr qsizetype kBatchBytes =
+        5 * qsizetype(sizeof(int32_t)) + 16 * qsizetype(sizeof(float))
+        + 3 * qsizetype(sizeof(int32_t));
+    if (p + kBatchBytes > end)
       break;
-    int32_t objectId = 0;
-    int32_t triCount = 0;
-    memcpy(&objectId, p, sizeof(int32_t));
+    int32_t renderObjectId = 0;
+    int32_t sourceObjectIndex = 0;
+    int32_t volumeIndex = 0;
+    int32_t instanceIndex = 0;
+    int32_t geomId = 0;
+    float m[16];
+    std::memcpy(&renderObjectId, p, sizeof(int32_t));
     p += sizeof(int32_t);
-    memcpy(&triCount, p, sizeof(int32_t));
+    std::memcpy(&sourceObjectIndex, p, sizeof(int32_t));
     p += sizeof(int32_t);
-    if (triCount <= 0)
+    std::memcpy(&volumeIndex, p, sizeof(int32_t));
+    p += sizeof(int32_t);
+    std::memcpy(&instanceIndex, p, sizeof(int32_t));
+    p += sizeof(int32_t);
+    std::memcpy(&geomId, p, sizeof(int32_t));
+    p += sizeof(int32_t);
+    std::memcpy(m, p, sizeof(m));
+    p += sizeof(m);
+    p += 3 * int(sizeof(int32_t)); // volumeType / extruderId / printable
+
+    if (geomId < 0 || geomId >= geometryCount)
       continue;
-    const qsizetype floatCount = qsizetype(triCount) * 9;
-    const qsizetype byteCount = floatCount * qsizetype(sizeof(float));
-    if (byteCount < 0 || p + byteCount > end)
-      break;
+    const ParsedGeometry &geom = geometries.at(int(geomId));
 
     MeshObject mesh;
-    mesh.objectId = objectId;
-    mesh.vertices.reserve(int(triCount) * 3);
-    const float *values = reinterpret_cast<const float *>(p);
+    mesh.objectId = renderObjectId;
+    mesh.vertices.reserve(int(geom.indexCount));
     mesh.min = QVector3D(std::numeric_limits<float>::max(),
                          std::numeric_limits<float>::max(),
                          std::numeric_limits<float>::max());
     mesh.max = QVector3D(-std::numeric_limits<float>::max(),
                          -std::numeric_limits<float>::max(),
                          -std::numeric_limits<float>::max());
-    for (int i = 0; i < triCount * 3; ++i)
+    const int32_t triangleCount = geom.indexCount / 3;
+    for (int32_t t = 0; t < triangleCount; ++t)
     {
-      QVector3D v(values[i * 3], values[i * 3 + 1], values[i * 3 + 2]);
-      mesh.vertices.append(v);
-      mesh.min.setX(std::min(mesh.min.x(), v.x()));
-      mesh.min.setY(std::min(mesh.min.y(), v.y()));
-      mesh.min.setZ(std::min(mesh.min.z(), v.z()));
-      mesh.max.setX(std::max(mesh.max.x(), v.x()));
-      mesh.max.setY(std::max(mesh.max.y(), v.y()));
-      mesh.max.setZ(std::max(mesh.max.z(), v.z()));
+      for (int k = 0; k < 3; ++k)
+      {
+        const uint32_t vi = geom.indices[t * 3 + k];
+        if (vi >= uint32_t(geom.vertexCount))
+          continue;
+        const float lx = geom.positions[vi * 3 + 0];
+        const float ly = geom.positions[vi * 3 + 1];
+        const float lz = geom.positions[vi * 3 + 2];
+        const QVector3D v(m[0] * lx + m[1] * ly + m[2] * lz + m[3],
+                          m[4] * lx + m[5] * ly + m[6] * lz + m[7],
+                          m[8] * lx + m[9] * ly + m[10] * lz + m[11]);
+        mesh.vertices.append(v);
+        mesh.min.setX(std::min(mesh.min.x(), v.x()));
+        mesh.min.setY(std::min(mesh.min.y(), v.y()));
+        mesh.min.setZ(std::min(mesh.min.z(), v.z()));
+        mesh.max.setX(std::max(mesh.max.x(), v.x()));
+        mesh.max.setY(std::max(mesh.max.y(), v.y()));
+        mesh.max.setZ(std::max(mesh.max.z(), v.z()));
+      }
     }
-    m_meshes.append(mesh);
-    p += byteCount;
+    if (!mesh.vertices.isEmpty())
+      m_meshes.append(mesh);
   }
 }
 

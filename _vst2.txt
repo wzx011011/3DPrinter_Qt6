@@ -1,0 +1,292 @@
+********* Start testing of ViewModelSmokeTests *********
+Config: Using QtTest library 6.10.2, Qt 6.10.2 (x86_64-little_endian-llp64 shared (dynamic) release build; by MSVC 2026), windows 11
+PASS   : ViewModelSmokeTests::initTestCase()
+QDEBUG : ViewModelSmokeTests::testTabPositionEnumValues() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testTabPositionEnumValues() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testTabPositionEnumValues()
+QDEBUG : ViewModelSmokeTests::testRequestSelectTabSignal() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testRequestSelectTabSignal() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testRequestSelectTabSignal()
+QDEBUG : ViewModelSmokeTests::testRequestSelectTabOutOfRange() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testRequestSelectTabOutOfRange() [Backend] hints.json not found, using fallback hints
+QWARN  : ViewModelSmokeTests::testRequestSelectTabOutOfRange() [Backend] requestSelectTab: invalid position -1 (valid 0..8)
+QWARN  : ViewModelSmokeTests::testRequestSelectTabOutOfRange() [Backend] requestSelectTab: invalid position 9 (valid 0..8)
+PASS   : ViewModelSmokeTests::testRequestSelectTabOutOfRange()
+QDEBUG : ViewModelSmokeTests::testViewModeEnumValues() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testViewModeEnumValues() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testViewModeEnumValues()
+QDEBUG : ViewModelSmokeTests::testCurrentViewModeDefault() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testCurrentViewModeDefault() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testCurrentViewModeDefault()
+QDEBUG : ViewModelSmokeTests::testRequestChangeViewModeSignal() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testRequestChangeViewModeSignal() [Backend] hints.json not found, using fallback hints
+QWARN  : ViewModelSmokeTests::testRequestChangeViewModeSignal() [Backend] requestChangeViewMode: invalid mode -1 (valid 0..2)
+QWARN  : ViewModelSmokeTests::testRequestChangeViewModeSignal() [Backend] requestChangeViewMode: invalid mode 99 (valid 0..2)
+PASS   : ViewModelSmokeTests::testRequestChangeViewModeSignal()
+QDEBUG : ViewModelSmokeTests::testTabSelectDrivesViewMode() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testTabSelectDrivesViewMode() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testTabSelectDrivesViewMode()
+QDEBUG : ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip() [Backend] hints.json not found, using fallback hints
+QINFO  : ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl
+QINFO  : ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl objects=1 plates=1
+QINFO  : ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip() [ProjectService] meshData: 1 batches, bbox=[108.3..111.8, 0.0..12.0, 108.3..111.8]
+PASS   : ViewModelSmokeTests::shellStateGatesForwardToEditorViewModelAndPreserveRoundTrip()
+QDEBUG : ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::sidebarPresetChangeInvalidatesSliceResults()
+QDEBUG : ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::settingsOpenDoesNotInvalidateSliceResults()
+QDEBUG : ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::sidebarSettingsForwardEmitsRequestedSignal()
+QDEBUG : ViewModelSmokeTests::testSidebarCollapsedDefault() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarCollapsedDefault() [Backend] hints.json not found, using fallback hints
+FAIL!  : ViewModelSmokeTests::testSidebarCollapsedDefault() Compared values are not the same
+   Actual   (ctx.sidebarWidth()): 320
+   Expected (392)               : 392
+E:\ai\3DPrinter_Qt6\tests\ViewModelSmokeTests.cpp(2017) : failure location
+QDEBUG : ViewModelSmokeTests::testRequestToggleSidebar() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testRequestToggleSidebar() [Backend] hints.json not found, using fallback hints
+QDEBUG : ViewModelSmokeTests::testRequestToggleSidebar() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testRequestToggleSidebar() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testRequestToggleSidebar()
+QDEBUG : ViewModelSmokeTests::testSidebarWidthClamp() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarWidthClamp() [Backend] hints.json not found, using fallback hints
+QDEBUG : ViewModelSmokeTests::testSidebarWidthClamp() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarWidthClamp() [Backend] hints.json not found, using fallback hints
+QDEBUG : ViewModelSmokeTests::testSidebarWidthClamp() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarWidthClamp() [Backend] hints.json not found, using fallback hints
+QDEBUG : ViewModelSmokeTests::testSidebarWidthClamp() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarWidthClamp() [Backend] hints.json not found, using fallback hints
+FAIL!  : ViewModelSmokeTests::testSidebarWidthClamp() Compared values are not the same
+   Actual   (legacyCtx.sidebarWidth()): 320
+   Expected (392)                     : 392
+E:\ai\3DPrinter_Qt6\tests\ViewModelSmokeTests.cpp(2103) : failure location
+QDEBUG : ViewModelSmokeTests::testSidebarDockArea() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarDockArea() [Backend] hints.json not found, using fallback hints
+QDEBUG : ViewModelSmokeTests::testSidebarDockArea() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSidebarDockArea() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testSidebarDockArea()
+QDEBUG : ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse() [SSDP] discovery finished, found 0 devices
+PASS   : ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse()
+QDEBUG : ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken() [Camera] starting stream: rtsp://192.168.1.50:8554/streaming/live/1
+PASS   : ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
+QINFO  : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl ext=stl
+QINFO  : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl ext=stl objects=1 plates=1
+QINFO  : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode() [SliceService] slice start source=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl plate=0 label=Æ½°å 1
+QINFO  : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode() [SliceService] slice finished plate=0 output=E:/ai/3DPrinter_Qt6/build/Prusa_20260814_222009.gcode layers=15
+QINFO  : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode() [SliceService] wipe-tower ready valid=0 w=0.00 d=0.00 h=0.00 x=0.00 z=0.00
+QINFO  : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode() [SliceService] filament-map ready valid=0 mode=3 count=0
+PASS   : ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode()
+PASS   : ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
+QDEBUG : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [Calib] starting real calibration: flow_dynamics
+QWARN  : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [SliceService] slice failed source= plate=0 reason=No sliceable model found
+QDEBUG : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [Calib] calib slice dispatched: mode=1 start=0.000 end=0.100 step=0.0020
+QDEBUG : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [Calib] starting real calibration: flow_rate
+QWARN  : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [SliceService] slice failed source= plate=0 reason=No sliceable model found
+QDEBUG : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [Calib] calib slice dispatched: mode=5 start=0.900 end=1.100 step=0.0100
+QDEBUG : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [Calib] starting real calibration: temp_tower
+QWARN  : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [SliceService] slice failed source= plate=0 reason=No sliceable model found
+QDEBUG : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests() [Calib] calib slice dispatched: mode=6 start=190.000 end=240.000 step=5.0000
+PASS   : ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
+QINFO  : ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable() [Calib] 'bed_leveling' is not startable: Blocked: requires live printer hardware calibration support.
+QINFO  : ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable() [Calib] 'vibration' is not startable: Blocked: requires live printer resonance measurement support.
+PASS   : ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
+QDEBUG : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress() [Calib] starting real calibration: flow_dynamics
+QDEBUG : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress() [Calib] no SliceService - mock-only mode
+QDEBUG : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress() [Calib] starting real calibration: flow_dynamics
+QDEBUG : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress() [Calib] no SliceService - mock-only mode
+QDEBUG : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress() [Calib] starting real calibration: flow_dynamics
+QDEBUG : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress() [Calib] no SliceService - mock-only mode
+PASS   : ViewModelSmokeTests::calibrationFallbackAndSliceCallbacksDriveProgress()
+QDEBUG : ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields() [Device] access code set for device idx=0 (port=8883)
+QDEBUG : ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields() [Device] access code set for device idx=0 (port=8883)
+QDEBUG : ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields() [Device] access code set for device idx=0 (port=8883)
+PASS   : ViewModelSmokeTests::int04_MqttConnectionParamsAndTelemetryFields()
+QDEBUG : ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow() [Device] publishPrintCommand('pause') skipped - MQTT not connected
+QDEBUG : ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow() [Device] publishPrintCommand('resume') skipped - MQTT not connected
+QDEBUG : ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow() [Device] publishPrintCommand('stop') skipped - MQTT not connected
+QDEBUG : ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow() [Device] publishPrintCommand('gcode_line') skipped - MQTT not connected
+PASS   : ViewModelSmokeTests::int05_MqttCommandConstructionAndControlFlow()
+QDEBUG : ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting() [Device] sendPrintViaFtp: MQTT not connected, cannot send print
+QDEBUG : ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting() [Device] sendPrintViaFtp: MQTT not connected, cannot send print
+PASS   : ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting()
+QDEBUG : ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically() [AppSettings] loaded: bed=220.0x220.0
+QDEBUG : ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically() [AppSettings] saved: bed=50.0x220.0
+QDEBUG : ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically() [AppSettings] saved: bed=50.0x2000.0
+QDEBUG : ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically() [AppSettings] loaded: bed=50.0x2000.0
+QDEBUG : ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically() [AppSettings] saved: bed=220.0x220.0
+PASS   : ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
+QINFO  : ViewModelSmokeTests::editor_import_model_updates_state() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl
+QINFO  : ViewModelSmokeTests::editor_import_model_updates_state() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl objects=1 plates=1
+QINFO  : ViewModelSmokeTests::editor_import_model_updates_state() [ProjectService] meshData: 1 batches, bbox=[108.3..111.8, 0.0..12.0, 108.3..111.8]
+PASS   : ViewModelSmokeTests::editor_import_model_updates_state()
+QINFO  : ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl
+QINFO  : ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl objects=1 plates=1
+QINFO  : ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid() [ProjectService] meshData: 1 batches, bbox=[108.3..111.8, 0.0..12.0, 108.3..111.8]
+PASS   : ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid()
+QDEBUG : ViewModelSmokeTests::monitor_refresh_updates_network_and_device() [Network] probe: online=1 latency=124ms
+PASS   : ViewModelSmokeTests::monitor_refresh_updates_network_and_device()
+PASS   : ViewModelSmokeTests::config_default_and_switch_preset()
+PASS   : ViewModelSmokeTests::configEnumNullKeysMapGuards()
+PASS   : ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
+PASS   : ViewModelSmokeTests::testMachineOptionsLoaded()
+PASS   : ViewModelSmokeTests::testFilamentOptionsLoaded()
+PASS   : ViewModelSmokeTests::testVendorEnumeration()
+PASS   : ViewModelSmokeTests::testPrinterModelsForVendor()
+PASS   : ViewModelSmokeTests::testMaterialsForVendor()
+PASS   : ViewModelSmokeTests::testBedTypesForPrinterModel()
+SKIP   : ViewModelSmokeTests::testBedTextureFileForPreset() Creality vendor presets not registered from cwd
+E:\ai\3DPrinter_Qt6\tests\ViewModelSmokeTests.cpp(673) : failure location
+PASS   : ViewModelSmokeTests::testEnumerationExcludesUpstreamDefaults()
+PASS   : ViewModelSmokeTests::testMachineEditFlowsToGlobal()
+PASS   : ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
+PASS   : ViewModelSmokeTests::configPresetDirtyTracksActiveTierAgainstSelectedPreset()
+PASS   : ViewModelSmokeTests::configResetRestoresSelectedPresetValues()
+PASS   : ViewModelSmokeTests::configOptionModelDirtyUsesPresetReferenceValues()
+PASS   : ViewModelSmokeTests::configScopeResetRevealsInheritedValue()
+PASS   : ViewModelSmokeTests::configUnsavedTransitionsQueueAndCancelPendingChanges()
+PASS   : ViewModelSmokeTests::configDiscardAppliesPendingTransitionAndRestoresValues()
+PASS   : ViewModelSmokeTests::configWritableSaveAppliesPendingTransition()
+PASS   : ViewModelSmokeTests::configReadOnlySaveAsAppliesPendingTransition()
+PASS   : ViewModelSmokeTests::configPresetCategoryMappingUsesServiceEnums()
+PASS   : ViewModelSmokeTests::configPresetMutationsRejectWrongCategory()
+PASS   : ViewModelSmokeTests::presetServiceMetadataClassifiesBuiltinAndCustomPresets()
+PASS   : ViewModelSmokeTests::presetServiceSelectionPersistsAcrossInstances()
+QWARN  : ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutation() [Preset] importBundle: invalid preset name or category
+QWARN  : ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutation() [Preset] importBundle: unsupported bundle kind or version
+PASS   : ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutation()
+QDEBUG : ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata() [Preset] exported 1 user presets to: C:/Users/67376/AppData/Local/Temp/owzx_good_preset_bundle.json
+QDEBUG : ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata() [Preset] imported 1 presets from: C:/Users/67376/AppData/Local/Temp/owzx_good_preset_bundle.json
+PASS   : ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
+PASS   : ViewModelSmokeTests::presetCompatibilityFiltersFilamentsAndProcessesForPrinter()
+PASS   : ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
+PASS   : ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
+PASS   : ViewModelSmokeTests::presetReadOnlyActionBlockerReasons()
+PASS   : ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
+PASS   : ViewModelSmokeTests::partPlateInstanceMembershipTracksObjectInstancePairs()
+PASS   : ViewModelSmokeTests::partPlateSliceStateMachineGatesCanSlice()
+PASS   : ViewModelSmokeTests::partPlateListCreateDeleteRenameLockReindexesAndKeepsAtLeastOne()
+PASS   : ViewModelSmokeTests::partPlateListInstanceMembershipDerivesObjectIndices()
+PASS   : ViewModelSmokeTests::partPlateListRefusesExceedMaxPlateCount()
+PASS   : ViewModelSmokeTests::projectServicePlateOpsBackedByPartPlateList()
+PASS   : ViewModelSmokeTests::partPlateListMovePlateReindexesAndAdjustsCurrent()
+PASS   : ViewModelSmokeTests::projectServiceClonePlateDeepCopiesObjects()
+PASS   : ViewModelSmokeTests::projectServicePerPlatePrintableRoundTrip()
+QINFO  : ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/tests/data/test_model.stl ext=stl
+QINFO  : ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/tests/data/test_model.stl ext=stl objects=1 plates=1
+PASS   : ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
+QINFO  : ViewModelSmokeTests::multiPlateFullStateRoundTrip() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/tests/data/test_model.stl ext=stl
+QINFO  : ViewModelSmokeTests::multiPlateFullStateRoundTrip() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/tests/data/test_model.stl ext=stl objects=1 plates=1
+PASS   : ViewModelSmokeTests::multiPlateFullStateRoundTrip()
+QINFO  : ViewModelSmokeTests::testAssembleTransformRoundTrip() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/tests/data/test_model.stl ext=stl
+QINFO  : ViewModelSmokeTests::testAssembleTransformRoundTrip() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/tests/data/test_model.stl ext=stl objects=1 plates=1
+PASS   : ViewModelSmokeTests::testAssembleTransformRoundTrip()
+PASS   : ViewModelSmokeTests::projectServicePerPlateConfigOverrideRoundTrips()
+PASS   : ViewModelSmokeTests::sliceServicePerPlateConfigMergeHonorsOverrides()
+PASS   : ViewModelSmokeTests::sliceServiceConfigMergeDirectionPlateWins()
+QINFO  : ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallback() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallback() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallback() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallback()
+QINFO  : ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel() [ProjectService] meshData: 2 batches, bbox=[95.0..125.0, 0.0..30.0, 95.0..125.0]
+QINFO  : ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel() [ProjectService] meshData: 2 batches, bbox=[95.0..125.0, 0.0..30.0, 95.0..125.0]
+PASS   : ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel()
+QINFO  : ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()
+QINFO  : ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
+QINFO  : ViewModelSmokeTests::gizmoScaleDragCoalescesIntoSingleUndoCommand() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::gizmoScaleDragCoalescesIntoSingleUndoCommand()
+QINFO  : ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
+QINFO  : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection()
+QINFO  : ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects()
+QINFO  : ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting()
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 2 batches, bbox=[99.2..120.8, 0.0..20.0, 99.1..120.9]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 2 batches, bbox=[99.2..120.8, 0.0..20.0, 99.1..120.9]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 2 batches, bbox=[99.2..120.8, 0.0..20.0, 99.1..120.9]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 2 batches, bbox=[65.5..154.4, 0.0..304.8, 65.6..154.4]
+QINFO  : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped() [ProjectService] meshData: 3 batches, bbox=[65.5..154.4, 0.0..304.8, 65.6..154.4]
+PASS   : ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped()
+QINFO  : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate() [ProjectService] meshData: 2 batches, bbox=[95.0..125.0, 0.0..30.0, 95.0..125.0]
+QINFO  : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate() [ProjectService] meshData: 3 batches, bbox=[95.0..125.0, 0.0..30.0, 95.0..125.0]
+QINFO  : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate() [ProjectService] meshData: 3 batches, bbox=[95.0..125.0, 0.0..30.0, 95.0..125.0]
+QINFO  : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate() [ProjectService] meshData: 2 batches, bbox=[99.2..120.8, 0.0..20.0, 99.1..120.9]
+PASS   : ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate()
+QINFO  : ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate() [ProjectService] meshData: 2 batches, bbox=[99.2..120.8, 0.0..20.0, 99.1..120.9]
+QINFO  : ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate() [ProjectService] meshData: 41 batches, bbox=[17.4..202.6, 0.0..20.0, 13.3..206.7]
+PASS   : ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate()
+QINFO  : ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations() [ProjectService] meshData: 1 batches, bbox=[-144.0..364.0, 0.0..508.0, -144.0..364.0]
+PASS   : ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations()
+QINFO  : ViewModelSmokeTests::prepareContextProcessSettingsCopyPasteUsesScopedConfig() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::prepareContextProcessSettingsCopyPasteUsesScopedConfig() [ProjectService] meshData: 2 batches, bbox=[95.0..125.0, 0.0..30.0, 95.0..125.0]
+PASS   : ViewModelSmokeTests::prepareContextProcessSettingsCopyPasteUsesScopedConfig()
+QINFO  : ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData() [PreviewViewModel] payload file=E:/ai/3DPrinter_Qt6/tests/fixtures/orca_sample.gcode bytes=1918 layers=1 moves=45 segments=45 travelVisible=0
+PASS   : ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData()
+QINFO  : ViewModelSmokeTests::legendGradientBoundsStableAcrossLayerMoveDrag() [PreviewViewModel] payload file=E:/ai/3DPrinter_Qt6/tests/fixtures/orca_sample.gcode bytes=1918 layers=1 moves=45 segments=45 travelVisible=0
+PASS   : ViewModelSmokeTests::legendGradientBoundsStableAcrossLayerMoveDrag()
+QINFO  : ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically() [PreviewViewModel] payload file=E:/ai/3DPrinter_Qt6/tests/fixtures/orca_sample.gcode bytes=1918 layers=1 moves=45 segments=45 travelVisible=0
+PASS   : ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
+QINFO  : ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow() [PreviewViewModel] payload file=E:/ai/3DPrinter_Qt6/tests/fixtures/orca_sample.gcode bytes=1918 layers=1 moves=45 segments=45 travelVisible=0
+PASS   : ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow()
+PASS   : ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
+PASS   : ViewModelSmokeTests::roleVisibilityMaskFeedsRendererShapeAndTogglesPropagate()
+QDEBUG : ViewModelSmokeTests::testSettingsDialogOpenFromSidebar() [AppSettings] loaded: bed=220.0x220.0
+QWARN  : ViewModelSmokeTests::testSettingsDialogOpenFromSidebar() [Backend] hints.json not found, using fallback hints
+PASS   : ViewModelSmokeTests::testSettingsDialogOpenFromSidebar()
+PASS   : ViewModelSmokeTests::testTabsAndGroupNavPerTier()
+PASS   : ViewModelSmokeTests::testConfigOptionModelSevenTypes()
+PASS   : ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
+PASS   : ViewModelSmokeTests::testPerOptionDirtyAndValueSource()
+PASS   : ViewModelSmokeTests::testReadonlyBuiltinGating()
+PASS   : ViewModelSmokeTests::testSaveSaveAsResetOptionResetGroupResetAll()
+PASS   : ViewModelSmokeTests::testUnsavedChangesGuardOnDirtyClose()
+PASS   : ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
+PASS   : ViewModelSmokeTests::testNullableAndVectorOptions()
+PASS   : ViewModelSmokeTests::editorExplosionRatioDefaultsAndResetMirrorsUpstream()
+QINFO  : ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
+PASS   : ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
+QINFO  : ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview() [ProjectService] meshData: 1 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+QINFO  : ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview() [ProjectService] meshData: 2 batches, bbox=[100.0..120.0, 0.0..20.0, 100.0..120.0]
+PASS   : ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
+PASS   : ViewModelSmokeTests::wipeTowerGeometryReadbackAppliesValidAndInvalidGate()
+PASS   : ViewModelSmokeTests::filamentMapAutoRecommendationReadbackWired()
+PASS   : ViewModelSmokeTests::wipeTowerRealDimsReachRendererPipeline()
+PASS   : ViewModelSmokeTests::wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallback()
+QINFO  : ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices() [ProjectService] import start path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl
+QINFO  : ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices() [ProjectService] import success path=E:/ai/3DPrinter_Qt6/third_party/OrcaSlicer/resources/profiles/hotend.stl ext=stl objects=1 plates=1
+PASS   : ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices()
+PASS   : ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt()
+PASS   : ViewModelSmokeTests::v56CrossWorkstreamViewModelsCallable()
+PASS   : ViewModelSmokeTests::cleanupTestCase()
+Totals: 116 passed, 2 failed, 1 skipped, 0 blacklisted, 9470ms
+********* Finished testing of ViewModelSmokeTests *********

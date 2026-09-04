@@ -239,7 +239,7 @@ CxDialog {
                             }
 
                             Text {
-                                text: qsTr("(温度覆盖 %1°C)").arg(modelData.temp)
+                                text: qsTr("(温度覆盖 %1℃)").arg(modelData.temp)
                                 color: Theme.accent
                                 font.pixelSize: Theme.fontSizeSM
                             }

@@ -1,0 +1,45 @@
+﻿2026-08-15T01:35:31.2210059Z ##[group]Run lukka/get-cmake@latest
+2026-08-15T01:35:31.2210505Z with:
+2026-08-15T01:35:31.2210738Z   cmakeVersion: ~4.3.0
+2026-08-15T01:35:31.2210997Z   useLocalCache: true
+2026-08-15T01:35:31.2211245Z   useCloudCache: true
+2026-08-15T01:35:31.2211459Z env:
+2026-08-15T01:35:31.2211669Z   TAG_NAME: v5.15.7
+2026-08-15T01:35:31.2212113Z   ORCA_DEPS_ROOT: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep
+2026-08-15T01:35:31.2213112Z   DEPS_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/OrcaSlicer/deps/build/OrcaSlicer_dep/usr/local
+2026-08-15T01:35:31.2213777Z   VCPKG_INSTALLED_DIR: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/vcpkg_installed/x64-windows
+2026-08-15T01:35:31.2214327Z   PAHO_MQTT_PREFIX: D:\a\3DPrinter_Qt6\3DPrinter_Qt6/third_party/paho-mqtt-prefix
+2026-08-15T01:35:31.2214809Z ##[endgroup]
+2026-08-15T01:35:31.4068587Z useCloudCache:true
+2026-08-15T01:35:31.4069913Z useLocalCache:true
+2026-08-15T01:35:31.4070506Z user defined cmake version:~4.3.0
+2026-08-15T01:35:31.4070872Z user defined ninja version:
+2026-08-15T01:35:31.4071085Z cmake version:~4.3.0
+2026-08-15T01:35:31.4071310Z ninja version:latest
+2026-08-15T01:35:31.4111852Z ##[group]Computing cache key from the downloads' URLs
+2026-08-15T01:35:31.4112691Z Cache key: '246192835'.
+2026-08-15T01:35:31.4113546Z Local install root: 'D:\a\_temp\246192835''.
+2026-08-15T01:35:31.4114130Z ##[endgroup]
+2026-08-15T01:35:31.4114522Z ##[group]Restoring from local GitHub runner cache using key '246192835'
+2026-08-15T01:35:31.4121178Z Local cache miss.
+2026-08-15T01:35:31.4121587Z ##[endgroup]
+2026-08-15T01:35:31.4122041Z ##[group]Restoring from GitHub cloud cache using key '246192835' into 'D:\a\_temp\246192835'
+2026-08-15T01:35:31.7606949Z Cache hit for: 246192835
+2026-08-15T01:35:32.9077070Z Received 44089976 of 44089976 (100.0%), 45.7 MBs/sec
+2026-08-15T01:35:32.9081303Z Cache Size: ~42 MB (44089976 B)
+2026-08-15T01:35:32.9452147Z [command]"C:\Program Files\Git\usr\bin\tar.exe" -xf D:/a/_temp/0048dd3c-6e74-45e4-bc02-de58983a95d7/cache.tzst -P -C D:/a/3DPrinter_Qt6/3DPrinter_Qt6 --force-local --use-compress-program "zstd -d"
+2026-08-15T01:35:34.7659662Z Cache restored successfully
+2026-08-15T01:35:34.7706193Z Cloud cache hit.
+2026-08-15T01:35:34.7706901Z ##[endgroup]
+2026-08-15T01:35:34.7709092Z ##[group]Add CMake and Ninja to PATH
+2026-08-15T01:35:34.7709606Z CMake path: 'D:\a\_temp\246192835\cmake-4.3.4-windows-x86_64\bin\'
+2026-08-15T01:35:34.7717095Z Ninja path: 'D:\a\_temp\246192835'
+2026-08-15T01:35:34.7725987Z ##[group]Validating the installed CMake and Ninja
+2026-08-15T01:35:35.1015228Z CMake actual path is: 'D:\a\_temp\246192835\cmake-4.3.4-windows-x86_64\bin\cmake.exe'
+2026-08-15T01:35:35.1015913Z Ninja actual path is: 'D:\a\_temp\246192835\ninja.exe'
+2026-08-15T01:35:35.1016945Z ##[endgroup]
+2026-08-15T01:35:35.1017256Z ##[endgroup]
+2026-08-15T01:35:35.1017894Z ##[group]Saving to local cache using key '246192835' from 'D:\a\_temp\246192835'
+2026-08-15T01:35:50.5636516Z Saved 'D:\a\_temp\246192835' to the local GitHub runner cache with key '246192835'.
+2026-08-15T01:35:50.5637217Z ##[endgroup]
+2026-08-15T01:35:50.5637444Z get-cmake action execution succeeded

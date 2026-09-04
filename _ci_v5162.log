@@ -1,0 +1,432 @@
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push less than a minute ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  * Checkout
+  * Setup CMake
+  * Setup MSVC
+  * Setup MSBuild
+  * Setup Ninja
+  * Install Qt 6.10.0
+  * Compute OrcaSlicer deps cache key
+  * Restore OrcaSlicer deps cache
+  * Build OrcaSlicer deps
+  * Save OrcaSlicer deps cache
+  * Verify dependency prefix
+  * Restore Paho MQTT cache
+  * Build Paho MQTT dependency
+  * Save Paho MQTT cache
+  * Verify Paho MQTT dependency
+  * Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 2 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 4 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 6 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 8 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 10 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 12 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 14 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 16 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 19 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 21 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+Refreshing run status every 120 seconds. Press Ctrl+C to quit.
+
+* v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 23 minutes ago
+
+JOBS
+* build-windows (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  * Build
+  * Collect failure diagnostics
+  * Upload failure diagnostics
+  * Upload artifacts
+  * Package release zip
+  * Upload release package
+  * Create GitHub Release
+  * Post Install Qt 6.10.0
+  * Post Checkout
+✓ v5.16.2 Tag Build (Windows) · 31958973187
+Triggered via push about 25 minutes ago
+
+JOBS
+✓ build-windows in 24m57s (ID 95193927878)
+  ✓ Set up job
+  ✓ Checkout
+  ✓ Setup CMake
+  ✓ Setup MSVC
+  ✓ Setup MSBuild
+  ✓ Setup Ninja
+  ✓ Install Qt 6.10.0
+  ✓ Compute OrcaSlicer deps cache key
+  ✓ Restore OrcaSlicer deps cache
+  - Build OrcaSlicer deps
+  - Save OrcaSlicer deps cache
+  ✓ Verify dependency prefix
+  ✓ Restore Paho MQTT cache
+  - Build Paho MQTT dependency
+  - Save Paho MQTT cache
+  ✓ Verify Paho MQTT dependency
+  ✓ Configure (CMake)
+  ✓ Build
+  - Collect failure diagnostics
+  - Upload failure diagnostics
+  ✓ Upload artifacts
+  ✓ Package release zip
+  ✓ Upload release package
+  ✓ Create GitHub Release
+  ✓ Post Install Qt 6.10.0
+  ✓ Post Checkout
+  ✓ Complete job
+
+ANNOTATIONS
+! Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/cache/restore@v4, actions/checkout@v4, actions/upload-artifact@v4, ilammy/msvc-dev-cmd@v1, seanmiddleditch/gha-setup-ninja@v5, softprops/action-gh-release@v2. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+build-windows: .github#4
+

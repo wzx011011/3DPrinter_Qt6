@@ -8,7 +8,9 @@
 #include <QQuickRhiItem>
 #include <QRectF>
 #include <QString>
+#include <atomic>
 #include "core/rendering/NavigatorCube.h"
+#include "core/rendering/ObjectPicking.h"
 
 class QTimer;
 #include <QVariant>
@@ -108,6 +110,13 @@ class RhiViewport : public QQuickRhiItem
   // it); the setter calls update() like its single-index twin.
   Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices WRITE setSelectedSourceObjectIndices)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
+  // v5.17 (FPS overlay): upstream render-statistics panel parity. Upstream
+  // counts SwapBuffers per second (GLCanvas3D.cpp:2057 increment,
+  // :1975-1980 ImGui display) and toggles it with Ctrl+Shift+Space
+  // (:3486). The renderer pushes the measured rate here from the render
+  // thread (queued); PreparePage draws a small overlay bound to it.
+  Q_PROPERTY(int fps READ fps NOTIFY fpsChanged)
+  Q_PROPERTY(bool showFps READ showFps WRITE setShowFps NOTIFY showFpsChanged)
   // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
   // Assembly measurement overlay annotates (volume A and volume B). Default -1
   // = not set. The setter calls update() so the renderer re-renders the
@@ -170,6 +179,12 @@ class RhiViewport : public QQuickRhiItem
   // setter calls update() so a paintDataChanged -> QML binding -> setter ->
   // synchronize() -> uploadPaintOverlayBuffer loop closes on every paint stroke.
   Q_PROPERTY(QByteArray paintOverlayData READ paintOverlayData WRITE setPaintOverlayData)
+  // P2.3-3: support preview line-segment byte stream (measure-overlay format,
+  // produced by EditorViewModel::onSupportPreviewReady from the slice worker's
+  // SupportLayer::support_fills capture). Rendered with the line pipeline while
+  // the support-paint gizmo is active (upstream shows the support preview in
+  // the FDM supports gizmo, GLGizmoFdmSupports.cpp:897-907).
+  Q_PROPERTY(QByteArray supportPreviewData READ supportPreviewData WRITE setSupportPreviewData)
   // Phase HOLLOW: drain-hole marker vertex byte stream (flattened by
   // EditorViewModel::hollowMarkerData). Same Q_PROPERTY-as-byte-pipe pattern
   // as paintOverlayData: QML binds viewport3d.hollowMarkerData to
@@ -190,6 +205,8 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float brushRadius READ brushRadius WRITE setBrushRadius)
   Q_PROPERTY(int brushCursorType READ brushCursorType WRITE setBrushCursorType)
   Q_PROPERTY(int paintState READ paintState WRITE setPaintState)
+  // P2.3-5: height-range band span in mm (upstream m_cursor_height 0.1..8).
+  Q_PROPERTY(double brushHeightRange READ brushHeightRange WRITE setBrushHeightRange)
   // Phase 240 (GIZ-02): smart-fill params. paintToolType mirrors
   // EditorViewModel::supportPaintToolType (0=Brush, 1=BucketFill,
   // 2=SmartFill, 3=GapFill); smartFillAngle is the seed-fill angle
@@ -204,6 +221,11 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float brushMouseScreenX READ brushMouseScreenX WRITE setBrushMouseScreenX)
   Q_PROPERTY(float brushMouseScreenY READ brushMouseScreenY WRITE setBrushMouseScreenY)
   Q_PROPERTY(int brushButtonState READ brushButtonState WRITE setBrushButtonState)
+  // P11.B2.3 (upstream 1d61962ea7): axis locks from EditorViewModel. During a
+  // BRUSH drag the pick screen X (Vertical) or Y (Horizontal) freezes at the
+  // last click position (GLGizmoPainterBase.cpp:738-743).
+  Q_PROPERTY(bool paintVerticalOnly READ paintVerticalOnly WRITE setPaintVerticalOnly)
+  Q_PROPERTY(bool paintHorizontalOnly READ paintHorizontalOnly WRITE setPaintHorizontalOnly)
   // Phase 121 (PAINT-02/OV-04): MMU per-extruder filament colors as hex
   // strings (mirrors EditorViewModel.extrudersColors). The renderer maps
   // ExtruderN -> colors[N-1] for the MMU overlay coloring.
@@ -414,6 +436,13 @@ public:
   QVariantList selectedSourceObjectIndices() const { return m_selectedSourceObjectIndices; }
   void setSelectedSourceObjectIndices(const QVariantList &value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
+  // v5.17 (FPS overlay): render-thread readable flag (atomic) + the queued
+  // entry point the renderer uses to publish the measured rate.
+  int fps() const { return m_fps; }
+  bool showFps() const { return m_showFps; }
+  void setShowFps(bool on);
+  bool fpsOverlayEnabled() const { return m_showFpsAtomic.load(std::memory_order_relaxed); }
+  void setFpsFromRenderThread(int fps);
   void setHoveredSourceObjectIndex(int value);
   // Phase 92 (ASMMEASURE-02): Assembly measurement overlay selection indices.
   int assemblyMeasureSelectedA() const { return m_assemblyMeasureSelectedA; }
@@ -495,6 +524,10 @@ public:
   // Phase 121 (PAINT-02/OV-02): paint overlay reverse-channel getter/setter.
   QByteArray paintOverlayData() const { return m_paintOverlayData; }
   void setPaintOverlayData(const QByteArray &data);
+  // P2.3-3: support preview byte-pipe getter/setter (same stash + update()
+  // contract as the other byte pipes).
+  QByteArray supportPreviewData() const { return m_supportPreviewData; }
+  void setSupportPreviewData(const QByteArray &data);
   QByteArray hollowMarkerData() const { return m_hollowMarkerData; }
   void setHollowMarkerData(const QByteArray &data);
   QByteArray advancedCutMarkerData() const { return m_advancedCutMarkerData; }
@@ -507,12 +540,20 @@ public:
   void setBrushCursorType(int t);
   int paintState() const { return m_paintState; }
   void setPaintState(int s);
+  // P2.3-5: height-range band span (see the Q_PROPERTY).
+  double brushHeightRange() const { return m_brushHeightRange; }
+  void setBrushHeightRange(double h);
   float brushMouseScreenX() const { return m_brushMouseScreenX; }
   void setBrushMouseScreenX(float x);
   float brushMouseScreenY() const { return m_brushMouseScreenY; }
   void setBrushMouseScreenY(float y);
   int brushButtonState() const { return m_brushButtonState; }
   void setBrushButtonState(int s);
+  // P11.B2.3: axis locks (see the Q_PROPERTY block).
+  bool paintVerticalOnly() const { return m_paintVerticalOnly; }
+  void setPaintVerticalOnly(bool b) { m_paintVerticalOnly = b; }
+  bool paintHorizontalOnly() const { return m_paintHorizontalOnly; }
+  void setPaintHorizontalOnly(bool b) { m_paintHorizontalOnly = b; }
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
   int paintToolType() const { return m_paintToolType; }
   void setPaintToolType(int t) { m_paintToolType = t; }
@@ -602,6 +643,9 @@ public:
 signals:
   void bedTextureUrlChanged();
   void canvasTypeChanged();
+  // v5.17 (FPS overlay).
+  void fpsChanged();
+  void showFpsChanged();
   void explosionRatioChanged();
   // Phase 237 (VIEW-01): projection toggle notify (orthographicCamera).
   void cameraProjectionChanged();
@@ -698,6 +742,7 @@ signals:
   void paintPickRequested(QVector3D worldOrigin,
                           QVector3D worldDirection,
                           QVector3D cameraPosition,
+                          QVector3D cameraForward,
                           int pickedSourceIndex,
                           double brushRadius,
                           int cursorType,
@@ -706,14 +751,27 @@ signals:
   // Phase 240 (GIZ-02): smart-fill pick variant. Emitted instead of
   // paintPickRequested when the SmartFill tool is active or Shift is held on
   // click (Phase 240 spec: Shift+click = smart fill). Carries the seed-fill
-  // angle + overhang filter state.
+  // angle + overhang filter state. cameraForward (P2.3-1) is the camera look
+  // direction the cross-section plane normal derives from
+  // (upstream -camera.get_dir_forward(), ObjectClipper::set_position_by_ratio).
   void smartFillPickRequested(QVector3D worldOrigin,
                               QVector3D worldDirection,
+                              QVector3D cameraForward,
                               int pickedSourceIndex,
                               int paintState,
                               double smartFillAngle,
                               bool overhangsOnly,
                               double overhangAngle);
+  // P2.3-5: height-range pick variant (upstream HEIGHT_RANGE tool,
+  // GLGizmoPainterBase.cpp:726-733). Emitted when the height-range tool is
+  // active; height is the band span in mm.
+  void heightRangePickRequested(QVector3D worldOrigin,
+                                QVector3D worldDirection,
+                                QVector3D cameraPosition,
+                                QVector3D cameraForward,
+                                int pickedSourceIndex,
+                                int paintState,
+                                double height);
   // Phase 240 (GIZ-03): flatten gizmo pick/hover. The hover variant feeds
   // the hovered-facet highlight; the click variant rotates the object so the
   // picked facet's normal faces down (upstream GLGizmoFlatten::on_mouse).
@@ -745,6 +803,20 @@ private:
   bool activeToolCapturesContextGesture() const;
   int pickSourceObjectAt(const QPointF &position);
   ViewportContextHit classifyContextAt(const QPointF &position);
+  // Wave 1.4 (perf): run the expensive hover pick pass (object sweep +
+  // gizmo pick emits) for the latest pending hover position, coalesced to
+  // ~60 Hz so fast mouse motion does not run a full triangle sweep per
+  // move event (measured 6.4 ms/event at 400k triangles,
+  // docs/perf-baseline.md).
+  void runHoverPickPass();
+  bool m_hoverPickQueued = false;
+  QPointF m_pendingHoverPosition;
+  Qt::KeyboardModifiers m_pendingHoverModifiers;
+  // Wave 2 (perf): per-batch AABB BVHs over the pick scene's triangle soup,
+  // rebuilt lazily after every pick-scene rebuild (ensurePickBvhs).
+  void ensurePickBvhs();
+  QVector<ObjectPicking::Bvh> m_pickBvhs;
+  bool m_pickBvhsValid = false;
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
   // GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate). The cube
   // consumes left presses/drags before any scene interaction, mirrors the
@@ -860,6 +932,10 @@ private:
   // P15.11 (MULTICENTER): all selected source object indices (see the Q_PROPERTY).
   QVariantList m_selectedSourceObjectIndices;
   int m_hoveredSourceObjectIndex = -1;
+  // v5.17 (FPS overlay): the atomic mirror is read by the render thread.
+  int m_fps = 0;
+  bool m_showFps = false;
+  std::atomic<bool> m_showFpsAtomic{false};
   // Phase 92 (ASMMEASURE-02): the two volumes the overlay annotates. -1 = not set.
   int m_assemblyMeasureSelectedA = -1;
   int m_assemblyMeasureSelectedB = -1;
@@ -908,6 +984,8 @@ private:
   // Phase 121 (PAINT-02/OV-02): painted-facet overlay reverse-channel payload.
   // Flattened by EditorViewModel::paintOverlayData (world-transformed bytes).
   QByteArray m_paintOverlayData;
+  // P2.3-3: support preview segments (measure-overlay byte format).
+  QByteArray m_supportPreviewData;
   // Flattened by EditorViewModel::hollowMarkerData (world-space disc fans).
   QByteArray m_hollowMarkerData;
   // v5.13: connector-pin markers (EditorViewModel::advancedCutMarkerData).
@@ -918,6 +996,7 @@ private:
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1; // 1=Sphere (PaintCursorType::Sphere)
   int m_paintState = 1;      // EnforcerBlockerType: 1=Enforcer
+  double m_brushHeightRange = 0.2; // P2.3-5 height-range span mm
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
   int m_paintToolType = 0;   // 0=Brush, 2=SmartFill
   float m_smartFillAngle = 30.f;
@@ -926,6 +1005,13 @@ private:
   /// Phase 240 (GIZ-02): true while the current pick originates from a
   /// press event (smart fill is click-driven; drags keep the brush path).
   bool m_paintClickPress = false;
+  // P11.B2.3: axis locks + the last paint click anchor (screen px). During a
+  // BRUSH drag the locked axis is frozen to this anchor (upstream
+  // m_last_mouse_click, GLGizmoPainterBase.cpp:738-743).
+  bool m_paintVerticalOnly = false;
+  bool m_paintHorizontalOnly = false;
+  float m_paintLastClickX = 0.f;
+  float m_paintLastClickY = 0.f;
   float m_brushMouseScreenX = 0.f;
   float m_brushMouseScreenY = 0.f;
   int m_brushButtonState = 0; // 0=hover, 1=left, 2=right

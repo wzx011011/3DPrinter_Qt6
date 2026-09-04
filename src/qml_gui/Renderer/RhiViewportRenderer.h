@@ -83,6 +83,11 @@ private:
   // ([int32 segmentCount][x,y,z pairs]) into GizmoVertex line soup.
   bool uploadMeasureOverlayBuffer(QRhiResourceUpdateBatch *updates);
   void renderMeasureOverlay(QRhiCommandBuffer *cb);
+  // P2.3-3: support preview line upload + render (measure pipe pattern, gray,
+  // gated to the support-paint gizmo). Parses m_supportPreviewData
+  // ([int32 segmentCount][x,y,z pairs]).
+  bool uploadSupportPreviewBuffer(QRhiResourceUpdateBatch *updates);
+  void renderSupportPreview(QRhiCommandBuffer *cb);
   // Phase 240 (GIZ-03): flatten hovered-facet highlight upload + render
   // (translucent fill pipeline, GizmoFlatten only). Parses
   // m_flattenHoverData ([int32 vertexCount][x,y,z triples]).
@@ -279,6 +284,21 @@ private:
     QVector3D center;
   };
   QVector<TranslucentBatchRange> m_modelTranslucentBatches;
+  // Wave 2c (perf): indexed model draws (docs/perf-wave2b-design.md). Index
+  // buffers reference the shared per-batch vertices; opaque batches draw
+  // through m_modelOpaqueIndexDraws, translucent ranges reuse
+  // TranslucentBatchRange with firstVertex/vertexCount reinterpreted as
+  // firstIndex/indexCount.
+  struct ModelIndexRange
+  {
+    quint32 firstIndex = 0;
+    quint32 indexCount = 0;
+  };
+  QVector<ModelIndexRange> m_modelOpaqueIndexDraws;
+  std::unique_ptr<QRhiBuffer> m_modelIndexBuffer;
+  quint32 m_modelIndexBufferBytes = 0;
+  std::unique_ptr<QRhiBuffer> m_modelTranslucentIndexBuffer;
+  quint32 m_modelTranslucentIndexBufferBytes = 0;
   QString m_extrudersColorsSignature;
   // Parsed filament colours (rgba 0..1, index 0 = extruder 1) mirrored from
   // RhiViewport::m_extrudersColors; consumed by the P15.1 tint and the
@@ -330,6 +350,8 @@ private:
   std::unique_ptr<QRhiBuffer> m_advancedCutMarkerBuffer;  // v5.13
   // Phase 240 (GIZ-05): measure overlay line buffer (line pipeline).
   std::unique_ptr<QRhiBuffer> m_measureOverlayBuffer;
+  // P2.3-3: support preview line buffer (line pipeline, gray).
+  std::unique_ptr<QRhiBuffer> m_supportPreviewBuffer;
   // Phase 240 (GIZ-03): flatten hovered-facet highlight buffer (translucent
   // fill pipeline).
   std::unique_ptr<QRhiBuffer> m_flattenHoverBuffer;
@@ -357,6 +379,8 @@ private:
   bool m_advancedCutMarkerBufferUploaded = false;  // v5.13
   // Phase 240 (GIZ-05/GIZ-03): overlay upload flags.
   bool m_measureOverlayBufferUploaded = false;
+  // P2.3-3: support preview buffer upload latch.
+  bool m_supportPreviewBufferUploaded = false;
   bool m_flattenHoverBufferUploaded = false;
   bool m_assemblyConnectorBufferUploaded = false;
   bool m_assemblyMeasureLineBufferUploaded = false;
@@ -372,6 +396,7 @@ private:
   quint32 m_hollowMarkerBufferBytes = 0;
   quint32 m_advancedCutMarkerBufferBytes = 0;  // v5.13
   quint32 m_measureOverlayBufferBytes = 0;   // Phase 240 (GIZ-05)
+  quint32 m_supportPreviewBufferBytes = 0;   // P2.3-3
   quint32 m_flattenHoverBufferBytes = 0;     // Phase 240 (GIZ-03)
   quint32 m_brushCursorBufferBytes = 0;
   quint32 m_assemblyConnectorBufferBytes = 0;
@@ -464,6 +489,7 @@ private:
   quint32 m_hollowMarkerVertexCount = 0;
   quint32 m_advancedCutMarkerVertexCount = 0;  // v5.13
   quint32 m_measureOverlayVertexCount = 0;   // Phase 240 (GIZ-05)
+  quint32 m_supportPreviewVertexCount = 0;   // P2.3-3
   quint32 m_flattenHoverVertexCount = 0;     // Phase 240 (GIZ-03)
   quint32 m_brushCursorVertexCount = 0;
   quint32 m_assemblyConnectorVertexCount = 0;
@@ -564,6 +590,8 @@ private:
   // Phase 240 (GIZ-05): measure overlay line stream from
   // EditorViewModel::measureOverlayData.
   QByteArray m_measureOverlayData;
+  // P2.3-3: support preview segments mirrored from the viewport.
+  QByteArray m_supportPreviewData;
   // Phase 240 (GIZ-03): flatten hovered-facet stream from
   // EditorViewModel::flattenHoverData.
   QByteArray m_flattenHoverData;
@@ -600,9 +628,15 @@ private:
   int m_gcodeViewMode = 0;
   QVector<bool> m_roleVisibility;  ///< Per-role extrusion mask from RhiViewport (render-side skip).
   QVector<Vertex> m_previewVertices;     // expanded preview vertices (CPU staging)
+  QVector<quint32> m_previewIndices;     // Wave 3c (perf): shared-vertex index staging
   struct PreviewDrawSpan {
     int layer;
     int move;
+    // Wave 3c (perf): index-buffer semantics since the prism/line soup became
+    // indexed — vertexOffset = firstIndex, vertexCount = indexCount (6 shared
+    // verts + 24 indices per extrusion prism instead of 24 duplicated verts:
+    // 672 -> 264 B/move, upstream parity direction GCodeViewer.hpp:84-87
+    // ushort-chunked indexed toolpaths).
     quint32 vertexOffset;
     quint32 vertexCount;
     int role;  ///< Canonical libvgcode EGCodeExtrusionRole index for render-side filtering.
@@ -622,7 +656,9 @@ private:
   quint32 m_previewCapVertexCount = 0;
   bool m_previewCapUploadPending = false;
   std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;
+  std::unique_ptr<QRhiBuffer> m_previewIndexBuffer;  // Wave 3c (perf)
   quint32 m_previewSegmentBufferBytes = 0;
+  quint32 m_previewIndexBufferBytes = 0;             // Wave 3c (perf)
   quint32 m_previewSegmentVertexCount = 0;
   bool m_previewSegmentBufferUploaded = false;
 

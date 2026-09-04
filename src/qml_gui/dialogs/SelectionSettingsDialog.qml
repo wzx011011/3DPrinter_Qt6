@@ -69,8 +69,8 @@ CxDialog {
         ListElement { key: "fill_density";      label: "填充密度";    unit: "%";  type: "int";    min: "0";    max: "100"; step: "5" }
         ListElement { key: "wall_loops";        label: "墙层数";      unit: "";   type: "int";    min: "1";    max: "8";   step: "1" }
         ListElement { key: "support_material";  label: "生成支撑";    unit: "";   type: "bool";   min: "";     max: "";    step: "" }
-        ListElement { key: "nozzle_temperature"; label: "喷嘴温度";   unit: "°C"; type: "int";    min: "150";  max: "320"; step: "5" }
-        ListElement { key: "bed_temperature";   label: "热床温度";    unit: "°C"; type: "int";    min: "0";    max: "150"; step: "5" }
+        ListElement { key: "nozzle_temperature"; label: "喷嘴温度";   unit: "℃"; type: "int";    min: "150";  max: "320"; step: "5" }
+        ListElement { key: "bed_temperature";   label: "热床温度";    unit: "℃"; type: "int";    min: "0";    max: "150"; step: "5" }
     }
 
     ListModel { id: overrideModel }

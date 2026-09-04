@@ -344,6 +344,10 @@ Invoke-NinjaTarget 'PreviewParserTests'
 Invoke-NinjaTarget 'owzx-cli'
 Invoke-NinjaTarget 'CliTests'
 Invoke-NinjaTarget 'test-slice-direct' $false
+# Perf evaluation stage benchmark (scripts/perf/, docs/perf-baseline.md).
+# Compile-gated only: it needs generated benchmark models and runs manually
+# via scripts/perf/run_stage_bench.ps1, never in the pass/fail verify flow.
+Invoke-NinjaTarget 'PerfBench' $false
 if ($renderBenchEnabled) {
   Invoke-NinjaTarget 'owzx-render-bench'
 }
@@ -665,11 +669,15 @@ if (Test-Path $e2eExe) {
 # PDBs via a propagated /DEBUG, now removed). E: historically dropped below
 # ~5 GB free mid-run, killing ninja. Deleting PDBs after a successful verify
 # keeps the tree at a stable size; the next build regenerates them.
+# Set OWZX_KEEP_PDBS=1 to keep PDBs for crash debugging (cdb symbolized
+# stacks; see docs/perf-baseline.md build-hygiene notes).
+if (-not $env:OWZX_KEEP_PDBS) {
 $pdbs = Get-ChildItem -Path '.' -Filter '*.pdb' -File -ErrorAction SilentlyContinue
 if ($pdbs) {
   $freedBytes = ($pdbs | Measure-Object -Property Length -Sum).Sum
   $pdbs | Remove-Item -Force -ErrorAction SilentlyContinue
   Write-Stage 'Cleanup' ("Removed " + $pdbs.Count + " regenerable PDB files (freed " + [math]::Round($freedBytes / 1GB, 2) + " GB)")
+}
 }
 
 exit 0

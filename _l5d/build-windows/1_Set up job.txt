@@ -1,0 +1,40 @@
+﻿2026-08-15T01:34:53.0624202Z Current runner version: '2.336.0'
+2026-08-15T01:34:53.0676212Z ##[group]Runner Image Provisioner
+2026-08-15T01:34:53.0677364Z Hosted Compute Agent
+2026-08-15T01:34:53.0677915Z Version: 20260729.566
+2026-08-15T01:34:53.0678557Z Commit: cf7153fe6e25b664e8693c24944bf2b00355d109
+2026-08-15T01:34:53.0679370Z Build Date: 2026-07-29T19:17:02Z
+2026-08-15T01:34:53.0680020Z Worker ID: {8822882c-7948-4a5f-923f-20bdfa44800b}
+2026-08-15T01:34:53.0680673Z Azure Region: westcentralus
+2026-08-15T01:34:53.0681227Z ##[endgroup]
+2026-08-15T01:34:53.0682629Z ##[group]Operating System
+2026-08-15T01:34:53.0683186Z Microsoft Windows Server 2022
+2026-08-15T01:34:53.0683728Z 10.0.20348
+2026-08-15T01:34:53.0684187Z Datacenter
+2026-08-15T01:34:53.0684632Z ##[endgroup]
+2026-08-15T01:34:53.0685126Z ##[group]Runner Image
+2026-08-15T01:34:53.0685636Z Image: windows-2022
+2026-08-15T01:34:53.0686111Z Version: 20260802.262.1
+2026-08-15T01:34:53.0687124Z Included Software: https://github.com/actions/runner-images/blob/win22/20260802.262/images/windows/Windows2022-Readme.md
+2026-08-15T01:34:53.0688986Z Image Release: https://github.com/actions/runner-images/releases/tag/win22%2F20260802.262
+2026-08-15T01:34:53.0689841Z ##[endgroup]
+2026-08-15T01:34:53.0690857Z ##[group]GITHUB_TOKEN Permissions
+2026-08-15T01:34:53.0692812Z Contents: write
+2026-08-15T01:34:53.0693297Z Metadata: read
+2026-08-15T01:34:53.0693789Z ##[endgroup]
+2026-08-15T01:34:53.0695702Z Secret source: Actions
+2026-08-15T01:34:53.0696590Z Prepare workflow directory
+2026-08-15T01:34:53.1314584Z Prepare all required actions
+2026-08-15T01:34:53.1370887Z Getting action download info
+2026-08-15T01:34:53.5030869Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-08-15T01:34:53.5998165Z Download action repository 'lukka/get-cmake@latest' (SHA:fffaaafeea488556c2c12dad60690008bc1caacb)
+2026-08-15T01:34:54.1346747Z Download action repository 'ilammy/msvc-dev-cmd@v1' (SHA:0b201ec74fa43914dc39ae48a89fd1d8cb592756)
+2026-08-15T01:34:54.5782805Z Download action repository 'microsoft/setup-msbuild@v3' (SHA:30375c66a4eea26614e0d39710365f22f8b0af57)
+2026-08-15T01:34:54.9688019Z Download action repository 'seanmiddleditch/gha-setup-ninja@v5' (SHA:96bed6edff20d1dd61ecff9b75cc519d516e6401)
+2026-08-15T01:34:55.4646084Z Download action repository 'jurplel/install-qt-action@v4' (SHA:48d3ad6db93f3627c8ee7a0454bc6f3744f7e730)
+2026-08-15T01:34:57.9002907Z Download action repository 'actions/cache@v4' (SHA:0057852bfaa89a56745cba8c7296529d2fc39830)
+2026-08-15T01:34:58.0126404Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-08-15T01:34:58.1638973Z Download action repository 'softprops/action-gh-release@v2' (SHA:3bb12739c298aeb8a4eeaf626c5b8d85266b0e65)
+2026-08-15T01:34:58.7454515Z Getting action download info
+2026-08-15T01:34:58.8618509Z Download action repository 'actions/setup-python@v6' (SHA:ece7cb06caefa5fff74198d8649806c4678c61a1)
+2026-08-15T01:34:59.0337369Z Complete job name: build-windows

@@ -3,6 +3,7 @@
 #include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoGeometry.h"
+#include "core/util/PerfLog.h"
 
 #include <QDebug>
 #include <QFile>
@@ -12,6 +13,7 @@
 #include <QSvgRenderer>
 
 #include <algorithm>
+#include <limits>
 #include <atomic>
 #include <cstddef>
 
@@ -651,6 +653,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (m_measureOverlayData != prevMeasureOverlay)
     m_measureOverlayBufferUploaded = false;
 
+  // P2.3-3: support preview line stream (same pipe pattern).
+  const QByteArray prevSupportPreview = m_supportPreviewData;
+  m_supportPreviewData = viewport->m_supportPreviewData;
+  if (m_supportPreviewData != prevSupportPreview)
+    m_supportPreviewBufferUploaded = false;
+
   // Phase 240 (GIZ-03): flatten hover facet stream (same pipe pattern).
   const QByteArray prevFlattenHover = m_flattenHoverData;
   m_flattenHoverData = viewport->m_flattenHoverData;
@@ -714,6 +722,24 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   }
   rhiTrace("render-enter");
 
+  // OWZX_PERF_LOG gated rolling frame-time stats (scripts/perf/,
+  // docs/perf-baseline.md). Zero cost when the env var is unset.
+  static QElapsedTimer perfFrameTimer;
+  static qint64 perfFrameStartNs = 0;
+  if (PerfLog::enabled()) {
+    if (!perfFrameTimer.isValid())
+      perfFrameTimer.start();
+    perfFrameStartNs = perfFrameTimer.nsecsElapsed();
+  }
+  // v5.17 (FPS overlay): upstream render-statistics parity — count frames
+  // and publish the rate twice a second (upstream increments per render at
+  // GLCanvas3D.cpp:2057 and displays via ImGui at :1975-1980).
+  static QElapsedTimer fpsOverlayTimer;
+  static int fpsOverlayFrames = 0;
+  if (!fpsOverlayTimer.isValid())
+    fpsOverlayTimer.start();
+  ++fpsOverlayFrames;
+
   // Phase 210 (MIT-03 / Seam C): bump the frame counter first so the value
   // seen by the upload logic below is 1-based. The first 3 frames after every
   // initialize() fall in the force window (m_frameCount <= 3) and get an
@@ -766,6 +792,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                                    !m_hollowMarkerBufferUploaded ||
                                    !m_advancedCutMarkerBufferUploaded ||
                                    !m_measureOverlayBufferUploaded ||
+                                   !m_supportPreviewBufferUploaded ||
                                    !m_flattenHoverBufferUploaded ||
                                    !m_sequentialClearanceBuffersUploaded ||
                                    !m_gizmoVertexBufferUploaded)) {
@@ -790,6 +817,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         // Phase 240 (GIZ-05/GIZ-03): measure overlay + flatten hover streams.
         uploadMeasureOverlayBuffer(updates);
         uploadFlattenHoverBuffer(updates);
+        // P2.3-3: support preview line stream.
+        uploadSupportPreviewBuffer(updates);
       }
     }
   }
@@ -982,7 +1011,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     renderAxes(cb);
     if (m_modelVertexBuffer && m_modelVertexCount > 0) {
       // v5.15 (MODELLIT): lit draw path (two-light gouraud) with the parallel
-      // per-face normal buffer. Falls back to the flat vertex-color pipeline
+      // per-vertex normal buffer. Falls back to the flat vertex-color pipeline
       // when the lit pipeline or normal buffer is unavailable.
       if (m_modelLitEnabled && ensureModelLitPipeline() && m_modelNormalBuffer) {
         cb->setGraphicsPipeline(m_modelLitPipeline.get());
@@ -990,13 +1019,22 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
             QRhiCommandBuffer::VertexInput(m_modelVertexBuffer.get(), 0),
             QRhiCommandBuffer::VertexInput(m_modelNormalBuffer.get(), 1),
         };
-        cb->setVertexInput(0, 2, modelBindings);
+        cb->setVertexInput(0, 2, modelBindings, m_modelIndexBuffer.get(), 0,
+                           QRhiCommandBuffer::IndexUInt32);
       } else {
         cb->setGraphicsPipeline(m_fillPipeline.get());
         const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
-        cb->setVertexInput(0, 1, &modelBinding);
+        cb->setVertexInput(0, 1, &modelBinding, m_modelIndexBuffer.get(), 0,
+                           QRhiCommandBuffer::IndexUInt32);
       }
-      cb->draw(m_modelVertexCount);
+      // Wave 2c (perf): indexed draws over the shared per-batch vertices
+      // (one draw per opaque batch range).
+      if (m_modelIndexBuffer && !m_modelOpaqueIndexDraws.isEmpty()) {
+        for (const ModelIndexRange &range : m_modelOpaqueIndexDraws)
+          cb->drawIndexed(range.indexCount, 1, range.firstIndex);
+      } else {
+        cb->draw(m_modelVertexCount);
+      }
     }
     // P15.2 (COLOR): upstream draws the translucent volumes after the plate
     // pass (_render_objects(Transparent), GLCanvas3D.cpp:1915); here it sits
@@ -1019,6 +1057,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // after the mesh with their own gizmo gating inside the render helpers.
     renderMeasureOverlay(cb);
     renderFlattenHover(cb);
+    // P2.3-3: support preview lines (gated to GizmoSupportPaint=6 inside).
+    renderSupportPreview(cb);
     if (m_showSelectedOutline && m_highlightVertexBuffer && m_highlightVertexCount > 0) {
       // P15.4 (SELBOX): the selection highlight is now the upstream white
       // corner-box outline (Selection.cpp:1939-1949 + render_bounding_box
@@ -1141,7 +1181,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // no-depth-write translucent fill pipeline (lit shading, matching the
     // upstream toolpath gouraud_light look), lines through the line
     // pipeline. One shared vertex buffer, two pipelines, span-ordered.
-    if (m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
+    if (m_previewSegmentBuffer && m_previewSegmentVertexCount > 0
+        && m_previewIndexBuffer) {
       const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
       if (!drawRanges.isEmpty()) {
         const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
@@ -1153,10 +1194,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
               range.triangles ? m_translucentFillPipeline.get() : m_linePipeline.get();
           if (wanted != currentPipeline) {
             cb->setGraphicsPipeline(wanted);
-            cb->setVertexInput(0, 1, &segBinding);
+            // Wave 3c (perf): one indexed draw per merged range
+            // (firstVertex/vertexCount carry firstIndex/indexCount).
+            cb->setVertexInput(0, 1, &segBinding, m_previewIndexBuffer.get(), 0,
+                               QRhiCommandBuffer::IndexUInt32);
             currentPipeline = wanted;
           }
-          cb->draw(range.vertexCount, 1, range.firstVertex);
+          cb->drawIndexed(range.vertexCount, 1, range.firstVertex);
         }
       }
     }
@@ -1250,6 +1294,45 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       QMetaObject::invokeMethod(viewport.data(), "update", Qt::QueuedConnection);
     }
   }
+  if (PerfLog::enabled() && perfFrameStartNs > 0) {
+    static qint64 perfAccumNs = 0;
+    static int perfFrames = 0;
+    static qint64 perfMinNs = std::numeric_limits<qint64>::max();
+    static qint64 perfMaxNs = 0;
+    const qint64 frameNs = perfFrameTimer.nsecsElapsed() - perfFrameStartNs;
+    perfAccumNs += frameNs;
+    ++perfFrames;
+    perfMinNs = std::min(perfMinNs, frameNs);
+    perfMaxNs = std::max(perfMaxNs, frameNs);
+    if (perfFrames >= 120) {
+      qInfo("[PERF] %-28s %10.2f ms avg | min=%6.2f max=%6.2f | n=%d",
+            "render.frame", double(perfAccumNs) / 1e6 / perfFrames,
+            double(perfMinNs) / 1e6, double(perfMaxNs) / 1e6, perfFrames);
+      perfAccumNs = 0;
+      perfFrames = 0;
+      perfMinNs = std::numeric_limits<qint64>::max();
+      perfMaxNs = 0;
+    }
+    perfFrameStartNs = 0;
+  }
+  // v5.17 (FPS overlay): publish the measured rate (queued to the GUI
+  // thread) whenever the overlay is enabled.
+  {
+    const qint64 elapsedMs = fpsOverlayTimer.elapsed();
+    if (elapsedMs >= 500) {
+      const int measuredFps = int(double(fpsOverlayFrames) * 1000.0 / double(elapsedMs));
+      fpsOverlayTimer.restart();
+      fpsOverlayFrames = 0;
+      if (m_viewportItem != nullptr && m_viewportItem->fpsOverlayEnabled()) {
+        QMetaObject::invokeMethod(
+            m_viewportItem.data(),
+            [viewport = m_viewportItem, measuredFps]() {
+              viewport->setFpsFromRenderThread(measuredFps);
+            },
+            Qt::QueuedConnection);
+      }
+    }
+  }
   rhiTrace("render-exit");
 }
 
@@ -1314,6 +1397,10 @@ void RhiViewportRenderer::releaseResources()
   m_modelTranslucentNormalBufferBytes = 0;
   m_modelTranslucentVertexCount = 0;
   m_modelTranslucentBatches.clear();
+  // Wave 2c (perf): indexed model draws.
+  m_modelIndexBufferBytes = 0;
+  m_modelTranslucentIndexBufferBytes = 0;
+  m_modelOpaqueIndexDraws.clear();
   // v5.16 (BEDMODEL/BEDTYPE-TEX)
   m_bedModelVertexBuffer.reset();
   m_bedModelNormalBuffer.reset();
@@ -1344,6 +1431,8 @@ void RhiViewportRenderer::releaseResources()
   m_cameraUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
   m_modelVertexBuffer.reset();
+  m_modelIndexBuffer.reset();
+  m_modelTranslucentIndexBuffer.reset();
   m_bedLineBuffer.reset();
   m_bedBottomLineBuffer.reset();
   // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES): derived bed buffers.
@@ -1639,8 +1728,14 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
   if (m_modelVertexBuffer && m_modelVertexCount > 0) {
     cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
     const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
-    cb->setVertexInput(0, 1, &modelBinding);
-    cb->draw(m_modelVertexCount);
+    cb->setVertexInput(0, 1, &modelBinding, m_modelIndexBuffer.get(), 0,
+                       QRhiCommandBuffer::IndexUInt32);
+    if (m_modelIndexBuffer && !m_modelOpaqueIndexDraws.isEmpty()) {
+      for (const ModelIndexRange &range : m_modelOpaqueIndexDraws)
+        cb->drawIndexed(range.indexCount, 1, range.firstIndex);
+    } else {
+      cb->draw(m_modelVertexCount);
+    }
   }
 
   cb->endPass();
@@ -1703,7 +1798,9 @@ void RhiViewportRenderer::deliverCompletedThumbnail()
 void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
 {
   m_previewSegmentBuffer.reset();
+  m_previewIndexBuffer.reset();  // Wave 3c (perf)
   m_previewSegmentBufferBytes = 0;
+  m_previewIndexBufferBytes = 0;
   m_previewSegmentBufferUploaded = false;
   // P17.7: sequential-range cap buffer.
   m_previewCapBuffer.reset();
@@ -1717,6 +1814,7 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
 
   if (!keepCpuStaging) {
     m_previewVertices.clear();
+    m_previewIndices.clear();
     m_previewDrawSpans.clear();
     m_previewSegmentVertexCount = 0;
     m_previewRangeCacheKey = 0;
@@ -2583,8 +2681,18 @@ void RhiViewportRenderer::renderModelTranslucentPass(QRhiCommandBuffer *cb)
       QRhiCommandBuffer::VertexInput(m_modelTranslucentBuffer.get(), 0),
       QRhiCommandBuffer::VertexInput(m_modelTranslucentNormalBuffer.get(), 1),
   };
-  cb->setVertexInput(0, 2, bindings);
+  cb->setVertexInput(0, 2, bindings, m_modelTranslucentIndexBuffer.get(), 0,
+                     QRhiCommandBuffer::IndexUInt32);
   cb->setShaderResources(m_srb.get());
+  // Wave 2c (perf): far-to-near draws issue one indexed draw per translucent
+  // batch range (firstVertex/vertexCount carry firstIndex/indexCount).
+  if (m_modelTranslucentIndexBuffer) {
+    for (const auto &entry : drawOrder) {
+      if (entry.second->vertexCount > 0)
+        cb->drawIndexed(entry.second->vertexCount, 1, entry.second->firstVertex);
+    }
+    return;
+  }
   for (const auto &entry : drawOrder) {
     if (entry.second->vertexCount > 0)
       cb->draw(entry.second->vertexCount, 1, entry.second->firstVertex, 0);
@@ -2803,51 +2911,145 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
   if (!uploadModel)
     return true;
 
-  // P15.2 (COLOR): split the scene vertices into the opaque pass buffer and
-  // the translucent modifier pass buffer (upstream _render_objects Opaque /
-  // Transparent, 3DScene.cpp:852-887). Translucent batches keep their ranges
-  // for the per-frame far-to-near sorted draws.
-  const QVector<PrepareSceneData::ModelVertex> &sceneVertices =
-      m_prepareScene.modelVertices();
+  // Wave 2c (perf): indexed world-space draws from the v2 decode
+  // (docs/perf-wave2b-design.md). Each batch contributes its geometry's
+  // SHARED vertices once (transformed by the batch matrix) plus an index
+  // range; mirrored batches (det(M3) > 0, axis-swap-folded matrix) swap two
+  // triangle indices to keep the v1 front-face semantics. Per-vertex
+  // normals transform through the normal matrix (inverse transpose),
+  // replacing the v1 per-face 3x duplication.
+  const QList<PrepareSceneData::ModelGeometry> &geometries =
+      m_prepareScene.modelGeometries();
+  const QList<PrepareSceneData::ModelBatchMeta> &batchMeta =
+      m_prepareScene.modelBatchMeta();
   const QList<PrepareSceneData::ModelBatch> &sceneBatches =
       m_prepareScene.modelBatches();
-  const QVector<Vertex> allVertices = buildModelVertices(sceneVertices);
+  const QList<PrepareSceneData::ModelVertex> &soup = m_prepareScene.modelVertices();
+
+  m_modelTranslucentBatches.clear();
+  m_modelOpaqueIndexDraws.clear();
+  m_modelTranslucentVertexCount = 0;
+
+  if (geometries.size() != sceneBatches.size()
+      || batchMeta.size() != sceneBatches.size())
+    return false;
+
   QVector<Vertex> modelVertices;
   QVector<Vertex> translucentVertices;
-  m_modelTranslucentBatches.clear();
-  m_modelTranslucentVertexCount = 0;
-  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
-    if (batch.firstVertex < 0
-        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
+  QVector<float> modelNormals;
+  QVector<float> translucentNormals;
+  QVector<quint32> modelIndices;
+  QVector<quint32> translucentIndices;
+
+  for (int b = 0; b < sceneBatches.size(); ++b) {
+    const PrepareSceneData::ModelBatch &batch = sceneBatches.at(b);
+    const PrepareSceneData::ModelBatchMeta &meta = batchMeta.at(b);
+    if (meta.geomId < 0 || meta.geomId >= geometries.size())
       continue;
-    if (!batch.translucent) {
-      for (int i = 0; i < batch.vertexCount; ++i)
-        modelVertices.append(allVertices.at(batch.firstVertex + i));
+    const PrepareSceneData::ModelGeometry &geom = geometries.at(meta.geomId);
+
+    // The compat soup bakes one shared color per batch; take the batch RGBA
+    // from its first soup vertex.
+    if (batch.firstVertex < 0 || batch.firstVertex >= soup.size())
       continue;
+    const PrepareSceneData::ModelVertex &colorSource = soup.at(batch.firstVertex);
+
+    const QMatrix4x4 matrix = meta.matrix;
+    const QMatrix3x3 normalMatrix = matrix.normalMatrix();
+    const float m00 = matrix(0, 0), m01 = matrix(0, 1), m02 = matrix(0, 2);
+    const float m10 = matrix(1, 0), m11 = matrix(1, 1), m12 = matrix(1, 2);
+    const float m20 = matrix(2, 0), m21 = matrix(2, 1), m22 = matrix(2, 2);
+    const float det3 = m00 * (m11 * m22 - m12 * m21)
+                     - m01 * (m10 * m22 - m12 * m20)
+                     + m02 * (m10 * m21 - m11 * m20);
+    const bool mirrored = det3 > 0.0f;
+
+    QVector<Vertex> &targetVertices = batch.translucent ? translucentVertices : modelVertices;
+    QVector<float> &targetNormals = batch.translucent ? translucentNormals : modelNormals;
+    QVector<quint32> &targetIndices = batch.translucent ? translucentIndices : modelIndices;
+
+    const int vertexCount = int(geom.positions.size()) / 3;
+    const quint32 vertexBase = quint32(targetVertices.size());
+    targetVertices.reserve(targetVertices.size() + vertexCount);
+    targetNormals.reserve(targetNormals.size() + vertexCount * 3);
+    for (int v = 0; v < vertexCount; ++v) {
+      const float lx = geom.positions.at(v * 3 + 0);
+      const float ly = geom.positions.at(v * 3 + 1);
+      const float lz = geom.positions.at(v * 3 + 2);
+      Vertex vertex;
+      vertex.x = m00 * lx + m01 * ly + m02 * lz + matrix(0, 3);
+      vertex.y = m10 * lx + m11 * ly + m12 * lz + matrix(1, 3);
+      vertex.z = m20 * lx + m21 * ly + m22 * lz + matrix(2, 3);
+      vertex.r = colorSource.r;
+      vertex.g = colorSource.g;
+      vertex.b = colorSource.b;
+      vertex.a = colorSource.a;
+      targetVertices.append(vertex);
+
+      QVector3D normal(geom.normals.at(v * 3 + 0),
+                       geom.normals.at(v * 3 + 1),
+                       geom.normals.at(v * 3 + 2));
+      // QMatrix3x3 (QGenericMatrix) has no vector multiply — do it manually.
+      normal = QVector3D(
+          normalMatrix(0, 0) * normal.x() + normalMatrix(0, 1) * normal.y()
+              + normalMatrix(0, 2) * normal.z(),
+          normalMatrix(1, 0) * normal.x() + normalMatrix(1, 1) * normal.y()
+              + normalMatrix(1, 2) * normal.z(),
+          normalMatrix(2, 0) * normal.x() + normalMatrix(2, 1) * normal.y()
+              + normalMatrix(2, 2) * normal.z());
+      const float length = normal.length();
+      if (length > 1e-9f)
+        normal /= length;
+      else
+        normal = QVector3D(0.0f, 1.0f, 0.0f);
+      targetNormals.append(normal.x());
+      targetNormals.append(normal.y());
+      targetNormals.append(normal.z());
     }
-    TranslucentBatchRange range;
-    range.firstVertex = quint32(translucentVertices.size());
-    for (int i = 0; i < batch.vertexCount; ++i)
-      translucentVertices.append(allVertices.at(batch.firstVertex + i));
-    range.vertexCount = quint32(batch.vertexCount);
-    range.center = QVector3D(
-        (batch.bounds.minX + batch.bounds.maxX) * 0.5f,
-        (batch.bounds.minY + batch.bounds.maxY) * 0.5f,
-        (batch.bounds.minZ + batch.bounds.maxZ) * 0.5f);
-    m_modelTranslucentBatches.append(range);
+
+    const int indexCount = int(geom.indices.size());
+    const quint32 firstIndex = quint32(targetIndices.size());
+    targetIndices.reserve(targetIndices.size() + indexCount);
+    for (int t = 0; t + 2 < indexCount; t += 3) {
+      const quint32 i0 = vertexBase + geom.indices.at(t);
+      const quint32 i1 = vertexBase + geom.indices.at(t + (mirrored ? 2 : 1));
+      const quint32 i2 = vertexBase + geom.indices.at(t + (mirrored ? 1 : 2));
+      targetIndices.append(i0);
+      targetIndices.append(i1);
+      targetIndices.append(i2);
+    }
+
+    if (batch.translucent) {
+      TranslucentBatchRange range;
+      range.firstVertex = firstIndex;
+      range.vertexCount = quint32(indexCount);
+      range.center = QVector3D(
+          (batch.bounds.minX + batch.bounds.maxX) * 0.5f,
+          (batch.bounds.minY + batch.bounds.maxY) * 0.5f,
+          (batch.bounds.minZ + batch.bounds.maxZ) * 0.5f);
+      m_modelTranslucentBatches.append(range);
+    } else {
+      ModelIndexRange range;
+      range.firstIndex = firstIndex;
+      range.indexCount = quint32(indexCount);
+      m_modelOpaqueIndexDraws.append(range);
+    }
   }
-  m_modelTranslucentVertexCount = quint32(translucentVertices.size());
 
   const quint32 modelBytes = quint32(modelVertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_modelVertexBuffer, modelBytes, m_modelVertexBufferBytes, QRhiBuffer::VertexBuffer))
     return false;
-
-  m_modelVertexCount = quint32(modelVertices.size());
   if (m_modelVertexBuffer && modelBytes > 0) {
-    updates->uploadStaticBuffer(m_modelVertexBuffer.get(),
-                                0,
-                                modelBytes,
+    updates->uploadStaticBuffer(m_modelVertexBuffer.get(), 0, modelBytes,
                                 modelVertices.constData());
+  }
+
+  const quint32 modelIndexBytes = quint32(modelIndices.size() * int(sizeof(quint32)));
+  if (!ensureBuffer(m_modelIndexBuffer, modelIndexBytes, m_modelIndexBufferBytes, QRhiBuffer::IndexBuffer))
+    return false;
+  if (m_modelIndexBuffer && modelIndexBytes > 0) {
+    updates->uploadStaticBuffer(m_modelIndexBuffer.get(), 0, modelIndexBytes,
+                                modelIndices.constData());
   }
 
   const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
@@ -2856,66 +3058,37 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
     return false;
   if (m_modelTranslucentBuffer && translucentBytes > 0) {
     updates->uploadStaticBuffer(m_modelTranslucentBuffer.get(),
-                                0,
-                                translucentBytes,
-                                translucentVertices.constData());
+                                0, translucentBytes, translucentVertices.constData());
   }
 
-  // Helper shared by both normal arrays (one normal per vertex, three
-  // identical normals per triangle) for the lit pipelines.
-  const auto buildNormals = [](const QVector<Vertex> &verts) {
-    QVector<float> normals;
-    normals.reserve(verts.size() * 3);
-    const int triCount = verts.size() / 3;
-    const Vertex *v = verts.constData();
-    for (int t = 0; t < triCount; ++t) {
-      const Vertex &a = v[t * 3 + 0];
-      const Vertex &b = v[t * 3 + 1];
-      const Vertex &c = v[t * 3 + 2];
-      const float ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
-      const float wx = c.x - a.x, wy = c.y - a.y, wz = c.z - a.z;
-      float nx = uy * wz - uz * wy;
-      float ny = uz * wx - ux * wz;
-      float nz = ux * wy - uy * wx;
-      const float len = std::sqrt(nx * nx + ny * ny + nz * nz);
-      if (len > 1e-9f) {
-        nx /= len; ny /= len; nz /= len;
-      } else {
-        nx = 0.f; ny = 1.f; nz = 0.f;
-      }
-      for (int k = 0; k < 3; ++k) {
-        normals.append(nx);
-        normals.append(ny);
-        normals.append(nz);
-      }
-    }
-    return normals;
-  };
+  const quint32 translucentIndexBytes = quint32(translucentIndices.size() * int(sizeof(quint32)));
+  if (!ensureBuffer(m_modelTranslucentIndexBuffer, translucentIndexBytes,
+                    m_modelTranslucentIndexBufferBytes, QRhiBuffer::IndexBuffer))
+    return false;
+  if (m_modelTranslucentIndexBuffer && translucentIndexBytes > 0) {
+    updates->uploadStaticBuffer(m_modelTranslucentIndexBuffer.get(), 0,
+                                translucentIndexBytes, translucentIndices.constData());
+  }
 
-  // v5.15 (MODELLIT): parallel per-face normal array for the lit pipeline.
-  // Computed here so the normal buffer always matches the position buffer
-  // even when the mesh stream rebuilds.
   {
-    const QVector<float> normals = buildNormals(modelVertices);
-    const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
+    const quint32 normalBytes = quint32(modelNormals.size() * int(sizeof(float)));
     if (ensureBuffer(m_modelNormalBuffer, normalBytes, m_modelNormalBufferBytes, QRhiBuffer::VertexBuffer)
         && m_modelNormalBuffer && normalBytes > 0) {
-      updates->uploadStaticBuffer(m_modelNormalBuffer.get(), 0, normalBytes, normals.constData());
+      updates->uploadStaticBuffer(m_modelNormalBuffer.get(), 0, normalBytes, modelNormals.constData());
     }
   }
-  // P15.2 (COLOR): the translucent pass shares the lit shader, so it needs
-  // its own matching normal array.
   {
-    const QVector<float> normals = buildNormals(translucentVertices);
-    const quint32 normalBytes = quint32(normals.size() * int(sizeof(float)));
+    const quint32 normalBytes = quint32(translucentNormals.size() * int(sizeof(float)));
     if (ensureBuffer(m_modelTranslucentNormalBuffer, normalBytes,
                      m_modelTranslucentNormalBufferBytes, QRhiBuffer::VertexBuffer)
         && m_modelTranslucentNormalBuffer && normalBytes > 0) {
       updates->uploadStaticBuffer(m_modelTranslucentNormalBuffer.get(),
-                                  0, normalBytes, normals.constData());
+                                  0, normalBytes, translucentNormals.constData());
     }
   }
 
+  m_modelVertexCount = quint32(modelVertices.size());
+  m_modelTranslucentVertexCount = quint32(translucentVertices.size());
   m_modelVertexBufferUploaded = true;
   return true;
 }
@@ -4322,6 +4495,29 @@ struct PaintOverlayTri
 inline void stateColor(int state, const QVariantList &extruderColors,
                        float out[4])
 {
+  // P2.3-2: negative state = STAGED seed-fill region (the ViewModel emits
+  // -(EnforcerBlockerType) of the pending commit state). Upstream renders the
+  // staged region with get_seed_fill_color(base) = base * 1.25 clamped
+  // (GLGizmoPainterBase.cpp:1123-1131).
+  if (state < 0)
+  {
+    // P2.3-5: -3 = gap fragment (area below the gap-area threshold, upstream
+    // TrianglePatch::is_fragment). Upstream keeps per-type colors in the
+    // filtered fragment view; Qt6 uses a dedicated amber so fragments read
+    // at a glance.
+    if (state == -3)
+    {
+      out[0] = 1.0f; out[1] = 0.9f; out[2] = 0.4f; out[3] = 1.0f;
+      return;
+    }
+    float base[4];
+    stateColor(-state, extruderColors, base);
+    out[0] = std::min(base[0] * 1.25f, 1.0f);
+    out[1] = std::min(base[1] * 1.25f, 1.0f);
+    out[2] = std::min(base[2] * 1.25f, 1.0f);
+    out[3] = 1.0f;
+    return;
+  }
   // EnforcerBlockerType: 1=Enforcer, 2=Blocker, 3..16=Extruder3..16
   // (TriangleSelector.hpp:13-38). Extruder1 aliases ENFORCER, Extruder2 aliases
   // BLOCKER, so MMU extruders 1/2 reuse the green/red; extruders 3..16 use the
@@ -4630,6 +4826,80 @@ bool RhiViewportRenderer::uploadMeasureOverlayBuffer(QRhiResourceUpdateBatch *up
   }
   m_measureOverlayBufferUploaded = true;
   return true;
+}
+
+// P2.3-3: parse the support preview byte stream ([int32 segmentCount]
+// [6 floats per segment]) into a gray line soup. The layout mirrors
+// uploadMeasureOverlayBuffer, but the vertices carry the upstream preview
+// volume's neutral gray (GLVolume(0.5f, 0.5f, 0.5f), GLGizmoFdmSupports.cpp:
+// 874) instead of white.
+bool RhiViewportRenderer::uploadSupportPreviewBuffer(
+    QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr)
+    return false;
+  if (m_supportPreviewBufferUploaded)
+    return true;
+
+  QVector<Vertex> vertices;
+  if (m_supportPreviewData.size() >= 4) {
+    qint32 segmentCount = 0;
+    std::memcpy(&segmentCount, m_supportPreviewData.constData(), 4);
+    const qint64 expected = 4 + qint64(segmentCount) * 6 * qint64(sizeof(float));
+    if (segmentCount > 0 && m_supportPreviewData.size() >= expected) {
+      const auto *coords = reinterpret_cast<const float *>(
+          m_supportPreviewData.constData() + 4);
+      vertices.reserve(segmentCount * 2);
+      for (qint32 s = 0; s < segmentCount; ++s) {
+        for (int e = 0; e < 2; ++e) {
+          const float *c = coords + (qint64(s) * 2 + e) * 3;
+          Vertex v;
+          // libslic3r world (X,Y,Z) -> scene (X,Z,Y).
+          v.x = c[0];
+          v.y = c[2];
+          v.z = c[1];
+          v.r = 0.5f;
+          v.g = 0.5f;
+          v.b = 0.5f;
+          v.a = 1.f;
+          vertices.append(v);
+        }
+      }
+    }
+  }
+
+  const quint32 byteSize = quint32(vertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_supportPreviewBuffer, byteSize,
+                    m_supportPreviewBufferBytes, QRhiBuffer::VertexBuffer))
+    return false;
+
+  m_supportPreviewVertexCount = quint32(vertices.size());
+  if (m_supportPreviewBuffer && byteSize > 0) {
+    updates->uploadStaticBuffer(m_supportPreviewBuffer.get(), 0, byteSize,
+                                vertices.constData());
+  }
+  m_supportPreviewBufferUploaded = true;
+  return true;
+}
+
+// P2.3-3: draw the support preview lines while the support-paint gizmo is
+// active (upstream shows the support preview inside the FDM supports gizmo).
+void RhiViewportRenderer::renderSupportPreview(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr)
+    return;
+  // Gate to the SupportPaint gizmo only (mode 6).
+  if (m_gizmoMode != 6)
+    return;
+  if (m_linePipeline == nullptr || m_supportPreviewBuffer == nullptr ||
+      m_supportPreviewVertexCount == 0)
+    return;
+
+  cb->setShaderResources(m_srb.get());
+  cb->setGraphicsPipeline(m_linePipeline.get());
+  const QRhiCommandBuffer::VertexInput binding(m_supportPreviewBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_supportPreviewVertexCount);
 }
 
 void RhiViewportRenderer::renderMeasureOverlay(QRhiCommandBuffer *cb)
@@ -5095,32 +5365,18 @@ void RhiViewportRenderer::parsePreviewSegments()
     return;
 
   const auto *seg = reinterpret_cast<const GcvPackedSegment *>(m_previewData.constData() + 8);
+  // Wave 3c (perf): 6 shared vertices + 24 indices per extrusion prism
+  // (was 24 duplicated vertices = 672 B/move; now 264 B/move). Lines emit
+  // 2 vertices + 2 indices so a single indexed draw path covers both
+  // topologies. Winding is preserved verbatim from the old triangle order.
   m_previewVertices.reserve(int(count) * 2);
+  m_previewIndices.reserve(int(count) * 8);
   m_previewDrawSpans.reserve(int(count));
 
   for (int i = 0; i < count; ++i)
   {
     // Axis swap: GCode (x, y, z) -> scene (x, z, y), matching the legacy
     // preview renderer convention.
-    Vertex a;
-    a.x = seg[i].x1;
-    a.y = seg[i].z1;
-    a.z = seg[i].y1;
-    a.r = seg[i].r;
-    a.g = seg[i].g;
-    a.b = seg[i].b;
-    a.a = 1.0f;
-
-    Vertex b = a;
-    b.x = seg[i].x2;
-    b.y = seg[i].z2;
-    b.z = seg[i].y2;
-
-    // P17.2: extrusion segments expand into the solid triangular prism
-    // (upstream renders each extrusion move as an 8-vertex prism with the
-    // move's width x height, GCodeViewer.cpp:817-822 / GCodeViewer.hpp:336);
-    // travel/options stay 2-vertex line segments. Zero-length moves (the
-    // retract/unretract/seam tick stand-ins) keep the line form.
     const float gdx = seg[i].x2 - seg[i].x1;
     const float gdy = seg[i].y2 - seg[i].y1;
     const float gdz = seg[i].z2 - seg[i].z1;
@@ -5129,13 +5385,12 @@ void RhiViewportRenderer::parsePreviewSegments()
         && seg[i].height > 0.005f;
     if (extrusion)
     {
-      // Prism cross-section: equilateral-ish triangle of the given width in
-      // the bed plane, apex up (upstream TriangleBuilder shape). The height
-      // offsets the flat base above the layer Z.
+      // P17.2: extrusion segments expand into the solid triangular prism
+      // (upstream renders each extrusion move as a prism with the move's
+      // width x height, GCodeViewer.cpp:817-822 / GCodeViewer.hpp:336).
       const float length = std::sqrt(lengthSq);
       const float ux = gdx / length;
       const float uy = gdy / length; // GCode y
-      const float uz = gdz / length;
       // In-plane perpendicular (bed normal = GCode z): perp = n x dir.
       float px = -uy;
       float py = ux;
@@ -5151,74 +5406,65 @@ void RhiViewportRenderer::parsePreviewSegments()
       }
       const float halfW = seg[i].width * 0.5f;
       const float h = seg[i].height;
-      // Cross-section corners in GCode space (base-left, base-right, apex).
-      const float bx1 = seg[i].x1 + px * halfW;
-      const float by1 = seg[i].y1 + py * halfW;
-      const float bx2 = seg[i].x1 - px * halfW;
-      const float by2 = seg[i].y1 - py * halfW;
-      const float ax1 = seg[i].x1;
-      const float ay1 = seg[i].y1;
-      const float az1 = seg[i].z1 + h;
-      const float bx1e = seg[i].x2 + px * halfW;
-      const float by1e = seg[i].y2 + py * halfW;
-      const float bx2e = seg[i].x2 - px * halfW;
-      const float by2e = seg[i].y2 - py * halfW;
-      const float ax2 = seg[i].x2;
-      const float ay2 = seg[i].y2;
-      const float az2 = seg[i].z2 + h;
 
-      // 8 triangles x 3 vertices: bottom quad (2), top ridge edges (2),
-      // both side quads (2+2). Winding chosen for outward normals under the
-      // winding-agnostic lit shader (it maxes N and -N terms).
-      const quint32 spanStart = quint32(m_previewVertices.size());
-      const float r = seg[i].r, g = seg[i].g, bb = seg[i].b;
-      const auto tri = [&](const Vertex &v0, const Vertex &v1, const Vertex &v2) {
-        m_previewVertices.append(v0);
-        m_previewVertices.append(v1);
-        m_previewVertices.append(v2);
-      };
       const auto gv = [&](float gx, float gy, float gz) {
         Vertex v;
         v.x = gx;
         v.y = gz;  // axis swap: GCode z -> scene y
         v.z = gy;  // GCode y -> scene z
-        v.r = r;
-        v.g = g;
-        v.b = bb;
+        v.r = seg[i].r;
+        v.g = seg[i].g;
+        v.b = seg[i].b;
         v.a = 1.0f;
         return v;
       };
-      const Vertex base1a = gv(bx1, by1, seg[i].z1);
-      const Vertex base1b = gv(bx2, by2, seg[i].z1);
-      const Vertex apex1 = gv(ax1, ay1, az1);
-      const Vertex base2a = gv(bx1e, by1e, seg[i].z2);
-      const Vertex base2b = gv(bx2e, by2e, seg[i].z2);
-      const Vertex apex2 = gv(ax2, ay2, az2);
-      // Bottom face (two triangles).
-      tri(base1a, base1b, base2b);
-      tri(base1a, base2b, base2a);
-      // Left side quad (base1a..base2a .. apex line).
-      tri(base1a, base2a, apex2);
-      tri(base1a, apex2, apex1);
-      // Right side quad.
-      tri(base2b, base1b, apex1);
-      tri(base2b, apex1, apex2);
-      // End caps.
-      tri(base1b, base1a, apex1);
-      tri(base2a, base2b, apex2);
 
-      const quint32 vertexOffset = spanStart;
-      m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset,
-                                 quint32(m_previewVertices.size()) - spanStart,
+      // 6 unique corners: start base-left/right + start apex, end base
+      // left/right + end apex (cross-section triangle, apex up).
+      const quint32 base = quint32(m_previewVertices.size());
+      m_previewVertices.append(gv(seg[i].x1 + px * halfW, seg[i].y1 + py * halfW, seg[i].z1)); // 0
+      m_previewVertices.append(gv(seg[i].x1 - px * halfW, seg[i].y1 - py * halfW, seg[i].z1)); // 1
+      m_previewVertices.append(gv(seg[i].x1, seg[i].y1, seg[i].z1 + h));                       // 2
+      m_previewVertices.append(gv(seg[i].x2 + px * halfW, seg[i].y2 + py * halfW, seg[i].z2)); // 3
+      m_previewVertices.append(gv(seg[i].x2 - px * halfW, seg[i].y2 - py * halfW, seg[i].z2)); // 4
+      m_previewVertices.append(gv(seg[i].x2, seg[i].y2, seg[i].z2 + h));                       // 5
+
+      // Same 8 triangles as the old soup (bottom, both side quads, end
+      // caps), now as 24 indices over the shared corners.
+      const quint32 idx[24] = {
+          0, 1, 4,  0, 4, 3,   // bottom face
+          0, 3, 5,  0, 5, 2,   // left side quad
+          4, 1, 2,  4, 2, 5,   // right side quad
+          1, 0, 2,  3, 4, 5,   // end caps
+      };
+      const quint32 firstIndex = quint32(m_previewIndices.size());
+      for (quint32 k = 0; k < 24; ++k)
+        m_previewIndices.append(base + idx[k]);
+
+      m_previewDrawSpans.append({seg[i].layer, seg[i].move, firstIndex, 24,
                                  seg[i].role, true});
       continue;
     }
 
+    Vertex a;
+    a.x = seg[i].x1;
+    a.y = seg[i].z1;
+    a.z = seg[i].y1;
+    a.r = seg[i].r;
+    a.g = seg[i].g;
+    a.b = seg[i].b;
+    a.a = 1.0f;
+    Vertex b = a;
+    b.x = seg[i].x2;
+    b.y = seg[i].z2;
+    b.z = seg[i].y2;
     m_previewVertices.append(a);
     m_previewVertices.append(b);
-
-    const quint32 vertexOffset = quint32(m_previewVertices.size() - 2);
-    m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2, seg[i].role, false});
+    const quint32 firstIndex = quint32(m_previewIndices.size());
+    m_previewIndices.append(quint32(m_previewVertices.size() - 2));
+    m_previewIndices.append(quint32(m_previewVertices.size() - 1));
+    m_previewDrawSpans.append({seg[i].layer, seg[i].move, firstIndex, 2,
+                               seg[i].role, false});
   }
 
   m_previewSegmentVertexCount = quint32(m_previewVertices.size());
@@ -5249,11 +5495,15 @@ void RhiViewportRenderer::rebuildPreviewCap()
     if (span.move >= m_moveEnd)
       break;
   }
+  // Wave 3c (perf): spans are index-based now — resolve the first two
+  // indices of the span to its vertices (for line spans these are the two
+  // endpoints; for prism spans the first cross-section corners — the same
+  // pair the old soup exposed at offset/offset+1).
   if (capSpan == nullptr || capSpan->vertexCount < 2
-      || capSpan->vertexOffset + 1 >= quint32(m_previewVertices.size()))
+      || capSpan->vertexOffset + 1 >= quint32(m_previewIndices.size()))
     return;
-  const Vertex &v0 = m_previewVertices.at(capSpan->vertexOffset);
-  const Vertex &v1 = m_previewVertices.at(capSpan->vertexOffset + 1);
+  const Vertex &v0 = m_previewVertices.at(m_previewIndices.at(capSpan->vertexOffset));
+  const Vertex &v1 = m_previewVertices.at(m_previewIndices.at(capSpan->vertexOffset + 1));
   // Direction in scene space; half-width across the bed-plane perpendicular.
   float dx = v1.x - v0.x, dy = v1.y - v0.y, dz = v1.z - v0.z;
   const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
@@ -5289,6 +5539,15 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
 
   updates->uploadStaticBuffer(m_previewSegmentBuffer.get(), 0, byteSize,
                               m_previewVertices.constData());
+  // Wave 3c (perf): the shared-vertex index buffer (24 indices per prism).
+  const quint32 indexBytes = quint32(m_previewIndices.size()) * sizeof(quint32);
+  if (!ensureBuffer(m_previewIndexBuffer, indexBytes, m_previewIndexBufferBytes,
+                    QRhiBuffer::IndexBuffer))
+    return false;
+  if (m_previewIndexBuffer && indexBytes > 0) {
+    updates->uploadStaticBuffer(m_previewIndexBuffer.get(), 0, indexBytes,
+                                m_previewIndices.constData());
+  }
   // Phase 27 (PERF-01): capture upload timing.
   m_previewLastUploadMs = 0; // uploadStaticBuffer is deferred; actual timing measured at frame level
   return true;
