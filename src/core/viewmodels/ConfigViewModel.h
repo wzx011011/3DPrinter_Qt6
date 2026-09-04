@@ -165,6 +165,10 @@ public:
   /// preset's values start from the parent's resolved chain (CreatePresetsDialog
   /// "inherits from" selection, upstream CreatePresetsDialog.cpp).
   Q_INVOKABLE bool createCustomPreset(int category, const QString &name, const QString &inherits);
+  /// G-01: replace an existing USER preset with the current tier edits
+  /// (upstream SavePresetDialog replace path). Keeps the current selection;
+  /// fails for builtin/read-only targets.
+  Q_INVOKABLE bool overwriteUserPreset(int category, const QString &name);
   Q_INVOKABLE bool deletePreset(int category, const QString &name);
   Q_INVOKABLE bool renamePreset(int category, const QString &oldName, const QString &newName);
   Q_INVOKABLE bool canDeletePreset(const QString &name) const;

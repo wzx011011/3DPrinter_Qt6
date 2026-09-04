@@ -123,6 +123,12 @@ public:
   /// does not exist.
   bool createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values,
                           const QString &inherits);
+  /// G-01: replace an existing USER-created preset in place with `values`
+  /// (upstream SavePresetDialog replace path, SavePresetDialog.cpp:216-222:
+  /// user presets are replaceable with a warning while bundled/vendor presets
+  /// are not). Refuses when the name is unknown, builtin, or read-only.
+  bool overwriteUserPreset(int category, const QString &name,
+                           const QHash<QString, QVariant> &values);
   /// v5.16 (PSET2-03): merge `values` into an existing user preset without
   /// replacing its other keys and persist to disk. This is the Transfer
   /// primitive (upstream UnsavedChangesDialog Action::Transfer,

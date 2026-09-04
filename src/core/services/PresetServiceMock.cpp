@@ -2224,6 +2224,31 @@ bool PresetServiceMock::createCustomPreset(int category, const QString &name,
   return true;
 }
 
+bool PresetServiceMock::overwriteUserPreset(int category, const QString &name,
+                                            const QHash<QString, QVariant> &values)
+{
+  // G-01: replace an existing USER preset in place. Unlike createCustomPreset
+  // there is no duplicate rejection -- but builtin/read-only (vendor/bundle)
+  // presets are never replaceable, and the preset's inheritance link (if any)
+  // is preserved: the stored chain stays the parent, overlaid with `values`.
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty() || !isUserPreset(trimmedName))
+    return false;
+
+  QHash<QString, QVariant> resolved;
+  const QString parent = m_presetInherits.value(trimmedName);
+  if (!parent.isEmpty() && m_presetStore.contains(parent))
+    resolved = m_presetStore.value(parent);
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    resolved.insert(it.key(), it.value());
+
+  if (!writePresetJsonFile(userPresetDirResolved(), category, trimmedName, resolved, parent))
+    return false;
+
+  m_presetStore[trimmedName] = resolved;
+  return true;
+}
+
 bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
   // v5.16 (PSET2-03): Transfer primitive — selected keys land on the target

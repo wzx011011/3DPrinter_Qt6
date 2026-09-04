@@ -892,6 +892,58 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
   return true;
 }
 
+bool ConfigViewModel::overwriteUserPreset(int category, const QString &name)
+{
+  // G-01: replace an existing USER preset with the current tier edits
+  // (upstream SavePresetDialog replace path). Mirrors createCustomPreset's
+  // validation/bookkeeping minus the duplicate rejection; the current
+  // selection is intentionally NOT switched -- replacing preset Y while
+  // editing preset X keeps X selected (upstream behaviour).
+  lastPresetError_.clear();
+  if (!presetService_) {
+    lastPresetError_ = tr("Preset service is unavailable.");
+    emit stateChanged();
+    return false;
+  }
+
+  QString tier;
+  if (category == PresetServiceMock::PrinterCat)
+    tier = QStringLiteral("printer");
+  else if (category == PresetServiceMock::FilamentCat)
+    tier = QStringLiteral("filament");
+  else if (category == PresetServiceMock::PrintCat)
+    tier = QStringLiteral("print");
+  else {
+    lastPresetError_ = tr("Unsupported preset category.");
+    emit stateChanged();
+    return false;
+  }
+
+  const QString trimmedName = name.trimmed();
+  if (trimmedName.isEmpty()) {
+    lastPresetError_ = tr("Preset name cannot be empty.");
+    emit stateChanged();
+    return false;
+  }
+  if (!presetService_->isUserPreset(trimmedName)) {
+    lastPresetError_ = tr("This preset is built-in or read-only.");
+    emit stateChanged();
+    return false;
+  }
+  if (!presetService_->overwriteUserPreset(category, trimmedName, editableValuesForTier(tier))) {
+    lastPresetError_ = tr("Failed to save preset '%1' to disk.").arg(trimmedName);
+    emit stateChanged();
+    return false;
+  }
+
+  refreshPresetListModel();
+  mergePresetHierarchy();
+  emit stateChanged();
+  if (hasPendingUnsavedChanges())
+    return applyPendingAction();
+  return true;
+}
+
 bool ConfigViewModel::deletePreset(int category, const QString &name)
 {
   lastPresetError_.clear();
