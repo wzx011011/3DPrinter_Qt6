@@ -542,6 +542,10 @@ public:
   // (delete-plate undo), then the plates/membership/current index are
   // restored. Returns false on parse failure (state untouched on failure).
   bool restorePlateListSnapshot(const QByteArray &snapshot);
+  /// G-06 (snapshot v2): index of the current object carrying this
+  /// Slic3r::ObjectID, or -1. Exact undo reconciliation identity under
+  /// duplicate object names.
+  int indexOfStableId(quint64 stableId) const;
 
   // ── v5.16 UNDO-04: FacetsAnnotation snapshot (paint-stroke undo) ──
   // Serializes the ModelVolume FacetsAnnotation of the given paint kind

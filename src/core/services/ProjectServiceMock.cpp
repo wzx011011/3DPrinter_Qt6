@@ -5413,7 +5413,11 @@ bool ProjectServiceMock::restoreVolumeSnapshot(int objectIndex, int volumeIndex,
 namespace {
 // "OWPS" plate snapshot header; bumped on any format change.
 constexpr quint32 kPlateSnapshotMagic = 0x4F575053u;
-constexpr quint32 kPlateSnapshotVersion = 1;
+// G-06: v2 adds stable per-object ids (Slic3r::ObjectID) parallel to the
+// name list and inside each deep object snapshot, so undo reconciliation
+// is exact even when several objects share a name (same STL imported on
+// different plates). v1 (name-only) snapshots remain readable.
+constexpr quint32 kPlateSnapshotVersion = 2;
 
 struct PlateSnapshotEntry {
   bool valid = false;
@@ -5440,6 +5444,7 @@ struct PlateSnapshotEntry {
 
 struct PlateObjectSnapshot {
   qint32 objectIndex = -1;
+  quint64 stableId = 0;  ///< G-06 (v2): Slic3r::ObjectID of the captured object; 0 = unknown (v1).
   QByteArray full3mf;
   QString name;
   double pos[3] = {0, 0, 0};
@@ -5521,6 +5526,23 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
   ds << qint32(names.size());
   for (const QString &n : names) ds << n;
 
+  // G-06 (v2): stable per-object ids (Slic3r::ObjectID, monotonic within the
+  // process) parallel to `names`. restore() reconciles by id first and only
+  // falls back to name matching, so duplicate object names can no longer
+  // mismatch during undo (delete-plate/clone-plate undo with the same STL on
+  // several plates).
+  QList<quint64> stableIds;
+#ifdef HAS_LIBSLIC3R
+  if (model_)
+  {
+    stableIds.reserve(int(model_->objects.size()));
+    for (const auto *obj : model_->objects)
+      stableIds << quint64(obj ? obj->id().id : 0);
+  }
+#endif
+  ds << qint32(stableIds.size());
+  for (quint64 id : stableIds) ds << id;
+
   // Deep per-object 3MF blobs for every object referenced by any plate.
   // delete-plate undo uses these to restore members with full mesh fidelity
   // (mirrors upstream whole-model snapshot fidelity).
@@ -5540,10 +5562,15 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
     ds << qint32(sorted.size());
     for (qint32 idx : sorted)
     {
+      quint64 sid = 0;
+#ifdef HAS_LIBSLIC3R
+      if (model_ && size_t(idx) < model_->objects.size() && model_->objects[size_t(idx)])
+        sid = quint64(model_->objects[size_t(idx)]->id().id);
+#endif
       const QVector3D pos = objectPosition(int(idx));
       const QVector3D rot = objectRotation(int(idx));
       const QVector3D scl = objectScale(int(idx));
-      ds << idx << captureFullObjectSnapshot(int(idx))
+      ds << idx << quint64(sid) << captureFullObjectSnapshot(int(idx))
          << objectNames().value(int(idx));
       ds << double(pos.x()) << double(pos.y()) << double(pos.z());
       ds << double(rot.x()) << double(rot.y()) << double(rot.z());
@@ -5559,6 +5586,22 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
   return buffer;
 }
 
+int ProjectServiceMock::indexOfStableId(quint64 stableId) const
+{
+  // G-06: locate a current object by its Slic3r::ObjectID — the exact
+  // identity used for undo snapshot reconciliation (see restorePlateListSnapshot).
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || stableId == 0)
+    return -1;
+  for (size_t i = 0; i < model_->objects.size(); ++i)
+  {
+    if (model_->objects[i] && quint64(model_->objects[i]->id().id) == stableId)
+      return int(i);
+  }
+#endif
+  return -1;
+}
+
 bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
 {
   if (loading_ || !m_plateList || snapshot.isEmpty())
@@ -5568,7 +5611,8 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
   QDataStream ds(snapshot);
   quint32 magic = 0, version = 0;
   ds >> magic >> version;
-  if (magic != kPlateSnapshotMagic || version != kPlateSnapshotVersion)
+  // G-06: v2 carries stable object ids; v1 (name-only) stays readable.
+  if (magic != kPlateSnapshotMagic || (version != 1 && version != kPlateSnapshotVersion))
     return false;
 
   qint32 count = 0, currentIdx = 0;
@@ -5632,6 +5676,22 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
     targetNames.append(n);
   }
 
+  // G-06 (v2): stable ids parallel to targetNames. Empty for v1 snapshots,
+  // which keep the legacy by-name reconciliation below.
+  QList<quint64> targetIds;
+  if (version >= 2)
+  {
+    qint32 idCount = 0;
+    ds >> idCount;
+    targetIds.reserve(idCount);
+    for (qint32 i = 0; i < idCount; ++i)
+    {
+      quint64 id = 0;
+      ds >> id;
+      targetIds.append(id);
+    }
+  }
+
   qint32 deepCount = 0;
   ds >> deepCount;
   QList<PlateObjectSnapshot> deepObjects;
@@ -5641,7 +5701,10 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
     PlateObjectSnapshot o;
     double posx = 0, posy = 0, posz = 0, rotx = 0, roty = 0, rotz = 0;
     double sclx = 1, scly = 1, sclz = 1;
-    ds >> o.objectIndex >> o.full3mf >> o.name;
+    ds >> o.objectIndex;
+    if (version >= 2)
+      ds >> o.stableId;
+    ds >> o.full3mf >> o.name;
     ds >> posx >> posy >> posz >> rotx >> roty >> rotz >> sclx >> scly >> sclz;
     ds >> o.printable >> o.visible >> o.plateIndex;
     o.pos[0] = posx; o.pos[1] = posy; o.pos[2] = posz;
@@ -5658,34 +5721,65 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
   // 2a. Remove objects that were not in the snapshot (clone-plate undo). The
   // mock duplicateObject branch can insert mid-list, so re-scan after each
   // delete instead of assuming the extras sit at the tail.
+  // G-06: v2 snapshots reconcile by STABLE object id — exact even when
+  // several objects share a name (same STL on different plates). v1
+  // snapshots (empty id list) keep the legacy by-name multiset match.
   bool removedAny = true;
   while (removedAny)
   {
     removedAny = false;
-    const QStringList current = objectNames();
-    QStringList remaining = targetNames;
-    for (int i = 0; i < current.size(); ++i)
+    if (!targetIds.isEmpty())
     {
-      const int pos = remaining.indexOf(current[i]);
-      if (pos < 0)
+#ifdef HAS_LIBSLIC3R
+      if (!model_)
+        break;
+      QSet<quint64> remaining(targetIds.cbegin(), targetIds.cend());
+      for (size_t i = 0; i < model_->objects.size(); ++i)
       {
-        deleteObject(i);
+        const quint64 sid =
+            model_->objects[i] ? quint64(model_->objects[i]->id().id) : 0;
+        if (remaining.remove(sid))
+          continue;
+        deleteObject(int(i));
         removedAny = true;
         break;
       }
-      remaining.removeAt(pos);
+#endif
+    }
+    else
+    {
+      const QStringList current = objectNames();
+      QStringList remaining = targetNames;
+      for (int i = 0; i < current.size(); ++i)
+      {
+        const int pos = remaining.indexOf(current[i]);
+        if (pos < 0)
+        {
+          deleteObject(i);
+          removedAny = true;
+          break;
+        }
+        remaining.removeAt(pos);
+      }
     }
   }
 
   // 2b. Re-insert missing deep-snapshot objects at their original indices
   // (delete-plate undo: members that died with the plate come back with full
   // mesh/volumes/config — UNDO-01 captureFullObjectSnapshot fidelity).
+  // G-06: survivors are resolved by stable id first (exact under duplicate
+  // names); v1 snapshots without ids fall back to the index+name check.
   for (const PlateObjectSnapshot &o : deepObjects)
   {
     if (o.full3mf.isEmpty())
       continue;
-    if (o.objectIndex >= 0 && o.objectIndex < objectNames().size()
-        && objectNames().value(o.objectIndex) == o.name)
+    if (o.stableId != 0)
+    {
+      if (indexOfStableId(o.stableId) >= 0)
+        continue;  // object survived the operation — nothing to restore
+    }
+    else if (o.objectIndex >= 0 && o.objectIndex < objectNames().size()
+             && objectNames().value(o.objectIndex) == o.name)
       continue;  // object survived the operation — nothing to restore
     const int newIdx = restoreFullObjectSnapshot(
         o.full3mf, o.objectIndex, o.name, o.printable, o.visible, o.plateIndex);

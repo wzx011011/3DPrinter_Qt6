@@ -257,6 +257,8 @@ private slots:
   // Phase 241 (PAGE-04): the backup primitive writes a real .3mf snapshot
   // without hijacking the current project path.
   void projectBackupWritesSnapshotFile();
+  // G-06: delete-plate undo reconciles same-named objects by stable ObjectID.
+  void deletePlateUndoReconcilesDuplicateNamesByStableId();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -4010,6 +4012,39 @@ void ViewModelSmokeTests::projectBackupWritesSnapshotFile()
   QSKIP("This test requires libslic3r");
 #endif
 }
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
+{
+  // G-06: the plate-list undo snapshot reconciles by Slic3r::ObjectID. With
+  // two objects sharing ONE name, the legacy by-name match treated the
+  // deleted object's recorded (index, name) as "survived" — the same-named
+  // survivor occupied that index after the delete — and skipped its deep
+  // restore, silently dropping the object.
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 0 "立方体"
+  QVERIFY(project.addPrimitiveToPlate(0) >= 1);   // object 1 "立方体" (same name)
+  QCOMPARE(project.objectNames().value(0), project.objectNames().value(1));
+
+  const QByteArray snapshot = project.capturePlateListSnapshot(true);
+  QVERIFY(!snapshot.isEmpty());
+
+  // Delete the FIRST same-named object: the survivor shifts into its
+  // recorded index/name slot.
+  QVERIFY(project.deleteObject(0));
+  QCOMPARE(project.modelCount(), 1);
+
+  QVERIFY(project.restorePlateListSnapshot(snapshot));
+  QCOMPARE(project.modelCount(), 2);
+  QVERIFY(project.volumeMeshTriangleMesh(0, 0) != nullptr);
+  QVERIFY(project.volumeMeshTriangleMesh(1, 0) != nullptr);
+}
+#else
+void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
+{
+  QSKIP("G-06 duplicate-name undo reconciliation requires HAS_LIBSLIC3R");
+}
+#endif
 
 void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
 {
