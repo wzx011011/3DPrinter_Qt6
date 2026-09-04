@@ -1182,9 +1182,7 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
 void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
 
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.canExportGCode")),
            "Prepare export dialog must be guarded by EditorViewModel::canExportGCode");
@@ -1192,37 +1190,16 @@ void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
            "Prepare export guard must route blocked attempts through the backend for a reason");
   QVERIFY2(preparePage.contains(QStringLiteral("plateSliceResultStatus(index)")),
            "Prepare plate cards must render explicit valid/stale/missing result status");
-
-  const QStringList backendBindings = {
-    QStringLiteral("root.editorVm.canPreview"),
-    QStringLiteral("root.editorVm.canExportGCode"),
-    QStringLiteral("root.editorVm.previewActionHint"),
-    QStringLiteral("root.editorVm.exportActionHint"),
-    QStringLiteral("root.editorVm.plateSliceResultStatus(index)")
-  };
-  for (const QString &binding : backendBindings) {
-    QVERIFY2(sliceProgress.contains(binding),
-             qPrintable(QStringLiteral("SliceProgress must bind backend readiness property: %1").arg(binding)));
-  }
-
-  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canPreview")),
-           "Preview action must be disabled through backend availability");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canExportGCode")),
-           "Export action must be disabled through backend availability");
-  QVERIFY2(!sliceProgress.contains(QStringLiteral("visible: root.hasSliceResult && !root.slicingNow")),
-           "Preview/export action row must not disappear solely because the current result is missing or stale");
 }
 
 void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString errorToast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
   QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
@@ -1240,12 +1217,6 @@ void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
 
   QVERIFY2(editorHeader.contains(QStringLiteral("defaultExportGCodeFileName")),
            "EditorViewModel must expose a default G-code export filename to QML");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("exportRequested")),
-           "SliceProgress export button must ask the page to open a save dialog");
-  QVERIFY2(!sliceProgress.contains(QStringLiteral("requestExportGCode(path)"))
-               && !sliceProgress.contains(QStringLiteral("requestExportGCode(root.outputPath)"))
-               && !sliceProgress.contains(QStringLiteral("? root.outputPath")),
-           "SliceProgress must not export directly to the generated source outputPath");
   QVERIFY2(!errorToast.contains(QStringLiteral("requestExportGCode(\"output.gcode\")")),
            "Notification export button must open the export dialog instead of writing output.gcode");
   QVERIFY2(errorToast.contains(QStringLiteral("exportGCodeRequested")),
@@ -1968,7 +1939,6 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
 void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
   const QString menuComponent = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString projectService = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
@@ -2007,9 +1977,7 @@ void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
                && !preparePage.contains(QStringLiteral("id: plateContextMenu")),
            "PreparePage must not retain legacy context-menu presentation surfaces");
   QVERIFY2(menuComponent.contains(QStringLiteral("splitSelectedToObjects"))
-               && menuComponent.contains(QStringLiteral("splitSelectedToParts"))
-               && objectList.contains(QStringLiteral("splitSelectedToObjects"))
-               && objectList.contains(QStringLiteral("splitSelectedToParts")),
+               && menuComponent.contains(QStringLiteral("splitSelectedToParts")),
            "Object and part split entries must route to distinct C++ actions");
   QVERIFY2(menuComponent.contains(QStringLiteral("requestReplaceAll"))
                && preparePage.contains(QStringLiteral("replaceAllOnPlateDlg"))
@@ -3410,10 +3378,8 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
-  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
 
   QVERIFY2(!preparePage.contains(QStringLiteral("plateCount < 10"))
                && !preparePage.contains(QStringLiteral("plateCount < 36"))
@@ -3428,27 +3394,24 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
            "Prepare plate controls must bind to EditorViewModel::canAddPlate");
 
   QVERIFY2(!preparePage.contains(QStringLiteral("canActivateGizmo("))
-               && !glToolbars.contains(QStringLiteral("canActivateGizmo("))
-               && !objectList.contains(QStringLiteral("canActivateGizmo(")),
+               && !glToolbars.contains(QStringLiteral("canActivateGizmo(")),
            "QML gizmo controls must bind to availableGizmoMask for reactive updates");
   QVERIFY2(preparePage.contains(QStringLiteral("availableGizmoMask"))
-               && glToolbars.contains(QStringLiteral("availableGizmoMask"))
-               && objectList.contains(QStringLiteral("availableGizmoMask")),
+               && glToolbars.contains(QStringLiteral("availableGizmoMask")),
            "Prepare gizmo controls must bind to EditorViewModel::availableGizmoMask");
-  QVERIFY2(!preparePage.contains(QStringLiteral("deleteSelectedObjects("))
-               && !objectList.contains(QStringLiteral("deleteSelectedObjects("))
-               && !objectList.contains(QStringLiteral("deleteObject(")),
+  QVERIFY2(!preparePage.contains(QStringLiteral("deleteSelectedObjects(")),
            "Prepare delete actions must route through EditorViewModel::deleteSelection");
 
+  // v5.16 (G-08): canRenameSelectedObject/canSetSelectionPrintable only ever
+  // had a QML consumer in the deleted object-list panel; the surviving
+  // gates stay anchored on the live PreparePage/GLToolbars carriers.
   const QStringList requiredObjectGates = {
-    QStringLiteral("canRenameSelectedObject"),
     QStringLiteral("canDuplicateSelectedObjects"),
     QStringLiteral("canDeleteSelection"),
-    QStringLiteral("canSetSelectionPrintable"),
     QStringLiteral("canTransformSelection")
   };
   for (const QString &gate : requiredObjectGates) {
-    QVERIFY2(preparePage.contains(gate) || objectList.contains(gate),
+    QVERIFY2(preparePage.contains(gate) || glToolbars.contains(gate),
              qPrintable(QStringLiteral("Prepare object actions must bind to %1").arg(gate)));
   }
 }
@@ -3468,30 +3431,13 @@ void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
-  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
 
   QVERIFY2(!glToolbars.contains(QStringLiteral("id: sliceButton")),
            "Phase 76 removes the large floating viewport Slice button");
   QVERIFY2(!glToolbars.contains(QStringLiteral("text: \">>\"")),
            "Viewport overlays must not expose the legacy floating >> Slice affordance");
-
-  const QStringList objectListTokens = {
-    QStringLiteral("readonly property int objectRowHeight: 38"),
-    QStringLiteral("readonly property int volumeRowHeight: 26"),
-    QStringLiteral("readonly property int groupHeaderHeight: 18"),
-    QStringLiteral("objectListStatusPill"),
-    QStringLiteral("row.objPrintable ? Theme.accent : Theme.textDisabled"),
-    QStringLiteral("enabled: !!root.editorVm && root.editorVm.canDeleteSelection")
-  };
-  for (const QString &token : objectListTokens) {
-    QVERIFY2(objectList.contains(token),
-             qPrintable(QStringLiteral("ObjectList must preserve Phase 76 compact/tree contract token: %1").arg(token)));
-  }
 
   const QStringList plateStripTokens = {
     QStringLiteral("height: 44"),
@@ -3505,13 +3451,6 @@ void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
     QVERIFY2(preparePage.contains(token),
              qPrintable(QStringLiteral("Prepare plate strip must preserve Phase 76 compact/state contract token: %1").arg(token)));
   }
-
-  QVERIFY2(sliceProgress.contains(QStringLiteral("readonly property bool primaryActionEnabled")),
-           "SliceProgress must expose one backend-gated primary action state");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("readonly property bool canSliceAll")),
-           "Slice-all must be explicitly gated instead of being an always-clickable button");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
-           "Slice-all button must bind to the explicit backend-derived gate");
 }
 
 void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
@@ -3620,10 +3559,6 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
                && !leftSidebar.contains(QStringLiteral("id: printerThumbnail")),
            "v5.14: printer preset must stay a compact row (hero card removed for screenshot-truth density)");
 
-  QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {")),
-           "Default screenshot sidebar must not mount ObjectList in the left parameter column");
-  QVERIFY2(!leftSidebar.contains(QStringLiteral("SliceProgress {")),
-           "Default screenshot sidebar must not mount SliceProgress in the left parameter column");
   // Phase 162 (TK-01): the sidebar palette was previously checked via specific
   // hex literals (#303236/#313337/#323438 -- the screenshot gray panel surface).
   // The v5.2 color sweep migrated those to Theme tokens (bgElevated/bgHover/
@@ -3764,9 +3699,6 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString dockableSidebar = readSource(QStringLiteral("src/qml_gui/panels/DockableSidebar.qml"));
-  const QString leftSidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
   const QString cxTextArea = readSource(QStringLiteral("src/qml_gui/controls/CxTextArea.qml"));
   const QString auditTests = readSource(QStringLiteral("tests/QmlUiAuditTests.cpp"));
@@ -3775,9 +3707,6 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!dockableSidebar.isEmpty(), "Unable to read DockableSidebar.qml");
-  QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
-  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
   QVERIFY2(!cxTextArea.isEmpty(), "Unable to read CxTextArea.qml");
 
@@ -3785,8 +3714,6 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
     QStringLiteral("pages/PreparePage.qml"),
     QStringLiteral("pages/Plater.qml"),
     QStringLiteral("panels/LeftSidebar.qml"),
-    QStringLiteral("panels/ObjectList.qml"),
-    QStringLiteral("panels/SliceProgress.qml"),
     QStringLiteral("panels/DockableSidebar.qml"),
     QStringLiteral("components/GLToolbars.qml")
   };
@@ -3826,17 +3753,9 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   }
   QVERIFY2(dockableSidebar.contains(QStringLiteral("LeftSidebar {")),
            "DockableSidebar must wrap the restored LeftSidebar path");
-  QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {"))
-              && !leftSidebar.contains(QStringLiteral("SliceProgress {")),
-           "Default screenshot sidebar must stay focused on printer, filament, process, and params");
   QVERIFY2(dockableSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
               && preparePage.contains(QStringLiteral("onExportRequested: root.openExportDialog()")),
-           "SliceProgress export must propagate to PreparePage.openExportDialog instead of exporting directly");
-  QVERIFY2(objectList.contains(QStringLiteral("objectListStatusPill")),
-           "ObjectList must keep the compact restored status pill");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("primaryActionEnabled"))
-              && sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
-           "SliceProgress must keep backend-gated primary and slice-all controls");
+           "Sidebar export must propagate to PreparePage.openExportDialog instead of exporting directly");
   QVERIFY2(glToolbars.contains(QStringLiteral("id: viewportActionToolbar"))
               && glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar")),
            "GLToolbars must keep the restored top and right toolbar groups");
@@ -8422,7 +8341,6 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
   const QString cxButton = readSource(QStringLiteral("src/qml_gui/controls/CxButton.qml"));
   const QString cxIconButton = readSource(QStringLiteral("src/qml_gui/controls/CxIconButton.qml"));
   const QString cxSpinBox = readSource(QStringLiteral("src/qml_gui/controls/CxSpinBox.qml"));
-  const QString cxPillAction = readSource(QStringLiteral("src/qml_gui/controls/CxPillAction.qml"));
 
   QVERIFY2(!cxButton.isEmpty(), "Unable to read CxButton.qml");
   QVERIFY2(!cxIconButton.isEmpty(), "Unable to read CxIconButton.qml");
@@ -8464,8 +8382,6 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
   // (5) Sanity: the rest of the Cx* library still uses Theme tokens for fonts.
   QVERIFY2(cxSpinBox.contains(QStringLiteral("Theme.fontSize")),
            "DS-03: CxSpinBox must use Theme.fontSize* tokens for typography");
-  QVERIFY2(cxPillAction.contains(QStringLiteral("Theme.fontSize")),
-           "DS-03: CxPillAction must use Theme.fontSize* tokens for typography");
 }
 
 // Phase 162 (TK-01): color hardcode sweep gate.
@@ -9022,9 +8938,8 @@ void QmlUiAuditTests::v53LayerRangeEditor()
 // Investigation revealed the real simplify pipeline already existed:
 // simplifySelected() at EditorViewModel.cpp:1355 calls simplifyObject() which
 // already calls QuadricEdgeCollapse. The duplicate simplifyMeshSelected()
-// method was the no-op stub that PreparePage.qml:447 + ObjectList.qml:928
-// were calling. Phase 176 fixes the wiring (delegation) rather than re-
-// implementing the simplify math.
+// method was the no-op stub that PreparePage.qml:447 was calling. Phase 176
+// fixes the wiring (delegation) rather than re-implementing the simplify math.
 void QmlUiAuditTests::v53SimplifyGizmoReal()
 {
   const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
@@ -9338,7 +9253,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
              "GATE-01/UI-02: main.qml must instantiate KBShortcutsDialog (not an inline Dialog)");
   }
 
-  // -- v5.6 FEAT-01 (Phase 196): Emboss spinner + SliceProgress states.
+  // -- v5.6 FEAT-01 (Phase 196): Emboss spinner + slice-state banners.
   // EditorViewModel exposes the embossRunning getter (QML binds a CxBusyIndicator
   // to it); SliceService exposes the sliceState Q_PROPERTY + sliceStateChanged.
   {
@@ -9350,7 +9265,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
     const QString sliceH = readSource(QStringLiteral("src/core/services/SliceService.h"));
     QVERIFY2(!sliceH.isEmpty(), "GATE-01/FEAT-01: Unable to read SliceService.h");
     QVERIFY2(sliceH.contains(QStringLiteral("Q_PROPERTY(State sliceState READ sliceState NOTIFY sliceStateChanged")),
-             "GATE-01/FEAT-01: SliceService must keep the sliceState Q_PROPERTY (SliceProgress Cancelled/Error banner)");
+             "GATE-01/FEAT-01: SliceService must keep the sliceState Q_PROPERTY (Cancelled/Error slice-state banner)");
     QVERIFY2(sliceH.contains(QStringLiteral("void sliceStateChanged()")),
              "GATE-01/FEAT-01: SliceService must keep the sliceStateChanged signal");
   }
@@ -9385,13 +9300,13 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
              "GATE-01/FEAT-02: CalibrationServiceMock must not carry the legacy '.drc' term (3DPrinter is an FDM slicer)");
   }
 
-  // -- v5.6 FEAT-03 (Phase 198): ObjectList tree deepening.
+  // -- v5.6 FEAT-03 (Phase 198): object tree deepening.
   // EditorViewModel exposes selectedVolumeIndex as a Q_PROPERTY so the deepened
-  // ObjectList tree (layer-range entry + fold triangle) binds to a real index.
+  // object tree (layer-range entry + fold triangle) binds to a real index.
   {
     const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
     QVERIFY2(vmH.contains(QStringLiteral("Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged")),
-             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (ObjectList tree deepening)");
+             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (object tree deepening)");
     QVERIFY2(vmH.contains(QStringLiteral("int selectedVolumeIndex() const")),
              "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex getter");
   }
