@@ -142,6 +142,27 @@ Item {
                     }
                 }
 
+                // R-P1.E: user-visible disclosure required by
+                // docs/依赖与协议边界审计.md -- the device list, connection
+                // state, camera and print controls are local mocks; real
+                // MQTT/device links are externally blocked.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: demoLabel.implicitHeight + 10
+                    color: Theme.bgInset
+
+                    Text {
+                        id: demoLabel
+                        anchors.centerIn: parent
+                        width: parent.width - Theme.spacingXL * 2
+                        text: qsTr("演示模式：设备/连接/摄像头/打印控制均为本地模拟数据（真实设备推送依赖 MQTT，当前为外部阻塞项）。")
+                        color: Theme.textTertiary
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+                }
+
                 // Separator
                 Rectangle {
                     Layout.fillWidth: true
