@@ -899,6 +899,21 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     Slic3r::PlateDataPtrs plateDataList;
     QStringList loadedPlateNames;
     QList<QList<int>> loadedPlateObjectIndices;
+    // G-11: per-plate state is collected into WORKER-LOCAL containers and
+    // handed to the GUI thread through the delivery-lambda capture. The
+    // receiver's pendingPlate* members are plain QList/QImage (non-atomic);
+    // writing them directly from this thread raced any concurrent GUI read
+    // (e.g. cancelLoad path).
+    QList<bool> pendingLocked;
+    QList<int> pendingBedType;
+    QList<int> pendingPrintSeq;
+    QList<int> pendingSpiral;
+    QList<QList<int>> pendingFirstLayerSeq;
+    QList<QList<int>> pendingOtherLayersSeq;
+    QList<int> pendingOtherLayersSeqNums;
+    QList<QImage> pendingThumbnails;
+    QList<QList<int>> pendingFilamentMaps;
+    QList<int> pendingFilamentMapMode;
 
     Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
       cancel = cancelFlag && cancelFlag->load();
@@ -984,18 +999,18 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
           // v3.0 Phase 18 (D-12): capture locked + bed-type + print-seq + spiral from
           // PlateData onto the receiver so the later rebuild lambda can restore them.
-          receiver->pendingPlateLocked_.clear();
-          receiver->pendingPlateBedType_.clear();
-          receiver->pendingPlatePrintSeq_.clear();
-          receiver->pendingPlateSpiral_.clear();
-          receiver->pendingPlateFirstLayerSeq_.clear();   // v5.16 (PLATE-03)
-          receiver->pendingPlateOtherLayersSeq_.clear();  // v5.16 (PLATE-03)
-          receiver->pendingPlateOtherLayersSeqNums_.clear(); // v5.16 (PLATE-03)
-          receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
-      receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
-      receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
-          receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
-          receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
+          pendingLocked.clear();
+          pendingBedType.clear();
+          pendingPrintSeq.clear();
+          pendingSpiral.clear();
+          pendingFirstLayerSeq.clear();   // v5.16 (PLATE-03)
+          pendingOtherLayersSeq.clear();  // v5.16 (PLATE-03)
+          pendingOtherLayersSeqNums.clear(); // v5.16 (PLATE-03)
+          pendingThumbnails.clear();  // v3.2 Phase 30 (THUMB-02)
+      pendingFilamentMaps.clear();   // v3.2 Phase 31 (FMAP-02)
+      pendingFilamentMapMode.clear(); // v3.2 Phase 31 (FMAP-02)
+          pendingFilamentMaps.clear();   // v3.2 Phase 31 (FMAP-02)
+          pendingFilamentMapMode.clear(); // v3.2 Phase 31 (FMAP-02)
 
           const OwzxPlateFilamentStates persistedFilamentStates =
               readOwzxPlateFilamentStates(localPath);
@@ -1013,7 +1028,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                                             : QObject::tr("平板 %1").arg(plateIdx + 1);
               loadedPlateNames << plateName;
 
-              receiver->pendingPlateLocked_.append(plate ? plate->locked : false);
+              pendingLocked.append(plate ? plate->locked : false);
               int bedType = 0, printSeq = 0, spiral = 0;
               if (plate) {
                 if (auto *opt = plate->config.option("curr_bed_type"))
@@ -1028,9 +1043,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                 if (auto *opt = plate->config.option<Slic3r::ConfigOptionBool>("spiral_mode"))
                   spiral = (opt->value ? 1 : 0);
               }
-              receiver->pendingPlateBedType_.append(bedType);
-              receiver->pendingPlatePrintSeq_.append(printSeq);
-              receiver->pendingPlateSpiral_.append(spiral);
+              pendingBedType.append(bedType);
+              pendingPrintSeq.append(printSeq);
+              pendingSpiral.append(spiral);
               // v5.16 (PLATE-03): filament print sequences (coInts keys).
               {
                 QList<int> firstSeq;
@@ -1044,9 +1059,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                   if (auto *opt = plate->config.option("other_layers_print_sequence_nums"))
                     otherNums = int(opt->getInt());
                 }
-                receiver->pendingPlateFirstLayerSeq_.append(firstSeq);
-                receiver->pendingPlateOtherLayersSeq_.append(otherSeq);
-                receiver->pendingPlateOtherLayersSeqNums_.append(otherNums);
+                pendingFirstLayerSeq.append(firstSeq);
+                pendingOtherLayersSeq.append(otherSeq);
+                pendingOtherLayersSeqNums.append(otherNums);
               }
 
               // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): extract
@@ -1088,8 +1103,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                 fmap = state.maps;
                 fmapMode = state.mode;
               }
-              receiver->pendingPlateFilamentMaps_.append(fmap);
-              receiver->pendingPlateFilamentMapMode_.append(fmapMode);
+              pendingFilamentMaps.append(fmap);
+              pendingFilamentMapMode.append(fmapMode);
 
               // Phase 97 fix (THUMBRT-01): restore the persisted per-plate
               // thumbnail so it survives save->reload. The normal model-load
@@ -1106,7 +1121,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
               QImage loadedThumb;
               if (plate)
                 loadedThumb = extractPlateThumbnailFrom3mf(localPath, plate->plate_index);
-              receiver->pendingPlateThumbnails_.append(loadedThumb);
+              pendingThumbnails.append(loadedThumb);
 
               QSet<int> uniq;
               QList<int> objList;
@@ -1130,10 +1145,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           {
             loadedPlateCount = 1;
             loadedPlateNames << QObject::tr("平板 1");
-            receiver->pendingPlateLocked_.append(false);
-            receiver->pendingPlateBedType_.append(0);
-            receiver->pendingPlatePrintSeq_.append(0);
-            receiver->pendingPlateSpiral_.append(0);
+            pendingLocked.append(false);
+            pendingBedType.append(0);
+            pendingPrintSeq.append(0);
+            pendingSpiral.append(0);
 
             QList<int> allObjects;
             allObjects.reserve(int(loadedModel->objects.size()));
@@ -1221,12 +1236,25 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
       if (!receiver)
       {
         delete loadedModel;
         return;
       }
+      // G-11: publish the worker-collected per-plate state to the receiver
+      // HERE, on the GUI thread -- the worker no longer writes these
+      // non-atomic members directly (data-race fix).
+      receiver->pendingPlateLocked_ = pendingLocked;
+      receiver->pendingPlateBedType_ = pendingBedType;
+      receiver->pendingPlatePrintSeq_ = pendingPrintSeq;
+      receiver->pendingPlateSpiral_ = pendingSpiral;
+      receiver->pendingPlateFirstLayerSeq_ = pendingFirstLayerSeq;
+      receiver->pendingPlateOtherLayersSeq_ = pendingOtherLayersSeq;
+      receiver->pendingPlateOtherLayersSeqNums_ = pendingOtherLayersSeqNums;
+      receiver->pendingPlateThumbnails_ = pendingThumbnails;
+      receiver->pendingPlateFilamentMaps_ = pendingFilamentMaps;
+      receiver->pendingPlateFilamentMapMode_ = pendingFilamentMapMode;
 
       receiver->loading_ = false;
       receiver->activeCancelFlag_.reset();
@@ -4932,13 +4960,14 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
     // one PlateData with the object membership, and one (invalid) thumbnail
     // placeholder per plate so the writer's thumbnail_status indexing stays
     // in bounds.
-    // Write next to the app binary (the directory where the proven
-    // storeProject3mf renames succeed); the user temp dir denied the writer's
-    // .tmp rename in the unattended test session.
-    const QString snapPath = QCoreApplication::applicationDirPath()
-        + QStringLiteral("/owzx_obj_snap_%1.3mf")
-              .arg(QDateTime::currentMSecsSinceEpoch());
-    QFile::remove(snapPath);
+    // G-11: write the scratch 3mf into a dedicated QTemporaryDir instead of
+    // next to the app binary -- Program Files installs are read-only (capture
+    // failed -> delete-plate undo silently degraded), and the dir auto-removes
+    // the file AND any writer ".tmp" leftover on scope exit.
+    QTemporaryDir snapDir;
+    if (!snapDir.isValid())
+      return {};
+    const QString snapPath = snapDir.filePath(QStringLiteral("owzx_obj_snap.3mf"));
     const QByteArray pathBytes = snapPath.toUtf8();
     Slic3r::StoreParams params;
     params.path = pathBytes.constData();

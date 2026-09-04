@@ -2188,8 +2188,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     // also matched G20/G21/G28-G29, so e.g. "G28 X0 Y0" was parsed as an
     // R=0 arc (upstream GCodeProcessor tokenizes the command word,
     // GCodeProcessor.cpp processG2_G3 dispatch).
-    const bool arcCW = upper == QStringLiteral("G2") || upper.startsWith(QStringLiteral("G2 "));
-    const bool arcCCW = upper == QStringLiteral("G3") || upper.startsWith(QStringLiteral("G3 "));
+    // G-10: also accept the leading-zero spellings (G02/G03) -- upstream
+    // tokenizes the command number so "G02" dispatches with "G2"
+    // (GCodeProcessor.cpp); slicer output is canonical, but post-processors
+    // and firmware echoes sometimes zero-pad the word.
+    const bool arcCW = upper == QStringLiteral("G2") || upper.startsWith(QStringLiteral("G2 "))
+                    || upper == QStringLiteral("G02") || upper.startsWith(QStringLiteral("G02 "));
+    const bool arcCCW = upper == QStringLiteral("G3") || upper.startsWith(QStringLiteral("G3 "))
+                     || upper == QStringLiteral("G03") || upper.startsWith(QStringLiteral("G03 "));
     if (arcCW || arcCCW)
     {
       const bool clockwise = arcCW;
@@ -2252,8 +2258,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
     }
 
-    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
-    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
+    // G-10: leading-zero spellings (G00/G01) dispatch like G0/G1.
+    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "))
+                   || upper == QStringLiteral("G00") || upper.startsWith(QStringLiteral("G00 "));
+    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "))
+                   || upper == QStringLiteral("G01") || upper.startsWith(QStringLiteral("G01 "));
     if (!isG0 && !isG1)
       continue;
 
