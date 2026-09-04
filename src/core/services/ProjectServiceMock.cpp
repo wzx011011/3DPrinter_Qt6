@@ -6359,6 +6359,35 @@ bool ProjectServiceMock::deleteObject(int index)
 
     model_->delete_object(size_t(index));
 
+    // R-P1.C: the scoped-config stores are keyed by object index -- after the
+    // real Model delete above they must shift exactly like the mirrors,
+    // otherwise layer ranges / overrides attach to the WRONG (shifted)
+    // objects after any deletion.
+    {
+      QHash<int, QList<MockLayerRange>> shiftedRanges;
+      for (auto it = m_mockLayerRanges.constBegin(); it != m_mockLayerRanges.constEnd(); ++it) {
+        if (it.key() == index) continue;
+        shiftedRanges[(it.key() > index) ? it.key() - 1 : it.key()] = it.value();
+      }
+      m_mockLayerRanges = shiftedRanges;
+
+      QHash<int, QHash<QString, QVariant>> shiftedOverrides;
+      for (auto it = m_mockObjectOverrides.constBegin(); it != m_mockObjectOverrides.constEnd(); ++it) {
+        if (it.key() == index) continue;
+        shiftedOverrides[(it.key() > index) ? it.key() - 1 : it.key()] = it.value();
+      }
+      m_mockObjectOverrides = shiftedOverrides;
+
+      QHash<int, QHash<QString, QVariant>> shiftedVolOverrides;
+      for (auto it = m_mockVolumeOverrides.constBegin(); it != m_mockVolumeOverrides.constEnd(); ++it) {
+        const int obj = it.key() >> 16;
+        if (obj == index) continue;
+        const int adjusted = (obj > index) ? obj - 1 : obj;
+        shiftedVolOverrides[(adjusted << 16) | (it.key() & 0xFFFF)] = it.value();
+      }
+      m_mockVolumeOverrides = shiftedVolOverrides;
+    }
+
     objectNames_.clear();
     objectNames_.reserve(int(model_->objects.size()));
     objectModuleNames_.clear();
@@ -8884,12 +8913,61 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
     // 对齐上游：移除原对象
     model_->delete_object(size_t(objectIndex));
 
+    // R-P1.C: rebuild per-plate membership exactly like deleteObject -- the
+    // removed index must drop and every higher index shift down (upstream
+    // Plater::priv::remove() does this; without it every object after the
+    // split one stayed a member of the WRONG plates).
+    if (m_plateList && m_plateList->plateCount() > 0) {
+      for (int pi = 0; pi < m_plateList->plateCount(); ++pi) {
+        OWzx::PartPlate *p = m_plateList->plate(pi);
+        if (!p) continue;
+        std::set<std::pair<int,int>> rebuilt;
+        for (const auto &pair : p->objToInstanceSet()) {
+          if (pair.first == objectIndex) continue;
+          int adjusted = pair.first > objectIndex ? pair.first - 1 : pair.first;
+          rebuilt.insert({adjusted, pair.second});
+        }
+        p->clearInstances();
+        for (const auto &pair : rebuilt)
+          p->addInstance(pair.first, pair.second);
+      }
+    }
+
+    // R-P1.C: shift the scoped stores with the mirrors (the split object's
+    // entries are dropped; its parts start fresh).
+    {
+      QHash<int, QList<MockLayerRange>> shiftedRanges;
+      for (auto it = m_mockLayerRanges.constBegin(); it != m_mockLayerRanges.constEnd(); ++it) {
+        if (it.key() == objectIndex) continue;
+        shiftedRanges[(it.key() > objectIndex) ? it.key() - 1 : it.key()] = it.value();
+      }
+      m_mockLayerRanges = shiftedRanges;
+
+      QHash<int, QHash<QString, QVariant>> shiftedOverrides;
+      for (auto it = m_mockObjectOverrides.constBegin(); it != m_mockObjectOverrides.constEnd(); ++it) {
+        if (it.key() == objectIndex) continue;
+        shiftedOverrides[(it.key() > objectIndex) ? it.key() - 1 : it.key()] = it.value();
+      }
+      m_mockObjectOverrides = shiftedOverrides;
+
+      QHash<int, QHash<QString, QVariant>> shiftedVolOverrides;
+      for (auto it = m_mockVolumeOverrides.constBegin(); it != m_mockVolumeOverrides.constEnd(); ++it) {
+        const int obj = it.key() >> 16;
+        if (obj == objectIndex) continue;
+        const int adjusted = (obj > objectIndex) ? obj - 1 : obj;
+        shiftedVolOverrides[(adjusted << 16) | (it.key() & 0xFFFF)] = it.value();
+      }
+      m_mockVolumeOverrides = shiftedVolOverrides;
+    }
+
     // 将拆分后的新对象添加到真实 model_
+    int addedParts = 0;
     for (auto *newObj : newObjects)
     {
       if (!newObj)
         continue;
       model_->add_object(*newObj);
+      ++addedParts;
 
       // 将新对象加入当前 plate
       if (m_plateList) {
@@ -8897,6 +8975,12 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
         if (cur) cur->addInstance(int(model_->objects.size()) - 1, 0);
       }
     }
+    // R-P1.C: add_object() copies, so the split() outputs must be freed --
+    // upstream load_model_objects deletes its inputs (Plater.cpp); they were
+    // leaked on every split before.
+    for (auto *newObj : newObjects)
+      delete newObj;
+    newObjects.clear();
 
     // 重建元数据
     objectNames_.clear();
@@ -8927,9 +9011,12 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
       objectVisibleStates_.append(printable);
     }
 
-    // 新对象从 objectIndex 位置开始
-    for (size_t i = size_t(objectIndex); i < model_->objects.size(); ++i)
-      newIndices.append(int(i));
+    // R-P1.C: the split parts are APPENDED (upstream load_model_objects) --
+    // they are the LAST `addedParts` objects, not everything from
+    // objectIndex on.
+    const int firstNew = int(model_->objects.size()) - addedParts;
+    for (int i = firstNew; i < int(model_->objects.size()); ++i)
+      newIndices.append(i);
 
     // 同步变换数组
     syncTransformsFromModel();

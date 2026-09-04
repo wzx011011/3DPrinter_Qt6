@@ -22,6 +22,10 @@ CxDialog {
     height: 380
 
     required property var editorVm
+    // R-P1.J3: VM state captured on open; fields write through on every edit,
+    // so Cancel must restore this snapshot (upstream BedShapeDialog applies
+    // only on OK, BedShapeDialog.cpp OK button).
+    property var _snapshot: null
 
     contentItem: RowLayout {
         spacing: Theme.spacingXL
@@ -358,7 +362,22 @@ CxDialog {
             CxButton {
                 text: qsTr("取消")
                 cxStyle: CxButton.Style.Secondary
-                onClicked: root.reject()
+                onClicked: {
+                    // R-P1.J3: roll back to the state captured on open -- the
+                    // field edits already wrote through to the VM.
+                    if (root._snapshot && root.editorVm) {
+                        var s = root._snapshot
+                        if (root.editorVm.bedShapeType !== s.type)
+                            root.editorVm.bedShapeType = s.type
+                        root.editorVm.bedWidth = s.w
+                        root.editorVm.bedDepth = s.d
+                        root.editorVm.bedDiameter = s.diam
+                        root.editorVm.bedMaxHeight = s.h
+                        root.editorVm.bedOriginX = s.ox
+                        root.editorVm.bedOriginY = s.oy
+                    }
+                    root.reject()
+                }
             }
 
             CxButton {
@@ -372,6 +391,16 @@ CxDialog {
     onOpened: {
         // Sync text fields with current editorVm values
         if (editorVm) {
+            // R-P1.J3: capture the opened state for Cancel rollback.
+            root._snapshot = {
+                type: editorVm.bedShapeType,
+                w: editorVm.bedWidth,
+                d: editorVm.bedDepth,
+                diam: editorVm.bedDiameter,
+                h: editorVm.bedMaxHeight,
+                ox: editorVm.bedOriginX,
+                oy: editorVm.bedOriginY
+            }
             widthField.text = editorVm.bedShapeType === 1
                 ? editorVm.bedDiameter.toFixed(1)
                 : editorVm.bedWidth.toFixed(1)

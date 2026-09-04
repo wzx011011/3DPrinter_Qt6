@@ -58,12 +58,26 @@ CxDialog {
         return []
     }
 
-    /// 校验：名称非空 + 不重名
+    /// R-P1.J: name of the CURRENT preset in this tier. Upstream
+    /// SavePresetDialog's primary path saves over exactly this name.
+    function currentPresetNameForTier() {
+        if (!configVm) return ""
+        if (presetTier === "print") return configVm.currentPrintPreset
+        if (presetTier === "filament") return configVm.currentFilamentPreset
+        return configVm.currentPrinterPreset
+    }
+
+    /// 校验：名称非空 + 不重名（当前预设自身名称除外——覆盖保存）
     function isValidName() {
         var name = nameInput.text.trim()
         if (name.length === 0 || root.tierToCategory(root.presetTier) < 0) return false
         // Duplicate validation uses this dialog's tier, not shared page state.
         if (!configVm) return false
+        // R-P1.J: saving over the CURRENT preset's own name is the upstream
+        // primary path (SavePresetDialog overwrite); the suggested name IS the
+        // current preset name, so rejecting it made the suggested save
+        // impossible. Other duplicates stay rejected.
+        if (name === root.currentPresetNameForTier()) return true
         var existing = root.presetNamesForTier(root.presetTier)
         return existing.indexOf(name) < 0
     }
@@ -172,8 +186,19 @@ CxDialog {
                             root.saveError = qsTr("Unsupported preset category.")
                             return
                         }
+                        // R-P1.J: overwriting the CURRENT preset (upstream
+                        // SavePresetDialog main path, SavePresetDialog.cpp
+                        // save-in-place branch) routes through
+                        // saveCurrentPreset; only a NEW name creates a custom
+                        // preset.
+                        var ok
+                        if (name === root.currentPresetNameForTier()) {
+                            ok = root.configVm.saveCurrentPreset()
+                        } else {
+                            ok = root.configVm.createCustomPreset(category, name)
+                        }
                         // Keep the dialog open when persistence rejects the save.
-                        if (root.configVm.createCustomPreset(category, name)) {
+                        if (ok) {
                             root.accept()
                         } else {
                             root.saveError = root.configVm.lastPresetError

@@ -918,7 +918,17 @@ ApplicationWindow {
     ConfigWizardDialog {
         id: configWizardDialog
         onWizardFinished: {
-            // Wizard completed successfully; selections saved to BackendContext
+            // R-P1.J (upstream ConfigWizard::apply_config): completing the
+            // wizard must APPLY the chosen printer/filament presets, not just
+            // persist the vendor/model — otherwise the wizard's choices never
+            // took effect and the app kept the previous presets.
+            var dlg = configWizardDialog
+            if (backend.configViewModel) {
+                if (dlg.selectedPrinter && dlg.selectedPrinter.length > 0)
+                    backend.configViewModel.requestCurrentPrinterPreset(dlg.selectedPrinter)
+                if (dlg.selectedFilament && dlg.selectedFilament.length > 0)
+                    backend.configViewModel.requestCurrentFilamentPreset(dlg.selectedFilament)
+            }
         }
     }
 
