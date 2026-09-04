@@ -8228,6 +8228,12 @@ bool EditorViewModel::deletePlate(int plateIndex)
     }
     invalidateAllSliceResults();
     rebuildObjectEntriesFromService();
+    // R-P1.I: the service may switch the current plate internally; without a
+    // mesh refresh the viewport kept rendering the DELETED plate's meshes
+    // (setCurrentPlateIndex() refreshes -- this path must too). Also revalidate
+    // the selection, which can point past the remaining objects.
+    ensureValidObjectSelection();
+    refreshMeshCacheAndFitHint();
     emit stateChanged();
     return true;
   }
@@ -8859,6 +8865,13 @@ QString EditorViewModel::sliceResultFilament() const
   return hasSliceResult() && sliceService_ ? sliceService_->resultFilamentLabel() : QString{};
 }
 
+QString EditorViewModel::lastGcodePath() const
+{
+  // R-P1.E: path of the active slice result, or empty when nothing was
+  // sliced yet (the dialog gates on it instead of opening with "").
+  return hasSliceResult() && sliceService_ ? sliceService_->outputPath() : QString{};
+}
+
 QString EditorViewModel::sliceResultCost() const
 {
   return hasSliceResult() && sliceService_ ? sliceService_->resultCostLabel() : QString{};
@@ -9175,11 +9188,28 @@ void EditorViewModel::requestSlice()
   if (configViewModel_ && sliceService_)
   {
     sliceService_->setMergedPresetConfig(configViewModel_->mergedConfigValues());
-    // v2.7 P0: ensure bed_shape is set (mirror CLI). If the merged preset
-    // does not carry a bed, default to 220x220 so slicing has a valid bed.
-    // setBedShape uses set_key_value(ConfigOptionPoints) directly, bypassing
-    // the unreliable printable_area/set_deserialize_strict path.
-    sliceService_->setBedShape({QPointF(0,0), QPointF(220,0), QPointF(220,220), QPointF(0,220)});
+    // v2.7 P0: ensure bed_shape is set (mirror CLI). R-P1.I: use the printer
+    // preset's bed (syncBedFromPrinterPreset keeps bedWidth/bedDepth/origins in
+    // sync from printable_area) instead of an unconditional 220x220 -- non-220
+    // printers sliced against the wrong bed. 220x220 stays the fallback when no
+    // preset bed is known. setBedShape uses set_key_value(ConfigOptionPoints)
+    // directly, bypassing the unreliable printable_area/set_deserialize_strict
+    // path.
+    {
+      const float w = bedWidth(), d = bedDepth();
+      if (w > 0.f && d > 0.f)
+      {
+        const QPointF origin(bedOriginX(), bedOriginY());
+        sliceService_->setBedShape({origin,
+                                    origin + QPointF(w, 0),
+                                    origin + QPointF(w, d),
+                                    origin + QPointF(0, d)});
+      }
+      else
+      {
+        sliceService_->setBedShape({QPointF(0,0), QPointF(220,0), QPointF(220,220), QPointF(0,220)});
+      }
+    }
   }
 
   m_sliceEstimatedTime.clear();

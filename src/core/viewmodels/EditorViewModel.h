@@ -1177,6 +1177,10 @@ public:
   Q_PROPERTY(QString sliceResultWeight READ sliceResultWeight NOTIFY stateChanged)
   Q_PROPERTY(QString sliceResultPlateLabel READ sliceResultPlateLabel NOTIFY stateChanged)
   Q_PROPERTY(QString sliceResultFilament READ sliceResultFilament NOTIFY stateChanged)
+  /// R-P1.E: G-code path of the ACTIVE slice result (SliceService::outputPath).
+  /// Consumed by PrintDialog -> SelectMachineDialog; previously the dialog read
+  /// a nonexistent property and always opened with an empty path.
+  Q_PROPERTY(QString lastGcodePath READ lastGcodePath NOTIFY stateChanged)
   Q_PROPERTY(QString sliceResultCost READ sliceResultCost NOTIFY stateChanged)
   Q_PROPERTY(int sliceResultLayerCount READ sliceResultLayerCount NOTIFY stateChanged)
   /// 模型尺寸文本（对齐上游 SliceInfoPanel 模型信息）
@@ -1303,6 +1307,8 @@ public:
   QString sliceResultWeight() const;
   QString sliceResultPlateLabel() const;
   QString sliceResultFilament() const;
+  /// R-P1.E: see lastGcodePath property.
+  QString lastGcodePath() const;
   QString sliceResultCost() const;
   int sliceResultLayerCount() const;
   QString modelSizeText() const;

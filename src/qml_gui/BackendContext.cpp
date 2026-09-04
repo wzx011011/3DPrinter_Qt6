@@ -1040,6 +1040,15 @@ bool BackendContext::topbarSaveProject()
   if (!projectViewModel_)
     return false;
 
+  // R-P1.I (CONTEXT safety, canSave() :526): saving serializes the Model on
+  // the GUI thread while the slice worker reads it. The gate lives here (not
+  // per-QML-entry) so Ctrl+S and both File menus inherit it.
+  if (!canSave())
+  {
+    postError(tr("切片进行中，无法保存项目"), 1);
+    return false;
+  }
+
   if (projectViewModel_->currentProjectPath().isEmpty())
     return false;
 
@@ -1067,6 +1076,13 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   const qint64 start = m_latencyClock.elapsed();
   if (!projectViewModel_)
     return false;
+
+  // R-P1.I: same mid-slice serialization gate as topbarSaveProject.
+  if (!canSave())
+  {
+    postError(tr("切片进行中，无法保存项目"), 1);
+    return false;
+  }
 
   const QUrl url(filePath);
   const QString localPath = url.isLocalFile() ? url.toLocalFile() : filePath;

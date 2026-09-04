@@ -581,6 +581,10 @@ PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceServ
     if (currentMove_ >= moveCount_)
     {
       playTimer_->stop();
+      // R-P1.B: notify the UI that playback finished -- without this emit
+      // isPlaying stayed true and the QML play/pause button stuck on
+      // "playing" after every completed playback.
+      emit stateChanged();
       return;
     }
     currentMove_ = qMin(currentMove_ + 12, moveCount_);
@@ -2180,9 +2184,15 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     // proportionally to chord length; feedrate carries over. I/J form uses
     // the center offset; R form solves the center on the perpendicular
     // bisector (minor arc for the given direction).
-    if (upper.startsWith(QStringLiteral("G2")) || upper.startsWith(QStringLiteral("G3")))
+    // R-P1.B: exact word match with a space guard -- bare startsWith("G2")
+    // also matched G20/G21/G28-G29, so e.g. "G28 X0 Y0" was parsed as an
+    // R=0 arc (upstream GCodeProcessor tokenizes the command word,
+    // GCodeProcessor.cpp processG2_G3 dispatch).
+    const bool arcCW = upper == QStringLiteral("G2") || upper.startsWith(QStringLiteral("G2 "));
+    const bool arcCCW = upper == QStringLiteral("G3") || upper.startsWith(QStringLiteral("G3 "));
+    if (arcCW || arcCCW)
     {
-      const bool clockwise = upper.startsWith(QStringLiteral("G2"));
+      const bool clockwise = arcCW;
       float targetX = x, targetY = y;
       float iOffset = 0.f, jOffset = 0.f, radius = 0.f;
       parseAxis(upper, 'X', targetX);
@@ -2389,8 +2399,12 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   toolChangeCount_ = toolChangeCount;
 
   // Average speed
+  // R-P1.B: F values are mm/min (parseFValue); the label is mm/s (upstream
+  // MoveVertex::feedrate carries mm/s, GCodeProcessor.hpp:161). Convert like
+  // the cruise computation above (feedrate / 60) instead of labeling
+  // mm/min as mm/s (60x error).
   if (feedrateCount > 0)
-    avgSpeed_ = QStringLiteral("%1 mm/s").arg(feedrateSum / feedrateCount, 0, 'f', 1);
+    avgSpeed_ = QStringLiteral("%1 mm/s").arg(feedrateSum / feedrateCount / 60.0, 0, 'f', 1);
   else
     avgSpeed_ = QStringLiteral("--");
 

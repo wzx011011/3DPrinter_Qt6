@@ -39,6 +39,10 @@ void JobManager::enqueue(JobBase *job)
     m_activeJobs.fetch_sub(1);
     emit jobFinished(job->jobName());
     emit activeJobCountChanged();
+    // R-P1.K: autoDelete is off, so the job object must be reclaimed here or
+    // every enqueued job leaks a QObject (the completion lambdas run on the
+    // manager thread, the job's affinity thread, so deleteLater is safe).
+    job->deleteLater();
   });
 
   connect(job, &JobBase::failed, this,
@@ -47,6 +51,7 @@ void JobManager::enqueue(JobBase *job)
     m_activeJobs.fetch_sub(1);
     emit jobFailed(job->jobName(), error);
     emit activeJobCountChanged();
+    job->deleteLater();
   });
 
   connect(job, &JobBase::canceled, this,
@@ -54,6 +59,7 @@ void JobManager::enqueue(JobBase *job)
   {
     m_activeJobs.fetch_sub(1);
     emit activeJobCountChanged();
+    job->deleteLater();
   });
 
   job->setAutoDelete(false);

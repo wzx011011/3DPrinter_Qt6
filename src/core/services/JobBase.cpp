@@ -17,6 +17,13 @@ void JobBase::run()
     {
       QMetaObject::invokeMethod(this, [this]() { emit canceled(); }, Qt::QueuedConnection);
     }
+    else if (m_progress.load() == Error)
+    {
+      // R-P1.K: reportError() already emitted failed() and the manager already
+      // decremented its active count for it -- emitting finished() here too
+      // double-counted and skipped finalize() semantics for error jobs.
+      return;
+    }
     else
     {
       QMetaObject::invokeMethod(this, [this]()

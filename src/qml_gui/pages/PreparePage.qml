@@ -1083,6 +1083,9 @@ Item {
     PrintDialog {
         id: printDlg
         editorVm: root.editorVm
+        // R-P1.E: SelectMachineDialog needs the device VM; it was never
+        // injected, so the print flow always opened with an empty device list.
+        monitorVm: typeof backend !== "undefined" ? backend.monitorViewModel : null
     }
 
     // 排列设置弹出面板（对齐上游 ArrangeSettings popup）
