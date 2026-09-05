@@ -119,8 +119,10 @@ class PartPlateList {
 #endif
 
   // ── Lifecycle (re-backing targets for ProjectServiceMock, PLATE-06) ────
-  /// Creates a new plate with an auto-incremented index. Returns nullptr if
-  /// kMaxPlateCount would be exceeded (mirrors upstream create_plate guard).
+  /// Creates a new plate with an auto-incremented index and stable print identity.
+  /// Returns nullptr if kMaxPlateCount would be exceeded (mirrors upstream
+  /// create_plate guard). The print identity is never reused or changed by
+  /// reorder/delete operations, matching upstream m_print_index semantics.
   PartPlate* createPlate();
 
   /// Removes the plate at index; reindexes the survivors' m_plate_index;
@@ -178,6 +180,9 @@ class PartPlateList {
   /// Owns the plates (mirrors upstream m_plate_list ownership).
   std::vector<std::unique_ptr<PartPlate>> m_plate_list;
   int m_current_plate = 0;
+  /// Next upstream-style print identity. It is monotonic for this list and
+  /// intentionally survives plate deletion so identities are never reused.
+  int m_next_print_index = 0;
 
   /// Plate-grid geometry (mirrors upstream PartPlate.hpp:569-576).
   int m_plate_count = 0;

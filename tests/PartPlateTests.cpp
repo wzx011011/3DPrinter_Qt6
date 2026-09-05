@@ -75,6 +75,9 @@ class PartPlateTests final : public QObject {
   // ── P0.5.5b plate readiness and instance containment ---------------------
   void instanceOutsideStateGatesPlateReadiness();
   void plateListInstanceLookupAndReadinessAggregation();
+  // Stable print identity must survive positional changes and never be reused
+  // (upstream PartPlate.cpp:3141-3150, 3713-3816, 4027-4065).
+  void platePrintIdentityLifecycle();
   // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
   void deletePlateMigratesInstancesToNeighbor();
   // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
@@ -487,6 +490,46 @@ void PartPlateTests::plateListInstanceLookupAndReadinessAggregation() {
   QCOMPARE(list.findInstance(2, 0), 1);
   QCOMPARE(list.findInstanceBelongs(2, 0), 1);
   QVERIFY(list.isAllPlatesReadyForSlice());
+}
+
+void PartPlateTests::platePrintIdentityLifecycle() {
+  OWzx::PartPlateList list;
+  QVERIFY(list.plate(0) != nullptr);
+  QVERIFY(list.createPlate() != nullptr);
+  QVERIFY(list.createPlate() != nullptr);
+
+  OWzx::PartPlate *plate0 = list.plate(0);
+  OWzx::PartPlate *plate1 = list.plate(1);
+  OWzx::PartPlate *plate2 = list.plate(2);
+  QCOMPARE(plate0->printIndex(), 0);
+  QCOMPARE(plate1->printIndex(), 1);
+  QCOMPARE(plate2->printIndex(), 2);
+
+  // Reordering changes positional indices only; identity stays with the plate.
+  QVERIFY(list.movePlate(1, 0));
+  QCOMPARE(list.plate(0), plate1);
+  QCOMPARE(list.plate(1), plate0);
+  QCOMPARE(list.plate(2), plate2);
+  QCOMPARE(list.plate(0)->printIndex(), 1);
+  QCOMPARE(list.plate(1)->printIndex(), 0);
+  QCOMPARE(list.plate(2)->printIndex(), 2);
+
+  // Removing a plate does not renumber survivors, and a later plate gets a
+  // fresh identity instead of reusing the removed one.
+  const int deletedPrintIndex = plate0->printIndex();
+  QVERIFY(list.deletePlate(1));
+  QCOMPARE(list.plateCount(), 2);
+  QCOMPARE(list.plate(0), plate1);
+  QCOMPARE(list.plate(1), plate2);
+  QCOMPARE(list.plate(0)->printIndex(), 1);
+  QCOMPARE(list.plate(1)->printIndex(), 2);
+
+  OWzx::PartPlate *newPlate = list.createPlate();
+  QVERIFY(newPlate != nullptr);
+  QCOMPARE(newPlate->printIndex(), 3);
+  QVERIFY(newPlate->printIndex() != deletedPrintIndex);
+  QVERIFY(newPlate->printIndex() != plate1->printIndex());
+  QVERIFY(newPlate->printIndex() != plate2->printIndex());
 }
 
 void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {

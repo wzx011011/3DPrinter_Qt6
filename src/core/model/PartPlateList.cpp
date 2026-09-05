@@ -39,6 +39,7 @@ PartPlate* PartPlateList::createPlate() {
   // Upstream create_plate guards against exceeding MAX_PLATE_COUNT.
   if (plateCount() >= kMaxPlateCount) return nullptr;
   auto p = std::make_unique<PartPlate>(plateCount());
+  p->setPrintIndex(m_next_print_index++);
   PartPlate* raw = p.get();
   m_plate_list.push_back(std::move(p));
   // Keep grid geometry consistent with the new count (Phase 29 D-29-4).
