@@ -345,6 +345,17 @@ function Invoke-NinjaTarget([string]$Target, [bool]$Required = $true) {
 
 Invoke-NinjaTarget 'OWzxSlicer.exe'
 
+# G-12 followup (2026-09-05): redirect test temp files to an ISOLATED E:
+# directory. QTemporaryDir (Qt tests, E2E fixtures) resolves from TMP/TEMP;
+# the shared C: Temp is contended by parallel automation sessions whose
+# multi-GB writes made QSaveFile targets transiently unwritable
+# (store_bbs_3mf dirWritable=0 flake). E: has its own headroom.
+$testTemp = Join-Path $BuildDir 'test_temp'
+New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+$env:TMP = $testTemp
+$env:TEMP = $testTemp
+Write-Host "[TestEnv] TMP/TEMP -> $testTemp"
+
 # Build test targets (if BUILD_TESTING is ON)
 Invoke-NinjaTarget 'E2EWorkflowTests'
 Invoke-NinjaTarget 'ViewModelSmokeTests'
