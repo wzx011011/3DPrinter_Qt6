@@ -268,6 +268,25 @@ $cmakeArgs = @(
 )
 
 $configureSucceeded = $false
+
+# Build-speed fast path (2026-09-05): CMake configure costs minutes on this
+# project (FindBoost, Qt shader/tooling discovery). Skip it entirely when the
+# existing build.ninja is NEWER than every CMake input that could change it
+# (root/cmake CMakeLists + the script's own -D switches are fixed values).
+$cmakeInputs = @('..\CMakeLists.txt') + (Get-ChildItem '..\cmake' -Filter '*.cmake' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+$buildNinja = Join-Path (Get-Location) 'build.ninja'
+$skipConfigure = $false
+if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0)) {
+  $ninjaTime = (Get-Item $buildNinja).LastWriteTimeUtc
+  $newestInput = ($cmakeInputs | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
+  if ($null -ne $newestInput -and $newestInput.LastWriteTimeUtc -le $ninjaTime) {
+    $skipConfigure = $true
+    $configureSucceeded = $true
+    Write-Stage 'Configure' ("Skipped (build.ninja up to date vs " + (Split-Path $newestInput.FullName -Leaf) + ")")
+  }
+}
+
+if (-not $skipConfigure) {
 for ($attempt = 1; $attempt -le 3; ++$attempt) {
   Write-Stage 'Configure' ("CMake configure attempt " + $attempt)
   $configureOutput = & cmake @cmakeArgs 2>&1
@@ -293,6 +312,7 @@ for ($attempt = 1; $attempt -le 3; ++$attempt) {
 if (-not $configureSucceeded) {
   Fail-Stage 'Configure' ("CMake configure failed after retries with exit code " + $lastConfigureExitCode) $lastConfigureExitCode
 }
+}  # end of skip-configure fast path
 
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
