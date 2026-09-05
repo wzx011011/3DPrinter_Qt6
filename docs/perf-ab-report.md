@@ -119,3 +119,35 @@ powershell -File scripts/perf/run_orca_bench.ps1 -Model build/perf_models/bench_
 powershell -File scripts/perf/run_stage_bench.ps1 -Tiers "2m"
 # GUI FPS(本地):双击 scripts\perf\gui_fps_collect.cmd → Ctrl+Shift+Space
 ```
+
+## 七、P1 STL 并行加载实验(2026-09-05 第三轮)— 结论:不可行
+
+### 尝试
+实现 `FastStlImport`(src/core/rendering/FastStlImport.cpp):
+- TBB 并行解析二进制 STL facet 块
+- 并行退化面剔除(exact memcmp)
+- mutex+unordered_map 共享顶点去重
+- 通过 `TriangleMesh(indexed_triangle_set&&)` 构造喂给切片引擎
+- 由 `OWZX_FAST_STL=1` 环境变量启用(默认关闭)
+
+### 结果
+
+| 配置 | 切片墙钟 | G-code 大小 | 切片正确性 |
+|---|---|---|---|
+| 标准路径(admesh 完整链) | 12-14 s | 10.1 MB ✅ | 正确 |
+| FastStlImport(免修复) | 6.7-20.8 s | **7.7 MB / 0 字节** ❌ | **不正确** |
+
+### 结论:admesh 修复链是切片正确性的必要前提
+
+跳过 `trianglemesh_repair_on_import`(边哈希连接+退化面移除+共享顶点 fan 遍历)
+会导致切片引擎收到非流形网格,产生错误 G-code 甚至零输出。修复链不是
+"可选优化",而是切片正确性的核心步骤。
+
+**此项为死路,标记关闭。** STL 加载 8.1 秒(2M 面)是修复+共享顶点管线
+的固有成本。未来加速方向仅限:
+1. 将修复链本身 TBB 化(需改 admesh 源码,违反迁移规则)
+2. 升级到 PrusaSlicer 新版的网格导入管线(需 upstream 同步)
+3. 对已知流形网格跳过修复(需要可靠性保证机制,当前不存在)
+
+代码保留在 `src/core/rendering/FastStlImport.cpp`(opt-in via
+`OWZX_FAST_STL=1`),不影响默认路径。

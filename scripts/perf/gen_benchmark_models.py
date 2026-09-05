@@ -122,6 +122,109 @@ def gen_grid(path, cols, rows, tris_each, radius, spacing):
     return count
 
 
+def overhang_tower(path, levels=60, side=30.0, shrink=0.55, layer_h=0.5):
+    """Stacked shrinking boxes with wide bridges: forces massive support
+    generation (every level overhangs the previous one). Deterministic
+    binary STL. Triangle count scales with levels."""
+    tris = []
+
+    sub = 16  # wall subdivisions per side: tris = levels * (4 walls * sub*sub*2 + caps)
+
+    def box(z0, z1, half):
+        x0, x1 = -half, half
+        y0, y1 = -half, half
+        # subdivided side walls
+        corners = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+        for i in range(4):
+            j = (i + 1) % 4
+            ax, ay = corners[i]
+            bx, by = corners[j]
+            for u in range(sub):
+                u0, u1 = u / sub, (u + 1) / sub
+                p0 = (ax + (bx - ax) * u0, ay + (by - ay) * u0)
+                p1 = (ax + (bx - ax) * u1, ay + (by - ay) * u1)
+                tris.append(((p0[0], p0[1], z0), (p1[0], p1[1], z0), (p1[0], p1[1], z1)))
+                tris.append(((p0[0], p0[1], z0), (p1[0], p1[1], z1), (p0[0], p0[1], z1)))
+        # top + bottom (subdivided grids)
+        for u in range(sub):
+            for v in range(sub):
+                ux0 = x0 + (x1 - x0) * u / sub
+                ux1 = x0 + (x1 - x0) * (u + 1) / sub
+                vy0 = y0 + (y1 - y0) * v / sub
+                vy1 = y0 + (y1 - y0) * (v + 1) / sub
+                tris.append(((ux0, vy0, z1), (ux1, vy0, z1), (ux1, vy1, z1)))
+                tris.append(((ux0, vy0, z1), (ux1, vy1, z1), (ux0, vy1, z1)))
+                tris.append(((ux0, vy0, z0), (ux1, vy1, z0), (ux1, vy0, z0)))
+                tris.append(((ux0, vy0, z0), (ux0, vy1, z0), (ux1, vy1, z0)))
+
+    z = 0.0
+    half = side / 2.0
+    for level in range(levels):
+        box(z, z + layer_h, half)
+        z += layer_h
+        half *= shrink if (level % 2 == 0) else (1.0 / shrink)
+    count = write_stl(path, iter(tris), len(tris))
+    print("%s: levels=%d tris=%d height=%.1fmm" % (path, levels, count, z))
+    return count
+
+
+def multi_plate_project(path, per_plate_tris=150000, plates=4, seg=400):
+    """One STL per plate: slice each plate separately on both slicers by
+    invoking the A/B scripts once per file (multi-plate = the plate queue)."""
+    import math
+    total = 0
+    for p in range(plates):
+        sectors = max(3, int(round(math.sqrt(per_plate_tris / 2.0))))
+        rings = max(2, int(round(per_plate_tris / (2.0 * sectors))) + 1)
+        tris = []
+        # A gear-like disk: outer ring + spokes + hub -> real slicing load
+        # (thin walls + small features) without needing an external model.
+        outer_r, inner_r, hub_r = 60.0, 48.0, 20.0
+        teeth = 24
+        for i in range(seg):
+            a0 = 2 * math.pi * i / seg
+            a1 = 2 * math.pi * (i + 1) % (2 * math.pi)
+            a1 = 2 * math.pi * (i + 1) / seg
+            # outer ring band (top+bottom+wall)
+            pts = [(outer_r * math.cos(a0), outer_r * math.sin(a0)),
+                   (outer_r * math.cos(a1), outer_r * math.sin(a1)),
+                   (inner_r * math.cos(a1), inner_r * math.sin(a1)),
+                   (inner_r * math.cos(a0), inner_r * math.sin(a0))]
+            h = 4.0
+            tris.append(((pts[0][0], pts[0][1], 0), (pts[1][0], pts[1][1], 0), (pts[2][0], pts[2][1], 0)))
+            tris.append(((pts[0][0], pts[0][1], 0), (pts[2][0], pts[2][1], 0), (pts[3][0], pts[3][1], 0)))
+            tris.append(((pts[0][0], pts[0][1], h), (pts[2][0], pts[2][1], h), (pts[1][0], pts[1][1], h)))
+            tris.append(((pts[0][0], pts[0][1], h), (pts[3][0], pts[3][1], h), (pts[2][0], pts[2][1], h)))
+            tris.append(((pts[0][0], pts[0][1], 0), (pts[3][0], pts[3][1], 0), (pts[3][0], pts[3][1], h)))
+            tris.append(((pts[0][0], pts[0][1], 0), (pts[3][0], pts[3][1], h), (pts[0][0], pts[0][1], h)))
+            tris.append(((pts[1][0], pts[1][1], 0), (pts[2][0], pts[2][1], h), (pts[2][0], pts[2][1], 0)))
+            tris.append(((pts[1][0], pts[1][1], 0), (pts[1][0], pts[1][1], h), (pts[2][0], pts[2][1], h)))
+            # tooth block on the rim (the overhang-ish feature)
+            tm = 2 * math.pi * (i + 0.5) / seg
+            tx, ty = 0.5 * (outer_r + inner_r) * math.cos(tm), 0.5 * (outer_r + inner_r) * math.sin(tm)
+            s = 6.0
+            tq = [(tx - s, ty - s), (tx + s, ty - s), (tx + s, ty + s), (tx - s, ty + s)]
+            for k in range(4):
+                k2 = (k + 1) % 4
+                tris.append(((tq[k][0], tq[k][1], 0), (tq[k2][0], tq[k2][1], 0), (tq[k2][0], tq[k2][1], h)))
+                tris.append(((tq[k][0], tq[k][1], 0), (tq[k2][0], tq[k2][1], h), (tq[k][0], tq[k][1], h)))
+            tris.append(((tq[0][0], tq[0][1], h), (tq[1][0], tq[1][1], h), (tq[2][0], tq[2][1], h)))
+            tris.append(((tq[0][0], tq[0][1], h), (tq[2][0], tq[2][1], h), (tq[3][0], tq[3][1], h)))
+            # hub ring segment
+            hp = [(hub_r * math.cos(a0), hub_r * math.sin(a0)),
+                  (hub_r * math.cos(a1), hub_r * math.sin(a1)),
+                  (hub_r * 0.5 * math.cos(a1), hub_r * 0.5 * math.sin(a1)),
+                  (hub_r * 0.5 * math.cos(a0), hub_r * 0.5 * math.sin(a0))]
+            tris.append(((hp[0][0], hp[0][1], 0), (hp[1][0], hp[1][1], 0), (hp[2][0], hp[2][1], 0)))
+            tris.append(((hp[0][0], hp[0][1], 0), (hp[2][0], hp[2][1], 0), (hp[3][0], hp[3][1], 0)))
+            tris.append(((hp[0][0], hp[0][1], h), (hp[2][0], hp[2][1], h), (hp[1][0], hp[1][1], h)))
+            tris.append(((hp[0][0], hp[0][1], h), (hp[3][0], hp[3][1], h), (hp[2][0], hp[2][1], h)))
+        path_p = path.replace(".stl", "_plate%d.stl" % (p + 1))
+        total += write_stl(path_p, iter(tris), len(tris))
+        print("%s: tris=%d" % (path_p, len(tris)))
+    return total
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="build/perf_models",
@@ -135,6 +238,10 @@ def main():
     gen_sphere(os.path.join(out, "bench_sphere_5m.stl"), 5000000)
     gen_grid(os.path.join(out, "bench_grid_20x100k.stl"), 5, 4, 100000,
              radius=12.0, spacing=35.0)
+    overhang_tower(os.path.join(out, "bench_overhang_tower.stl"),
+                   levels=200, side=30.0, layer_h=0.2)
+    multi_plate_project(os.path.join(out, "bench_gear.stl"),
+                        per_plate_tris=150000, plates=4, seg=1200)
     print("done -> %s" % out)
 
 
