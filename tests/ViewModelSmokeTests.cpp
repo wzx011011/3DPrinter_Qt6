@@ -4118,7 +4118,10 @@ void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
+  QTemporaryDir presetDir;
+  QVERIFY(presetDir.isValid());
   PresetServiceMock presets;
+  presets.setUserPresetDir(presetDir.path());
   // Base parent first: a bare service instance carries no bundled presets.
   QHash<QString, QVariant> base;
   base.insert(QStringLiteral("layer_height"), 0.2);
@@ -4155,7 +4158,10 @@ void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
   // back as an adopt payload.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("G13Embed"));
+  QTemporaryDir presetDir;
+  QVERIFY(presetDir.isValid());
   PresetServiceMock presets;
+  presets.setUserPresetDir(presetDir.path());
   QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
                                      QStringLiteral("EmbPrint"),
                                      {{QStringLiteral("layer_height"), 0.3}}));
@@ -4214,17 +4220,27 @@ void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
   QCOMPARE(payload.size(), 3);
 
   // Adopt as BackendContext does on loadFinished.
+  QTemporaryDir adoptDir;
+  QVERIFY(adoptDir.isValid());
   PresetServiceMock adopted;
+  adopted.setUserPresetDir(adoptDir.path());
   for (const QVariant &entryVar : payload) {
     const QVariantMap entry = entryVar.toMap();
     QHash<QString, QVariant> values;
     const QVariantMap valuesMap = entry.value(QStringLiteral("values")).toMap();
     for (auto it = valuesMap.constBegin(); it != valuesMap.constEnd(); ++it)
       values.insert(it.key(), it.value());
-    QVERIFY(adopted.adoptProjectEmbeddedPreset(
+    const bool adoptedOk = adopted.adoptProjectEmbeddedPreset(
         entry.value(QStringLiteral("category")).toInt(),
         entry.value(QStringLiteral("name")).toString(), values,
-        entry.value(QStringLiteral("inherits")).toString()));
+        entry.value(QStringLiteral("inherits")).toString());
+    if (!adoptedOk)
+      qInfo("[G13] adopt failed: category=%d name=%s values=%lld exists=%d",
+            entry.value(QStringLiteral("category")).toInt(),
+            qUtf8Printable(entry.value(QStringLiteral("name")).toString()),
+            static_cast<long long>(values.size()),
+            adopted.hasPreset(entry.value(QStringLiteral("name")).toString()) ? 1 : 0);
+    QVERIFY2(adoptedOk, "G-13: adoptProjectEmbeddedPreset must succeed for each embedded entry");
   }
   QVERIFY(adopted.hasPreset(QStringLiteral("EmbPrint")));
   QCOMPARE(adopted.presetValues(QStringLiteral("EmbPrint"))
