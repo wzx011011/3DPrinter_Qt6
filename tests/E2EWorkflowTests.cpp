@@ -588,6 +588,10 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   QVERIFY2(QFileInfo::exists(generatedOutput),
            "current export must preserve the generated source G-code");
 
+  // G-13 followup: the previous export's worker may still be finalizing (the
+  // destination file appears before the busy flag clears); wait it out or the
+  // request below is refused with "already in progress".
+  QTRY_VERIFY_WITH_TIMEOUT(!editor.exportBusy(), 30000);
   QVERIFY2(editor.requestExportAllGCode(exportDir.path(), QStringLiteral("workflow_all")),
            "all-valid-plate export should succeed for the sliced workflow result");
   const QString allExportPath = exportDir.filePath(QStringLiteral("workflow_all_plate1.gcode"));

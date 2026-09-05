@@ -8829,6 +8829,8 @@ int EditorViewModel::sliceProgress() const
 
 bool EditorViewModel::isSlicing() const { return sliceService_ && sliceService_->slicing(); }
 
+bool EditorViewModel::exportBusy() const { return sliceService_ && sliceService_->exportBusy(); }
+
 // Phase 196 (FEAT-01): expose SliceService::State to QML.
 int EditorViewModel::sliceState() const
 {

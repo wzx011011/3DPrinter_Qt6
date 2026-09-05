@@ -237,6 +237,10 @@ public:
   /// a QtConcurrent worker). Mirrors cancelSlice's flag semantics -- the worker
   /// aborts at the next chunk boundary and reports exportFailed("...cancelled").
   Q_INVOKABLE void cancelExport();
+  /// G-13 followup (E2E timing): true while an async G-code export worker is
+  /// still running -- requestExportAllGCode refuses when this is set, so
+  /// tests/back-to-back callers must wait for it to clear.
+  Q_INVOKABLE bool exportBusy() const { return exportActive_; }
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);

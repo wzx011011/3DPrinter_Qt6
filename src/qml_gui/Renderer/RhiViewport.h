@@ -599,7 +599,7 @@ public:
   // base64 PNG m_lastThumbnailData format and emits thumbnailCaptured(), so
   // PreparePage.qml's contract (lastThumbnailData / onThumbnailCaptured) stays
   // unchanged. plateIndex is carried for Phase 96 per-plate routing.
-  void deliverThumbnail(const QImage &image, int plateIndex);
+  void deliverThumbnail(const QImage &image, int plateIndex, int variant = 0);
 
 signals:
   void bedTextureUrlChanged();

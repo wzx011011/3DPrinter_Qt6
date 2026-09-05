@@ -4857,7 +4857,7 @@ void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
 
   // (6) Queued callback (THUMBCAP-03): deliverThumbnail is defined on the item
   //     and the renderer posts the QImage via Qt::QueuedConnection.
-  QVERIFY2(viewportHeader.contains(QStringLiteral("deliverThumbnail(const QImage &image, int plateIndex)")),
+  QVERIFY2(viewportHeader.contains(QStringLiteral("deliverThumbnail(const QImage &image, int plateIndex, int variant = 0)")),
            "RhiViewport.h must declare the deliverThumbnail GUI-thread delivery slot");
   QVERIFY2(viewportSource.contains(QStringLiteral("void RhiViewport::deliverThumbnail")),
            "RhiViewport.cpp must define the deliverThumbnail delivery slot");
@@ -4867,7 +4867,7 @@ void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
   // (7) Public contract preserved (THUMBCAP-01): requestThumbnailCapture still
   //     sets the request + calls update(); lastThumbnailData/thumbnailCaptured
   //     remain the Q_PROPERTY/signal contract.
-  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128)")),
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128,")),
            "RhiViewport.h must keep the requestThumbnailCapture Q_INVOKABLE signature unchanged");
   QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QString lastThumbnailData")),
            "RhiViewport.h must keep the lastThumbnailData Q_PROPERTY contract");
@@ -8010,9 +8010,10 @@ void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
   // (3) RhiViewport carries the plateIndex through a per-plate signal so
   //     captured bytes can be routed back to the right plate. (deliverThumbnail
   //     previously Q_UNUSED'd the index -- Phase 156 closes that.)
-  QVERIFY2(rhiH.contains(QStringLiteral("thumbnailCapturedForPlate(int plateIndex, const QString &data)")),
+  QVERIFY2(rhiH.contains(QStringLiteral("thumbnailCapturedForPlate(int plateIndex, const QString &data,")) &&
+         rhiH.contains(QStringLiteral("int variant = 0);")),
            "CLOS-03: RhiViewport.h must declare thumbnailCapturedForPlate(int, QString) signal carrying the plate index");
-  QVERIFY2(rhiCpp.contains(QStringLiteral("emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData)")),
+  QVERIFY2(rhiCpp.contains(QStringLiteral("emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData, variant)")),
            "CLOS-03: RhiViewport::deliverThumbnail must emit thumbnailCapturedForPlate with the real plateIndex (no longer Q_UNUSED)");
 
   // (4) PreparePage QML: per-plate capture handler persists bytes + a
@@ -9483,7 +9484,7 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
                && processTabs.contains(QStringLiteral("TabBar"))
                && processTabs.contains(QStringLiteral("TabButton")),
            "Process tabs must consume the C++ page contract with extractable presentation labels");
-  QVERIFY2(processTabs.contains(QStringLiteral("processTabBar.width - processTabBar.spacing * (processTabBar.count - 1)"))
+  QVERIFY2(processTabs.contains(QStringLiteral("processTabStrip.width - processTabBar.spacing * (processTabBar.count - 1)"))
                && processTabs.contains(QStringLiteral("height: 38"))
                && processTabs.contains(QStringLiteral("Text.ElideRight")),
            "Process tabs must remain six equal-width one-line cells within the available strip width");

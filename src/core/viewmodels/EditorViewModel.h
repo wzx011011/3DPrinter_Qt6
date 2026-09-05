@@ -1296,6 +1296,9 @@ public:
   Q_PROPERTY(QString sliceActionHint READ sliceActionHint NOTIFY stateChanged)
   Q_INVOKABLE int sliceProgress() const;
   Q_INVOKABLE bool isSlicing() const;
+  /// G-13 followup (E2E timing): true while an async G-code export worker is
+  /// still running -- requestExportAllGCode refuses until it clears.
+  Q_INVOKABLE bool exportBusy() const;
   /// Phase 196 (FEAT-01): returns the SliceService::State enum value so QML
   /// (SliceProgress.qml) can render Cancelled/Error-specific UI. Values map to
   /// SliceService::State (Idle=0, Slicing=1, Exporting=2, Completed=3,
