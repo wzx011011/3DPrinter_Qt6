@@ -1349,6 +1349,17 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   QVERIFY2(QFileInfo::exists(slice.plateOutputPath(1)),
            qPrintable(QStringLiteral("plate 1 output should exist: %1").arg(slice.plateOutputPath(1))));
 
+  // P0.5.5b: result ownership follows the stable per-plate print identity,
+  // not the mutable positional index. Reordering the plates must therefore
+  // move the result lookup with the plate rather than swapping or losing it.
+  const QString plate0ResultBeforeMove = slice.plateOutputPath(0);
+  const QString plate1ResultBeforeMove = slice.plateOutputPath(1);
+  QVERIFY(project.movePlate(0, 1));
+  QCOMPARE(slice.plateOutputPath(0), plate1ResultBeforeMove);
+  QCOMPARE(slice.plateOutputPath(1), plate0ResultBeforeMove);
+  QVERIFY(slice.hasPlateResult(0));
+  QVERIFY(slice.hasPlateResult(1));
+
   QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_export_all_XXXXXX"));
   QVERIFY2(exportDir.isValid(), "temporary all-plate export directory should be available");
   // 260822-x4n B3 (upstream is_all_slice_results_ready_for_print,
@@ -1380,8 +1391,12 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   const QString exportedPlate0 = exportDir.filePath(QStringLiteral("allplates_plate1.gcode"));
   const QString exportedPlate1 = exportDir.filePath(QStringLiteral("allplates_plate2.gcode"));
   const QString skippedPlate2 = exportDir.filePath(QStringLiteral("allplates_plate3.gcode"));
-  // Phase 239 (ENGN-03): the batch export runs on one QtConcurrent worker --
-  // wait for the LAST plate's file to commit before asserting.
+  // Phase 239 (ENGN-03): the batch export runs on one QtConcurrent worker
+  // copying jobs sequentially. With stable result keys the reorder above
+  // swapped which key lands in which target file, so NEITHER filename is
+  // guaranteed to be the worker's last write -- wait for each file with a
+  // QTRY instead of asserting the second one synchronously.
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportedPlate0), 30000);
   QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportedPlate1), 30000);
   QVERIFY2(QFileInfo::exists(exportedPlate0),
            qPrintable(QStringLiteral("plate 0 export should exist: %1").arg(exportedPlate0)));

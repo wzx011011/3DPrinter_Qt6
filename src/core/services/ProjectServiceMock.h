@@ -225,6 +225,11 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+  /// Stable upstream-style print identity for a positional plate index.
+  /// Returns -1 for an invalid index or a plate without an assigned identity.
+  int platePrintIndex(int plateIndex) const;
+  /// Resolves a stable print identity back to the current positional index.
+  int plateIndexForPrintIndex(int printIndex) const;
   /// Slice readiness bridge to the PartPlate domain state machine.
   Q_INVOKABLE bool isPlateReadyForSlice(int plateIndex) const;
   Q_INVOKABLE bool currentPlateCanSlice() const;

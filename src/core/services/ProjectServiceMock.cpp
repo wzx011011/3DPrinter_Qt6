@@ -1795,6 +1795,24 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
   return true;
 }
 
+int ProjectServiceMock::platePrintIndex(int plateIndex) const
+{
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->printIndex() : -1;
+}
+
+int ProjectServiceMock::plateIndexForPrintIndex(int printIndex) const
+{
+  if (!m_plateList || printIndex < 0)
+    return -1;
+  for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex) {
+    const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+    if (p && p->printIndex() == printIndex)
+      return plateIndex;
+  }
+  return -1;
+}
+
 bool ProjectServiceMock::isPlateReadyForSlice(int plateIndex) const
 {
   if (!m_plateList) return false;

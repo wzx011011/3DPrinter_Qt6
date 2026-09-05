@@ -333,6 +333,7 @@ private:
   int resultLayerCount_ = 0;
   QString resultCostLabel_;
   int activeTargetPlateIndex_ = -1;
+  int activeTargetResultKey_ = -1;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
   /// Phase 239 (ENGN-03): cancel flag for the QtConcurrent export worker
   /// (exportSourceToPath / exportAllPlateGCodeToDirectory). Null when idle.
@@ -366,6 +367,11 @@ private:
 
   void clearStoredResult();
   void clearActiveTargetResult();
+  int resultKeyForPlateIndex(int plateIndex) const;
+  int plateIndexForResultKey(int resultKey) const;
+  const PlateSliceResult *resultForPlateIndex(int plateIndex) const;
+  bool removeResultForPlateIndex(int plateIndex);
+  void storePlateResultForKey(int resultKey, const PlateSliceResult &result);
   void storePlateResult(int plateIndex, const PlateSliceResult &result);
   void setExportStatus(State state, int progress, const QString &label);
   /// Phase 239 (ENGN-03): validates the source/target synchronously (so

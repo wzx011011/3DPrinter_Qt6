@@ -362,18 +362,60 @@ void SliceService::clearActiveTargetResult()
 {
   if (activeTargetPlateIndex_ >= 0)
   {
-    plateResults_.remove(activeTargetPlateIndex_);
-    setDomainResultValid(activeTargetPlateIndex_, false);
+    const int resultKey = activeTargetResultKey_ >= 0
+        ? activeTargetResultKey_ : resultKeyForPlateIndex(activeTargetPlateIndex_);
+    plateResults_.remove(resultKey);
+    const int currentPlateIndex = plateIndexForResultKey(resultKey);
+    if (currentPlateIndex >= 0)
+      setDomainResultValid(currentPlateIndex, false);
   }
   if (resultPlateIndex_ == activeTargetPlateIndex_)
     clearStoredResult();
+  activeTargetResultKey_ = -1;
+}
+
+int SliceService::resultKeyForPlateIndex(int plateIndex) const
+{
+  if (projectService_) {
+    const int stableId = projectService_->platePrintIndex(plateIndex);
+    if (stableId >= 0)
+      return stableId;
+  }
+  return plateIndex;
+}
+
+int SliceService::plateIndexForResultKey(int resultKey) const
+{
+  if (projectService_) {
+    const int plateIndex = projectService_->plateIndexForPrintIndex(resultKey);
+    if (plateIndex >= 0)
+      return plateIndex;
+  }
+  return resultKey;
+}
+
+const PlateSliceResult *SliceService::resultForPlateIndex(int plateIndex) const
+{
+  const auto it = plateResults_.constFind(resultKeyForPlateIndex(plateIndex));
+  return it == plateResults_.constEnd() ? nullptr : &it.value();
+}
+
+bool SliceService::removeResultForPlateIndex(int plateIndex)
+{
+  return plateResults_.remove(resultKeyForPlateIndex(plateIndex)) > 0;
+}
+
+void SliceService::storePlateResultForKey(int resultKey, const PlateSliceResult &result)
+{
+  if (resultKey >= 0)
+    plateResults_[resultKey] = result;
 }
 
 void SliceService::storePlateResult(int plateIndex, const PlateSliceResult &result)
 {
   if (plateIndex >= 0)
   {
-    plateResults_[plateIndex] = result;
+    storePlateResultForKey(resultKeyForPlateIndex(plateIndex), result);
     setDomainResultValid(plateIndex, true);
   }
 }
@@ -392,6 +434,7 @@ void SliceService::clearResults()
 
   clearStoredResult();
   activeTargetPlateIndex_ = -1;
+  activeTargetResultKey_ = -1;
   plateResults_.clear();
   setAllDomainResultsValid(false);
   emit resultChanged();
@@ -609,7 +652,9 @@ void SliceService::startSlice(const QString &projectName)
     return;
   }
   activeTargetPlateIndex_ = targetPlateIndex;
-  plateResults_.remove(targetPlateIndex);
+  const int targetResultKey = resultKeyForPlateIndex(targetPlateIndex);
+  activeTargetResultKey_ = targetResultKey;
+  plateResults_.remove(targetResultKey);
   setDomainResultValid(targetPlateIndex, false);
   clearStoredResult();
   emit resultChanged();
@@ -641,9 +686,10 @@ void SliceService::startSlice(const QString &projectName)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
-  emit sliceStateChanged();
+    emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
     activeTargetPlateIndex_ = -1;
+    activeTargetResultKey_ = -1;
     return;
   }
 
@@ -658,9 +704,10 @@ void SliceService::startSlice(const QString &projectName)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
-  emit sliceStateChanged();
+    emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
     activeTargetPlateIndex_ = -1;
+    activeTargetResultKey_ = -1;
     return;
   }
 #endif
@@ -682,7 +729,7 @@ void SliceService::startSlice(const QString &projectName)
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
 
-  QtConcurrent::run([receiver, cancelFlag, sourcePath, targetPlateIndex, targetPlateLabel
+  QtConcurrent::run([receiver, cancelFlag, sourcePath, targetPlateIndex, targetResultKey, targetPlateLabel
 #ifdef HAS_LIBSLIC3R
                      , modelForSlice = std::move(modelForSlice)
 #endif
@@ -1027,7 +1074,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, targetResultKey, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance]() {
       if (!receiver)
         return;
 
@@ -1050,6 +1097,7 @@ void SliceService::startSlice(const QString &projectName)
         emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
         receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1068,6 +1116,7 @@ void SliceService::startSlice(const QString &projectName)
         emit receiver->stateChanged();
         emit receiver->sliceFailed(errorText);
         receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1094,9 +1143,13 @@ void SliceService::startSlice(const QString &projectName)
         pr.resultLayerCount = receiver->resultLayerCount_;
         pr.totalFilamentMm = receiver->resultTotalFilamentMm();
         pr.source = int(ResultSource::ModelSlice);
-        receiver->storePlateResult(resultPlateIndex, pr);
+        receiver->storePlateResultForKey(targetResultKey, pr);
+        const int currentPlateIndex = receiver->plateIndexForResultKey(targetResultKey);
+        if (currentPlateIndex >= 0)
+          receiver->setDomainResultValid(currentPlateIndex, true);
       }
       receiver->activeTargetPlateIndex_ = -1;
+      receiver->activeTargetResultKey_ = -1;
       qInfo("[SliceService] slice finished plate=%d output=%s layers=%d",
             resultPlateIndex,
             outputPath.toUtf8().constData(),
@@ -1163,15 +1216,18 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   const QFileInfo info(gcodeFilePath);
   const QString localPath = info.absoluteFilePath();
   const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
+  const int targetResultKey = resultKeyForPlateIndex(targetPlateIndex);
   activeTargetPlateIndex_ = targetPlateIndex;
+  activeTargetResultKey_ = targetResultKey;
   // Phase 239 (ENGN-02): keep the previous per-plate labels (weight/filament/
   // cost/layer count). The reuse re-reads the SAME file the metadata was
   // computed from (upstream keeps gcode_result statistics alive on the
   // finished() branch, BackgroundSlicingProcess.cpp:199-221), so the labels
   // survive the re-store below; only the estimated time is re-derived fresh
   // from the parsed file.
-  const PlateSliceResult previousMeta = plateResults_.value(targetPlateIndex);
-  plateResults_.remove(targetPlateIndex);
+  const PlateSliceResult previousMeta = resultForPlateIndex(targetPlateIndex)
+      ? *resultForPlateIndex(targetPlateIndex) : PlateSliceResult{};
+  removeResultForPlateIndex(targetPlateIndex);
   setDomainResultValid(targetPlateIndex, false);
   clearStoredResult();
   emit resultChanged();
@@ -1187,9 +1243,10 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
-  emit sliceStateChanged();
+    emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
     activeTargetPlateIndex_ = -1;
+    activeTargetResultKey_ = -1;
     return false;
   }
 
@@ -1214,7 +1271,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       targetPlateLabel = QObject::tr("Plate %1").arg(targetPlateIndex + 1);
   }
 
-  QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetPlateLabel, previousMeta]()
+  QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]()
                     {
     QString errorText;
     QString estimatedTimeLabel;
@@ -1246,7 +1303,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetPlateLabel, previousMeta]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]() {
       if (!receiver)
         return;
 
@@ -1269,6 +1326,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
         receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1287,6 +1345,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         emit receiver->stateChanged();
         emit receiver->sliceFailed(errorText);
         receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1312,9 +1371,13 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         pr.resultLayerCount = previousMeta.resultLayerCount;
         pr.totalFilamentMm = previousMeta.totalFilamentMm;
         pr.source = int(ResultSource::PreviousGCode);
-        receiver->storePlateResult(targetPlateIndex, pr);
+        receiver->storePlateResultForKey(targetResultKey, pr);
+        const int currentPlateIndex = receiver->plateIndexForResultKey(targetResultKey);
+        if (currentPlateIndex >= 0)
+          receiver->setDomainResultValid(currentPlateIndex, true);
       }
       receiver->activeTargetPlateIndex_ = -1;
+      receiver->activeTargetResultKey_ = -1;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -1388,8 +1451,8 @@ QString SliceService::defaultExportGCodeFileName(int plateIndex) const
 
 bool SliceService::exportPlateGCodeToPath(int plateIndex, const QString &targetPath)
 {
-  const auto it = plateResults_.constFind(plateIndex);
-  if (it == plateResults_.constEnd())
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  if (!result)
   {
     setExportStatus(State::Completed, progress_, QObject::tr("No G-code result for plate %1").arg(plateIndex + 1));
     logExportFailure(QStringLiteral("plate"),
@@ -1399,7 +1462,7 @@ bool SliceService::exportPlateGCodeToPath(int plateIndex, const QString &targetP
     emit exportFailed(statusLabel_);
     return false;
   }
-  return exportSourceToPath(it->outputPath, targetPath, defaultExportGCodeFileName(plateIndex));
+  return exportSourceToPath(result->outputPath, targetPath, defaultExportGCodeFileName(plateIndex));
 }
 
 bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, const QString &baseName)
@@ -1488,7 +1551,9 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
         int(plateResults_.size()));
   for (auto it = plateResults_.constBegin(); it != plateResults_.constEnd(); ++it)
   {
-    const int plateIndex = it.key();
+    const int plateIndex = plateIndexForResultKey(it.key());
+    if (plateIndex < 0)
+      continue;  // plate was deleted after the result was produced
     if (projectService_ && (projectService_->isPlateLocked(plateIndex) || !projectService_->isPlatePrintable(plateIndex)))
       continue;
     if (it->outputPath.isEmpty())
@@ -1748,52 +1813,51 @@ void SliceService::cancelExport()
 
 bool SliceService::hasPlateResult(int plateIndex) const
 {
-  const auto it = plateResults_.constFind(plateIndex);
-  if (it == plateResults_.constEnd() || it->outputPath.isEmpty())
-    return false;
-  return QFileInfo::exists(it->outputPath);
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result && !result->outputPath.isEmpty()
+      && QFileInfo::exists(result->outputPath);
 }
 
 QString SliceService::plateEstimatedTime(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->estimatedTimeLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->estimatedTimeLabel : QString();
 }
 
 QString SliceService::plateWeight(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->resultWeightLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultWeightLabel : QString();
 }
 
 QString SliceService::plateFilament(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->resultFilamentLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultFilamentLabel : QString();
 }
 
 QString SliceService::plateCost(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->resultCostLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultCostLabel : QString();
 }
 
 int SliceService::plateLayerCount(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->resultLayerCount : 0;
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultLayerCount : 0;
 }
 
 QString SliceService::plateOutputPath(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->outputPath : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->outputPath : QString();
 }
 
 int SliceService::plateResultSource(int plateIndex) const
 {
-  auto it = plateResults_.constFind(plateIndex);
-  return it != plateResults_.constEnd() ? it->source : int(ResultSource::None);
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->source : int(ResultSource::None);
 }
 
 bool SliceService::activatePlateResult(int plateIndex)
@@ -1801,8 +1865,8 @@ bool SliceService::activatePlateResult(int plateIndex)
   if (slicing_)
     return false;
 
-  const auto it = plateResults_.constFind(plateIndex);
-  if (it == plateResults_.constEnd() || it->outputPath.isEmpty() || !QFileInfo::exists(it->outputPath))
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  if (!result || result->outputPath.isEmpty() || !QFileInfo::exists(result->outputPath))
   {
     if (resultPlateIndex_ != -1 || !outputPath_.isEmpty())
     {
@@ -1810,23 +1874,23 @@ bool SliceService::activatePlateResult(int plateIndex)
       emit resultChanged();
       emit sliceResultCleared();
       emit stateChanged();
-  emit sliceStateChanged();
+      emit sliceStateChanged();
     }
     return false;
   }
 
   sliceState_ = State::Completed;
   progress_ = 100;
-  statusLabel_ = it->source == int(ResultSource::PreviousGCode)
+  statusLabel_ = result->source == int(ResultSource::PreviousGCode)
       ? QObject::tr("Existing G-code reuse complete")
       : QObject::tr("Slice complete");
-  outputPath_ = it->outputPath;
-  estimatedTimeLabel_ = it->estimatedTimeLabel;
-  resultWeightLabel_ = it->resultWeightLabel;
+  outputPath_ = result->outputPath;
+  estimatedTimeLabel_ = result->estimatedTimeLabel;
+  resultWeightLabel_ = result->resultWeightLabel;
   resultPlateIndex_ = plateIndex;
-  resultFilamentLabel_ = it->resultFilamentLabel;
-  resultLayerCount_ = it->resultLayerCount;
-  resultCostLabel_ = it->resultCostLabel;
+  resultFilamentLabel_ = result->resultFilamentLabel;
+  resultLayerCount_ = result->resultLayerCount;
+  resultCostLabel_ = result->resultCostLabel;
 
   if (projectService_)
   {
@@ -1849,6 +1913,7 @@ bool SliceService::activatePlateResult(int plateIndex)
 void SliceService::clearPlateResults()
 {
   clearStoredResult();
+  activeTargetResultKey_ = -1;
   plateResults_.clear();
   setAllDomainResultsValid(false);
   emit resultChanged();
@@ -1859,7 +1924,7 @@ void SliceService::clearPlateResults()
 
 void SliceService::removePlateResult(int plateIndex)
 {
-  const bool removedPlateMetadata = plateResults_.remove(plateIndex) > 0;
+  const bool removedPlateMetadata = removeResultForPlateIndex(plateIndex);
   if (removedPlateMetadata)
     setDomainResultValid(plateIndex, false);
   bool clearedCurrentOutput = false;
