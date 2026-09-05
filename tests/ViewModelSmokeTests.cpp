@@ -4108,6 +4108,14 @@ void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
 {
   // G-13: Detach (upstream "detach from system preset") cuts the inherits
   // link of a USER preset, keeping the resolved values as its own.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("G13Detach"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
   PresetServiceMock presets;
   // Base parent first: a bare service instance carries no bundled presets.
   QHash<QString, QVariant> base;
