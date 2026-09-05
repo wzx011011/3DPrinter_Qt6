@@ -370,6 +370,9 @@ private slots:
   // 5 CLOS-04 dimensions + per-plate thumbnails survive save→reload. This is
   // the live ctest that Phase 152 could only source-audit-lock.
   void multiPlateFullStateRoundTrip();
+  // G-11 follow-up: loadProject publishes every pending plate field on the GUI
+  // thread and replaces, rather than leaks, sequence state across reloads.
+  void loadProjectReplacesPlateSequenceState();
   // Phase 138 (ASM-01): per-instance assemble transform survives a real 3MF
   // save (saveProjectAs -> store_3mf) + reload (loadProject) through the upstream
   // <assemble> block (bbs_3mf.cpp:8070-8088 write, 4734-4741 read). Proves the
@@ -5508,6 +5511,62 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
   QVERIFY2(loader.plateCount() >= 2, "reloaded project must have >= 2 plates");
   QVERIFY2(loader.isPlateLocked(1), "plate 1 locked state must round-trip");
   QCOMPARE(loader.plateBedType(0), 3);
+#endif
+}
+
+void ViewModelSmokeTests::loadProjectReplacesPlateSequenceState()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("loadProject sequence replacement requires libslic3r");
+#else
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/test_model.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "sequence fixture must exist");
+
+  const QString firstPath = QDir(QDir::tempPath()).filePath(
+      QStringLiteral("owzx_sequence_first.3mf"));
+  const QString secondPath = QDir(QDir::tempPath()).filePath(
+      QStringLiteral("owzx_sequence_second.3mf"));
+  QFile::remove(firstPath);
+  QFile::remove(secondPath);
+
+  ProjectServiceMock first;
+  QSignalSpy firstLoad(&first, &ProjectServiceMock::loadFinished);
+  QVERIFY(first.loadFile(fixturePath));
+  QTRY_VERIFY_WITH_TIMEOUT(firstLoad.count() > 0, 10000);
+  QVERIFY(first.setPlateFirstLayerSeqChoice(0, 1));
+  QVERIFY(first.setPlateFirstLayerSeqOrder(0, QVariantList{2, 1}));
+  QVERIFY(first.setPlateOtherLayersSeqChoice(0, 1));
+  QVERIFY(first.addPlateOtherLayersSeqEntry(0, 2, 50));
+  QVERIFY(first.saveProject(firstPath));
+
+  ProjectServiceMock second;
+  QSignalSpy secondLoad(&second, &ProjectServiceMock::loadFinished);
+  QVERIFY(second.loadFile(fixturePath));
+  QTRY_VERIFY_WITH_TIMEOUT(secondLoad.count() > 0, 10000);
+  QVERIFY(second.saveProject(secondPath));
+
+  ProjectServiceMock loader;
+  QSignalSpy loaderSignals(&loader, &ProjectServiceMock::loadFinished);
+  QVERIFY(loader.loadProject(firstPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loaderSignals.count() > 0, 10000);
+  QVERIFY(loaderSignals.last().at(0).toBool());
+  QCOMPARE(loader.plateFirstLayerSeqChoice(0), 1);
+  QCOMPARE(loader.plateFirstLayerSeqOrder(0), QVariantList({2, 1}));
+  QCOMPARE(loader.plateOtherLayersSeqChoice(0), 1);
+  QCOMPARE(loader.plateOtherLayersSeqCount(0), 1);
+
+  loaderSignals.clear();
+  QVERIFY(loader.loadProject(secondPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loaderSignals.count() > 0, 10000);
+  QVERIFY(loaderSignals.last().at(0).toBool());
+  QCOMPARE(loader.plateFirstLayerSeqChoice(0), 0);
+  QVERIFY(loader.plateFirstLayerSeqOrder(0).isEmpty());
+  QCOMPARE(loader.plateOtherLayersSeqChoice(0), 0);
+  QCOMPARE(loader.plateOtherLayersSeqCount(0), 0);
+
+  QFile::remove(firstPath);
+  QFile::remove(secondPath);
 #endif
 }
 
