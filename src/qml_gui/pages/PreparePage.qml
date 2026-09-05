@@ -4119,9 +4119,20 @@ Item {
             // ProjectServiceMock write path so non-current plates retain real
             // thumbnails within the session (the gap that forced Phase 151 to
             // ship persisted-only).
-            function onThumbnailCapturedForPlate(plateIndex, data) {
+            // G-04: variant-aware routing -- 0=main (writes the main AND
+            // no_light caches server-side), 1=picking (writes the picking
+            // cache). A completed main capture cascades one picking capture
+            // for the same plate so both families stay populated for save.
+            function onThumbnailCapturedForPlate(plateIndex, data, variant) {
                 if (!root.editorVm || !data || data.length === 0) return
+                const v = (variant === undefined) ? 0 : variant
+                if (v === 1) {
+                    root.editorVm.setPlatePickThumbnailFromBase64(plateIndex, data)
+                    return
+                }
                 root.editorVm.setPlateThumbnailFromBase64(plateIndex, data)
+                if (viewport3d)
+                    viewport3d.requestThumbnailCapture(plateIndex, 128, 1)
             }
         }
 

@@ -694,6 +694,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (viewport->m_thumbnailRequestPending) {
     m_thumbnailRequestPending = true;
     m_thumbnailPlateIndex = viewport->m_thumbnailPlateIndex;
+    m_thumbnailVariant = viewport->m_thumbnailVariant;
     m_thumbnailSize = viewport->m_thumbnailSize;
     viewport->m_thumbnailRequestPending = false;
   }
@@ -1461,6 +1462,7 @@ void RhiViewportRenderer::releaseThumbnailResources()
 {
   m_thumbnailFillPipeline.reset();
   m_thumbnailLinePipeline.reset();
+  m_pickVertexBuffer.reset();
   m_thumbnailSrb.reset();
   m_thumbnailUniformBuffer.reset();
   m_thumbnailUniformBufferBytes = 0;
@@ -1583,6 +1585,8 @@ bool RhiViewportRenderer::ensureThumbnailRenderTarget(int size)
     return false;
   }
 
+
+
   m_thumbnailLastBuiltSize = size;
   return true;
 }
@@ -1636,7 +1640,18 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
     cb->draw(m_bedLineVertexCount);
   }
   // Model mesh (triangles) — the actual rendered scene, not just a clear color.
-  if (m_modelVertexBuffer && m_modelVertexCount > 0) {
+  if (m_thumbnailVariant == ThumbnailPicking) {
+    // G-04: picking pass -- the pick vertex buffer bakes one flat palette
+    // color per ModelBatch (keyed by sourceObjectIndex), so the same unlit
+    // fragment path renders the upstream pick_thumbnail family
+    // (Plater.cpp:12086-12094).
+    if (m_pickVertexBuffer && m_pickVertexCount > 0) {
+      cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+      const QRhiCommandBuffer::VertexInput pickBinding(m_pickVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &pickBinding);
+      cb->draw(m_pickVertexCount);
+    }
+  } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
     cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
     const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
     cb->setVertexInput(0, 1, &modelBinding);
@@ -1686,16 +1701,17 @@ void RhiViewportRenderer::deliverCompletedThumbnail()
                         QImage::Format_RGBA8888).copy();
 
   const int plateIndex = m_thumbnailResultPlateIndex;
+  const int variant = m_thumbnailVariant;
   const QPointer<RhiViewport> viewport = m_viewportItem;
   if (viewport == nullptr)
     return;
   QMetaObject::invokeMethod(
       viewport.data(),
-      [viewport, image, plateIndex]() {
+      [viewport, image, plateIndex, variant]() {
         // The queued callback runs on the GUI thread. Recheck the guarded item
         // there because it may have been destroyed after readback completion.
         if (viewport != nullptr)
-          viewport->deliverThumbnail(image, plateIndex);
+          viewport->deliverThumbnail(image, plateIndex, variant);
       },
       Qt::QueuedConnection);
 }
@@ -2849,6 +2865,37 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
                                 modelBytes,
                                 modelVertices.constData());
   }
+
+  // G-04: picking variant vertex buffer -- same soup positions, but every
+  // vertex's color is overwritten with its batch's flat palette color
+  // (keyed by sourceObjectIndex, deterministic hash like upstream id
+  // encoding). Built alongside the main buffer so a picking capture needs
+  // no GPU-side state changes.
+  QVector<Vertex> pickVertices;
+  pickVertices.reserve(modelVertices.size());
+  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
+    if (batch.translucent
+        || batch.firstVertex < 0
+        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
+      continue;
+    const quint32 h = quint32(batch.sourceObjectIndex) * 2654435761u;
+    const float pr = float((h >> 16) & 0xFF) / 255.0f;
+    const float pg = float((h >> 8) & 0xFF) / 255.0f;
+    const float pb = float(h & 0xFF) / 255.0f;
+    for (int i = 0; i < batch.vertexCount; ++i) {
+      Vertex v = allVertices.at(batch.firstVertex + i);
+      v.r = pr; v.g = pg; v.b = pb; v.a = 1.0f;
+      pickVertices.append(v);
+    }
+  }
+  m_pickVertexCount = quint32(pickVertices.size());
+  const quint32 pickBytes = quint32(pickVertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_pickVertexBuffer, pickBytes, m_pickVertexBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+  if (m_pickVertexBuffer && pickBytes > 0)
+    updates->uploadStaticBuffer(m_pickVertexBuffer.get(), 0, pickBytes,
+                                pickVertices.constData());
 
   const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_modelTranslucentBuffer, translucentBytes,

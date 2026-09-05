@@ -591,7 +591,9 @@ public:
   // GLGizmoSVG workbench, minimal port).
   Q_INVOKABLE QPointF screenToBedPoint(qreal screenX, qreal screenY) const;
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
-  Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128);
+  // G-04: variant 0 = main capture, 1 = picking (per-object flat colors).
+  Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128,
+                                           int variant = 0);
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot the renderer targets via
   // a queued QMetaObject::invokeMethod. Encodes the captured QImage to the
   // base64 PNG m_lastThumbnailData format and emits thumbnailCaptured(), so
@@ -626,7 +628,10 @@ signals:
   /// PartPlate::setThumbnail via ProjectServiceMock::setPlateThumbnailFromBase64.
   /// The legacy no-arg thumbnailCaptured() above stays for back-compat with
   /// QML bindings reading lastThumbnailData for the current plate's live preview.
-  void thumbnailCapturedForPlate(int plateIndex, const QString &data);
+  // G-04: variant rides the delivery (0=main, 1=picking) so the QML
+  // consumer routes each capture into the right PartPlate variant cache.
+  void thumbnailCapturedForPlate(int plateIndex, const QString &data,
+                                 int variant = 0);
   void objectPickedSource(int sourceIndex);
   void contextMenuRequested(int targetKind,
                             int sourceObjectIndex,
@@ -959,6 +964,7 @@ private:
   bool m_thumbnailRequestPending = false;
   int m_thumbnailPlateIndex = 0;
   int m_thumbnailSize = 128;
+  int m_thumbnailVariant = 0;  // G-04: 0=main, 1=picking
   bool m_previewCameraFitted = false;
   QVector4D m_previewFitHint;
   qint64 m_sceneGeneration = 1;

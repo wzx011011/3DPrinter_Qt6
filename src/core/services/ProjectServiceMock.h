@@ -716,6 +716,9 @@ public:
   /// captured in-session (Phase 151 shipped the read accessor + 3MF save/load
   /// round-trip only). Returns true on successful decode + store.
   Q_INVOKABLE bool setPlateThumbnailFromBase64(int plateIndex, const QString &base64);
+  /// G-04: picking variant cache (per-object flat colors); written by the
+  /// picking thumbnail capture and consumed by storeProject3mf's pick family.
+  Q_INVOKABLE bool setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64);
 
   /// 添加新对象到当前平板（对齐上游 Plater 粘贴剪贴板行为）
   /// 返回新对象的索引，失败返回 -1

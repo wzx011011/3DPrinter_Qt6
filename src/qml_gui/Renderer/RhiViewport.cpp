@@ -978,7 +978,7 @@ void RhiViewport::arrangeSelected(float spacing, bool rotation, bool alignY)
   update();
 }
 
-void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
+void RhiViewport::requestThumbnailCapture(int plateIndex, int size, int variant)
 {
   // Phase 95 (THUMBCAP-01/03): real QRhi texture readback dispatch. The
   // previous solid-color stub (flat dark PNG fabricated on the GUI thread) is
@@ -989,11 +989,12 @@ void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
   // requestViewPreset pattern (set state + update()).
   m_thumbnailPlateIndex = plateIndex;
   m_thumbnailSize = qMax(32, size);
+  m_thumbnailVariant = variant;
   m_thumbnailRequestPending = true;
   update();  // schedule synchronize()+render() on the render thread
 }
 
-void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
+void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex, int variant)
 {
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot targeted by the
   // renderer's queued QMetaObject::invokeMethod. Encodes the captured QImage
@@ -1014,7 +1015,7 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
   m_lastThumbnailData = QStringLiteral("data:image/png;base64,")
                         + QString::fromLatin1(bytes.toBase64());
   emit thumbnailCaptured();
-  emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData);
+  emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData, variant);
 }
 
 // ── v5.16 (NAVIGATOR): bottom-left 3D navigator cube ──

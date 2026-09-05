@@ -8876,6 +8876,44 @@ bool ProjectServiceMock::setPlateThumbnailFromBase64(int plateIndex, const QStri
 #endif
 }
 
+bool ProjectServiceMock::setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList || base64.isEmpty()) return false;
+  OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p) return false;
+
+  // Strip the optional `data:image/png;base64,` prefix that QML thumbnail
+  // sources typically carry (and that our own deliverThumbnail emits).
+  QByteArray raw = base64.toUtf8();
+  const int comma = raw.indexOf(',');
+  if (comma >= 0 && comma < 64) raw = raw.mid(comma + 1);
+
+  const QByteArray pngBytes = QByteArray::fromBase64(raw);
+  if (pngBytes.isEmpty()) return false;
+  QImage img;
+  if (!img.loadFromData(pngBytes, "PNG") || img.isNull()) return false;
+
+    p->setPickThumbnail(img);
+  // G-04: the no_light variant is the SAME image by construction -- the Qt6
+  // RHI pipeline is unlit end to end (rhi_viewport.frag passes vertex color
+  // straight through, no lighting term), so the regular capture already IS
+  // the "no scene lighting" rendering upstream generates as a separate pass
+  // (Plater.cpp:12051-12063). Persisting it here keeps the no_light family
+  // populated in the saved 3MF without a second render pass. The picking
+  // variant needs per-object flat colors and stays unimplemented (see
+  // 15.7) -- it is saved as an invalid placeholder the writer skips.
+  p->setNoLightThumbnail(img);
+  // NOTE: no projectChanged() here — this is a high-frequency capture-result
+  // write; the caller (PreparePage.qml capture handler) is responsible for
+  // triggering any UI refresh (plate cards re-bind on the next paint).
+  return true;
+#else
+  Q_UNUSED(plateIndex); Q_UNUSED(base64);
+  return false;
+#endif
+}
+
 int ProjectServiceMock::duplicateObject(int sourceIndex)
 {
   if (loading_)
