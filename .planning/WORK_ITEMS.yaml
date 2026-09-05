@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: c6c33a3
+head_at_update: cc0df24
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -49,11 +49,13 @@ items:
   - id: PLATE-RESULT-STABLE-KEY
     title: Slice results keyed by stable per-plate print identity (SliceService)
     aliases: ["P0.5.5b/stable-result-key"]
+    status: resolved
+    resolved: 2026-09-06
     area: Prepare/Plate
     priority: P0
-    implementation: hybrid
-    parity: partial
-    verification: fail
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -67,25 +69,20 @@ items:
       - src/core/services/ProjectServiceMock.cpp
       - tests/E2EWorkflowTests.cpp
     notes: >
-      Working-tree migration (uncommitted at c6c33a3+): plateResults_ keys move
-      from positional plate index to stable printIndex; startSlice /
-      completion / cancel / error / previous-G-code reuse / batch export all
-      routed through resultKeyForPlateIndex / plateIndexForResultKey.
-    remaining:
-      - Root-cause batch-export regression: after movePlate(0,1) only one
-        all-plate file is produced (E2E
-        test_slice_all_stores_outputs_for_printable_unlocked_plates_only
-        FAILED 2026-09-05, allplates_plate1.gcode missing; no exportFailed
-        emitted — jobs list or generation drop suspected).
-      - activeTargetResultKey_ is not reset on the SUCCESS branches of
-        startSlice / loadGCodeFromPrevious (only cancel/error paths).
-      - clearResults() / clearPlateResults() do not reset activeTargetResultKey_.
-      - activatePlateResult() formatting regression ("if (...)  {", stray indent).
-      - Add reorder+delete async regression tests for result lookup.
+      Resolved 2026-09-06 (commit cc0df24): plateResults_ keys are stable
+      printIndex values; start/completion/cancel/error/previous-G-code reuse/
+      batch export route through the stable-key helpers; batch export skips
+      results whose plate was deleted and names files by current position;
+      activeTargetResultKey_ is reset on every terminal path. The earlier
+      batch-export failure root-caused to a TEST timing race (the reorder
+      insertion changed which export file the worker writes last; the
+      synchronous second-file assert now QTRY-waits), not a service defect.
     evidence:
+      commits: [cc0df24]
       tests:
-        - tests/E2EWorkflowTests.cpp::test_slice_all_stores_outputs_for_printable_unlocked_plates_only (currently failing after reorder insert)
-      last_verified: 2026-09-05
+        - tests/E2EWorkflowTests.cpp::test_slice_all_stores_outputs_for_printable_unlocked_plates_only (reorder assertions)
+      gate: canonical verifier EXIT=0 2026-09-06, 12 suites 560 tests 0 failed (E2E 29/29 included)
+      last_verified: 2026-09-06
 
   - id: QML-BINDING-LOOPS
     title: Remaining QML binding loops (post two-loop fix)
