@@ -3312,13 +3312,15 @@ void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
 
   // Duplicate and persistence failures remain in the modal; only a successful
   // save accepts it, and the ViewModel failure is rendered to the user.
-  // R-P1.J: the save now routes through saveCurrentPreset (overwrite-current,
-  // the suggested name) OR createCustomPreset (new name) -- the anchor asserts
-  // BOTH paths exist and accept() is gated on the shared result.
-  QVERIFY2(saveDialog.contains(QStringLiteral("ok = root.configVm.saveCurrentPreset()"))
+  // R-P1.J + G-13: the save routes are save-in-place (saveCurrentPreset),
+  // Detach (detachPresetFromParent), replace (overwriteUserPreset) and
+  // create (createCustomPreset) — accept() is gated on the shared result.
+  QVERIFY2(saveDialog.contains(QStringLiteral("root.configVm.saveCurrentPreset()"))
+               && saveDialog.contains(QStringLiteral("root.configVm.detachPresetFromParent(category, name)"))
+               && saveDialog.contains(QStringLiteral("ok = root.configVm.overwriteUserPreset(category, name)"))
                && saveDialog.contains(QStringLiteral("ok = root.configVm.createCustomPreset(category, name)"))
                && saveDialog.contains(QStringLiteral("if (ok) {\n                            root.accept()")),
-           "W1A: SavePresetDialog must accept only after the save (overwrite or create) succeeds");
+           "W1A: SavePresetDialog must accept only after the save (detach/overwrite/create) succeeds");
   QVERIFY2(saveDialog.contains(QStringLiteral("root.saveError = root.configVm.lastPresetError")),
            "W1A: SavePresetDialog must show the ViewModel save failure");
   QVERIFY2(configVmHeader.contains(QStringLiteral("lastPresetError"))
