@@ -3366,8 +3366,11 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("启用镂空:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     CxCheckBox {
+                        // G-12: onToggled instead of onCheckedChanged -- the
+                        // programmatic checked refresh (VM stateChanged) no
+                        // longer writes back, breaking the binding loop.
                         checked: root.editorVm ? root.editorVm.hollowEnabled : false
-                        onCheckedChanged: if (root.editorVm) root.editorVm.hollowEnabled = checked
+                        onToggled: if (root.editorVm) root.editorVm.hollowEnabled = checked
                     }
                 }
 
@@ -3910,7 +3913,7 @@ Item {
                 Text { text: qsTr("位置"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.advCutPosition : 0; from: -500; to: 500; onValueModified: if (root.editorVm) root.editorVm.advCutPosition = value }
 
-                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.advCutKeepBoth : true; onCheckedChanged: if (root.editorVm) root.editorVm.advCutKeepBoth = checked }
+                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.advCutKeepBoth : true; onToggled: if (root.editorVm) root.editorVm.advCutKeepBoth = checked }
 
                 // Tongue-groove parameters (executor: independent groove params
                 // if >0, else connectorSize-derived defaults — upstream Cut::Groove).
