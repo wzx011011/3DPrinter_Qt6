@@ -1,9 +1,0 @@
-系统找不到指定的路径。
-'findstr' 不是内部或外部命令，也不是可运行的程序
-或批处理文件。
-[1/4] Automatic MOC and UIC for target QmlUiAuditTests
-[2/3] Building CXX object CMakeFiles\QmlUiAuditTests.dir\tests\QmlUiAuditTests.cpp.obj
-[3/3] Linking CXX executable QmlUiAuditTests.exe
-
-[UI] Running QML UI audit tests...
-[UI] tests passed
