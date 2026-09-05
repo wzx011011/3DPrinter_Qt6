@@ -1,22 +1,22 @@
 # Planning Index
 
-Last updated: 2026-07-25
+Last updated: 2026-09-06
 
 This is the canonical entry point for `.planning/`. Historical phase files are evidence; current work starts from the files below.
 
 ## Current Source Of Truth
 
+- **Current task state: [WORK_ITEMS.yaml](WORK_ITEMS.yaml)** (canonical since
+  2026-09-06 — open/in-progress/blocked/resolved work items; historical
+  R-P0.*/R-P1.*/G-*/P* ids resolve through its alias map)
 - Project framing: [PROJECT.md](PROJECT.md)
-- Current state: [STATE.md](STATE.md)
+- Milestone status: [STATE.md](STATE.md)
 - Current roadmap: [ROADMAP.md](ROADMAP.md)
 - Current requirements: [REQUIREMENTS.md](REQUIREMENTS.md)
 - v3.6 starting inventory: [research/v3.6-SCREENSHOT-SOURCE-TRUTH.md](research/v3.6-SCREENSHOT-SOURCE-TRUTH.md)
-- Remaining migration plan: [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
+- Historical migration backlog (superseded as a state source): [REMAINING_MIGRATION_PLAN.md](REMAINING_MIGRATION_PLAN.md)
 - Milestone history: [MILESTONES.md](MILESTONES.md)
-- Active milestone roadmap: [milestones/v5.9-ROADMAP.md](milestones/v5.9-ROADMAP.md)
-- Active milestone requirements: [milestones/v5.9-REQUIREMENTS.md](milestones/v5.9-REQUIREMENTS.md)
-- Latest completed milestone audit: [milestones/v5.9-MILESTONE-AUDIT.md](milestones/v5.9-MILESTONE-AUDIT.md)
-- Archived milestone audit: [milestones/v5.8-MILESTONE-AUDIT.md](milestones/v5.8-MILESTONE-AUDIT.md)
+- Historical milestone artifacts (v5.9 and earlier): [milestones/](milestones/)
 - Retrospective: [RETROSPECTIVE.md](RETROSPECTIVE.md)
 - Prior alignment audit: [audits/2026-06-24-plan-implementation-alignment.md](audits/2026-06-24-plan-implementation-alignment.md)
 - Prior implementation audit: [audits/2026-06-23-implementation-audit.md](audits/2026-06-23-implementation-audit.md)
@@ -24,82 +24,27 @@ This is the canonical entry point for `.planning/`. Historical phase files are e
 
 ## Latest Completed Milestone
 
-**v5.9 ConfigWizard Multi-Vendor Selection** is complete (closed 2026-07-25).
+**v5.16 Full Gap Closure** is complete (closed 2026-08-16; 11/11 phases
+231-241, canonical verify exit 0). See [STATE.md](STATE.md) and
+[MILESTONES.md](MILESTONES.md). Post-milestone work items — stable plate
+result identity, paint axis lock, preview G-code tokenization, QML binding
+loops, external blockers — are tracked in [WORK_ITEMS.yaml](WORK_ITEMS.yaml).
 
-Primary outcome:
-
-- The ConfigWizard is now multi-vendor: users pick from 46 upstream vendor
-  JSONs (Anker/Anycubic/BBL/Creality/Dremel/Elegoo/...); the chosen vendor's
-  presets load on demand (`loadSingleVendor`/`loadVendor`); the selection
-  persists across launches (AppConfig-lite QSettings `wizard/selectedVendor`,
-  `wizard/selectedPrinterModel`).
-- PresetUpdater (HTTP vendor-index sync) stays deferred (network scope).
-- Full 3-way material compatibility filtering stays deferred (future
-  refinement).
-- All verification gates PASS: `v56CrossWorkstreamRegressionLocked` (incl. new
-  WIZ-03 source-audit checks), `mmuSegmentationPaintFeedsSlice`,
-  `v50PresetIniAndCreateDialogWired`, `multiPlateFullStateRoundTrip`.
-
-Previous milestone **v5.8 Submodule Baseline Alignment + Hollow Editing** is
-complete (closed 2026-07-25). Submodule aligned to 0632bae8 + compat patches;
-MMU config-driven; Hollow drain-hole editing end to end.
-
-Primary outcome:
-
-- D3D12 promotion attempted, verified on real hardware, **reverted** — D3D12
-  crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream iGPU).
-  D3D11 remains the default; D3D12 is opt-in. Phase 207-210 retained
-  (diagnostics + seam A/B/C mitigations). Canonical build (D3D11 default) exited
-  `0`, `APP_RUNNING_PID=80404`, all ctest + E2E passed.
-
-Previous milestone **v5.6 Deferred Backlog Closure** is complete (closed
-2026-07-24). Canonical build exited `0`, `APP_RUNNING_PID=79708`, all ctest +
-E2E passed.
-
-Phases (193-205):
-
-- Phase 193: Planning State Reconciliation
-- Phase 194: Cmp-03 OptionRow and Slider Unification
-- Phase 195: KBShortcutsDialog Extraction and Grouping
-- Phase 196: XD-02 Emboss Spinner and SliceProgress States
-- Phase 197: Calibration Dedicated Tower Geometry
-- Phase 198: ObjectList Tree Deepening (Auxiliary file-tree panel)
-- Phase 199: ConfigWizard Vendor/Model Enumeration Layer
-- Phase 200: ConfigWizard Single-Vendor Wizard Rewrite
-- Phase 201: AMS Architecture Cleanup (mock to ViewModel)
-- Phase 202: Plugin Manager UI Real Backend (no Python)
-- Phase 203: D3D12 Root-Cause Confirmation (no default promotion)
-- Phase 204: de/fr/ja/ko Translation Long Tail to >=85%
-- Phase 205: Cross-Workstream Regression Gate and Milestone Audit
-
-Carry-forward from v5.5:
-
-- The canonical build/run contract is the entry gate for every v5.6 phase.
-- `third_party/OrcaSlicer` submodule is not checked out locally; upstream
-  comparison uses `D:/work/OrcaSlicer`.
-
-Deferred after v5.6 (per user decisions 2026-07-24):
-
-- H2C/A2L multi-nozzle UI (bb3 fork submodule + product decision pending).
-- Per-extruder config editor UI (Cmp-03 sub-item; needs multi-extruder fixture).
-- ConfigWizard multi-vendor selection + PresetUpdater + AppConfig.
-- D3D12 default-backend promotion itself (pending root cause).
-- AMS real device/cloud data sources (printer-hardware scope).
-- Python script/macro framework / CPython embedding.
-
-Removed from forward scope:
-
-- LAN device discovery, device send/upload, cloud print, Monitor task lifecycle, ModelMall/Home WebView/cloud workflows, live camera/network streams, and printer-connected hardware workflows.
+Historical note: v5.9 ConfigWizard Multi-Vendor Selection closed 2026-07-25;
+its roadmap/requirements/audit artifacts remain under [milestones/](milestones/)
+as history. Earlier closed milestones (v5.8, v5.6, phases 193-205) are
+recorded in [MILESTONES.md](MILESTONES.md).
 
 ## Directory Map
 
 | Path | Purpose | Use Rule |
 |---|---|---|
+| `WORK_ITEMS.yaml` | Canonical CURRENT task state (open/in-progress/blocked/resolved + alias map) | Update whenever task state changes; all other docs reference it, never duplicate it |
 | `PROJECT.md` | Living project charter and active milestone framing | Update at milestone boundaries or major source-truth decisions |
-| `STATE.md` | Current milestone status and next handoff | Update at phase/milestone transitions |
-| `REQUIREMENTS.md` | Requirement IDs, classifications, and traceability | Use for current or most recently audited milestone scope and future backlog |
+| `STATE.md` | Milestone-level status and handoff | Update at phase/milestone transitions |
+| `REQUIREMENTS.md` | Requirement IDs and acceptance definitions for the most recent milestone | Checkboxes are milestone-close evidence; current state lives in WORK_ITEMS.yaml |
 | `ROADMAP.md` | Active/latest milestone phase plan | Keep focused on the active or most recently audited milestone |
-| `REMAINING_MIGRATION_PLAN.md` | Ordered post-v2.9 backlog | Update when a milestone changes backlog order |
+| `REMAINING_MIGRATION_PLAN.md` | Historical candidate backlog (v5.5-era) | Do not use as a current-state source; superseded by WORK_ITEMS.yaml |
 | `MILESTONES.md` | Historical shipped milestone summary | Append milestone-level summaries only |
 | `research/` | Current milestone research and inventory inputs | Link files from requirements/roadmap when they are execution inputs |
 | `audits/` | Dated read-only audit and gap reports | New dated files; do not mix execution work here |
@@ -118,10 +63,14 @@ Use these status terms in requirements, audits, and handoffs:
 - **Placeholder:** visible UI or enum exists but no meaningful backend behavior.
 - **Superseded:** previous scope intentionally abandoned in favor of the active milestone.
 
-Do not treat phase completion as product completion unless the exact workflow is implemented and verified against upstream behavior and screenshot visual truth where applicable.
+`WORK_ITEMS.yaml` refines these into four independent dimensions
+(implementation / parity / verification / availability). Do not collapse
+them into a single checkbox, and do not treat phase completion as product
+completion unless the exact workflow is implemented and verified against
+upstream behavior and screenshot visual truth where applicable.
 
 ## Next Step
 
-Select the next product migration milestone from the deferred backlog (H2C/A2L,
-per-extruder editor, ConfigWizard multi-vendor, D3D12 promotion, AMS real
-backend, Python framework). Keep the canonical verification gate in place.
+Select the next work item from [WORK_ITEMS.yaml](WORK_ITEMS.yaml) (unblocked
+items with status `open`; verify no regression first). Keep the canonical
+verification gate (`scripts/auto_verify_with_vcvars.ps1`) in place.

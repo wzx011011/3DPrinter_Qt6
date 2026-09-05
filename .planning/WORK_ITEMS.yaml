@@ -1,0 +1,354 @@
+# Canonical Work-Item Ledger — OWzx Slicer
+#
+# This file is the SINGLE source of truth for CURRENT task state.
+# Other documents are views or evidence, never state owners:
+#   - docs/源码对照迁移任务追踪.md      developer-readable feature-domain view (long form)
+#   - docs/代码评审报告_2026-09-04.md   immutable 2026-09-04 review snapshot (findings only)
+#   - .planning/REQUIREMENTS.md         v5.16 acceptance definitions (closed 2026-08-16)
+#   - .planning/phases/*/…-SUMMARY.md   immutable per-phase execution evidence
+#   - .planning/quick/*/…-SUMMARY.md    immutable one-shot task evidence
+#
+# Rules:
+#   * One problem = one canonical id. Historical ids (R-P0.*, R-P1.*, G-*, P*.*) live
+#     in `aliases` and must not be re-used as new work items.
+#   * "phase complete", "requirement complete" and "ledger item complete" are
+#     different claims; only this ledger claims source-truth parity state.
+#   * Every verification claim must cite commit(s) + suite evidence + date.
+#     A green run without a commit anchor is `stale`, not `pass`.
+#
+# Status model (four independent dimensions — do not collapse into one checkbox):
+#   implementation: not_started | mock | hybrid | real
+#   parity:         not_checked | partial | aligned | known_deviation
+#   verification:   none | pass | fail | stale | partial
+#   availability:   available | blocked_external | blocked_user_decision | declined | superseded
+
+schema_version: 1
+updated: 2026-09-06
+head_at_update: c6c33a3
+
+# ---------------------------------------------------------------------------
+# Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
+# kept so stale checkboxes anywhere can be resolved without re-deriving.
+# ---------------------------------------------------------------------------
+alias_map:
+  R-P0.4: G-04
+  R-P1.A: [G-06, G-11]
+  R-P1.B: preview-parity-fixes-2026-09-05
+  R-P1.G: G-04
+  R-P1.H: G-07
+  R-P1.K: G-11
+  R-P1.L: G-08
+  "P2.8.2": PREVIEW-GHOST-SHELL
+  "P17.5": PREVIEW-GHOST-SHELL
+  "P11.B2.3": PAINT-AXIS-LOCK
+  "P12.2": SUBMODULE-PUSH-AUTH
+  "P17.8": CONFLICT-MARKERS
+
+items:
+  # ── In progress ──────────────────────────────────────────────────────────
+  - id: PLATE-RESULT-STABLE-KEY
+    title: Slice results keyed by stable per-plate print identity (SliceService)
+    aliases: ["P0.5.5b/stable-result-key"]
+    area: Prepare/Plate
+    priority: P0
+    implementation: hybrid
+    parity: partial
+    verification: fail
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/PartPlate.hpp (m_print_list / m_gcode_result_list)
+        - src/slic3r/GUI/PartPlate.cpp:3675-3816 (destroy_print / delete_plate)
+    qt_targets:
+      - src/core/services/SliceService.h
+      - src/core/services/SliceService.cpp
+      - src/core/services/ProjectServiceMock.h
+      - src/core/services/ProjectServiceMock.cpp
+      - tests/E2EWorkflowTests.cpp
+    notes: >
+      Working-tree migration (uncommitted at c6c33a3+): plateResults_ keys move
+      from positional plate index to stable printIndex; startSlice /
+      completion / cancel / error / previous-G-code reuse / batch export all
+      routed through resultKeyForPlateIndex / plateIndexForResultKey.
+    remaining:
+      - Root-cause batch-export regression: after movePlate(0,1) only one
+        all-plate file is produced (E2E
+        test_slice_all_stores_outputs_for_printable_unlocked_plates_only
+        FAILED 2026-09-05, allplates_plate1.gcode missing; no exportFailed
+        emitted — jobs list or generation drop suspected).
+      - activeTargetResultKey_ is not reset on the SUCCESS branches of
+        startSlice / loadGCodeFromPrevious (only cancel/error paths).
+      - clearResults() / clearPlateResults() do not reset activeTargetResultKey_.
+      - activatePlateResult() formatting regression ("if (...)  {", stray indent).
+      - Add reorder+delete async regression tests for result lookup.
+    evidence:
+      tests:
+        - tests/E2EWorkflowTests.cpp::test_slice_all_stores_outputs_for_printable_unlocked_plates_only (currently failing after reorder insert)
+      last_verified: 2026-09-05
+
+  - id: QML-BINDING-LOOPS
+    title: Remaining QML binding loops (post two-loop fix)
+    aliases: ["G-12/remaining", "G-12(剩余绑定环)"]
+    area: QML/Quality
+    priority: P2
+    implementation: hybrid
+    parity: partial
+    verification: partial
+    availability: available
+    qt_targets:
+      - src/qml_gui/dialogs/SettingsDialog.qml
+      - src/qml_gui/pages/PreparePage.qml
+      - src/qml_gui/pages/ (site-by-site sweep)
+    notes: >
+      G-12 closed its scope on 2026-09-05 (smoke_test.ps1 expectations,
+      commit 100b685; SettingsDialog TabBar width loop + two PreparePage
+      CxCheckBox write-back loops, commit 849cfce, QmlUiAudit green).
+      The long tail of ~75 runtime binding loops remains a standing item;
+      agreed pattern: onCheckedChanged->onToggled, strip-reference instead of
+      TabBar implicitWidth aggregation.
+    remaining:
+      - Sweep remaining loop sites one by one; re-run QmlUiAuditTests after each batch.
+    evidence:
+      commits: [100b685, 849cfce]
+      last_verified: 2026-09-05
+
+  # ── Not started (next candidates, unblocked) ─────────────────────────────
+  - id: PAINT-AXIS-LOCK
+    title: Support painting Vertical/Horizontal axis lock (Circle/Sphere brush)
+    aliases: ["P11.B2.3"]
+    area: Prepare/Paint
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp (Vertical/Horizontal checkboxes, mutually exclusive)
+    qt_targets:
+      - src/qml_gui/Renderer/RhiViewport.cpp (screen-coordinate drag layer; brushMouseScreenX/Y + m_paintClickPress already exist)
+      - src/qml_gui/pages/PreparePage.qml (checkbox UI)
+    notes: >
+      Upstream: Vertical locks screen X, Horizontal locks screen Y; the two
+      checkboxes are mutually exclusive and only shown for Circle/Sphere
+      brushes. Constraint belongs in the RhiViewport pointer layer, not
+      PaintEngine.
+    remaining:
+      - Implement exclusive checkboxes, wire to drag clamping, add audit/test.
+
+  - id: PREVIEW-GCODE-SOURCE-TOKENS
+    title: Preview G-code source panel semantic tokenization
+    aliases: []
+    area: Preview
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GCodeViewer.cpp (command/parameters/comment split, 55-char truncation, per-part coloring)
+    qt_targets:
+      - src/core/viewmodels/PreviewViewModel.h/.cpp
+      - src/qml_gui/pages/PreviewPage.qml
+    notes: >
+      Current panel renders each line as one raw text field; upstream splits
+      command, parameters and comment, truncates at 55 chars and colors parts
+      separately.
+    remaining:
+      - Tokenize in C++ (PreviewViewModel), color/split in QML presentation only.
+
+  - id: PLATE-PRINT-LIFECYCLE
+    title: Persistent per-plate Print / GCodeResult ownership and deep plate semantics
+    aliases: ["P0.5.5b/remainder"]
+    area: Prepare/Plate
+    priority: P1
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/PartPlate.hpp (unprintable_plate, m_shape, m_exclude_areas)
+        - src/slic3r/GUI/PartPlate.cpp:3141-3150, 4027-4065, 4110-4167, 4989-5044
+    qt_targets:
+      - src/core/model/PartPlate.h
+      - src/core/model/PartPlateList.h/.cpp
+      - src/core/services/SliceService.h/.cpp
+    notes: >
+      Stable printIndex allocation is DONE (see PLATE-RESULT-STABLE-KEY
+      prerequisite and resolved PLATE-PRINT-IDENTITY). Still missing: durable
+      Print/GCodeResult lifetime per plate, unprintable/shared plate semantics,
+      full find_instance/contains geometry, plate shape/exclude/extruder
+      areas, per-plate wipe-tower/Print context, complete slice-state/result
+      API.
+    remaining:
+      - Sub-scope into separate items when work starts; do not mark P0.5.5b
+        complete until this item closes.
+
+  # ── Blocked / pending user decision ─────────────────────────────────────
+  - id: STASH-WIP-DISPOSITION
+    title: Dispose of stash@{0} and stash@{1} (user decision required)
+    aliases: ["stash@{0}", "stash@{1}"]
+    area: Repo/Governance
+    priority: P1
+    implementation: hybrid
+    parity: not_checked
+    verification: none
+    availability: blocked_user_decision
+    notes: >
+      stash@{0}: small plate-per-file CLI WIP. stash@{1}: large perf-waves +
+      v5.16 WIP (59 files, +7916/-1171). Neither may be applied or dropped
+      without the user. If merged, the 2026-09-04 review P0 findings that
+      exist only inside that WIP must be fixed first (review report §4/§5).
+    remaining:
+      - User decides: dedicated branch/worktree for repair vs. drop.
+
+  - id: SUBMODULE-PUSH-AUTH
+    title: Push authorization for third_party/OrcaSlicer submodule fork
+    aliases: ["P12.2"]
+    area: Repo/Governance
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: blocked_user_decision
+
+  - id: CONFLICT-MARKERS
+    title: Conflict-marker feature (review P17.8)
+    aliases: ["P17.8"]
+    area: Prepare
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: blocked_external
+    notes: Classified Blocked in the 2026-09-04 review; blocker detail in the
+      ledger P17.8 entry.
+
+  - id: EXTERNAL-BLOCKERS
+    title: Standing external blockers (unchanged exemptions)
+    aliases: ["OpenVDB/SLA", "FFmpeg/WebRTC", "Paho-MQTT", "bambu_networking/MALL-01", "cr_tpms", "CGAL-5.4", "GCodeProcessor-conflict-channel"]
+    area: Platform
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: blocked_external
+    notes: >
+      OpenVDB (hollow/support-paint VDB paths), FFmpeg/WebRTC (camera),
+      Paho MQTT real-device, bambu_networking/Model Mall (MALL-01 locked),
+      cr_tpms (DLL removed at deploy), CGAL 5.4 (mesh boolean/cut surface
+      need 5.6+), GCodeProcessor collision/conflict channels. Maintain as
+      blocked_external; never count as open work.
+
+  # ── Resolved (keep for alias resolution; do not re-implement) ───────────
+  - id: PLATE-PRINT-IDENTITY
+    title: Stable monotonic non-reused per-plate print identity
+    aliases: ["P0.5.5b/stable-identity"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [288a09f]
+      tests:
+        - tests/PartPlateTests.cpp::platePrintIdentityLifecycle
+      last_verified: 2026-09-05
+    notes: PartPlateList assigns monotonic print identity; reorder/delete keep
+      survivor identity; new plates never reuse deleted identity.
+
+  - id: LOADPROJECT-GUI-THREAD-PUBLISH
+    title: loadProject publishes pending plate state + version on GUI thread
+    aliases: ["R-P1.K"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [8b87060, c6c33a3]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::loadProjectReplacesPlateSequenceState
+      last_verified: 2026-09-05
+
+  - id: RES-G04-THUMBNAIL-FAMILY
+    title: 3MF thumbnail family + SaveStrategy semantics
+    aliases: ["G-04"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [9aa1f94, 926f70c]
+      notes: Includes picking render variant (926f70c) and no_light variant.
+
+  - id: RES-G10-LEADING-ZEROS
+    title: G02/G03 + G00/G01 leading-zero parsing
+    aliases: ["G-10"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [8b87060]
+
+  - id: RES-G11-LOADFILE-WORKER
+    title: loadFile worker direct-write + undo snapshot temp file in install dir
+    aliases: ["G-11", "R-P1.K'"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [8b87060]
+      notes: Pending state now collected into worker-local containers and
+        published via queued lambda; snapshot scratch moved to QTemporaryDir
+        (ProjectServiceMock.cpp:5029).
+
+  - id: PREVIEW-GHOST-SHELL
+    title: Preview ghost object shells
+    aliases: ["P2.8.2", "P17.5"]
+    status: open
+    implementation: hybrid
+    parity: partial
+    verification: partial
+    availability: available
+    notes: >
+      Conflict resolved: P17.5 (2026-08-29) delivered the RHI ghost-shell
+      approximation (extruder coloring, sliced geometry, alpha 0.15->0.35;
+      upstream baseline set_shell_transparency alpha=0.15). P2.8.2's original
+      "[ ]" checkbox is superseded by this item. Remaining: full per-volume
+      shell lifecycle. A GPU-scale rewrite is NOT planned; approximation is
+      accepted until upstream parity work reopens it.
+    remaining:
+      - per-volume shell lifecycle (deferred)
+
+  - id: REVIEW-P1-RESIDUE
+    title: Unverified 2026-09-04 review P1 residue
+    aliases: ["R-P1.C'/deleteObject-mirror", "R-P1.E'/mock-disclosure"]
+    status: open
+    implementation: hybrid
+    parity: not_checked
+    verification: none
+    availability: available
+    notes: >
+      Split into two verifiable sub-items instead of trusting the 15.5
+      snapshot: (a) deleteObject mirror-translation check + splitObject leak
+      (double-free half fixed in 63bf0ad), (b) CloudServiceMock fake-login and
+      MonitorPage demo-mode user-visible disclosure.
+    remaining:
+      - Verify/fix deleteObject mirror translation.
+      - Add disclosure for cloud login fake-success and monitor demo mode.
