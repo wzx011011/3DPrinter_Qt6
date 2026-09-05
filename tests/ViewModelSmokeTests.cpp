@@ -263,6 +263,8 @@ private slots:
   void projectStoreWritesThumbnailFamily();
   // G-13: Detach flattens an inherited user preset (cut the inherits link).
   void detachFlattensInheritedUserPreset();
+  // G-13: save embeds the tier selections; loading reads them back.
+  void projectEmbedsAndReloadsSelectedPresets();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -4142,6 +4144,96 @@ void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
 void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
 {
   QSKIP("G-13 detach requires HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
+{
+  // G-13: saving a project embeds the tier selections as project presets
+  // (upstream save_project -> project_presets); loading the 3MF reads them
+  // back as an adopt payload.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("G13Embed"));
+  PresetServiceMock presets;
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("EmbPrint"),
+                                     {{QStringLiteral("layer_height"), 0.3}}));
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrinterCat,
+                                     QStringLiteral("EmbPrinter"),
+                                     {{QStringLiteral("bed_shape"), QStringLiteral("0,0,200,0,200,200,0,200")}}));
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::FilamentCat,
+                                     QStringLiteral("EmbFilament"),
+                                     {{QStringLiteral("filament_type"), QStringLiteral("PLA")}}));
+  presets.setSelectedPresetForCategory(PresetServiceMock::PrintCat, QStringLiteral("EmbPrint"));
+  presets.setSelectedPresetForCategory(PresetServiceMock::PrinterCat, QStringLiteral("EmbPrinter"));
+  presets.setSelectedPresetForCategory(PresetServiceMock::FilamentCat, QStringLiteral("EmbFilament"));
+
+  // Mirror BackendContext::collectProjectEmbeddedPresets (it cannot run here:
+  // no full BackendContext needed for the service round-trip).
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVariantList embed;
+  const int categories[] = {PresetServiceMock::PrintCat,
+                            PresetServiceMock::FilamentCat,
+                            PresetServiceMock::PrinterCat};
+  for (int category : categories) {
+    const QString name = presets.selectedPresetForCategory(category);
+    QVERIFY(!name.isEmpty());
+    QVariantMap entry;
+    entry.insert(QStringLiteral("category"), category);
+    entry.insert(QStringLiteral("name"), name);
+    QVariantMap values;
+    const auto presetValues = presets.presetValues(name);
+    for (auto it = presetValues.constBegin(); it != presetValues.constEnd(); ++it)
+      values.insert(it.key(), it.value());
+    entry.insert(QStringLiteral("values"), values);
+    embed.append(entry);
+  }
+  project.setProjectEmbeddedPresets(embed);
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.path() + QStringLiteral("/embed.3mf");
+  QVERIFY(project.saveProject(path));
+
+  ProjectServiceMock reload;
+  QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+  QVERIFY(reload.loadFile(path));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(loadSpy.takeFirst().at(0).toBool());
+
+  const QVariantList payload = reload.takeProjectEmbeddedPresets();
+  for (const QVariant &entryVar : payload) {
+    const QVariantMap entry = entryVar.toMap();
+    qInfo("[G13] embedded payload: category=%d name=%s values=%lld",
+          entry.value(QStringLiteral("category")).toInt(),
+          qUtf8Printable(entry.value(QStringLiteral("name")).toString()),
+          static_cast<long long>(entry.value(QStringLiteral("values")).toMap().size()));
+  }
+  QCOMPARE(payload.size(), 3);
+
+  // Adopt as BackendContext does on loadFinished.
+  PresetServiceMock adopted;
+  for (const QVariant &entryVar : payload) {
+    const QVariantMap entry = entryVar.toMap();
+    QHash<QString, QVariant> values;
+    const QVariantMap valuesMap = entry.value(QStringLiteral("values")).toMap();
+    for (auto it = valuesMap.constBegin(); it != valuesMap.constEnd(); ++it)
+      values.insert(it.key(), it.value());
+    QVERIFY(adopted.adoptProjectEmbeddedPreset(
+        entry.value(QStringLiteral("category")).toInt(),
+        entry.value(QStringLiteral("name")).toString(), values,
+        entry.value(QStringLiteral("inherits")).toString()));
+  }
+  QVERIFY(adopted.hasPreset(QStringLiteral("EmbPrint")));
+  QCOMPARE(adopted.presetValues(QStringLiteral("EmbPrint"))
+               .value(QStringLiteral("layer_height")).toDouble(), 0.3);
+}
+#else
+void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
+{
+  QSKIP("G-13 embedded presets require HAS_LIBSLIC3R");
 }
 #endif
 

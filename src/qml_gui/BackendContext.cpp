@@ -224,6 +224,25 @@ BackendContext::BackendContext(QObject *parent)
             // import). A non-empty result raises the RecenterDialog.
             if (success && editorViewModel_ && editorViewModel_->checkObjectsOutsideBed() > 0)
               emit recenterPromptRequested();
+            // G-13: adopt the in-project embedded presets carried by the
+            // loaded 3MF (upstream Preset::is_project_embedded semantics).
+            if (success && presetService_) {
+              const QVariantList embedded = projectService_->takeProjectEmbeddedPresets();
+              for (const QVariant &entryVar : embedded) {
+                const QVariantMap entry = entryVar.toMap();
+                QHash<QString, QVariant> values;
+                const QVariantMap valuesMap = entry.value(QStringLiteral("values")).toMap();
+                for (auto it = valuesMap.constBegin(); it != valuesMap.constEnd(); ++it)
+                  values.insert(it.key(), it.value());
+                presetService_->adoptProjectEmbeddedPreset(
+                    entry.value(QStringLiteral("category")).toInt(),
+                    entry.value(QStringLiteral("name")).toString(),
+                    values,
+                    entry.value(QStringLiteral("inherits")).toString());
+              }
+              if (!embedded.isEmpty() && configViewModel_)
+                configViewModel_->refreshPresetLists();
+            }
           });
   // Phase 237 (VIEW-04): forward the editor viewmodel's post-import prompts.
   // Zero-volume removal mirrors upstream Model::removed_objects_with_
@@ -1034,6 +1053,42 @@ bool BackendContext::topbarImportModel(const QString &filePath)
   return loaded;
 }
 
+QVariantList BackendContext::collectProjectEmbeddedPresets() const
+{
+  // G-13: the current tier selections ride the saved 3MF as project presets
+  // (upstream save_project -> project_presets). Values come from the preset
+  // service store; names from the tier selections.
+  QVariantList embed;
+  if (!presetService_ || !configViewModel_)
+    return embed;
+  struct Tier
+  {
+    int category;
+    QString (ConfigViewModel::*nameFn)() const;
+  };
+  const Tier tiers[] = {
+      {PresetServiceMock::PrinterCat, &ConfigViewModel::currentPrinterPreset},
+      {PresetServiceMock::FilamentCat, &ConfigViewModel::currentFilamentPreset},
+      {PresetServiceMock::PrintCat, &ConfigViewModel::currentPrintPreset},
+  };
+  for (const Tier &tier : tiers) {
+    const QString name = (configViewModel_->*tier.nameFn)();
+    if (name.isEmpty() || !presetService_->hasPreset(name))
+      continue;
+    QVariantMap entry;
+    entry.insert(QStringLiteral("category"), tier.category);
+    entry.insert(QStringLiteral("name"), name);
+    QVariantMap values;
+    const QHash<QString, QVariant> presetValues = presetService_->presetValues(name);
+    for (auto it = presetValues.constBegin(); it != presetValues.constEnd(); ++it)
+      values.insert(it.key(), it.value());
+    entry.insert(QStringLiteral("values"), values);
+    entry.insert(QStringLiteral("inherits"), presetService_->presetInherits(name));
+    embed.append(entry);
+  }
+  return embed;
+}
+
 bool BackendContext::topbarSaveProject()
 {
   const qint64 start = m_latencyClock.elapsed();
@@ -1056,8 +1111,12 @@ bool BackendContext::topbarSaveProject()
   // v5.16 (PSET2-06): overlay the preset selection state (tier preset ids +
   // per-extruder filament_presets vector) into the stored project config so
   // a reload restores it (upstream embeds the PresetBundle selections).
-  if (projectService_ && configViewModel_)
+  if (projectService_ && configViewModel_) {
     projectService_->setProjectConfigOverlay(configViewModel_->projectPresetConfigOverlay());
+    // G-13: embed the current tier selections (upstream save_project carries
+    // them as project presets in the archive).
+    projectService_->setProjectEmbeddedPresets(collectProjectEmbeddedPresets());
+  }
   if (projectService_ && !projectService_->saveProject(projectViewModel_->currentProjectPath()))
   {
     postError(projectService_->lastError(), 1);
@@ -1093,6 +1152,9 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   // v5.16 (PSET2-06): same preset-selection overlay as topbarSaveProject.
   if (projectService_ && configViewModel_)
     projectService_->setProjectConfigOverlay(configViewModel_->projectPresetConfigOverlay());
+  // G-13: embed the current tier selections as above.
+  if (projectService_)
+    projectService_->setProjectEmbeddedPresets(collectProjectEmbeddedPresets());
   if (projectService_ && !projectService_->saveProject(localPath))
   {
     postError(projectService_->lastError(), 1);

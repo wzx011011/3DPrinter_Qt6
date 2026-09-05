@@ -190,10 +190,17 @@ public:
   /// PresetBundle selections in the 3MF config; BackendContext pushes the
   /// ConfigViewModel state here before saveProject/saveProjectAs.
   void setProjectConfigOverlay(const QVariantMap &overlay);
+  /// G-13: tier selections to embed as project presets on the next save
+  /// (BackendContext pushes the current printer/filament/print selections
+  /// before saveProject/saveProjectAs, mirroring upstream save_project).
+  void setProjectEmbeddedPresets(const QVariantList &presets) { m_projectEmbeddedPresets = presets; }
   // v2.4 IO-02: 导出模型（STL/3MF/OBJ 格式）
   Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format);
   /// v2.4: 当前项目路径（saveProjectAs 后更新）
   QString currentProjectPath() const { return currentProjectPath_; }
+  /// G-13: embedded presets read from the last loaded 3MF; returns and
+  /// clears. Empty when the archive carried none (or it was not a project).
+  QVariantList takeProjectEmbeddedPresets();
 
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
@@ -996,6 +1003,13 @@ private:
   QList<QVector3D> assembleOffsets_;   // (x, y, z) in mm
   QList<QVector3D> assembleRotations_; // (x, y, z) in degrees
   QList<QVector3D> assembleScales_;    // (x, y, z) factors
+  /// G-13: see setProjectEmbeddedPresets. Consumed (and cleared-to-last-push)
+  /// by storeProject3mf.
+  QVariantList m_projectEmbeddedPresets;
+  /// G-13: embedded presets read back from the 3MF being loaded (worker
+  /// publishes them through the load-delivery lambda; BackendContext takes
+  /// and adopts them into the PresetServiceMock on loadFinished).
+  QVariantList m_projectEmbeddedPresetsFromLoad;
   int loadProgress_ = 0;
   bool loading_ = false;
 

@@ -892,6 +892,15 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
   return true;
 }
 
+void ConfigViewModel::refreshPresetLists()
+{
+  // G-13: re-read the service store (e.g. after in-project embedded presets
+  // from a loaded 3MF were adopted) and surface the change.
+  refreshPresetListModel();
+  mergePresetHierarchy();
+  emit stateChanged();
+}
+
 QString ConfigViewModel::presetInheritsParent(const QString &name) const
 {
   // G-13: parent preset name for the Detach flow (empty = standalone).

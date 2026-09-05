@@ -2284,6 +2284,28 @@ bool PresetServiceMock::detachPresetFromParent(int category, const QString &name
   return true;
 }
 
+bool PresetServiceMock::adoptProjectEmbeddedPreset(int category, const QString &name,
+                                                   const QHash<QString, QVariant> &values,
+                                                   const QString &inherits)
+{
+  // G-13: register an in-project embedded preset (from a saved 3MF).
+  // Memory-only registration: the values ride m_presetStore so the preset
+  // shows up in the lists and can be selected, but nothing is written to
+  // the user preset directory. A stored preset with the same name wins.
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty() || values.isEmpty())
+    return false;
+  if (m_presetStore.contains(trimmedName))
+    return false;
+
+  m_presetStore[trimmedName] = values;
+  registerPresetMetadata(trimmedName, category, false, false);
+  if (!inherits.isEmpty())
+    m_presetInherits[trimmedName] = inherits;
+  emit projectEmbeddedPresetsAdopted();
+  return true;
+}
+
 bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
   // v5.16 (PSET2-03): Transfer primitive — selected keys land on the target

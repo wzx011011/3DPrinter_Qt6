@@ -169,6 +169,9 @@ public:
   /// (upstream SavePresetDialog replace path). Keeps the current selection;
   /// fails for builtin/read-only targets.
   Q_INVOKABLE bool overwriteUserPreset(int category, const QString &name);
+  /// G-13: rebuild the preset lists from the service (fired after in-project
+  /// embedded presets from a loaded 3MF were adopted).
+  Q_INVOKABLE void refreshPresetLists();
   /// G-13: Detach — flatten an inherited USER preset (cut the inherits link,
   /// the resolved values become its own) and persist it. Keeps the current
   /// selection; fails for builtin/read-only targets.

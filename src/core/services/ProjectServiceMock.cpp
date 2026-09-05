@@ -1,5 +1,7 @@
 #include "ProjectServiceMock.h"
 
+#include "PresetServiceMock.h"  // G-13: project-embedded presets
+
 #include <QFileInfo>
 #include <QFile>
 #include <QDir>
@@ -20,6 +22,7 @@
 #include <QBuffer>
 #include <QThread>
 #include <algorithm>
+#include <map>
 #include <QMetaObject>
 #include <QPointer>
 #include <QCoreApplication>
@@ -33,6 +36,7 @@
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
+#include <libslic3r/Preset.hpp>  // G-13: project-embedded presets
 #include <libslic3r/Utils.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleMeshDeal.hpp>
@@ -73,6 +77,19 @@ using OwzxPlateFilamentStates = QHash<int, OwzxPlateFilamentState>;
 static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archivePath);
 static bool writeOwzxPlateFilamentStates(const QString &archivePath,
                                          const QByteArray &payload);
+
+// G-13: in-project embedded preset read back from a saved 3MF. Full
+// definition must precede the load worker (the delivery lambda captures the
+// list by value); the reader implementation sits below with the other
+// miniz-based helpers.
+struct ProjectEmbeddedPreset
+{
+  int category = -1;
+  QString name;
+  QString inherits;
+  QHash<QString, QVariant> values;
+};
+static QList<ProjectEmbeddedPreset> readProjectEmbeddedPresets(const QString &archivePath);
 #endif
 
 namespace
@@ -915,6 +932,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     QList<QImage> pendingThumbnails;
     QList<QList<int>> pendingFilamentMaps;
     QList<int> pendingFilamentMapMode;
+    QVariantList embeddedPayload;  // G-13: filled in the plate-data block below
 
     Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
       cancel = cancelFlag && cancelFlag->load();
@@ -1015,6 +1033,23 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
           const OwzxPlateFilamentStates persistedFilamentStates =
               readOwzxPlateFilamentStates(localPath);
+          // G-13: read the in-project embedded presets (writer side:
+          // storeProject3mf -> params.project_presets).
+          const QList<ProjectEmbeddedPreset> embeddedPresets =
+              readProjectEmbeddedPresets(localPath);
+          embeddedPayload.reserve(embeddedPresets.size());
+          for (const ProjectEmbeddedPreset &preset : embeddedPresets)
+          {
+            QVariantMap entry;
+            entry.insert(QStringLiteral("category"), preset.category);
+            entry.insert(QStringLiteral("name"), preset.name);
+            QVariantMap values;
+            for (auto it = preset.values.constBegin();
+                 it != preset.values.constEnd(); ++it)
+              values.insert(it.key(), it.value());
+            entry.insert(QStringLiteral("values"), values);
+            embeddedPayload.append(entry);
+          }
           if (!plateDataList.empty())
           {
             loadedPlateNames.reserve(loadedPlateCount);
@@ -1237,7 +1272,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -1256,6 +1291,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       receiver->pendingPlateThumbnails_ = pendingThumbnails;
       receiver->pendingPlateFilamentMaps_ = pendingFilamentMaps;
       receiver->pendingPlateFilamentMapMode_ = pendingFilamentMapMode;
+      // G-13: hand the embedded presets to BackendContext via take() on
+      // loadFinished (the same lambda emits loadFinished below).
+      receiver->m_projectEmbeddedPresetsFromLoad = embeddedPayload;
 
       receiver->loading_ = false;
       receiver->activeCancelFlag_.reset();
@@ -1607,6 +1645,15 @@ bool ProjectServiceMock::exportModel(const QString &filePath, const QString &for
 #else
     return false;
 #endif
+}
+
+QVariantList ProjectServiceMock::takeProjectEmbeddedPresets()
+{
+  // G-13: handed to BackendContext on loadFinished so the embedded presets
+  // are adopted into the PresetServiceMock (see readProjectEmbeddedPresets).
+  QVariantList out = m_projectEmbeddedPresetsFromLoad;
+  m_projectEmbeddedPresetsFromLoad.clear();
+  return out;
 }
 
 void ProjectServiceMock::cancelLoad()
@@ -8810,6 +8857,15 @@ bool ProjectServiceMock::setPlateThumbnailFromBase64(int plateIndex, const QStri
   if (!img.loadFromData(pngBytes, "PNG") || img.isNull()) return false;
 
   p->setThumbnail(img);
+  // G-04: the no_light variant is the SAME image by construction -- the Qt6
+  // RHI pipeline is unlit end to end (rhi_viewport.frag passes vertex color
+  // straight through, no lighting term), so the regular capture already IS
+  // the "no scene lighting" rendering upstream generates as a separate pass
+  // (Plater.cpp:12051-12063). Persisting it here keeps the no_light family
+  // populated in the saved 3MF without a second render pass. The picking
+  // variant needs per-object flat colors and stays unimplemented (see
+  // 15.7) -- it is saved as an invalid placeholder the writer skips.
+  p->setNoLightThumbnail(img);
   // NOTE: no projectChanged() here — this is a high-frequency capture-result
   // write; the caller (PreparePage.qml capture handler) is responsible for
   // triggering any UI refresh (plate cards re-bind on the next paint).
@@ -9803,6 +9859,98 @@ static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archiv
   return states;
 }
 
+// G-13: in-project embedded presets saved by upstream-compatible writers
+// (Metadata/{process,filament,machine}_settings_N.config, JSON dumped from a
+// DynamicPrintConfig). Qt6 reads them with mz directly -- Model::read_from_file
+// discards load_bbs_3mf's project_presets output parameter.
+static QHash<QString, QVariant> parseEmbeddedPresetJson(const QByteArray &payload,
+                                                        const QString &idKey,
+                                                        QString *nameOut)
+{
+  QHash<QString, QVariant> values;
+  const QJsonDocument document = QJsonDocument::fromJson(payload);
+  if (!document.isObject())
+    return values;
+  const QJsonObject root = document.object();
+  // G-13: filament_settings_id is a ConfigOptionStrings (JSON array of one
+  // name); the scalar *_settings_id keys are JSON strings. Accept both.
+  const QJsonValue idValue = root.value(idKey);
+  QString name = idValue.toString();
+  if (name.isEmpty() && idValue.isArray() && !idValue.toArray().isEmpty())
+    name = idValue.toArray().first().toString();
+  if (name.isEmpty())
+    return values;
+  static const QSet<QString> kHeaderKeys = {
+      QStringLiteral("version"), QStringLiteral("name"),
+      QStringLiteral("from"), QStringLiteral("is_custom")};
+  for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
+    if (kHeaderKeys.contains(it.key()))
+      continue;
+    const QJsonValue v = it.value();
+    if (v.isArray()) {
+      QStringList parts;
+      for (const QJsonValue &element : v.toArray())
+        parts << element.toVariant().toString();
+      values.insert(it.key(), parts);
+    } else {
+      values.insert(it.key(), v.toVariant());
+    }
+  }
+  *nameOut = name;
+  return values;
+}
+
+static QList<ProjectEmbeddedPreset> readProjectEmbeddedPresets(const QString &archivePath)
+{
+  QList<ProjectEmbeddedPreset> presets;
+  if (archivePath.isEmpty())
+    return presets;
+
+  struct EmbeddedEntry
+  {
+    const char *entry;
+    int category;
+    const char *idKey;
+  };
+  const EmbeddedEntry entries[] = {
+      {"Metadata/process_settings_1.config", PresetServiceMock::PrintCat, "print_settings_id"},
+      {"Metadata/filament_settings_1.config", PresetServiceMock::FilamentCat, "filament_settings_id"},
+      {"Metadata/machine_settings_1.config", PresetServiceMock::PrinterCat, "printer_settings_id"},
+  };
+
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return presets;
+
+  for (const EmbeddedEntry &entry : entries)
+  {
+    const int entryIndex =
+        mz_zip_reader_locate_file(&archive, entry.entry, nullptr, 0);
+    if (entryIndex < 0)
+      continue;
+    mz_zip_archive_file_stat stat;
+    if (!mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(entryIndex), &stat) ||
+        stat.m_uncomp_size > 4 * 1024 * 1024)
+      continue;
+    QByteArray payload(static_cast<int>(stat.m_uncomp_size), Qt::Uninitialized);
+    if (!mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(entryIndex),
+                                      payload.data(), payload.size(), 0))
+      continue;
+
+    ProjectEmbeddedPreset preset;
+    preset.category = entry.category;
+    QString name;
+    preset.values = parseEmbeddedPresetJson(payload, QString::fromLatin1(entry.idKey), &name);
+    preset.name = name;
+    if (!preset.name.isEmpty() && !preset.values.isEmpty())
+      presets.append(preset);
+  }
+
+  Slic3r::close_zip_reader(&archive);
+  return presets;
+}
+
 static bool writeOwzxPlateFilamentStates(const QString &archivePath,
                                          const QByteArray &payload)
 {
@@ -10069,6 +10217,82 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
       | static_cast<unsigned int>(Slic3r::SaveStrategy::FullPathSources)
       | static_cast<unsigned int>(Slic3r::SaveStrategy::ShareMesh)
       | static_cast<unsigned int>(Slic3r::SaveStrategy::SplitModel));
+
+  // G-13 (upstream save_project, Plater.cpp:12125-12143): embed the tier
+  // selections pushed by BackendContext (setProjectEmbeddedPresets) as
+  // project presets. The writer serializes each Preset::config to JSON under
+  // the model's backup path and archives it as
+  // Metadata/{process,filament,machine}_settings_N.config; the reader names
+  // the preset from the *_settings_id key, which is forced to the preset
+  // name here. Same push-before-save pattern as setProjectConfigOverlay
+  // (PSET2-06).
+  std::vector<Slic3r::Preset *> projectPresets;
+  QTemporaryDir embedDir;
+  if (!m_projectEmbeddedPresets.isEmpty() && embedDir.isValid())
+  {
+    const std::map<int, Slic3r::Preset::Type> tierTypes = {
+      {PresetServiceMock::PrinterCat,  Slic3r::Preset::TYPE_PRINTER},
+      {PresetServiceMock::FilamentCat, Slic3r::Preset::TYPE_FILAMENT},
+      {PresetServiceMock::PrintCat,    Slic3r::Preset::TYPE_PRINT},
+    };
+    const std::map<int, const char *> idKeys = {
+      {PresetServiceMock::PrintCat,    "print_settings_id"},
+      {PresetServiceMock::FilamentCat, "filament_settings_id"},
+      {PresetServiceMock::PrinterCat,  "printer_settings_id"},
+    };
+    auto variantToString = [](const QVariant &value) -> QString {
+      if (value.type() == QVariant::Double)
+        return QString::number(value.toDouble(), 'g', 17);
+      return value.toString();
+    };
+    for (const QVariant &entryVar : m_projectEmbeddedPresets) {
+      const QVariantMap entry = entryVar.toMap();
+      const int category = entry.value(QStringLiteral("category")).toInt();
+      const QString name = entry.value(QStringLiteral("name")).toString();
+      const QVariantMap valuesMap = entry.value(QStringLiteral("values")).toMap();
+      const auto typeIt = tierTypes.find(category);
+      const auto idIt = idKeys.find(category);
+      if (typeIt == tierTypes.end() || idIt == idKeys.end() ||
+          name.isEmpty() || valuesMap.isEmpty())
+        continue;
+      auto *preset = new Slic3r::Preset(typeIt->second, name.toStdString(), false);
+      preset->loaded = true;
+      preset->is_project_embedded = true;
+      for (auto it = valuesMap.constBegin(); it != valuesMap.constEnd(); ++it) {
+        try {
+          const QVariant v = it.value();
+          if (v.canConvert<QVariantList>()) {
+            QStringList parts;
+            for (const QVariant &element : v.toList())
+              parts << variantToString(element);
+            const std::string keyStr = it.key().toStdString();
+            const std::string valueStr = parts.join(QStringLiteral(",")).toStdString();
+            preset->config.set_deserialize_strict(keyStr, valueStr);
+          } else {
+            const std::string keyStr = it.key().toStdString();
+            const std::string valueStr = variantToString(v).toStdString();
+            preset->config.set_deserialize_strict(keyStr, valueStr);
+          }
+        } catch (...) {
+          // Unknown key for this build's schema -- skip it (the embedded
+          // preset is a convenience snapshot, not a source of truth).
+        }
+      }
+      try {
+        // The reader names the preset from this key -- force it to match.
+        const std::string idKeyStr(idIt->second);
+        const std::string nameStr = name.toStdString();
+        preset->config.set_deserialize_strict(idKeyStr, nameStr);
+      } catch (...) {}
+      projectPresets.push_back(preset);
+    }
+    if (!projectPresets.empty()) {
+      const QString embedPath = embedDir.path();
+      QDir().mkpath(embedPath);
+      model_->set_backup_path(QDir::toNativeSeparators(embedPath).toStdString());
+      params.project_presets = projectPresets;
+    }
+  }
   // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
   // WITHOUT a default member initializer and the empty StoreParams() {}
   // constructor does NOT zero it, so an unassigned params.config is a WILD
@@ -10194,6 +10418,13 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
 
   // Free the heap PlateData objects after store (success or failure).
   Slic3r::release_PlateData_list(plateData);
+  // G-13: the writer borrowed the preset pointers and the backup path; both
+  // are release-time bookkeeping only.
+  for (Slic3r::Preset *preset : projectPresets)
+    delete preset;
+  projectPresets.clear();
+  if (model_)
+    model_->set_backup_path("");
 
   if (!ok)
   {

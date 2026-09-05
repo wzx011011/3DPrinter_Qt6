@@ -469,6 +469,9 @@ public:
   Q_INVOKABLE bool topbarImportConfigs(const QString &filePath);
   Q_INVOKABLE bool topbarSaveProject();
   Q_INVOKABLE bool topbarSaveProjectAs(const QString &filePath);
+  /// G-13: the current tier selections as an embeddable payload
+  /// (setProjectEmbeddedPresets) -- see topbarSaveProject.
+  QVariantList collectProjectEmbeddedPresets() const;
   Q_INVOKABLE int beginLatency(const QString &operation, const QString &detail = QString());
   Q_INVOKABLE void endLatency(int token);
   Q_INVOKABLE void recordLatency(const QString &operation, int elapsedMs, const QString &detail = QString());

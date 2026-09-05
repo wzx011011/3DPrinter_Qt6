@@ -11,6 +11,11 @@ class PresetServiceMock final : public QObject
 {
   Q_OBJECT
 
+signals:
+  /// G-13: emitted after in-project embedded presets from a loaded 3MF were
+  /// registered, so the preset lists refresh.
+  void projectEmbeddedPresetsAdopted();
+
 public:
   explicit PresetServiceMock(QObject *parent = nullptr);
 
@@ -129,6 +134,13 @@ public:
   /// are not). Refuses when the name is unknown, builtin, or read-only.
   bool overwriteUserPreset(int category, const QString &name,
                            const QHash<QString, QVariant> &values);
+  /// G-13: register an in-project embedded preset loaded from a saved 3MF
+  /// (Metadata/*_settings_1.config). Memory-only: never written to the user
+  /// library; skipped when a stored preset with the same name already exists
+  /// (the user library takes precedence).
+  bool adoptProjectEmbeddedPreset(int category, const QString &name,
+                                  const QHash<QString, QVariant> &values,
+                                  const QString &inherits);
   /// G-13: Detach — cut a USER preset's inheritance link, flattening the
   /// parent-resolved chain overlaid with `values` into a standalone preset
   /// (upstream "detach from system preset" flow). The name and selection are

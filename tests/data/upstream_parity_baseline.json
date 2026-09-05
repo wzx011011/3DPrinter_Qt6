@@ -1,0 +1,197 @@
+{
+  "comment": "P7.2 upstream-parity regression baseline. Each anchor maps one upstream behavior point (source of truth) to its Qt6 counterpart and the automated test that locks it. upstreamParityBaselineEntriesResolveInSource (QmlUiAuditTests) verifies every entry: the Qt counterpart file must contain qtSymbol, and lockTest must exist in the named test executable source. Extend this list whenever a new upstream behavior is migrated; never delete an entry without removing the corresponding behavior.",
+  "anchors": [
+    {
+      "area": "Slice result panel",
+      "upstream": "src/slic3r/GUI/SliceInfoPanel.cpp get_bbl_time_dhms (compact NdNhNmNs prediction)",
+      "qtFile": "src/core/services/SliceService.cpp",
+      "qtSymbol": "formatDurationLabel",
+      "lockTest": "test_slice_produces_gcode_file",
+      "lockTestFile": "tests/E2EWorkflowTests.cpp"
+    },
+    {
+      "area": "Slice result panel",
+      "upstream": "src/slic3r/GUI/SliceInfoPanel.cpp:319 weight format %.2fg",
+      "qtFile": "src/core/services/SliceService.cpp",
+      "qtSymbol": "%.2fg",
+      "lockTest": "test_slice_produces_gcode_file",
+      "lockTestFile": "tests/E2EWorkflowTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/libslic3r/TriangleSelector.cpp:234 select_patch brush sweep",
+      "qtFile": "src/core/rendering/PaintEngine.cpp",
+      "qtSymbol": "select_patch",
+      "lockTest": "paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/libslic3r/TriangleSelector.cpp:319 seed_fill_select_triangles",
+      "qtFile": "src/core/rendering/PaintEngine.cpp",
+      "qtSymbol": "seed_fill_select_triangles",
+      "lockTest": "seedFillStagedRegionReadableBeforeCommit",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:1101 get_clipping_plane_in_volume_coordinates",
+      "qtFile": "src/core/viewmodels/EditorViewModel.cpp",
+      "qtSymbol": "buildVolumeClippingPlane",
+      "lockTest": "paintEngineClippingPlaneLimitsBrushToVisibleSide",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:726 HEIGHT_RANGE brush dispatch",
+      "qtFile": "src/core/rendering/PaintEngine.cpp",
+      "qtSymbol": "paintHeightRangeAt",
+      "lockTest": "paintHeightRangeGapFragmentsAndEdgeDetectionMatchUpstream",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "MMU gizmo",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp:640 edge detection off forces seed angle -1",
+      "qtFile": "src/core/viewmodels/EditorViewModel.cpp",
+      "qtSymbol": "effectiveSeedFillAngle",
+      "lockTest": "paintHeightRangeGapFragmentsAndEdgeDetectionMatchUpstream",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:1234 TrianglePatch::is_fragment gap-area threshold",
+      "qtFile": "src/core/rendering/PaintEngine.cpp",
+      "qtSymbol": "gapFragmentsIts",
+      "lockTest": "paintHeightRangeGapFragmentsAndEdgeDetectionMatchUpstream",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "FDM supports preview",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp:897 support_fills extrusion preview",
+      "qtFile": "src/core/services/SliceService.cpp",
+      "qtSymbol": "support_fills.entities",
+      "lockTest": "supportPreviewPipePacksSegmentsAndClearsOnInvalid",
+      "lockTestFile": "tests/E2EWorkflowTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp:247 per-gizmo m_triangle_selectors (kind isolation)",
+      "qtFile": "src/core/services/ProjectServiceMock.h",
+      "qtSymbol": "PaintKind",
+      "lockTest": "paintKindsKeepSeparateSelectors",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp:700 update_model_object mmu_segmentation_facets write-back",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "clearPaintOnModelVolume",
+      "lockTest": "mmuKindPaintWritesMmuAnnotationOnly",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Paint gizmos",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp FacetsAnnotation write-back via update_model_object",
+      "qtFile": "src/core/viewmodels/EditorViewModel.cpp",
+      "qtSymbol": "writePaintToModelVolume",
+      "lockTest": "mmuKindPaintWritesMmuAnnotationOnly",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Mesh boolean",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoMeshBoolean.cpp:347 MeshBoolean::mcut::make_boolean",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "make_boolean",
+      "lockTest": "meshBooleanVolumeLevelReplacesSourceVolume",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Face detector",
+      "upstream": "src/libslic3r/FaceDetector.cpp detect_exterior_face ray grid",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "FaceDetector",
+      "lockTest": "faceDetectorRecognizesAllCubeFacetsAsExterior",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Filament map",
+      "upstream": "src/libslic3r/bbs_3mf.hpp:98 PlateData::filament_maps + Print::get_filament_maps",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "setPlateFilamentMap",
+      "lockTest": "manualFilamentMapBridgeRoundTripsToService",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Process tab",
+      "upstream": "src/libslic3r/Preset.cpp s_Preset_print_options / Preset::print_options",
+      "qtFile": "src/qml_gui/Models/ConfigOptionModel.cpp",
+      "qtSymbol": "auditProcessManifest",
+      "lockTest": "sourceMappedProcessHierarchyMatchesTabPrint",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Printer tab",
+      "upstream": "src/libslic3r/Preset.cpp:980 Preset::printer_options",
+      "qtFile": "src/qml_gui/Models/ConfigOptionModel.cpp",
+      "qtSymbol": "auditMachineManifest",
+      "lockTest": "configTierManifestAuditsCoverUpstreamPresetOptions",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Filament tab",
+      "upstream": "src/libslic3r/Preset.cpp:971 Preset::filament_options",
+      "qtFile": "src/qml_gui/Models/ConfigOptionModel.cpp",
+      "qtSymbol": "auditFilamentManifest",
+      "lockTest": "configTierManifestAuditsCoverUpstreamPresetOptions",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Arrange",
+      "upstream": "src/slic3r/GUI/Plater.cpp on_arrange -> libnest2d arrange_objects",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "arrange_objects",
+      "lockTest": "arrangeDistributesAcrossPlates",
+      "lockTestFile": "tests/PartPlateTests.cpp"
+    },
+    {
+      "area": "Cut gizmo",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmoCut.cpp perform_cut -> cut_mesh",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "cut_mesh",
+      "lockTest": "testCutPlaneGeometry",
+      "lockTestFile": "tests/GizmoGeometryTests.cpp"
+    },
+    {
+      "area": "Plate filament map mode",
+      "upstream": "src/slic3r/GUI/PartPlate.cpp PartPlate::setFilamentMapMode",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "setFilamentMapMode",
+      "lockTest": "manualFilamentMapBridgeRoundTripsToService",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    },
+    {
+      "area": "Notifications",
+      "upstream": "src/slic3r/GUI/NotificationManager.hpp push warning/error notifications",
+      "qtFile": "src/qml_gui/BackendContext.cpp",
+      "qtSymbol": "postError",
+      "lockTest": "gizmoDepthAndNotificationSourceAudit",
+      "lockTestFile": "tests/QmlUiAuditTests.cpp"
+    },
+    {
+      "area": "RHI cut plane",
+      "upstream": "src/slic3r/GUI/GLCanvas3D.cpp canvas-owned cut-plane rendering",
+      "qtFile": "src/qml_gui/Renderer/RhiViewportRenderer.cpp",
+      "qtSymbol": "renderCutPlane",
+      "lockTest": "rhiCutPlaneAndWipeTowerStayCppOwned",
+      "lockTestFile": "tests/QmlUiAuditTests.cpp"
+    },
+    {
+      "area": "Clipper radius",
+      "upstream": "src/slic3r/GUI/Gizmos/GLGizmosCommon.cpp:272 instance_bounding_box radius",
+      "qtFile": "src/core/services/ProjectServiceMock.cpp",
+      "qtSymbol": "instance_bounding_box",
+      "lockTest": "paintEngineClippingPlaneLimitsBrushToVisibleSide",
+      "lockTestFile": "tests/ViewModelSmokeTests.cpp"
+    }
+  ]
+}
