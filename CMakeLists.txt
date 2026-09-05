@@ -436,7 +436,12 @@ if(OWZX_QML_GUI)
     )
     if(MSVC)
         target_compile_options(OWzxSlicer PRIVATE /Zi)
-        target_link_options(OWzxSlicer PRIVATE /DEBUG:FULL)
+        # G-12 followup (2026-09-05): the full PDB is ~1.1 GB and E: has been
+        # chronically near capacity (the verify script deletes PDBs after every
+        # run for exactly this reason). FASTLINK keeps local debugging working
+        # while shrinking the PDB by ~10x; revert to /DEBUG:FULL if a portable
+        # PDB is ever needed.
+        target_link_options(OWzxSlicer PRIVATE /DEBUG:FASTLINK)
     # v2.8 P2-C: libcurl(OpenSSL) 与 paho-mqtt 都带静态 SHA1 实现 → LNK2005。
     # /FORCE:MULTIPLE 让链接器取第一个定义（paho 的 SHA1 先链接），忽略后续重复。
     target_link_options(OWzxSlicer PRIVATE /FORCE:MULTIPLE)

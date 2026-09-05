@@ -4109,13 +4109,18 @@ void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
   // G-13: Detach (upstream "detach from system preset") cuts the inherits
   // link of a USER preset, keeping the resolved values as its own.
   PresetServiceMock presets;
+  // Base parent first: a bare service instance carries no bundled presets.
+  QHash<QString, QVariant> base;
+  base.insert(QStringLiteral("layer_height"), 0.2);
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("BaseProfile"), base));
   QHash<QString, QVariant> values;
-  values.insert(QStringLiteral("layer_height"), 0.2);
+  values.insert(QStringLiteral("layer_height"), 0.3);
   QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
                                      QStringLiteral("MyProfile"), values,
-                                     QStringLiteral("Default")));
+                                     QStringLiteral("BaseProfile")));
   QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")),
-           QStringLiteral("Default"));
+           QStringLiteral("BaseProfile"));
 
   QVERIFY(presets.detachPresetFromParent(PresetServiceMock::PrintCat,
                                          QStringLiteral("MyProfile"), values));
