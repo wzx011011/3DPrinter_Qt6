@@ -28,6 +28,7 @@
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Point.hpp>
 #include <libslic3r/TriangleMesh.hpp>  // its_make_cube (Phase 113 raycaster test)
+#include <libslic3r/PrintConfig.hpp>   // TimelapseType (PLATE batch 5 arrange gates)
 #include "core/rendering/MeshRaycaster.h"
 #include "core/rendering/SceneRaycaster.h"
 #include "core/rendering/MeasureEngine.h"  // Phase 114 (MEASURE-03)
@@ -65,10 +66,15 @@ class PartPlateTests final : public QObject {
   // ── ARRANGE-02/03 integration tests (through arrangeObjects) ────────────
 #ifdef HAS_LIBSLIC3R
   void arrangeDistributesAcrossPlates();
+  // PLATE-PRINT-LIFECYCLE (batch 5): arrange must keep objects off the fixed
+  // wipe-tower rectangle (ArrangeJob.cpp:337-359, PartPlate.cpp:1739-1777)
+  // and off the bed_exclude_area rectangles (PartPlate.cpp:4586-4623).
+  void arrangeAvoidsWipeTowerAndExcludeAreas();
   void lockedPlateExclusion();
   void allLockedReturnsFalse();
 #else
   void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void arrangeAvoidsWipeTowerAndExcludeAreas() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void lockedPlateExclusion() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void allLockedReturnsFalse() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
@@ -414,6 +420,69 @@ void PartPlateTests::arrangeDistributesAcrossPlates() {
   QVERIFY2(service.plateObjectIndices(2).contains(2),
            "object 2 (x=240) should be on plate 2");
   QVERIFY2(spy.count() >= 1, "plateDataLoaded should fire after rebuild");
+}
+
+void PartPlateTests::arrangeAvoidsWipeTowerAndExcludeAreas() {
+#ifdef HAS_LIBSLIC3R
+  // PLATE-PRINT-LIFECYCLE (batch 5): the two-list arrange feed must keep
+  // object centers off the fixed wipe-tower rectangle (smooth timelapse
+  // forces the tower, ArrangeJob.cpp:287-292; geometry PartPlate.cpp:1739-
+  // 1777) and off the bed_exclude_area rectangles (PartPlate.cpp:4586-4623).
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  // 12 sizeable objects so the packed rows sweep across the bed middle,
+  // where both rectangles sit.
+  while (service.modelCount() < 12)
+    QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  for (int i = 0; i < service.modelCount(); ++i)
+    QVERIFY(service.setObjectScale(i, 12.0f, 12.0f, 12.0f));
+  service.setPlateSize(220, 220, 0);
+
+  // Prime tower at the bed centre. The hotend is single-extruder, so the
+  // smooth-timelapse gate is what makes the tower appear (upstream
+  // ArrangeJob.cpp:287-292). Tower: x=110..170, y=110..130 (depth 20 from
+  // the min-depth table at the ~12mm object height).
+  auto *plateCfg = &service.plateListMut()->plate(0)->config();
+  if (auto *op = plateCfg->option<Slic3r::ConfigOptionBool>("enable_prime_tower", true))
+    op->value = true;
+  if (auto *op = plateCfg->option<Slic3r::ConfigOptionEnum<Slic3r::TimelapseType>>("timelapse_type", true))
+    op->setInt(int(Slic3r::TimelapseType::tlSmooth));
+  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloats>("wipe_tower_x", true))
+    op->values = {110.0};
+  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloats>("wipe_tower_y", true))
+    op->values = {110.0};
+  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloat>("prime_tower_width", true))
+    op->value = 60.0f;
+  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloat>("prime_tower_brim_width", true))
+    op->value = 0.0f;
+
+  // Bed exclude rectangle over the lower-left corner (0,0)-(60,60).
+  service.plateListMut()->setExcludeAreas(
+      {{0.0, 0.0}, {60.0, 0.0}, {60.0, 60.0}, {0.0, 60.0}});
+
+  // Explicit 4-corner bed polygon: the arrange parser needs >= 3 points.
+  QVERIFY2(service.arrangeObjects(5.0f, false, false,
+                                  QStringLiteral("0,0,220,0,220,220,0,220")),
+           "arrange must succeed with the fixed obstacles present");
+
+  // GL(X,Z,Y) -> slic3r(X,Y,Z): slice x = pos.x(), slice y = pos.z().
+  for (int i = 0; i < service.modelCount(); ++i)
+  {
+    const QVector3D pos = service.objectPosition(i);
+    const double sx = double(pos.x());
+    const double sy = double(pos.z());
+    QVERIFY2(!(sx >= 110.0 && sx <= 170.0 && sy >= 110.0 && sy <= 130.0),
+             qPrintable(QStringLiteral("object %1 at (%2,%3) must avoid the "
+                                      "wipe-tower rect")
+                            .arg(i).arg(sx).arg(sy)));
+    QVERIFY2(!(sx >= 0.0 && sx <= 60.0 && sy >= 0.0 && sy <= 60.0),
+             qPrintable(QStringLiteral("object %1 at (%2,%3) must avoid the "
+                                      "excluded-area rect")
+                            .arg(i).arg(sx).arg(sy)));
+  }
+#endif
 }
 
 void PartPlateTests::lockedPlateExclusion() {

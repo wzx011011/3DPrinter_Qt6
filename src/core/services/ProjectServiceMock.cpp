@@ -30,6 +30,7 @@
 #include <QtConcurrent/QtConcurrentRun>
 #include <limits>
 #include <cstdint>
+#include <set>
 #include <unordered_set>
 #include <QtMath>
 #include <cmath>
@@ -51,6 +52,8 @@
 #include <libslic3r/TextConfiguration.hpp>
 #include <libslic3r/Orient.hpp>
 #include <libslic3r/ModelArrange.hpp>
+#include <libslic3r/Arrange.hpp>
+#include <libslic3r/GCode/WipeTower.hpp>
 #include <libslic3r/TriangleMeshSlicer.hpp>
 #include <libslic3r/MeshBoolean.hpp>
 #include <libslic3r/Geometry.hpp>
@@ -4314,6 +4317,201 @@ bool ProjectServiceMock::orientObject(int objectIndex)
 #endif
 }
 
+#ifdef HAS_LIBSLIC3R
+namespace {
+// PLATE-PRINT-LIFECYCLE (batch 5): wipe-tower min-depth table lookup, ported
+// verbatim from PartPlate::estimate_wipe_tower_size (PartPlate.cpp:1701-1734)
+// over WipeTower::min_depth_per_height ({100mm->20mm, 250mm->40mm}).
+float wipeTowerMinDepthForHeight(float maxHeight)
+{
+  float minDepth = 0.f;
+  auto iter = Slic3r::WipeTower::min_depth_per_height.begin();
+  while (iter != Slic3r::WipeTower::min_depth_per_height.end())
+  {
+    const auto curr = *iter;
+    // Tower height below the first table entry uses that entry's min depth.
+    if (curr.first >= maxHeight)
+    {
+      minDepth = curr.second;
+      break;
+    }
+    ++iter;
+    // Last entry reached: use its min depth.
+    if (iter == Slic3r::WipeTower::min_depth_per_height.end())
+    {
+      minDepth = curr.second;
+      break;
+    }
+    // Between two entries: linear interpolation.
+    const auto next = *iter;
+    if (next.first > maxHeight)
+    {
+      const float heightDiff = next.first - curr.first;
+      const float depthDiff = next.second - curr.second;
+      minDepth = curr.second + (maxHeight - curr.first) / heightDiff * depthDiff;
+      break;
+    }
+  }
+  return minDepth;
+}
+
+// Distinct extruder ids used by the plate's member volumes (the core of
+// upstream PartPlate::get_extruders, PartPlate.cpp:1355+ -- volume extruder
+// ids, no custom-gcode plates in the Qt6 model).
+std::set<int> collectPlateExtruders(const Slic3r::Model *model, const OWzx::PartPlate *plate)
+{
+  std::set<int> ids;
+  if (!model || !plate)
+    return ids;
+  for (const auto &pr : plate->objToInstanceSet())
+  {
+    if (pr.first < 0 || size_t(pr.first) >= model->objects.size())
+      continue;
+    const auto *obj = model->objects[size_t(pr.first)];
+    if (!obj)
+      continue;
+    for (const auto *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      // ModelConfig::option is the plain pointer accessor (not a template).
+      const auto *extOpt = static_cast<const Slic3r::ConfigOptionInt *>(
+          vol->config.option("extruder"));
+      const int ext = extOpt ? int(extOpt->getInt()) : 0;
+      ids.emplace(ext > 0 ? ext : 1);
+    }
+  }
+  return ids;
+}
+
+// Upstream PartPlateList::preprocess_exclude_areas (PartPlate.cpp:4586-4623):
+// the raw config-space exclude points are grouped into 4-point rectangles and
+// each rectangle becomes one virtual ArrangePolygon PER plate (bed_idx = j).
+void appendArrangeExcludeAreas(const OWzx::PartPlateList *plateList,
+                               Slic3r::ArrangePolygons &unselected)
+{
+  if (!plateList)
+    return;
+  const auto &raw = plateList->excludeAreas();
+  const int plateCount = plateList->plateCount();
+  for (size_t i = 0; i + 3 < raw.size(); i += 4)
+  {
+    double minX = raw[i].x(), minY = raw[i].y();
+    double maxX = minX, maxY = minY;
+    for (size_t k = 1; k < 4; ++k)
+    {
+      minX = std::min(minX, raw[i + k].x());
+      maxX = std::max(maxX, raw[i + k].x());
+      minY = std::min(minY, raw[i + k].y());
+      maxY = std::max(maxY, raw[i + k].y());
+    }
+    const Slic3r::Polygon rect({
+        {Slic3r::scaled(minX), Slic3r::scaled(minY)},
+        {Slic3r::scaled(maxX), Slic3r::scaled(minY)},
+        {Slic3r::scaled(maxX), Slic3r::scaled(maxY)},
+        {Slic3r::scaled(minX), Slic3r::scaled(maxY)}});
+    for (int j = 0; j < plateCount; ++j)
+    {
+      Slic3r::arrangement::ArrangePolygon ap;
+      ap.poly.contour = rect;
+      ap.translation = Slic3r::Vec2crd(0, 0);
+      ap.rotation = 0.0f;
+      ap.is_virt_object = true;
+      ap.bed_idx = j;
+      ap.height = 1;
+      ap.name = "ExcludedRegion" + std::to_string(i / 4);
+      unselected.emplace_back(std::move(ap));
+    }
+  }
+}
+
+// Upstream ArrangeJob::prepare_wipe_tower + PartPlate::estimate_wipe_tower_polygon
+// (ArrangeJob.cpp:279-359, PartPlate.cpp:1739-1777): per UNLOCKED plate, when
+// the prime tower is enabled, sequence print is by-layer, and the tower is
+// needed (smooth timelapse or >1 extruder on the plate -- a single-extruder
+// tower has zero depth upstream), emit a fixed wipe-tower rectangle at
+// wipe_tower_x/y clamped inside the plate, inflated by the tower brim.
+// The paint-color / bed-temperature gates are not observable from the service
+// layer; the extruder-count gate covers the dominant multi-material case.
+void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
+                             const Slic3r::Model *model,
+                             Slic3r::ArrangePolygons &unselected)
+{
+  constexpr float kWipeTowerMargin = 1.f;  // libslic3r.h:88 WIPE_TOWER_MARGIN
+  if (!plateList || !model)
+    return;
+  const int plateCount = plateList->plateCount();
+  int bedidUnlock = 0;
+  for (int bedid = 0; bedid < plateCount; ++bedid)
+  {
+    const OWzx::PartPlate *pl = plateList->plate(bedid);
+    if (!pl || pl->isLocked())
+      continue;  // locked beds keep their items fixed and get no virtual bed
+    const auto &cfg = pl->config();
+    bool towerEnabled = false;
+    if (const auto *op = cfg.option("enable_prime_tower"))
+      towerEnabled = op->getBool();
+    bool smoothTimelapse = false;
+    if (const auto *op = cfg.option("timelapse_type"))
+      smoothTimelapse = op->getInt() == int(Slic3r::TimelapseType::tlSmooth);
+    const bool seqPrint = pl->printSequence() != 0;  // 0 = by layer
+    const std::set<int> extruders = collectPlateExtruders(model, pl);
+    const bool needTower = towerEnabled && !seqPrint
+        && (smoothTimelapse || extruders.size() > 1);
+    if (needTower)
+    {
+      const auto *xOpt = cfg.option<Slic3r::ConfigOptionFloats>("wipe_tower_x");
+      const auto *yOpt = cfg.option<Slic3r::ConfigOptionFloats>("wipe_tower_y");
+      const auto *wOpt = cfg.option<Slic3r::ConfigOptionFloat>("prime_tower_width");
+      const auto *vOpt = cfg.option<Slic3r::ConfigOptionFloat>("prime_volume");
+      const auto *brimOpt = cfg.option<Slic3r::ConfigOptionFloat>("prime_tower_brim_width");
+      if (xOpt && yOpt && !xOpt->values.empty() && !yOpt->values.empty())
+      {
+        const float x0 = float(xOpt->get_at(size_t(bedid)));
+        const float y0 = float(yOpt->get_at(size_t(bedid)));
+        const float w = wOpt ? wOpt->value : 60.f;
+        const double primeVolume = vOpt ? double(vOpt->value) : 0.0;
+        const float brim = brimOpt ? brimOpt->value : 0.f;
+        // Max member-object height (bounding_box_exact, upstream object loop).
+        double maxHeight = 0.0;
+        for (const auto &pr : pl->objToInstanceSet())
+        {
+          if (pr.first < 0 || size_t(pr.first) >= model->objects.size())
+            continue;
+          const auto *obj = model->objects[size_t(pr.first)];
+          if (!obj)
+            continue;
+          maxHeight = std::max(obj->bounding_box_exact().size().z(), maxHeight);
+        }
+        double depth = extruders.size() <= 1 ? 0.0 : primeVolume;
+        if (smoothTimelapse || depth > 1e-6)  // upstream EPSILON
+          depth = std::max<double>(wipeTowerMinDepthForHeight(float(maxHeight)), depth);
+        const float margin = kWipeTowerMargin + brim;
+        const float x = std::clamp(x0, margin,
+                                   float(pl->width()) - w - margin - brim);
+        const float y = std::clamp(y0, margin,
+                                   float(pl->depth()) - float(depth) - margin - brim);
+        Slic3r::arrangement::ArrangePolygon ap;
+        ap.poly.contour = Slic3r::Polygon({
+            {Slic3r::scaled(x - brim), Slic3r::scaled(y - brim)},
+            {Slic3r::scaled(x + w + brim), Slic3r::scaled(y - brim)},
+            {Slic3r::scaled(x + w + brim), Slic3r::scaled(y + float(depth) + brim)},
+            {Slic3r::scaled(x - brim), Slic3r::scaled(y + float(depth) + brim)}});
+        ap.bed_idx = bedidUnlock;
+        ap.setter = nullptr;  // do not move the wipe tower
+        ap.translation = Slic3r::Vec2crd(0, 0);
+        ap.name = "WipeTower";
+        ap.is_virt_object = true;
+        ap.is_wipe_tower = true;
+        unselected.emplace_back(std::move(ap));
+      }
+    }
+    ++bedidUnlock;
+  }
+}
+}  // namespace
+#endif  // HAS_LIBSLIC3R
+
 bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                           const QString &printableArea)
 {
@@ -4390,7 +4588,19 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
         // branches) deferred per CONTEXT.
         // 传入容错 vfn：失败 item 不抛，arrange_objects 返回 false 表示有 item 未摆放。
         // 即使部分 item 未摆放，已成功摆放的 item 坐标已被 apply_arrange_polys 写回模型实例。
-        const bool arranged = Slic3r::arrange_objects(*model_, bed_bb, params, tolerantVfn);
+        // PLATE-PRINT-LIFECYCLE (batch 5): mirror upstream ArrangeJob by feeding
+        // the fixed virtual objects (wipe towers + exclude areas) into arrange
+        // through the two-list overload instead of the no-excludes
+        // arrange_objects convenience wrapper (ArrangeJob.cpp:248-251, :337-359;
+        // PartPlate.cpp:4586, :1739-1777).
+        Slic3r::ModelInstancePtrs arrangeInstances;
+        auto arrangeInput = Slic3r::get_arrange_polys(*model_, arrangeInstances);
+        Slic3r::ArrangePolygons fixedObstacles;
+        appendArrangeExcludeAreas(m_plateList.get(), fixedObstacles);
+        appendArrangeWipeTowers(m_plateList.get(), model_, fixedObstacles);
+        Slic3r::arrangement::arrange(arrangeInput, fixedObstacles, bed_bb, params);
+        const bool arranged =
+            Slic3r::apply_arrange_polys(arrangeInput, arrangeInstances, tolerantVfn);
         // D-29-12: only rebuild plate membership when arrange succeeded
         // (all-locked returns false → no rebuild, no membership changes).
         if (arranged && m_plateList)
