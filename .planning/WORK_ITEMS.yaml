@@ -253,26 +253,39 @@ items:
       legacy-default loading; 859db5b fixes empty-model services to select that
       fallback instead of emitting an empty 3MF archive. This is not full
       upstream 3MF PlateData shape/exclude/extruder-area parity.
+      Batch 4 (bed geometry round-trip) resolved d47a7ce. Scope correction
+      from the upstream re-read: shape/exclude areas are NOT PlateData fields
+      (bbs_3mf.hpp:52-108 has none) -- they persist as machine-config keys
+      printable_area / bed_exclude_area / printable_height and load_project
+      restores them via set_bed_shape -> PartPlateList::set_shapes
+      (Plater.cpp:12996-12998, :8135-8169); "extruder areas" has no upstream
+      PartPlate field. Qt6 save now embeds the plate-list bed geometry as
+      typed config options (overlay keys keep priority); load parses them
+      worker-side and applies setPlateSize + the new list-level
+      PartPlateList::excludeAreas (upstream m_exclude_areas raw semantics,
+      PartPlate.cpp:4898) before plates are created; JSON fallback mirrors
+      the same fields.
     remaining:
-      - Plate shape/exclude/extruder areas persistence (3MF PlateData);
-        viewport drop / out-of-bounds consumers adopting the new
-        point/box primitives (blocked on the mock GL<->slic3r bed-rect
-        coordinate unification, not on the primitives themselves).
-      - Per-plate wipe-tower/Print context; complete slice-state/result API.
+      - Viewport drop / out-of-bounds consumers adopting the point/box
+        primitives, blocked on the GL<->slic3r bed-rect coordinate
+        unification; wipe-tower-as-arrange-obstacle
+        (estimate_wipe_tower_polygon, PartPlate.cpp:1739-1777) joins that
+        same coordinate-gated batch.
       - Sub-scope into separate items when work starts; do not mark P0.5.5b
         complete until this item closes.
     evidence:
-      commits: [18dd03e, 564a51d, 9fd126b, 859db5b]
+      commits: [18dd03e, 564a51d, 9fd126b, 859db5b, d47a7ce]
       tests:
         - tests/PartPlateTests.cpp::platePrintVolumeContainsTests
         - tests/PartPlateTests.cpp::plateFindInstancePointLookup
         - tests/PartPlateTests.cpp::plateListBoxAndPointLookups
         - tests/PartPlateTests.cpp::unprintablePlateExcludedFromFindInstanceAt
         - tests/PartPlateTests.cpp::servicePlateIndexAtPointUsesInstanceBounds
+        - tests/PartPlateTests.cpp::jsonPersistenceRoundTripGeometryAndOutsideState
+        - tests/PartPlateTests.cpp::plateBedShapeRoundTripsThroughProject
         - tests/E2EWorkflowTests.cpp::test_persistent_print_reused_on_same_plate_reslice
         - tests/E2EWorkflowTests.cpp::test_plate_deletion_releases_persistent_print_entry
         - tests/E2EWorkflowTests.cpp::test_cancelled_slice_restart_rebuilds_persistent_print
-        - tests/PartPlateTests.cpp::jsonPersistenceRoundTripGeometryAndOutsideState
       gate batch 2: canonical run EXIT=0 2026-09-06, 12 suites 574 tests
         0 failed 0 skipped (E2E 32 incl. the 3 new slots, PartPlate 66,
         ViewModelSmoke 187, QmlUiAudit 171); batch 3 follow-up gate also
@@ -280,11 +293,19 @@ items:
         0 skipped; one prior interim run's
         PartPlate/E2E 0xC0000005 was the known stale-obj-after-header-change
         issue, green after purging objs older than SliceService.h
+      gate batch 4 2026-09-07: post ninja -t clean full rebuild, in-run
+        PrepareScene 23 / PartPlate 68 (incl. the bed-shape round-trip) /
+        AppTool 10 / ObjectPicking 7 all green; ViewModelSmoke hit the
+        known dirWritable=0 AV file-churn flake on
+        projectStoreWritesThumbnailFamily in-run (186/187) but passed
+        187/187 EXIT=0 on the standalone rerun, and QmlUiAudit,
+        PreviewParser, Navigator, Camera, ViewportContextMenu,
+        GizmoGeometry, and E2E all passed EXIT=0 on standalone reruns
       gate: canonical run after ninja -t clean full rebuild EXIT=0 2026-09-06,
         12 suites 571 tests 0 failed (PartPlate 66 incl. the 5 new slots);
         one in-suite ViewModelSmoke write flake (dirWritable=0, known AV
         file-churn G-11 pattern) passed 187/187 on the individual rerun
-      last_verified: 2026-09-06
+      last_verified: 2026-09-07
 
   - id: PAINT-RIGHT-BUTTON
     title: Right-button paint stroke (alternate state / context-menu suppression)
