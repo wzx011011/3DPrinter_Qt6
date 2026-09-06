@@ -10522,6 +10522,37 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
                                 new Slic3r::ConfigOptionString(
                                     it.value().toString().toStdString()));
   }
+  // PLATE-PRINT-LIFECYCLE (batch 4): embed the plate-list bed geometry as
+  // typed machine-config options so a project reload restores it. Upstream
+  // embeds the printer profile in the 3MF and load_project feeds
+  // printable_area/bed_exclude_area/printable_height back through
+  // set_bed_shape -> PartPlateList::set_shapes (Plater.cpp:12996-12998,
+  // :8135-8169). Keys already present in the overlay win (explicit override).
+  // The rect is corner-origin raw profile data, like the upstream config.
+  if (m_plateList && m_plateList->plateWidth() > 0 && m_plateList->plateDepth() > 0
+      && !overlayConfig.has("printable_area"))
+  {
+    const double w = m_plateList->plateWidth();
+    const double d = m_plateList->plateDepth();
+    overlayConfig.set_key_value(
+        "printable_area",
+        new Slic3r::ConfigOptionPoints(
+            std::vector<Slic3r::Vec2d>{{0.0, 0.0}, {w, 0.0}, {w, d}, {0.0, d}}));
+  }
+  if (m_plateList && m_plateList->plateHeight() > 0
+      && !overlayConfig.has("printable_height"))
+  {
+    overlayConfig.set_key_value(
+        "printable_height",
+        new Slic3r::ConfigOptionFloat(double(m_plateList->plateHeight())));
+  }
+  if (m_plateList && !m_plateList->excludeAreas().empty()
+      && !overlayConfig.has("bed_exclude_area"))
+  {
+    overlayConfig.set_key_value(
+        "bed_exclude_area",
+        new Slic3r::ConfigOptionPoints(m_plateList->excludeAreas()));
+  }
   params.config = overlayConfig.keys().empty() ? nullptr : &overlayConfig;
 
   // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
@@ -10713,8 +10744,16 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   {
     root[QStringLiteral("plateWidth")] = m_plateList->plateWidth();
     root[QStringLiteral("plateDepth")] = m_plateList->plateDepth();
-    // plateHeight has no public getter; plate volume height is not exposed by
-    // the current Qt6 API and is therefore intentionally not synthesized.
+    root[QStringLiteral("plateHeight")] = m_plateList->plateHeight();
+#ifdef HAS_LIBSLIC3R
+    // PLATE-PRINT-LIFECYCLE (batch 4): list-level raw exclude areas, the JSON
+    // mirror of the 3MF bed_exclude_area round-trip.
+    QJsonArray excludeArr;
+    for (const auto &pt : m_plateList->excludeAreas())
+      excludeArr.append(QJsonArray{pt.x(), pt.y()});
+    if (!excludeArr.isEmpty())
+      root[QStringLiteral("bedExcludeArea")] = excludeArr;
+#endif
   }
 
   // Save plates
@@ -10878,6 +10917,12 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       auto *loadedModel = new Slic3r::Model();
       std::string err;
       int loadedPlateCount = 0;
+      // PLATE-PRINT-LIFECYCLE (batch 4): embedded bed geometry parsed from the
+      // project config (upstream set_bed_shape inputs). -1 sentinel = absent.
+      int loadedBedWidthMm = -1;
+      int loadedBedDepthMm = -1;
+      int loadedBedHeightMm = -1;
+      std::vector<Slic3r::Vec2d> loadedBedExcludeArea;
       Slic3r::PlateDataPtrs plateDataList;
       Slic3r::DynamicPrintConfig loadedConfig;
       Slic3r::ConfigSubstitutionContext configSubstCtx(Slic3r::ForwardCompatibilitySubstitutionRule::Enable);
@@ -10922,6 +10967,26 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             &fileVersion,
             progressFn);
         *loadedModel = std::move(loaded);
+
+        // PLATE-PRINT-LIFECYCLE (batch 4): parse the embedded bed geometry
+        // (upstream Plater::load_project -> set_bed_shape,
+        // Plater.cpp:12996-12998) on the worker. The values are handed to the
+        // GUI publish step, which applies them to the rebuilt PartPlateList.
+        if (const auto *areaOpt = loadedConfig.option<Slic3r::ConfigOptionPoints>("printable_area"))
+        {
+          if (areaOpt->values.size() >= 3)
+          {
+            // Pointfs extents are 2D (BoundingBoxf, Point.hpp:311) -- the bed
+            // shape is a plane polygon, so only x/y sizes matter here.
+            const Slic3r::BoundingBoxf bedBox(Slic3r::get_extents(areaOpt->values));
+            loadedBedWidthMm = int(bedBox.size().x() + 0.5);
+            loadedBedDepthMm = int(bedBox.size().y() + 0.5);
+          }
+        }
+        if (const auto *heightOpt = loadedConfig.option<Slic3r::ConfigOptionFloat>("printable_height"))
+          loadedBedHeightMm = int(heightOpt->value + 0.5);
+        if (const auto *excludeOpt = loadedConfig.option<Slic3r::ConfigOptionPoints>("bed_exclude_area"))
+          loadedBedExcludeArea = excludeOpt->values;
 
         if (!loadedModel->objects.empty())
         {
@@ -11169,7 +11234,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       }
 #endif
 
-      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedProjectVersion, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
+      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedProjectVersion, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode, loadedBedWidthMm, loadedBedDepthMm, loadedBedHeightMm, loadedBedExcludeArea]() {
         if (!receiver) { delete loadedModel; return; }
 
         // Publish worker-local plate state only on the GUI thread. This also
@@ -11250,6 +11315,18 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
             receiver->attachPlateInstanceBounds();
             receiver->m_plateList->resetToSinglePlate();
+            // PLATE-PRINT-LIFECYCLE (batch 4): restore the bed geometry from
+            // the project's embedded machine config BEFORE creating plates, so
+            // createPlate/updatePlateOrigins build the grid with the saved
+            // size (upstream load_project -> set_bed_shape ->
+            // PartPlateList::set_shapes, Plater.cpp:12996-12998/:8169).
+            // Sentinel -1 = key absent -> keep constructor defaults.
+            if (loadedBedWidthMm > 0 && loadedBedDepthMm > 0)
+              receiver->m_plateList->setPlateSize(
+                  loadedBedWidthMm, loadedBedDepthMm,
+                  loadedBedHeightMm > 0 ? loadedBedHeightMm : 0);
+            if (!loadedBedExcludeArea.empty())
+              receiver->m_plateList->setExcludeAreas(loadedBedExcludeArea);
             for (int pi = 0; pi < plateObjs.size(); ++pi) {
               OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
                                              : receiver->m_plateList->createPlate();
@@ -11341,10 +11418,10 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               receiver->m_plateList->createPlate();
             // v3.2 Phase 29 (RESEARCH §6): defensive origin recompute so plate
             // origins are consistent even if the auto-arrange-on-load below is
-            // later conditioned out. Note: m_plate_width/depth default to 0 at
-            // load time (no bed parse before arrange), so computeOrigin yields
-            // (0,0,0) for a 1-plate load — correct. The auto-arrange at line
-            // ~5368 re-derives real sizes via setPlateSize.
+            // later conditioned out. The width/depth come from the embedded
+            // bed geometry restored at the top of this block (batch 4); a
+            // project without embedded printable_area keeps the constructor
+            // defaults, and computeOrigin then yields (0,0,0) for 1 plate.
             receiver->m_plateList->refreshPlateOrigins();
             receiver->m_plateList->setCurrentPlateIndex(
                 receiver->m_plateList->plateCount() > 0 ? 0 : -1);
@@ -11477,8 +11554,25 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   // Older JSON files omit geometry and continue using constructor defaults.
   const int savedWidth = root.value(QStringLiteral("plateWidth")).toInt(0);
   const int savedDepth = root.value(QStringLiteral("plateDepth")).toInt(0);
+  const int savedHeight = root.value(QStringLiteral("plateHeight")).toInt(0);
   if (root.contains(QStringLiteral("plateWidth")) || root.contains(QStringLiteral("plateDepth")))
-    m_plateList->setPlateSize(savedWidth, savedDepth, 0);
+    m_plateList->setPlateSize(savedWidth, savedDepth, savedHeight);
+#ifdef HAS_LIBSLIC3R
+  // PLATE-PRINT-LIFECYCLE (batch 4): restore list-level exclude areas.
+  if (root.contains(QStringLiteral("bedExcludeArea")))
+  {
+    std::vector<Slic3r::Vec2d> areas;
+    const QJsonArray excludeArr = root.value(QStringLiteral("bedExcludeArea")).toArray();
+    areas.reserve(size_t(excludeArr.size()));
+    for (const auto &value : excludeArr)
+    {
+      const QJsonArray pt = value.toArray();
+      if (pt.size() == 2)
+        areas.emplace_back(pt[0].toDouble(), pt[1].toDouble());
+    }
+    m_plateList->setExcludeAreas(std::move(areas));
+  }
+#endif
 
   // Restore plates and objects
   const QJsonArray platesArr = root.value(QStringLiteral("plates")).toArray();

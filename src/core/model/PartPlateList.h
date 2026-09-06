@@ -73,6 +73,7 @@ class PartPlateList {
   int plateCols() const { return m_plate_cols; }
   int plateWidth() const { return m_plate_width; }
   int plateDepth() const { return m_plate_depth; }
+  int plateHeight() const { return m_plate_height; }
   double plateStrideX() const;  // size * (1 + LOGICAL_PART_PLATE_GAP)
   double plateStrideY() const;
 
@@ -82,6 +83,14 @@ class PartPlateList {
   Slic3r::Vec2d computeShapePosition(int index, int cols) const;
   /// 3D world origin for plate index in a grid of `cols` columns (z=0).
   Slic3r::Vec3d computeOrigin(int index, int cols) const;
+
+  /// List-level raw exclude-area points (upstream Pointfs
+  /// PartPlateList::m_exclude_areas). Stored UNTRANSLATED, exactly like the
+  /// upstream list-level assignment (PartPlate.cpp:4898 -- the per-plate
+  /// position translation happens inside PartPlate::set_shape, :2606-2624,
+  /// which Qt6 defers until a consumer needs world-space geometry).
+  const std::vector<Slic3r::Vec2d>& excludeAreas() const { return m_exclude_areas; }
+  void setExcludeAreas(std::vector<Slic3r::Vec2d> areas) { m_exclude_areas = std::move(areas); }
 #endif
 
   /// Decode the plate index from a world-space (mm) translation.
@@ -243,6 +252,10 @@ class PartPlateList {
 
   /// Injected instance world-bounds source for findInstanceAt (see above).
   InstanceBoundsFn m_instance_bounds_fn;
+
+  /// Raw list-level exclude areas (upstream PartPlateList::m_exclude_areas,
+  /// PartPlate.hpp:543 -- untranslated config-space points).
+  std::vector<Slic3r::Vec2d> m_exclude_areas;
 #endif
 
   /// Refresh m_plate_count + m_plate_cols from the list size (PartPlate.cpp:4862-4870).

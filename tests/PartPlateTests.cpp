@@ -80,6 +80,11 @@ class PartPlateTests final : public QObject {
   // (upstream PartPlate.cpp:3141-3150, 3713-3816, 4027-4065).
   void platePrintIdentityLifecycle();
   void jsonPersistenceRoundTripGeometryAndOutsideState();
+  // PLATE-PRINT-LIFECYCLE (batch 4): embedded bed geometry (printable_area /
+  // printable_height / bed_exclude_area) must survive a project save->reload
+  // and restore the plate-list geometry (upstream load_project ->
+  // set_bed_shape -> PartPlateList::set_shapes, Plater.cpp:12996-12998).
+  void plateBedShapeRoundTripsThroughProject();
   // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
   void deletePlateMigratesInstancesToNeighbor();
   // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
@@ -587,6 +592,79 @@ void PartPlateTests::jsonPersistenceRoundTripGeometryAndOutsideState() {
   QVERIFY(legacy.loadProject(path));
   QCOMPARE(legacy.plateListConst()->plateWidth(), 0);
   QCOMPARE(legacy.plateListConst()->plateDepth(), 0);
+}
+
+void PartPlateTests::plateBedShapeRoundTripsThroughProject() {
+  // PLATE-PRINT-LIFECYCLE (batch 4): save embeds the plate-list bed geometry
+  // as typed machine-config options (upstream embeds the printer profile,
+  // Plater.cpp:12021 full_config_secure); reload restores it through
+  // loadProject's set_bed_shape-equivalent block. Covers 3MF AND the JSON
+  // fallback (same contract, mirrored fields).
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  const QString path3mf = tempDir.filePath(QStringLiteral("bedshape.3mf"));
+  const QString pathJson = tempDir.filePath(QStringLiteral("bedshape.json"));
+
+  const std::vector<Slic3r::Vec2d> excludeRect = {
+      {5.0, 5.0}, {25.0, 5.0}, {25.0, 25.0}, {5.0, 25.0}};
+
+  // -- ARRANGE: a real model is required for the 3MF save branch.
+  ProjectServiceMock saved;
+  QSignalSpy loadSpy(&saved, &ProjectServiceMock::loadFinished);
+  QVERIFY(saved.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  saved.setPlateSize(300, 300, 310);
+#ifdef HAS_LIBSLIC3R
+  saved.plateListMut()->setExcludeAreas(excludeRect);
+#endif
+
+  // -- ACT + ASSERT: 3MF round-trip restores width/depth/height + exclude.
+  QVERIFY2(saved.saveProject(path3mf),
+           qPrintable(QStringLiteral("3mf save must succeed: %1").arg(path3mf)));
+  ProjectServiceMock reloaded3mf;
+  QSignalSpy reloadSpy(&reloaded3mf, &ProjectServiceMock::loadFinished);
+  QVERIFY(reloaded3mf.loadProject(path3mf));
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 20000);
+  QCOMPARE(reloaded3mf.plateListConst()->plateWidth(), 300);
+  QCOMPARE(reloaded3mf.plateListConst()->plateDepth(), 300);
+  QCOMPARE(reloaded3mf.plateListConst()->plateHeight(), 310);
+#ifdef HAS_LIBSLIC3R
+  const auto &reloadedExclude = reloaded3mf.plateListConst()->excludeAreas();
+  QCOMPARE(int(reloadedExclude.size()), int(excludeRect.size()));
+  if (reloadedExclude.size() == excludeRect.size()) {
+    for (size_t i = 0; i < excludeRect.size(); ++i) {
+      QCOMPARE(reloadedExclude[i].x(), excludeRect[i].x());
+      QCOMPARE(reloadedExclude[i].y(), excludeRect[i].y());
+    }
+  }
+#endif
+
+  // -- ACT + ASSERT: JSON fallback mirrors the same contract. The fallback
+  // only fires for a model-less service (an empty model keeps the JSON writer
+  // usable for plate-only state), and its load is synchronous.
+  ProjectServiceMock jsonSaved;
+  jsonSaved.setPlateSize(300, 300, 310);
+#ifdef HAS_LIBSLIC3R
+  jsonSaved.plateListMut()->setExcludeAreas(excludeRect);
+#endif
+  QVERIFY2(jsonSaved.saveProject(pathJson),
+           qPrintable(QStringLiteral("json save must succeed: %1").arg(pathJson)));
+  ProjectServiceMock reloadedJson;
+  QVERIFY2(reloadedJson.loadProject(pathJson),
+           qPrintable(reloadedJson.lastError()));
+  QCOMPARE(reloadedJson.plateListConst()->plateWidth(), 300);
+  QCOMPARE(reloadedJson.plateListConst()->plateDepth(), 300);
+  QCOMPARE(reloadedJson.plateListConst()->plateHeight(), 310);
+#ifdef HAS_LIBSLIC3R
+  const auto &jsonExclude = reloadedJson.plateListConst()->excludeAreas();
+  QCOMPARE(int(jsonExclude.size()), int(excludeRect.size()));
+  if (jsonExclude.size() == excludeRect.size()) {
+    for (size_t i = 0; i < excludeRect.size(); ++i) {
+      QCOMPARE(jsonExclude[i].x(), excludeRect[i].x());
+      QCOMPARE(jsonExclude[i].y(), excludeRect[i].y());
+    }
+  }
+#endif
 }
 
 void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
