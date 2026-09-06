@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: 564a51d
+head_at_update: ccea3ac
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -192,8 +192,10 @@ items:
     aliases: ["P0.5.5b/remainder"]
     area: Prepare/Plate
     priority: P1
-    implementation: hybrid
-    parity: partial
+    status: resolved
+    resolved: 2026-09-07
+    implementation: real
+    parity: aligned
     verification: pass
     availability: available
     upstream:
@@ -265,16 +267,32 @@ items:
       PartPlateList::excludeAreas (upstream m_exclude_areas raw semantics,
       PartPlate.cpp:4898) before plates are created; JSON fallback mirrors
       the same fields.
-    remaining:
-      - Viewport drop / out-of-bounds consumers adopting the point/box
-        primitives, blocked on the GL<->slic3r bed-rect coordinate
-        unification; wipe-tower-as-arrange-obstacle
-        (estimate_wipe_tower_polygon, PartPlate.cpp:1739-1777) joins that
-        same coordinate-gated batch.
-      - Sub-scope into separate items when work starts; do not mark P0.5.5b
-        complete until this item closes.
+      Batch 5 (arrange obstacles) resolved ccea3ac: arrangeObjects now feeds
+      the two-list arrangement::arrange overload with the upstream fixed
+      virtual objects -- bed_exclude_area rectangles as per-plate exclude
+      polygons (preprocess_exclude_areas, PartPlate.cpp:4586-4623) and the
+      per-unlocked-plate wipe-tower rectangle (ArrangeJob.cpp:279-359,
+      estimate_wipe_tower_polygon geometry, PartPlate.cpp:1739-1777, with the
+      WipeTower::min_depth_per_height depth interpolation and the
+      WIPE_TOWER_MARGIN + brim inflation), pinned to its unlocked virtual
+      bed; locked plates keep items fixed and get no tower. The upstream
+      paint-color / bed-temperature tower gates are not observable from the
+      service layer (documented scope note); the extruder-count and smooth-
+      timelapse gates cover the dominant cases. Item closed: the drop /
+      out-of-bounds consumer concern was re-audited 2026-09-07 -- upstream
+      OnDropFiles loads into the CURRENT plate (no under-cursor plate
+      routing exists upstream), the SVG drop path already resolves
+      screenToBedPoint, and the outside-bed check already consumes
+      PartPlate instanceOutsideSet; the GL<->slic3r coordinate "unification"
+      prerequisite is therefore not a gate for any remaining upstream
+      behavior. The slice-state/result API parity is delivered through
+      PartPlate validity gates + the stable-printIndex result store +
+      all-plates aggregates; upstream PartPlate::update_slice_context
+      bridging is SliceService-owned by the D-05 architecture (same
+      behavior, different owner).
+    remaining: []
     evidence:
-      commits: [18dd03e, 564a51d, 9fd126b, 859db5b, d47a7ce]
+      commits: [18dd03e, 564a51d, 9fd126b, 859db5b, d47a7ce, ccea3ac]
       tests:
         - tests/PartPlateTests.cpp::platePrintVolumeContainsTests
         - tests/PartPlateTests.cpp::plateFindInstancePointLookup
@@ -283,9 +301,15 @@ items:
         - tests/PartPlateTests.cpp::servicePlateIndexAtPointUsesInstanceBounds
         - tests/PartPlateTests.cpp::jsonPersistenceRoundTripGeometryAndOutsideState
         - tests/PartPlateTests.cpp::plateBedShapeRoundTripsThroughProject
+        - tests/PartPlateTests.cpp::arrangeAvoidsWipeTowerAndExcludeAreas
         - tests/E2EWorkflowTests.cpp::test_persistent_print_reused_on_same_plate_reslice
         - tests/E2EWorkflowTests.cpp::test_plate_deletion_releases_persistent_print_entry
         - tests/E2EWorkflowTests.cpp::test_cancelled_slice_restart_rebuilds_persistent_print
+      gate batch 5 2026-09-07: canonical run EXIT=0, 12 suites 577 tests
+        0 failed 0 skipped (PartPlate 69 incl. the arrange-obstacle test,
+        ViewModelSmoke 187, QmlUiAudit 171, E2E 32, PrepareScene 23,
+        PreviewParser 26, Gizmo 24, AppTool 10, ObjectPicking 7,
+        Navigator 8, Camera 14, ViewportContext 6)
       gate batch 2: canonical run EXIT=0 2026-09-06, 12 suites 574 tests
         0 failed 0 skipped (E2E 32 incl. the 3 new slots, PartPlate 66,
         ViewModelSmoke 187, QmlUiAudit 171); batch 3 follow-up gate also
@@ -361,7 +385,7 @@ items:
     evidence:
       commits: [d9d52e0]
       gate: 12 suites 562 tests 0 failed 2026-09-06 (in-gate + standalone on same binaries; one env write-flake passed standalone)
-      last_verified: 2026-09-06
+      last_verified: 2026-09-07
 
   - id: PAINT-ALT-WHEEL-CLIP
     title: Alt+wheel clipping-plane sweep inside paint gizmos
