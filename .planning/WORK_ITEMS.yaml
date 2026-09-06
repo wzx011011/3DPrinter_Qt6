@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: 3054f21
+head_at_update: ae513c3
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -292,10 +292,11 @@ items:
   - id: VIEW-ARROW-NUDGE
     title: Arrow-key nudge of selected objects (10mm, Shift=1mm)
     aliases: []
-    status: open
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -303,6 +304,18 @@ items:
         - src/slic3r/GUI/GLCanvas3D.cpp:3360-3457
     qt_targets:
       - src/qml_gui/pages/PreparePage.qml (Keys handling)
+      - src/core/viewmodels/EditorViewModel.h/.cpp (nudgeSelectedObjects)
+    notes: >
+      Resolved 2026-09-06: arrows translate the selection on the bed plane
+      through nudgeSelectedObjects; TransformCommand mergeWith coalesces key
+      repeats into one undo step (upstream do_move on key-up). Camera-space
+      Ctrl variant not ported (Qt6 shell has no equivalent binding need yet).
+    evidence:
+      commits: [ae513c3]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::arrowNudgeTranslatesSelectionWithCoalescedUndo
+      gate: canonical run EXIT=0 2026-09-06, 12 suites 561 tests 0 failed
+      last_verified: 2026-09-06
 
   - id: MENU-EDIT-EXPAND
     title: Edit menu missing Cut/Copy/Paste/Delete/Clone/Duplicate-plate entries
