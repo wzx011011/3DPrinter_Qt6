@@ -46,6 +46,14 @@ Item {
     signal exportModelRequested()
     signal undoRequested()
     signal redoRequested()
+    // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): Edit-menu entries
+    // for the clipboard/delete/clone set the shortcuts already drive.
+    signal editCutRequested()
+    signal editCopyRequested()
+    signal editPasteRequested()
+    signal editDeleteRequested()
+    signal editCloneRequested()
+    signal editDuplicatePlateRequested()
     signal calibrationRequested()
     signal sliceRequested()
     signal sliceSinglePlateRequested()
@@ -126,6 +134,15 @@ Item {
                 title: qsTr("编辑")
                 MenuItem { text: qsTr("撤销"); onTriggered: root.undoRequested() }
                 MenuItem { text: qsTr("重做"); onTriggered: root.redoRequested() }
+                MenuSeparator {}
+                // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467).
+                MenuItem { text: qsTr("剪切"); onTriggered: root.editCutRequested() }
+                MenuItem { text: qsTr("复制"); onTriggered: root.editCopyRequested() }
+                MenuItem { text: qsTr("粘贴"); onTriggered: root.editPasteRequested() }
+                MenuItem { text: qsTr("删除选中"); onTriggered: root.editDeleteRequested() }
+                MenuItem { text: qsTr("删除全部"); onTriggered: root.deleteAllRequested() }
+                MenuItem { text: qsTr("克隆选中"); onTriggered: root.editCloneRequested() }
+                MenuItem { text: qsTr("克隆当前平板"); onTriggered: root.editDuplicatePlateRequested() }
             }
             Menu {
                 title: qsTr("帮助")

@@ -650,6 +650,16 @@ ApplicationWindow {
                 onExportModelRequested: exportModelDialog.open()
                 onUndoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
                 onRedoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
+                // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the
+                // Edit-menu clipboard/delete/clone set routes through the same
+                // ViewModel actions as the shortcuts; delete-selected keeps the
+                // Phase 169 confirm, duplicate-plate clones the current plate.
+                onEditCutRequested: if (backend.editorViewModel) backend.editorViewModel.cutSelectedObjects()
+                onEditCopyRequested: if (backend.editorViewModel) backend.editorViewModel.copySelectedObjects()
+                onEditPasteRequested: if (backend.editorViewModel) backend.editorViewModel.pasteObjects()
+                onEditDeleteRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.confirmDeleteSelection()
+                onEditCloneRequested: if (backend.editorViewModel) backend.editorViewModel.duplicateSelectedObjects()
+                onEditDuplicatePlateRequested: if (backend.editorViewModel) backend.editorViewModel.clonePlate(backend.editorViewModel.currentPlateIndex)
                 onCalibrationRequested: backend.requestSelectTab(backend.tpCalibration)
                 onPreferencesRequested: backend.openSettings()
                 onAboutRequested: aboutDialog.open()

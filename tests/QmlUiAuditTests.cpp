@@ -10870,6 +10870,23 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
                && mainQml.contains(QStringLiteral("active: backend.currentPage === backend.tpPreferences"))
                && mainQml.contains(QStringLiteral("+ (backend.tpPreferences + 1)")),
            "WAVE-4: Preferences must remain mounted at its semantic route and status index");
+
+  // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the Edit menu must
+  // expose the clipboard/delete/clone set, wired to the same ViewModel
+  // actions as the shortcuts.
+  QVERIFY2(topbar.contains(QStringLiteral("editCutRequested")) &&
+           topbar.contains(QStringLiteral("editCopyRequested")) &&
+           topbar.contains(QStringLiteral("editPasteRequested")) &&
+           topbar.contains(QStringLiteral("editDeleteRequested")) &&
+           topbar.contains(QStringLiteral("editCloneRequested")) &&
+           topbar.contains(QStringLiteral("editDuplicatePlateRequested")),
+           "MENU-EDIT-EXPAND: the Edit menu must expose cut/copy/paste/delete/clone/duplicate-plate");
+  QVERIFY2(mainQml.contains(QStringLiteral("onEditCutRequested")) &&
+           mainQml.contains(QStringLiteral("cutSelectedObjects()")) &&
+           mainQml.contains(QStringLiteral("onEditDuplicatePlateRequested")) &&
+           mainQml.contains(QStringLiteral("clonePlate(backend.editorViewModel.currentPlateIndex)")) &&
+           mainQml.contains(QStringLiteral("confirmDeleteSelection()")),
+           "MENU-EDIT-EXPAND: entries must route to the real ViewModel actions (delete keeps the confirm)");
 }
 
 void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
