@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: 18dd03e
+head_at_update: 564a51d
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -228,9 +228,27 @@ items:
       (re)creation and exposes plateIndexAtPoint. Slice chain verified
       reading PartPlate::isPrintable domain state (export-all filter
       SliceService.cpp:1557; slice-all queue EditorViewModel::requestSliceAll).
+      Batch 2 (durable per-plate Print / GCodeResult lifetime) resolved
+      564a51d: SliceService keeps one persistent Slic3r::Print + applied model
+      clone per plate keyed by stable printIndex (upstream PartPlate per-plate
+      Print + GCodeResult, PartPlate.cpp:2839-2840), GUI-thread-exclusive
+      single-owner handoff to the slice worker (no locks, no shared
+      container). Incremental reslice judgment (conservative): reuse only when
+      the plate geometry fingerprint (new ProjectServiceMock::
+      currentPlateGeometrySignature: object/volume/instance counts, ids,
+      mesh sizes, transforms, config + supported/seam/mmu facet timestamps,
+      printable flags) is unchanged and no calib params are involved;
+      config-only changes flow through Print::apply diff invalidation with
+      process() at the upstream default use_cache=false; mesh change, cancel,
+      failure, calib, deletePlate, and project resets rebuild fully.
+      deletePlate emits plateRemoved(printIndex) so the slot + result entry
+      are released synchronously; startSlice reconciles pruned identities.
+      ~SliceService cancels then joins the worker via QFuture. Review
+      2026-09-04 P0-1 (shared locked map) and P0-2 (QThread wait-timeout
+      qFatal) are resolved by design (single ownership; task wait, not
+      thread wait). perf/waves divergence: use_cache=true was not ported
+      (no upstream call site uses it; it force-completes invalidated steps).
     remaining:
-      - Durable per-plate Print / GCodeResult lifetime (m_print_list /
-        m_gcode_result_list port).
       - Plate shape/exclude/extruder areas persistence (3MF PlateData);
         viewport drop / out-of-bounds consumers adopting the new
         point/box primitives (blocked on the mock GL<->slic3r bed-rect
@@ -239,13 +257,21 @@ items:
       - Sub-scope into separate items when work starts; do not mark P0.5.5b
         complete until this item closes.
     evidence:
-      commits: [18dd03e]
+      commits: [18dd03e, 564a51d]
       tests:
         - tests/PartPlateTests.cpp::platePrintVolumeContainsTests
         - tests/PartPlateTests.cpp::plateFindInstancePointLookup
         - tests/PartPlateTests.cpp::plateListBoxAndPointLookups
         - tests/PartPlateTests.cpp::unprintablePlateExcludedFromFindInstanceAt
         - tests/PartPlateTests.cpp::servicePlateIndexAtPointUsesInstanceBounds
+        - tests/E2EWorkflowTests.cpp::test_persistent_print_reused_on_same_plate_reslice
+        - tests/E2EWorkflowTests.cpp::test_plate_deletion_releases_persistent_print_entry
+        - tests/E2EWorkflowTests.cpp::test_cancelled_slice_restart_rebuilds_persistent_print
+      gate batch 2: canonical run EXIT=0 2026-09-06, 12 suites 574 tests
+        0 failed 0 skipped (E2E 32 incl. the 3 new slots, PartPlate 66,
+        ViewModelSmoke 187, QmlUiAudit 171); one prior interim run's
+        PartPlate/E2E 0xC0000005 was the known stale-obj-after-header-change
+        issue, green after purging objs older than SliceService.h
       gate: canonical run after ninja -t clean full rebuild EXIT=0 2026-09-06,
         12 suites 571 tests 0 failed (PartPlate 66 incl. the 5 new slots);
         one in-suite ViewModelSmoke write flake (dirWritable=0, known AV
