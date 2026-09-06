@@ -6641,6 +6641,15 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "VIEW-ARROW-NUDGE: Shift must step 1mm, default 10mm");
   QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::nudgeSelectedObjects")),
            "VIEW-ARROW-NUDGE: EditorViewModel must implement nudgeSelectedObjects");
+
+  // PAINT-CTRL-WHEEL (upstream GLGizmoPainterBase.cpp:584-631): Ctrl+wheel
+  // with a paint gizmo active tunes brush radius (0.2 step, [0.4, 8]) or the
+  // SmartFill seed angle (1 deg step, [0, 90]) instead of zooming.
+  QVERIFY2(rhiSource.contains(QStringLiteral("PAINT-CTRL-WHEEL")) &&
+           rhiSource.contains(QStringLiteral("m_brushRadius = qBound(0.4f, next, 8.0f)")),
+           "PAINT-CTRL-WHEEL: wheelEvent must step the brush radius on Ctrl+wheel");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_smartFillAngle = qBound(0.0f, next, 90.0f)")),
+           "PAINT-CTRL-WHEEL: wheelEvent must step the SmartFill angle on Ctrl+wheel");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()

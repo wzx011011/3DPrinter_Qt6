@@ -1868,6 +1868,31 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 
 void RhiViewport::wheelEvent(QWheelEvent *event)
 {
+  // PAINT-CTRL-WHEEL (upstream GLGizmoPainterBase.cpp:584-631): with a paint
+  // gizmo active, Ctrl+wheel tunes the brush parameters instead of zooming.
+  // Brush cursors step the radius 0.2 within [0.4, 8] (CursorRadius*); the
+  // SmartFill tool steps its seed-fill angle 1 deg within [0, 90]
+  // (SmartFillAngle*). HeightRange height / GapFill area belong to tools not
+  // present on the main line yet (PAINT-GAPFILL-PORT / PAINT-MMU-TOOLS).
+  if (event->modifiers() & Qt::ControlModifier &&
+      (m_gizmoMode == GizmoSupportPaint ||
+       m_gizmoMode == GizmoSeamPaint ||
+       m_gizmoMode == GizmoMmuSegmentation)) {
+    const float delta = float(event->angleDelta().y()) / 120.0f;
+    if (delta != 0.f) {
+      const bool down = delta < 0.f;
+      if (m_paintToolType == 2) {
+        const float next = down ? m_smartFillAngle - 1.f : m_smartFillAngle + 1.f;
+        m_smartFillAngle = qBound(0.0f, next, 90.0f);
+      } else {
+        const float next = down ? m_brushRadius - 0.2f : m_brushRadius + 0.2f;
+        m_brushRadius = qBound(0.4f, next, 8.0f);
+      }
+      event->accept();
+      update();
+      return;
+    }
+  }
   // v5.12 gap-closure: reverseZoom inverts the wheel direction (upstream
   // reverse_mouse_wheel_zoom, GLCanvas3D.cpp:3765). One notch = +-1 like the
   // upstream GetWheelRotation/GetWheelDelta ratio.
