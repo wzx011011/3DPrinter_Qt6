@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: ae513c3
+head_at_update: d9d52e0
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -226,12 +226,13 @@ items:
       commits: [3054f21]
 
   - id: PAINT-CTRL-WHEEL
-    title: Ctrl+wheel adjusts brush radius / height-range / smart-fill angle / gap area
+    title: Ctrl+wheel adjusts brush radius / smart-fill angle (paint gizmos)
     aliases: []
-    status: open
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: partial
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -239,8 +240,16 @@ items:
         - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:584-631
     qt_targets:
       - src/qml_gui/Renderer/RhiViewport.cpp (wheelEvent paint branch)
-    remaining:
-      - Route Ctrl+wheel per active paint tool; keep plain wheel = zoom.
+    notes: >
+      Resolved 2026-09-06 (commit d9d52e0) for the tools present on main:
+      brush cursors step radius 0.2 within [0.4, 8]; SmartFill steps its
+      angle 1 deg within [0, 90]. HeightRange height and GapFill area wheel
+      steps belong to tools not yet on main and are tracked with
+      PAINT-GAPFILL-PORT / PAINT-MMU-TOOLS.
+    evidence:
+      commits: [d9d52e0]
+      gate: 12 suites 562 tests 0 failed 2026-09-06 (in-gate + standalone on same binaries; one env write-flake passed standalone)
+      last_verified: 2026-09-06
 
   - id: PAINT-ALT-WHEEL-CLIP
     title: Alt+wheel clipping-plane sweep inside paint gizmos
