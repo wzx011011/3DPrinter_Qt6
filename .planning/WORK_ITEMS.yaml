@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: cc0df24
+head_at_update: 3054f21
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -114,26 +114,34 @@ items:
   - id: PAINT-AXIS-LOCK
     title: Support painting Vertical/Horizontal axis lock (Circle/Sphere brush)
     aliases: ["P11.B2.3"]
+    status: resolved
+    resolved: 2026-09-06
     area: Prepare/Paint
     priority: P2
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
       refs:
         - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp (Vertical/Horizontal checkboxes, mutually exclusive)
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:738-742 (drag clamp)
+        - src/slic3r/GUI/Gizmos/GLGizmoSeam.cpp:322 (Seam shows only Vertical)
+        - src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp:717-724 (MMU shows both)
     qt_targets:
-      - src/qml_gui/Renderer/RhiViewport.cpp (screen-coordinate drag layer; brushMouseScreenX/Y + m_paintClickPress already exist)
-      - src/qml_gui/pages/PreparePage.qml (checkbox UI)
+      - src/qml_gui/Renderer/RhiViewport.cpp
+      - src/core/viewmodels/EditorViewModel.h/.cpp
+      - src/qml_gui/pages/PreparePage.qml
     notes: >
-      Upstream: Vertical locks screen X, Horizontal locks screen Y; the two
-      checkboxes are mutually exclusive and only shown for Circle/Sphere
-      brushes. Constraint belongs in the RhiViewport pointer layer, not
-      PaintEngine.
-    remaining:
-      - Implement exclusive checkboxes, wire to drag clamping, add audit/test.
+      Resolved 2026-09-06 (commit 3054f21): single exclusive int
+      paintLockAxis; drag clamped to press point in RhiViewport; Seam panel
+      Vertical-only, MMU panel both, FDM supports none (upstream-faithful).
+      Same commit closes right-button paint and Shift-erase semantics.
+    evidence:
+      commits: [3054f21]
+      gate: clean-rebuild 2026-09-06, 12 suites 561 tests 0 failed
+      last_verified: 2026-09-06
 
   - id: PREVIEW-GCODE-SOURCE-TOKENS
     title: Preview G-code source panel semantic tokenization
@@ -186,6 +194,130 @@ items:
     remaining:
       - Sub-scope into separate items when work starts; do not mark P0.5.5b
         complete until this item closes.
+
+  - id: PAINT-RIGHT-BUTTON
+    title: Right-button paint stroke (alternate state / context-menu suppression)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: RightDown strokes the alternate state (PainterBase.cpp:649);
+      MMU right stays disabled (GLGizmoMmuSegmentation.hpp:94).
+    evidence:
+      commits: [3054f21]
+      gate: clean-rebuild 2026-09-06, 12 suites 561 tests 0 failed
+
+  - id: PAINT-SHIFT-ERASER
+    title: Shift = temporary eraser semantics (was inverted to smart fill)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: Upstream PainterBase.cpp:662-671 holds new_state NONE with Shift;
+      the Phase 240 Shift->smart-fill+Blocker mapping was inverted and is
+      replaced; SmartFill remains tool-chip-only.
+    evidence:
+      commits: [3054f21]
+
+  - id: PAINT-CTRL-WHEEL
+    title: Ctrl+wheel adjusts brush radius / height-range / smart-fill angle / gap area
+    aliases: []
+    status: open
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:584-631
+    qt_targets:
+      - src/qml_gui/Renderer/RhiViewport.cpp (wheelEvent paint branch)
+    remaining:
+      - Route Ctrl+wheel per active paint tool; keep plain wheel = zoom.
+
+  - id: PAINT-ALT-WHEEL-CLIP
+    title: Alt+wheel clipping-plane sweep inside paint gizmos
+    aliases: []
+    status: open
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:632-646
+    remaining:
+      - Expose clipping ratio sweep + reset while a paint gizmo is active.
+
+  - id: PAINT-MMU-TOOLS
+    title: MMU panel tool set (pointer brush / bucket fill / height range / gap fill)
+    aliases: []
+    status: open
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp:594-595, 620-622, 667-668, 703-704
+    notes: Qt6 MMU panel currently only offers extruder color selection.
+      Height-range/gap-fill engine work exists on the perf/waves branch
+      (commit 399d43f) but was never merged to main; port or reimplement.
+
+  - id: PAINT-GAPFILL-PORT
+    title: Support Gap Fill tool + engine fragments (port from perf/waves)
+    aliases: []
+    status: open
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp:378-379
+    notes: The 2026-09-02 ledger closure for gap-fill/height-range lived on
+      perf/waves (399d43f) and is absent from main; the main-line ledger
+      overstated this item. Port the engine + tool chip, or reimplement.
+
+  - id: VIEW-ARROW-NUDGE
+    title: Arrow-key nudge of selected objects (10mm, Shift=1mm)
+    aliases: []
+    status: open
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GLCanvas3D.cpp:3360-3457
+    qt_targets:
+      - src/qml_gui/pages/PreparePage.qml (Keys handling)
+
+  - id: MENU-EDIT-EXPAND
+    title: Edit menu missing Cut/Copy/Paste/Delete/Clone/Duplicate-plate entries
+    aliases: []
+    status: open
+    implementation: hybrid
+    parity: partial
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/MainFrame.cpp:2400-2467
+    notes: Actions exist via shortcuts/context menus; only the top-level Edit
+      menu rows are missing (P3).
 
   # ── Blocked / pending user decision ─────────────────────────────────────
   - id: STASH-WIP-DISPOSITION
