@@ -650,6 +650,10 @@ public:
   Q_INVOKABLE void beginGizmoMoveDrag();
   Q_INVOKABLE void applyGizmoMoveDelta(float dx, float dy, float dz);
   Q_INVOKABLE void endGizmoMoveDrag();
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470): relative bed-plane
+  // translation of the whole selection; per-object TransformCommands merge
+  // via mergeWith so key repeats collapse into one undo step.
+  Q_INVOKABLE void nudgeSelectedObjects(double dxMm, double dyMm);
   Q_INVOKABLE void beginGizmoRotateDrag();
   Q_INVOKABLE void applyGizmoRotateDelta(int axis, float radians);
   Q_INVOKABLE void endGizmoRotateDrag();

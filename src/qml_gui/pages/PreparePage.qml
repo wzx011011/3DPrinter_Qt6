@@ -350,6 +350,25 @@ Item {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSupportPaint)
             }
             break
+        case Qt.Key_Left:
+        case Qt.Key_Right:
+        case Qt.Key_Up:
+        case Qt.Key_Down:
+            // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470): arrows
+            // nudge the selection on the bed plane; Shift steps 1mm instead
+            // of 10mm. TransformCommand mergeWith coalesces key repeats.
+            if (root.editorVm && root.editorVm.hasSelection) {
+                var step = (mod & Qt.ShiftModifier) ? 1.0 : 10.0
+                var dx = 0.0
+                var dy = 0.0
+                if (key === Qt.Key_Left) dx = -step
+                else if (key === Qt.Key_Right) dx = step
+                else if (key === Qt.Key_Up) dy = step
+                else dy = -step
+                root.editorVm.nudgeSelectedObjects(dx, dy)
+                event.accepted = true
+            }
+            break
         }
     }
 

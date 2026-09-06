@@ -390,6 +390,41 @@ void EditorViewModel::setObjectPosZ(float v)
   }
 }
 
+void EditorViewModel::nudgeSelectedObjects(double dxMm, double dyMm)
+{
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470, on_key
+  // TranslationProcessor): arrow keys apply a relative bed-plane translation
+  // to the whole selection (10mm per press, Shift=1mm is decided in QML).
+  // Each object pushes a TransformCommand whose mergeWith coalesces key
+  // repeats into one undo step, mirroring upstream do_move on key-up.
+  if (!projectService_ || (dxMm == 0.0 && dyMm == 0.0))
+    return;
+
+  QSet<int> targets = m_selectedSourceIndices;
+  if (targets.isEmpty() && m_selectedVolumeObjectSourceIndex >= 0)
+    targets.insert(m_selectedVolumeObjectSourceIndex);
+
+  bool moved = false;
+  for (const int idx : std::as_const(targets))
+  {
+    const QVector3D oldPos = projectService_->objectPosition(idx);
+    const QVector3D newPos(float(oldPos.x() + dxMm), float(oldPos.y() + dyMm), oldPos.z());
+    projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
+    moved = true;
+    if (m_undoManager)
+    {
+      auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
+                                       projectService_->objectScale(idx), projectService_);
+      cmd->setNewTransform(newPos,
+                           projectService_->objectRotation(idx),
+                           projectService_->objectScale(idx));
+      m_undoManager->push(cmd);
+    }
+  }
+  if (moved)
+    emit stateChanged();
+}
+
 void EditorViewModel::beginGizmoMoveDrag()
 {
   const int idx = primarySelectedSourceIndex(this);

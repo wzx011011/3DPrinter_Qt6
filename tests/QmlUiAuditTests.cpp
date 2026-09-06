@@ -6631,6 +6631,16 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
   QVERIFY2(rhiSource.contains(QStringLiteral("else if (shiftHeld)")) &&
            rhiSource.contains(QStringLiteral("paintState = 0;")),
            "P11: Shift must act as a temporary eraser (paintState NONE), not smart fill");
+
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3360-3457): arrow keys must
+  // nudge the selection through the ViewModel with Shift=1mm scaling.
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("Qt.Key_Left")) &&
+           preparePagePaint.contains(QStringLiteral("nudgeSelectedObjects")),
+           "VIEW-ARROW-NUDGE: PreparePage must route arrow keys to nudgeSelectedObjects");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("ShiftModifier) ? 1.0 : 10.0")),
+           "VIEW-ARROW-NUDGE: Shift must step 1mm, default 10mm");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::nudgeSelectedObjects")),
+           "VIEW-ARROW-NUDGE: EditorViewModel must implement nudgeSelectedObjects");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()

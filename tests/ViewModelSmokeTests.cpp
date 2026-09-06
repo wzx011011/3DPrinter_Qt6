@@ -499,6 +499,7 @@ private slots:
   // boundary: the cursor + select_patch invocation runs WITHOUT a Model or
   // renderer. Mirrors the Phase 114 MeasureEngine readback pattern (synthetic
   // input + pure helper assertion).
+  void arrowNudgeTranslatesSelectionWithCoalescedUndo();
   void paintAxisLockClampsAndRoundTrips();
   void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
@@ -7136,14 +7137,41 @@ void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidI
            "MEASURE-01/MI-05: volumeMeshIts(0,out-of-range-volume) must return nullptr");
 }
 
+void ViewModelSmokeTests::arrowNudgeTranslatesSelectionWithCoalescedUndo()
+{
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470): arrow keys apply a
+  // relative bed-plane translation to the selection; repeated nudges collapse
+  // into one coalesced TransformCommand (mergeWith) so a single undo
+  // restores the original placement.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  QVERIFY(editor.hasSelection());
+
+  const QVector3D before = project.objectPosition(0);
+  editor.nudgeSelectedObjects(10.0, 0.0);
+  QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, 0.f, 0.f))).lengthSquared() < 1e-6);
+  editor.nudgeSelectedObjects(0.0, -1.0);
+  QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, -1.f, 0.f))).lengthSquared() < 1e-6);
+
+  const int undoCount = undoManager.stack()->count();
+  QVERIFY(undoCount >= 1);
+  editor.undo();
+  QVERIFY((project.objectPosition(0) - before).lengthSquared() < 1e-6);
+}
+
 void ViewModelSmokeTests::paintAxisLockClampsAndRoundTrips()
 {
   // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only):
   // the axis lock is a single 0/1/2 value so Vertical and Horizontal stay
   // mutually exclusive, and out-of-range writes fall back to off.
   ProjectServiceMock project;
-  SliceService slice(&project);
-  EditorViewModel vm(&project, &slice);
+  SliceService slice(&project);  EditorViewModel vm(&project, &slice);
   QCOMPARE(vm.paintLockAxis(), 0);
 
   QSignalSpy spy(&vm, &EditorViewModel::stateChanged);
