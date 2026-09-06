@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: 9bb840b
+head_at_update: a216932
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -344,21 +344,27 @@ items:
       last_verified: 2026-09-06
 
   - id: MENU-EDIT-EXPAND
-    title: Edit menu missing Cut/Copy/Paste/Delete/Clone/Duplicate-plate entries
+    title: Edit menu clipboard/delete/clone entries
     aliases: []
-    status: open
-    implementation: hybrid
-    parity: partial
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
       refs:
         - src/slic3r/GUI/MainFrame.cpp:2400-2467
-    notes: Actions exist via shortcuts/context menus; only the top-level Edit
-      menu rows are missing (P3).
+    notes: >
+      Resolved 2026-09-06: Edit menu exposes Cut/Copy/Paste/Delete
+      selected (with confirm)/Delete all/Clone selected/Duplicate current
+      plate, routed to the same ViewModel actions as the shortcuts.
+    evidence:
+      commits: [a216932]
+      gate: single canonical run EXIT=0 2026-09-06, 12 suites 564 tests 0 failed
+      last_verified: 2026-09-06
 
-  # ── Blocked / pending user decision ─────────────────────────────────────
   - id: STASH-WIP-DISPOSITION
     title: Dispose of stash@{0} and stash@{1} (user decision required)
     aliases: ["stash@{0}", "stash@{1}"]
