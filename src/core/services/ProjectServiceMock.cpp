@@ -6656,6 +6656,15 @@ bool ProjectServiceMock::deleteObject(int index)
     objectPrintableStates_.removeAt(index);
     if (index < objectVisibleStates_.size())
       objectVisibleStates_.removeAt(index);
+    // REVIEW-P1-RESIDUE: the transform mirrors must shift with the rest of
+    // the parallel arrays in the mock branch (the HAS_LIBSLIC3R branch above
+    // fully resyncs from the model, so only this path could desync).
+    if (index < objectPositions_.size())
+      objectPositions_.removeAt(index);
+    if (index < objectRotations_.size())
+      objectRotations_.removeAt(index);
+    if (index < objectScales_.size())
+      objectScales_.removeAt(index);
 #endif
 
     modelCount_ = objectNames_.size();
