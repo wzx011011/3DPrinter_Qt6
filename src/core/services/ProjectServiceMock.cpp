@@ -10669,9 +10669,10 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   }
 
 #ifdef HAS_LIBSLIC3R
-  if (!model_)
+  if (!model_ || model_->objects.empty())
   {
-    // No real model — fall through to JSON mock save
+    // An empty model has no 3MF payload; keep the JSON fallback usable for
+    // plate-only state and for newly constructed services.
   }
   else
   {
