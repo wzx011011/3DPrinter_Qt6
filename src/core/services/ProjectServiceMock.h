@@ -99,6 +99,21 @@ public:
   // code should go through the Q_INVOKABLE API; this is a test seam.
   OWzx::PartPlateList *plateListMut() { return m_plateList.get(); }
 
+  // ── Plate print-volume geometry (PLATE-PRINT-LIFECYCLE batch 1) ──────────
+  // Upstream PartPlateList::find_instance / contains / intersects
+  // (PartPlate.cpp:3948-3964, 4110-4167) resolve instance geometry from
+  // m_model. Qt6 injects the bounds source into PartPlateList instead (see
+  // PartPlateList::InstanceBoundsFn); this service owns the Model, so it
+  // attaches the provider wherever m_plateList is (re)created.
+  void attachPlateInstanceBounds();
+
+  /// Plate whose print volume holds the bed-plane point (slic3r world X/Y,
+  /// z=0) -- service wrapper over PartPlateList::findInstanceAt
+  /// (PartPlate.cpp:4110-4129 loop structure). Unprintable plates never match
+  /// (upstream keeps the unprintable shared plate out of m_plate_list,
+  /// PartPlate.hpp:541). Returns the plate position index, or -1.
+  Q_INVOKABLE int plateIndexAtPoint(double x, double y) const;
+
   /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
   void setPlateSize(int width, int depth, int height) {
     if (m_plateList) m_plateList->setPlateSize(width, depth, height);

@@ -421,6 +421,7 @@ ProjectServiceMock::ProjectServiceMock(QObject *parent)
   Slic3r::set_temporary_dir(QDir::tempPath().toStdString());
   model_ = new Slic3r::Model();
 #endif
+  attachPlateInstanceBounds();
 }
 
 #ifdef HAS_LIBSLIC3R
@@ -1381,6 +1382,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           // previous per-object representation. Phase 18 will populate true instance
           // pairs from PlateData::objects_and_instances.)
           receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+          receiver->attachPlateInstanceBounds();
           receiver->m_plateList->resetToSinglePlate();
           for (int pi = 0; pi < plateObjs.size(); ++pi) {
             OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
@@ -1474,6 +1476,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->modelCount_ = 0;
         // Reset plate storage to a fresh single-plate list (D-05).
         receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+        receiver->attachPlateInstanceBounds();
         receiver->m_plateList->setCurrentPlateIndex(-1);
         receiver->sourceFilePath_.clear();
         receiver->objectNames_.clear();
@@ -1793,6 +1796,50 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
   m_plateList->setPlatePrintable(plateIndex, printable);
   emit projectChanged();
   return true;
+}
+
+// ── Plate print-volume geometry (PLATE-PRINT-LIFECYCLE batch 1) ────────────
+
+void ProjectServiceMock::attachPlateInstanceBounds()
+{
+  if (!m_plateList)
+    return;
+#ifdef HAS_LIBSLIC3R
+  // Upstream PartPlateList derives instance world bounds from m_model inside
+  // notify_instance_update (PartPlate.cpp:4198-4250,
+  // ModelObject::instance_bounding_box). Qt6 injects the same source so
+  // PartPlateList stays free of the Model type; this service owns model_,
+  // so the provider is re-attached wherever m_plateList is (re)created.
+  m_plateList->setInstanceBoundsFn(
+      [this](int objectIndex, int instanceIndex) -> Slic3r::BoundingBoxf3 {
+        if (!model_ || objectIndex < 0 ||
+            size_t(objectIndex) >= model_->objects.size())
+          return Slic3r::BoundingBoxf3();
+        const Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+        if (!obj || instanceIndex < 0 ||
+            instanceIndex >= int(obj->instances.size()))
+          return Slic3r::BoundingBoxf3();
+        return obj->instance_bounding_box(size_t(instanceIndex));
+      });
+#endif
+}
+
+int ProjectServiceMock::plateIndexAtPoint(double x, double y) const
+{
+  if (!m_plateList)
+    return -1;
+#ifdef HAS_LIBSLIC3R
+  // Bed-plane point (z=0): the plate bounding box is built from shape points
+  // at z=0 (upstream calc_bounding_boxes, PartPlate.cpp:349-356), so the
+  // upstream point test only holds on the bed plane.
+  const OWzx::PartPlateList::InstanceHit hit =
+      m_plateList->findInstanceAt(Slic3r::Vec3d(x, y, 0.0));
+  return hit.plateIndex;
+#else
+  Q_UNUSED(x);
+  Q_UNUSED(y);
+  return -1;
+#endif
 }
 
 int ProjectServiceMock::platePrintIndex(int plateIndex) const
@@ -6672,6 +6719,7 @@ bool ProjectServiceMock::deleteObject(int index)
     {
       // No objects left: reset to a single empty plate, current unset.
       m_plateList = std::make_unique<OWzx::PartPlateList>();
+      attachPlateInstanceBounds();
       m_plateList->setCurrentPlateIndex(-1);
     }
     else
@@ -9749,6 +9797,7 @@ void ProjectServiceMock::clearProject()
   // Reset plate storage to a fresh single-plate list (current unset), matching the
   // previous "no project loaded" state (plateCount=0, currentPlateIndex=-1).
   m_plateList = std::make_unique<OWzx::PartPlateList>();
+  attachPlateInstanceBounds();
   m_plateList->setCurrentPlateIndex(-1);
   sourceFilePath_.clear();
   objectNames_.clear();
@@ -11085,6 +11134,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               plateObjs.append(all);
             }
             receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+            receiver->attachPlateInstanceBounds();
             receiver->m_plateList->resetToSinglePlate();
             for (int pi = 0; pi < plateObjs.size(); ++pi) {
               OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
@@ -11232,6 +11282,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           delete loadedModel;
           receiver->modelCount_ = 0;
           receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+          receiver->attachPlateInstanceBounds();
           receiver->m_plateList->setCurrentPlateIndex(-1);
           receiver->sourceFilePath_.clear();
           receiver->objectNames_.clear();
@@ -11307,6 +11358,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 
   // v3.0 Phase 16 (D-05): rebuild m_plateList from the JSON plates array.
   m_plateList = std::make_unique<OWzx::PartPlateList>();
+  attachPlateInstanceBounds();
   m_plateList->resetToSinglePlate();
 
   // Restore plates and objects

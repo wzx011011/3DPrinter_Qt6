@@ -20,6 +20,7 @@
 // Per-plate config (D-04): native Slic3r::DynamicPrintConfig m_config under HAS_LIBSLIC3R
 //   (PartPlate.hpp:159), NOT QHash<QString,QVariant>.
 
+#include <functional>
 #include <set>
 #include <string>
 #include <utility>
@@ -28,6 +29,7 @@
 #include <QImage>  // v3.2 Phase 30: cached plate thumbnail (Qt-native).
 
 #ifdef HAS_LIBSLIC3R
+#include <libslic3r/BoundingBox.hpp>
 #include <libslic3r/PrintConfig.hpp>
 #include <libslic3r/Point.hpp>
 #endif
@@ -134,7 +136,10 @@ class PartPlate {
   /// Geometry origin in world space (upstream m_origin, Vec3d).
 #ifdef HAS_LIBSLIC3R
   Slic3r::Vec3d origin() const { return m_origin; }
-  void setOrigin(const Slic3r::Vec3d& origin) { m_origin = origin; }
+  void setOrigin(const Slic3r::Vec3d& origin) {
+    m_origin = origin;
+    m_bounding_box_dirty = true;  // default rect tracks the origin (center)
+  }
 #else
   struct OriginFallback { double x = 0, y = 0, z = 0; };
   OriginFallback origin() const {
@@ -150,7 +155,81 @@ class PartPlate {
   int width() const { return m_width; }
   int depth() const { return m_depth; }
   int height() const { return m_height; }
-  void setSize(int w, int d, int h) { m_width = w; m_depth = d; m_height = h; }
+  void setSize(int w, int d, int h) {
+    m_width = w;
+    m_depth = d;
+    m_height = h;
+#ifdef HAS_LIBSLIC3R
+    m_bounding_box_dirty = true;  // default rect tracks width/depth
+#endif
+  }
+
+  // ── Bed shape + print-volume geometry (upstream m_shape / contains) ──────
+  // Source truth: PartPlate.hpp:120-123 (m_raw_shape/m_shape/m_exclude_area),
+  // PartPlate.cpp:2606-2624 (set_shape), :349-356 (calc_bounding_boxes),
+  // :2694-2725 (contains/intersects).
+  //
+  // Upstream stores the bed shape centered at (0,0) and translates it by the
+  // plate grid position (set_shape adds `position` to every raw point,
+  // PartPlate.cpp:2609-2611; position = compute_shape_position = the plate
+  // origin). Qt6 mirrors this: the plate origin IS the plate center, and the
+  // default shape is the width x depth rectangle centered on it. A custom
+  // polygon (round/oval beds) can be installed with setShape; until then the
+  // default rectangle is synthesized lazily, so origin/size updates never go
+  // stale (PartPlateList::updatePlateOrigins keeps moving origins).
+#ifdef HAS_LIBSLIC3R
+  /// World-space print-area polygon (upstream Pointfs m_shape). Empty until a
+  /// custom shape is installed; queries then fall back to the default
+  /// origin-centered rectangle.
+  const std::vector<Slic3r::Vec2d>& shape() const { return m_shape; }
+
+  /// Installs a custom world-space print-area polygon and marks it custom
+  /// (upstream set_shape shape half, PartPlate.cpp:2606-2624). An empty vector
+  /// re-selects the default origin-centered rectangle.
+  void setShape(std::vector<Slic3r::Vec2d> shape) {
+    m_shape = std::move(shape);
+    m_bounding_box_dirty = true;
+  }
+
+  /// Bounding box of the print area (upstream m_bounding_box, fed by
+  /// calc_bounding_boxes, PartPlate.cpp:349-356 -- shape points merged at
+  /// z=0). Upstream PartPlate::contains(Vec3d) tests THIS box (PartPlate.cpp:
+  /// 2694-2697), not a per-point polygon sweep, so for a custom polygon the
+  /// point test is its AABB.
+  const Slic3r::BoundingBoxf3& boundingBox() const;
+
+  /// Upstream PartPlate::contains(const Vec3d&) (PartPlate.cpp:2694-2697):
+  /// the point lies inside the print-area bounding box. The box is built from
+  /// shape points at z=0, so like upstream this holds for bed-plane points
+  /// (z == 0).
+  bool contains(const Slic3r::Vec3d& point) const {
+    return boundingBox().contains(point);
+  }
+
+  /// Upstream PartPlate::contains(const BoundingBoxf3&) (PartPlate.cpp:2704-
+  /// 2714): the box is FULLY inside the print volume. The volume spans the
+  /// print-area footprint widened by BedEpsilon on X/Y, with objects allowed
+  /// to protrude below the bed (z in [-1e10, +1e3], PartPlate.cpp:2707-2712).
+  bool contains(const Slic3r::BoundingBoxf3& box) const;
+
+  /// Upstream PartPlate::intersects(const BoundingBoxf3&) (PartPlate.cpp:2716-
+  /// 2725): the same print volume, overlap instead of containment.
+  bool intersects(const Slic3r::BoundingBoxf3& box) const;
+
+  /// Geometric instance lookup under a bed-plane point. Qt6 composite of the
+  /// bounding-box work upstream does per instance inside
+  /// PartPlateList::notify_instance_update (PartPlate.cpp:4198-4250): walks
+  /// this plate's obj_to_instance_set in membership order and returns the
+  /// first (objectIndex, instanceIndex) whose transformed world bounding box
+  /// -- supplied by instanceBounds, the same source upstream derives from
+  /// ModelObject::instance_bounding_box -- contains the point. Returns
+  /// {-1,-1} when no member instance matches (or the provider is unset).
+  std::pair<int, int> findInstance(
+      const Slic3r::Vec3d& point,
+      const std::function<Slic3r::BoundingBoxf3(int objectIndex,
+                                                int instanceIndex)>& instanceBounds)
+      const;
+#endif
 
   // ── Lock / printable / slice state machine ─────────────────────────────
   bool isLocked() const { return m_locked; }
@@ -384,6 +463,16 @@ class PartPlate {
   int m_width = 0;
   int m_depth = 0;
   int m_height = 0;
+
+#ifdef HAS_LIBSLIC3R
+  /// Custom print-area polygon (upstream m_shape). Empty = the default
+  /// origin-centered width x depth rectangle is used for queries.
+  std::vector<Slic3r::Vec2d> m_shape;
+  /// Print-area bounding box cache (upstream m_bounding_box), rebuilt lazily
+  /// by calcBoundingBoxes() after shape/origin/size changes.
+  mutable Slic3r::BoundingBoxf3 m_bounding_box;
+  mutable bool m_bounding_box_dirty = true;
+#endif
 
   bool m_printable = true;
   bool m_locked = false;

@@ -82,6 +82,26 @@ class PartPlateTests final : public QObject {
   void deletePlateMigratesInstancesToNeighbor();
   // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
   void allPlatesAggregateReadinessTruthTables();
+  // ── PLATE-PRINT-LIFECYCLE batch 1: print-volume geometry + findInstance ──
+  // Point/bounds tests against the plate print area (upstream contains/
+  // intersects, PartPlate.cpp:2694-2725): inside / outside / boundary /
+  // below-bed protrusion / BedEpsilon tolerance / custom shape.
+#ifdef HAS_LIBSLIC3R
+  void platePrintVolumeContainsTests();
+  void plateFindInstancePointLookup();
+  void plateListBoxAndPointLookups();
+  void unprintablePlateExcludedFromFindInstanceAt();
+#else
+  void platePrintVolumeContainsTests() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void plateFindInstancePointLookup() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void plateListBoxAndPointLookups() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void unprintablePlateExcludedFromFindInstanceAt() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
+#ifdef HAS_LIBSLIC3R
+  void servicePlateIndexAtPointUsesInstanceBounds();
+#else
+  void servicePlateIndexAtPointUsesInstanceBounds() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
 #ifdef HAS_LIBSLIC3R
   void sliceServiceRejectsNotReadyPlate();
 #else
@@ -669,6 +689,272 @@ void PartPlateTests::allPlatesAggregateReadinessTruthTables() {
     QVERIFY(!list.isAllSliceResultReadyForExport());
   }
 }
+
+// ── PLATE-PRINT-LIFECYCLE batch 1: print-volume geometry + findInstance ─────
+
+#ifdef HAS_LIBSLIC3R
+void PartPlateTests::platePrintVolumeContainsTests() {
+  // Default shape: the width x depth rectangle centered on the plate origin
+  // (upstream set_shape translates the centered bed shape by the plate grid
+  // position, PartPlate.cpp:2609-2611 -- the origin IS the plate center).
+  OWzx::PartPlate plate(0);
+  plate.setSize(200, 200, 0);
+  QVERIFY(plate.shape().empty());  // no custom polygon installed yet
+  const Slic3r::Vec3d origin = plate.origin();
+  QCOMPARE(origin.x(), 0.0);
+  QCOMPARE(origin.y(), 0.0);
+
+  // The default bounding box spans [-100,100]x[-100,100] at z=0 (upstream
+  // calc_bounding_boxes merges shape points at z=0, PartPlate.cpp:349-356).
+  const Slic3r::BoundingBoxf3& box = plate.boundingBox();
+  QCOMPARE(box.min(0), -100.0);
+  QCOMPARE(box.max(0), 100.0);
+  QCOMPARE(box.min(1), -100.0);
+  QCOMPARE(box.max(1), 100.0);
+  QCOMPARE(box.min(2), 0.0);
+  QCOMPARE(box.max(2), 0.0);
+
+  // contains(Vec3d) -- inside / outside / boundary (upstream
+  // PartPlate.cpp:2694-2697 == m_bounding_box.contains(point)).
+  QVERIFY(plate.contains(Slic3r::Vec3d(0.0, 0.0, 0.0)));
+  QVERIFY(plate.contains(Slic3r::Vec3d(-99.0, 99.0, 0.0)));
+  QVERIFY(plate.contains(Slic3r::Vec3d(100.0, 100.0, 0.0)));  // boundary: closed box
+  QVERIFY(!plate.contains(Slic3r::Vec3d(100.5, 0.0, 0.0)));   // outside +X
+  QVERIFY(!plate.contains(Slic3r::Vec3d(0.0, -100.5, 0.0)));  // outside -Y
+  // The box carries z=[0,0] (shape points merged at z=0), so like upstream
+  // only bed-plane points (z==0) can match.
+  QVERIFY(!plate.contains(Slic3r::Vec3d(0.0, 0.0, 5.0)));
+
+  // contains(BoundingBoxf3) (upstream PartPlate.cpp:2704-2714): full
+  // containment in the print volume; X/Y widened by BedEpsilon (3e-4), and
+  // objects may protrude below the bed (min z forced to -1e10, max 1e3).
+  QVERIFY(plate.contains(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(-10.0, -10.0, 0.0), Slic3r::Vec3d(10.0, 10.0, 20.0))));
+  // A box sticking out on X is NOT contained (containment is strict beyond
+  // the epsilon widening).
+  QVERIFY(!plate.contains(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(-110.0, -10.0, 0.0), Slic3r::Vec3d(-90.0, 10.0, 5.0))));
+  // Below-bed protrusion is allowed.
+  QVERIFY(plate.contains(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(-10.0, -10.0, -30.0), Slic3r::Vec3d(10.0, 10.0, 20.0))));
+  // BedEpsilon tolerance: up to 3e-4 of protrusion still counts as contained.
+  QVERIFY(plate.contains(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(-10.0, -10.0, 0.0),
+      Slic3r::Vec3d(100.0 + 2e-4, 10.0, 5.0))));
+  QVERIFY(!plate.contains(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(-10.0, -10.0, 0.0),
+      Slic3r::Vec3d(100.0 + 1e-3, 10.0, 5.0))));
+
+  // intersects(BoundingBoxf3) (upstream PartPlate.cpp:2716-2725): overlap.
+  QVERIFY(plate.intersects(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(90.0, -10.0, 0.0), Slic3r::Vec3d(150.0, 10.0, 5.0))));
+  QVERIFY(!plate.intersects(Slic3r::BoundingBoxf3(
+      Slic3r::Vec3d(150.0, -10.0, 0.0), Slic3r::Vec3d(200.0, 10.0, 5.0))));
+
+  // A custom polygon replaces the default rectangle; the point test is its
+  // AABB (upstream stores bed shapes as polygons and tests m_bounding_box,
+  // so for non-rectangular beds the test is the polygon's bounding box).
+  OWzx::PartPlate custom(0);
+  custom.setSize(200, 200, 0);
+  std::vector<Slic3r::Vec2d> poly{
+      Slic3r::Vec2d(0.0, 0.0), Slic3r::Vec2d(50.0, 0.0),
+      Slic3r::Vec2d(50.0, 20.0), Slic3r::Vec2d(0.0, 20.0)};
+  custom.setShape(poly);
+  QCOMPARE(int(custom.shape().size()), 4);
+  QCOMPARE(custom.boundingBox().max(0), 50.0);
+  QCOMPARE(custom.boundingBox().max(1), 20.0);
+  QVERIFY(custom.contains(Slic3r::Vec3d(25.0, 10.0, 0.0)));
+  QVERIFY(!custom.contains(Slic3r::Vec3d(25.0, 30.0, 0.0)));
+  // An empty vector re-selects the default origin-centered rectangle.
+  custom.setShape({});
+  QVERIFY(custom.shape().empty());
+  QCOMPARE(custom.boundingBox().max(0), 100.0);
+}
+
+void PartPlateTests::plateFindInstancePointLookup() {
+  // PartPlate::findInstance: the first member instance whose transformed
+  // bounds contain the bed-plane point (the per-instance bounding-box work
+  // upstream performs in notify_instance_update, PartPlate.cpp:4198-4250).
+  OWzx::PartPlate plate(0);
+  plate.addInstance(0, 0);
+  plate.addInstance(1, 0);
+
+  // obj1's box deliberately overlaps obj0's so membership order (first added
+  // wins) is observable, mirroring the upstream first-hit find_instance loop.
+  auto bounds = [](int objectIndex, int instanceIndex) {
+    Slic3r::BoundingBoxf3 box;
+    if (objectIndex == 0 && instanceIndex == 0) {
+      box.merge(Slic3r::Vec3d(-10.0, -10.0, 0.0));
+      box.merge(Slic3r::Vec3d(10.0, 10.0, 5.0));
+    } else if (objectIndex == 1 && instanceIndex == 0) {
+      box.merge(Slic3r::Vec3d(5.0, -5.0, 0.0));
+      box.merge(Slic3r::Vec3d(30.0, 5.0, 5.0));
+    }
+    return box;  // undefined for unknown members -> never matches
+  };
+
+  const auto hit0 = plate.findInstance(Slic3r::Vec3d(0.0, 0.0, 0.0), bounds);
+  QCOMPARE(hit0.first, 0);
+  QCOMPARE(hit0.second, 0);
+
+  const auto hitOnly1 = plate.findInstance(Slic3r::Vec3d(25.0, 0.0, 0.0), bounds);
+  QCOMPARE(hitOnly1.first, 1);
+  QCOMPARE(hitOnly1.second, 0);
+
+  // Overlap zone: membership order decides (obj 0 added first).
+  const auto hitOverlap = plate.findInstance(Slic3r::Vec3d(9.0, 0.0, 0.0), bounds);
+  QCOMPARE(hitOverlap.first, 0);
+
+  // A point inside no member instance (and unknown members with undefined
+  // boxes) never matches; a null provider is fail-closed.
+  QCOMPARE(plate.findInstance(Slic3r::Vec3d(50.0, 50.0, 0.0), bounds).first, -1);
+  QCOMPARE(plate.findInstance(Slic3r::Vec3d(0.0, 0.0, 0.0), {}).first, -1);
+}
+
+void PartPlateTests::plateListBoxAndPointLookups() {
+  // 100x100 plates on the Phase 29 grid: stride 120, origins at (0,0),
+  // (120,0), (0,-120); the default rects span origin +/- 50.
+  OWzx::PartPlateList list;
+  list.setPlateSize(100, 100, 0);
+  QVERIFY(list.createPlate() != nullptr);
+  QVERIFY(list.createPlate() != nullptr);
+  QCOMPARE(list.plateCount(), 3);
+
+  const auto mkBox = [](double minX, double minY, double maxX, double maxY) {
+    return Slic3r::BoundingBoxf3(Slic3r::Vec3d(minX, minY, 0.0),
+                                 Slic3r::Vec3d(maxX, maxY, 10.0));
+  };
+
+  // List-level intersects-lookup (upstream find_instance(BoundingBoxf3&),
+  // PartPlate.cpp:4131-4149): FIRST intersecting plate wins.
+  QCOMPARE(list.findInstance(mkBox(40.0, -10.0, 60.0, 10.0)), 0);
+  QCOMPARE(list.findInstance(mkBox(110.0, -10.0, 130.0, 10.0)), 1);
+  // A box in the gap between the grid plates touches no plate.
+  QCOMPARE(list.findInstance(mkBox(55.0, -10.0, 65.0, 10.0)), -1);
+  // Plate 2 sits at row 1 / col 0 (origin (0,-120)).
+  QCOMPARE(list.findInstance(mkBox(-5.0, -125.0, 5.0, -115.0)), 2);
+
+  // List-level contains/intersects aggregates (PartPlate.cpp:3948-3964):
+  // contains = full containment on SOME plate; intersects = overlap.
+  QVERIFY(list.contains(mkBox(-10.0, -10.0, 10.0, 10.0)));
+  QVERIFY(!list.contains(mkBox(40.0, -10.0, 60.0, 10.0)));
+  QVERIFY(list.intersects(mkBox(40.0, -10.0, 60.0, 10.0)));
+  QVERIFY(!list.intersects(mkBox(55.0, 5.0, 65.0, 15.0)));
+
+  // Cross-plate point lookup (findInstanceAt, upstream find_instance loop
+  // structure, PartPlate.cpp:4110-4129) via the injected bounds source.
+  OWzx::PartPlateList hitList;
+  hitList.setPlateSize(100, 100, 0);
+  QVERIFY(hitList.createPlate() != nullptr);
+  QVERIFY(hitList.createPlate() != nullptr);
+  hitList.plate(0)->addInstance(0, 0);  // covers (0,0) +/- 10
+  hitList.plate(1)->addInstance(1, 0);  // covers (120,0) +/- 10 on X
+  hitList.setInstanceBoundsFn([](int objectIndex, int) {
+    Slic3r::BoundingBoxf3 box;
+    if (objectIndex == 0) {
+      box.merge(Slic3r::Vec3d(-10.0, -10.0, 0.0));
+      box.merge(Slic3r::Vec3d(10.0, 10.0, 5.0));
+    } else if (objectIndex == 1) {
+      box.merge(Slic3r::Vec3d(110.0, -10.0, 0.0));
+      box.merge(Slic3r::Vec3d(130.0, 10.0, 5.0));
+    }
+    return box;
+  });
+
+  const OWzx::PartPlateList::InstanceHit hit0 =
+      hitList.findInstanceAt(Slic3r::Vec3d(0.0, 5.0, 0.0));
+  QCOMPARE(hit0.plateIndex, 0);
+  QCOMPARE(hit0.objectIndex, 0);
+  QCOMPARE(hit0.instanceIndex, 0);
+
+  const OWzx::PartPlateList::InstanceHit hit1 =
+      hitList.findInstanceAt(Slic3r::Vec3d(120.0, -5.0, 0.0));
+  QCOMPARE(hit1.plateIndex, 1);
+  QCOMPARE(hit1.objectIndex, 1);
+
+  // A point over the unoccupied plate 2 (or far outside the grid) never
+  // matches: no member instance covers it.
+  QCOMPARE(hitList.findInstanceAt(Slic3r::Vec3d(0.0, -120.0, 0.0)).plateIndex, -1);
+  QCOMPARE(hitList.findInstanceAt(Slic3r::Vec3d(500.0, 500.0, 0.0)).plateIndex, -1);
+
+  // Without a bounds provider the lookup is fail-closed (no hit, no crash).
+  OWzx::PartPlateList noProvider;
+  noProvider.plate(0)->addInstance(0, 0);
+  const OWzx::PartPlateList::InstanceHit miss =
+      noProvider.findInstanceAt(Slic3r::Vec3d(0.0, 0.0, 0.0));
+  QCOMPARE(miss.plateIndex, -1);
+  QCOMPARE(miss.objectIndex, -1);
+  QCOMPARE(miss.instanceIndex, -1);
+}
+
+void PartPlateTests::unprintablePlateExcludedFromFindInstanceAt() {
+  // Upstream verification: the unprintable shared plate is constructed with
+  // printable=false (PartPlate.cpp:3114/3122) and kept OUT of m_plate_list
+  // (PartPlate.hpp:541), so find_instance (PartPlate.cpp:4110-4149) can never
+  // return it. Qt6 flags unprintable plates in place, so findInstanceAt must
+  // skip them exactly like the upstream list loop does.
+  OWzx::PartPlateList list;
+  QVERIFY(list.createPlate() != nullptr);  // plates 0,1
+  // The SAME point is covered by an instance on each plate; plate 0 is
+  // unprintable, so only plate 1 may answer.
+  list.plate(0)->addInstance(0, 0);
+  list.plate(1)->addInstance(1, 0);
+  QVERIFY(list.plate(0)->isPrintable());
+  list.plate(0)->setPrintable(false);
+  QVERIFY(!list.plate(0)->isPrintable());
+  list.setInstanceBoundsFn([](int, int) {
+    Slic3r::BoundingBoxf3 box;
+    box.merge(Slic3r::Vec3d(9.0, 9.0, 0.0));
+    box.merge(Slic3r::Vec3d(11.0, 11.0, 5.0));
+    return box;
+  });
+
+  const OWzx::PartPlateList::InstanceHit hit =
+      list.findInstanceAt(Slic3r::Vec3d(10.0, 10.0, 0.0));
+  QCOMPARE(hit.plateIndex, 1);
+  QCOMPARE(hit.objectIndex, 1);
+
+  // Membership lookup is NOT filtered: instances parked on the unprintable
+  // plate stay resolvable (upstream handles that plate separately at
+  // PartPlate.cpp:4228 via unprintable_plate.contain_instance).
+  QCOMPARE(list.findInstance(0, 0), 0);
+
+  // All-unprintable: no plate may answer the point query.
+  list.plate(1)->setPrintable(false);
+  QCOMPARE(list.findInstanceAt(Slic3r::Vec3d(10.0, 10.0, 0.0)).plateIndex, -1);
+}
+
+void PartPlateTests::servicePlateIndexAtPointUsesInstanceBounds() {
+  // Service-level wiring: the provider resolves REAL ModelObject bounds
+  // (ModelObject::instance_bounding_box, the source upstream uses at
+  // PartPlate.cpp:4198-4250), so plateIndexAtPoint works on loaded projects.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(service.modelCount() >= 1);
+
+  // The world bbox of object 0 (GL coords: x = slic3r X, z = slic3r Y per the
+  // ProjectServiceMock GL<->slic3r swap). Its CENTER is inside the instance
+  // box by construction, so the point must resolve to plate 0.
+  const QVariantMap box = service.selectionWorldBoundingBox({0});
+  QVERIFY2(!box.isEmpty(), "loaded object must expose a world bounding box");
+  const double cx = (box.value(QStringLiteral("minX")).toDouble() +
+                     box.value(QStringLiteral("maxX")).toDouble()) / 2.0;
+  const double cy = (box.value(QStringLiteral("minZ")).toDouble() +
+                     box.value(QStringLiteral("maxZ")).toDouble()) / 2.0;
+  QCOMPARE(service.plateIndexAtPoint(cx, cy), 0);
+
+  // A far-away bed point matches nothing.
+  QCOMPARE(service.plateIndexAtPoint(1.0e9, -1.0e9), -1);
+
+  // An unprintable plate is skipped even though its instance covers the point
+  // (upstream: the unprintable shared plate is not in m_plate_list).
+  QVERIFY(service.setPlatePrintable(0, false));
+  QCOMPARE(service.plateIndexAtPoint(cx, cy), -1);
+}
+#endif  // HAS_LIBSLIC3R
 
 #ifdef HAS_LIBSLIC3R
 void PartPlateTests::sliceServiceRejectsNotReadyPlate() {

@@ -156,6 +156,52 @@ int PartPlateList::findInstanceBelongs(int objectIndex, int instanceIndex) const
   return -1;
 }
 
+// -- Print-volume geometry (upstream PartPlateList overloads) ----------------
+
+#ifdef HAS_LIBSLIC3R
+int PartPlateList::findInstance(const Slic3r::BoundingBoxf3& boundingBox) const {
+  // PartPlate.cpp:4131-4149: first plate whose print volume intersects.
+  for (int i = 0; i < plateCount(); ++i) {
+    if (m_plate_list[i]->intersects(boundingBox)) return i;
+  }
+  return -1;
+}
+
+PartPlateList::InstanceHit PartPlateList::findInstanceAt(
+    const Slic3r::Vec3d& point) const {
+  // Upstream find_instance loop structure (PartPlate.cpp:4110-4129: first hit
+  // wins). The unprintable shared plate is excluded: upstream keeps it out of
+  // m_plate_list (PartPlate.hpp:541), so find_instance can never return it;
+  // the printable flag reproduces that filter (see header).
+  if (!m_instance_bounds_fn) return {};
+  for (int i = 0; i < plateCount(); ++i) {
+    const PartPlate* p = m_plate_list[i].get();
+    if (!p || !p->isPrintable()) continue;
+    const std::pair<int, int> key = p->findInstance(point, m_instance_bounds_fn);
+    if (key.first >= 0) return {i, key.first, key.second};
+  }
+  return {};
+}
+
+bool PartPlateList::contains(const Slic3r::BoundingBoxf3& boundingBox) const {
+  // PartPlate.cpp:3956-3964 (the upstream loop never breaks; same boolean).
+  bool result = false;
+  for (const auto& plate : m_plate_list) {
+    if (plate && plate->contains(boundingBox)) result = true;
+  }
+  return result;
+}
+
+bool PartPlateList::intersects(const Slic3r::BoundingBoxf3& boundingBox) const {
+  // PartPlate.cpp:3948-3954.
+  bool result = false;
+  for (const auto& plate : m_plate_list) {
+    if (plate && plate->intersects(boundingBox)) result = true;
+  }
+  return result;
+}
+#endif  // HAS_LIBSLIC3R
+
 bool PartPlateList::isAllPlatesReadyForSlice() const {
   for (const auto& plate : m_plate_list) {
     if (plate && plate->canSlice())
@@ -319,18 +365,25 @@ void PartPlateList::updatePlateCols() {
 }
 
 void PartPlateList::updatePlateOrigins() {
-  // Mirrors update_all_plates_pos_and_size core loop (PartPlate.cpp:4872-4892);
+  // Mirrors the update_all_plates_pos_and_size core loop (PartPlate.cpp:4004,
+  // per-plate set_pos_and_size at :4014, PartPlate::set_pos_and_size :1810);
   // wipe-tower and unprintable branches stripped (out of Phase 29 scope).
+  // Upstream set_pos_and_size writes BOTH the position and the plate size, so
+  // every plate carries its own width/depth/height (the per-plate print
+  // volume used by contains/intersects); Phase 29 dropped the size half.
 #ifdef HAS_LIBSLIC3R
   for (int i = 0; i < plateCount(); ++i) {
     PartPlate* p = plate(i);
-    if (p) p->setOrigin(computeOrigin(i, m_plate_cols));
+    if (!p) continue;
+    p->setSize(m_plate_width, m_plate_depth, m_plate_height);
+    p->setOrigin(computeOrigin(i, m_plate_cols));
   }
 #else
   // Non-HAS_LIBSLIC3R fallback: write via the 3-double setOrigin overload.
   for (int i = 0; i < plateCount(); ++i) {
     PartPlate* p = plate(i);
     if (!p) continue;
+    p->setSize(m_plate_width, m_plate_depth, m_plate_height);
     const int row = (m_plate_cols > 0) ? i / m_plate_cols : 0;
     const int col = (m_plate_cols > 0) ? i % m_plate_cols : 0;
     p->setOrigin(col * plateStrideX(), -row * plateStrideY(), 0.0);
