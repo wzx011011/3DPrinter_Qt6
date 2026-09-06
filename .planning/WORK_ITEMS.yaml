@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: 5f351e3
+head_at_update: 18dd03e
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -192,9 +192,9 @@ items:
     aliases: ["P0.5.5b/remainder"]
     area: Prepare/Plate
     priority: P1
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    implementation: hybrid
+    parity: partial
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -212,9 +212,45 @@ items:
       full find_instance/contains geometry, plate shape/exclude/extruder
       areas, per-plate wipe-tower/Print context, complete slice-state/result
       API.
+      Batch 1 (instance geometry + unprintable semantics) resolved 18dd03e:
+      PartPlate gains m_shape storage with the origin-centered default
+      rectangle (set_shape/calc_bounding_boxes semantics), contains(Vec3d),
+      contains/intersects(BoundingBoxf3) with the BedEpsilon print volume
+      (PartPlate.cpp:2694-2725), and findInstance(point) over member
+      instances with injected ModelObject::instance_bounding_box bounds
+      (notify_instance_update, PartPlate.cpp:4198-4250);
+      PartPlateList::findInstance(BoundingBoxf3) + contains/intersects
+      aggregates (:3948-3964, 4131-4149) and findInstanceAt(point) skip
+      unprintable plates (upstream keeps unprintable_plate out of
+      m_plate_list, PartPlate.hpp:541); updatePlateOrigins now writes
+      per-plate size like upstream set_pos_and_size (:4004-4014, :1810);
+      ProjectServiceMock attaches the bounds provider at every plate list
+      (re)creation and exposes plateIndexAtPoint. Slice chain verified
+      reading PartPlate::isPrintable domain state (export-all filter
+      SliceService.cpp:1557; slice-all queue EditorViewModel::requestSliceAll).
     remaining:
+      - Durable per-plate Print / GCodeResult lifetime (m_print_list /
+        m_gcode_result_list port).
+      - Plate shape/exclude/extruder areas persistence (3MF PlateData);
+        viewport drop / out-of-bounds consumers adopting the new
+        point/box primitives (blocked on the mock GL<->slic3r bed-rect
+        coordinate unification, not on the primitives themselves).
+      - Per-plate wipe-tower/Print context; complete slice-state/result API.
       - Sub-scope into separate items when work starts; do not mark P0.5.5b
         complete until this item closes.
+    evidence:
+      commits: [18dd03e]
+      tests:
+        - tests/PartPlateTests.cpp::platePrintVolumeContainsTests
+        - tests/PartPlateTests.cpp::plateFindInstancePointLookup
+        - tests/PartPlateTests.cpp::plateListBoxAndPointLookups
+        - tests/PartPlateTests.cpp::unprintablePlateExcludedFromFindInstanceAt
+        - tests/PartPlateTests.cpp::servicePlateIndexAtPointUsesInstanceBounds
+      gate: canonical run after ninja -t clean full rebuild EXIT=0 2026-09-06,
+        12 suites 571 tests 0 failed (PartPlate 66 incl. the 5 new slots);
+        one in-suite ViewModelSmoke write flake (dirWritable=0, known AV
+        file-churn G-11 pattern) passed 187/187 on the individual rerun
+      last_verified: 2026-09-06
 
   - id: PAINT-RIGHT-BUTTON
     title: Right-button paint stroke (alternate state / context-menu suppression)
