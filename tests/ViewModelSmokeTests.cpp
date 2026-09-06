@@ -510,6 +510,13 @@ private slots:
   // GLGizmoPainterBase.cpp:1234-1236), the threshold<=0 disable, and that a
   // brush stroke which subdivides the square grows the fragment set.
   void paintEngineGapFragmentsRespectAreaThreshold();
+  // PAINT-MMU-TOOLS: bucket fill (pointer single-facet + connected flood) and
+  // the height-range band via the pure helpers. Asserts the upstream click
+  // semantics (apply-on-next-click staging, GLGizmoPainterBase.cpp:778-787),
+  // the angle=-1 no-edge-detection flood, the propagate=false pointer scope,
+  // and the world-Z band anchoring incl. the full-transform translation
+  // (GLGizmoPainterBase.cpp:703-733).
+  void paintEngineMmuToolsBucketFillAndHeightRange();
   // PAINT-ALT-WHEEL-CLIP: buildPaintClippingPlane volume-coordinate math.
   // Asserts the upstream chain semantics: normal = -camera forward, world
   // offset = n.dot(center) + R - ratio*2R (ObjectClipper::
@@ -8683,6 +8690,135 @@ void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
 void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
 {
   QSKIP("Smart fill smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+// ===========================================================================
+// PAINT-MMU-TOOLS: bucket fill (pointer + connected flood) and the
+// height-range band via the pure helpers on a synthetic unit square.
+// ===========================================================================
+void ViewModelSmokeTests::paintEngineMmuToolsBucketFillAndHeightRange()
+{
+  // Same unit-square synthesis as
+  // paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt: two coplanar
+  // triangles in the XY plane sharing the v0-v2 diagonal. Coplanarity means
+  // the bucket flood crosses the shared edge with ANY angle (and with
+  // angle=-1 the edge check is skipped entirely), so the facet-count
+  // assertions below are exact.
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),
+    Slic3r::Vec3i32(0, 2, 3)
+  };
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  const Slic3r::Transform3d identity = Slic3r::Transform3d::Identity();
+
+  // (a) Pointer brush (angle -1, propagate false): the FIRST click only
+  // stages the hit facet (nothing was staged before), the SECOND click
+  // applies exactly it (upstream POINTER click path,
+  // GLGizmoPainterBase.cpp:790-793 bucket_fill angle -1 propagate false).
+  {
+    Slic3r::TriangleMesh mesh(its);
+    Slic3r::TriangleSelector selector(mesh);
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/false);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+             "PAINT-MMU-TOOLS: first pointer click must only stage the facet");
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/false);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 1,
+             "PAINT-MMU-TOOLS: second pointer click must apply exactly the staged facet");
+  }
+
+  // (b) Bucket fill (angle -1 = edge detection off, propagate true): the
+  // flood crosses the shared edge and stages BOTH facets; the second click
+  // applies both (upstream BUCKET_FILL click path,
+  // GLGizmoPainterBase.cpp:795-797).
+  {
+    Slic3r::TriangleMesh mesh(its);
+    Slic3r::TriangleSelector selector(mesh);
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/true);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+             "PAINT-MMU-TOOLS: first bucket click must only stage the region");
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/true);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 2,
+             "PAINT-MMU-TOOLS: the no-edge-detection flood must apply both coplanar facets");
+  }
+
+  // (c) Height range: mesh lifted to world Z = 5 by the FULL transform (the
+  // band anchor is a world Z). A band [5, 5.2] covers the square; a band
+  // anchored at 6 covers nothing (all facets strictly below). select_patch's
+  // hr branch sweeps every original facet regardless of facetStart
+  // (TriangleSelector.cpp:259-269).
+  {
+    Slic3r::Transform3d trafoWorld = Slic3r::Transform3d::Identity();
+    trafoWorld.translation() = Slic3r::Vec3d(0.0, 0.0, 5.0);
+    const Slic3r::Transform3d trafoNoTranslate = identity;
+
+    Slic3r::TriangleMesh covered(its);
+    Slic3r::TriangleSelector coveredSelector(covered);
+    OWzx::applyHeightRangeToSelector(coveredSelector,
+                                     /*hitWorldZ=*/5.0f, /*height=*/0.2f,
+                                     Slic3r::EnforcerBlockerType::ENFORCER,
+                                     trafoWorld, trafoNoTranslate,
+                                     /*cameraPosMeshLocal=*/Slic3r::Vec3f(0.5f, 0.5f, 10.f),
+                                     /*facetStart=*/0);
+    QVERIFY2(coveredSelector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 2,
+             "PAINT-MMU-TOOLS: the world-Z band must cover both lifted facets");
+
+    Slic3r::TriangleMesh missed(its);
+    Slic3r::TriangleSelector missedSelector(missed);
+    OWzx::applyHeightRangeToSelector(missedSelector,
+                                     /*hitWorldZ=*/6.0f, /*height=*/0.2f,
+                                     Slic3r::EnforcerBlockerType::ENFORCER,
+                                     trafoWorld, trafoNoTranslate,
+                                     Slic3r::Vec3f(0.5f, 0.5f, 10.f),
+                                     /*facetStart=*/0);
+    QVERIFY2(missedSelector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+             "PAINT-MMU-TOOLS: a band above the lifted mesh must paint nothing");
+  }
+
+  // (d) PaintEngine wrapper end-to-end: bucketFillAt + paintHeightRangeAt on
+  // the same synthetic mesh (locks the ensureSelector cache contract).
+  {
+    auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+    OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+    const bool filled = engine.bucketFillAt(
+        0, 0, 0, facet0Center, -1.f,
+        Slic3r::EnforcerBlockerType::ENFORCER, identity, /*propagate=*/true);
+    QVERIFY2(filled, "PAINT-MMU-TOOLS: bucketFillAt must accept a valid hit");
+    const Slic3r::Transform3d trafoWorld = identity;
+    const bool painted = engine.paintHeightRangeAt(
+        0, 0, /*hitWorldZ=*/0.0f, /*height=*/0.2f,
+        Slic3r::EnforcerBlockerType::ENFORCER, trafoWorld, identity,
+        Slic3r::Vec3f(0.5f, 0.5f, 10.f), /*facetStart=*/0);
+    QVERIFY2(painted, "PAINT-MMU-TOOLS: paintHeightRangeAt must accept a valid band");
+    QVERIFY2(engine.cachedSelectorCount() == 1,
+             "PAINT-MMU-TOOLS: both wrapper calls must share the cached selector");
+  }
+}
+#else
+void ViewModelSmokeTests::paintEngineMmuToolsBucketFillAndHeightRange()
+{
+  QSKIP("MMU tools smoke test requires HAS_LIBSLIC3R -- skipping");
 }
 #endif
 

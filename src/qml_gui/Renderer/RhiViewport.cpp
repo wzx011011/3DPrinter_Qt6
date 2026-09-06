@@ -1874,23 +1874,46 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
   // SmartFill tool steps its seed-fill angle 1 deg within [0, 90]
   // (SmartFillAngle*); the GapFill tool steps the gap area 0.2 mm2 within
   // [0, 5] (GapArea*, PAINT-GAPFILL-PORT, GLGizmoPainterBase.cpp:624-627).
-  // HeightRange height belongs to the MMU tool set (PAINT-MMU-TOOLS).
+  // PAINT-MMU-TOOLS: the MMU tool set routes its own channels in the upstream
+  // order -- HeightRange steps the band span 0.2 within [0.1, 8]
+  // (CursorHeight*, GLGizmoPainterBase.cpp:584-592, first branch upstream),
+  // BucketFill steps the fill angle, GapFill steps the gap area, and the
+  // pointer brush tunes nothing (upstream POINTER matches no branch -- the
+  // wheel falls through to zoom).
+  const bool mmuTool = (m_gizmoMode == GizmoMmuSegmentation);
+  const bool mmuPointerBrush =
+      mmuTool && m_mmuPaintTool == 0 && m_brushCursorType == 2;
   if (event->modifiers() & Qt::ControlModifier &&
       (m_gizmoMode == GizmoSupportPaint ||
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
     const float delta = float(event->angleDelta().y()) / 120.0f;
-    if (delta != 0.f) {
+    if (delta != 0.f && !mmuPointerBrush) {
       const bool down = delta < 0.f;
-      if (m_paintToolType == 3 && m_gizmoMode == GizmoSupportPaint) {
+      if (mmuTool && m_mmuPaintTool == 4) {
+        // PAINT-MMU-TOOLS: m_cursor_height step (upstream
+        // GLGizmoPainterBase.cpp:584-592 -- CursorHeightStep 0.2 clamped to
+        // [CursorHeightMin 0.1, CursorHeightMax 8],
+        // GLGizmoPainterBase.hpp:242-245). The new value round-trips through
+        // heightRangeTuned -> QML -> EditorViewModel.paintHeightRange so the
+        // band + the panel slider follow the wheel.
+        const double next = down ? m_brushHeightRange - 0.2
+                                 : m_brushHeightRange + 0.2;
+        m_brushHeightRange = qBound(0.1, next, 8.0);
+        emit heightRangeTuned(m_brushHeightRange);
+      } else if ((m_paintToolType == 3 &&
+                  m_gizmoMode == GizmoSupportPaint) ||
+                 (mmuTool && m_mmuPaintTool == 3)) {
         // PAINT-GAPFILL-PORT: gap_area step (upstream
         // GLGizmoPainterBase.cpp:624-627). The new value round-trips through
         // gapAreaTuned -> QML -> EditorViewModel.supportPaintGapArea so the
         // -3 fragment overlay and the panel slider follow the wheel.
+        // PAINT-MMU-TOOLS: the MMU GapFill chip steps the same shared
+        // threshold (upstream GAP_FILL wheel is gizmo-independent).
         const float next = down ? m_gapArea - 0.2f : m_gapArea + 0.2f;
         m_gapArea = qBound(0.0f, next, 5.0f);
         emit gapAreaTuned(double(m_gapArea));
-      } else if (m_paintToolType == 2) {
+      } else if (m_paintToolType == 2 || (mmuTool && m_mmuPaintTool == 1)) {
         const float next = down ? m_smartFillAngle - 1.f : m_smartFillAngle + 1.f;
         m_smartFillAngle = qBound(0.0f, next, 90.0f);
       } else {
@@ -2381,6 +2404,52 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
     paintState = 0;
   else
     paintState = m_paintState;
+  // PAINT-MMU-TOOLS: the MMU gizmo routes its own tool set BEFORE the shared
+  // channels (upstream GLGizmoMmuSegmentation keeps its own m_current_tool
+  // independent of the other painter gizmos). Press-only like the smart fill
+  // -- a drag would restage the same region on every move event. Shift keeps
+  // its temporary-eraser meaning (paintState NONE above), so Shift+click on
+  // these tools erases the region/band (upstream runs the same fill branch
+  // with new_state NONE).
+  if (m_gizmoMode == GizmoMmuSegmentation) {
+    // HeightRange tool (upstream HeightRangeIcon -> BRUSH + HEIGHT_RANGE):
+    // click anchors the band at the hit's world Z.
+    if (m_mmuPaintTool == 4) {
+      if (m_paintClickPress && m_paintButton != 2) {
+        emit heightRangePickRequested(rayOrigin, rayDirection, m_camera.eye(),
+                                      m_camera.forwardVector(),
+                                      pickedSourceIndex, paintState,
+                                      m_brushHeightRange);
+      }
+      return;
+    }
+    // BucketFill tool (upstream FillButtonIcon -> BUCKET_FILL) and the
+    // pointer brush (upstream TriangleButtonIcon -> BRUSH + POINTER, routed
+    // as bucket_fill with angle -1 + propagate false,
+    // GLGizmoMmuSegmentation.cpp:594-595 + GLGizmoPainterBase.cpp:790-793).
+    const bool bucketTool = (m_mmuPaintTool == 1);
+    const bool pointerBrush =
+        (m_mmuPaintTool == 0 && m_brushCursorType == 2);
+    if ((bucketTool || pointerBrush) && m_paintClickPress &&
+        m_paintButton != 2) {
+      // Unchecked edge detection = angle -1 (upstream m_smart_fill_angle =
+      // -1.f when m_detect_geometry_edge is off,
+      // GLGizmoMmuSegmentation.cpp:633-637).
+      const double seedFillAngle = bucketTool
+          ? (m_mmuBucketEdgeDetection ? double(m_smartFillAngle) : -1.0)
+          : -1.0;
+      emit bucketFillPickRequested(rayOrigin, rayDirection,
+                                   m_camera.forwardVector(),
+                                   pickedSourceIndex, paintState,
+                                   seedFillAngle, /*propagate=*/bucketTool);
+      return;
+    }
+    // GapFill tool (upstream GapFillIcon -> GAP_FILL): clicks paint nothing
+    // (upstream GAP_FILL matches no click branch -- the fragment merge runs
+    // from the Perform button; the Qt6 port keeps the -3 preview only).
+    if (m_mmuPaintTool == 3)
+      return;
+  }
   // Phase 240 (GIZ-02): SmartFill is the tool chip (paintToolType==2) firing
   // on PRESS only -- a shift-DRAG keeps the brush path and the right button
   // never smart-fills.

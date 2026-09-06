@@ -368,6 +368,27 @@ public:
   void setSupportPaintSmartFillAngle(float angle);
   float supportPaintGapArea() const;
   void setSupportPaintGapArea(float area);
+  /// PAINT-MMU-TOOLS: the MMU gizmo's own tool chip (upstream
+  /// GLGizmoMmuSegmentation m_current_tool, each painter gizmo instance keeps
+  /// its own). 0=Brush (circle/sphere/pointer cursor via
+  /// supportPaintCursorType), 1=BucketFill, 3=GapFill, 4=HeightRange. The
+  /// values mirror supportPaintToolType where the tools overlap so the shared
+  /// channels stay comparable.
+  int mmuPaintTool() const;
+  void setMmuPaintTool(int tool);
+  /// PAINT-MMU-TOOLS: bucket-fill edge detection (upstream
+  /// m_detect_geometry_edge, GLGizmoMmuSegmentation.cpp:623-637). Checked =
+  /// the fill stops at facet edges steeper than the smart-fill angle;
+  /// unchecked = angle -1 (no edge detection, floods every same-state
+  /// neighbour).
+  bool mmuBucketEdgeDetection() const;
+  void setMmuBucketEdgeDetection(bool on);
+  /// PAINT-MMU-TOOLS: height-range band span in mm (upstream m_cursor_height,
+  /// CursorHeightMin=0.1 / Max=8 / Step=0.2, GLGizmoPainterBase.hpp:242-245).
+  /// Clamped to [0.1, 8]; Ctrl+wheel on the height-range tool steps it 0.2
+  /// (round-trips through RhiViewport::heightRangeTuned).
+  float paintHeightRange() const;
+  void setPaintHeightRange(float height);
   bool supportPaintOnOverhangsOnly() const;
   void setSupportPaintOnOverhangsOnly(bool on);
   /// Phase 240 (GIZ-02): overhang filter angle in degrees (upstream
@@ -436,6 +457,33 @@ public:
                                     int pickedSourceIndex,
                                     QVector3D rayOrigin, QVector3D rayDir,
                                     QVector3D cameraForward);
+  /// PAINT-MMU-TOOLS: bucket (connected-region) fill pick entry. Same
+  /// two-stage pick contract as smartFillAtFacet, but drives
+  /// TriangleSelector::bucket_fill_select_triangles (upstream POINTER brush +
+  /// BUCKET_FILL tool click, GLGizmoPainterBase.cpp:778-787). seedFillAngle
+  /// is the edge-detection threshold; a negative value disables it (pointer
+  /// brush + unchecked edge detection). propagate=true floods the connected
+  /// same-state region (bucket fill); false stages only the hit facet
+  /// (pointer brush). Returns true when a facet was hit and the fill ran.
+  Q_INVOKABLE bool bucketFillAtFacet(int state,
+                                     double seedFillAngle,
+                                     bool propagate,
+                                     int pickedSourceIndex,
+                                     QVector3D rayOrigin, QVector3D rayDir,
+                                     QVector3D cameraForward);
+  /// PAINT-MMU-TOOLS: height-range pick entry (upstream HEIGHT_RANGE brush,
+  /// GLGizmoPainterBase.cpp:703-733 + GLGizmoMmuSegmentation.cpp:667-668).
+  /// The world Z of the ray hit anchors the band [z, z + height]; the band is
+  /// applied to EVERY part volume of the picked object whose facets intersect
+  /// it (upstream get_projected_height_range scans all part volumes,
+  /// GLGizmoPainterBase.cpp:515-573). Returns true when at least one volume
+  /// was painted.
+  Q_INVOKABLE bool paintHeightRangeAt(int state,
+                                      double height,
+                                      int pickedSourceIndex,
+                                      QVector3D rayOrigin, QVector3D rayDir,
+                                      QVector3D cameraPosition,
+                                      QVector3D cameraForward);
   /// PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position for the
   /// painter gizmos, 0..1 (upstream ObjectClipper m_clp_ratio; 0 = clipping
   /// off). While > 0 paint picks that hit the mesh on the clipped side of
@@ -961,6 +1009,15 @@ public:
   Q_PROPERTY(float supportPaintAngleThreshold READ supportPaintAngleThreshold WRITE setSupportPaintAngleThreshold NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY stateChanged)
+  // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip (0=Brush, 1=BucketFill,
+  // 3=GapFill, 4=HeightRange; upstream GLGizmoMmuSegmentation m_current_tool
+  // Triangle/Fill/HeightRange/GapFill icons) + the bucket-fill edge-detection
+  // checkbox (m_detect_geometry_edge) + the height-range band span
+  // (m_cursor_height, 0.1..8 step 0.2). mmuPaintTool changes also emit
+  // paintDataChanged so the -3 gap-fragment preview follows the chip.
+  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool NOTIFY stateChanged)
+  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection NOTIFY stateChanged)
+  Q_PROPERTY(float paintHeightRange READ paintHeightRange WRITE setPaintHeightRange NOTIFY stateChanged)
   // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position 0..1
   // (0 = off) -- upstream ObjectClipper m_clp_ratio swept by Alt+wheel
   // (GLGizmoPainterBase.cpp:632-641) and reset via resetPaintClippingPlane.
@@ -1971,6 +2028,9 @@ private:
   float m_supportPaintAngleThreshold = 45.0f; ///< Overhang highlight angle
   float m_supportPaintSmartFillAngle = 30.0f; ///< Smart fill angle threshold
   float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold mm2 (upstream TriangleSelectorPatch::gap_area, 0..5 step 0.2)
+  int m_mmuPaintTool = 0;                 ///< PAINT-MMU-TOOLS: 0=Brush, 1=BucketFill, 3=GapFill, 4=HeightRange (upstream m_current_tool)
+  bool m_mmuBucketEdgeDetection = false;  ///< PAINT-MMU-TOOLS: bucket-fill edge detection (upstream m_detect_geometry_edge)
+  float m_paintHeightRange = 0.2f;        ///< PAINT-MMU-TOOLS: height-range band span mm (upstream m_cursor_height, 0.2 default, 0.1..8)
   double m_paintClippingPosition = 0.0;   ///< PAINT-ALT-WHEEL-CLIP: cross-section ratio, 0 = off (upstream ObjectClipper m_clp_ratio)
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   float m_supportPaintOverhangAngle = 0.0f;   ///< GIZ-02 overhang filter angle (deg)

@@ -195,7 +195,9 @@ Item {
     function _activeBrushCursorType() {
         if (!root.editorVm)
             return 1
-        // All three gizmos reuse supportPaintCursorType (0=Circle, 1=Sphere).
+        // All three gizmos reuse supportPaintCursorType (0=Circle, 1=Sphere;
+        // PAINT-MMU-TOOLS adds 2=Pointer for the MMU triangle brush, routed
+        // by the viewport to the single-facet bucket fill).
         return root.editorVm.supportPaintCursorType
     }
     function _activePaintState() {
@@ -1634,11 +1636,30 @@ Item {
                     // Phase 220 (HOLLOW-REFRESH): when entering the Hollow
                     // gizmo, rebuild the marker stream so drain holes loaded
                     // from 3MF render without a place/delete first.
-                    onGizmoModeChanged: if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
-                        root.editorVm.refreshHollowMarkers()
-                    // v5.13: entering AdvancedCut rebuilds the pin markers.
-                    else if (gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm)
-                        root.editorVm.refreshAdvancedCutConnectors()
+                    onGizmoModeChanged: {
+                        // PAINT-MMU-TOOLS: entering a paint gizmo routes the
+                        // stroke write-back kind (0=Support, 1=Seam, 2=Mmu).
+                        // Upstream each gizmo instance writes its own
+                        // FacetsAnnotation member (GLGizmoPainterBase.hpp:247
+                        // supported/seam/mmu_segmentation facets) -- the Qt6
+                        // port routes the shared PaintEngine commit through
+                        // this kind flag (pure value routing, no geometry).
+                        if (root.editorVm) {
+                            if (gizmoMode === GLViewport.GizmoSupportPaint)
+                                root.editorVm.activePaintKind = 0
+                            else if (gizmoMode === GLViewport.GizmoSeamPaint)
+                                root.editorVm.activePaintKind = 1
+                            else if (gizmoMode === GLViewport.GizmoMmuSegmentation)
+                                root.editorVm.activePaintKind = 2
+                        }
+                        // Phase 220 (HOLLOW-REFRESH): entering Hollow rebuilds
+                        // the marker stream.
+                        if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
+                            root.editorVm.refreshHollowMarkers()
+                        // v5.13: entering AdvancedCut rebuilds the pin markers.
+                        else if (gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm)
+                            root.editorVm.refreshAdvancedCutConnectors()
+                    }
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     // v5.12: camera preferences wired from settingsViewModel
                     reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
@@ -1765,6 +1786,32 @@ Item {
                         if (root.editorVm)
                             root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection, cameraForward)
                     }
+                    // PAINT-MMU-TOOLS: bucket (connected-region) fill pick --
+                    // routed to EditorViewModel::bucketFillAtFacet (upstream
+                    // POINTER brush angle -1 propagate false / BUCKET_FILL
+                    // tool edge-detection angle propagate true,
+                    // GLGizmoPainterBase.cpp:778-787). Opaque-forward contract
+                    // as above.
+                    onBucketFillPickRequested: function(worldOrigin, worldDirection, cameraForward, pickedSourceIndex, paintState, seedFillAngle, propagate) {
+                        if (root.editorVm)
+                            root.editorVm.bucketFillAtFacet(paintState, seedFillAngle, propagate, pickedSourceIndex, worldOrigin, worldDirection, cameraForward)
+                    }
+                    // PAINT-MMU-TOOLS: height-range pick -- routed to
+                    // EditorViewModel::paintHeightRangeAt (upstream
+                    // HEIGHT_RANGE brush: world-Z anchor band painted across
+                    // every part volume, GLGizmoPainterBase.cpp:703-733).
+                    onHeightRangePickRequested: function(worldOrigin, worldDirection, cameraPosition, cameraForward, pickedSourceIndex, paintState, height) {
+                        if (root.editorVm)
+                            root.editorVm.paintHeightRangeAt(paintState, height, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition, cameraForward)
+                    }
+                    // PAINT-MMU-TOOLS: Ctrl+wheel stepped the height-range
+                    // band span in the viewport; write it back into the
+                    // ViewModel so the band + panel slider follow (same
+                    // opaque-value forward contract as onGapAreaTuned).
+                    onHeightRangeTuned: function(height) {
+                        if (root.editorVm)
+                            root.editorVm.paintHeightRange = height
+                    }
                     // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area
                     // threshold in the viewport; write it back into the
                     // ViewModel so the -3 fragment overlay + panel slider
@@ -1861,6 +1908,14 @@ Item {
                     // Phase 240 (GIZ-02): smart-fill params for the paint path.
                     paintToolType: root.editorVm ? root.editorVm.supportPaintToolType : 0
                     smartFillAngle: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                    // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip +
+                    // bucket edge detection + height-range band span (upstream
+                    // GLGizmoMmuSegmentation m_current_tool /
+                    // m_detect_geometry_edge / m_cursor_height). The viewport
+                    // routes MMU picks by these before the shared channels.
+                    mmuPaintTool: root.editorVm ? root.editorVm.mmuPaintTool : 0
+                    mmuBucketEdgeDetection: root.editorVm ? root.editorVm.mmuBucketEdgeDetection : false
+                    brushHeightRange: root.editorVm ? root.editorVm.paintHeightRange : 0.2
                     // PAINT-GAPFILL-PORT: gap-fill area threshold for the
                     // Ctrl+wheel step (the wheel value round-trips back via
                     // onGapAreaTuned below).
@@ -3715,6 +3770,154 @@ Item {
                     color: Theme.textMuted
                     font.pixelSize: Theme.fontSizeXS
                     Layout.alignment: Qt.AlignHCenter
+                }
+
+                // PAINT-MMU-TOOLS: tool selector (对齐上游
+                // GLGizmoMmuSegmentation.cpp:504-551 六个工具图标 -- Qt6 以
+                // chip 呈现). 0=笔刷(Brush), 1=桶填充(Bucket fill /
+                // FillButtonIcon), 4=高度范围(Height range / HeightRangeIcon),
+                // 3=缝隙填充(Gap fill / GapFillIcon); 指针笔刷(Pointer /
+                // TriangleButtonIcon)是笔刷工具下的光标类型, 见下一行.
+                // Bound to the MMU gizmo's own mmuPaintTool (upstream keeps
+                // one m_current_tool per painter gizmo instance).
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    Repeater {
+                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("桶填充"), val: 1}, {label: qsTr("高度范围"), val: 4}, {label: qsTr("缝隙填充"), val: 3}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 64; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.mmuPaintTool = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // PAINT-MMU-TOOLS: cursor type selector for the brush tool
+                // (对齐上游 Circle/Sphere/Triangle 三个刷子图标,
+                // GLGizmoMmuSegmentation.cpp:504-509). 0=Circle 圆, 1=Sphere
+                // 球, 2=Pointer 指针 (upstream Triangle button: a click hits
+                // the single facet under the cursor, cpp:594-595). Shared
+                // channel with the other paint gizmos (supportPaintCursorType).
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 0
+                    Repeater {
+                        model: [{label: qsTr("圆"), val: 0}, {label: qsTr("球"), val: 1}, {label: qsTr("指针"), val: 2}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 48; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // PAINT-MMU-TOOLS: height-range band span (对齐上游
+                // m_cursor_height slider, GLGizmoMmuSegmentation.cpp:669-676;
+                // CursorHeightMin=0.1/Max=8/Step=0.2,
+                // GLGizmoPainterBase.hpp:242-245). Ctrl+wheel on the
+                // height-range tool steps the same value.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 4
+                    Text { text: qsTr("高度范围:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0.1; to: 8; stepSize: 0.1
+                        value: root.editorVm ? root.editorVm.paintHeightRange : 0.2
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintHeightRange = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintHeightRange : 0.2).toFixed(1) + "mm"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 44
+                    }
+                }
+
+                // PAINT-MMU-TOOLS: bucket-fill edge detection (对齐上游
+                // m_detect_geometry_edge 复选框 + smart_fill_angle 滑条,
+                // GLGizmoMmuSegmentation.cpp:623-636). Unchecked = no edge
+                // detection (angle -1): the fill floods every same-state
+                // neighbour.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 1
+                    CxCheckBox {
+                        text: qsTr("边缘检测")
+                        checked: root.editorVm ? root.editorVm.mmuBucketEdgeDetection : false
+                        onToggled: if (root.editorVm) root.editorVm.mmuBucketEdgeDetection = checked
+                    }
+                    CxSlider {
+                        visible: root.editorVm && root.editorVm.mmuBucketEdgeDetection
+                        from: 1; to: 90; stepSize: 1
+                        value: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                        implicitWidth: 80
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintSmartFillAngle = value
+                    }
+                    Text {
+                        visible: root.editorVm && root.editorVm.mmuBucketEdgeDetection
+                        text: (root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30).toFixed(0) + "°"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                }
+
+                // PAINT-MMU-TOOLS: gap-fill area threshold (对齐上游 gap_area
+                // 滑条, GLGizmoMmuSegmentation.cpp:705-713; GapAreaMin=0/
+                // Max=5/Step=0.2). While the tool is active the -3 amber
+                // fragment preview follows this threshold (preview only -- the
+                // upstream Perform merge stays a follow-up).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 3
+                    Text { text: qsTr("缝隙面积:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 5; stepSize: 0.2
+                        value: root.editorVm ? root.editorVm.supportPaintGapArea : 1
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintGapArea = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.supportPaintGapArea : 1).toFixed(2) + "mm²"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 52
+                    }
                 }
 
                 // P11.B2.3（对齐上游 GLGizmoMmuSegmentation.cpp:717-724）：

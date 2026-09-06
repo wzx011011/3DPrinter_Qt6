@@ -79,12 +79,20 @@
 namespace OWzx {
 
 // Brush cursor shape. Mirrors TriangleSelector::CursorType
-// (TriangleSelector.hpp:52-59). Phase 120 wires Sphere + Circle (the two
-// SinglePointCursor shapes). HeightRange / Capsule are Phase 121+ (brush UI).
+// (TriangleSelector.hpp:50-56). Phase 120 wires Sphere + Circle (the two
+// SinglePointCursor brush shapes). Pointer + HeightRange are the PAINT-MMU-TOOLS
+// additions: Pointer is the MMU triangle brush (a single-facet click routed
+// through the bucket-fill channel, GLGizmoMmuSegmentation.cpp:594-595) and
+// HeightRange is the MMU height-range brush (a world-Z band cursor,
+// GLGizmoMmuSegmentation.cpp:667-668). Neither value reaches
+// applyPaintToSelector -- the pick routing dispatches them to bucketFillAt /
+// paintHeightRangeAt instead.
 enum class PaintCursorType : int
 {
-  Circle = 0,  // TriangleSelector::CursorType::CIRCLE
-  Sphere = 1   // TriangleSelector::CursorType::SPHERE
+  Circle = 0,      // TriangleSelector::CursorType::CIRCLE
+  Sphere = 1,      // TriangleSelector::CursorType::SPHERE
+  Pointer = 2,     // TriangleSelector::CursorType::POINTER (MMU tool)
+  HeightRange = 3  // TriangleSelector::CursorType::HEIGHT_RANGE (MMU tool)
 };
 
 // PaintEngine -- per-volume TriangleSelector owner + select_patch driver.
@@ -178,6 +186,51 @@ public:
                    float seedFillAngle, float highlightByAngleDeg,
                    Slic3r::EnforcerBlockerType state,
                    const Slic3r::Transform3d &trafo);
+
+  // PAINT-MMU-TOOLS: bucket (connected-region) fill. Mirrors the upstream
+  // POINTER brush + BUCKET_FILL tool click path
+  // (GLGizmoPainterBase.cpp:778-787): seed_fill_apply_on_triangles commits the
+  // region staged by the previous click with `state`, then
+  // bucket_fill_select_triangles stages the connected region under the hit:
+  //
+  // seedFillAngle: maximal angle between neighbouring facets filled by the
+  //                same click (upstream m_smart_fill_angle). A NEGATIVE value
+  //                disables edge detection so the fill propagates through
+  //                every same-state neighbour (upstream sets -1.f when the
+  //                edge_detection checkbox is off and for the POINTER brush).
+  // propagate:     true = BUCKET_FILL (flood across connected same-state
+  //                facets), false = POINTER brush (only the hit facet is
+  //                staged, upstream passes propagate=false).
+  bool bucketFillAt(int objectIndex, int volumeIndex, int facetIdx,
+                    const Slic3r::Vec3f &meshLocalHit,
+                    float seedFillAngle, Slic3r::EnforcerBlockerType state,
+                    const Slic3r::Transform3d &trafo, bool propagate);
+
+  // PAINT-MMU-TOOLS: height-range paint. Mirrors the upstream HEIGHT_RANGE
+  // brush (GLGizmoPainterBase.cpp:703-733 + GLGizmoMmuSegmentation.cpp:
+  // 667-668): the SinglePointCursor::cursor_factory overload taking a WORLD Z
+  // anchor builds a TriangleSelector::HeightRange cursor; select_patch's
+  // hr_cursor branch then scans ALL original facets for the band
+  // [hitWorldZ, hitWorldZ + height] (TriangleSelector.cpp:259-269 sweeps
+  // every original facet, so facetStart is carried for contract symmetry but
+  // not consumed).
+  //
+  // hitWorldZ:         the WORLD Z of the ray hit (the band bottom anchor,
+  //                    upstream z_bot_world, GLGizmoPainterBase.cpp:532).
+  // height:            the band span in mm (upstream m_cursor_height,
+  //                    0.1..8 step 0.2).
+  // trafoWorld:        the FULL mesh->world transform (WITH translation) --
+  //                    the HeightRange cursor transforms mesh points by it and
+  //                    compares against the world Z band (upstream passes
+  //                    trafo_matrix here, GLGizmoPainterBase.cpp:729).
+  // trafoNoTranslate:  mesh->world without translation -- select_patch's
+  //                    trafo_no_translate (normal transforms only).
+  bool paintHeightRangeAt(int objectIndex, int volumeIndex, float hitWorldZ,
+                          float height, Slic3r::EnforcerBlockerType state,
+                          const Slic3r::Transform3d &trafoWorld,
+                          const Slic3r::Transform3d &trafoNoTranslate,
+                          const Slic3r::Vec3f &cameraPosMeshLocal,
+                          int facetStart);
 
   // Read the facets currently marked with `state` as an indexed_triangle_set.
   // Wraps TriangleSelector::get_facets (TriangleSelector.hpp:333). Returns a
@@ -302,6 +355,32 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                               float seedFillAngle, float highlightByAngleDeg,
                               Slic3r::EnforcerBlockerType state,
                               const Slic3r::Transform3d &trafo);
+
+// PAINT-MMU-TOOLS: pure bucket-fill helper extracted for unit testing
+// (same TS-08 pattern). Drives the upstream seed_fill_apply_on_triangles +
+// bucket_fill_select_triangles pair exactly as PaintEngine::bucketFillAt does
+// in production. No Model / renderer needed.
+void applyBucketFillToSelector(Slic3r::TriangleSelector &selector,
+                               int facetIdx,
+                               const Slic3r::Vec3f &meshLocalHit,
+                               float seedFillAngle,
+                               Slic3r::EnforcerBlockerType state,
+                               const Slic3r::Transform3d &trafo,
+                               bool propagate);
+
+// PAINT-MMU-TOOLS: pure height-range helper extracted for unit testing.
+// Builds the TriangleSelector::HeightRange cursor via the world-Z
+// cursor_factory overload and drives select_patch exactly as
+// PaintEngine::paintHeightRangeAt does in production. trafoWorld carries the
+// translation (the band is anchored in world Z); trafoNoTranslate feeds
+// select_patch.
+void applyHeightRangeToSelector(Slic3r::TriangleSelector &selector,
+                                float hitWorldZ, float height,
+                                Slic3r::EnforcerBlockerType state,
+                                const Slic3r::Transform3d &trafoWorld,
+                                const Slic3r::Transform3d &trafoNoTranslate,
+                                const Slic3r::Vec3f &cameraPosMeshLocal,
+                                int facetStart);
 
 // PAINT-ALT-WHEEL-CLIP: build the mesh-local cross-section (clipping) plane
 // for the painter gizmos. Mirrors the upstream chain:

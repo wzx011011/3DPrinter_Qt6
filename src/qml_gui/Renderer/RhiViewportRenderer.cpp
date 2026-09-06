@@ -4819,6 +4819,7 @@ bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updat
   // comparison.
   const bool inputsChanged =
       (m_brushButtonState != m_brushCursorLastButtonState) ||
+      (m_brushCursorType != m_brushCursorLastCursorType) ||
       !qFuzzyCompare(m_brushMouseScreenX, m_brushCursorLastScreenX) ||
       !qFuzzyCompare(m_brushMouseScreenY, m_brushCursorLastScreenY) ||
       !qFuzzyCompare(m_brushRadius, m_brushCursorLastRadius);
@@ -4826,13 +4827,20 @@ bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updat
     return true;
 
   m_brushCursorLastButtonState = m_brushButtonState;
+  m_brushCursorLastCursorType = m_brushCursorType;
   m_brushCursorLastScreenX = m_brushMouseScreenX;
   m_brushCursorLastScreenY = m_brushMouseScreenY;
   m_brushCursorLastRadius = m_brushRadius;
 
   // Hidden (buttonState < 0): emit zero verts so the draw is skipped.
+  // PAINT-MMU-TOOLS: the brush ball exists only for the Circle/Sphere brush
+  // cursors (m_brushCursorType 0/1). The MMU pointer brush and height-range
+  // band have no ball upstream (GLGizmoPainterBase renders a small pointer
+  // marker / the band highlight instead, GLGizmoMmuSegmentation.cpp:
+  // 594-595, 667-668) -- drawing the sphere there would be misleading.
   QVector<Vertex> vertices;
-  if (m_brushButtonState >= 0 && m_brushRadius > 0.f)
+  if (m_brushButtonState >= 0 && m_brushRadius > 0.f &&
+      m_brushCursorType >= 0 && m_brushCursorType <= 1)
   {
     // Unproject the mouse to a world ray and intersect the bed plane (Y=0).
     // m_cameraMvp is the view-projection; invert it to map NDC->world. The

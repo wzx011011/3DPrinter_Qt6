@@ -597,6 +597,7 @@ private:
   float m_brushCursorLastScreenX = std::numeric_limits<float>::lowest();
   float m_brushCursorLastScreenY = std::numeric_limits<float>::lowest();
   float m_brushCursorLastRadius = -1.f;
+  int m_brushCursorLastCursorType = -1; // PAINT-MMU-TOOLS: hide/show on tool switch
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport

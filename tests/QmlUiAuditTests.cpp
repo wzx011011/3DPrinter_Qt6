@@ -6737,6 +6737,70 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each bind the section slider");
   QVERIFY2(preparePagePaint.count(QStringLiteral("resetPaintClippingPlane()")) >= 3,
            "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each expose the reset action");
+
+  // PAINT-MMU-TOOLS (upstream GLGizmoMmuSegmentation.cpp:594-595 Pointer
+  // brush, 620-637 Bucket fill + edge detection, 667-676 Height range span,
+  // 703-713 Gap fill; GLGizmoPainterBase.cpp:703-733 height-range apply,
+  // 778-787 pointer/bucket click path, 584-592 Ctrl+wheel height step): the
+  // MMU panel tool set must route through the MMU gizmo's own channels on
+  // every layer (engine -> ViewModel -> viewport -> panel).
+  QVERIFY2(paintHeader.contains(QStringLiteral("bucketFillAt")),
+           "PAINT-MMU-TOOLS: PaintEngine.h must declare bucketFillAt");
+  QVERIFY2(paintSource.contains(QStringLiteral("PaintEngine::bucketFillAt")) &&
+           paintSource.contains(QStringLiteral("bucket_fill_select_triangles")),
+           "PAINT-MMU-TOOLS: PaintEngine must drive the upstream bucket_fill_select_triangles");
+  QVERIFY2(paintHeader.contains(QStringLiteral("paintHeightRangeAt")) &&
+           paintHeader.contains(QStringLiteral("applyHeightRangeToSelector")),
+           "PAINT-MMU-TOOLS: PaintEngine.h must declare the height-range entry + pure helper");
+  QVERIFY2(paintSource.contains(QStringLiteral("PaintEngine::paintHeightRangeAt")),
+           "PAINT-MMU-TOOLS: PaintEngine.cpp must implement paintHeightRangeAt");
+  QVERIFY2(paintSource.contains(QStringLiteral("applyBucketFillToSelector")) &&
+           paintSource.contains(QStringLiteral("applyHeightRangeToSelector")),
+           "PAINT-MMU-TOOLS: PaintEngine.cpp must implement the unit-testable pure helpers");
+  // ViewModel: the MMU tool chip property + the two pick entries + the MMU
+  // gap-fragment view (the -3 marker also fires for kind 2 = Mmu).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(int mmuPaintTool")),
+           "PAINT-MMU-TOOLS: EditorViewModel.h must expose the mmuPaintTool tool chip");
+  QVERIFY2(editorHeader.contains(QStringLiteral("bucketFillAtFacet")) &&
+           editorHeader.contains(QStringLiteral("paintHeightRangeAt")),
+           "PAINT-MMU-TOOLS: EditorViewModel.h must declare the bucket-fill + height-range pick entries");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::bucketFillAtFacet")) &&
+           editorSource.contains(QStringLiteral("EditorViewModel::paintHeightRangeAt")),
+           "PAINT-MMU-TOOLS: EditorViewModel.cpp must implement the pick entries");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_activePaintKind == 2 && m_mmuPaintTool == 3")),
+           "PAINT-MMU-TOOLS: paintOverlayData must gate the -3 fragment view on the MMU gap-fill chip (kind 2)");
+  // Viewport: the MMU pick routing + the dedicated wheel channel.
+  QVERIFY2(rhiHeader.contains(QStringLiteral("heightRangePickRequested")) &&
+           rhiHeader.contains(QStringLiteral("bucketFillPickRequested")),
+           "PAINT-MMU-TOOLS: RhiViewport.h must declare the height-range + bucket-fill pick signals");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(double brushHeightRange")) &&
+           rhiHeader.contains(QStringLiteral("Q_PROPERTY(int mmuPaintTool")),
+           "PAINT-MMU-TOOLS: RhiViewport.h must expose the brushHeightRange + mmuPaintTool channels");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("heightRangeTuned")),
+           "PAINT-MMU-TOOLS: RhiViewport.h must declare the heightRangeTuned write-back signal");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_mmuPaintTool == 4")) &&
+           rhiSource.contains(QStringLiteral("emit heightRangePickRequested")),
+           "PAINT-MMU-TOOLS: the MMU height-range chip must dispatch the band pick");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_brushCursorType == 2")) &&
+           rhiSource.contains(QStringLiteral("emit bucketFillPickRequested")),
+           "PAINT-MMU-TOOLS: the MMU pointer cursor must dispatch the single-facet bucket fill");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_brushHeightRange = qBound(0.1, next, 8.0)")) &&
+           rhiSource.contains(QStringLiteral("emit heightRangeTuned")),
+           "PAINT-MMU-TOOLS: Ctrl+wheel must step the band 0.2 within [0.1, 8] on the height-range tool");
+  // Panel: the four tool chips + the circle/sphere/pointer cursor chips + the
+  // opaque pick/wheel forwards.
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("mmuPaintTool === modelData.val")) &&
+           preparePagePaint.contains(QStringLiteral("editorVm.mmuPaintTool = modelData.val")),
+           "PAINT-MMU-TOOLS: MMU panel must carry the tool chips bound to mmuPaintTool");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("supportPaintCursorType === modelData.val")) &&
+           preparePagePaint.contains(QStringLiteral("editorVm.supportPaintCursorType = modelData.val")),
+           "PAINT-MMU-TOOLS: MMU panel must carry the circle/sphere/pointer cursor-type chips");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("onHeightRangePickRequested")) &&
+           preparePagePaint.contains(QStringLiteral("onBucketFillPickRequested")) &&
+           preparePagePaint.contains(QStringLiteral("onHeightRangeTuned")),
+           "PAINT-MMU-TOOLS: PreparePage must forward the MMU pick signals + the wheel write-back");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("paintHeightRange = height")),
+           "PAINT-MMU-TOOLS: PreparePage must write the stepped height back into the ViewModel");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()

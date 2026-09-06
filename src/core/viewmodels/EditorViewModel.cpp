@@ -1287,6 +1287,50 @@ void EditorViewModel::setSupportPaintGapArea(float area)
   }
 }
 
+int EditorViewModel::mmuPaintTool() const { return m_mmuPaintTool; }
+void EditorViewModel::setMmuPaintTool(int tool)
+{
+  if (m_mmuPaintTool != tool)
+  {
+    m_mmuPaintTool = tool;
+    emit stateChanged();
+    // PAINT-MMU-TOOLS: switching to/from the MMU gap-fill tool changes the
+    // paintOverlayData contents (the -3 fragment view), so the overlay
+    // binding must re-evaluate (upstream tool_changed ->
+    // seed_fill_unselect_all_triangles + set_filter_state,
+    // GLGizmoMmuSegmentation.cpp:536-541, 860-866).
+    emit paintDataChanged();
+  }
+}
+
+bool EditorViewModel::mmuBucketEdgeDetection() const
+{
+  return m_mmuBucketEdgeDetection;
+}
+
+void EditorViewModel::setMmuBucketEdgeDetection(bool on)
+{
+  if (m_mmuBucketEdgeDetection != on)
+  {
+    m_mmuBucketEdgeDetection = on;
+    emit stateChanged();
+  }
+}
+
+float EditorViewModel::paintHeightRange() const { return m_paintHeightRange; }
+void EditorViewModel::setPaintHeightRange(float height)
+{
+  // PAINT-MMU-TOOLS: upstream clamps m_cursor_height to CursorHeightMin=0.1
+  // / CursorHeightMax=8 (GLGizmoPainterBase.hpp:242-245) both on the slider
+  // and on the Ctrl+wheel step (GLGizmoPainterBase.cpp:585-588).
+  const float clamped = qBound(0.1f, height, 8.0f);
+  if (!qFuzzyCompare(m_paintHeightRange, clamped))
+  {
+    m_paintHeightRange = clamped;
+    emit stateChanged();
+  }
+}
+
 double EditorViewModel::paintClippingPosition() const
 {
   return m_paintClippingPosition;
@@ -4668,11 +4712,304 @@ bool EditorViewModel::smartFillAtFacet(int state,
                           int(hit.facetIdx), state);
   return filled;
 }
+
+// ===========================================================================
+// PAINT-MMU-TOOLS: bucket (connected-region) fill pick entry. Mirrors the
+// upstream POINTER brush + BUCKET_FILL tool click
+// (GLGizmoPainterBase.cpp:778-787): the stage-2 hit seeds
+// TriangleSelector::bucket_fill_select_triangles (flood bounded by
+// seedFillAngle / the hit facet only), after seed_fill_apply_on_triangles
+// commits the region staged by the previous click. Same two-stage pick
+// contract as smartFillAtFacet.
+// ===========================================================================
+bool EditorViewModel::bucketFillAtFacet(int state,
+                                        double seedFillAngle,
+                                        bool propagate,
+                                        int pickedSourceIndex,
+                                        QVector3D rayOrigin, QVector3D rayDir,
+                                        QVector3D cameraForward)
+{
+  if (!projectService_ || pickedSourceIndex < 0)
+    return false;
+
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+  if (!m_paintEngine) {
+    m_paintEngine = std::make_unique<OWzx::PaintEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const Slic3r::TriangleMesh> {
+          return svc ? svc->volumeMeshTriangleMesh(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  const OWzx::SceneRaycasterHit hit =
+      m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit)
+    return false;
+
+  // PAINT-ALT-WHEEL-CLIP: the bucket fill honours the cross-section plane the
+  // same way the brush does -- a seed hit on the clipped side is rejected
+  // (upstream threads the volume-coordinate clipping plane into
+  // bucket_fill_select_triangles, GLGizmoPainterBase.cpp:781-787).
+  double boundingRadius = double(m_fitHint.w());
+  const QVariantMap worldBox =
+      projectService_->selectionWorldBoundingBox({pickedSourceIndex});
+  if (!worldBox.isEmpty()) {
+    const double dx = worldBox[QStringLiteral("maxX")].toDouble() -
+                      worldBox[QStringLiteral("minX")].toDouble();
+    const double dy = worldBox[QStringLiteral("maxY")].toDouble() -
+                      worldBox[QStringLiteral("minY")].toDouble();
+    const double dz = worldBox[QStringLiteral("maxZ")].toDouble() -
+                      worldBox[QStringLiteral("minZ")].toDouble();
+    boundingRadius = 0.5 * std::sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  const Slic3r::Vec3d centerWorld = worldTransform.translation();
+  const Slic3r::Vec3d forwardWorld(double(cameraForward.x()),
+                                   double(cameraForward.y()),
+                                   double(cameraForward.z()));
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane =
+      OWzx::buildPaintClippingPlane(m_paintClippingPosition, forwardWorld,
+                                    centerWorld, boundingRadius,
+                                    worldTransform);
+  if (clippingPlane.is_active() &&
+      clippingPlane.is_mesh_point_clipped(hit.meshLocalPosition))
+    return false; // seed hit is on the clipped side -- nothing fillable there
+
+  const Slic3r::Transform3d trafoNoTranslate =
+      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+
+  const Slic3r::EnforcerBlockerType ebt =
+      static_cast<Slic3r::EnforcerBlockerType>(state);
+  const bool filled = m_paintEngine->bucketFillAt(
+      hit.objectIndex, hit.volumeIndex, int(hit.facetIdx),
+      hit.meshLocalPosition, float(seedFillAngle), ebt, trafoNoTranslate,
+      propagate);
+
+  if (filled)
+    commitPaintedSelector(hit.objectIndex, hit.volumeIndex,
+                          int(hit.facetIdx), state);
+  return filled;
+}
+
+// ===========================================================================
+// PAINT-MMU-TOOLS: height-range pick entry (upstream HEIGHT_RANGE brush,
+// GLGizmoPainterBase.cpp:703-733). The world Z of the ray hit anchors the
+// band [z_bot, z_bot + height]; the band is then applied to the hit volume
+// AND every other part volume of the object whose facets intersect it
+// (upstream get_projected_height_range loops the other meshes and picks the
+// first in-band facet as that selector's select_patch entry,
+// GLGizmoPainterBase.cpp:515-573).
+// ===========================================================================
+bool EditorViewModel::paintHeightRangeAt(int state, double height,
+                                         int pickedSourceIndex,
+                                         QVector3D rayOrigin, QVector3D rayDir,
+                                         QVector3D cameraPosition,
+                                         QVector3D cameraForward)
+{
+  if (!projectService_ || pickedSourceIndex < 0)
+    return false;
+
+  if (!m_sceneRaycaster) {
+    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+  if (!m_paintEngine) {
+    m_paintEngine = std::make_unique<OWzx::PaintEngine>(
+        [svc = projectService_](int objIdx, int volIdx)
+            -> std::shared_ptr<const Slic3r::TriangleMesh> {
+          return svc ? svc->volumeMeshTriangleMesh(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
+  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
+  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
+  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
+                              float(rotationDeg.y() * float(M_PI) / 180.0f),
+                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  const Slic3r::Transform3d worldTransform =
+      rebuildWorldTransform(translation, rotationRad, scale);
+  const Slic3r::Transform3d trafoNoTranslate =
+      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
+  candidates.reserve(std::max(1, volumeCount));
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = pickedSourceIndex;
+    cand.volumeIndex = v;
+    cand.worldTransform = worldTransform;
+    candidates.push_back(cand);
+  }
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  const OWzx::SceneRaycasterHit hit =
+      m_sceneRaycaster->hitTest(origin, dir, candidates);
+  if (!hit.hit)
+    return false;
+
+  // PAINT-ALT-WHEEL-CLIP: an anchor hit on the clipped side rejects the
+  // stroke (the upstream HeightRange cursor would carry the plane too,
+  // GLGizmoPainterBase.cpp:729).
+  double boundingRadius = double(m_fitHint.w());
+  const QVariantMap worldBox =
+      projectService_->selectionWorldBoundingBox({pickedSourceIndex});
+  if (!worldBox.isEmpty()) {
+    const double dx = worldBox[QStringLiteral("maxX")].toDouble() -
+                      worldBox[QStringLiteral("minX")].toDouble();
+    const double dy = worldBox[QStringLiteral("maxY")].toDouble() -
+                      worldBox[QStringLiteral("minY")].toDouble();
+    const double dz = worldBox[QStringLiteral("maxZ")].toDouble() -
+                      worldBox[QStringLiteral("minZ")].toDouble();
+    boundingRadius = 0.5 * std::sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  const Slic3r::Vec3d centerWorld = worldTransform.translation();
+  const Slic3r::Vec3d forwardWorld(double(cameraForward.x()),
+                                   double(cameraForward.y()),
+                                   double(cameraForward.z()));
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane =
+      OWzx::buildPaintClippingPlane(m_paintClippingPosition, forwardWorld,
+                                    centerWorld, boundingRadius,
+                                    worldTransform);
+  if (clippingPlane.is_active() &&
+      clippingPlane.is_mesh_point_clipped(hit.meshLocalPosition))
+    return false; // anchor hit is on the clipped side -- nothing paintable
+
+  // Upstream anchors the band at the WORLD Z of the ray hit (z_bot_world,
+  // GLGizmoPainterBase.cpp:532) and clamps the span to
+  // CursorHeightMin/Max (GLGizmoPainterBase.hpp:242-245).
+  const Slic3r::Vec3d hitWorldD =
+      worldTransform * Slic3r::Vec3d(double(hit.meshLocalPosition.x()),
+                                     double(hit.meshLocalPosition.y()),
+                                     double(hit.meshLocalPosition.z()));
+  const float zBotWorld = float(hitWorldD.z());
+  const float bandHeight = qBound(0.1f, float(height), 8.0f);
+  const float zTopWorld = zBotWorld + bandHeight;
+
+  const Slic3r::Vec3d cameraWorld(double(cameraPosition.x()),
+                                  double(cameraPosition.y()),
+                                  double(cameraPosition.z()));
+  const Slic3r::Vec3d cameraLocalD = worldTransform.inverse() * cameraWorld;
+  const Slic3r::Vec3f cameraLocal(float(cameraLocalD.x()),
+                                  float(cameraLocalD.y()),
+                                  float(cameraLocalD.z()));
+
+  const Slic3r::EnforcerBlockerType ebt =
+      static_cast<Slic3r::EnforcerBlockerType>(state);
+
+  // The hit volume paints through the full world transform (the HeightRange
+  // cursor transforms mesh points into world Z; upstream passes
+  // trafo_matrix WITH translation here, GLGizmoPainterBase.cpp:729).
+  bool anyPainted = m_paintEngine->paintHeightRangeAt(
+      hit.objectIndex, hit.volumeIndex, zBotWorld, bandHeight, ebt,
+      worldTransform, trafoNoTranslate, cameraLocal, int(hit.facetIdx));
+  if (anyPainted)
+    commitPaintedSelector(hit.objectIndex, hit.volumeIndex,
+                          int(hit.facetIdx), state);
+
+  // Cross-volume selection (upstream get_projected_height_range,
+  // GLGizmoPainterBase.cpp:537-572): every OTHER part volume whose facets
+  // intersect the band gets the same band cursor, seeded at its first
+  // in-band facet (select_patch's hr branch scans all facets anyway -- the
+  // seed only satisfies the facet_start contract).
+  for (int v = 0; v < std::max(1, volumeCount); ++v) {
+    if (v == hit.volumeIndex)
+      continue;
+    const std::shared_ptr<const indexed_triangle_set> its =
+        projectService_->volumeMeshIts(pickedSourceIndex, v);
+    if (!its)
+      continue;
+    int firstInBandFacet = -1;
+    for (const auto &idx : its->indices) {
+      if (idx[0] < 0 || idx[1] < 0 || idx[2] < 0 ||
+          size_t(idx[0]) >= its->vertices.size() ||
+          size_t(idx[1]) >= its->vertices.size() ||
+          size_t(idx[2]) >= its->vertices.size())
+        continue;
+      float below = 0.f, above = 0.f;
+      for (int k = 0; k < 3; ++k) {
+        const Slic3r::Vec3f &p = its->vertices[size_t(idx[k])];
+        const Slic3r::Vec3d w =
+            worldTransform * Slic3r::Vec3d(double(p.x()), double(p.y()),
+                                           double(p.z()));
+        if (float(w.z()) < zBotWorld)
+          ++below;
+        else if (float(w.z()) > zTopWorld)
+          ++above;
+      }
+      // Outside = all three verts below the band OR all three above it
+      // (upstream outside_range, GLGizmoPainterBase.cpp:548-549).
+      if (below < 3.f && above < 3.f) {
+        firstInBandFacet = int(&idx - its->indices.data());
+        break;
+      }
+    }
+    if (firstInBandFacet < 0)
+      continue;
+    if (m_paintEngine->paintHeightRangeAt(pickedSourceIndex, v, zBotWorld,
+                                          bandHeight, ebt, worldTransform,
+                                          trafoNoTranslate, cameraLocal,
+                                          firstInBandFacet)) {
+      anyPainted = true;
+      commitPaintedSelector(pickedSourceIndex, v, firstInBandFacet, state);
+    }
+  }
+  return anyPainted;
+}
 #else
 bool EditorViewModel::smartFillAtFacet(int, double, bool, double, int,
                                        QVector3D, QVector3D, QVector3D)
 {
   // HAS_LIBSLIC3R off: no TriangleSelector. No smart fill.
+  return false;
+}
+bool EditorViewModel::bucketFillAtFacet(int, double, bool, int,
+                                        QVector3D, QVector3D, QVector3D)
+{
+  // HAS_LIBSLIC3R off: no TriangleSelector. No bucket fill.
+  return false;
+}
+bool EditorViewModel::paintHeightRangeAt(int, double, int,
+                                         QVector3D, QVector3D, QVector3D,
+                                         QVector3D)
+{
+  // HAS_LIBSLIC3R off: no TriangleSelector. No height-range paint.
   return false;
 }
 #endif
@@ -4853,8 +5190,16 @@ QByteArray EditorViewModel::paintOverlayData() const
     // is below it, marked with the dedicated -3 fragment marker (amber in the
     // renderers). getFacets cannot express this view (it merges leaves per
     // state and loses the sub-triangle identity), hence the dedicated reader.
-    if (m_activePaintKind == 0 && m_supportPaintToolType == 3 &&
-        m_supportPaintGapArea > 0.f)
+    // PAINT-MMU-TOOLS: the MMU gizmo exposes the same tool (upstream MMU
+    // GAP_FILL is isomorphic to the support one,
+    // GLGizmoMmuSegmentation.cpp:703-704, 738-748) -- the -3 marker stays a
+    // PREVIEW there (the fragment merge Perform belongs to a follow-up), so
+    // the kind gate widens to Support(0) + Mmu(2), each with its own tool
+    // chip channel.
+    const bool gapFillToolActive =
+        (m_activePaintKind == 0 && m_supportPaintToolType == 3) ||
+        (m_activePaintKind == 2 && m_mmuPaintTool == 3);
+    if (gapFillToolActive && m_supportPaintGapArea > 0.f)
     {
       auto fragments = engine->getGapFragments(obj, v, m_supportPaintGapArea);
       if (fragments && !fragments->indices.empty())

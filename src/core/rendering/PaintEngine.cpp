@@ -170,6 +170,44 @@ bool PaintEngine::smartFillAt(int objectIndex, int volumeIndex, int facetIdx,
   return true;
 }
 
+// PAINT-MMU-TOOLS: bucket fill. See PaintEngine.h for the upstream mapping
+// (GLGizmoPainterBase.cpp:778-787 -- the POINTER brush passes angle -1 +
+// propagate false, the BUCKET_FILL tool passes the edge-detection angle + propagate
+// true).
+bool PaintEngine::bucketFillAt(int objectIndex, int volumeIndex, int facetIdx,
+                               const Slic3r::Vec3f &meshLocalHit,
+                               float seedFillAngle,
+                               Slic3r::EnforcerBlockerType state,
+                               const Slic3r::Transform3d &trafo, bool propagate)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  if (!selector)
+    return false; // mesh source had no mesh for the pair
+
+  applyBucketFillToSelector(*selector, facetIdx, meshLocalHit, seedFillAngle,
+                            state, trafo, propagate);
+  return true;
+}
+
+// PAINT-MMU-TOOLS: height-range paint. See PaintEngine.h for the upstream
+// mapping (GLGizmoPainterBase.cpp:703-733).
+bool PaintEngine::paintHeightRangeAt(int objectIndex, int volumeIndex,
+                                     float hitWorldZ, float height,
+                                     Slic3r::EnforcerBlockerType state,
+                                     const Slic3r::Transform3d &trafoWorld,
+                                     const Slic3r::Transform3d &trafoNoTranslate,
+                                     const Slic3r::Vec3f &cameraPosMeshLocal,
+                                     int facetStart)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  if (!selector)
+    return false; // mesh source had no mesh for the pair
+
+  applyHeightRangeToSelector(*selector, hitWorldZ, height, state, trafoWorld,
+                             trafoNoTranslate, cameraPosMeshLocal, facetStart);
+  return true;
+}
+
 std::shared_ptr<indexed_triangle_set>
 PaintEngine::getFacets(int objectIndex, int volumeIndex,
                        Slic3r::EnforcerBlockerType state)
@@ -330,6 +368,68 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                                       /*seed_fill_angle=*/seedFillAngle,
                                       /*highlight_by_angle_deg=*/highlightByAngleDeg,
                                       /*force_reselection=*/true);
+}
+
+// applyBucketFillToSelector -- pure helper (PAINT-MMU-TOOLS). Unit-testable
+// without a Model. Mirrors the upstream POINTER / BUCKET_FILL click sequence
+// (GLGizmoPainterBase.cpp:778-787): seed_fill_apply_on_triangles commits the
+// region staged by the previous click, then bucket_fill_select_triangles
+// stages the connected region under the current click. A negative
+// seedFillAngle disables edge detection (upstream passes -1.f for the
+// POINTER brush and whenever the edge_detection checkbox is off,
+// GLGizmoMmuSegmentation.cpp:625-637); propagate=false keeps only the hit
+// facet (POINTER), propagate=true floods the connected same-state region
+// (BUCKET_FILL). force_reselection=true mirrors the upstream call so a
+// re-click on an already staged facet restages it.
+void applyBucketFillToSelector(Slic3r::TriangleSelector &selector,
+                               int facetIdx,
+                               const Slic3r::Vec3f &meshLocalHit,
+                               float seedFillAngle,
+                               Slic3r::EnforcerBlockerType state,
+                               const Slic3r::Transform3d &trafo,
+                               bool propagate)
+{
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
+  selector.seed_fill_apply_on_triangles(/*new_state=*/state);
+  // The trafo argument is unused by bucket_fill_select_triangles (the flood
+  // walks topology + facet normals only); it is kept in the signature so the
+  // helper mirrors the production call-site contract.
+  (void)trafo;
+  selector.bucket_fill_select_triangles(/*hit=*/meshLocalHit,
+                                        /*facet_start=*/facetIdx,
+                                        /*clp=*/clippingPlane,
+                                        /*seed_fill_angle=*/seedFillAngle,
+                                        /*propagate=*/propagate,
+                                        /*force_reselection=*/true);
+}
+
+// applyHeightRangeToSelector -- pure helper (PAINT-MMU-TOOLS). Unit-testable
+// without a Model. Mirrors the upstream HEIGHT_RANGE brush apply
+// (GLGizmoPainterBase.cpp:726-733): the SinglePointCursor::cursor_factory
+// overload taking a float world Z builds the TriangleSelector::HeightRange
+// cursor over the [hitWorldZ, hitWorldZ + height] band; select_patch's
+// hr_cursor branch then collects every original facet intersecting the band
+// (TriangleSelector.cpp:259-269 -- facetStart is not consumed there).
+// highlight_by_angle_deg stays 0: the MMU gizmo exposes no overhang filter
+// (upstream m_paint_on_overhangs_only is false for MMU,
+// GLGizmoMmuSegmentation has no such checkbox).
+void applyHeightRangeToSelector(Slic3r::TriangleSelector &selector,
+                                float hitWorldZ, float height,
+                                Slic3r::EnforcerBlockerType state,
+                                const Slic3r::Transform3d &trafoWorld,
+                                const Slic3r::Transform3d &trafoNoTranslate,
+                                const Slic3r::Vec3f &cameraPosMeshLocal,
+                                int facetStart)
+{
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
+  auto cursorPtr = Slic3r::TriangleSelector::SinglePointCursor::cursor_factory(
+      /*z_world=*/hitWorldZ, cameraPosMeshLocal, height, trafoWorld,
+      clippingPlane);
+  selector.select_patch(/*facet_start=*/facetStart, std::move(cursorPtr),
+                        /*new_state=*/state,
+                        /*trafo_no_translate=*/trafoNoTranslate,
+                        /*triangle_splitting=*/true,
+                        /*highlight_by_angle_deg=*/0.f);
 }
 
 // buildPaintClippingPlane -- pure helper (PAINT-ALT-WHEEL-CLIP). Mirrors the

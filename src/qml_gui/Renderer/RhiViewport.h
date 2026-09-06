@@ -199,6 +199,24 @@ class RhiViewport : public QQuickRhiItem
   // these so the ViewModel picks the brush vs smart-fill path.
   Q_PROPERTY(int paintToolType READ paintToolType WRITE setPaintToolType)
   Q_PROPERTY(float smartFillAngle READ smartFillAngle WRITE setSmartFillAngle)
+  // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip mirroring
+  // EditorViewModel::mmuPaintTool (0=Brush, 1=BucketFill, 3=GapFill,
+  // 4=HeightRange; upstream GLGizmoMmuSegmentation m_current_tool -- each
+  // painter gizmo instance keeps its own tool). emitPaintPickIfActive routes
+  // MMU picks by it BEFORE the shared paintToolType channel.
+  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool)
+  // PAINT-MMU-TOOLS: bucket-fill edge detection mirroring
+  // EditorViewModel::mmuBucketEdgeDetection (upstream
+  // m_detect_geometry_edge, GLGizmoMmuSegmentation.cpp:623-637). Checked =
+  // the bucket fill stops at facet edges steeper than smartFillAngle;
+  // unchecked = angle -1 (no edge detection).
+  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection)
+  // PAINT-MMU-TOOLS: height-range band span (mm) mirroring
+  // EditorViewModel::paintHeightRange (upstream m_cursor_height, 0.1..8 step
+  // 0.2, GLGizmoPainterBase.hpp:242-245). Ctrl+wheel on the height-range
+  // tool steps it and reports via heightRangeTuned so QML can write the
+  // value back into the ViewModel (same opaque-forward bridge as gapArea).
+  Q_PROPERTY(double brushHeightRange READ brushHeightRange WRITE setBrushHeightRange)
   // PAINT-GAPFILL-PORT: gap-fill area threshold (mm2) mirroring
   // EditorViewModel::supportPaintGapArea (upstream TriangleSelectorPatch::
   // gap_area, 0..5 step 0.2, GLGizmoPainterBase.hpp:117-119). Ctrl+wheel on
@@ -536,6 +554,16 @@ public:
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
   int paintToolType() const { return m_paintToolType; }
   void setPaintToolType(int t) { m_paintToolType = t; }
+  // PAINT-MMU-TOOLS: MMU gizmo tool chip + bucket edge detection (see the
+  // Q_PROPERTY block).
+  int mmuPaintTool() const { return m_mmuPaintTool; }
+  void setMmuPaintTool(int t) { m_mmuPaintTool = t; }
+  bool mmuBucketEdgeDetection() const { return m_mmuBucketEdgeDetection; }
+  void setMmuBucketEdgeDetection(bool b) { m_mmuBucketEdgeDetection = b; }
+  // PAINT-MMU-TOOLS: height-range band span mm clamped to the upstream
+  // CursorHeightMin/Max (0.1..8, GLGizmoPainterBase.hpp:242-245).
+  double brushHeightRange() const { return m_brushHeightRange; }
+  void setBrushHeightRange(double h) { m_brushHeightRange = qBound(0.1, h, 8.0); }
   int paintLockAxis() const { return m_paintLockAxis; }
   void setPaintLockAxis(int axis) { m_paintLockAxis = qBound(0, axis, 2); }
   float smartFillAngle() const { return m_smartFillAngle; }
@@ -753,6 +781,39 @@ signals:
                               double smartFillAngle,
                               bool overhangsOnly,
                               double overhangAngle);
+  // PAINT-MMU-TOOLS: bucket (connected-region) fill pick variant (upstream
+  // POINTER brush + BUCKET_FILL tool, GLGizmoPainterBase.cpp:778-787).
+  // Emitted instead of paintPickRequested when the MMU bucket-fill tool or
+  // the pointer brush is active. seedFillAngle is the edge-detection
+  // threshold (negative = disabled); propagate=true floods the connected
+  // same-state region (bucket), false stages only the hit facet (pointer).
+  // cameraForward feeds the cross-section plane rejection (same contract as
+  // smartFillPickRequested).
+  void bucketFillPickRequested(QVector3D worldOrigin,
+                               QVector3D worldDirection,
+                               QVector3D cameraForward,
+                               int pickedSourceIndex,
+                               int paintState,
+                               double seedFillAngle,
+                               bool propagate);
+  // PAINT-MMU-TOOLS: height-range pick variant (upstream HEIGHT_RANGE brush,
+  // GLGizmoPainterBase.cpp:703-733). Emitted on click while the MMU
+  // height-range tool is active; carries the band span (mm). The ViewModel
+  // anchors the band at the world Z of the ray hit and paints every volume
+  // whose facets intersect [z, z + height].
+  void heightRangePickRequested(QVector3D worldOrigin,
+                                QVector3D worldDirection,
+                                QVector3D cameraPosition,
+                                QVector3D cameraForward,
+                                int pickedSourceIndex,
+                                int paintState,
+                                double height);
+  // PAINT-MMU-TOOLS: Ctrl+wheel stepped the height-range band span (upstream
+  // GLGizmoPainterBase.cpp:585-588 -- m_cursor_height +-CursorHeightStep
+  // clamped to [CursorHeightMin, CursorHeightMax]). Carries the clamped
+  // value; QML writes it into EditorViewModel.paintHeightRange so the panel
+  // slider follows the wheel (same round-trip contract as gapAreaTuned).
+  void heightRangeTuned(double height);
   // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area threshold
   // (upstream GLGizmoPainterBase.cpp:624-627 -- SLAGizmoEventType::
   // MouseWheelDown/Up steps TriangleSelectorPatch::gap_area by GapAreaStep
@@ -973,6 +1034,9 @@ private:
   int m_paintState = 1;      // EnforcerBlockerType: 1=Enforcer
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
   int m_paintToolType = 0;   // 0=Brush, 2=SmartFill, 3=GapFill
+  int m_mmuPaintTool = 0;    // PAINT-MMU-TOOLS: 0=Brush, 1=BucketFill, 3=GapFill, 4=HeightRange
+  bool m_mmuBucketEdgeDetection = false; // PAINT-MMU-TOOLS: bucket edge detection on/off
+  double m_brushHeightRange = 0.2; // PAINT-MMU-TOOLS: height-range band span mm (upstream 0.2 default)
   float m_smartFillAngle = 30.f;
   float m_gapArea = 1.0f;    // PAINT-GAPFILL-PORT: gap-fill threshold mm2
   double m_paintClippingPosition = 0.0; // PAINT-ALT-WHEEL-CLIP: section ratio 0..1, 0 = off
