@@ -248,6 +248,11 @@ items:
       qFatal) are resolved by design (single ownership; task wait, not
       thread wait). perf/waves divergence: use_cache=true was not ported
       (no upstream call site uses it; it force-completes invalidated steps).
+      Batch 3 partial: 9fd126b persists existing PartPlateList width/depth and
+      PartPlate instanceOutsideSet through the JSON fallback, with symmetric
+      legacy-default loading; 859db5b fixes empty-model services to select that
+      fallback instead of emitting an empty 3MF archive. This is not full
+      upstream 3MF PlateData shape/exclude/extruder-area parity.
     remaining:
       - Plate shape/exclude/extruder areas persistence (3MF PlateData);
         viewport drop / out-of-bounds consumers adopting the new
@@ -257,7 +262,7 @@ items:
       - Sub-scope into separate items when work starts; do not mark P0.5.5b
         complete until this item closes.
     evidence:
-      commits: [18dd03e, 564a51d]
+      commits: [18dd03e, 564a51d, 9fd126b, 859db5b]
       tests:
         - tests/PartPlateTests.cpp::platePrintVolumeContainsTests
         - tests/PartPlateTests.cpp::plateFindInstancePointLookup
@@ -267,9 +272,12 @@ items:
         - tests/E2EWorkflowTests.cpp::test_persistent_print_reused_on_same_plate_reslice
         - tests/E2EWorkflowTests.cpp::test_plate_deletion_releases_persistent_print_entry
         - tests/E2EWorkflowTests.cpp::test_cancelled_slice_restart_rebuilds_persistent_print
+        - tests/PartPlateTests.cpp::jsonPersistenceRoundTripGeometryAndOutsideState
       gate batch 2: canonical run EXIT=0 2026-09-06, 12 suites 574 tests
         0 failed 0 skipped (E2E 32 incl. the 3 new slots, PartPlate 66,
-        ViewModelSmoke 187, QmlUiAudit 171); one prior interim run's
+        ViewModelSmoke 187, QmlUiAudit 171); batch 3 follow-up gate also
+        EXIT=0 with 12 suites and 575 tests (PartPlate 67), 0 failed and
+        0 skipped; one prior interim run's
         PartPlate/E2E 0xC0000005 was the known stale-obj-after-header-change
         issue, green after purging objs older than SliceService.h
       gate: canonical run after ninja -t clean full rebuild EXIT=0 2026-09-06,
