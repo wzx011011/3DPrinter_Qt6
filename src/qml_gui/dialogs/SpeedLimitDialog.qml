@@ -56,8 +56,12 @@ CxDialog {
                 Layout.topMargin: Theme.spacingXS
                 CxCheckBox {
                     Layout.preferredWidth: 20
+                    // QML-BINDING-LOOPS: onToggled instead of
+                    // onCheckedChanged -- delegate re-creation after a
+                    // limitItems reassignment no longer writes the seeded
+                    // value back into the model array.
                     checked: modelData.enabled
-                    onCheckedChanged: root.limitItems[index].enabled = checked
+                    onToggled: root.limitItems[index].enabled = checked
                 }
 
                 CxTextField {
