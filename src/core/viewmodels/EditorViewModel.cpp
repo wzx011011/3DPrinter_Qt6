@@ -1287,6 +1287,30 @@ void EditorViewModel::setSupportPaintGapArea(float area)
   }
 }
 
+double EditorViewModel::paintClippingPosition() const
+{
+  return m_paintClippingPosition;
+}
+
+void EditorViewModel::setPaintClippingPosition(double pos)
+{
+  // PAINT-ALT-WHEEL-CLIP (upstream ObjectClipper::set_position_by_ratio,
+  // GLGizmosCommon.cpp:354 -- the callers clamp the ratio; the setter keeps
+  // the property in [0, 1] so QML cannot push it out of range). 0 = off.
+  const double clamped = qBound(0.0, pos, 1.0);
+  if (qFuzzyCompare(m_paintClippingPosition, clamped))
+    return;
+  m_paintClippingPosition = clamped;
+  emit stateChanged();
+}
+
+void EditorViewModel::resetPaintClippingPlane()
+{
+  // Upstream ResetClippingPlane turns the section plane off
+  // (GLGizmoPainterBase.cpp:643-646); the Qt6 port models "off" as ratio 0.
+  setPaintClippingPosition(0.0);
+}
+
 bool EditorViewModel::supportPaintOnOverhangsOnly() const { return m_supportPaintOnOverhangsOnly; }
 void EditorViewModel::setSupportPaintOnOverhangsOnly(bool on)
 {
@@ -4338,7 +4362,8 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
                                    int state, double brushRadius, int cursorType,
                                    int pickedSourceIndex,
                                    QVector3D rayOrigin, QVector3D rayDir,
-                                   QVector3D cameraPosition)
+                                   QVector3D cameraPosition,
+                                   QVector3D cameraForward)
 {
   // TS-05: require the project service + a stage-1 survivor. Without
   // libslic3r's mesh there is nothing to paint; the early-out keeps QML safe.
@@ -4414,6 +4439,38 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
       m_sceneRaycaster->hitTest(origin, dir, candidates);
   if (!hit.hit)
     return false; // ray missed every candidate volume -- nothing to paint
+
+  // PAINT-ALT-WHEEL-CLIP: cross-section plane (upstream threads
+  // get_clipping_plane_in_volume_coordinates into every paint call and
+  // rejects hits on the clipped side via is_mesh_point_clipped,
+  // GLGizmoPainterBase.cpp:383-393). The bounding radius mirrors upstream
+  // m_active_inst_bb_radius = instance_bounding_box().radius()
+  // (GLGizmosCommon.cpp:272-273); m_fitHint.w() is the whole-scene fallback
+  // when the selection box is not resolvable. This covers the GapFill tool
+  // too -- it paints through the same brush path (PAINT-GAPFILL-PORT).
+  double boundingRadius = double(m_fitHint.w());
+  const QVariantMap worldBox =
+      projectService_->selectionWorldBoundingBox({pickedSourceIndex});
+  if (!worldBox.isEmpty()) {
+    const double dx = worldBox[QStringLiteral("maxX")].toDouble() -
+                      worldBox[QStringLiteral("minX")].toDouble();
+    const double dy = worldBox[QStringLiteral("maxY")].toDouble() -
+                      worldBox[QStringLiteral("minY")].toDouble();
+    const double dz = worldBox[QStringLiteral("maxZ")].toDouble() -
+                      worldBox[QStringLiteral("minZ")].toDouble();
+    boundingRadius = 0.5 * std::sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  const Slic3r::Vec3d centerWorld = worldTransform.translation();
+  const Slic3r::Vec3d forwardWorld(double(cameraForward.x()),
+                                   double(cameraForward.y()),
+                                   double(cameraForward.z()));
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane =
+      OWzx::buildPaintClippingPlane(m_paintClippingPosition, forwardWorld,
+                                    centerWorld, boundingRadius,
+                                    worldTransform);
+  if (clippingPlane.is_active() &&
+      clippingPlane.is_mesh_point_clipped(hit.meshLocalPosition))
+    return false; // hit is on the clipped side -- nothing paintable there
 
   // trafo_no_translate for select_patch (TriangleSelector.hpp:309): the mesh->
   // world transform with the translation column zeroed. select_patch uses it to
@@ -4517,7 +4574,8 @@ bool EditorViewModel::smartFillAtFacet(int state,
                                        bool overhangsOnly,
                                        double overhangAngle,
                                        int pickedSourceIndex,
-                                       QVector3D rayOrigin, QVector3D rayDir)
+                                       QVector3D rayOrigin, QVector3D rayDir,
+                                       QVector3D cameraForward)
 {
   if (!projectService_ || pickedSourceIndex < 0)
     return false;
@@ -4566,6 +4624,35 @@ bool EditorViewModel::smartFillAtFacet(int state,
   if (!hit.hit)
     return false;
 
+  // PAINT-ALT-WHEEL-CLIP: the seed fill honours the cross-section plane the
+  // same way the brush does -- a seed hit on the clipped side is rejected
+  // (upstream threads get_clipping_plane_in_volume_coordinates into
+  // seed_fill_select_triangles and gates the click via is_mesh_point_clipped,
+  // GLGizmoPainterBase.cpp:383-393, 616).
+  double boundingRadius = double(m_fitHint.w());
+  const QVariantMap worldBox =
+      projectService_->selectionWorldBoundingBox({pickedSourceIndex});
+  if (!worldBox.isEmpty()) {
+    const double dx = worldBox[QStringLiteral("maxX")].toDouble() -
+                      worldBox[QStringLiteral("minX")].toDouble();
+    const double dy = worldBox[QStringLiteral("maxY")].toDouble() -
+                      worldBox[QStringLiteral("minY")].toDouble();
+    const double dz = worldBox[QStringLiteral("maxZ")].toDouble() -
+                      worldBox[QStringLiteral("minZ")].toDouble();
+    boundingRadius = 0.5 * std::sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  const Slic3r::Vec3d centerWorld = worldTransform.translation();
+  const Slic3r::Vec3d forwardWorld(double(cameraForward.x()),
+                                   double(cameraForward.y()),
+                                   double(cameraForward.z()));
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane =
+      OWzx::buildPaintClippingPlane(m_paintClippingPosition, forwardWorld,
+                                    centerWorld, boundingRadius,
+                                    worldTransform);
+  if (clippingPlane.is_active() &&
+      clippingPlane.is_mesh_point_clipped(hit.meshLocalPosition))
+    return false; // seed hit is on the clipped side -- nothing fillable there
+
   const Slic3r::Transform3d trafoNoTranslate =
       rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
 
@@ -4583,7 +4670,7 @@ bool EditorViewModel::smartFillAtFacet(int state,
 }
 #else
 bool EditorViewModel::smartFillAtFacet(int, double, bool, double, int,
-                                       QVector3D, QVector3D)
+                                       QVector3D, QVector3D, QVector3D)
 {
   // HAS_LIBSLIC3R off: no TriangleSelector. No smart fill.
   return false;

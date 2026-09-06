@@ -1753,17 +1753,17 @@ Item {
                     // Phase 240 (GIZ-02): smart-fill picks arrive on the
                     // dedicated smartFillPickRequested signal (brush picks keep
                     // this one; the trailing smartFill flag is always 0 here).
-                    onPaintPickRequested: function(worldOrigin, worldDirection, cameraPosition, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
+                    onPaintPickRequested: function(worldOrigin, worldDirection, cameraPosition, cameraForward, pickedSourceIndex, brushRadius, cursorType, paintState, smartFill) {
                         if (root.editorVm && !smartFill)
-                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition)
+                            root.editorVm.paintAtFacet(-1, -1, -1, 0.0, 0.0, 0.0, paintState, brushRadius, cursorType, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition, cameraForward)
                     }
                     // Phase 240 (GIZ-02): smart (seed) fill pick -- routed to
                     // EditorViewModel::smartFillAtFacet (upstream SMART_FILL
                     // tool: seed_fill_select_triangles + seed_fill_apply_on_
                     // triangles). Opaque-forward contract as above.
-                    onSmartFillPickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, paintState, smartFillAngle, overhangsOnly, overhangAngle) {
+                    onSmartFillPickRequested: function(worldOrigin, worldDirection, cameraForward, pickedSourceIndex, paintState, smartFillAngle, overhangsOnly, overhangAngle) {
                         if (root.editorVm)
-                            root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection)
+                            root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection, cameraForward)
                     }
                     // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area
                     // threshold in the viewport; write it back into the
@@ -1773,6 +1773,15 @@ Item {
                     onGapAreaTuned: function(gapArea) {
                         if (root.editorVm)
                             root.editorVm.supportPaintGapArea = gapArea
+                    }
+                    // PAINT-ALT-WHEEL-CLIP: Alt+wheel swept the cross-section
+                    // (clipping) plane ratio in the viewport; write it back
+                    // into the ViewModel so the clipped-side pick rejection +
+                    // the panel sliders follow (opaque-value forward contract,
+                    // no logic in QML).
+                    onPaintClippingTuned: function(position) {
+                        if (root.editorVm)
+                            root.editorVm.paintClippingPosition = position
                     }
                     // Phase 240 (GIZ-03): flatten hover highlight + click-to-
                     // place. The ViewModel runs the stage-2 pick; hover updates
@@ -1856,6 +1865,10 @@ Item {
                     // Ctrl+wheel step (the wheel value round-trips back via
                     // onGapAreaTuned below).
                     gapArea: root.editorVm ? root.editorVm.supportPaintGapArea : 1
+                    // PAINT-ALT-WHEEL-CLIP: cross-section plane ratio for the
+                    // Alt+wheel sweep (the wheel value round-trips back via
+                    // onPaintClippingTuned above).
+                    paintClippingPosition: root.editorVm ? root.editorVm.paintClippingPosition : 0
                     paintOnOverhangsOnly: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
                     paintOverhangAngle: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
 
@@ -2256,6 +2269,37 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 52
+                    }
+                }
+
+                // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane slider
+                // (upstream ObjectClipper m_clp_ratio surfaced through the
+                // gizmo's ClippingPlaneWidget, 0 = off). While > 0 paint picks
+                // on the clipped side of the plane are rejected; Alt+wheel
+                // sweeps the same ratio in the viewport.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
                 }
 
@@ -3078,6 +3122,37 @@ Item {
                     }
                 }
 
+                // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane slider
+                // (upstream GLGizmoSeam "clipping_of_view" + "reset_direction"
+                // imgui slider, GLGizmoSeam.cpp:305-319). Shares the ViewModel
+                // paintClippingPosition with the support panel -- the plane is
+                // one shared ObjectClipper ratio across the painter gizmos.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
+                    }
+                }
+
                 // P11.B2.3（对齐上游 GLGizmoSeam.cpp:322）：缝线面板只提供
                 // Vertical 锁——拖动笔画锁定在按下点所在列。
                 CxCheckBox {
@@ -3656,6 +3731,38 @@ Item {
                         text: qsTr("水平")
                         checked: root.editorVm ? root.editorVm.paintLockAxis === 2 : false
                         onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 2 : 0
+                    }
+                }
+
+                // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane slider
+                // (upstream GLGizmoMmuSegmentation "clipping_of_view" +
+                // "reset_direction" imgui slider, GLGizmoMmuSegmentation.cpp:
+                // 604-617). Shares the ViewModel paintClippingPosition with
+                // the other paint gizmos -- the plane is one shared
+                // ObjectClipper ratio across the painter gizmos.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
                 }
 

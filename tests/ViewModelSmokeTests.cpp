@@ -510,6 +510,15 @@ private slots:
   // GLGizmoPainterBase.cpp:1234-1236), the threshold<=0 disable, and that a
   // brush stroke which subdivides the square grows the fragment set.
   void paintEngineGapFragmentsRespectAreaThreshold();
+  // PAINT-ALT-WHEEL-CLIP: buildPaintClippingPlane volume-coordinate math.
+  // Asserts the upstream chain semantics: normal = -camera forward, world
+  // offset = n.dot(center) + R - ratio*2R (ObjectClipper::
+  // set_position_by_ratio, GLGizmosCommon.cpp:346-367), the plane carried
+  // into volume coordinates via the inverse/transpose transform
+  // (get_clipping_plane_in_volume_coordinates,
+  // GLGizmoPainterBase.cpp:1101-1117), the inactive plane at ratio 0, and
+  // which side is_mesh_point_clipped rejects (TriangleSelector.hpp:65).
+  void paintClippingPlaneMathMatchesUpstream();
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
   // the key viewmodel/service APIs landed by Phases 196-202 are callable at
   // the C++ boundary: EditorViewModel::embossRunning, SliceService::sliceState,
@@ -7458,6 +7467,99 @@ void ViewModelSmokeTests::paintEngineGapFragmentsRespectAreaThreshold()
 void ViewModelSmokeTests::paintEngineGapFragmentsRespectAreaThreshold()
 {
   QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+// PAINT-ALT-WHEEL-CLIP: buildPaintClippingPlane volume-coordinate math.
+// The plane semantics are locked against the upstream chain
+// (ObjectClipper::set_position_by_ratio + get_clipping_plane_in_volume_
+// coordinates): a camera looking along -Z sees the sweep cut into the object
+// from the camera side as the ratio grows, the identity transform keeps the
+// plane untouched, and a rotated object carries the plane through the
+// inverse/transpose transform pair.
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintClippingPlaneMathMatchesUpstream()
+{
+  const Slic3r::Vec3d center = Slic3r::Vec3d::Zero();
+  const Slic3r::Vec3d forward(0.0, 0.0, -1.0); // camera above, looking down -Z
+  const double radius = 5.0;
+  const Slic3r::Transform3d identity = Slic3r::Transform3d::Identity();
+
+  // (a) ratio 0 (and below) returns the INACTIVE plane -- clipping is off
+  // (upstream ObjectClipper::get_position() == 0 early-out,
+  // GLGizmoPainterBase.cpp:383-393).
+  const Slic3r::TriangleSelector::ClippingPlane off =
+      OWzx::buildPaintClippingPlane(0.0, forward, center, radius, identity);
+  QVERIFY2(!off.is_active(),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0 must yield the inactive plane");
+
+  // (b) Identity transform, ratio 0.5: normal = -forward = +Z and the world
+  // offset = 0 + 5 - 0.5*2*5 = 0, so the plane sits at z=0 through the
+  // object center. A point at z=+1 (camera side) is clipped; z=-1 is not
+  // (is_mesh_point_clipped: normal.dot(p) - offset > 0).
+  const Slic3r::TriangleSelector::ClippingPlane half =
+      OWzx::buildPaintClippingPlane(0.5, forward, center, radius, identity);
+  QVERIFY2(half.is_active(),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0.5 must yield an active plane");
+  QCOMPARE(half.normal.z(), 1.0f);
+  QVERIFY2(qFuzzyIsNull(half.offset),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0.5 on a zero-centered object must put the plane at the center");
+  QVERIFY2(half.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 1.f)),
+           "PAINT-ALT-WHEEL-CLIP: the camera-side point must be clipped at ratio 0.5");
+  QVERIFY2(!half.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, -1.f)),
+           "PAINT-ALT-WHEEL-CLIP: the far-side point must stay paintable at ratio 0.5");
+
+  // (c) The sweep endpoints: ratio 0.25 puts the plane at z=+2.5 (only the
+  // top cap clipped), ratio 1.0 at z=-5 (the whole object clipped).
+  const Slic3r::TriangleSelector::ClippingPlane quarter =
+      OWzx::buildPaintClippingPlane(0.25, forward, center, radius, identity);
+  QVERIFY2(quarter.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 3.f)) &&
+           !quarter.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 2.f)),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0.25 must clip only beyond z=+2.5");
+  const Slic3r::TriangleSelector::ClippingPlane full =
+      OWzx::buildPaintClippingPlane(1.0, forward, center, radius, identity);
+  QVERIFY2(full.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, -4.f)),
+           "PAINT-ALT-WHEEL-CLIP: ratio 1.0 must clip the whole object");
+
+  // (d) Volume coordinates: a +90 deg Z rotation (linear maps
+  // (x,y,z)->(-y,x,z)) keeps the +Z plane normal fixed under the transpose
+  // and leaves the zero-centered plane at offset 0 -- a mesh point at +Z
+  // stays clipped and one at -Z stays visible. The section follows the
+  // OBJECT transform, not just the world axes (upstream
+  // get_clipping_plane_in_volume_coordinates).
+  Slic3r::Transform3d rotZ = Slic3r::Transform3d::Identity();
+  const double c90 = std::cos(M_PI / 2.0), s90 = std::sin(M_PI / 2.0);
+  rotZ(0, 0) = c90; rotZ(0, 1) = -s90;
+  rotZ(1, 0) = s90; rotZ(1, 1) = c90;
+  const Slic3r::TriangleSelector::ClippingPlane rotated =
+      OWzx::buildPaintClippingPlane(0.5, forward, center, radius, rotZ);
+  QVERIFY2(rotated.is_active(),
+           "PAINT-ALT-WHEEL-CLIP: the rotated object must still get an active plane");
+  QCOMPARE(rotated.normal.x(), 0.0f);
+  QCOMPARE(rotated.normal.y(), 0.0f);
+  QCOMPARE(rotated.normal.z(), 1.0f);
+  QVERIFY2(qFuzzyIsNull(rotated.offset),
+           "PAINT-ALT-WHEEL-CLIP: the zero-centered plane must survive the rotation unchanged");
+  QVERIFY2(rotated.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 0.5f)) &&
+           !rotated.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, -0.5f)),
+           "PAINT-ALT-WHEEL-CLIP: the mesh-local clip side must follow the plane through the rotation");
+
+  // (e) A translated object: center (0,0,10) shifts the world plane to
+  // z=10 (ratio 0.5). With the identity volume transform the mesh-local
+  // frame equals the world frame, so the point 1mm above the object center
+  // (z=11) is clipped while 1mm below (z=9) stays paintable -- the sweep is
+  // anchored on the object center, not the world origin.
+  const Slic3r::Vec3d lifted(0.0, 0.0, 10.0);
+  const Slic3r::TriangleSelector::ClippingPlane liftedPlane =
+      OWzx::buildPaintClippingPlane(0.5, forward, lifted, radius, identity);
+  QVERIFY2(liftedPlane.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 11.f)) &&
+           !liftedPlane.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 9.f)),
+           "PAINT-ALT-WHEEL-CLIP: the plane must sweep relative to the object center, not the world origin");
+}
+#else
+void ViewModelSmokeTests::paintClippingPlaneMathMatchesUpstream()
+{
+  QSKIP("PaintEngine clipping-plane test requires HAS_LIBSLIC3R -- skipping");
 }
 #endif
 

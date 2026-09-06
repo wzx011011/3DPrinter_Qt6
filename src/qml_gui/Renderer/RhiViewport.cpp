@@ -1902,6 +1902,30 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
       return;
     }
   }
+  // PAINT-ALT-WHEEL-CLIP (upstream GLGizmoPainterBase.cpp:632-641, the
+  // else-if after the ctrl_down branch): with a paint gizmo active, Alt+wheel
+  // sweeps the cross-section (clipping) plane ratio instead of zooming --
+  // wheel down steps -0.01 clamped to 0, wheel up steps +0.01 clamped to 1
+  // (ObjectClipper::set_position_by_ratio). The new ratio round-trips through
+  // paintClippingTuned -> QML -> EditorViewModel.paintClippingPosition so the
+  // clipped-side pick rejection + the panel sliders follow the wheel (same
+  // write-back contract as gapAreaTuned).
+  else if (event->modifiers() & Qt::AltModifier &&
+           (m_gizmoMode == GizmoSupportPaint ||
+            m_gizmoMode == GizmoSeamPaint ||
+            m_gizmoMode == GizmoMmuSegmentation)) {
+    const float delta = float(event->angleDelta().y()) / 120.0f;
+    if (delta != 0.f) {
+      const double next = (delta < 0.f)
+          ? m_paintClippingPosition - 0.01
+          : m_paintClippingPosition + 0.01;
+      m_paintClippingPosition = qBound(0.0, next, 1.0);
+      emit paintClippingTuned(m_paintClippingPosition);
+      event->accept();
+      update();
+      return;
+    }
+  }
   // v5.12 gap-closure: reverseZoom inverts the wheel direction (upstream
   // reverse_mouse_wheel_zoom, GLCanvas3D.cpp:3765). One notch = +-1 like the
   // upstream GetWheelRotation/GetWheelDelta ratio.
@@ -2364,7 +2388,8 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
                              m_paintButton != 2 && m_paintClickPress;
 
   if (smartFill) {
-    emit smartFillPickRequested(rayOrigin, rayDirection, pickedSourceIndex,
+    emit smartFillPickRequested(rayOrigin, rayDirection,
+                                m_camera.forwardVector(), pickedSourceIndex,
                                 paintState, double(m_smartFillAngle),
                                 m_paintOnOverhangsOnly,
                                 double(m_paintOverhangAngle));
@@ -2373,7 +2398,11 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
 
   // Forward to QML opaquely (no ray math in QML -- same contract as
   // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
+  // cameraForward (PAINT-ALT-WHEEL-CLIP) is the camera look direction the
+  // cross-section plane normal derives from (upstream -camera.
+  // get_dir_forward(), ObjectClipper::set_position_by_ratio).
   emit paintPickRequested(rayOrigin, rayDirection, m_camera.eye(),
+                          m_camera.forwardVector(),
                           pickedSourceIndex, brushRadius, cursorType, paintState,
                           /*smartFill=*/0);
 }

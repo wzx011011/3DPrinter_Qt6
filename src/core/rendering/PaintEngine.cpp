@@ -332,5 +332,35 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                                       /*force_reselection=*/true);
 }
 
+// buildPaintClippingPlane -- pure helper (PAINT-ALT-WHEEL-CLIP). Mirrors the
+// upstream chain ObjectClipper::set_position_by_ratio
+// (GLGizmosCommon.cpp:346-367 -- normal = -camera forward, world offset =
+// normal.dot(center) + boundingRadius - ratio * 2 * boundingRadius) followed
+// by get_clipping_plane_in_volume_coordinates (GLGizmoPainterBase.cpp:
+// 1101-1117 -- the plane point transforms via the inverse, the normal via
+// the transpose linear part, the volume-local offset is their dot). Returns
+// the inactive plane (offset FLT_MAX) when the ratio is off so callers can
+// branch on is_active().
+Slic3r::TriangleSelector::ClippingPlane buildPaintClippingPlane(
+    double ratio, const Slic3r::Vec3d &cameraForwardWorld,
+    const Slic3r::Vec3d &objectCenterWorld, double boundingRadius,
+    const Slic3r::Transform3d &worldTransform)
+{
+  if (ratio <= 0.0 || boundingRadius <= 0.0 ||
+      cameraForwardWorld.norm() < 1e-12)
+    return {};
+  const Slic3r::Vec3d normal = (-cameraForwardWorld).normalized();
+  const double dist = normal.dot(objectCenterWorld);
+  const double offset = dist + boundingRadius - ratio * 2.0 * boundingRadius;
+  const Slic3r::Vec3d pointOnPlane = normal * offset;
+  const Slic3r::Vec3d pointTransformed = worldTransform.inverse() * pointOnPlane;
+  const Slic3r::Transform3d trafoNormal(worldTransform.linear().transpose());
+  const Slic3r::Vec3d normalTransformed = trafoNormal * normal;
+  return Slic3r::TriangleSelector::ClippingPlane(
+      {float(normalTransformed.x()), float(normalTransformed.y()),
+       float(normalTransformed.z()),
+       float(pointTransformed.dot(normalTransformed))});
+}
+
 } // namespace OWzx
 #endif // HAS_LIBSLIC3R

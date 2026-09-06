@@ -408,12 +408,17 @@ public:
   // world mm. cursorType is PaintCursorType (0=Circle,1=Sphere).
   //
   // Returns true when a facet was hit and the selector was painted.
+  // cameraForward (PAINT-ALT-WHEEL-CLIP) is the viewport camera look
+  // direction (world space) -- upstream builds the cross-section plane normal
+  // from -camera.get_dir_forward() (ObjectClipper::set_position_by_ratio,
+  // GLGizmosCommon.cpp:346).
   Q_INVOKABLE bool paintAtFacet(int obj, int vol, int facetIdx,
                                 double hitX, double hitY, double hitZ,
                                 int state, double brushRadius, int cursorType,
                                 int pickedSourceIndex,
                                 QVector3D rayOrigin, QVector3D rayDir,
-                                QVector3D cameraPosition);
+                                QVector3D cameraPosition,
+                                QVector3D cameraForward);
   /// Phase 240 (GIZ-02): smart (seed) fill pick entry. Same two-stage pick
   /// contract as paintAtFacet, but instead of the brush cursor it drives
   /// TriangleSelector::seed_fill_select_triangles + seed_fill_apply_on_
@@ -422,13 +427,26 @@ public:
   /// supportPaintSmartFillAngle Q_PROPERTY; overhangsOnly threads the
   /// overhang filter angle (upstream m_paint_on_overhangs_only ->
   /// m_highlight_by_angle_threshold_deg). Returns true when a facet was hit
-  /// and the seed fill committed.
+  /// and the seed fill committed. cameraForward (PAINT-ALT-WHEEL-CLIP) is the
+  /// camera look direction the cross-section plane normal derives from.
   Q_INVOKABLE bool smartFillAtFacet(int state,
                                     double seedFillAngle,
                                     bool overhangsOnly,
                                     double overhangAngle,
                                     int pickedSourceIndex,
-                                    QVector3D rayOrigin, QVector3D rayDir);
+                                    QVector3D rayOrigin, QVector3D rayDir,
+                                    QVector3D cameraForward);
+  /// PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position for the
+  /// painter gizmos, 0..1 (upstream ObjectClipper m_clp_ratio; 0 = clipping
+  /// off). While > 0 paint picks that hit the mesh on the clipped side of
+  /// the plane are rejected (upstream is_mesh_point_clipped,
+  /// GLGizmoPainterBase.cpp:383-393).
+  double paintClippingPosition() const;
+  void setPaintClippingPosition(double pos);
+  /// PAINT-ALT-WHEEL-CLIP: reset the plane to 0 = off (upstream
+  /// SLAGizmoEventType::ResetClippingPlane -> set_position_by_ratio(-1.),
+  /// GLGizmoPainterBase.cpp:643-646; the Qt6 port models "off" as ratio 0).
+  Q_INVOKABLE void resetPaintClippingPlane();
   /// Phase 120 (PAINT-01): drop all PaintEngine selectors for one object.
   /// Called on gizmo-exit cleanup (mirrors GLGizmoPainterBase on_exit).
   Q_INVOKABLE void clearPaintOnObject(int objectIndex);
@@ -943,6 +961,10 @@ public:
   Q_PROPERTY(float supportPaintAngleThreshold READ supportPaintAngleThreshold WRITE setSupportPaintAngleThreshold NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY stateChanged)
   Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY stateChanged)
+  // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position 0..1
+  // (0 = off) -- upstream ObjectClipper m_clp_ratio swept by Alt+wheel
+  // (GLGizmoPainterBase.cpp:632-641) and reset via resetPaintClippingPlane.
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition NOTIFY stateChanged)
   Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
   /// Phase 240 (GIZ-02): overhang filter angle (see supportPaintOverhangAngle).
   Q_PROPERTY(float supportPaintOverhangAngle READ supportPaintOverhangAngle WRITE setSupportPaintOverhangAngle NOTIFY stateChanged)
@@ -1949,6 +1971,7 @@ private:
   float m_supportPaintAngleThreshold = 45.0f; ///< Overhang highlight angle
   float m_supportPaintSmartFillAngle = 30.0f; ///< Smart fill angle threshold
   float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold mm2 (upstream TriangleSelectorPatch::gap_area, 0..5 step 0.2)
+  double m_paintClippingPosition = 0.0;   ///< PAINT-ALT-WHEEL-CLIP: cross-section ratio, 0 = off (upstream ObjectClipper m_clp_ratio)
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   float m_supportPaintOverhangAngle = 0.0f;   ///< GIZ-02 overhang filter angle (deg)
   bool m_supportEnable = false;            ///< Support enabled flag

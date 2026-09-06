@@ -303,5 +303,26 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                               Slic3r::EnforcerBlockerType state,
                               const Slic3r::Transform3d &trafo);
 
+// PAINT-ALT-WHEEL-CLIP: build the mesh-local cross-section (clipping) plane
+// for the painter gizmos. Mirrors the upstream chain:
+//   1. ObjectClipper::set_position_by_ratio (GLGizmosCommon.cpp:346-367) --
+//      normal = -camera forward, world offset = normal.dot(center)
+//      + boundingRadius - ratio * 2 * boundingRadius (the sweep runs from
+//      "in front of the whole object" at ratio 0 to "past the far side" at
+//      ratio 1 across the bounding-sphere radius).
+//   2. get_clipping_plane_in_volume_coordinates
+//      (GLGizmoPainterBase.cpp:1101-1117) -- the plane is carried into
+//      volume coordinates with the FULL volume transform: the point on the
+//      plane via the inverse, the normal via the transpose linear part, the
+//      offset recomputed as their dot.
+// A mesh point is on the clipped side when normal.dot(point) - offset > 0
+// (TriangleSelector.hpp:65). ratio <= 0 returns the inactive plane
+// (offset FLT_MAX, TriangleSelector.hpp:63). Pure helper so the plane math
+// is unit-testable without a Model/renderer (TS-08 pattern).
+Slic3r::TriangleSelector::ClippingPlane buildPaintClippingPlane(
+    double ratio, const Slic3r::Vec3d &cameraForwardWorld,
+    const Slic3r::Vec3d &objectCenterWorld, double boundingRadius,
+    const Slic3r::Transform3d &worldTransform);
+
 } // namespace OWzx
 #endif // HAS_LIBSLIC3R

@@ -6697,6 +6697,46 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "PAINT-GAPFILL-PORT: PreparePage must bind the gap area channel + slider");
   QVERIFY2(preparePagePaint.contains(QStringLiteral("onGapAreaTuned")),
            "PAINT-GAPFILL-PORT: PreparePage must forward gapAreaTuned into the ViewModel");
+
+  // PAINT-ALT-WHEEL-CLIP (upstream GLGizmoPainterBase.cpp:632-646): Alt+wheel
+  // with a paint gizmo active sweeps the ObjectClipper ratio +-0.01 within
+  // [0, 1]; the plane is built in volume coordinates (normal = -camera
+  // forward, center + bounding-radius offset by ratio,
+  // ObjectClipper::set_position_by_ratio + get_clipping_plane_in_volume_
+  // coordinates) and paint picks that hit the clipped side are rejected
+  // (is_mesh_point_clipped, GLGizmoPainterBase.cpp:383-393).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(double paintClippingPosition")),
+           "PAINT-ALT-WHEEL-CLIP: EditorViewModel.h must expose the paintClippingPosition property");
+  QVERIFY2(editorHeader.contains(QStringLiteral("resetPaintClippingPlane")),
+           "PAINT-ALT-WHEEL-CLIP: EditorViewModel.h must expose the resetPaintClippingPlane invokable");
+  QVERIFY2(paintHeader.contains(QStringLiteral("buildPaintClippingPlane")),
+           "PAINT-ALT-WHEEL-CLIP: PaintEngine.h must declare the volume-coordinate plane builder");
+  QVERIFY2(paintSource.contains(QStringLiteral("buildPaintClippingPlane")),
+           "PAINT-ALT-WHEEL-CLIP: PaintEngine.cpp must implement the plane builder (set_position_by_ratio + volume-coords chain)");
+  QVERIFY2(paintSource.contains(QStringLiteral("cameraForwardWorld.norm()")),
+           "PAINT-ALT-WHEEL-CLIP: the plane builder must derive the normal from -camera forward");
+  QVERIFY2(editorSource.contains(QStringLiteral("buildPaintClippingPlane")) &&
+           editorSource.contains(QStringLiteral("is_mesh_point_clipped(hit.meshLocalPosition)")),
+           "PAINT-ALT-WHEEL-CLIP: paintAtFacet/smartFillAtFacet must reject hits on the clipped side");
+  QVERIFY2(rhiSource.contains(QStringLiteral("Qt::AltModifier")) &&
+           rhiSource.contains(QStringLiteral("qBound(0.0, next, 1.0)")) &&
+           rhiSource.contains(QStringLiteral("emit paintClippingTuned")),
+           "PAINT-ALT-WHEEL-CLIP: wheelEvent must sweep the ratio +-0.01 clamped to [0, 1] on Alt+wheel");
+  QVERIFY2(rhiSource.contains(QStringLiteral("- 0.01")) &&
+           rhiSource.contains(QStringLiteral("+ 0.01")),
+           "PAINT-ALT-WHEEL-CLIP: the Alt+wheel step must be 0.01 (upstream GLGizmoPainterBase.cpp:636-639)");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("paintClippingTuned")),
+           "PAINT-ALT-WHEEL-CLIP: RhiViewport.h must declare the paintClippingTuned write-back signal");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("cameraForward")) &&
+           rhiSource.contains(QStringLiteral("m_camera.forwardVector()")),
+           "PAINT-ALT-WHEEL-CLIP: the paint pick signals must carry the camera forward (upstream get_dir_forward)");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("onPaintClippingTuned")) &&
+           preparePagePaint.contains(QStringLiteral("paintClippingPosition = position")),
+           "PAINT-ALT-WHEEL-CLIP: PreparePage must forward paintClippingTuned into the ViewModel");
+  QVERIFY2(preparePagePaint.count(QStringLiteral("paintClippingPosition = value / 100.0")) >= 3,
+           "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each bind the section slider");
+  QVERIFY2(preparePagePaint.count(QStringLiteral("resetPaintClippingPlane()")) >= 3,
+           "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each expose the reset action");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()

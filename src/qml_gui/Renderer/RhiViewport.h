@@ -206,6 +206,13 @@ class RhiViewport : public QQuickRhiItem
   // the value back into the ViewModel (same opaque-forward bridge as the
   // pick signals).
   Q_PROPERTY(float gapArea READ gapArea WRITE setGapArea)
+  // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane ratio mirroring
+  // EditorViewModel::paintClippingPosition (upstream ObjectClipper
+  // m_clp_ratio, 0..1, 0 = off, GLGizmoPainterBase.cpp:632-641). Alt+wheel
+  // with a paint gizmo active steps it and reports via paintClippingTuned so
+  // QML can write the value back into the ViewModel (same opaque-forward
+  // bridge as gapArea).
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition)
   Q_PROPERTY(bool paintOnOverhangsOnly READ paintOnOverhangsOnly WRITE setPaintOnOverhangsOnly)
   Q_PROPERTY(float paintOverhangAngle READ paintOverhangAngle WRITE setPaintOverhangAngle)
   // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only,
@@ -536,6 +543,10 @@ public:
   // PAINT-GAPFILL-PORT: gap-fill area threshold mm2 (see the Q_PROPERTY block).
   float gapArea() const { return m_gapArea; }
   void setGapArea(float a) { m_gapArea = qBound(0.0f, a, 5.0f); }
+  // PAINT-ALT-WHEEL-CLIP: current cross-section ratio the Alt+wheel step
+  // advances from (kept in lockstep with the ViewModel via the QML binding).
+  double paintClippingPosition() const { return m_paintClippingPosition; }
+  void setPaintClippingPosition(double p) { m_paintClippingPosition = qBound(0.0, p, 1.0); }
   bool paintOnOverhangsOnly() const { return m_paintOnOverhangsOnly; }
   void setPaintOnOverhangsOnly(bool b) { m_paintOnOverhangsOnly = b; }
   float paintOverhangAngle() const { return m_paintOverhangAngle; }
@@ -721,6 +732,7 @@ signals:
   void paintPickRequested(QVector3D worldOrigin,
                           QVector3D worldDirection,
                           QVector3D cameraPosition,
+                          QVector3D cameraForward,
                           int pickedSourceIndex,
                           double brushRadius,
                           int cursorType,
@@ -729,9 +741,13 @@ signals:
   // Phase 240 (GIZ-02): smart-fill pick variant. Emitted instead of
   // paintPickRequested when the SmartFill tool is active or Shift is held on
   // click (Phase 240 spec: Shift+click = smart fill). Carries the seed-fill
-  // angle + overhang filter state.
+  // angle + overhang filter state. cameraForward (PAINT-ALT-WHEEL-CLIP) is
+  // the camera look direction the cross-section plane normal derives from
+  // (upstream -camera.get_dir_forward(), ObjectClipper::set_position_by_ratio,
+  // GLGizmosCommon.cpp:346).
   void smartFillPickRequested(QVector3D worldOrigin,
                               QVector3D worldDirection,
+                              QVector3D cameraForward,
                               int pickedSourceIndex,
                               int paintState,
                               double smartFillAngle,
@@ -744,6 +760,13 @@ signals:
   // writes it into EditorViewModel.supportPaintGapArea so the -3 fragment
   // overlay + the panel slider follow the wheel.
   void gapAreaTuned(double gapArea);
+  // PAINT-ALT-WHEEL-CLIP: Alt+wheel swept the cross-section (clipping) plane
+  // ratio +-0.01 within [0, 1] (upstream GLGizmoPainterBase.cpp:632-641 --
+  // ObjectClipper::set_position_by_ratio). Carries the clamped value; QML
+  // writes it into EditorViewModel.paintClippingPosition so the pick
+  // rejection + the panel sliders follow the wheel (same round-trip contract
+  // as gapAreaTuned).
+  void paintClippingTuned(double position);
   // Phase 240 (GIZ-03): flatten gizmo pick/hover. The hover variant feeds
   // the hovered-facet highlight; the click variant rotates the object so the
   // picked facet's normal faces down (upstream GLGizmoFlatten::on_mouse).
@@ -952,6 +975,7 @@ private:
   int m_paintToolType = 0;   // 0=Brush, 2=SmartFill, 3=GapFill
   float m_smartFillAngle = 30.f;
   float m_gapArea = 1.0f;    // PAINT-GAPFILL-PORT: gap-fill threshold mm2
+  double m_paintClippingPosition = 0.0; // PAINT-ALT-WHEEL-CLIP: section ratio 0..1, 0 = off
   bool m_paintOnOverhangsOnly = false;
   float m_paintOverhangAngle = 0.f;
   /// Phase 240 (GIZ-02): true while the current pick originates from a
