@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: d9d52e0
+head_at_update: ff5ff29
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -283,20 +283,32 @@ items:
       (commit 399d43f) but was never merged to main; port or reimplement.
 
   - id: PAINT-GAPFILL-PORT
-    title: Support Gap Fill tool + engine fragments (port from perf/waves)
+    title: Support Gap Fill tool + engine fragments
     aliases: []
-    status: open
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
       refs:
-        - src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp:378-379
-    notes: The 2026-09-02 ledger closure for gap-fill/height-range lived on
-      perf/waves (399d43f) and is absent from main; the main-line ledger
-      overstated this item. Port the engine + tool chip, or reimplement.
+        - src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp:378-386
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:1234-1236 (is_fragment), 624-627 (wheel step)
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp:117-119 (GapArea 0..5 step 0.2)
+    notes: >
+      Resolved 2026-09-06 (commit ff5ff29), reimplemented on main from the
+      upstream contract (not blind-copied from perf/waves): PaintSelector
+      read-only subclass + getGapFragments strict area filter, -3 amber
+      overlay marker in both renderers, tool chip + slider on the support
+      panel, Ctrl+wheel step with gapAreaTuned write-back.
+    evidence:
+      commits: [ff5ff29]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::paintEngineGapFragmentsRespectAreaThreshold
+      gate: single canonical run EXIT=0 2026-09-06 after full clean rebuild, 12 suites 563 tests 0 failed
+      last_verified: 2026-09-06
 
   - id: VIEW-ARROW-NUDGE
     title: Arrow-key nudge of selected objects (10mm, Shift=1mm)
