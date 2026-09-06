@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: ff5ff29
+head_at_update: 9bb840b
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -146,25 +146,30 @@ items:
   - id: PREVIEW-GCODE-SOURCE-TOKENS
     title: Preview G-code source panel semantic tokenization
     aliases: []
-    area: Preview
-    priority: P3
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
       refs:
-        - src/slic3r/GUI/GCodeViewer.cpp (command/parameters/comment split, 55-char truncation, per-part coloring)
+        - src/slic3r/GUI/GCodeViewer.cpp:509-540 (55-char truncate, split, colors)
     qt_targets:
-      - src/core/viewmodels/PreviewViewModel.h/.cpp
-      - src/qml_gui/pages/PreviewPage.qml
+      - src/core/viewmodels/PreviewViewModel.cpp (rebuildGcodeLineWindow)
+      - src/qml_gui/pages/PreviewPage.qml (delegate)
     notes: >
-      Current panel renders each line as one raw text field; upstream splits
-      command, parameters and comment, truncates at 55 chars and colors parts
-      separately.
-    remaining:
-      - Tokenize in C++ (PreviewViewModel), color/split in QML presentation only.
+      Resolved 2026-09-06 (commit 9bb840b): >55-char lines truncate to
+      52 + "..."; rows carry command/parameters/comment; delegate colors
+      command yellow / parameters primary / comment muted per upstream
+      ImGui colors.
+    evidence:
+      commits: [9bb840b]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::gcodeLineWindowTokenizesAndTruncatesLikeUpstream
+      gate: single canonical run EXIT=0 2026-09-06, 12 suites 564 tests 0 failed
+      last_verified: 2026-09-06
 
   - id: PLATE-PRINT-LIFECYCLE
     title: Persistent per-plate Print / GCodeResult ownership and deep plate semantics
