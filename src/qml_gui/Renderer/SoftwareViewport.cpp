@@ -658,8 +658,13 @@ void SoftwareViewport::paintScene(QPainter *painter, const QRectF &target)
         const QVector3D r1 = rotatePoint(p1 - m_center);
         const QVector3D r2 = rotatePoint(p2 - m_center);
         // State -> color (Enforcer green / Blocker red / MMU extruder color).
+        // PAINT-GAPFILL-PORT: -3 = gap fragment marker, amber to match the
+        // RHI overlay (upstream TrianglePatch::is_fragment,
+        // GLGizmoPainterBase.cpp:1234-1236).
         QColor faceColor = QColor::fromRgbF(0.7f, 0.7f, 0.7f, 0.85f);
-        if (state == 1)
+        if (state == -3)
+          faceColor = QColor::fromRgbF(1.0f, 0.9f, 0.4f, 0.85f);
+        else if (state == 1)
           faceColor = QColor::fromRgbF(0.5f, 1.0f, 0.5f, 0.85f);
         else if (state == 2)
           faceColor = QColor::fromRgbF(1.0f, 0.5f, 0.5f, 0.85f);

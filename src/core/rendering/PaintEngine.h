@@ -32,6 +32,13 @@
 //   so the reference TriangleSelector stores (TriangleSelector.hpp:477 m_mesh)
 //   stays valid for the selector's whole lifetime (TS-01 ownership contract).
 //
+//   The cached instance is a PaintSelector (defined in the .cpp), a read-only
+//   subclass that only exposes the protected m_vertices/m_triangles for the
+//   gap-fragment reader (PAINT-GAPFILL-PORT). No behavior is overridden --
+//   the same justification as upstream TriangleSelectorGUI, which subclasses
+//   TriangleSelector to read leaf state for rendering
+//   (GLGizmoPainterBase.cpp:1123-1157).
+//
 // THREE STRUCTURAL GAPS THIS CLASS BRIDGES (Phase 120 CONTEXT.md):
 //   1. TriangleSelector ctor takes `const TriangleMesh&` -- the mesh source
 //      here returns shared_ptr<const TriangleMesh> (aliasing shallow-share,
@@ -179,6 +186,20 @@ public:
   std::shared_ptr<indexed_triangle_set>
   getFacets(int objectIndex, int volumeIndex,
             Slic3r::EnforcerBlockerType state);
+
+  // PAINT-GAPFILL-PORT (gap-area tool): facets whose leaf area is below
+  // gapAreaMm2 (upstream TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236 -- `area < TriangleSelectorPatch::
+  // gap_area`; slider range GapAreaMin=0 / GapAreaMax=5 / GapAreaStep=0.2,
+  // GLGizmoPainterBase.hpp:117-119). Unlike get_facets (which merges leaves
+  // per state and loses the sub-triangle identity), this reads the selector's
+  // leaf triangles directly, so the gap-fill tool can preview the small
+  // patches the upstream patch renderer brightens. Returns the compact ITS of
+  // fragment leaves (vertex-compacted like get_facets), or nullptr when no
+  // selector exists for the pair. A threshold <= 0 disables the view (empty
+  // ITS), matching GapAreaMin.
+  std::shared_ptr<indexed_triangle_set>
+  getGapFragments(int objectIndex, int volumeIndex, float gapAreaMm2);
 
   // Does any facet carry `state`? Wraps TriangleSelector::has_facets
   // (TriangleSelector.hpp:329). Returns false if no selector exists.

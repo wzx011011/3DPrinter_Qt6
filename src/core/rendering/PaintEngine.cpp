@@ -20,6 +20,71 @@
 #include <utility>
 
 namespace OWzx {
+namespace {
+
+// PAINT-GAPFILL-PORT: exposes the PROTECTED TriangleSelector state
+// (m_vertices / m_triangles are protected, TriangleSelector.hpp:364+) so the
+// gap-fragment leaves can be flattened for the gap-fill tool view. This
+// mirrors upstream TriangleSelectorGUI, which subclasses TriangleSelector for
+// exactly the same reason (read-only leaf access for rendering,
+// GLGizmoPainterBase.cpp:1123-1157). No behavior is overridden.
+//
+// Destruction note: the cache stores unique_ptr<TriangleSelector> over this
+// subclass exactly like upstream GLGizmoPainterBase::m_triangle_selectors
+// stores TriangleSelectorGUI/TriangleSelectorPatch instances
+// (GLGizmoPainterBase.hpp:250). TriangleSelector adds no data members to the
+// derived layout, so the base-subobject address equals the object address.
+class PaintSelector final : public Slic3r::TriangleSelector
+{
+public:
+  explicit PaintSelector(const Slic3r::TriangleMesh &mesh)
+      : Slic3r::TriangleSelector(mesh)
+  {}
+
+  // PAINT-GAPFILL-PORT: gap fragments = leaf triangles whose mesh-space area
+  // is below the gap-area threshold (upstream TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236: `area < TriangleSelectorPatch::
+  // gap_area`). Areas are mm2 (mesh units), matching the upstream slider
+  // range GapAreaMin=0 / GapAreaMax=5 / GapAreaStep=0.2
+  // (GLGizmoPainterBase.hpp:117-119). A threshold <= 0 disables the view.
+  // Output is vertex-compacted like the upstream get_facets result.
+  indexed_triangle_set gapFragmentsIts(float gapAreaMm2) const
+  {
+    indexed_triangle_set out;
+    if (gapAreaMm2 <= 0.f)
+      return out;
+    std::vector<int> vertexMap(m_vertices.size(), -1);
+    for (const Triangle &tr : m_triangles) {
+      if (tr.is_split() || !tr.valid())
+        continue;
+      const Slic3r::Vec3f &a = m_vertices[size_t(tr.verts_idxs[0])].v;
+      const Slic3r::Vec3f &b = m_vertices[size_t(tr.verts_idxs[1])].v;
+      const Slic3r::Vec3f &c = m_vertices[size_t(tr.verts_idxs[2])].v;
+      const float area = 0.5f * (b - a).cross(c - a).norm();
+      if (area >= gapAreaMm2)
+        continue;
+      Slic3r::Vec3i32 tri;
+      bool ok = true;
+      for (int k = 0; k < 3; ++k) {
+        const int old = tr.verts_idxs[k];
+        if (old < 0 || size_t(old) >= m_vertices.size()) {
+          ok = false;
+          break;
+        }
+        if (vertexMap[size_t(old)] < 0) {
+          vertexMap[size_t(old)] = int(out.vertices.size());
+          out.vertices.push_back(m_vertices[size_t(old)].v);
+        }
+        tri[k] = vertexMap[size_t(old)];
+      }
+      if (ok)
+        out.indices.push_back(tri);
+    }
+    return out;
+  }
+};
+
+} // namespace
 
 // Out-of-line destructor: the cache holds unique_ptr<TriangleSelector> over a
 // type that is complete here (TriangleSelector.hpp is included by the header).
@@ -52,7 +117,10 @@ Slic3r::TriangleSelector *PaintEngine::ensureSelector(
   // is the TS-01 ownership contract bridged at the libslic3r->Qt boundary.
   auto entry = std::make_unique<CacheEntry>();
   entry->mesh = meshSharedPtr;
-  entry->selector = std::make_unique<Slic3r::TriangleSelector>(*meshSharedPtr);
+  // PaintSelector (PAINT-GAPFILL-PORT) subclasses the upstream selector
+  // read-only to expose the leaf triangles for the gap-fragment reader; no
+  // behavior override.
+  entry->selector = std::make_unique<PaintSelector>(*meshSharedPtr);
   Slic3r::TriangleSelector *raw = entry->selector.get();
   m_cache.emplace(key, std::move(*entry));
   return raw;
@@ -127,6 +195,20 @@ bool PaintEngine::hasFacets(int objectIndex, int volumeIndex,
   if (it == m_cache.end() || !it->second.selector)
     return false;
   return it->second.selector->has_facets(state);
+}
+
+// PAINT-GAPFILL-PORT: fragment leaves below the gap-area threshold. Reads the
+// cached selector without rebuilding unrelated volumes; ensureSelector lazily
+// builds for the requested pair only (same contract as getFacets' neighbors).
+std::shared_ptr<indexed_triangle_set>
+PaintEngine::getGapFragments(int objectIndex, int volumeIndex, float gapAreaMm2)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  if (!selector)
+    return nullptr;
+  auto *paintSelector = static_cast<PaintSelector *>(selector);
+  return std::make_shared<indexed_triangle_set>(
+      paintSelector->gapFragmentsIts(gapAreaMm2));
 }
 
 const Slic3r::TriangleSelector *PaintEngine::cachedSelectorForVolume(

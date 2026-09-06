@@ -4369,6 +4369,16 @@ struct PaintOverlayTri
 inline void stateColor(int state, const QVariantList &extruderColors,
                        float out[4])
 {
+  // PAINT-GAPFILL-PORT: -3 = gap fragment marker (facets whose leaf area is
+  // below the gap-area threshold while the support gap-fill tool is active;
+  // upstream TrianglePatch::is_fragment, GLGizmoPainterBase.cpp:1234-1236).
+  // Upstream keeps per-type colors in the filtered fragment view; the Qt6
+  // port uses a dedicated amber so fragments read at a glance.
+  if (state == -3)
+  {
+    out[0] = 1.0f; out[1] = 0.9f; out[2] = 0.4f; out[3] = 1.0f;
+    return;
+  }
   // EnforcerBlockerType: 1=Enforcer, 2=Blocker, 3..16=Extruder3..16
   // (TriangleSelector.hpp:13-38). Extruder1 aliases ENFORCER, Extruder2 aliases
   // BLOCKER, so MMU extruders 1/2 reuse the green/red; extruders 3..16 use the

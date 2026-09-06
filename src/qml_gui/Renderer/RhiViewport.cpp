@@ -1872,8 +1872,9 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
   // gizmo active, Ctrl+wheel tunes the brush parameters instead of zooming.
   // Brush cursors step the radius 0.2 within [0.4, 8] (CursorRadius*); the
   // SmartFill tool steps its seed-fill angle 1 deg within [0, 90]
-  // (SmartFillAngle*). HeightRange height / GapFill area belong to tools not
-  // present on the main line yet (PAINT-GAPFILL-PORT / PAINT-MMU-TOOLS).
+  // (SmartFillAngle*); the GapFill tool steps the gap area 0.2 mm2 within
+  // [0, 5] (GapArea*, PAINT-GAPFILL-PORT, GLGizmoPainterBase.cpp:624-627).
+  // HeightRange height belongs to the MMU tool set (PAINT-MMU-TOOLS).
   if (event->modifiers() & Qt::ControlModifier &&
       (m_gizmoMode == GizmoSupportPaint ||
        m_gizmoMode == GizmoSeamPaint ||
@@ -1881,7 +1882,15 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
     const float delta = float(event->angleDelta().y()) / 120.0f;
     if (delta != 0.f) {
       const bool down = delta < 0.f;
-      if (m_paintToolType == 2) {
+      if (m_paintToolType == 3 && m_gizmoMode == GizmoSupportPaint) {
+        // PAINT-GAPFILL-PORT: gap_area step (upstream
+        // GLGizmoPainterBase.cpp:624-627). The new value round-trips through
+        // gapAreaTuned -> QML -> EditorViewModel.supportPaintGapArea so the
+        // -3 fragment overlay and the panel slider follow the wheel.
+        const float next = down ? m_gapArea - 0.2f : m_gapArea + 0.2f;
+        m_gapArea = qBound(0.0f, next, 5.0f);
+        emit gapAreaTuned(double(m_gapArea));
+      } else if (m_paintToolType == 2) {
         const float next = down ? m_smartFillAngle - 1.f : m_smartFillAngle + 1.f;
         m_smartFillAngle = qBound(0.0f, next, 90.0f);
       } else {

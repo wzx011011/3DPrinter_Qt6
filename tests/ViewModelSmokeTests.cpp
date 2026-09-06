@@ -502,6 +502,13 @@ private slots:
   void arrowNudgeTranslatesSelectionWithCoalescedUndo();
   void paintAxisLockClampsAndRoundTrips();
   void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
+  // PAINT-GAPFILL-PORT: PaintEngine::getGapFragments area-threshold behavior
+  // on the SAME synthetic unit-square mesh as
+  // paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt. Asserts the strict
+  // `area < gap_area` fragment filter (upstream TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236), the threshold<=0 disable, and that a
+  // brush stroke which subdivides the square grows the fragment set.
+  void paintEngineGapFragmentsRespectAreaThreshold();
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
   // the key viewmodel/service APIs landed by Phases 196-202 are callable at
   // the C++ boundary: EditorViewModel::embossRunning, SliceService::sliceState,
@@ -7295,6 +7302,113 @@ void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt(
 }
 #else
 void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt()
+{
+  QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintEngineGapFragmentsRespectAreaThreshold()
+{
+  // PAINT-GAPFILL-PORT: exercise PaintEngine::getGapFragments with the SAME
+  // synthetic unit-square mesh as
+  // paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt. The square splits
+  // into two 0.5 mm2 facets, so the untouched selector has exactly two leaves
+  // and the area threshold can be probed exactly around them. This locks the
+  // upstream fragment contract (TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236: leaf area STRICTLY below
+  // TriangleSelectorPatch::gap_area) plus the vertex compaction.
+
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),  // facet 0: lower-right triangle (0.5 mm2)
+    Slic3r::Vec3i32(0, 2, 3)   // facet 1: upper-left triangle (0.5 mm2)
+  };
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+
+  // Helper: total area + max leaf area of a fragment ITS.
+  auto totalArea = [](const indexed_triangle_set &set) {
+    float area = 0.f;
+    for (const auto &idx : set.indices) {
+      const Slic3r::Vec3f &a = set.vertices[size_t(idx[0])];
+      const Slic3r::Vec3f &b = set.vertices[size_t(idx[1])];
+      const Slic3r::Vec3f &c = set.vertices[size_t(idx[2])];
+      area += 0.5f * (b - a).cross(c - a).norm();
+    }
+    return area;
+  };
+
+  // (a) Threshold <= 0 disables the fragment view (empty ITS, GapAreaMin).
+  auto disabled = engine.getGapFragments(0, 0, 0.0f);
+  QVERIFY2(disabled != nullptr,
+           "PAINT-GAPFILL-PORT: getGapFragments must return a shared_ptr when a selector exists");
+  QVERIFY2(disabled->indices.empty(),
+           "PAINT-GAPFILL-PORT: threshold 0 must disable the fragment view");
+
+  // (b) Threshold 5 covers the whole untouched square: both 0.5 mm2 leaves
+  // come back, vertex-compacted, and their areas sum to the surface area.
+  auto all = engine.getGapFragments(0, 0, 5.0f);
+  QVERIFY2(all != nullptr && all->indices.size() == 2,
+           "PAINT-GAPFILL-PORT: threshold 5 must return both 0.5 mm2 leaves of the untouched square");
+  QVERIFY2(qAbs(totalArea(*all) - 1.0f) < 1e-4f,
+           "PAINT-GAPFILL-PORT: fragment ITS must preserve the leaf geometry (areas sum to 1 mm2)");
+
+  // (c) is_fragment is a STRICT area < gap_area: a 0.5 mm2 leaf is not a
+  // fragment at threshold 0.5.
+  auto strict = engine.getGapFragments(0, 0, 0.5f);
+  QVERIFY2(strict != nullptr && strict->indices.empty(),
+           "PAINT-GAPFILL-PORT: the fragment filter must be a strict area < threshold");
+
+  // (d) A brush stroke that grazes the shared diagonal subdivides both facets
+  // (upstream split_triangle subdivides until sides reach the cursor edge
+  // limit, TriangleSelector.cpp:981-1010), so leaves far smaller than the
+  // 0.5 mm2 parents appear. The cursor must be a SPHERE: the SinglePointCursor
+  // view direction degenerates (0/0 -> NaN) when camera_pos == hit
+  // (TriangleSelector.cpp SinglePointCursor ctor), which kills the Circle
+  // cursor's containment tests, while Sphere ignores the direction entirely
+  // and its is_facet_visible is unconditional (TriangleSelector.hpp:163).
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  const bool painted = engine.paintAt(
+      /*obj=*/0, /*vol=*/0, /*facetIdx=*/0, facet0Center,
+      /*brushRadius=*/0.3f, OWzx::PaintCursorType::Sphere,
+      Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+      /*cameraPosMeshLocal=*/facet0Center);
+  QVERIFY2(painted, "PAINT-GAPFILL-PORT: paintAt must return true when the selector exists");
+
+  auto afterStroke = engine.getGapFragments(0, 0, 5.0f);
+  QVERIFY2(afterStroke != nullptr && afterStroke->indices.size() > 2,
+           "PAINT-GAPFILL-PORT: the subdividing stroke must grow the leaf set beyond the 2 original facets");
+  QVERIFY2(qAbs(totalArea(*afterStroke) - 1.0f) < 1e-4f,
+           "PAINT-GAPFILL-PORT: subdivided fragment ITS must still cover the full surface");
+
+  // (e) The 0.5 threshold now keeps only the subdivided leaves; each
+  // returned leaf must respect area < threshold.
+  auto small = engine.getGapFragments(0, 0, 0.5f);
+  QVERIFY2(small != nullptr && small->indices.size() >= 3,
+           "PAINT-GAPFILL-PORT: the 0.5 threshold must keep the subdivided leaves");
+  bool allBelow = true;
+  for (const auto &idx : small->indices) {
+    const Slic3r::Vec3f &a = small->vertices[size_t(idx[0])];
+    const Slic3r::Vec3f &b = small->vertices[size_t(idx[1])];
+    const Slic3r::Vec3f &c = small->vertices[size_t(idx[2])];
+    if (!(0.5f * (b - a).cross(c - a).norm() < 0.5f))
+      allBelow = false;
+  }
+  QVERIFY2(allBelow,
+           "PAINT-GAPFILL-PORT: every returned fragment leaf must have area strictly below the threshold");
+}
+#else
+void ViewModelSmokeTests::paintEngineGapFragmentsRespectAreaThreshold()
 {
   QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
 }

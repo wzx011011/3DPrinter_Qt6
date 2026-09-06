@@ -199,6 +199,13 @@ class RhiViewport : public QQuickRhiItem
   // these so the ViewModel picks the brush vs smart-fill path.
   Q_PROPERTY(int paintToolType READ paintToolType WRITE setPaintToolType)
   Q_PROPERTY(float smartFillAngle READ smartFillAngle WRITE setSmartFillAngle)
+  // PAINT-GAPFILL-PORT: gap-fill area threshold (mm2) mirroring
+  // EditorViewModel::supportPaintGapArea (upstream TriangleSelectorPatch::
+  // gap_area, 0..5 step 0.2, GLGizmoPainterBase.hpp:117-119). Ctrl+wheel on
+  // the gap-fill tool steps it and reports via gapAreaTuned so QML can write
+  // the value back into the ViewModel (same opaque-forward bridge as the
+  // pick signals).
+  Q_PROPERTY(float gapArea READ gapArea WRITE setGapArea)
   Q_PROPERTY(bool paintOnOverhangsOnly READ paintOnOverhangsOnly WRITE setPaintOnOverhangsOnly)
   Q_PROPERTY(float paintOverhangAngle READ paintOverhangAngle WRITE setPaintOverhangAngle)
   // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only,
@@ -526,6 +533,9 @@ public:
   void setPaintLockAxis(int axis) { m_paintLockAxis = qBound(0, axis, 2); }
   float smartFillAngle() const { return m_smartFillAngle; }
   void setSmartFillAngle(float a) { m_smartFillAngle = a; }
+  // PAINT-GAPFILL-PORT: gap-fill area threshold mm2 (see the Q_PROPERTY block).
+  float gapArea() const { return m_gapArea; }
+  void setGapArea(float a) { m_gapArea = qBound(0.0f, a, 5.0f); }
   bool paintOnOverhangsOnly() const { return m_paintOnOverhangsOnly; }
   void setPaintOnOverhangsOnly(bool b) { m_paintOnOverhangsOnly = b; }
   float paintOverhangAngle() const { return m_paintOverhangAngle; }
@@ -727,6 +737,13 @@ signals:
                               double smartFillAngle,
                               bool overhangsOnly,
                               double overhangAngle);
+  // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area threshold
+  // (upstream GLGizmoPainterBase.cpp:624-627 -- SLAGizmoEventType::
+  // MouseWheelDown/Up steps TriangleSelectorPatch::gap_area by GapAreaStep
+  // clamped to [GapAreaMin, GapAreaMax]). Carries the clamped value; QML
+  // writes it into EditorViewModel.supportPaintGapArea so the -3 fragment
+  // overlay + the panel slider follow the wheel.
+  void gapAreaTuned(double gapArea);
   // Phase 240 (GIZ-03): flatten gizmo pick/hover. The hover variant feeds
   // the hovered-facet highlight; the click variant rotates the object so the
   // picked facet's normal faces down (upstream GLGizmoFlatten::on_mouse).
@@ -932,8 +949,9 @@ private:
   int m_brushCursorType = 1; // 1=Sphere (PaintCursorType::Sphere)
   int m_paintState = 1;      // EnforcerBlockerType: 1=Enforcer
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
-  int m_paintToolType = 0;   // 0=Brush, 2=SmartFill
+  int m_paintToolType = 0;   // 0=Brush, 2=SmartFill, 3=GapFill
   float m_smartFillAngle = 30.f;
+  float m_gapArea = 1.0f;    // PAINT-GAPFILL-PORT: gap-fill threshold mm2
   bool m_paintOnOverhangsOnly = false;
   float m_paintOverhangAngle = 0.f;
   /// Phase 240 (GIZ-02): true while the current pick originates from a

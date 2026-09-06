@@ -1765,6 +1765,15 @@ Item {
                         if (root.editorVm)
                             root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection)
                     }
+                    // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area
+                    // threshold in the viewport; write it back into the
+                    // ViewModel so the -3 fragment overlay + panel slider
+                    // follow (same opaque-value forward contract -- no logic
+                    // in QML).
+                    onGapAreaTuned: function(gapArea) {
+                        if (root.editorVm)
+                            root.editorVm.supportPaintGapArea = gapArea
+                    }
                     // Phase 240 (GIZ-03): flatten hover highlight + click-to-
                     // place. The ViewModel runs the stage-2 pick; hover updates
                     // the highlight stream, click rotates the picked facet down.
@@ -1843,6 +1852,10 @@ Item {
                     // Phase 240 (GIZ-02): smart-fill params for the paint path.
                     paintToolType: root.editorVm ? root.editorVm.supportPaintToolType : 0
                     smartFillAngle: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                    // PAINT-GAPFILL-PORT: gap-fill area threshold for the
+                    // Ctrl+wheel step (the wheel value round-trips back via
+                    // onGapAreaTuned below).
+                    gapArea: root.editorVm ? root.editorVm.supportPaintGapArea : 1
                     paintOnOverhangsOnly: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
                     paintOverhangAngle: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
 
@@ -2168,14 +2181,16 @@ Item {
                 }
 
                 // Tool type selector (Phase 240 GIZ-02, upstream
-                // GLGizmoPainterBase ToolType): 0=Brush, 2=SmartFill. Selecting
-                // SmartFill makes clicks seed-fill (Shift+click also triggers a
-                // seed fill regardless of the tool).
+                // GLGizmoPainterBase ToolType): 0=Brush, 2=SmartFill,
+                // 3=GapFill (PAINT-GAPFILL-PORT, upstream GLGizmoFdmSupports
+                // ImGui::GapFillIcon). Selecting SmartFill makes clicks
+                // seed-fill (Shift+click also triggers a seed fill regardless
+                // of the tool); GapFill shows the fragment view + area slider.
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
-                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}]
+                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}, {label: qsTr("缝隙填充"), val: 3}]
                         delegate: Rectangle {
                             required property var modelData
                             width: 76; height: 24; radius: 4
@@ -2216,6 +2231,31 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 32
+                    }
+                }
+
+                // Gap-fill area threshold (PAINT-GAPFILL-PORT, upstream
+                // gap_area slider, GLGizmoFdmSupports.cpp:383-386: mm2, 0..5,
+                // 0.2 step; TriangleSelectorPatch::GapAreaMin/Max/Step).
+                // Facets whose leaf area is below it render in the amber -3
+                // fragment view.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.supportPaintToolType === 3
+                    Text { text: qsTr("缝隙面积:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 5; stepSize: 0.2
+                        value: root.editorVm ? root.editorVm.supportPaintGapArea : 1
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintGapArea = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.supportPaintGapArea : 1).toFixed(2) + "mm²"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 52
                     }
                 }
 

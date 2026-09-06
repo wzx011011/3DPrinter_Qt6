@@ -1234,6 +1234,11 @@ void EditorViewModel::setSupportPaintToolType(int type)
   {
     m_supportPaintToolType = type;
     emit stateChanged();
+    // PAINT-GAPFILL-PORT: switching to/from the gap-fill tool changes the
+    // paintOverlayData contents (the -3 fragment view), so the overlay
+    // binding must re-evaluate (upstream tool click ->
+    // request_update_render_data, GLGizmoPainterBase.cpp:377-386).
+    emit paintDataChanged();
   }
 }
 
@@ -1274,6 +1279,11 @@ void EditorViewModel::setSupportPaintGapArea(float area)
   {
     m_supportPaintGapArea = area;
     emit stateChanged();
+    // PAINT-GAPFILL-PORT: the threshold shapes the -3 fragment view in
+    // paintOverlayData, so the overlay binding must re-evaluate (upstream
+    // gap_area slider -> request_update_render_data,
+    // GLGizmoFdmSupports.cpp:383-386).
+    emit paintDataChanged();
   }
 }
 
@@ -4637,6 +4647,9 @@ void EditorViewModel::resyncPaintSelector(int objectIndex, int volumeIndex, int 
 // m_gizmoMode). state is the TriangleSelector EnforcerBlockerType int value
 // (1=Enforcer, 2=Blocker, 3..16=Extruder3..16) so the renderer can apply the
 // correct per-state color (Support/Seam green/red, MMU per-extruder filament).
+// PAINT-GAPFILL-PORT: state -3 is the reserved gap-fragment marker (facets
+// below the gap-area threshold while the support gap-fill tool is active);
+// renderers map it to a dedicated amber.
 //
 // World transform: PaintEngine::getFacets returns MESH-LOCAL vertices
 // (TriangleSelector stores m_vertices in mesh space). The overlay must render in
@@ -4743,6 +4756,57 @@ QByteArray EditorViewModel::paintOverlayData() const
           rec.verts[t * 3 + 2] = wv.z();
         }
         records.push_back(rec);
+      }
+    }
+
+    // PAINT-GAPFILL-PORT: gap-fill tool view (upstream ToolType::GAP_FILL,
+    // GLGizmoFdmSupports.cpp:378-386, + TrianglePatch::is_fragment,
+    // GLGizmoPainterBase.cpp:1234-1236): with the gap-fill tool active on the
+    // SUPPORT gizmo and a threshold set, surface the facets whose leaf area
+    // is below it, marked with the dedicated -3 fragment marker (amber in the
+    // renderers). getFacets cannot express this view (it merges leaves per
+    // state and loses the sub-triangle identity), hence the dedicated reader.
+    if (m_activePaintKind == 0 && m_supportPaintToolType == 3 &&
+        m_supportPaintGapArea > 0.f)
+    {
+      auto fragments = engine->getGapFragments(obj, v, m_supportPaintGapArea);
+      if (fragments && !fragments->indices.empty())
+      {
+        std::vector<Slic3r::Vec3f> worldVerts(fragments->vertices.size());
+        for (size_t vi = 0; vi < fragments->vertices.size(); ++vi)
+        {
+          const Slic3r::Vec3f &ml = fragments->vertices[vi];
+          const Slic3r::Vec3d w =
+              worldTransform * Slic3r::Vec3d(double(ml.x()), double(ml.y()),
+                                             double(ml.z()));
+          worldVerts[vi] = Slic3r::Vec3f(float(w.x()), float(w.y()),
+                                         float(w.z()));
+        }
+        for (const auto &idx : fragments->indices)
+        {
+          bool valid = true;
+          for (int t = 0; t < 3; ++t)
+          {
+            if (idx[t] < 0 || size_t(idx[t]) >= worldVerts.size())
+            {
+              valid = false;
+              break;
+            }
+          }
+          if (!valid)
+            continue;
+
+          TriRecord rec;
+          rec.state = -3;
+          for (int t = 0; t < 3; ++t)
+          {
+            const Slic3r::Vec3f &wv = worldVerts[size_t(idx[t])];
+            rec.verts[t * 3 + 0] = wv.x();
+            rec.verts[t * 3 + 1] = wv.y();
+            rec.verts[t * 3 + 2] = wv.z();
+          }
+          records.push_back(rec);
+        }
       }
     }
   }

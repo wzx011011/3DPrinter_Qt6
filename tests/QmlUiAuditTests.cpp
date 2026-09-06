@@ -6650,6 +6650,53 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "PAINT-CTRL-WHEEL: wheelEvent must step the brush radius on Ctrl+wheel");
   QVERIFY2(rhiSource.contains(QStringLiteral("m_smartFillAngle = qBound(0.0f, next, 90.0f)")),
            "PAINT-CTRL-WHEEL: wheelEvent must step the SmartFill angle on Ctrl+wheel");
+
+  // PAINT-GAPFILL-PORT (upstream GLGizmoFdmSupports.cpp:378-386 Gap Fill tool
+  // + gap_area slider, TriangleSelectorPatch::GapAreaMin=0/Max=5/Step=0.2,
+  // GLGizmoPainterBase.hpp:117-119; TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236): the ported pipeline must keep the
+  // engine fragment reader, the -3 overlay marker, the tool chip on the
+  // shared paintToolType channel, and the Ctrl+wheel step.
+  QVERIFY2(paintHeader.contains(QStringLiteral("getGapFragments")),
+           "PAINT-GAPFILL-PORT: PaintEngine.h must declare getGapFragments(obj, vol, gapAreaMm2)");
+  QVERIFY2(paintSource.contains(QStringLiteral("PaintEngine::getGapFragments")),
+           "PAINT-GAPFILL-PORT: PaintEngine.cpp must implement getGapFragments");
+  QVERIFY2(paintSource.contains(QStringLiteral("gapFragmentsIts")),
+           "PAINT-GAPFILL-PORT: PaintEngine.cpp must flatten fragment leaves via gapFragmentsIts");
+  QVERIFY2(paintSource.contains(QStringLiteral("area >= gapAreaMm2")),
+           "PAINT-GAPFILL-PORT: fragment filter must keep the strict area < threshold (is_fragment)");
+  // The ViewModel emits the dedicated -3 marker when the gap-fill tool is
+  // active on the support gizmo with a positive threshold.
+  QVERIFY2(editorSource.contains(QStringLiteral("m_supportPaintToolType == 3")),
+           "PAINT-GAPFILL-PORT: paintOverlayData must gate the fragment view on the GapFill tool");
+  QVERIFY2(editorSource.contains(QStringLiteral("rec.state = -3")),
+           "PAINT-GAPFILL-PORT: paintOverlayData must mark fragments with the -3 marker");
+  // The overlay refresh must fire when the tool chip or threshold changes
+  // (upstream slider -> request_update_render_data).
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::setSupportPaintGapArea")),
+           "PAINT-GAPFILL-PORT: EditorViewModel must implement setSupportPaintGapArea");
+  // Renderers color the -3 marker amber.
+  const QString rhiRendererSource =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rhiRendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("state == -3")),
+           "PAINT-GAPFILL-PORT: RhiViewportRenderer must color the -3 fragment marker");
+  // The wheel branch steps the gap area 0.2 within [0, 5] and reports the
+  // value for the QML -> ViewModel write-back.
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_gapArea = qBound(0.0f, next, 5.0f)")) &&
+           rhiSource.contains(QStringLiteral("emit gapAreaTuned")),
+           "PAINT-GAPFILL-PORT: Ctrl+wheel must step the gap area 0.2 within [0, 5] on the GapFill tool");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(float gapArea")),
+           "PAINT-GAPFILL-PORT: RhiViewport.h must expose the gapArea brush-param channel");
+  // The support panel must carry the gap-fill tool chip (val 3 on the shared
+  // paintToolType channel) + the gap_area slider bound to the ViewModel.
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("val: 3}")),
+           "PAINT-GAPFILL-PORT: PreparePage support panel must carry the GapFill tool chip (toolType 3)");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("gapArea:")) &&
+           preparePagePaint.contains(QStringLiteral("supportPaintGapArea")),
+           "PAINT-GAPFILL-PORT: PreparePage must bind the gap area channel + slider");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("onGapAreaTuned")),
+           "PAINT-GAPFILL-PORT: PreparePage must forward gapAreaTuned into the ViewModel");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()

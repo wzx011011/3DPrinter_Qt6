@@ -1948,7 +1948,7 @@ private:
   float m_supportPaintCursorRadius = 5.0f; ///< Brush radius in mm
   float m_supportPaintAngleThreshold = 45.0f; ///< Overhang highlight angle
   float m_supportPaintSmartFillAngle = 30.0f; ///< Smart fill angle threshold
-  float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold
+  float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold mm2 (upstream TriangleSelectorPatch::gap_area, 0..5 step 0.2)
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   float m_supportPaintOverhangAngle = 0.0f;   ///< GIZ-02 overhang filter angle (deg)
   bool m_supportEnable = false;            ///< Support enabled flag
