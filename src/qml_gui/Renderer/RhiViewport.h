@@ -201,6 +201,12 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float smartFillAngle READ smartFillAngle WRITE setSmartFillAngle)
   Q_PROPERTY(bool paintOnOverhangsOnly READ paintOnOverhangsOnly WRITE setPaintOnOverhangsOnly)
   Q_PROPERTY(float paintOverhangAngle READ paintOverhangAngle WRITE setPaintOverhangAngle)
+  // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only,
+  // GLGizmoPainterBase.cpp:738-742): brush-drag axis lock. 0=off, 1=Vertical
+  // (drag strokes stay on the press column, screen X clamped), 2=Horizontal
+  // (press row, screen Y clamped). The single int keeps the two options
+  // mutually exclusive like the upstream MMU checkbox pair.
+  Q_PROPERTY(int paintLockAxis READ paintLockAxis WRITE setPaintLockAxis)
   Q_PROPERTY(float brushMouseScreenX READ brushMouseScreenX WRITE setBrushMouseScreenX)
   Q_PROPERTY(float brushMouseScreenY READ brushMouseScreenY WRITE setBrushMouseScreenY)
   Q_PROPERTY(int brushButtonState READ brushButtonState WRITE setBrushButtonState)
@@ -516,6 +522,8 @@ public:
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
   int paintToolType() const { return m_paintToolType; }
   void setPaintToolType(int t) { m_paintToolType = t; }
+  int paintLockAxis() const { return m_paintLockAxis; }
+  void setPaintLockAxis(int axis) { m_paintLockAxis = qBound(0, axis, 2); }
   float smartFillAngle() const { return m_smartFillAngle; }
   void setSmartFillAngle(float a) { m_smartFillAngle = a; }
   bool paintOnOverhangsOnly() const { return m_paintOnOverhangsOnly; }
@@ -931,6 +939,13 @@ private:
   /// Phase 240 (GIZ-02): true while the current pick originates from a
   /// press event (smart fill is click-driven; drags keep the brush path).
   bool m_paintClickPress = false;
+  // P11.B2.3: brush-drag axis lock (see the Q_PROPERTY block) and the press
+  // anchor the clamp uses (upstream m_last_mouse_click, set on the hit click).
+  int m_paintLockAxis = 0; // 0=off, 1=Vertical (lock screen X), 2=Horizontal
+  QPointF m_paintPressPosition;
+  // P11: button driving the current paint stroke (1=left, 2=right); right
+  // paints the alternate state (upstream RightDown, GLGizmoPainterBase.cpp:649).
+  int m_paintButton = 0;
   float m_brushMouseScreenX = 0.f;
   float m_brushMouseScreenY = 0.f;
   int m_brushButtonState = 0; // 0=hover, 1=left, 2=right

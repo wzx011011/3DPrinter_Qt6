@@ -499,6 +499,7 @@ private slots:
   // boundary: the cursor + select_patch invocation runs WITHOUT a Model or
   // renderer. Mirrors the Phase 114 MeasureEngine readback pattern (synthetic
   // input + pure helper assertion).
+  void paintAxisLockClampsAndRoundTrips();
   void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
   // the key viewmodel/service APIs landed by Phases 196-202 are callable at
@@ -7133,6 +7134,32 @@ void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidI
            "MEASURE-01/MI-05: volumeMeshIts(0,-1) must return nullptr (negative volume index)");
   QVERIFY2(project.volumeMeshIts(0, project.objectVolumeCount(0) + 100) == nullptr,
            "MEASURE-01/MI-05: volumeMeshIts(0,out-of-range-volume) must return nullptr");
+}
+
+void ViewModelSmokeTests::paintAxisLockClampsAndRoundTrips()
+{
+  // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only):
+  // the axis lock is a single 0/1/2 value so Vertical and Horizontal stay
+  // mutually exclusive, and out-of-range writes fall back to off.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel vm(&project, &slice);
+  QCOMPARE(vm.paintLockAxis(), 0);
+
+  QSignalSpy spy(&vm, &EditorViewModel::stateChanged);
+  QVERIFY(spy.isValid());
+
+  vm.setPaintLockAxis(1);
+  QCOMPARE(vm.paintLockAxis(), 1);
+  vm.setPaintLockAxis(2);
+  QCOMPARE(vm.paintLockAxis(), 2);
+  vm.setPaintLockAxis(7);
+  QCOMPARE(vm.paintLockAxis(), 2);
+  vm.setPaintLockAxis(-3);
+  QCOMPARE(vm.paintLockAxis(), 0);
+  // Three effective changes (to 1, to 2, back to 0); the clamped no-op 7
+  // write must not emit.
+  QCOMPARE(spy.count(), 3);
 }
 
 #ifdef HAS_LIBSLIC3R

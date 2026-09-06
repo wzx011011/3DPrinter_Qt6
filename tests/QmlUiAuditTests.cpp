@@ -6592,6 +6592,45 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "PAINT-01: CMakeLists.txt must register PaintEngine.cpp in owzx_app_core");
   QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/PaintEngine.h")),
            "PAINT-01: CMakeLists.txt must register PaintEngine.h in owzx_app_core");
+
+  // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only,
+  // GLGizmoPainterBase.cpp:738-742, GLGizmoSeam.cpp:322,
+  // GLGizmoMmuSegmentation.cpp:717-724): brush-drag axis lock. The drag path
+  // must clamp to the press point, the ViewModel must expose the lock, and
+  // the Seam panel gets only Vertical while MMU gets both checkboxes
+  // (upstream FDM supports exposes neither).
+  const QString preparePagePaint = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePagePaint.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintLockAxis == 1")) &&
+           rhiSource.contains(QStringLiteral("paintPos.setX(m_paintPressPosition.x())")),
+           "P11.B2.3: RhiViewport drag path must clamp screen X to the press point for Vertical lock");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintLockAxis == 2")) &&
+           rhiSource.contains(QStringLiteral("paintPos.setY(m_paintPressPosition.y())")),
+           "P11.B2.3: RhiViewport drag path must clamp screen Y to the press point for Horizontal lock");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintPressPosition = event->position()")),
+           "P11.B2.3: RhiViewport press must record the axis-lock anchor");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(int paintLockAxis")),
+           "P11.B2.3: RhiViewport.h must expose paintLockAxis");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::setPaintLockAxis")),
+           "P11.B2.3: EditorViewModel must implement the paintLockAxis setter");
+  QVERIFY2(preparePagePaint.count(QStringLiteral("paintLockAxis === 1")) >= 2,
+           "P11.B2.3: Seam + MMU panels must bind the Vertical lock checkbox");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("paintLockAxis === 2")),
+           "P11.B2.3: MMU panel must bind the Horizontal lock checkbox");
+  const int lockCheckboxes = preparePagePaint.count(QStringLiteral("root.editorVm.paintLockAxis = checked"));
+  QCOMPARE(lockCheckboxes, 3); // Seam Vertical + MMU Vertical/Horizontal; support panel exposes none
+
+  // P11: right-button paint (upstream GLGizmoPainterBase.cpp:649 RightDown,
+  // MMU disabled via GLGizmoMmuSegmentation.hpp:94) and Shift = temporary
+  // eraser (PainterBase.cpp:662-671 keeps new_state NONE).
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintButton = 2")) &&
+           rhiSource.contains(QStringLiteral("paintState = (m_paintState == 2) ? 1 : 2")),
+           "P11: RhiViewport must paint the alternate state on the right button");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_gizmoMode != GizmoMmuSegmentation")),
+           "P11: MMU right button must stay disabled (upstream returns -1)");
+  QVERIFY2(rhiSource.contains(QStringLiteral("else if (shiftHeld)")) &&
+           rhiSource.contains(QStringLiteral("paintState = 0;")),
+           "P11: Shift must act as a temporary eraser (paintState NONE), not smart fill");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()

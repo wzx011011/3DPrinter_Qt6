@@ -1312,6 +1312,25 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     return;
   }
   if (event->button() == Qt::RightButton) {
+    // P11 (upstream GLGizmoPainterBase.cpp:649 RightDown): with a paint gizmo
+    // active the right button paints instead of opening the context menu.
+    // MMU disables the right button entirely (upstream
+    // GLGizmoMmuSegmentation.hpp:94 returns -1 and the event is dropped).
+    if ((m_gizmoMode == GizmoSupportPaint ||
+         m_gizmoMode == GizmoSeamPaint ||
+         m_gizmoMode == GizmoMmuSegmentation) &&
+        m_gizmoMode != GizmoMmuSegmentation) {
+      m_dragButton = Qt::RightButton;
+      m_paintButton = 2;
+      m_paintPressPosition = event->position();
+      updateBrushCursorState(event->position(), 2 /*right*/);
+      m_paintClickPress = true;
+      emitPaintPickIfActive(event->position(), event->modifiers());
+      m_paintClickPress = false;
+      m_contextPressActive = false;
+      event->accept();
+      return;
+    }
     m_contextPressPosition = event->position();
     m_contextPressActive = true;
     m_contextDragExceeded = false;
@@ -1425,6 +1444,10 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
     updateBrushCursorState(event->position(), 1 /*left*/);
+    // P11.B2.3 (upstream m_last_mouse_click, GLGizmoPainterBase.cpp:715):
+    // remember the press point so an axis-locked drag can clamp to it.
+    m_paintPressPosition = event->position();
+    m_paintButton = 1;
     // Phase 240 (GIZ-02): smart fill fires on PRESS only (a shift-drag keeps
     // the erase-brush path).
     m_paintClickPress = true;
@@ -1499,12 +1522,22 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   // TriangleSelector brush (mirrors upstream GLGizmoPainterBase on_mouse
   // move-while-LeftDown). mousePressEvent already accept()-ed the initial
   // click for paint gizmos, so m_gizmoDragging stays false here.
-  if (m_dragButton == Qt::LeftButton &&
+  if ((m_dragButton == Qt::LeftButton || m_dragButton == Qt::RightButton) &&
       (m_gizmoMode == GizmoSupportPaint ||
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
-    updateBrushCursorState(event->position(), 1 /*left*/);
-    emitPaintPickIfActive(event->position(), event->modifiers());
+    // P11.B2.3 (upstream GLGizmoPainterBase.cpp:738-742): during a brush
+    // drag, Vertical lock clamps the screen X to the press column and
+    // Horizontal lock clamps the screen Y to the press row, so the stroke
+    // stays a straight line through the click point. The clamp applies to
+    // the whole downstream path (cursor + pick ray).
+    QPointF paintPos = event->position();
+    if (m_paintLockAxis == 1)
+      paintPos.setX(m_paintPressPosition.x());
+    else if (m_paintLockAxis == 2)
+      paintPos.setY(m_paintPressPosition.y());
+    updateBrushCursorState(paintPos, m_dragButton == Qt::RightButton ? 2 : 1);
+    emitPaintPickIfActive(paintPos, event->modifiers());
     event->accept();
     return;
   }
@@ -1728,6 +1761,13 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     return;
   }
   if (event->button() == Qt::RightButton) {
+    // P11: a right-button paint stroke ends here; it suppresses the context
+    // menu (m_contextPressActive was cleared at press) and clears the
+    // stroke button so hover painting does not inherit it.
+    if (m_paintButton == 2) {
+      m_paintButton = 0;
+      m_dragButton = Qt::NoButton;
+    }
     const bool suppress = !m_contextPressActive || m_contextDragExceeded
         || m_contextLayerEditingAtPress || m_contextToolCapturedAtPress;
     m_contextPressActive = false;
@@ -1773,6 +1813,7 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
       emit objectPickedSource(m_pressPickedSourceObjectIndex);
   }
   m_dragButton = Qt::NoButton;
+  m_paintButton = 0;
   m_pressPickedSourceObjectIndex = -1;
   // Phase 121 (PAINT-03): release returns the brush cursor to hover (black).
   if (m_gizmoMode == GizmoSupportPaint ||
@@ -2270,9 +2311,23 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
   const double brushRadius = double(m_brushRadius);
   const int    cursorType  = m_brushCursorType;
   const bool   shiftHeld   = (modifiers & Qt::ShiftModifier) != 0;
-  // EnforcerBlockerType: 1=Enforcer, 2=Blocker (TriangleSelector.hpp:13-38).
-  const int    paintState  = shiftHeld ? 2 : m_paintState;
-  const bool   smartFill   = (shiftHeld || m_paintToolType == 2) && m_paintClickPress;
+  // P11 (upstream GLGizmoPainterBase.cpp:662-671): Shift holds new_state at
+  // NONE, i.e. Shift is a temporary ERASER for every painter gizmo (the
+  // earlier smart-fill mapping inverted this). The right button paints the
+  // alternate state (PainterBase default right=BLOCKER; the complement of
+  // the active tool keeps the Enforcer/Blocker pair symmetric).
+  int paintState;
+  if (m_paintButton == 2)
+    paintState = (m_paintState == 2) ? 1 : 2;
+  else if (shiftHeld)
+    paintState = 0;
+  else
+    paintState = m_paintState;
+  // Phase 240 (GIZ-02): SmartFill is the tool chip (paintToolType==2) firing
+  // on PRESS only -- a shift-DRAG keeps the brush path and the right button
+  // never smart-fills.
+  const bool   smartFill   = (m_paintToolType == 2) && !shiftHeld &&
+                             m_paintButton != 2 && m_paintClickPress;
 
   if (smartFill) {
     emit smartFillPickRequested(rayOrigin, rayDirection, pickedSourceIndex,

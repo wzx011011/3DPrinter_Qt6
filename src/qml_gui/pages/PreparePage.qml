@@ -3019,6 +3019,15 @@ Item {
                     }
                 }
 
+                // P11.B2.3（对齐上游 GLGizmoSeam.cpp:322）：缝线面板只提供
+                // Vertical 锁——拖动笔画锁定在按下点所在列。
+                CxCheckBox {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("垂直")
+                    checked: root.editorVm ? root.editorVm.paintLockAxis === 1 : false
+                    onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 1 : 0
+                }
+
                 // 清除按钮
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
@@ -3572,6 +3581,23 @@ Item {
                     color: Theme.textMuted
                     font.pixelSize: Theme.fontSizeXS
                     Layout.alignment: Qt.AlignHCenter
+                }
+
+                // P11.B2.3（对齐上游 GLGizmoMmuSegmentation.cpp:717-724）：
+                // MMU 面板提供 Vertical/Horizontal 两个互斥轴锁复选框。
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 12
+                    CxCheckBox {
+                        text: qsTr("垂直")
+                        checked: root.editorVm ? root.editorVm.paintLockAxis === 1 : false
+                        onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 1 : 0
+                    }
+                    CxCheckBox {
+                        text: qsTr("水平")
+                        checked: root.editorVm ? root.editorVm.paintLockAxis === 2 : false
+                        onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 2 : 0
+                    }
                 }
 
                 // 清除分段按钮（对齐上游 reset triangle painting）

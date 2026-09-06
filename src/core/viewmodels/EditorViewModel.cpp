@@ -1387,6 +1387,13 @@ void EditorViewModel::setSeamPaintOnOverhangsOnly(bool on)
 {
   if (m_seamPaintOnOverhangsOnly != on) { m_seamPaintOnOverhangsOnly = on; emit stateChanged(); }
 }
+int EditorViewModel::paintLockAxis() const { return m_paintLockAxis; }
+void EditorViewModel::setPaintLockAxis(int axis)
+{
+  // 0=off, 1=Vertical, 2=Horizontal; out-of-range falls back to off.
+  const int clamped = qBound(0, axis, 2);
+  if (m_paintLockAxis != clamped) { m_paintLockAxis = clamped; emit stateChanged(); }
+}
 void EditorViewModel::clearSeamPaintOnSelection()
 {
   // Phase 122 (PAINT-04): clear Seam paint on the selected object. Mirrors

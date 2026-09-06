@@ -459,6 +459,9 @@ public:
   void setSeamPaintCursorRadius(float radius);
   bool seamPaintOnOverhangsOnly() const;
   void setSeamPaintOnOverhangsOnly(bool on);
+  // P11.B2.3 brush-drag axis lock (paint gizmos)
+  int paintLockAxis() const;
+  void setPaintLockAxis(int axis);
   /// Clear all seam painting on selected volumes
   Q_INVOKABLE void clearSeamPaintOnSelection();
   // Hollow gizmo (对齐上游 GLGizmoHollow)
@@ -965,6 +968,10 @@ public:
   Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY stateChanged)
   Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY stateChanged)
   Q_PROPERTY(bool seamPaintOnOverhangsOnly READ seamPaintOnOverhangsOnly WRITE setSeamPaintOnOverhangsOnly NOTIFY stateChanged)
+  /// P11.B2.3 笔刷拖动轴锁（对齐上游 GLGizmoPainterBase m_vertical_only/
+  /// m_horizontal_only）：0=关，1=垂直（锁屏幕 X），2=水平（锁屏幕 Y）。
+  /// 单值天然互斥，等价上游 MMU 面板两个复选框的联动行为。
+  Q_PROPERTY(int paintLockAxis READ paintLockAxis WRITE setPaintLockAxis NOTIFY stateChanged)
   /// SLA 空洞标记设置（对齐上游 GLGizmoHollow）
   Q_PROPERTY(bool hollowEnabled READ hollowEnabled WRITE setHollowEnabled NOTIFY stateChanged)
   Q_PROPERTY(float hollowHoleRadius READ hollowHoleRadius WRITE setHollowHoleRadius NOTIFY stateChanged)
@@ -1947,6 +1954,8 @@ private:
   int m_seamPaintTool = 0;                 ///< 0=None, 1=Enforcer, 2=Blocker
   float m_seamPaintCursorRadius = 2.0f;
   bool m_seamPaintOnOverhangsOnly = false;
+  // P11.B2.3 brush-drag axis lock: 0=off, 1=Vertical, 2=Horizontal
+  int m_paintLockAxis = 0;
   // Hollow gizmo (对齐上游 GLGizmoHollow)
   bool m_hollowEnabled = true;             ///< m_enable_hollowing
   float m_hollowHoleRadius = 2.0f;        ///< m_new_hole_radius
