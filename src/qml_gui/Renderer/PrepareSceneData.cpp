@@ -340,6 +340,10 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     // P15.3 (OUTOFBED): ProjectVolumeType for the outside-state gate.
     batch.volumeType = batchVolumeTypes.isEmpty() ? 0
                                                   : batchVolumeTypes.at(objectIndex);
+    // PREVIEW-GHOST-SHELL: per-volume extruder identity for the ghost pass.
+    batch.extruderId = batchExtruderIds.isEmpty()
+                           ? 0
+                           : batchExtruderIds.at(objectIndex);
 
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
       float x = 0.0f;

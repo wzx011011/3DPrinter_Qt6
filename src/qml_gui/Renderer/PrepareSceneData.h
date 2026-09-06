@@ -61,6 +61,11 @@ public:
     // shader_outside_printer_detection_enabled = is_model_part,
     // 3DScene.cpp:728). Trailing field keeps aggregate initializers valid.
     int volumeType = 0;
+    // PREVIEW-GHOST-SHELL: upstream ModelVolume::extruder_id() for the batch
+    // (0/absent when the render-channel arrays were not supplied). Consumed
+    // by the preview ghost-shell pass to tint per volume
+    // (update_colors_by_extruder, 3DScene.cpp:1216-1224). Trailing field.
+    int extruderId = 0;
   };
 
   // P15.3 (OUTOFBED): upstream PrintVolumeDetection (gouraud.fs:11-22),

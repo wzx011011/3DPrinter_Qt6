@@ -5367,6 +5367,20 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
 // from the SAME prepare-pass mesh staging (m_prepareScene.modelVertices --
 // fed by PreviewPage.qml's meshData/meshBatch* bindings, mirroring
 // PreparePage), with the per-vertex alpha overridden to the ghost alpha.
+//
+// PREVIEW-GHOST-SHELL per-volume lifecycle: the ghost buffer is built PER
+// ModelBatch, not as one merged blob (upstream Shells is a per-volume
+// GLVolumeCollection, GCodeViewer.hpp:381-389). Eligibility mirrors
+// load_shells: only model-part volumes become shells -- modifier/negative/
+// blocker/enforcer volumes are dropped (upstream deletes modifier shell
+// volumes, GCodeViewer.cpp:3163-3171; load_object only feeds model parts,
+// 3DScene.cpp:689-743). Each surviving batch is tinted with ITS OWN extruder
+// color (update_colors_by_extruder filament_colour[extruder-1] with the
+// first-color fallback for an invalid id, 3DScene.cpp:1216-1224), replacing
+// the previous extruder-1-only tint. An empty eligible set is the upstream
+// reset_shell transition (clear volumes + empty collection,
+// GCodeViewer.cpp:1193-1198, :3091-3095): the generation is recorded so an
+// empty scene does not rebuild every frame and no stale shell draws.
 bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *updates)
 {
   if (updates == nullptr || rhi() == nullptr)
@@ -5377,37 +5391,50 @@ bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *update
   if (m_ghostShellBufferUploaded && m_ghostShellModelGeneration == m_modelGeneration)
     return true;
 
-  const QVector<Vertex> source = buildModelVertices(m_prepareScene.modelVertices());
-  if (source.isEmpty())
-  {
-    // No meshes loaded (e.g. empty plate) -- nothing to ghost; still record
-    // the generation so empty scenes do not rebuild every frame.
-    m_ghostShellModelGeneration = m_modelGeneration;
-    m_ghostShellBufferUploaded = true;
-    m_ghostShellVertexCount = 0;
-    return true;
-  }
-
   // Ghost alpha override (upstream renders the shell volumes in Transparent
   // mode so toolpaths stay readable on top; shell_transparency 0.15,
   // GCodeViewer.cpp:3076-3186 m_shells.alpha).
   constexpr float kGhostAlpha = 0.15f;
-  // P17.5: tint the shell with the extruder-1 configured color (upstream
-  // update_colors_by_extruder tints per volume; the Qt6 ghost is one merged
-  // mesh, so extruder 1 — the default part color source — applies).
-  float tintR = 0.8f, tintG = 0.8f, tintB = 0.8f;
-  if (!m_extrudersColorsParsed.isEmpty())
-  {
-    tintR = m_extrudersColorsParsed.first().x();
-    tintG = m_extrudersColorsParsed.first().y();
-    tintB = m_extrudersColorsParsed.first().z();
-  }
+
   QVector<Vertex> ghost;
-  ghost.resize(source.size());
-  for (int i = 0; i < source.size(); ++i)
+  const QList<PrepareSceneData::ModelBatch> &batches = m_prepareScene.modelBatches();
+  if (!batches.isEmpty()) {
+    // 1:1 with modelVertices() for CanvasPreview (buildModelVertices only
+    // diverges for the AssembleView explosion/transform paths), so per-batch
+    // [firstVertex, firstVertex+vertexCount) ranges map directly onto the
+    // built output.
+    const QVector<Vertex> built = buildModelVertices(m_prepareScene.modelVertices());
+    ghost.reserve(built.size());
+    for (const PrepareSceneData::ModelBatch &batch : batches) {
+      if (batch.volumeType != 0 || batch.vertexCount <= 0)
+        continue; // shell eligibility: model parts only (load_shells rules)
+      float tintR = 0.8f, tintG = 0.8f, tintB = 0.8f;
+      if (!m_extrudersColorsParsed.isEmpty()) {
+        int colorIndex = batch.extruderId - 1;
+        if (colorIndex < 0 || colorIndex >= m_extrudersColorsParsed.size())
+          colorIndex = 0; // invalid extruder falls back to the first color
+        const QVector4D &color = m_extrudersColorsParsed.at(colorIndex);
+        tintR = color.x();
+        tintG = color.y();
+        tintB = color.z();
+      }
+      const int first = batch.firstVertex;
+      for (int i = 0; i < batch.vertexCount; ++i) {
+        const Vertex &v = built.at(first + i);
+        ghost.append(Vertex{v.x, v.y, v.z, tintR, tintG, tintB, kGhostAlpha});
+      }
+    }
+  }
+
+  if (ghost.isEmpty())
   {
-    const Vertex &v = source[i];
-    ghost[i] = Vertex{v.x, v.y, v.z, tintR, tintG, tintB, kGhostAlpha};
+    // reset_shell equivalent: no eligible shell volumes (empty plate or only
+    // modifier/negative volumes). Record the generation so empty scenes do
+    // not rebuild every frame and no stale shell geometry survives.
+    m_ghostShellModelGeneration = m_modelGeneration;
+    m_ghostShellBufferUploaded = true;
+    m_ghostShellVertexCount = 0;
+    return true;
   }
 
   const quint32 byteSize = quint32(ghost.size()) * sizeof(Vertex);

@@ -10583,6 +10583,7 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
 {
   const QString rendererCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString rendererH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString prepareSceneH = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
   const QString visFilter = readSource(QStringLiteral("src/qml_gui/components/VisibilityFilter.qml"));
@@ -10592,6 +10593,7 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   const QString previewVmCpp = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
   QVERIFY2(!rendererCpp.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
   QVERIFY2(!rendererH.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!prepareSceneH.isEmpty(), "Unable to read PrepareSceneData.h");
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
   QVERIFY2(!layerRail.isEmpty(), "Unable to read PreviewLayerRail.qml");
   QVERIFY2(!visFilter.isEmpty(), "Unable to read VisibilityFilter.qml");
@@ -10615,6 +10617,35 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   // (mirrors the upstream shells-always-loaded behavior).
   QVERIFY2(previewPage.contains(QStringLiteral("meshData: root.editorVm ? root.editorVm.meshData : null")),
            "PREV-01: PreviewPage must bind editorVm.meshData so shells have data in preview");
+
+  // ── PREVIEW-GHOST-SHELL: per-volume shell lifecycle ────────────────────
+  // Upstream Shells is a per-volume GLVolumeCollection (GCodeViewer.hpp:381-
+  // 389); load_shells walks object x volume x printable instance
+  // (GCodeViewer.cpp:3076-3189), deletes modifier volumes (:3163-3171), and
+  // tints each volume with its own extruder color
+  // (update_colors_by_extruder, 3DScene.cpp:1216-1224, first-color fallback
+  // :1220-1222). reset_shell (:1193-1198) empties the collection when the
+  // eligible set is empty (:3091-3095).
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_prepareScene.modelBatches()")),
+           "GHOST-PER-VOLUME: the ghost build must iterate per-batch ModelBatch"
+           " ranges, not one merged vertex blob");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.volumeType != 0")),
+           "GHOST-PER-VOLUME: only model-part volumes may become shells"
+           " (modifier/negative/blocker/enforcer are dropped, upstream"
+           " GCodeViewer.cpp:3163-3171)");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.extruderId - 1")),
+           "GHOST-PER-VOLUME: each shell volume must tint with its own"
+           " extruder color (upstream filament_colour[extruder-1],"
+           " 3DScene.cpp:1216-1224)");
+  QVERIFY2(!rendererCpp.contains(QStringLiteral("m_extrudersColorsParsed.first()")),
+           "GHOST-PER-VOLUME: the extruder-1-only merged tint must not return"
+           " (first-color fallback is allowed only through the clamped index"
+           " path)");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.vertexCount <= 0")),
+           "GHOST-PER-VOLUME: empty/zero-vertex batches must be skipped");
+  QVERIFY2(prepareSceneH.contains(QStringLiteral("int extruderId = 0;")),
+           "GHOST-PER-VOLUME: ModelBatch must carry the per-volume extruder id"
+           " for the ghost tint");
 
   // ── PREV-02: tool marker consumed by the renderer ─────────────────────
   // Upstream Marker::render (GCodeViewer.cpp:306-330) draws the stylized
