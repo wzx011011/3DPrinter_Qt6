@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: 0b3834c
+head_at_update: 5f351e3
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -87,28 +87,44 @@ items:
   - id: QML-BINDING-LOOPS
     title: Remaining QML binding loops (post two-loop fix)
     aliases: ["G-12/remaining", "G-12(剩余绑定环)"]
+    status: resolved
+    resolved: 2026-09-06
     area: QML/Quality
     priority: P2
-    implementation: hybrid
-    parity: partial
-    verification: partial
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     qt_targets:
       - src/qml_gui/dialogs/SettingsDialog.qml
       - src/qml_gui/pages/PreparePage.qml
-      - src/qml_gui/pages/ (site-by-site sweep)
+      - src/qml_gui/dialogs/EnableLiteModeDialog.qml
+      - src/qml_gui/dialogs/AMSSettingsDialog.qml
+      - src/qml_gui/dialogs/SpeedLimitDialog.qml
+      - src/qml_gui/dialogs/PluginManagerDialog.qml
     notes: >
       G-12 closed its scope on 2026-09-05 (smoke_test.ps1 expectations,
       commit 100b685; SettingsDialog TabBar width loop + two PreparePage
-      CxCheckBox write-back loops, commit 849cfce, QmlUiAudit green).
-      The long tail of ~75 runtime binding loops remains a standing item;
-      agreed pattern: onCheckedChanged->onToggled, strip-reference instead of
-      TabBar implicitWidth aggregation.
-    remaining:
-      - Sweep remaining loop sites one by one; re-run QmlUiAuditTests after each batch.
+      CxCheckBox write-back loops, commit 849cfce). Closed 2026-09-06
+      (commit 5f351e3): runtime capture at 95f4a2a found 0 binding-loop
+      warnings across 19 page/dialog open states, a 25s window-resize
+      stress probe, and scripted Settings-dialog click interaction, so the
+      historical ~75 counts no longer reproduce (loop warnings repeat per
+      relayout; the fixed G-12 sites were the repeat sources). Static sweep
+      then converted the 4 remaining G-12-pattern write-backs (checked
+      bound declaratively + onCheckedChanged writing back) to onToggled:
+      EnableLiteModeDialog liteModeEnabled, AMSSettingsDialog per-slot
+      auto-swap, SpeedLimitDialog limitItems delegate, PluginManagerDialog
+      guarded plugin enable. Post-fix: same 19-state sweep + click probe
+      still 0 binding loops (before 0, after 0); smoke 60/61 -- the single
+      fail is 15 pre-existing non-loop type/reference QML warnings,
+      unchanged before/after (SettingsDialog:767 QString->int, HomePage
+      loginError/bindError ReferenceErrors, PreparePage:2931
+      undefined->bool); those are tracked outside this loop-governance item.
     evidence:
-      commits: [100b685, 849cfce]
-      last_verified: 2026-09-05
+      commits: [100b685, 849cfce, 5f351e3]
+      gate: auto_verify_with_vcvars EXIT=0 2026-09-06, 12 suites 566 tests 0 failed (QmlUiAuditTests 171/171 included)
+      last_verified: 2026-09-06
 
   # ── Not started (next candidates, unblocked) ─────────────────────────────
   - id: PAINT-AXIS-LOCK
