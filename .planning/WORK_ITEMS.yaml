@@ -637,20 +637,42 @@ items:
   - id: PREVIEW-GHOST-SHELL
     title: Preview ghost object shells
     aliases: ["P2.8.2", "P17.5"]
-    status: open
-    implementation: hybrid
-    parity: partial
-    verification: partial
+    status: resolved
+    resolved: 2026-09-07
+    implementation: real
+    parity: known_deviation
+    verification: pass
     availability: available
     notes: >
-      Conflict resolved: P17.5 (2026-08-29) delivered the RHI ghost-shell
-      approximation (extruder coloring, sliced geometry, alpha 0.15->0.35;
-      upstream baseline set_shell_transparency alpha=0.15). P2.8.2's original
-      "[ ]" checkbox is superseded by this item. Remaining: full per-volume
-      shell lifecycle. A GPU-scale rewrite is NOT planned; approximation is
-      accepted until upstream parity work reopens it.
-    remaining:
-      - per-volume shell lifecycle (deferred)
+      P17.5 (2026-08-29) delivered the RHI ghost-shell pass (extruder
+      coloring, sliced geometry, alpha 0.15 -> upstream
+      set_shell_transparency 0.15). 85d641f (2026-09-07) closed the
+      per-volume lifecycle gap: the ghost buffer is built PER ModelBatch
+      with upstream load_shells eligibility (only model-part volumes;
+      modifier/negative/blocker/enforcer dropped, GCodeViewer.cpp:3163-3171)
+      and per-volume extruder tint through the first-color fallback
+      (update_colors_by_extruder, 3DScene.cpp:1216-1224); ModelBatch now
+      carries extruderId; an empty eligible set is the explicit reset_shell
+      transition (GCodeViewer.cpp:1193-1198, :3091-3095). A GPU-scale
+      rewrite was NOT needed (ModelBatch already had object/volume/instance
+      ranges). Two narrow accepted deviations remain (not the deferred
+      per-volume lifecycle): (a) the shell cache keys on the Qt6 model
+      generation instead of upstream print_id + get_modified_count, so a
+      brand-new Print with an identical mesh keeps the old shell where
+      upstream would rebuild; (b) an extruder-color-only change rebuilds
+      through the full scene-generation path instead of a shells-only
+      recolor (efficiency-only divergence).
+    evidence:
+      commits: [85d641f]
+      tests:
+        - tests/QmlUiAuditTests.cpp::previewCompletionSourceAudit
+      gate: canonical run after ninja -t clean full rebuild EXIT=0
+        2026-09-07, 12 suites 576 tests 0 failed 0 skipped (PrepareScene
+        23 incl. batch parsing, PartPlate 68, ViewModelSmoke 187, QmlUiAudit
+        171 incl. the new GHOST-PER-VOLUME assertions, PreviewParser 26,
+        Gizmo 24, AppTool 10, ObjectPicking 7, Navigator 8, Camera 14,
+        ViewportContext 6, E2E 32)
+      last_verified: 2026-09-07
 
   - id: REVIEW-P1-RESIDUE
     title: Unverified 2026-09-04 review P1 residue
