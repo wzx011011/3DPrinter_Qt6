@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: a216932
+head_at_update: b33f61f
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -259,17 +259,36 @@ items:
   - id: PAINT-ALT-WHEEL-CLIP
     title: Alt+wheel clipping-plane sweep inside paint gizmos
     aliases: []
-    status: open
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: partial
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
       refs:
         - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:632-646
-    remaining:
-      - Expose clipping ratio sweep + reset while a paint gizmo is active.
+    qt_targets:
+      - src/core/rendering/PaintEngine.cpp (buildPaintClippingPlane volume-coords helper)
+      - src/core/viewmodels/EditorViewModel.cpp (paintClippingPosition + clipped-side pick rejection)
+      - src/qml_gui/Renderer/RhiViewport.cpp (Alt+wheel sweep + cameraForward pick signals)
+      - src/qml_gui/pages/PreparePage.qml (support/seam/MMU section slider + reset rows)
+    notes: >
+      Resolved 2026-09-06 (commit b33f61f) for the paint pipeline on main:
+      Alt+wheel steps the shared ratio +-0.01 within [0, 1] and the panel
+      reset turns it off (upstream models off via set_position_by_ratio
+      -1/0). The plane is built in volume coordinates through the upstream
+      ObjectClipper + get_clipping_plane_in_volume_coordinates chain
+      (normal = -camera forward, bounding-radius offset) and paintAtFacet /
+      smartFillAtFacet reject hits on the clipped side (is_mesh_point_
+      clipped); GapFill rides the brush path so it is covered too. The
+      section plane itself is not rendered as a cut contour yet -- that
+      visual belongs with a future overlay task.
+    evidence:
+      commits: [b33f61f]
+      gate: 12 suites 565 tests 0 failed 2026-09-06 (single canonical run after an ABI-refresh rebuild of stale ninja objects)
+      last_verified: 2026-09-06
 
   - id: PAINT-MMU-TOOLS
     title: MMU panel tool set (pointer brush / bucket fill / height range / gap fill)
