@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-06
-head_at_update: b33f61f
+head_at_update: 3ad7937
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -532,16 +532,22 @@ items:
   - id: REVIEW-P1-RESIDUE
     title: Unverified 2026-09-04 review P1 residue
     aliases: ["R-P1.C'/deleteObject-mirror", "R-P1.E'/mock-disclosure"]
-    status: open
-    implementation: hybrid
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     notes: >
-      Split into two verifiable sub-items instead of trusting the 15.5
-      snapshot: (a) deleteObject mirror-translation check + splitObject leak
-      (double-free half fixed in 63bf0ad), (b) CloudServiceMock fake-login and
-      MonitorPage demo-mode user-visible disclosure.
-    remaining:
-      - Verify/fix deleteObject mirror translation.
-      - Add disclosure for cloud login fake-success and monitor demo mode.
+      Resolved 2026-09-06 by verification + one small fix: (a) deleteObject
+      canonical path fully resyncs mirrors from the Model (no manual-shift
+      desync possible); splitObject double-free already fixed in 63bf0ad;
+      the only real residue was the pure-mock branch transform mirrors not
+      shifting -- fixed in 3ad7937 (canonical builds unaffected).
+      (b) User-visible mock disclosures already in place: cloud login +
+      binding banners (HomePage.qml) and monitor demo-mode banner
+      (MonitorPage.qml), landed with the P1.E batch (9b6fb82).
+    evidence:
+      commits: [3ad7937]
+      gate: 12 suites 565 tests 0 failed 2026-09-06 (in-gate + standalone; one C:-temp env write flake passed on retry)
+      last_verified: 2026-09-06
