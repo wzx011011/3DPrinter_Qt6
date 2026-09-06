@@ -989,7 +989,32 @@ void PreviewViewModel::rebuildGcodeLineWindow()
     QVariantMap row;
     row.insert(QStringLiteral("line"), source.lineNumber);
     row.insert(QStringLiteral("move"), source.moveIndex);
-    row.insert(QStringLiteral("text"), source.text);
+    // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-536):
+    // lines longer than 55 characters truncate to 52 + "..."; the line then
+    // splits at the first ';' (comment) and the first space (command vs
+    // parameters) so the delegate can color the three parts separately.
+    QString gline = source.text;
+    if (gline.size() > 55)
+      gline = gline.left(52) + QStringLiteral("...");
+    QString command = gline;
+    QString comment;
+    const int semicolon = gline.indexOf(QLatin1Char(';'));
+    if (semicolon >= 0) {
+      command = gline.left(semicolon);
+      comment = gline.mid(semicolon);
+    }
+    QString parameters;
+    if (!command.isEmpty()) {
+      const int space = command.indexOf(QLatin1Char(' '));
+      if (space >= 0) {
+        parameters = command.mid(space + 1);
+        command = command.left(space);
+      }
+    }
+    row.insert(QStringLiteral("text"), gline);
+    row.insert(QStringLiteral("command"), command);
+    row.insert(QStringLiteral("parameters"), parameters);
+    row.insert(QStringLiteral("comment"), comment);
     row.insert(QStringLiteral("current"), i == anchor);
     gcodeLines_.append(row);
   }

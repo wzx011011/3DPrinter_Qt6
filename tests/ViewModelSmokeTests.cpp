@@ -411,6 +411,7 @@ private slots:
   void legendGradientBoundsStableAcrossLayerMoveDrag();
   void currentMoveUpdatesGcodeLineWindowAtomically();
   void stepCurrentMoveClampsAndUpdatesGcodeLineWindow();
+  void gcodeLineWindowTokenizesAndTruncatesLikeUpstream();
   void viewModesExposeUpstreamSeventeenModes();
   // Phase 55 code-review fix (GCODE-02): the renderer consumes a DENSE 20-bool
   // mask, not the 18-row QVariantMap UI list. Guard the producer shape and the
@@ -6486,6 +6487,52 @@ void ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow()
   QCOMPARE(preview.currentMove(), preview.moveCount());
   preview.stepCurrentMove(-999999);
   QCOMPARE(preview.currentMove(), 0);
+}
+
+void ViewModelSmokeTests::gcodeLineWindowTokenizesAndTruncatesLikeUpstream()
+{
+  // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-536): every
+  // window row carries the command / parameters / comment split; lines longer
+  // than 55 characters truncate to 52 + "..."; a row whose source has a ';'
+  // reports the comment part starting with ';'.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+
+  QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
+           "loadGCodeForPreview should succeed on the committed Orca fixture");
+  const QVariantList rows = preview.gcodeLines();
+  QVERIFY2(!rows.isEmpty(), "the source window must be populated");
+
+  bool sawComment = false;
+  bool sawParameters = false;
+  for (const QVariant &v : rows) {
+    const QVariantMap row = v.toMap();
+    QVERIFY2(row.contains(QStringLiteral("command")) &&
+             row.contains(QStringLiteral("parameters")) &&
+             row.contains(QStringLiteral("comment")),
+             "every row must carry the command/parameters/comment split");
+    const QString text = row.value(QStringLiteral("text")).toString();
+    QVERIFY2(text.size() <= 55,
+             "rows longer than 55 characters must truncate (52 + \"...\")");
+    if (text.endsWith(QStringLiteral("...")))
+      QCOMPARE(text.size(), 55);
+    const QString command = row.value(QStringLiteral("command")).toString();
+    const QString comment = row.value(QStringLiteral("comment")).toString();
+    const QString parameters = row.value(QStringLiteral("parameters")).toString();
+    QVERIFY2(!command.contains(QLatin1Char(';')),
+             "the command part must never contain the comment");
+    if (!comment.isEmpty()) {
+      QVERIFY2(comment.startsWith(QLatin1Char(';')),
+               "the comment part must start with ';'");
+      sawComment = true;
+    }
+    if (!parameters.isEmpty())
+      sawParameters = true;
+  }
+  QVERIFY2(sawComment, "the fixture window must contain at least one comment line");
+  QVERIFY2(sawParameters,
+           "the fixture window must contain at least one parameterized command");
 }
 
 void ViewModelSmokeTests::testNullableAndVectorOptions()

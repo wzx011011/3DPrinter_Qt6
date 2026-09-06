@@ -10655,6 +10655,24 @@ void QmlUiAuditTests::previewWave5GcodeWindowAndAddMenuHonesty()
   QVERIFY2(topbar.contains(QStringLiteral("currentPage === backend.tpPreview"))
                && topbar.contains(QStringLiteral("backend.previewViewModel.previewReady")),
            "W5: Show G-code Window must remain Preview-scoped and data-gated");
+
+  // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-540): the
+  // source window tokenizes each line (55-char truncate, command/parameters/
+  // comment split, per-part colors) instead of rendering one raw text field.
+  const QString previewVm =
+      readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  QVERIFY2(!previewVm.isEmpty(), "Unable to read PreviewViewModel.cpp");
+  QVERIFY2(previewVm.contains(QStringLiteral("PREVIEW-GCODE-SOURCE-TOKENS"))
+               && previewVm.contains(QStringLiteral("gline.left(52) + QStringLiteral(\"...\")")),
+           "TOKENS: rebuildGcodeLineWindow must truncate >55-char lines to 52 + \"...\"");
+  QVERIFY2(previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"command\"), command)"))
+               && previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"parameters\"), parameters)"))
+               && previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"comment\"), comment)")),
+           "TOKENS: rows must carry the command/parameters/comment split");
+  QVERIFY2(page.contains(QStringLiteral("modelData.command"))
+               && page.contains(QStringLiteral("#CCCC00"))
+               && page.contains(QStringLiteral("modelData.comment")),
+           "TOKENS: the delegate must color command (yellow) and comment parts");
 }
 
 void QmlUiAuditTests::engineSemanticsSourceAudit()
