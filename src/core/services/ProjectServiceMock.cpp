@@ -802,6 +802,94 @@ QStringList ProjectServiceMock::objMtlColors(const QString &objPath) const
 }
 
 #ifdef HAS_LIBSLIC3R
+namespace
+{
+  // PLATE-PRINT-LIFECYCLE (batch 2): FNV-1a helpers for the plate geometry
+  // fingerprint (ProjectServiceMock::currentPlateGeometrySignature).
+  constexpr quint64 kFnvOffsetBasis = 0xcbf29ce484222325ULL;
+  constexpr quint64 kFnvPrime = 0x00000100000001b3ULL;
+
+  inline void fnvMix(quint64 &h, quint64 value)
+  {
+    h ^= value;
+    h *= kFnvPrime;
+  }
+
+  inline void fnvMixDouble(quint64 &h, double value)
+  {
+    quint64 bits = 0;
+    static_assert(sizeof(bits) == sizeof(value), "64-bit double expected");
+    std::memcpy(&bits, &value, sizeof(bits));
+    fnvMix(h, bits);
+  }
+} // namespace
+
+quint64 ProjectServiceMock::currentPlateGeometrySignature() const
+{
+  // Conservative fingerprint of everything that changes how the plate slices,
+  // mirroring the upstream PrintObject identity inputs (Print.cpp:1852-1902
+  // is_print_object_the_same) plus object/volume/instance config timestamps
+  // and the supported/seam/mmu facet-annotation timestamps (paint edits can
+  // change slicing without touching mesh sizes). Timestamps are process-wide
+  // mutation counters, so ANY config/paint touch forces a full rebuild --
+  // deliberate "prefer full reslice over wrong reuse".
+  if (!model_)
+    return 0;
+
+  const QList<int> plateObjectIndices = currentPlateObjectIndices();
+  quint64 h = kFnvOffsetBasis;
+  fnvMix(h, quint64(plateObjectIndices.size()));
+  for (int objectIndex : plateObjectIndices)
+  {
+    if (objectIndex < 0 || objectIndex >= int(model_->objects.size()))
+      continue;
+    const Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+    if (!obj)
+      continue;
+    fnvMix(h, quint64(obj->id().id));
+    fnvMix(h, quint64(obj->volumes.size()));
+    fnvMix(h, quint64(obj->instances.size()));
+    fnvMix(h, quint64(obj->printable ? 1 : 0));
+    fnvMix(h, quint64(obj->config.ModelConfig::timestamp()));
+    fnvMix(h, quint64(obj->layer_config_ranges.size()));
+    for (const auto &range : obj->layer_config_ranges)
+    {
+      fnvMixDouble(h, double(range.first.first));
+      fnvMixDouble(h, double(range.first.second));
+      fnvMix(h, quint64(range.second.timestamp()));
+    }
+    for (const Slic3r::ModelVolume *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      const auto &its = vol->mesh().its;
+      fnvMix(h, quint64(its.vertices.size()));
+      fnvMix(h, quint64(its.indices.size()));
+      fnvMix(h, quint64(int(vol->type())));
+      fnvMix(h, quint64(vol->extruder_id()));
+      fnvMix(h, quint64(vol->config.ModelConfig::timestamp()));
+      fnvMix(h, quint64(vol->supported_facets.timestamp()));
+      fnvMix(h, quint64(vol->seam_facets.timestamp()));
+      fnvMix(h, quint64(vol->mmu_segmentation_facets.timestamp()));
+      const Slic3r::Transform3d m = vol->get_transformation().get_matrix();
+      for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+          fnvMixDouble(h, m(r, c));
+    }
+    for (const Slic3r::ModelInstance *inst : obj->instances)
+    {
+      if (!inst)
+        continue;
+      const Slic3r::Transform3d m = inst->get_transformation().get_matrix();
+      for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+          fnvMixDouble(h, m(r, c));
+      fnvMix(h, quint64(inst->printable ? 1 : 0));
+    }
+  }
+  return h;
+}
+
 std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() const
 {
   if (!model_ || !m_plateList || m_plateList->currentPlateIndex() < 0 ||
@@ -1723,9 +1811,15 @@ bool ProjectServiceMock::deletePlate(int plateIndex)
     return false;
 
   const int prevCurrent = m_plateList->currentPlateIndex();
+  // PLATE-PRINT-LIFECYCLE (batch 2): capture the stable print identity BEFORE
+  // removal so identity-keyed stores (SliceService persistent Print slot and
+  // per-plate result) can release their entries; identities are never reused.
+  const int removedPrintIndex = platePrintIndex(plateIndex);
   if (!m_plateList->deletePlate(plateIndex))
     return false;  // refuses last plate / invalid index
 
+  if (removedPrintIndex >= 0)
+    emit plateRemoved(removedPrintIndex);
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
   if (m_plateList->currentPlateIndex() != prevCurrent)

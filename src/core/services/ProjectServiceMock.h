@@ -140,6 +140,17 @@ public:
 #ifdef HAS_LIBSLIC3R
   std::unique_ptr<Slic3r::Model> cloneCurrentPlateModel() const;
   Slic3r::Model *rawModel() const { return model_; }
+  /// PLATE-PRINT-LIFECYCLE (batch 2): FNV-1a fingerprint of the CURRENT
+  /// plate's sliceable geometry, used by SliceService to decide whether the
+  /// persistent per-plate Print can be reused (config-only reslice) or must
+  /// be rebuilt (mesh change). Conservative superset of the upstream
+  /// PrintObject-identity inputs (Print.cpp:1852-1902 is_print_object_the_same):
+  /// object count/id/config timestamp/printable/layer ranges, per-volume mesh
+  /// size/type/extruder/transform/config timestamp and the supported/seam/mmu
+  /// facet-annotation timestamps, per-instance transform + printable.
+  /// O(objects) metadata walk on the GUI thread -- no mesh content traversal.
+  /// Returns 0 when nothing is sliceable.
+  quint64 currentPlateGeometrySignature() const;
 
   // Phase 122/123 (PAINT-04/05): write the painted TriangleSelector into the
   // ModelVolume FacetsAnnotation member for the given paint kind. Mirrors
@@ -935,6 +946,12 @@ signals:
   /// after addTextVolumeAsync's worker fails (font load, empty shapes, mesh
   /// generation, or cancellation).
   void embossVolumeFailed(const QString &reason);
+  /// PLATE-PRINT-LIFECYCLE (batch 2): fired by deletePlate after the plate
+  /// left the list, carrying the removed plate's stable printIndex so stores
+  /// keyed by that identity (SliceService persistent Print slots and
+  /// per-plate results) release the entry immediately -- printIndex
+  /// identities are never reused.
+  void plateRemoved(int printIndex);
 
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
