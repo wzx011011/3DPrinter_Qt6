@@ -14,6 +14,7 @@
 #include <QtTest>
 #include <QDir>
 #include <QDateTime>
+#include <QTemporaryDir>
 #include <QFileInfo>
 #include <QColor>
 #include <QSignalSpy>
@@ -78,6 +79,7 @@ class PartPlateTests final : public QObject {
   // Stable print identity must survive positional changes and never be reused
   // (upstream PartPlate.cpp:3141-3150, 3713-3816, 4027-4065).
   void platePrintIdentityLifecycle();
+  void jsonPersistenceRoundTripGeometryAndOutsideState();
   // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
   void deletePlateMigratesInstancesToNeighbor();
   // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
@@ -550,6 +552,41 @@ void PartPlateTests::platePrintIdentityLifecycle() {
   QVERIFY(newPlate->printIndex() != deletedPrintIndex);
   QVERIFY(newPlate->printIndex() != plate1->printIndex());
   QVERIFY(newPlate->printIndex() != plate2->printIndex());
+}
+
+void PartPlateTests::jsonPersistenceRoundTripGeometryAndOutsideState() {
+  QTemporaryDir tempDir;
+  QVERIFY(tempDir.isValid());
+  const QString path = tempDir.filePath(QStringLiteral("geometry.json"));
+
+  ProjectServiceMock saved;
+  saved.setPlateSize(220, 220, 0);
+  auto *list = saved.plateListMut();
+  QVERIFY(list != nullptr);
+  auto *plate = list->plate(0);
+  QVERIFY(plate != nullptr);
+  plate = list->plate(0);
+  QVERIFY(plate != nullptr);
+  QVERIFY(saved.saveProject(path));
+
+  ProjectServiceMock loaded;
+  QVERIFY2(loaded.loadProject(path), qPrintable(loaded.lastError()));
+  const auto *loadedList = loaded.plateListConst();
+  QVERIFY(loadedList != nullptr);
+  QCOMPARE(loadedList->plateWidth(), 220);
+  QCOMPARE(loadedList->plateDepth(), 220);
+  // The empty fallback project has no instance area state to restore.
+  QVERIFY(loadedList->plate(0)->instanceOutsideSet().empty());
+
+  // Missing geometry fields keep the normal default instead of inventing data.
+  QFile file(path);
+  QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
+  file.write("{\"name\":\"legacy\",\"plates\":[{\"objects\":[{\"name\":\"fixture\"}],\"outsideInstances\":[[0,0]]}]}");
+  file.close();
+  ProjectServiceMock legacy;
+  QVERIFY(legacy.loadProject(path));
+  QCOMPARE(legacy.plateListConst()->plateWidth(), 0);
+  QCOMPARE(legacy.plateListConst()->plateDepth(), 0);
 }
 
 void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {

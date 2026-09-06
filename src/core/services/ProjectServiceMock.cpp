@@ -10707,6 +10707,14 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   root[QStringLiteral("name")] = projectName_;
   root[QStringLiteral("source")] = sourceFilePath_;
   root[QStringLiteral("currentPlate")] = m_plateList ? m_plateList->currentPlateIndex() : -1;
+  // Persist list geometry; absent fields retain PartPlateList defaults on load.
+  if (m_plateList)
+  {
+    root[QStringLiteral("plateWidth")] = m_plateList->plateWidth();
+    root[QStringLiteral("plateDepth")] = m_plateList->plateDepth();
+    // plateHeight has no public getter; plate volume height is not exposed by
+    // the current Qt6 API and is therefore intentionally not synthesized.
+  }
 
   // Save plates
   QJsonArray platesArr;
@@ -10783,6 +10791,17 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
       objsArr.append(objObj);
     }
     plateObj[QStringLiteral("objects")] = objsArr;
+    // Persist the existing per-instance outside-area state. No new geometry
+    // container is introduced because PartPlate already owns this set.
+    QJsonArray outsideArr;
+    if (pp)
+    {
+      for (const auto &key : pp->instanceOutsideSet())
+      {
+        outsideArr.append(QJsonArray{key.first, key.second});
+      }
+    }
+    plateObj[QStringLiteral("outsideInstances")] = outsideArr;
     platesArr.append(plateObj);
   }
   root[QStringLiteral("plates")] = platesArr;
@@ -11454,6 +11473,11 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   m_plateList = std::make_unique<OWzx::PartPlateList>();
   attachPlateInstanceBounds();
   m_plateList->resetToSinglePlate();
+  // Older JSON files omit geometry and continue using constructor defaults.
+  const int savedWidth = root.value(QStringLiteral("plateWidth")).toInt(0);
+  const int savedDepth = root.value(QStringLiteral("plateDepth")).toInt(0);
+  if (root.contains(QStringLiteral("plateWidth")) || root.contains(QStringLiteral("plateDepth")))
+    m_plateList->setPlateSize(savedWidth, savedDepth, 0);
 
   // Restore plates and objects
   const QJsonArray platesArr = root.value(QStringLiteral("plates")).toArray();
@@ -11556,6 +11580,15 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 
       objIndices.append(idx);
       pp->addInstance(idx, 0);  // instance-level membership (single instance per object)
+    }
+
+    // Restore existing outside-area membership after object indices are known.
+    const QJsonArray outsideArr = plateObj.value(QStringLiteral("outsideInstances")).toArray();
+    for (const auto &value : outsideArr)
+    {
+      const QJsonArray pair = value.toArray();
+      if (pair.size() == 2)
+        pp->setInstanceOutside(pair[0].toInt(), pair[1].toInt(), true);
     }
   }
 
