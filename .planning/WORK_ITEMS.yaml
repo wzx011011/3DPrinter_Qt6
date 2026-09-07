@@ -887,9 +887,11 @@ items:
     aliases: ["P1-5-refinement"]
     area: Prepare/Arrange
     priority: P3
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -900,15 +902,27 @@ items:
       - src/core/services/ProjectServiceMock.cpp (appendArrangeWipeTowers)
       - src/core/viewmodels/EditorViewModel.cpp (arrangeWipeTowerContext)
     notes: >
-      The allow_multi_materials_on_same_plate gate is ported (review P1-5
-      fix) but currently assumes "same bed temperature" for every extruder,
-      which can only create an extra arrange obstacle (conservative
-      direction, never misplaces geometry). The exact refinement needs the
-      extruder -> filament preset -> bed_temp data channel plumbed into
-      EditorViewModel::arrangeWipeTowerContext (per-extruder bed temps from
-      the filament preset slots) plus a per-object bed-temp map in
-      appendArrangeWipeTowers matching upstream's bedTemp2extruderIds
-      grouping.
+      Resolved 2026-09-08. EditorViewModel::arrangeWipeTowerContext parses
+      the merged "bed_temp" coInts (per-extruder filament bed temps) into
+      the context; ProjectServiceMock::wipeTowerNeededForPlate (extracted,
+      exposed as the arrangeWipeTowerNeededForPlate test seam) groups the
+      plate's extruders by bed temperature exactly like upstream
+      bedTemp2extruderIds (ArrangeJob.cpp:308-319) -- with allow_multi the
+      tower is needed only when several extruders SHARE one temperature.
+      The multi-extruder-OBJECT gate (:296-304) sits upstream of allow_multi
+      and is independent of it, matching the upstream gate order; no data
+      falls back to the conservative same-temp assumption. Truth-table
+      regression in PartPlateTests::arrangeWipeTowerBedTempGateTruthTable
+      covers: disabled tower, different temps, same temps, no data, and the
+      multi-extruder-object case.
+    evidence:
+      commits: [195b9d8]
+      tests:
+        - tests/PartPlateTests.cpp::arrangeWipeTowerBedTempGateTruthTable
+      gate: full rebuild; canonical suites green on 2026-09-08 (PartPlate 70
+        incl. the truth table; all other suites standalone EXIT=0 -- in-gate
+        ViewModelSmoke abort was the tracked THUMBFAMILY-GATE-ENV AV flake)
+      last_verified: 2026-09-08
 
   - id: STASH-WIP-DISPOSITION
     title: Dispose of stash@{0} and stash@{1} (user decision required)
