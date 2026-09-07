@@ -70,11 +70,13 @@ class PartPlateTests final : public QObject {
   // wipe-tower rectangle (ArrangeJob.cpp:337-359, PartPlate.cpp:1739-1777)
   // and off the bed_exclude_area rectangles (PartPlate.cpp:4586-4623).
   void arrangeAvoidsWipeTowerAndExcludeAreas();
+  void arrangeWipeTowerBedTempGateTruthTable();
   void lockedPlateExclusion();
   void allLockedReturnsFalse();
 #else
   void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeAvoidsWipeTowerAndExcludeAreas() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void arrangeWipeTowerBedTempGateTruthTable() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void lockedPlateExclusion() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void allLockedReturnsFalse() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
@@ -478,6 +480,65 @@ void PartPlateTests::arrangeAvoidsWipeTowerAndExcludeAreas() {
              qPrintable(QStringLiteral("object %1 at (%2,%3) must avoid the "
                                       "excluded-area rect")
                             .arg(i).arg(sx).arg(sy)));
+  }
+#endif
+}
+
+void PartPlateTests::arrangeWipeTowerBedTempGateTruthTable() {
+#ifdef HAS_LIBSLIC3R
+  // WIPE-TOWER-BEDTEMP-GATE: truth table for the per-plate tower decision
+  // (upstream ArrangeJob.cpp:279-319). The extruderBedTemps list implements
+  // the bedTemp2extruderIds grouping: with allow_multi the tower is needed
+  // only when several extruders SHARE one bed temperature.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(service.duplicateObject(0) >= 0);  // two objects on plate 0
+
+  // Object 0 stays extruder 1; object 1 moves to extruder 2 (plate carries
+  // two extruders but NO single multi-extruder object).
+  QVERIFY(service.setVolumeExtruderId(1, 0, 2));
+  QCOMPARE(service.volumeExtruderId(1, 0), 2);
+
+  QVariantMap ctx;
+  ctx[QStringLiteral("enable_prime_tower")] = true;
+  ctx[QStringLiteral("allow_multi_materials_on_same_plate")] = true;
+  ctx[QStringLiteral("timelapse_type")] = 0;  // not smooth
+
+  // Disabled prime tower: no tower regardless of anything else.
+  {
+    QVariantMap off = ctx;
+    off[QStringLiteral("enable_prime_tower")] = false;
+    QVERIFY(!service.arrangeWipeTowerNeededForPlate(0, off));
+  }
+  // allow_multi + different bed temps (60 vs 80): no shared temp -> no tower.
+  {
+    QVariantMap diff = ctx;
+    diff[QStringLiteral("extruderBedTemps")] = QVariantList{60, 80};
+    QVERIFY(!service.arrangeWipeTowerNeededForPlate(0, diff));
+  }
+  // allow_multi + same bed temp (60 vs 60): tower needed (upstream
+  // ArrangeJob.cpp:308-319).
+  {
+    QVariantMap same = ctx;
+    same[QStringLiteral("extruderBedTemps")] = QVariantList{60, 60};
+    QVERIFY(service.arrangeWipeTowerNeededForPlate(0, same));
+  }
+  // No bed-temp data at all: the conservative fallback treats the two
+  // extruders as same-temp -> tower.
+  QVERIFY(service.arrangeWipeTowerNeededForPlate(0, ctx));
+
+  // A single multi-extruder OBJECT needs the tower even without allow_multi
+  // (upstream ArrangeJob.cpp:296-304 paint-color case): give object 0 a
+  // second volume on a different extruder.
+  QVERIFY(service.addPrimitive(0, 0));
+  QVERIFY(service.setVolumeExtruderId(0, 1, 2));
+  {
+    QVariantMap paint = ctx;
+    paint[QStringLiteral("allow_multi_materials_on_same_plate")] = false;
+    paint[QStringLiteral("extruderBedTemps")] = QVariantList{60, 80};
+    QVERIFY(service.arrangeWipeTowerNeededForPlate(0, paint));
   }
 #endif
 }

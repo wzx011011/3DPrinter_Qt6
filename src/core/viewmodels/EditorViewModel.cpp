@@ -291,6 +291,25 @@ QVariantMap EditorViewModel::arrangeWipeTowerContext() const
                  merged.value(QStringLiteral("wipe_tower_x")));
   context.insert(QStringLiteral("wipe_tower_y"),
                  merged.value(QStringLiteral("wipe_tower_y")));
+  // WIPE-TOWER-BEDTEMP-GATE: per-extruder first-layer bed temps (upstream
+  // coInts "bed_temp", one value per filament), parsed into a list so the
+  // service can group extruders by bed temperature exactly like upstream
+  // bedTemp2extruderIds (ArrangeJob.cpp:308-319).
+  const QVariant bedTemps = merged.value(QStringLiteral("bed_temp"));
+  if (bedTemps.typeId() == QMetaType::Type::QString) {
+    QVariantList temps;
+    const QStringList parts = bedTemps.toString().split(QLatin1Char(','),
+                                                        Qt::SkipEmptyParts);
+    for (const QString &part : parts) {
+      bool ok = false;
+      const int v = part.trimmed().toInt(&ok);
+      if (ok)
+        temps.append(v);
+    }
+    context.insert(QStringLiteral("extruderBedTemps"), temps);
+  } else if (bedTemps.typeId() == QMetaType::Type::QVariantList) {
+    context.insert(QStringLiteral("extruderBedTemps"), bedTemps);
+  }
   return context;
 }
 

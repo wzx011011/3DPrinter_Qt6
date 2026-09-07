@@ -475,7 +475,13 @@ public:
   /// per-plate wipe_tower_x/wipe_tower_y floats. Empty map = no tower.
   Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                     const QString &printableArea = QString(),
-                                    const QVariantMap &wipeTowerContext = {});
+                                    const QVariantMap &wipeTowerContext = {});  /// WIPE-TOWER-BEDTEMP-GATE test seam: the per-plate "does this plate need
+  /// the wipe-tower arrange obstacle" decision over the same context map
+  /// arrangeObjects consumes. Truth-table unit tests exercise the gate
+  /// (enable gate, seq print, smooth timelapse, multi-extruder object,
+  /// allow_multi with bed-temp grouping) without running a real arrange.
+  Q_INVOKABLE bool arrangeWipeTowerNeededForPlate(int plateIndex,
+                                                  const QVariantMap &wipeTowerContext) const;
   /// 切割对象（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
   /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
   /// Returns the index of the new object created (≥0 on success, -1 on failure)

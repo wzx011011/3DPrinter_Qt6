@@ -4526,6 +4526,21 @@ void appendArrangeExcludeAreas(const OWzx::PartPlateList *plateList,
   }
 }
 
+// WIPE-TOWER-BEDTEMP-GATE: upstream groups extruder ids by the filament
+// bed temperature (ArrangeJob.cpp:308-319 bedTemp2extruderIds). Qt6 reads
+// the per-extruder temps from the merged "bed_temp" coInts handed in via
+// the wipe-tower context; an extruder beyond the vector falls back to the
+// first entry (upstream ConfigOptionVector::get_at semantics).
+int extruderBedTemp(const QVariantMap &towerContext, int extruderId)
+{
+  const QVariantList temps = towerContext.value(
+      QStringLiteral("extruderBedTemps")).toList();
+  if (temps.isEmpty())
+    return 0;  // no data -> caller treats all extruders as same-temp
+  const int idx = extruderId - 1;
+  return temps.value(idx >= 0 && idx < temps.size() ? idx : 0).toInt();
+}
+
 // Upstream ArrangeJob::prepare_wipe_tower + PartPlate::estimate_wipe_tower_polygon
 // (ArrangeJob.cpp:279-359, PartPlate.cpp:1739-1777): per UNLOCKED plate, when
 // the prime tower is enabled, sequence print is by-layer, and the tower is
@@ -4536,10 +4551,10 @@ void appendArrangeExcludeAreas(const OWzx::PartPlateList *plateList,
 // by the tower brim. Review P1-5: the tower parameters come from the GLOBAL
 // merged preset config handed in by the view model (upstream reads
 // preset_bundle, not the per-plate config -- the Qt6 plate config never
-// carries these keys in real flows). The only unported refinement is the
-// per-extruder bed-temperature equality check inside the allow_multi gate
-// (ledger WIPE-TOWER-BEDTEMP-GATE: needs the filament preset channel); the
-// conservative same-temp assumption can only add an extra arrange obstacle.
+// carries these keys in real flows). The allow_multi branch
+// groups the plate's extruders by their configured bed temperature
+// (extruderBedTemps from the context) exactly like upstream
+// bedTemp2extruderIds.
 float towerContextFloat(const QVariantMap &ctx, const char *key, float fallback)
 {
   const QVariant value = ctx.value(QLatin1String(key));
@@ -4571,6 +4586,43 @@ QVariant towerContextPerPlate(const QVariantMap &ctx, const char *key, int bedid
   return value;  // a plain per-plate scalar
 }
 
+// WIPE-TOWER-BEDTEMP-GATE: the per-plate "does this plate need the tower"
+// decision, extracted so the truth table is unit-testable through the
+// arrangeWipeTowerNeededForPlate test seam.
+bool wipeTowerNeededForPlate(const OWzx::PartPlate *pl,
+                             const Slic3r::Model *model,
+                             const QVariantMap &towerContext)
+{
+  // Upstream ArrangeJob.cpp:287: sequential print suppresses the tower on
+  // every path (the enable_prime_tower hard gate is checked by the caller).
+  if (pl->printSequence() != 0)  // 0 = by layer
+    return false;
+  // Upstream ArrangeJob.cpp:292: smooth timelapse always needs the tower.
+  if (towerContext.value(QStringLiteral("timelapse_type")).toInt()
+          == int(Slic3r::TimelapseType::tlSmooth))
+    return true;
+  // Upstream ArrangeJob.cpp:296-304: some OBJECT carries multiple extruders
+  // (multi-color part / painted supports) -- independent of allow_multi.
+  if (plateHasMultiExtruderObject(model, pl))
+    return true;
+  // Upstream ArrangeJob.cpp:308-319: with allow_multi_materials_on_same_plate
+  // the tower is needed when several extruders SHARE one bed temperature
+  // (extruderBedTemps grouping; no data = conservative same-temp assumption).
+  if (!towerContext.value(QStringLiteral("allow_multi_materials_on_same_plate")).toBool())
+    return false;
+  const std::set<int> extruders = collectPlateExtruders(model, pl);
+  if (extruders.size() <= 1)
+    return false;
+  std::map<int, int> bedTempExtruderCount;
+  for (int ext : extruders)
+    ++bedTempExtruderCount[extruderBedTemp(towerContext, ext)];
+  for (const auto &kv : bedTempExtruderCount) {
+    if (kv.second > 1)
+      return true;
+  }
+  return false;
+}
+
 void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
                              const Slic3r::Model *model,
                              const QVariantMap &towerContext,
@@ -4588,14 +4640,6 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
   const bool smoothTimelapse =
       towerContext.value(QStringLiteral("timelapse_type")).toInt()
           == int(Slic3r::TimelapseType::tlSmooth);
-  // Upstream ArrangeJob.cpp:308-319: with allow_multi_materials_on_same_plate
-  // the tower is also needed when the plate carries several extruders. The
-  // upstream per-extruder bed-temperature equality refinement needs the
-  // filament preset channel (ledger item WIPE-TOWER-BEDTEMP-GATE); until
-  // that channel exists the conservative assumption is "same bed temp",
-  // which can only create an extra arrange obstacle, never misplace a part.
-  const bool allowMultiMaterial =
-      towerContext.value(QStringLiteral("allow_multi_materials_on_same_plate")).toBool();
   const float towerWidth = towerContextFloat(towerContext, "prime_tower_width", 60.f);
   const double primeVolume = towerContextFloat(towerContext, "prime_volume", 0.f);
   const float towerBrim = towerContextFloat(towerContext, "prime_tower_brim_width", 0.f);
@@ -4606,12 +4650,7 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
     const OWzx::PartPlate *pl = plateList->plate(bedid);
     if (!pl || pl->isLocked())
       continue;  // locked beds keep their items fixed and get no virtual bed
-    const bool seqPrint = pl->printSequence() != 0;  // 0 = by layer
-    const std::set<int> extruders = collectPlateExtruders(model, pl);
-    const bool needTower = !seqPrint
-        && (smoothTimelapse
-            || plateHasMultiExtruderObject(model, pl)
-            || (allowMultiMaterial && extruders.size() > 1));
+    const bool needTower = wipeTowerNeededForPlate(pl, model, towerContext);
     if (needTower)
     {
       const QVariant xValue = towerContextPerPlate(towerContext, "wipe_tower_x", bedid);
@@ -4622,6 +4661,7 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
       if (okX && okY)
       {
         // Max member-object height (bounding_box_exact, upstream object loop).
+        const std::set<int> extruders = collectPlateExtruders(model, pl);
         double maxHeight = 0.0;
         for (const auto &pr : pl->objToInstanceSet())
         {
@@ -4663,6 +4703,23 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
 }
 }  // namespace
 #endif  // HAS_LIBSLIC3R
+
+bool ProjectServiceMock::arrangeWipeTowerNeededForPlate(
+    int plateIndex, const QVariantMap &wipeTowerContext) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList || !model_ || plateIndex < 0
+      || plateIndex >= m_plateList->plateCount()
+      || wipeTowerContext.value(QStringLiteral("enable_prime_tower")).toBool() == false)
+    return false;
+  return wipeTowerNeededForPlate(m_plateList->plate(plateIndex), model_,
+                                 wipeTowerContext);
+#else
+  Q_UNUSED(plateIndex);
+  Q_UNUSED(wipeTowerContext);
+  return false;
+#endif
+}
 
 bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                           const QString &printableArea,
