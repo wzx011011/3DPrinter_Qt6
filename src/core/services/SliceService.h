@@ -416,10 +416,25 @@ private:
   std::shared_ptr<std::atomic_bool> activeExportCancelFlag_;
   bool exportActive_ = false;
   quint64 exportGeneration_ = 0;
+  /// Review P1-3: project-scoped reset counter. Bumped by clearResults /
+  /// clearPlateResults; a slice worker captures it at start and its
+  /// completion lambda applies results / re-inserts the persistent Print
+  /// only when the generation still matches -- a queued completion from a
+  /// discarded project must never attach onto the newly loaded one (the
+  /// plate-list rebuild resets printIndex identities, so identity checks
+  /// alone cannot tell stale from fresh).
+  quint64 sliceGeneration_ = 0;
   /// PLATE-PRINT-LIFECYCLE (batch 2): future of the in-flight slice worker
   /// (valid while slicing_). The destructor joins it after cancelling so a
   /// worker can never race this object's destruction.
   QFuture<void> activeSliceFuture_;
+  /// Review P2-4: the auxiliary workers (previous-G-code preview load,
+  /// export-all, single-export chunked copy) are ALSO tracked and joined by
+  /// the destructor after their cancel flags are set -- the structural
+  /// guarantee, not a call-site discipline.
+  QFuture<void> previousGcodeFuture_;
+  QFuture<void> exportAllFuture_;
+  QFuture<void> exportCopyFuture_;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
 #endif

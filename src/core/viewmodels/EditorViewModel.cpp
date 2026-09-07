@@ -245,6 +245,55 @@ void EditorViewModel::invalidateAllSliceResults()
     sliceService_->clearResults();
 }
 
+QVariantMap EditorViewModel::arrangeWipeTowerContext() const
+{
+  // Review P1-5: wipe-tower arrange obstacle parameters from the GLOBAL
+  // merged preset config (upstream ArrangeJob.cpp:284-287 reads the preset
+  // bundle). Merged values may arrive as native QVariants or as serialized
+  // strings, so every read normalizes explicitly.
+  if (!configViewModel_)
+    return {};
+  const auto merged = configViewModel_->mergedConfigValues();
+  const auto asBool = [](const QVariant &value) {
+    if (value.typeId() == QMetaType::Type::Bool)
+      return value.toBool();
+    const QString text = value.toString().trimmed().toLower();
+    return text == QLatin1String("1") || text == QLatin1String("true")
+        || text == QLatin1String("yes");
+  };
+  const auto asFloat = [](const QVariant &value, float fallback) {
+    bool ok = false;
+    const float parsed = value.toFloat(&ok);
+    return ok ? parsed : fallback;
+  };
+  const auto asInt = [](const QVariant &value, int fallback) {
+    bool ok = false;
+    const int parsed = value.toInt(&ok);
+    return ok ? parsed : fallback;
+  };
+
+  QVariantMap context;
+  context.insert(QStringLiteral("enable_prime_tower"),
+                 asBool(merged.value(QStringLiteral("enable_prime_tower"))));
+  context.insert(QStringLiteral("timelapse_type"),
+                 asInt(merged.value(QStringLiteral("timelapse_type")), 0));
+  context.insert(QStringLiteral("allow_multi_materials_on_same_plate"),
+                 asBool(merged.value(QStringLiteral("allow_multi_materials_on_same_plate"))));
+  context.insert(QStringLiteral("prime_tower_width"),
+                 asFloat(merged.value(QStringLiteral("prime_tower_width")), 60.0f));
+  context.insert(QStringLiteral("prime_volume"),
+                 asFloat(merged.value(QStringLiteral("prime_volume")), 0.0f));
+  context.insert(QStringLiteral("prime_tower_brim_width"),
+                 asFloat(merged.value(QStringLiteral("prime_tower_brim_width")), 0.0f));
+  // Per-plate tower positions stay raw (string "x,x,..." or list) -- the
+  // service extracts the entry for each plate's virtual bed index.
+  context.insert(QStringLiteral("wipe_tower_x"),
+                 merged.value(QStringLiteral("wipe_tower_x")));
+  context.insert(QStringLiteral("wipe_tower_y"),
+                 merged.value(QStringLiteral("wipe_tower_y")));
+  return context;
+}
+
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
   m_cachedMeshData = projectService_->meshData();
@@ -8006,7 +8055,8 @@ bool EditorViewModel::setSelectedInstanceCount(int count)
   const QString printableArea = QStringLiteral("0,0,%1,0,%1,%2,0,%2")
       .arg(m_bedWidth).arg(m_bedDepth);
   projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
-                                  m_arrangeAlignY, printableArea);
+                                  m_arrangeAlignY, printableArea,
+                                  arrangeWipeTowerContext());
 
   if (m_undoManager)
   {
@@ -8066,10 +8116,12 @@ bool EditorViewModel::fillBedWithInstances()
     if (!projectService_->setObjectInstanceCount(sourceIndex, instanceCount + 1))
       break;
     if (!projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
-                                         m_arrangeAlignY, printableArea)) {
+                                         m_arrangeAlignY, printableArea,
+                                         arrangeWipeTowerContext())) {
       projectService_->setObjectInstanceCount(sourceIndex, instanceCount);
       projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
-                                      m_arrangeAlignY, printableArea);
+                                      m_arrangeAlignY, printableArea,
+                                      arrangeWipeTowerContext());
       break;
     }
     ++instanceCount;
@@ -10360,7 +10412,8 @@ void EditorViewModel::arrangeAllObjects()
     const auto merged = configViewModel_->mergedConfigValues();
     printableArea = merged.value(QStringLiteral("printable_area")).toString();
   }
-  if (projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY, printableArea))
+  if (projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY, printableArea,
+                                      arrangeWipeTowerContext()))
   {
     // Real arrange succeeded — sync transforms from model to mock arrays
     projectService_->syncTransformsFromModel();
@@ -10384,7 +10437,8 @@ bool EditorViewModel::arrangePlate(int plateIndex)
     printableArea = configViewModel_->mergedConfigValues().value(QStringLiteral("printable_area")).toString();
 
   const bool arranged = projectService_->arrangeObjects(spacing, m_arrangeRotation,
-                                                         m_arrangeAlignY, printableArea);
+                                                         m_arrangeAlignY, printableArea,
+                                                         arrangeWipeTowerContext());
   if (arranged) {
     projectService_->syncTransformsFromModel();
     invalidateSliceResultsForPlate(plateIndex);

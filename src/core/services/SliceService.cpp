@@ -277,8 +277,10 @@ SliceService::~SliceService()
   //  1. Cancel first: flip the flag and cancel the active Print so a running
   //     Print::process throws at the next step boundary (PrintBase state
   //     machine calls throw_if_canceled on every step start/done,
-  //     PrintBase.hpp:150-186 + 542). Cancellation is prompt because no step
-  //     runs unbounded.
+  //     PrintBase.hpp:150-186 + 542). The load-then-cancel pair is safe
+  //     since review P1-1: the worker no longer destroys the Print -- a
+  //     cancelled/failed slot is carried into the queued completion lambda,
+  //     so the Print outlives this load/cancel race window.
   //  2. Join the worker via its QFuture BEFORE any member is destroyed. This
   //     is a plain blocking wait on the QtConcurrent task (no owned QThread,
   //     so the qFatal wait()-timeout failure mode of the perf/waves WIP
@@ -286,13 +288,30 @@ SliceService::~SliceService()
   //     the in-flight PersistentSlice -- finishes touching this service's
   //     state and posts its completion before teardown continues. Idle slots
   //     in persistentSlices_ then die here on the GUI thread.
+  //     Review P2-4: ALL workers are tracked now -- the slice worker plus
+  //     the previous-G-code, export-all, and export-copy auxiliary workers
+  //     each carry a stored future that the destructor cancels (flags) and
+  //     joins below. No worker class relies on call-site discipline.
+  //  Review P1-2 (BackendContext): the context destructor deletes the slice
+  //  service FIRST so the joined worker cannot touch an already-destroyed
+  //  ProjectServiceMock (Qt would otherwise destroy children in creation
+  //  order).
   if (activeCancelFlag_)
     activeCancelFlag_->store(true);
+  if (activeExportCancelFlag_)
+    activeExportCancelFlag_->store(true);
 #ifdef HAS_LIBSLIC3R
   if (Slic3r::Print *active = activePrint_.load(std::memory_order_acquire))
     active->cancel();
 #endif
+  // Review P2-4: join EVERY worker this service ever launched -- the slice
+  // worker plus the three auxiliary ones -- so none can touch this object
+  // (or, via BackendContext ~dtor ordering, the project service) after its
+  // owner began teardown.
   activeSliceFuture_.waitForFinished();
+  previousGcodeFuture_.waitForFinished();
+  exportAllFuture_.waitForFinished();
+  exportCopyFuture_.waitForFinished();
 }
 
 int SliceService::persistentSliceCount() const
@@ -503,6 +522,9 @@ void SliceService::clearResults()
   activeTargetPlateIndex_ = -1;
   activeTargetResultKey_ = -1;
   plateResults_.clear();
+  // Review P1-3: project-scoped reset bumps the generation so queued
+  // completion lambdas from the discarded context are dropped on arrival.
+  ++sliceGeneration_;
 #ifdef HAS_LIBSLIC3R
   // PLATE-PRINT-LIFECYCLE (batch 2): clearResults is the project-scoped reset
   // (import, clear workspace, undo/redo, external scene change) -- those flows
@@ -877,6 +899,8 @@ void SliceService::startSlice(const QString &projectName)
                      , persistentSlot = std::move(reusedSlice)
                      , plateGeometrySignature
 #endif
+                     // Review P1-3: project reset generation at start time.
+                     , generation = receiver ? receiver->sliceGeneration_ : quint64(0)
                      ]() mutable
                     {
     QString errorText;
@@ -1199,17 +1223,18 @@ void SliceService::startSlice(const QString &projectName)
     catch (const std::exception &ex)
     {
       receiver->activePrint_.store(nullptr, std::memory_order_release);
-      // PLATE-PRINT-LIFECYCLE (batch 2): cancel/failure invalidates the
-      // persistent Print state -- destroy the slot HERE on the worker thread
-      // so a cancelled or failed engine state is never reused (and the GUI
-      // thread never pays the deallocation cost).
-      persistentSlot.reset();
+      // PLATE-PRINT-LIFECYCLE (batch 2) / review P1-1: the slot is NOT
+      // destroyed here. It is carried by value into the queued completion
+      // lambda (which only re-inserts it on success), so a cancelled or
+      // failed Print is never reused while the Print object itself stays
+      // ALIVE until the GUI thread drops the lambda. Destroying it here
+      // would race ~SliceService/cancelSlice, which load activePrint_ and
+      // call cancel() between this store(nullptr) and the destruction.
       errorText = QString::fromUtf8(ex.what());
     }
     catch (...)
     {
       receiver->activePrint_.store(nullptr, std::memory_order_release);
-      persistentSlot.reset();
       errorText = QObject::tr("Slicing failed");
     }
 #else
@@ -1266,12 +1291,19 @@ void SliceService::startSlice(const QString &projectName)
     QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, targetResultKey, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance
 #ifdef HAS_LIBSLIC3R
                                          // PLATE-PRINT-LIFECYCLE (batch 2):
-                                         // null on cancel/failure (destroyed
-                                         // on the worker); carries the
-                                         // finished persistent Print back to
-                                         // the GUI thread on success.
+                                         // on success carries the finished
+                                         // persistent Print back to the GUI
+                                         // thread; on cancel/failure it now
+                                         // ALSO carries the slot (review
+                                         // P1-1) so the Print stays alive
+                                         // until this lambda dies on the GUI
+                                         // thread -- never destroyed while
+                                         // ~SliceService/cancelSlice may
+                                         // still call activePrint_->cancel().
                                          , persistentSlot, reusedPersistentPrint
 #endif
+                                         // Review P1-3: generation gate.
+                                         , generation
     ]() {
       if (!receiver)
         return;
@@ -1331,7 +1363,14 @@ void SliceService::startSlice(const QString &projectName)
       receiver->resultLayerCount_ = layerCount;
 
       // Store per-plate result for multi-plate tracking
-      if (resultPlateIndex >= 0) {
+      // Review P1-3: gated on the slice generation. A project load/reset
+      // (invalidateAllSliceResults -> clearResults) bumps the generation and
+      // rebuilds the plate list, so a completion lambda queued after the
+      // reset must not attach its stale result -- the new project's plate 0
+      // can legitimately carry the same printIndex again (the counter resets
+      // with the list), which would defeat the identity liveness checks
+      // below on their own.
+      if (resultPlateIndex >= 0 && generation == receiver->sliceGeneration_) {
         PlateSliceResult pr;
         pr.estimatedTimeLabel = estimatedTimeLabel;
         pr.resultWeightLabel = resultWeightLabel;
@@ -1349,10 +1388,10 @@ void SliceService::startSlice(const QString &projectName)
 #ifdef HAS_LIBSLIC3R
       // PLATE-PRINT-LIFECYCLE (batch 2): the slice succeeded and the worker
       // handed the persistent Print back -- re-insert it for the next slice
-      // unless the plate vanished mid-slice (then the slot dies with this
-      // lambda). The G-code result artifact above and the persistent Print
-      // below now share the same per-plate lifecycle.
-      if (persistentSlot)
+      // unless the plate vanished mid-slice or the generation moved on (a
+      // stale Print from a discarded project must never re-enter the new
+      // project's slot store), then the slot dies with this lambda.
+      if (persistentSlot && generation == receiver->sliceGeneration_)
       {
         // Authoritative liveness check: the stable printIndex must still
         // resolve to a live plate (plateIndexForResultKey's positional
@@ -1503,7 +1542,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       targetPlateLabel = QObject::tr("Plate %1").arg(targetPlateIndex + 1);
   }
 
-  QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]()
+  previousGcodeFuture_ = QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]()
                     {
     QString errorText;
     QString estimatedTimeLabel;
@@ -1818,7 +1857,7 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs, generation]() {
+  exportAllFuture_ = QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs, generation]() {
     QString failureReason;
     QString failureSource;
     QString failureTarget;
@@ -1976,7 +2015,7 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
   setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes, generation]() {
+  exportCopyFuture_ = QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes, generation]() {
     const auto onProgress = [receiver](int percent) {
       if (!receiver)
         return;
@@ -2147,6 +2186,8 @@ void SliceService::clearPlateResults()
   clearStoredResult();
   activeTargetResultKey_ = -1;
   plateResults_.clear();
+  // Review P1-3: same generation bump as clearResults.
+  ++sliceGeneration_;
 #ifdef HAS_LIBSLIC3R
   // PLATE-PRINT-LIFECYCLE (batch 2): same conservative reset as clearResults.
   persistentSlices_.clear();

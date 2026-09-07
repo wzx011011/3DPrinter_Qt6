@@ -250,10 +250,15 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       && batchSourceObjectIndices.size() == objectCount
       && batchVolumeIndices.size() == objectCount
       && batchInstanceIndices.size() == objectCount
+      // Review P2-5: each optional channel must be empty or cover every
+      // batch -- a partially supplied array would send .at(objectIndex) out
+      // of bounds below (QList::at is unchecked in release).
       && (batchVolumeTypes.isEmpty()
-          || (batchVolumeTypes.size() == objectCount
-              && batchExtruderIds.size() == objectCount
-              && batchPrintableFlags.size() == objectCount));
+          || batchVolumeTypes.size() == objectCount)
+      && (batchExtruderIds.isEmpty()
+          || batchExtruderIds.size() == objectCount)
+      && (batchPrintableFlags.isEmpty()
+          || batchPrintableFlags.size() == objectCount);
 
   if (valid) {
     m_modelVertices.reserve(std::min<qsizetype>(meshData.size() / kPackedVertexBytes, 1000000));
@@ -303,8 +308,12 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     float a = 1.0f;
     if (!batchVolumeTypes.isEmpty()) {
       const int volumeType = batchVolumeTypes.at(objectIndex);
-      const int extruderId = batchExtruderIds.at(objectIndex);
-      const bool printable = batchPrintableFlags.at(objectIndex) != 0;
+      // Review P2-5: each channel is independently optional -- only index
+      // into an array that actually covers this batch.
+      const int extruderId = batchExtruderIds.size() == objectCount
+                                 ? batchExtruderIds.at(objectIndex) : 0;
+      const bool printable = batchPrintableFlags.size() == objectCount
+                                 ? batchPrintableFlags.at(objectIndex) != 0 : true;
       switch (volumeType) {
       case 1: r = 0.3f; g = 0.3f; b = 0.3f; a = 0.4f; break; // MODEL_NEGTIVE_COL
       case 2: r = 1.0f; g = 1.0f; b = 0.0f; a = 0.6f; break; // MODEL_MIDIFIER_COL
@@ -341,9 +350,8 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     batch.volumeType = batchVolumeTypes.isEmpty() ? 0
                                                   : batchVolumeTypes.at(objectIndex);
     // PREVIEW-GHOST-SHELL: per-volume extruder identity for the ghost pass.
-    batch.extruderId = batchExtruderIds.isEmpty()
-                           ? 0
-                           : batchExtruderIds.at(objectIndex);
+    batch.extruderId =
+        batchExtruderIds.size() == objectCount ? batchExtruderIds.at(objectIndex) : 0;
 
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
       float x = 0.0f;

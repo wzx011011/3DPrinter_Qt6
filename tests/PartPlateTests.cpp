@@ -443,20 +443,16 @@ void PartPlateTests::arrangeAvoidsWipeTowerAndExcludeAreas() {
   // Prime tower at the bed centre. The hotend is single-extruder, so the
   // smooth-timelapse gate is what makes the tower appear (upstream
   // ArrangeJob.cpp:287-292). Tower: x=110..170, y=110..130 (depth 20 from
-  // the min-depth table at the ~12mm object height).
-  auto *plateCfg = &service.plateListMut()->plate(0)->config();
-  if (auto *op = plateCfg->option<Slic3r::ConfigOptionBool>("enable_prime_tower", true))
-    op->value = true;
-  if (auto *op = plateCfg->option<Slic3r::ConfigOptionEnum<Slic3r::TimelapseType>>("timelapse_type", true))
-    op->setInt(int(Slic3r::TimelapseType::tlSmooth));
-  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloats>("wipe_tower_x", true))
-    op->values = {110.0};
-  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloats>("wipe_tower_y", true))
-    op->values = {110.0};
-  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloat>("prime_tower_width", true))
-    op->value = 60.0f;
-  if (auto *op = plateCfg->option<Slic3r::ConfigOptionFloat>("prime_tower_brim_width", true))
-    op->value = 0.0f;
+  // the min-depth table at the ~12mm object height). Review P1-5: the tower
+  // parameters come from the GLOBAL merged config, handed to arrangeObjects
+  // as the wipeTowerContext map (not the plate config).
+  QVariantMap towerContext;
+  towerContext[QStringLiteral("enable_prime_tower")] = true;
+  towerContext[QStringLiteral("timelapse_type")] = int(Slic3r::TimelapseType::tlSmooth);
+  towerContext[QStringLiteral("wipe_tower_x")] = 110.0;
+  towerContext[QStringLiteral("wipe_tower_y")] = 110.0;
+  towerContext[QStringLiteral("prime_tower_width")] = 60.0f;
+  towerContext[QStringLiteral("prime_tower_brim_width")] = 0.0f;
 
   // Bed exclude rectangle over the lower-left corner (0,0)-(60,60).
   service.plateListMut()->setExcludeAreas(
@@ -464,7 +460,8 @@ void PartPlateTests::arrangeAvoidsWipeTowerAndExcludeAreas() {
 
   // Explicit 4-corner bed polygon: the arrange parser needs >= 3 points.
   QVERIFY2(service.arrangeObjects(5.0f, false, false,
-                                  QStringLiteral("0,0,220,0,220,220,0,220")),
+                                  QStringLiteral("0,0,220,0,220,220,0,220"),
+                                  towerContext),
            "arrange must succeed with the fixed obstacles present");
 
   // GL(X,Z,Y) -> slic3r(X,Y,Z): slice x = pos.x(), slice y = pos.z().
@@ -737,10 +734,14 @@ void PartPlateTests::plateBedShapeRoundTripsThroughProject() {
 }
 
 void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
-  // B2 (upstream delete_plate keeps instances, PartPlate.cpp:3708-3810):
-  // deleting a plate must migrate its memberships to a neighbor plate instead
-  // of orphaning them. Destination: the next plate at the same index position;
-  // deleting the last plate merges into the previous one.
+  // PLATE-DELETE-DOCK (GAP-2, upstream delete_plate PartPlate.cpp:3710-3816):
+  // the deleted plate's instances dock OFF every printable plate -- upstream
+  // teleports them to the unprintable slot (:3761) before the
+  // move_instances_to intersect test (:2483-2497, :3810), so they virtually
+  // never join a neighbor. Surviving plates keep their own memberships; the
+  // dock move of the orphaned OBJECTS happens in the ProjectServiceMock
+  // wrapper (service owns the Model), so at the pure-list level the orphaned
+  // instances are simply no longer members anywhere.
   OWzx::PartPlateList list;
   QVERIFY(list.createPlate() != nullptr);
   QVERIFY(list.createPlate() != nullptr);  // plates 0,1,2
@@ -750,23 +751,22 @@ void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
   list.plate(1)->addInstance(21, 1);
   list.plate(2)->addInstance(30, 0);
 
-  // Delete middle plate 1: its instances move to the next plate (now at
-  // index 1). Every previously-assigned instance stays findable (no orphans).
+  // Delete middle plate 1: its instances dock (no membership anywhere).
   QVERIFY(list.deletePlate(1));
   QCOMPARE(list.plateCount(), 2);
-  QCOMPARE(list.findInstance(20, 0), 1);
-  QCOMPARE(list.findInstance(21, 1), 1);
+  QCOMPARE(list.findInstance(20, 0), -1);
+  QCOMPARE(list.findInstance(21, 1), -1);
   QCOMPARE(list.findInstance(10, 0), 0);
   QCOMPARE(list.findInstance(30, 0), 1);
 
-  // Delete the last plate: its instances merge into the previous plate.
+  // Delete the last plate: its own instances dock; earlier plates unaffected.
   QVERIFY(list.deletePlate(1));
   QCOMPARE(list.plateCount(), 1);
-  QCOMPARE(list.findInstance(30, 0), 0);
-  QCOMPARE(list.findInstance(20, 0), 0);
-  QCOMPARE(list.findInstance(21, 1), 0);
+  QCOMPARE(list.findInstance(30, 0), -1);
+  QCOMPARE(list.findInstance(20, 0), -1);
+  QCOMPARE(list.findInstance(21, 1), -1);
   QCOMPARE(list.findInstance(10, 0), 0);
-  // Grid/count bookkeeping unchanged by migration; single plate left.
+  // Grid/count bookkeeping unchanged; single plate left.
   QCOMPARE(list.plateCols(), 1);
   QVERIFY(list.currentPlateIndex() >= 0 && list.currentPlateIndex() < list.plateCount());
 
@@ -778,18 +778,16 @@ void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
   QCOMPARE(list.plateCount(), 2);
   QVERIFY(list.currentPlateIndex() < list.plateCount());
 
-  // Outside flags do not survive the move: an instance flagged outside on the
-  // deleted plate re-homes totally on the destination (upstream
-  // move_instances_to iterates obj_to_instance_set only), so the destination
-  // plate stays slice-ready.
+  // Outside flags die with the deleted plate (the dock is not a plate): the
+  // docked instance carries no readiness state anywhere.
   OWzx::PartPlateList outside;
   QVERIFY(outside.createPlate() != nullptr);          // plates 0,1
   outside.plate(1)->addInstance(5, 0);
   outside.plate(1)->setInstanceOutside(5, 0, true);  // flagged outside on deleted plate
   QVERIFY(!outside.plate(1)->canSlice());
-  QVERIFY(outside.deletePlate(1));                   // delete last plate -> merges into plate 0
-  QCOMPARE(outside.findInstance(5, 0), 0);
-  QCOMPARE(outside.findInstanceBelongs(5, 0), 0);    // re-homed totally (no outside carryover)
+  QVERIFY(outside.deletePlate(1));                   // delete last plate -> instance docks
+  QCOMPARE(outside.findInstance(5, 0), -1);
+  QCOMPARE(outside.findInstanceBelongs(5, 0), -1);
   QVERIFY(outside.plate(0)->canSlice());
 }
 

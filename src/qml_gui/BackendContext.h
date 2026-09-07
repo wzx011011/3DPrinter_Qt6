@@ -291,6 +291,13 @@ public:
   int sdaRight() const { return static_cast<int>(SidebarDockArea::Right); }
 
   explicit BackendContext(QObject *parent = nullptr);
+  /// Review P1-2: the slice worker dereferences projectService_ while
+  /// ~SliceService joins it. Qt deletes children in creation order, which
+  /// would destroy ProjectServiceMock (created first) BEFORE SliceService
+  /// (created second) and leave the joined worker touching a dangling
+  /// service. Deleting the slice service explicitly first closes that
+  /// window by construction.
+  ~BackendContext() override;
 
   QObject *editorViewModel() const;
   QObject *previewViewModel() const;

@@ -1815,6 +1815,11 @@ private:
   void refreshMeshCacheAndFitHint();
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
+  /// Review P1-5: the wipe-tower arrange obstacle reads the GLOBAL merged
+  /// preset config (upstream ArrangeJob reads preset_bundle::full_config,
+  /// not the per-plate config). Built once per arrange call and handed to
+  /// ProjectServiceMock::arrangeObjects as the wipeTowerContext map.
+  QVariantMap arrangeWipeTowerContext() const;
   // P15.11: drag-time sequential clearance preview (upstream
   // GLCanvas3D::update_sequential_clearance + reset_sequential_print_clearance).
   // begin is called by every beginGizmo{Move,Rotate,Scale}Drag (the

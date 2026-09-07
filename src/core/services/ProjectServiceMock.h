@@ -468,8 +468,14 @@ public:
   Q_INVOKABLE bool orientObject(int objectIndex);
   /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → Slic3r::arrange_objects）
   /// HAS_LIBSLIC3R: 调用真实 arrange_objects API；Mock: 返回 false
+  /// wipeTowerContext: review P1-5 -- the wipe-tower arrange obstacle reads
+  /// the GLOBAL preset config (upstream ArrangeJob reads preset_bundle, not
+  /// the plate config): enable_prime_tower(bool), timelapse_type(int),
+  /// prime_tower_width/prime_volume/prime_tower_brim_width(floats) and the
+  /// per-plate wipe_tower_x/wipe_tower_y floats. Empty map = no tower.
   Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY,
-                                    const QString &printableArea = QString());
+                                    const QString &printableArea = QString(),
+                                    const QVariantMap &wipeTowerContext = {});
   /// 切割对象（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
   /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
   /// Returns the index of the new object created (≥0 on success, -1 on failure)

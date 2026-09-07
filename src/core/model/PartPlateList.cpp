@@ -52,21 +52,20 @@ bool PartPlateList::deletePlate(int index) {
   if (plateCount() <= 1) return false;  // upstream invariant: keep >= 1 plate
   if (index < 0 || index >= plateCount()) return false;
 
-  // Migrate the deleted plate's instance memberships instead of dropping them.
-  // Upstream delete_plate keeps the instances ("keep its instance at origin
-  // position and add them into next plate if have", PartPlate.cpp:3708-3810;
-  // move_instances_to re-homes every obj_to_instance_set entry and carries no
-  // instance_outside_set state). Qt6 destination rule: the next plate at the
-  // same index position after erase; deleting the last plate merges into the
-  // previous one. Memberships re-home wholesale through addInstance so the
-  // destination's slice readiness is re-evaluated.
-  const std::set<std::pair<int, int>> migrated =
+  // PLATE-DELETE-DOCK (GAP-2): upstream delete_plate re-homes the deleted
+  // plate's instances by first teleporting them to the unprintable dock slot
+  // (set_pos_and_size(compute_origin_for_unprintable(), with_instance_move=
+  // true), PartPlate.cpp:3761) and only then running the move_instances_to
+  // intersect test against the last plate (PartPlate.cpp:2483-2497, :3810)
+  // -- instances sitting at the off-grid dock virtually never intersect it,
+  // so the NET behavior is: the deleted plate's objects keep their geometry
+  // but leave EVERY printable plate. Qt6 mirror: clear the memberships here
+  // (the ProjectServiceMock wrapper physically moves the orphaned objects to
+  // the dock slot); no unconditional neighbor merge.
+  const std::set<std::pair<int, int>> orphans =
       m_plate_list[index]->objToInstanceSet();
+  Q_UNUSED(orphans);
   m_plate_list.erase(m_plate_list.begin() + index);
-  const int destIndex = (index < plateCount()) ? index : index - 1;
-  for (const auto& key : migrated) {
-    m_plate_list[destIndex]->addInstance(key.first, key.second);
-  }
 
   reindex();
   // Keep current plate index valid after deletion.

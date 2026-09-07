@@ -395,6 +395,17 @@ BackendContext::BackendContext(QObject *parent)
                        : SidebarDockArea::Left;  // 防御：非 Right 一律按 Left
 }
 
+BackendContext::~BackendContext()
+{
+  // Review P1-2: Qt deletes children in creation order, so ProjectServiceMock
+  // (created first) would die before SliceService (created second) -- but
+  // ~SliceService joins the slice worker, and that worker dereferences
+  // projectService_. Delete the slice service (and its in-flight worker join)
+  // while the project service is still alive.
+  delete sliceService_;
+  sliceService_ = nullptr;
+}
+
 QObject *BackendContext::editorViewModel() const { return editorViewModel_; }
 QObject *BackendContext::sliceService() const { return sliceService_; }
 

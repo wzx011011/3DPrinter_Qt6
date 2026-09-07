@@ -836,6 +836,11 @@ quint64 ProjectServiceMock::currentPlateGeometrySignature() const
   // change slicing without touching mesh sizes). Timestamps are process-wide
   // mutation counters, so ANY config/paint touch forces a full rebuild --
   // deliberate "prefer full reslice over wrong reuse".
+  // Review P2-3 note: this intentionally does NOT hash mesh CONTENT -- it
+  // relies on the Qt6 convention that any mesh mutation creates a new volume
+  // (fresh volume/config timestamps land in the hash). An in-place same-size
+  // mesh swap that also preserved every timestamp would defeat it; no code
+  // path does that today.
   if (!model_)
     return 0;
 
@@ -868,6 +873,27 @@ quint64 ProjectServiceMock::currentPlateGeometrySignature() const
       const auto &its = vol->mesh().its;
       fnvMix(h, quint64(its.vertices.size()));
       fnvMix(h, quint64(its.indices.size()));
+      // Review P2-3: hash the mesh CONTENT itself (raw vertex/index bytes),
+      // closing the in-place same-size mesh-swap hole that metadata-only
+      // inputs leave open. This makes the signature an O(vertices) walk;
+      // startSlice already clones the plate model right after, so the extra
+      // pass is noise next to the clone + Print::apply cost.
+      {
+        const unsigned char *vertexBytes =
+            its.vertices.empty()
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(its.vertices.front().data());
+        const size_t vertexByteCount = its.vertices.size() * sizeof(its.vertices.front());
+        for (size_t b = 0; b < vertexByteCount; ++b)
+          fnvMix(h, quint64(vertexBytes[b]));
+        const unsigned char *indexBytes =
+            its.indices.empty()
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(its.indices.front().data());
+        const size_t indexByteCount = its.indices.size() * sizeof(its.indices.front());
+        for (size_t b = 0; b < indexByteCount; ++b)
+          fnvMix(h, quint64(indexBytes[b]));
+      }
       fnvMix(h, quint64(int(vol->type())));
       fnvMix(h, quint64(vol->extruder_id()));
       fnvMix(h, quint64(vol->config.ModelConfig::timestamp()));
@@ -1818,8 +1844,42 @@ bool ProjectServiceMock::deletePlate(int plateIndex)
   // removal so identity-keyed stores (SliceService persistent Print slot and
   // per-plate result) can release their entries; identities are never reused.
   const int removedPrintIndex = platePrintIndex(plateIndex);
+  // PLATE-DELETE-DOCK (GAP-2): capture the dying plate's memberships so the
+  // orphaned objects can be moved to the upstream unprintable dock slot
+  // (PartPlate.cpp:3761 teleport + :3810 move_instances_to) after the plate
+  // leaves the list.
+  std::set<std::pair<int, int>> orphanedInstances;
+  if (const OWzx::PartPlate *dying = m_plateList->plate(plateIndex))
+    orphanedInstances = dying->objToInstanceSet();
   if (!m_plateList->deletePlate(plateIndex))
     return false;  // refuses last plate / invalid index
+
+#ifdef HAS_LIBSLIC3R
+  // Physically move each fully-orphaned object to the dock slot one grid
+  // position past the last plate (upstream compute_origin_for_unprintable,
+  // PartPlate.cpp:3196-3202) so later rebuildPlateMembership /
+  // rebuildPlatesAfterArrangement passes cannot silently reabsorb it.
+  // Per-instance orphans whose object still has another plate membership are
+  // left untouched (Qt6 moves whole objects).
+  if (!orphanedInstances.empty())
+  {
+    const Slic3r::Vec3d dock =
+        m_plateList->computeOrigin(m_plateList->plateCount(),
+                                   m_plateList->plateCols());
+    std::set<int> dockedObjects;
+    for (const auto &key : orphanedInstances)
+    {
+      const int objIdx = key.first;
+      if (dockedObjects.count(objIdx) > 0)
+        continue;
+      dockedObjects.insert(objIdx);
+      if (plateIndexForObject(objIdx) >= 0)
+        continue;  // another instance of the object still lives on a plate
+      // GL(X,Z,Y) -> slic3r(X,Y,Z): GL.y carries the slic3r z (keep 0).
+      setObjectPosition(objIdx, float(dock.x()), 0.0f, float(dock.y()));
+    }
+  }
+#endif
 
   if (removedPrintIndex >= 0)
     emit plateRemoved(removedPrintIndex);
@@ -4384,6 +4444,36 @@ std::set<int> collectPlateExtruders(const Slic3r::Model *model, const OWzx::Part
   return ids;
 }
 
+// Upstream ArrangeJob.cpp:296-304: a tower is needed when SOME OBJECT uses
+// more than one extruder (multi-color part / painted support material).
+bool plateHasMultiExtruderObject(const Slic3r::Model *model,
+                                 const OWzx::PartPlate *plate)
+{
+  if (!model || !plate)
+    return false;
+  for (const auto &pr : plate->objToInstanceSet())
+  {
+    if (pr.first < 0 || size_t(pr.first) >= model->objects.size())
+      continue;
+    const auto *obj = model->objects[size_t(pr.first)];
+    if (!obj)
+      continue;
+    std::set<int> ids;
+    for (const auto *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      const auto *extOpt = static_cast<const Slic3r::ConfigOptionInt *>(
+          vol->config.option("extruder"));
+      const int ext = extOpt ? int(extOpt->getInt()) : 0;
+      ids.emplace(ext > 0 ? ext : 1);
+      if (ids.size() > 1)
+        return true;
+    }
+  }
+  return false;
+}
+
 // Upstream PartPlateList::preprocess_exclude_areas (PartPlate.cpp:4586-4623):
 // the raw config-space exclude points are grouped into 4-point rectangles and
 // each rectangle becomes one virtual ArrangePolygon PER plate (bed_idx = j).
@@ -4394,6 +4484,13 @@ void appendArrangeExcludeAreas(const OWzx::PartPlateList *plateList,
     return;
   const auto &raw = plateList->excludeAreas();
   const int plateCount = plateList->plateCount();
+  // Review P3: a non-multiple-of-4 tail cannot form a rectangle -- upstream
+  // asserts on the grouping; warn and skip the tail instead.
+  if (raw.size() % 4 != 0)
+    qWarning("[Arrange] bed_exclude_area point count %lld is not a multiple "
+             "of 4; dropping the trailing %lld points",
+             static_cast<long long>(raw.size()),
+             static_cast<long long>(raw.size() % 4));
   for (size_t i = 0; i + 3 < raw.size(); i += 4)
   {
     double minX = raw[i].x(), minY = raw[i].y();
@@ -4428,18 +4525,76 @@ void appendArrangeExcludeAreas(const OWzx::PartPlateList *plateList,
 // Upstream ArrangeJob::prepare_wipe_tower + PartPlate::estimate_wipe_tower_polygon
 // (ArrangeJob.cpp:279-359, PartPlate.cpp:1739-1777): per UNLOCKED plate, when
 // the prime tower is enabled, sequence print is by-layer, and the tower is
-// needed (smooth timelapse or >1 extruder on the plate -- a single-extruder
-// tower has zero depth upstream), emit a fixed wipe-tower rectangle at
-// wipe_tower_x/y clamped inside the plate, inflated by the tower brim.
-// The paint-color / bed-temperature gates are not observable from the service
-// layer; the extruder-count gate covers the dominant multi-material case.
+// needed -- smooth timelapse, some object with multiple extruders, or
+// allow_multi_materials_on_same_plate with several extruders on the plate
+// (a single-extruder tower has zero depth upstream) -- emit a fixed
+// wipe-tower rectangle at wipe_tower_x/y clamped inside the plate, inflated
+// by the tower brim. Review P1-5: the tower parameters come from the GLOBAL
+// merged preset config handed in by the view model (upstream reads
+// preset_bundle, not the per-plate config -- the Qt6 plate config never
+// carries these keys in real flows). The only unported refinement is the
+// per-extruder bed-temperature equality check inside the allow_multi gate
+// (ledger WIPE-TOWER-BEDTEMP-GATE: needs the filament preset channel); the
+// conservative same-temp assumption can only add an extra arrange obstacle.
+float towerContextFloat(const QVariantMap &ctx, const char *key, float fallback)
+{
+  const QVariant value = ctx.value(QLatin1String(key));
+  if (!value.isValid())
+    return fallback;
+  bool ok = false;
+  const float parsed = value.toFloat(&ok);
+  return ok ? parsed : fallback;
+}
+
+QVariant towerContextPerPlate(const QVariantMap &ctx, const char *key, int bedid)
+{
+  const QVariant value = ctx.value(QLatin1String(key));
+  if (!value.isValid())
+    return {};
+  if (value.typeId() == QMetaType::Type::QVariantList) {
+    const QVariantList list = value.toList();
+    return list.isEmpty() ? QVariant()
+                          : list.value(size_t(bedid) < list.size() ? bedid : 0);
+  }
+  if (value.typeId() == QMetaType::Type::QString) {
+    const QStringList parts = value.toString().split(QLatin1Char(','),
+                                                     Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+      return {};
+    const int idx = (bedid >= 0 && bedid < parts.size()) ? bedid : 0;
+    return parts.value(idx).trimmed();
+  }
+  return value;  // a plain per-plate scalar
+}
+
 void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
                              const Slic3r::Model *model,
+                             const QVariantMap &towerContext,
                              Slic3r::ArrangePolygons &unselected)
 {
   constexpr float kWipeTowerMargin = 1.f;  // libslic3r.h:88 WIPE_TOWER_MARGIN
-  if (!plateList || !model)
+  if (!plateList || !model || towerContext.isEmpty())
     return;
+  // Upstream ArrangeJob.cpp:286-287: an explicitly disabled prime tower
+  // means NO tower, regardless of the other gates.
+  const bool towerEnabled =
+      towerContext.value(QStringLiteral("enable_prime_tower")).toBool();
+  if (!towerEnabled)
+    return;
+  const bool smoothTimelapse =
+      towerContext.value(QStringLiteral("timelapse_type")).toInt()
+          == int(Slic3r::TimelapseType::tlSmooth);
+  // Upstream ArrangeJob.cpp:308-319: with allow_multi_materials_on_same_plate
+  // the tower is also needed when the plate carries several extruders. The
+  // upstream per-extruder bed-temperature equality refinement needs the
+  // filament preset channel (ledger item WIPE-TOWER-BEDTEMP-GATE); until
+  // that channel exists the conservative assumption is "same bed temp",
+  // which can only create an extra arrange obstacle, never misplace a part.
+  const bool allowMultiMaterial =
+      towerContext.value(QStringLiteral("allow_multi_materials_on_same_plate")).toBool();
+  const float towerWidth = towerContextFloat(towerContext, "prime_tower_width", 60.f);
+  const double primeVolume = towerContextFloat(towerContext, "prime_volume", 0.f);
+  const float towerBrim = towerContextFloat(towerContext, "prime_tower_brim_width", 0.f);
   const int plateCount = plateList->plateCount();
   int bedidUnlock = 0;
   for (int bedid = 0; bedid < plateCount; ++bedid)
@@ -4447,31 +4602,21 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
     const OWzx::PartPlate *pl = plateList->plate(bedid);
     if (!pl || pl->isLocked())
       continue;  // locked beds keep their items fixed and get no virtual bed
-    const auto &cfg = pl->config();
-    bool towerEnabled = false;
-    if (const auto *op = cfg.option("enable_prime_tower"))
-      towerEnabled = op->getBool();
-    bool smoothTimelapse = false;
-    if (const auto *op = cfg.option("timelapse_type"))
-      smoothTimelapse = op->getInt() == int(Slic3r::TimelapseType::tlSmooth);
     const bool seqPrint = pl->printSequence() != 0;  // 0 = by layer
     const std::set<int> extruders = collectPlateExtruders(model, pl);
-    const bool needTower = towerEnabled && !seqPrint
-        && (smoothTimelapse || extruders.size() > 1);
+    const bool needTower = !seqPrint
+        && (smoothTimelapse
+            || plateHasMultiExtruderObject(model, pl)
+            || (allowMultiMaterial && extruders.size() > 1));
     if (needTower)
     {
-      const auto *xOpt = cfg.option<Slic3r::ConfigOptionFloats>("wipe_tower_x");
-      const auto *yOpt = cfg.option<Slic3r::ConfigOptionFloats>("wipe_tower_y");
-      const auto *wOpt = cfg.option<Slic3r::ConfigOptionFloat>("prime_tower_width");
-      const auto *vOpt = cfg.option<Slic3r::ConfigOptionFloat>("prime_volume");
-      const auto *brimOpt = cfg.option<Slic3r::ConfigOptionFloat>("prime_tower_brim_width");
-      if (xOpt && yOpt && !xOpt->values.empty() && !yOpt->values.empty())
+      const QVariant xValue = towerContextPerPlate(towerContext, "wipe_tower_x", bedid);
+      const QVariant yValue = towerContextPerPlate(towerContext, "wipe_tower_y", bedid);
+      bool okX = false, okY = false;
+      const float x0 = xValue.toFloat(&okX);
+      const float y0 = yValue.toFloat(&okY);
+      if (okX && okY)
       {
-        const float x0 = float(xOpt->get_at(size_t(bedid)));
-        const float y0 = float(yOpt->get_at(size_t(bedid)));
-        const float w = wOpt ? wOpt->value : 60.f;
-        const double primeVolume = vOpt ? double(vOpt->value) : 0.0;
-        const float brim = brimOpt ? brimOpt->value : 0.f;
         // Max member-object height (bounding_box_exact, upstream object loop).
         double maxHeight = 0.0;
         for (const auto &pr : pl->objToInstanceSet())
@@ -4483,20 +4628,23 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
             continue;
           maxHeight = std::max(obj->bounding_box_exact().size().z(), maxHeight);
         }
-        double depth = extruders.size() <= 1 ? 0.0 : primeVolume;
+        double depth = extruders.size() <= 1 ? 0.0 : double(primeVolume);
         if (smoothTimelapse || depth > 1e-6)  // upstream EPSILON
           depth = std::max<double>(wipeTowerMinDepthForHeight(float(maxHeight)), depth);
-        const float margin = kWipeTowerMargin + brim;
+        const float margin = kWipeTowerMargin + towerBrim;
+        // Upstream clamps with plate_width - w - margin - brim; a degenerate
+        // (negative) range means the tower cannot fit -- keep the margin
+        // edge like the upstream formula would.
         const float x = std::clamp(x0, margin,
-                                   float(pl->width()) - w - margin - brim);
+                                   std::max(margin, float(pl->width()) - towerWidth - margin - towerBrim));
         const float y = std::clamp(y0, margin,
-                                   float(pl->depth()) - float(depth) - margin - brim);
+                                   std::max(margin, float(pl->depth()) - float(depth) - margin - towerBrim));
         Slic3r::arrangement::ArrangePolygon ap;
         ap.poly.contour = Slic3r::Polygon({
-            {Slic3r::scaled(x - brim), Slic3r::scaled(y - brim)},
-            {Slic3r::scaled(x + w + brim), Slic3r::scaled(y - brim)},
-            {Slic3r::scaled(x + w + brim), Slic3r::scaled(y + float(depth) + brim)},
-            {Slic3r::scaled(x - brim), Slic3r::scaled(y + float(depth) + brim)}});
+            {Slic3r::scaled(x - towerBrim), Slic3r::scaled(y - towerBrim)},
+            {Slic3r::scaled(x + towerWidth + towerBrim), Slic3r::scaled(y - towerBrim)},
+            {Slic3r::scaled(x + towerWidth + towerBrim), Slic3r::scaled(y + float(depth) + towerBrim)},
+            {Slic3r::scaled(x - towerBrim), Slic3r::scaled(y + float(depth) + towerBrim)}});
         ap.bed_idx = bedidUnlock;
         ap.setter = nullptr;  // do not move the wipe tower
         ap.translation = Slic3r::Vec2crd(0, 0);
@@ -4513,7 +4661,8 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
 #endif  // HAS_LIBSLIC3R
 
 bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY,
-                                          const QString &printableArea)
+                                          const QString &printableArea,
+                                          const QVariantMap &wipeTowerContext)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || model_->objects.empty())
@@ -4597,7 +4746,8 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
         auto arrangeInput = Slic3r::get_arrange_polys(*model_, arrangeInstances);
         Slic3r::ArrangePolygons fixedObstacles;
         appendArrangeExcludeAreas(m_plateList.get(), fixedObstacles);
-        appendArrangeWipeTowers(m_plateList.get(), model_, fixedObstacles);
+        appendArrangeWipeTowers(m_plateList.get(), model_, wipeTowerContext,
+                                fixedObstacles);
         Slic3r::arrangement::arrange(arrangeInput, fixedObstacles, bed_bb, params);
         const bool arranged =
             Slic3r::apply_arrange_polys(arrangeInput, arrangeInstances, tolerantVfn);
@@ -4633,7 +4783,7 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
   Q_UNUSED(allowRotation);
   Q_UNUSED(alignY);
   Q_UNUSED(printableArea);
-  Q_UNUSED(alignY);
+  Q_UNUSED(wipeTowerContext);
   return false;
 #endif
 }
@@ -11423,8 +11573,17 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 #ifdef HAS_LIBSLIC3R
       if (ok && !canceled)
       {
+        // Review P1-4: the bed-geometry keys are machine-profile data. They
+        // are consumed by the plate-list restore above; letting them flow
+        // into the preset-value channel (projectConfigLoaded ->
+        // printPresetValues_ -> slice injection) would override the CURRENT
+        // bed with the bed baked into the project on every later slice.
+        const std::set<std::string> bedKeysSkip = {
+            "printable_area", "printable_height", "bed_exclude_area"};
         for (const auto &key_str : loadedConfig.keys())
         {
+          if (bedKeysSkip.count(key_str) > 0)
+            continue;
           const QString key = QString::fromStdString(key_str);
           const auto *opt = loadedConfig.option(key_str);
           if (!opt) continue;
@@ -11762,11 +11921,21 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   attachPlateInstanceBounds();
   m_plateList->resetToSinglePlate();
   // Older JSON files omit geometry and continue using constructor defaults.
-  const int savedWidth = root.value(QStringLiteral("plateWidth")).toInt(0);
-  const int savedDepth = root.value(QStringLiteral("plateDepth")).toInt(0);
-  const int savedHeight = root.value(QStringLiteral("plateHeight")).toInt(0);
-  if (root.contains(QStringLiteral("plateWidth")) || root.contains(QStringLiteral("plateDepth")))
-    m_plateList->setPlateSize(savedWidth, savedDepth, savedHeight);
+  // Review P3: handle partial geometry objects per-field so a file carrying
+  // only plateDepth does not zero the width (and vice versa).
+  const bool savedHasWidth = root.contains(QStringLiteral("plateWidth"));
+  const bool savedHasDepth = root.contains(QStringLiteral("plateDepth"));
+  const bool savedHasHeight = root.contains(QStringLiteral("plateHeight"));
+  if (savedHasWidth || savedHasDepth || savedHasHeight)
+  {
+    const int width = savedHasWidth ? root.value(QStringLiteral("plateWidth")).toInt(0)
+                                    : m_plateList->plateWidth();
+    const int depth = savedHasDepth ? root.value(QStringLiteral("plateDepth")).toInt(0)
+                                    : m_plateList->plateDepth();
+    const int height = savedHasHeight ? root.value(QStringLiteral("plateHeight")).toInt(0)
+                                      : m_plateList->plateHeight();
+    m_plateList->setPlateSize(width, depth, height);
+  }
 #ifdef HAS_LIBSLIC3R
   // PLATE-PRINT-LIFECYCLE (batch 4): restore list-level exclude areas.
   if (root.contains(QStringLiteral("bedExcludeArea")))
