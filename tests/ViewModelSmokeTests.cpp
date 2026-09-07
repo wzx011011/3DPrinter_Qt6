@@ -406,13 +406,13 @@ private slots:
   void prepareContextMeshAndUnitActionsUseUpstreamModelOperations();
   void prepareContextProcessSettingsCopyPasteUsesScopedConfig();
   // Phase 55-04 (GCODE-02/03): render-side role-toggle no-repack guard,
-  // legend/global-scope coherence, currentMove atomicity, 17-view-mode contract.
+  // legend/global-scope coherence, currentMove atomicity, upstream-10 contract.
   void roleVisibilityToggleDoesNotRepackGcodePreviewData();
   void legendGradientBoundsStableAcrossLayerMoveDrag();
   void currentMoveUpdatesGcodeLineWindowAtomically();
   void stepCurrentMoveClampsAndUpdatesGcodeLineWindow();
   void gcodeLineWindowTokenizesAndTruncatesLikeUpstream();
-  void viewModesExposeUpstreamSeventeenModes();
+  void viewModesExposeUpstreamTenModes();
   // Phase 55 code-review fix (GCODE-02): the renderer consumes a DENSE 20-bool
   // mask, not the 18-row QVariantMap UI list. Guard the producer shape and the
   // toggle→mask propagation so the role-visibility feature cannot silently
@@ -6041,24 +6041,45 @@ void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
            "gcodeLines window must be populated after a move step");
 }
 
-// Phase 55 (GCODE-02): belt-and-suspenders alongside PreviewParserTests -- the
-// 17 upstream EViewType modes must be present with the canonical names so the
-// QML view-mode combo and recolor switch share one source of truth.
-void ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
+// GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): belt-and-suspenders alongside
+// PreviewParserTests -- viewModes() must equal the upstream GCodeViewer
+// view_type_items table item by item: count, order, and the exact
+// get_view_type_string display names (GCodeViewer.cpp:892-901 + :59-84).
+void ViewModelSmokeTests::viewModesExposeUpstreamTenModes()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
-  QVERIFY2(modes.size() == 17,
-           qPrintable(QStringLiteral("viewModes() should expose 17 upstream modes, got %1").arg(modes.size())));
-  QVERIFY2(modes.contains(QStringLiteral("Line Type")),
-           "viewModes() must contain 'Line Type'");
-  QVERIFY2(modes.contains(QStringLiteral("Summary")),
-           "viewModes() must contain 'Summary'");
-  QVERIFY2(modes.contains(QStringLiteral("Tool")),
-           "viewModes() must contain 'Tool'");
+  const QStringList upstream = {
+      QStringLiteral("Line Type"),        // FeatureType
+      QStringLiteral("Filament"),         // ColorPrint
+      QStringLiteral("Speed"),            // Feedrate
+      QStringLiteral("Layer Height"),     // Height
+      QStringLiteral("Line Width"),       // Width
+      QStringLiteral("Flow"),             // VolumetricRate
+      QStringLiteral("Layer Time"),       // LayerTime
+      QStringLiteral("Layer Time (log)"), // LayerTimeLog
+      QStringLiteral("Fan Speed"),        // FanSpeed
+      QStringLiteral("Temperature"),      // Temperature
+  };
+  QVERIFY2(modes.size() == upstream.size(),
+           qPrintable(QStringLiteral("viewModes() should expose the 10 upstream modes, got %1").arg(modes.size())));
+  for (int i = 0; i < upstream.size(); ++i)
+  {
+    QVERIFY2(modes.at(i) == upstream.at(i),
+             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (upstream order), got '%3'")
+                            .arg(i).arg(upstream.at(i), modes.at(i))));
+  }
+  // Upstream hides Tool (commented out at GCodeViewer.cpp:902-904), keeps
+  // FilamentId internal (GCodeViewer.cpp:911), and has no Summary row.
+  QVERIFY2(!modes.contains(QStringLiteral("Tool")),
+           "Tool is hidden upstream and must not appear in the dropdown");
+  QVERIFY2(!modes.contains(QStringLiteral("Summary")),
+           "Summary has no upstream dropdown row");
+  QVERIFY2(!modes.contains(QStringLiteral("FilamentId")),
+           "FilamentId stays internal (GCodeViewer.cpp:911)");
 }
 
 // -- Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-01..07 --

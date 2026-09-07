@@ -257,6 +257,42 @@ public:
   Q_INVOKABLE double extruderUsedLength(int extruderId) const;  // meters
   Q_INVOKABLE double extruderUsedWeight(int extruderId) const;  // grams
   Q_INVOKABLE bool loadGCodeForPreview(const QString &filePath);
+  /// Preview view modes. Rows 0..9 mirror the upstream GCodeViewer
+  /// view_type_items dropdown exactly: fixed order from update_by_mode
+  /// (GCodeViewer.cpp:892-901), display strings from get_view_type_string
+  /// (GCodeViewer.cpp:59-84). Upstream hides Tool (commented out,
+  /// GCodeViewer.cpp:902-904) and keeps FilamentId internal-only (appended
+  /// after the string table is built, GCodeViewer.cpp:911). The trailing
+  /// entries are retained render capabilities without an upstream dropdown
+  /// row; setViewModeIndex() still accepts them so the recolor/legend
+  /// branches stay reachable and testable.
+  enum EViewType
+  {
+    VT_LineType = 0,     // FeatureType: per-role colors
+    VT_Filament = 1,     // ColorPrint: per-extruder palette
+    VT_Speed = 2,        // Feedrate: gradient on feedrate
+    VT_Height = 3,       // Height: gradient on layer height
+    VT_Width = 4,        // Width: gradient on line width
+    VT_Flow = 5,         // VolumetricRate: gradient on volumetric rate
+    VT_LayerTime = 6,    // LayerTime: gradient on layer time
+    VT_LayerTimeLog = 7, // LayerTimeLog: gradient on log(layer time)
+    VT_FanSpeed = 8,     // FanSpeed: gradient on fan speed
+    VT_Temperature = 9,  // Temperature: gradient on temperature
+    // Internal-capability tail -- not listed by viewModes().
+    VT_Summary = 10,         // statistics only, no gradient legend
+    VT_ActualSpeed = 11,     // gradient on actual speed (M220 factor)
+    VT_Acceleration = 12,    // gradient on acceleration (M204)
+    VT_Jerk = 13,            // gradient on jerk (M205)
+    VT_ActualFlow = 14,      // gradient on actual flow (M221 factor)
+    VT_PressureAdvance = 15, // gradient on pressure advance (M900)
+    VT_Tool = 16,            // per-extruder palette (upstream Tool, hidden)
+    VT_FilamentId = 17,      // hidden diagnostic pseudo-color {id, role, id}
+    VT_ModeCount = 18        // dropdown rows + internal capability tail
+  };
+  Q_ENUM(EViewType)
+  /// Dropdown names for the 10 upstream-visible modes only (row index equals
+  /// the EViewType value). Internal capabilities past VT_Temperature are
+  /// deliberately absent from this list.
   QStringList viewModes() const;
   int viewModeIndex() const { return viewModeIndex_; }
   bool currentViewModeAvailable() const;
@@ -340,6 +376,10 @@ public:
   Q_INVOKABLE void playAnimation();
   Q_INVOKABLE void pauseAnimation();
   Q_INVOKABLE void togglePlayPause();
+  /// Accepts the full EViewType range [0, VT_ModeCount). The QML combo only
+  /// produces the 10 upstream dropdown rows, while the internal capability
+  /// tail stays addressable for tests and future callers. Clamps, then
+  /// recolors and repacks the segment payload.
   Q_INVOKABLE void setViewModeIndex(int index);
 
   /// Map an upstream ;TYPE: display string to its canonical libvgcode
@@ -463,7 +503,7 @@ private:
   QMap<int, double> m_extruderUsedLength;  ///< extruder_id to total extrusion length in mm.
   QMap<int, double> m_extruderUsedWeight;  ///< extruder_id to total extrusion weight in g.
   float m_maxLayerTime = 0.f;
-  int viewModeIndex_ = 0;
+  int viewModeIndex_ = 0;  ///< VT_LineType (FeatureType), the upstream default (GCodeViewer.hpp:771).
   QList<OWzx::TickCode> tickMarks_;
   bool stealthMode_ = false;
   // Travel hidden after first view, matching upstream Travels/Wipes=false defaults

@@ -15,9 +15,12 @@
 //
 // Upstream references:
 //   - ;TYPE: role strings:  libslic3r/ExtrusionEntity.cpp:583-639 (role_to_string / string_to_role)
-//   - EViewType: P17 adjudication — the vendored upstream snapshot has 12
-//     modes (GCodeViewer.hpp:711-726); the 17-mode dropdown = 11 visible
-//     upstream modes + 6 OWzx superset modes (FilamentId stays hidden).
+//   - EViewType: GAP-3 adjudication -- viewModes() equals the upstream
+//     view_type_items dropdown exactly (10 items, GCodeViewer.cpp:892-901,
+//     strings from :59-84); Tool is hidden upstream and FilamentId stays
+//     internal. OWzx-only render capabilities (Summary/Acceleration/Actual
+//     Speed/Jerk/Actual Flow/Pressure Advance/Tool/FilamentId) remain
+//     addressable via the EViewType internal tail.
 //   - EGCodeExtrusionRole:  libvgcode/include/Types.hpp:131-157 (canonical Qt6 index)
 
 #include <QDir>
@@ -39,8 +42,8 @@ class PreviewParserTests final : public QObject
 private slots:
   void test_fixture_has_expected_role_coverage();
   void test_role_string_mapping_covers_upstream_enum();
-  void test_view_modes_match_upstream_seventeen();
-  void test_view_mode_availability_reports_data_unavailable_modes();
+  void test_view_modes_match_upstream_ten();
+  void test_view_mode_availability_all_upstream_rows_available();
   void test_summary_mode_has_no_gradient_legend();
   void test_divergent_role_colors_correct();
   void test_all_view_modes_keep_valid_gcv1_payload();
@@ -172,89 +175,98 @@ void PreviewParserTests::test_role_string_mapping_covers_upstream_enum()
   QCOMPARE(preview.roleForType(QStringLiteral("Nonexistent role")), 0);
 }
 
-// GREEN since Plan 55-02: viewModes() returns the 17 upstream EViewType display
-// names in upstream update_by_mode order (libvgcode/include/Types.hpp:80-103).
-void PreviewParserTests::test_view_modes_match_upstream_seventeen()
+// GREEN since GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): viewModes() returns exactly
+// the upstream GCodeViewer view_type_items dropdown -- 10 items, fixed order
+// from update_by_mode (GCodeViewer.cpp:892-901), display strings from
+// get_view_type_string (GCodeViewer.cpp:59-84).
+void PreviewParserTests::test_view_modes_match_upstream_ten()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
-  QCOMPARE(modes.size(), 17);
-  QVERIFY2(modes.contains(QStringLiteral("Summary")),
-           "viewModes must include Summary (upstream EViewType index 0)");
-  QVERIFY2(modes.contains(QStringLiteral("Line Type")),
-           "viewModes must include Line Type (upstream FeatureType)");
-  QVERIFY2(modes.contains(QStringLiteral("Filament")),
-           "viewModes must include Filament (upstream ColorPrint)");
-  QVERIFY2(modes.contains(QStringLiteral("Flow")),
-           "viewModes must include Flow (upstream VolumetricFlowRate)");
-  QVERIFY2(modes.contains(QStringLiteral("Actual Speed")),
-           "viewModes must include Actual Speed (upstream ActualSpeed)");
-  QVERIFY2(modes.contains(QStringLiteral("Acceleration")),
-           "viewModes must include Acceleration");
-  QVERIFY2(modes.contains(QStringLiteral("Jerk")),
-           "viewModes must include Jerk (upstream Jerk)");
-  QVERIFY2(modes.contains(QStringLiteral("Pressure Advance")),
-           "viewModes must include Pressure Advance (upstream PressureAdvance)");
-  QVERIFY2(modes.contains(QStringLiteral("Tool")),
-           "viewModes must include Tool");
-  // Head/tail ordering guard: Summary first, Tool last (upstream order).
-  QCOMPARE(modes.first(), QStringLiteral("Summary"));
-  QCOMPARE(modes.last(), QStringLiteral("Tool"));
+  const QStringList upstream = {
+      QStringLiteral("Line Type"),        // FeatureType
+      QStringLiteral("Filament"),         // ColorPrint
+      QStringLiteral("Speed"),            // Feedrate
+      QStringLiteral("Layer Height"),     // Height
+      QStringLiteral("Line Width"),       // Width
+      QStringLiteral("Flow"),             // VolumetricRate
+      QStringLiteral("Layer Time"),       // LayerTime
+      QStringLiteral("Layer Time (log)"), // LayerTimeLog
+      QStringLiteral("Fan Speed"),        // FanSpeed
+      QStringLiteral("Temperature"),      // Temperature
+  };
+  QCOMPARE(modes.size(), 10);
+  for (int i = 0; i < upstream.size(); ++i) {
+    QVERIFY2(modes.at(i) == upstream.at(i),
+             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (upstream order), got '%3'")
+                            .arg(i).arg(upstream.at(i), modes.at(i))));
+  }
+  // Internal capability modes must not resurface as dropdown rows.
+  QVERIFY2(!modes.contains(QStringLiteral("Summary")),
+           "Summary has no upstream dropdown row");
+  QVERIFY2(!modes.contains(QStringLiteral("Tool")),
+           "Tool is hidden upstream (GCodeViewer.cpp:902-904)");
+  QVERIFY2(!modes.contains(QStringLiteral("FilamentId")),
+           "FilamentId stays internal (GCodeViewer.cpp:911)");
+  // The dropdown row index must equal the EViewType constant for every row so
+  // viewModeIndex_ doubles as the combo row and the recolor switch key.
+  QCOMPARE(modes.indexOf(QStringLiteral("Line Type")), PreviewViewModel::VT_LineType);
+  QCOMPARE(modes.indexOf(QStringLiteral("Filament")), PreviewViewModel::VT_Filament);
+  QCOMPARE(modes.indexOf(QStringLiteral("Speed")), PreviewViewModel::VT_Speed);
+  QCOMPARE(modes.indexOf(QStringLiteral("Layer Height")), PreviewViewModel::VT_Height);
+  QCOMPARE(modes.indexOf(QStringLiteral("Line Width")), PreviewViewModel::VT_Width);
+  QCOMPARE(modes.indexOf(QStringLiteral("Flow")), PreviewViewModel::VT_Flow);
+  QCOMPARE(modes.indexOf(QStringLiteral("Layer Time")), PreviewViewModel::VT_LayerTime);
+  QCOMPARE(modes.indexOf(QStringLiteral("Layer Time (log)")), PreviewViewModel::VT_LayerTimeLog);
+  QCOMPARE(modes.indexOf(QStringLiteral("Fan Speed")), PreviewViewModel::VT_FanSpeed);
+  QCOMPARE(modes.indexOf(QStringLiteral("Temperature")), PreviewViewModel::VT_Temperature);
 }
 
-void PreviewParserTests::test_view_mode_availability_reports_data_unavailable_modes()
+// GREEN since GAP-3: every dropdown row is available (v5.11 parses real data
+// for M220/M221/M205/M900, so nothing is data-gated) and the internal
+// capability modes stay out of the dropdown.
+void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
-  // v5.11: these 4 modes now parse real data (M220/M221/M205/M900) and are
-  // available. They were previously gated as unavailable.
-  const QStringList nowAvailableModes = {
+  QCOMPARE(modes.size(), 10);
+  for (int i = 0; i < modes.size(); ++i) {
+    QVERIFY2(preview.viewModeAvailable(i),
+             qPrintable(QStringLiteral("%1 must be available (all fields parse since v5.11)").arg(modes.at(i))));
+    QVERIFY2(preview.viewModeStatusText(i).isEmpty(),
+             qPrintable(QStringLiteral("%1 must not show an unavailable-mode status").arg(modes.at(i))));
+  }
+
+  // Retained internal capabilities (no upstream dropdown row).
+  const QStringList internalOnly = {
+    QStringLiteral("Summary"),
     QStringLiteral("Actual Speed"),
+    QStringLiteral("Acceleration"),
     QStringLiteral("Jerk"),
     QStringLiteral("Actual Flow"),
-    QStringLiteral("Pressure Advance")
-  };
-
-  for (const QString &modeName : nowAvailableModes) {
-    const int index = modes.indexOf(modeName);
-    QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing mode: %1").arg(modeName)));
-    QVERIFY2(preview.viewModeAvailable(index),
-             qPrintable(QStringLiteral("%1 must be available after v5.11 G-code parse extension").arg(modeName)));
-  }
-
-  const QStringList availableModes = {
-    QStringLiteral("Summary"),
-    QStringLiteral("Line Type"),
-    QStringLiteral("Filament"),
-    QStringLiteral("Fan Speed"),
+    QStringLiteral("Pressure Advance"),
     QStringLiteral("Tool")
   };
-  for (const QString &modeName : availableModes) {
-    const int index = modes.indexOf(modeName);
-    QVERIFY2(index >= 0, qPrintable(QStringLiteral("Missing mode: %1").arg(modeName)));
-    QVERIFY2(preview.viewModeAvailable(index),
-             qPrintable(QStringLiteral("%1 must not be incorrectly gated").arg(modeName)));
-    QVERIFY2(preview.viewModeStatusText(index).isEmpty(),
-             qPrintable(QStringLiteral("%1 must not show an unavailable-mode status").arg(modeName)));
+  for (const QString &modeName : internalOnly) {
+    QVERIFY2(!modes.contains(modeName),
+             qPrintable(QStringLiteral("%1 is an internal capability and must stay out of the dropdown").arg(modeName)));
   }
 
-  const int actualSpeedIndex = modes.indexOf(QStringLiteral("Actual Speed"));
-  preview.setViewModeIndex(actualSpeedIndex);
-  // v5.11: Actual Speed is now available (parses M220); currentViewModeAvailable
-  // must follow setViewModeIndex and report true.
+  preview.setViewModeIndex(PreviewViewModel::VT_Speed);
   QVERIFY2(preview.currentViewModeAvailable(),
-           "currentViewModeAvailable must follow setViewModeIndex (Actual Speed is available after v5.11)");
+           "currentViewModeAvailable must follow setViewModeIndex for dropdown rows");
 }
 
-// GREEN since Plan 55-02: Summary mode (upstream EViewType index 0) renders
-// statistics only and produces no gradient legend. legendType() stays 0
-// (discrete) and legendItems() is empty when viewModeIndex maps to Summary.
+// GAP-3: Summary lost its dropdown row (no upstream GCodeViewer counterpart)
+// but stays reachable as an internal capability (VT_Summary) and still must
+// produce no gradient legend. legendType() stays 0 (discrete) and
+// legendItems() is empty when viewModeIndex maps to Summary.
 void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
 {
   ProjectServiceMock project;
@@ -264,10 +276,7 @@ void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
   QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
            "fixture should parse for Summary legend assertion");
 
-  const QStringList modes = preview.viewModes();
-  const int summaryIdx = modes.indexOf(QStringLiteral("Summary"));
-  QVERIFY2(summaryIdx >= 0, "Summary mode must exist before this assertion runs");
-  preview.setViewModeIndex(summaryIdx);
+  preview.setViewModeIndex(PreviewViewModel::VT_Summary);
 
   QVERIFY2(preview.legendItems().isEmpty(),
            "Summary mode must not produce discrete legend items");
@@ -317,13 +326,16 @@ void PreviewParserTests::test_all_view_modes_keep_valid_gcv1_payload()
            "fixture should parse before validating view-mode payload survival");
 
   const QStringList modes = preview.viewModes();
-  for (int i = 0; i < modes.size(); ++i) {
+  // Every addressable mode must keep a healthy payload: the 10 upstream
+  // dropdown rows plus the internal capability tail (VT_Summary..VT_FilamentId).
+  for (int i = 0; i < PreviewViewModel::VT_ModeCount; ++i) {
     preview.setViewModeIndex(i);
     const QByteArray payload = preview.gcodePreviewData();
+    const QString label = i < modes.size() ? modes.at(i) : QStringLiteral("internal mode %1").arg(i);
     QVERIFY2(payload.size() > 8,
-             qPrintable(QStringLiteral("%1 mode must keep a non-empty preview payload").arg(modes.at(i))));
+             qPrintable(QStringLiteral("%1 mode must keep a non-empty preview payload").arg(label)));
     QVERIFY2(payload.startsWith("GCV1"),
-             qPrintable(QStringLiteral("%1 mode must keep the GCV1 wire format").arg(modes.at(i))));
+             qPrintable(QStringLiteral("%1 mode must keep the GCV1 wire format").arg(label)));
   }
 }
 
@@ -676,8 +688,9 @@ void PreviewParserTests::test_prev06_configured_extruder_colors_override_fixed_c
   QCOMPARE(preview.extruderColor(1), QStringLiteral("#00ff00"));
 
   // Tool view mode legend rows carry the configured colors + visibility.
-  const QStringList modes = preview.viewModes();
-  preview.setViewModeIndex(modes.indexOf(QStringLiteral("Tool")));
+  // GAP-3: Tool is hidden upstream (GCodeViewer.cpp:902-904), so it is
+  // addressed via the internal capability index instead of a dropdown row.
+  preview.setViewModeIndex(PreviewViewModel::VT_Tool);
   const QVariantList legendRows = preview.legendItems();
   QCOMPARE(legendRows.size(), 2);
   QCOMPARE(legendRows.at(0).toMap().value(QStringLiteral("color")).toString(), QStringLiteral("#ff0000"));
@@ -911,9 +924,9 @@ void PreviewParserTests::test_wave5_preview_visibility_gates()
   QVERIFY(!preview.extruderVisibilityAvailable());
 }
 
-// P17.1: upstream EViewType::FilamentId is a hidden diagnostic mode — it is
-// NOT in the dropdown list, but setViewModeIndex(17) keeps a valid payload
-// and recolors segments with the {id, role, id} pseudo-color.
+// P17.1 + GAP-3: upstream EViewType::FilamentId is a hidden diagnostic mode --
+// it is NOT in the dropdown list, and setViewModeIndex(VT_FilamentId) keeps a
+// valid payload and recolors segments with the {id, role, id} pseudo-color.
 void PreviewParserTests::test_prev01_filamentid_mode_hidden_and_pseudo_color()
 {
   ProjectServiceMock project;
@@ -924,7 +937,9 @@ void PreviewParserTests::test_prev01_filamentid_mode_hidden_and_pseudo_color()
 
   QVERIFY2(!preview.viewModes().contains(QStringLiteral("FilamentId")),
            "FilamentId is a hidden mode and must not appear in the dropdown");
-  preview.setViewModeIndex(17); // EViewType::FilamentId
+  preview.setViewModeIndex(PreviewViewModel::VT_FilamentId);
+  QVERIFY2(preview.viewModeIndex() == PreviewViewModel::VT_FilamentId,
+           "the internal FilamentId capability must stay addressable");
   QVERIFY2(!preview.gcodePreviewData().isEmpty(),
            "FilamentId mode must keep a valid GCV1 payload");
 }

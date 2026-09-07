@@ -2129,7 +2129,7 @@ void QmlUiAuditTests::previewRoleColorModesAreHonestAndPayloadSafe()
   QVERIFY2(previewSource.contains(QStringLiteral("viewModeUsesUnavailableData"))
               && previewSource.contains(QStringLiteral("VT_ActualSpeed"))
               && previewSource.contains(QStringLiteral("VT_PressureAdvance")),
-           "PreviewViewModel must centrally list data-unavailable view modes");
+           "PreviewViewModel must keep the internal capability view modes addressable in the recolor switch (GAP-3)");
 }
 
 void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()

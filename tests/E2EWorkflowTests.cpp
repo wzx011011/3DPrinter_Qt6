@@ -567,7 +567,7 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   preview.setLayerRange(0, qMin(1, maxLayer));
   preview.moveLayerRange(1);
   preview.setCurrentMove(qMin(2, preview.moveCount()));
-  preview.setViewModeIndex(3);
+  preview.setViewModeIndex(PreviewViewModel::VT_Speed);
   preview.setShowTravelMoves(false);
   QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
            "Preview payload must survive layer/move/view interactions");
@@ -760,10 +760,10 @@ G1 X50 Y20 E0.60
   QVERIFY2(preview.currentLayerLabel().contains(QStringLiteral("/")),
            "Preview should expose a user-facing layer summary");
 
-  // Filament mode (EViewType index 2) exposes the per-extruder legend. The old
-  // 13-mode list mapped the tool/extruder view to index 3; the 17-mode renumber
-  // (Plan 55-02) moves it to Filament(2) / Tool(16), so use the new index here.
-  preview.setViewModeIndex(2);
+  // Filament (ColorPrint) mode exposes the per-extruder legend. GAP-3 put the
+  // dropdown on the upstream view_type_items order (GCodeViewer.cpp:892-901,
+  // Filament = row 1); the enum constant keeps the mapping explicit.
+  preview.setViewModeIndex(PreviewViewModel::VT_Filament);
   QCOMPARE(preview.legendType(), 2);
   QVERIFY2(preview.legendItems().size() >= 2, "filament mode should expose both extruders in the legend");
 
@@ -886,24 +886,25 @@ G1 X30 Y10 E0.10 F1800
   QVERIFY2(preview.toolWidth() > 0.44 && preview.toolWidth() < 0.46,
            qPrintable(QStringLiteral("WIDTH metadata should be stored on the segment, got %1").arg(preview.toolWidth())));
 
-  // The 17-mode EViewType renumber (Plan 55-02) shifts these indices:
-  // Fan Speed 5->13, Temperature 6->14, Acceleration 12->5, Tool 3->16/2.
-  preview.setViewModeIndex(13); // Fan Speed
+  // GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): Fan Speed and Temperature are upstream
+  // dropdown rows (addressed by their EViewType constants); Acceleration and
+  // Tool are retained internal capabilities addressed directly.
+  preview.setViewModeIndex(PreviewViewModel::VT_FanSpeed);
   QCOMPARE(preview.legendType(), 1);
   QVERIFY2(preview.legendGradientMaxLabel().toDouble() > preview.legendGradientMinLabel().toDouble(),
            "fan-speed mode should expose a non-degenerate parsed range");
 
-  preview.setViewModeIndex(14); // Temperature
+  preview.setViewModeIndex(PreviewViewModel::VT_Temperature);
   QCOMPARE(preview.legendType(), 1);
   QVERIFY2(preview.legendGradientMaxLabel().toDouble() > preview.legendGradientMinLabel().toDouble(),
            "temperature mode should expose a non-degenerate parsed range");
 
-  preview.setViewModeIndex(5); // Acceleration
+  preview.setViewModeIndex(PreviewViewModel::VT_Acceleration);
   QCOMPARE(preview.legendType(), 1);
   QVERIFY2(preview.legendGradientMaxLabel().toDouble() > preview.legendGradientMinLabel().toDouble(),
            "acceleration mode should expose S/P/T M204 variants as a parsed range");
 
-  preview.setViewModeIndex(16); // Tool
+  preview.setViewModeIndex(PreviewViewModel::VT_Tool);
   QCOMPARE(preview.legendType(), 2);
   QVERIFY2(preview.legendItems().size() >= 2, "tool mode should list both used extruders");
 }
