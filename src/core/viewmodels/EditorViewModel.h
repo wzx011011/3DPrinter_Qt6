@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QRectF>
 #include <QSet>
 #include <QString>
 #include <QByteArray>
@@ -811,6 +812,26 @@ public:
   Q_INVOKABLE void selectObject(int i);
   Q_INVOKABLE bool selectSourceObject(int sourceIndex);
   Q_INVOKABLE void toggleObjectSelection(int i);
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4152-4168, Ctrl+click removes
+  // an already selected volume / adds a missed one additively): source-index
+  // form of toggleObjectSelection() for the viewport pick path, which has no
+  // filtered-list index to map.
+  Q_INVOKABLE void toggleSourceObjectSelection(int sourceIndex);
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135, Alt+click switches the
+  // click into volume selection mode, KBShortcutsDialog.cpp:235 "Alt+Left
+  // mouse button = Select a part"): select one volume (part) of an object by
+  // source index.
+  Q_INVOKABLE void selectVolumeBySource(int sourceIndex, int volumeIndex);
+  // SEL-MODIFIERS-RECT: rubber-band rectangle selection backend. The viewport
+  // resolves which visible source objects the screen rect hits (the upstream
+  // GLSelectionRectangle::contains projection test) and forwards the raw press
+  // modifiers + rect + contained source indices; this method owns the state
+  // change (upstream _update_selection_from_hover, GLCanvas3D.cpp:9518-9600):
+  // Shift rect replaces the selection (additive when Ctrl is held, :9576),
+  // Alt rect removes the contained objects (:9588-9589), an empty Shift rect
+  // clears the whole selection (:9522-9526). QML forwards opaquely.
+  Q_INVOKABLE void selectObjectsInRect(int modifiers, const QRectF &rect,
+                                       const QVariantList &containedSourceIndices);
   Q_INVOKABLE void clearObjectSelection();
   Q_INVOKABLE void selectAllVisibleObjects();
   Q_INVOKABLE void setSelectedObjectsPrintable(bool printable);

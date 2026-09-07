@@ -1344,12 +1344,19 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   m_pressPosition = event->position();
   m_dragButton = event->button();
   m_pressPickedSourceObjectIndex = -1;
+  // SEL-MODIFIERS-RECT: press-time modifiers drive the release routing
+  // (upstream reads the live key state at LeftDown, GLCanvas3D.cpp:4135-4142).
+  m_pressModifiers = event->modifiers();
+  m_pressPickedVolumeIndex = -1;
+  m_rectSelectActive = false;
   // Upstream GLCanvas3D.cpp:4310-4317: Ctrl+drag orbits around the canvas
   // center unprojected onto the bed plane (m_rotation_center), cached once
-  // per press.
+  // per press. Shift is excluded: Shift+left belongs to the rectangle
+  // selection drag (GLCanvas3D.cpp:4136-4145), not the orbit pivot.
   m_ctrlRotationCenterActive = false;
   if (event->button() == Qt::LeftButton
-      && (event->modifiers() & Qt::ControlModifier)) {
+      && (event->modifiers() & Qt::ControlModifier)
+      && !(event->modifiers() & Qt::ShiftModifier)) {
     QVector3D hit;
     const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
     if (CameraController::groundPointOnPlane(
@@ -1496,7 +1503,39 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   }
 
   if (event->button() == Qt::LeftButton) {
+    // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4136-4145): Shift+left
+    // starts the rectangle selection drag instead of a single pick. Alt turns
+    // the stroke into a deselect rectangle (GLCanvas3D.cpp:8676 "alt_pressed
+    // = deselect by rectangle"; applied through GLSelectionRectangle::EState::
+    // Deselect, GLCanvas3D.cpp:9588-9589). Active gizmos never reach here
+    // (their branches above accept the press first), mirroring the upstream
+    // gizmo-consumed guard.
+    if (event->modifiers() & Qt::ShiftModifier) {
+      m_rectSelectActive = true;
+      m_rectSelectStart = event->position();
+      updateSelectionRubberBand(event->position());
+      event->accept();
+      return;
+    }
     m_pressPickedSourceObjectIndex = pickSourceObjectAt(event->position());
+    // SEL-MODIFIERS-RECT (GLCanvas3D.cpp:4135/4152-4168): Ctrl+click toggles
+    // the object, Alt+click picks the volume (part) under the cursor -- both
+    // need the full hit with the volume index, not just the source index.
+    if (m_pressPickedSourceObjectIndex >= 0
+        && (event->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
+      const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+      const float aspect = float(viewSize.width()) / float(viewSize.height());
+      auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+          float(event->position().x()), float(event->position().y()),
+          viewSize,
+          m_camera.projMatrix(aspect),
+          m_camera.viewMatrix());
+      const ObjectPicking::Hit hit = ObjectPicking::pick(
+          rayOrigin, rayDirection,
+          m_pickScene.modelVertices(), m_pickScene.modelBatches());
+      if (hit.isValid())
+        m_pressPickedVolumeIndex = hit.volumeIndex;
+    }
     setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
   }
   event->accept();
@@ -1631,6 +1670,16 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
         emit gizmoMoveRequested(frameDelta);
       }
     }
+    m_lastMousePosition = event->position();
+    event->accept();
+    return;
+  }
+
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4255-4260): while the
+  // rectangle-selection drag is active, a left-drag only grows the rubber
+  // band -- camera orbit and hover picking stay suppressed.
+  if (m_rectSelectActive && m_dragButton == Qt::LeftButton) {
+    updateSelectionRubberBand(event->position());
     m_lastMousePosition = event->position();
     event->accept();
     return;
@@ -1806,15 +1855,47 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     return;
   }
 
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4384-4391): LeftUp applies
+  // the rectangle selection and stops the drag. The containment candidates
+  // are resolved here in C++ (projection of the visible pick-scene batches);
+  // QML only forwards modifiers + rect + contained sources to
+  // EditorViewModel::selectObjectsInRect, which owns the state change.
+  if (event->button() == Qt::LeftButton && m_rectSelectActive) {
+    m_rectSelectActive = false;
+    const QRectF rect = m_selectionRubberBand;
+    if (m_selectionRubberBandActive) {
+      m_selectionRubberBandActive = false;
+      emit selectionRubberBandChanged();
+    }
+    const QVariantList contained = containedRectangleSelectionSources(rect);
+    emit rectangleSelectionFinished(int(m_pressModifiers), rect, contained);
+    m_dragButton = Qt::NoButton;
+    m_pressPickedSourceObjectIndex = -1;
+    m_pressPickedVolumeIndex = -1;
+    event->accept();
+    return;
+  }
+
   if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex >= 0) {
     const QPointF releaseDelta = event->position() - m_pressPosition;
     const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
-    if (isClick && pickSourceObjectAt(event->position()) == m_pressPickedSourceObjectIndex)
-      emit objectPickedSource(m_pressPickedSourceObjectIndex);
+    if (isClick && pickSourceObjectAt(event->position()) == m_pressPickedSourceObjectIndex) {
+      // SEL-MODIFIERS-RECT: Ctrl/Alt clicks route through the modifier-
+      // carrying signal (Ctrl = additive toggle, Alt = part pick); the
+      // no-modifier path keeps emitting objectPickedSource unchanged.
+      const bool modifierClick = (m_pressModifiers & (Qt::ControlModifier | Qt::AltModifier)) != 0;
+      if (modifierClick)
+        emit objectPickedSourceWithModifiers(m_pressPickedSourceObjectIndex,
+                                             m_pressPickedVolumeIndex,
+                                             int(m_pressModifiers));
+      else
+        emit objectPickedSource(m_pressPickedSourceObjectIndex);
+    }
   }
   m_dragButton = Qt::NoButton;
   m_paintButton = 0;
   m_pressPickedSourceObjectIndex = -1;
+  m_pressPickedVolumeIndex = -1;
   // Phase 121 (PAINT-03): release returns the brush cursor to hover (black).
   if (m_gizmoMode == GizmoSupportPaint ||
       m_gizmoMode == GizmoSeamPaint ||
@@ -2180,6 +2261,111 @@ ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
     result.target = ViewportContextTarget::Empty;
   }
   return result;
+}
+
+// ===========================================================================
+// SEL-MODIFIERS-RECT: rubber-band rectangle selection (upstream
+// GLSelectionRectangle + GLCanvas3D.cpp:4136-4145/4255-4260/4384-4391).
+// Geometry stays C++-owned: the viewport projects the visible pick-scene
+// batches, QML only draws the band and forwards the finished stroke.
+// ===========================================================================
+QRectF RhiViewport::projectBoundsToScreenRect(
+    const PrepareSceneData::ModelBounds &bounds,
+    const QMatrix4x4 &viewProjection,
+    const QSizeF &viewportSize)
+{
+  // GLSelectionRectangle::contains (GLSelectionRectangle.cpp:33-49): project
+  // sample points into screen space and keep the enclosing rectangle. The 8
+  // bounds corners sample the object's extent. Screen Y grows downward --
+  // same convention as projectWorldToScreen(). Corners behind the camera
+  // (w <= 0) are skipped so a partially clipped object does not fold the
+  // rect across the viewport.
+  if (viewportSize.isEmpty())
+    return QRectF();
+
+  const float corners[8][3] = {
+      {bounds.minX, bounds.minY, bounds.minZ},
+      {bounds.maxX, bounds.minY, bounds.minZ},
+      {bounds.minX, bounds.maxY, bounds.minZ},
+      {bounds.minX, bounds.minY, bounds.maxZ},
+      {bounds.maxX, bounds.maxY, bounds.minZ},
+      {bounds.maxX, bounds.minY, bounds.maxZ},
+      {bounds.minX, bounds.maxY, bounds.maxZ},
+      {bounds.maxX, bounds.maxY, bounds.maxZ}};
+
+  float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
+  bool any = false;
+  for (const auto &corner : corners) {
+    const QVector4D clip = viewProjection * QVector4D(corner[0], corner[1], corner[2], 1.0f);
+    if (clip.w() <= 0.0f)
+      continue;
+    const QVector3D ndc = clip.toVector3D() / clip.w();
+    const float sx = float((ndc.x() * 0.5 + 0.5) * viewportSize.width());
+    const float sy = float((1.0 - (ndc.y() * 0.5 + 0.5)) * viewportSize.height());
+    if (!any) {
+      minX = maxX = sx;
+      minY = maxY = sy;
+      any = true;
+    } else {
+      minX = std::min(minX, sx);
+      minY = std::min(minY, sy);
+      maxX = std::max(maxX, sx);
+      maxY = std::max(maxY, sy);
+    }
+  }
+  if (!any)
+    return QRectF();
+  return QRectF(QPointF(minX, minY), QPointF(maxX, maxY));
+}
+
+bool RhiViewport::rectHitsProjectedBounds(const QRectF &rect, const QRectF &screenBounds)
+{
+  // The upstream picking pass selects a volume when ANY of its rendered
+  // pixels falls inside the rectangle (GLCanvas3D.cpp:7019-7030). The
+  // projected-bounds approximation keeps that partial-overlap semantics; a
+  // degenerate (click-sized) band still behaves like the upstream 1x1 pixel
+  // fallback (GLCanvas3D.cpp:6899-6900).
+  if (screenBounds.isEmpty())
+    return false;
+  return rect.intersects(screenBounds);
+}
+
+void RhiViewport::updateSelectionRubberBand(const QPointF &position)
+{
+  QRectF rect(m_rectSelectStart, position);
+  rect = rect.normalized();
+  if (!m_selectionRubberBandActive || rect != m_selectionRubberBand) {
+    m_selectionRubberBand = rect;
+    m_selectionRubberBandActive = true;
+    emit selectionRubberBandChanged();
+  }
+  update();
+}
+
+QVariantList RhiViewport::containedRectangleSelectionSources(const QRectF &rect)
+{
+  QVariantList contained;
+  if (width() <= 1.0 || height() <= 1.0)
+    return contained;
+
+  updatePickingScene();
+  const QSizeF viewportSize(width(), height());
+  const float aspect = float(width()) / float(height());
+  const QMatrix4x4 viewProjection = cameraMvp(aspect);
+  // Visible = the batches already filtered into the pick scene for the
+  // current plate (PrepareSceneData::setModelMeshData drops every batch whose
+  // source object is not on the active plate). Every batch of a source object
+  // (all volumes + instances) is tested: any hit selects the object, matching
+  // the upstream per-volume hover collection.
+  for (const PrepareSceneData::ModelBatch &batch : m_pickScene.modelBatches()) {
+    if (batch.sourceObjectIndex < 0 || contained.contains(QVariant(batch.sourceObjectIndex)))
+      continue;
+    const QRectF screenBounds =
+        projectBoundsToScreenRect(batch.bounds, viewProjection, viewportSize);
+    if (rectHitsProjectedBounds(rect, screenBounds))
+      contained.append(batch.sourceObjectIndex);
+  }
+  return contained;
 }
 
 // ===========================================================================

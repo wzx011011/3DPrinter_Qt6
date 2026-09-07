@@ -1701,6 +1701,30 @@ Item {
                         if (root.editorVm)
                             root.editorVm.selectSourceObject(sourceIndex)
                     }
+                    // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135 and
+                    // 4152-4168, KBShortcutsDialog.cpp:235-236): Ctrl+click
+                    // toggles the clicked object in/out of the selection,
+                    // Alt+click selects the volume (part) under the cursor.
+                    // Pure forwarding -- the selection state changes live in
+                    // EditorViewModel.
+                    onObjectPickedSourceWithModifiers: function(sourceIndex, volumeIndex, modifiers) {
+                        if (!root.editorVm)
+                            return
+                        if ((modifiers & Qt.ControlModifier) !== 0)
+                            root.editorVm.toggleSourceObjectSelection(sourceIndex)
+                        else if ((modifiers & Qt.AltModifier) !== 0)
+                            root.editorVm.selectVolumeBySource(sourceIndex, volumeIndex)
+                    }
+                    // SEL-MODIFIERS-RECT (upstream m_rectangle_selection,
+                    // GLCanvas3D.cpp:1872 + 3506-3508 + 4384-4391): a finished
+                    // Shift(+Alt) rubber-band stroke. The viewport already
+                    // resolved the contained source objects in C++; QML only
+                    // forwards modifiers + rect + indices to the backend
+                    // method that owns the selection change.
+                    onRectangleSelectionFinished: function(modifiers, rect, containedIndices) {
+                        if (root.editorVm)
+                            root.editorVm.selectObjectsInRect(modifiers, rect, containedIndices)
+                    }
                     onContextMenuRequested: function(targetKind, sourceObjectIndex, volumeIndex, instanceIndex, plateIndex, popupX, popupY) {
                         if (!root.editorVm)
                             return
@@ -2000,6 +2024,24 @@ Item {
                             }
                         }
                     }
+                }
+
+                // SEL-MODIFIERS-RECT: rubber-band selection band (upstream
+                // GLSelectionRectangle::render, GLSelectionRectangle.cpp:57-121
+                // -- dashed screen-space line loop). The drag rect comes from
+                // the viewport in item-local pixels; this overlay only draws
+                // it (same C++-computed/QML-drawn pattern as plateAnchors).
+                Rectangle {
+                    readonly property rect band: viewport3d.selectionRubberBand
+                    x: band.x
+                    y: band.y
+                    width: band.width
+                    height: band.height
+                    visible: viewport3d.selectionRubberBandActive
+                    color: "transparent"
+                    border.color: Theme.accent
+                    border.width: 1
+                    z: 97
                 }
 
         // ── 视口告警覆盖层（对齐上游 EWarning / Plater::_set_warning_notification）──

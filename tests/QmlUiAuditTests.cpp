@@ -55,6 +55,12 @@ private slots:
   void previewRoleColorModesAreHonestAndPayloadSafe();
   void previewRestorationMilestoneHasFinalCleanupCoverage();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
+  // SEL-MODIFIERS-RECT: modifier clicks + the rubber-band rectangle selection
+  // must carry the modifiers in dedicated signals, resolve containment in
+  // C++, apply the state change through an EditorViewModel backend method,
+  // and keep the no-modifier objectPickedSource -> selectSourceObject path
+  // unchanged.
+  void rhiViewportSelectionModifiersRouteThroughBackend();
   void prepareViewportContextMenuWorkflowIsCppOwned();
   void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
@@ -1934,6 +1940,83 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
   QVERIFY2(!rendererSource.mid(uploadModelStart, uploadHighlightStart - uploadModelStart)
                .contains(QStringLiteral("DirtySelection")),
            "Selection/hover changes must not reupload the full model vertex buffer");
+}
+
+// SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:8673-8679 shift=rect select /
+// alt=rect deselect / ctrl=toggle, :1872 + :3506-3508 m_rectangle_selection,
+// KBShortcutsDialog.cpp:235-239): the modifier selection surface must (a)
+// carry the press modifiers in dedicated viewport signals, (b) resolve the
+// rectangle containment in C++ (projected pick-scene batches), (c) apply the
+// state change through EditorViewModel backend methods with QML forwarding
+// only, and (d) keep the no-modifier objectPickedSource -> selectSourceObject
+// path untouched.
+void QmlUiAuditTests::rhiViewportSelectionModifiersRouteThroughBackend()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString softwareHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!softwareHeader.isEmpty(), "Unable to read SoftwareViewport.h");
+
+  // (a) dedicated signals carry the press modifiers.
+  QVERIFY2(viewportHeader.contains(
+               QStringLiteral("void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,")),
+           "RhiViewport must expose a modifier-carrying click pick signal");
+  QVERIFY2(viewportHeader.contains(
+               QStringLiteral("void rectangleSelectionFinished(int modifiers, QRectF rect,")),
+           "RhiViewport must expose a modifier-carrying rectangle selection signal");
+  QVERIFY2(viewportSource.contains(QStringLiteral("emit objectPickedSourceWithModifiers"))
+               && viewportSource.contains(QStringLiteral("emit rectangleSelectionFinished")),
+           "RhiViewport must emit the modifier-carrying selection signals");
+
+  // (b) rectangle containment stays C++-owned (projection primitive + visible
+  // pick-scene batches); QML never computes it.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("static QRectF projectBoundsToScreenRect"))
+               && viewportSource.contains(
+                   QStringLiteral("QRectF RhiViewport::projectBoundsToScreenRect")),
+           "RhiViewport must own the GLSelectionRectangle projection primitive");
+  QVERIFY2(viewportSource.contains(QStringLiteral("containedRectangleSelectionSources"))
+               && viewportSource.contains(QStringLiteral("m_pickScene.modelBatches()")),
+           "RhiViewport must resolve rectangle containment over the pick-scene batches");
+  QVERIFY2(!preparePage.contains(QStringLiteral("projectBoundsToScreenRect"))
+               && !preparePage.contains(QStringLiteral("selectionRubberBand.x()")),
+           "PreparePage must not recompute or mutate the selection rectangle geometry");
+
+  // (c) the state change flows through EditorViewModel backend methods, QML
+  // forwards opaquely.
+  QVERIFY2(editorHeader.contains(QStringLiteral("selectObjectsInRect(int modifiers, const QRectF &rect,"))
+               && editorSource.contains(QStringLiteral("void EditorViewModel::selectObjectsInRect")),
+           "EditorViewModel must own the rectangle selection state change");
+  QVERIFY2(editorHeader.contains(QStringLiteral("void toggleSourceObjectSelection(int sourceIndex);"))
+               && editorSource.contains(QStringLiteral("void EditorViewModel::toggleSourceObjectSelection")),
+           "EditorViewModel must own the Ctrl+click toggle state change");
+  QVERIFY2(editorHeader.contains(QStringLiteral("void selectVolumeBySource(int sourceIndex, int volumeIndex);"))
+               && editorSource.contains(QStringLiteral("void EditorViewModel::selectVolumeBySource")),
+           "EditorViewModel must own the Alt+click volume (part) selection");
+  QVERIFY2(preparePage.contains(
+               QStringLiteral("root.editorVm.selectObjectsInRect(modifiers, rect, containedIndices)")),
+           "PreparePage must forward the rectangle stroke to EditorViewModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.toggleSourceObjectSelection(sourceIndex)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.selectVolumeBySource(sourceIndex, volumeIndex)")),
+           "PreparePage must forward modifier clicks to EditorViewModel");
+
+  // (d) the no-modifier path stays unchanged: objectPickedSource still routes
+  // to selectSourceObject, and the modifier branch must not swallow it.
+  QVERIFY2(preparePage.contains(QStringLiteral("onObjectPickedSource: function(sourceIndex)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.selectSourceObject(sourceIndex)")),
+           "PreparePage must keep forwarding the plain pick to selectSourceObject");
+  QVERIFY2(viewportSource.contains(QStringLiteral("else\n        emit objectPickedSource(m_pressPickedSourceObjectIndex);")),
+           "RhiViewport must keep emitting the plain objectPickedSource signal");
+  QVERIFY2(softwareHeader.contains(QStringLiteral("void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,"))
+               && softwareHeader.contains(QStringLiteral("Q_PROPERTY(bool selectionRubberBandActive")),
+           "SoftwareViewport fallback must keep QML signal/property compatibility");
 }
 
 void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()

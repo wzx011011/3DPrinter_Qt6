@@ -5,6 +5,7 @@
 #include <QList>
 #include <QPointF>
 #include <QQuickPaintedItem>
+#include <QRectF>
 #include <QVariant>
 #include <QVector>
 #include <QVector3D>
@@ -40,6 +41,12 @@ class SoftwareViewport : public QQuickPaintedItem
   Q_PROPERTY(bool contextToolInputCaptured READ contextToolInputCaptured WRITE setContextToolInputCaptured)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex WRITE setSelectedSourceObjectIndex)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
+  // SEL-MODIFIERS-RECT: inert rubber-band mirrors of RhiViewport. The
+  // software fallback performs no object picking (never emits
+  // objectPickedSource*), so the band stays inactive; the properties exist so
+  // the shared PreparePage.qml bindings resolve on both viewport paths.
+  Q_PROPERTY(QRectF selectionRubberBand READ selectionRubberBand NOTIFY selectionRubberBandChanged)
+  Q_PROPERTY(bool selectionRubberBandActive READ selectionRubberBandActive NOTIFY selectionRubberBandChanged)
   Q_PROPERTY(bool showWipeTower READ showWipeTower WRITE setShowWipeTower)
   Q_PROPERTY(float wipeTowerWidth READ wipeTowerWidth WRITE setWipeTowerWidth)
   Q_PROPERTY(float wipeTowerDepth READ wipeTowerDepth WRITE setWipeTowerDepth)
@@ -153,6 +160,9 @@ public:
   void setSelectedSourceObjectIndex(int value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
   void setHoveredSourceObjectIndex(int value);
+  // SEL-MODIFIERS-RECT: inert rubber-band mirrors (see the Q_PROPERTY note).
+  QRectF selectionRubberBand() const { return QRectF(); }
+  bool selectionRubberBandActive() const { return false; }
   bool showWipeTower() const { return m_showWipeTower; }
   void setShowWipeTower(bool value);
   float wipeTowerWidth() const { return m_wipeTowerWidth; }
@@ -222,6 +232,14 @@ signals:
   void gcodeViewModeChanged();
   void thumbnailCaptured();
   void objectPickedSource(int sourceIndex);
+  // SEL-MODIFIERS-RECT: signal-compatible mirrors of RhiViewport. The
+  // software fallback never emits them (no object picking); they exist only
+  // so the shared PreparePage.qml signal handlers compile on this path too.
+  void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,
+                                       int modifiers);
+  void rectangleSelectionFinished(int modifiers, QRectF rect,
+                                  QVariantList containedSourceIndices);
+  void selectionRubberBandChanged();
   void contextMenuRequested(int targetKind,
                             int sourceObjectIndex,
                             int volumeIndex,

@@ -63,6 +63,9 @@
 #include "qml_gui/BackendContext.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
+// SEL-MODIFIERS-RECT: static projection/containment helpers (pure, no QRhi
+// instantiation) reused by the rubber-band selection test.
+#include "qml_gui/Renderer/RhiViewport.h"
 
 namespace
 {
@@ -387,6 +390,21 @@ private slots:
   void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
   // v3.2 Phase 25-03: QRhi picking selects source objects through the ViewModel
   void rendererPickingSelectsSourceObjectThroughEditorViewModel();
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135/4152-4168): Ctrl+click
+  // toggles a source object in/out of the selection; Alt+click selects the
+  // volume (part) scope -- both routed through EditorViewModel backend
+  // methods, never through QML.
+  void selectionModifierClicksRouteThroughBackendToggleAndVolumePick();
+  // SEL-MODIFIERS-RECT (upstream _update_selection_from_hover,
+  // GLCanvas3D.cpp:9518-9600): Shift rect replaces the selection (additive
+  // with Ctrl), Alt rect removes, an empty Shift rect clears, an empty Alt
+  // rect is a no-op.
+  void selectionRectBackendReplacesAddsDeselectsAndClears();
+  // SEL-MODIFIERS-RECT (GLSelectionRectangle::contains projection primitive):
+  // a synthetic packed mesh blob feeds PrepareSceneData, the batch bounds are
+  // projected with RhiViewport::projectBoundsToScreenRect, and the contained
+  // list drives EditorViewModel::selectObjectsInRect (include/exclude).
+  void rectangleSelectionProjectsSyntheticMeshBatchesForContainment();
   // P15.11 (SIDEBAR-LOCAL-AXES): the sidebar hint orientation mirrors the
   // selected object's local axes (Selection.cpp:2003-2020 orient_matrix).
   void selectedHintLocalRotationMirrorsSelectionRotation();
@@ -5143,6 +5161,234 @@ void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewMod
   QVERIFY(editor.activePlateObjectIndices().isEmpty());
   QVERIFY(!editor.selectSourceObject(0));
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+}
+
+// SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135/4152-4168, KBShortcutsDialog
+// .cpp:235-236): the viewport's Ctrl/Alt click signals must route through
+// EditorViewModel backend methods. Ctrl+click on an unselected object adds it
+// without touching the rest of the selection; Ctrl+click on a selected object
+// removes it (Selection::remove); Alt+click selects the volume (part) scope.
+void ViewModelSmokeTests::selectionModifierClicksRouteThroughBackendToggleAndVolumePick()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QCOMPARE(editor.objectCount(), 2);
+
+  QSignalSpy spy(&editor, &EditorViewModel::stateChanged);
+  // Ctrl+click on object 0 with an empty selection -> selected.
+  editor.toggleSourceObjectSelection(0);
+  QVERIFY(editor.isObjectSelected(0));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 0);
+  // Ctrl+click on object 1 -> joins additively, object 0 stays.
+  editor.toggleSourceObjectSelection(1);
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedObjectCount(), 2);
+  // Ctrl+click again on object 0 -> removed; object 1 remains.
+  editor.toggleSourceObjectSelection(0);
+  QVERIFY(!editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QVERIFY(spy.count() >= 3);
+
+  // Out-of-range source index is a silent no-op (no state churn).
+  const int signalCountBeforeInvalid = spy.count();
+  editor.toggleSourceObjectSelection(-1);
+  editor.toggleSourceObjectSelection(999);
+  QCOMPARE(spy.count(), signalCountBeforeInvalid);
+  QVERIFY(editor.isObjectSelected(1));
+
+  // Alt+click routes to the volume (part) scope of the clicked object
+  // (upstream m_selection.set_volume_selection_mode(Volume)).
+  editor.selectVolumeBySource(1, 0);
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QCOMPARE(editor.selectedVolumeIndex(), 0);
+  QVERIFY(editor.isObjectSelected(1));
+  // Invalid volume index keeps the previous selection.
+  editor.selectVolumeBySource(1, 7);
+  QCOMPARE(editor.selectedVolumeIndex(), 0);
+}
+
+// SEL-MODIFIERS-RECT (upstream _update_selection_from_hover,
+// GLCanvas3D.cpp:9518-9600): Shift rect replaces the selection (:9576),
+// Ctrl+Shift rect is additive, an empty Shift rect clears the whole selection
+// (:9522-9526, gated on Ctrl), Alt rect removes the contained objects
+// (:9588-9589) and an empty Alt rect is a no-op.
+void ViewModelSmokeTests::selectionRectBackendReplacesAddsDeselectsAndClears()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(editor.addPrimitiveToPlate(2));
+  QCOMPARE(editor.objectCount(), 3);
+
+  const QRectF band(10.0, 10.0, 120.0, 90.0);
+  const int shift = int(Qt::ShiftModifier);
+  const int ctrlShift = int(Qt::ShiftModifier) | int(Qt::ControlModifier);
+  const int altShift = int(Qt::ShiftModifier) | int(Qt::AltModifier);
+
+  // Shift rect over {1}: replaces the prior object-0 selection.
+  QVERIFY(editor.selectSourceObject(0));
+  editor.selectObjectsInRect(shift, band, QVariantList{1});
+  QVERIFY(!editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+
+  // Ctrl+Shift rect over {0, 2}: additive on top of {1}.
+  editor.selectObjectsInRect(ctrlShift, band, QVariantList{0, 2});
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QVERIFY(editor.isObjectSelected(2));
+
+  // Alt rect over {1, 2}: removes them, keeps 0.
+  editor.selectObjectsInRect(altShift, band, QVariantList{1, 2});
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(!editor.isObjectSelected(1));
+  QVERIFY(!editor.isObjectSelected(2));
+
+  // Shift rect with nothing contained: clears the selection (upstream
+  // remove_all); the Ctrl variant keeps it.
+  editor.selectObjectsInRect(shift, band, QVariantList());
+  QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+  QVERIFY(editor.selectSourceObject(0));
+  editor.selectObjectsInRect(ctrlShift, band, QVariantList());
+  QVERIFY(editor.isObjectSelected(0));
+
+  // Alt rect with nothing contained: no-op.
+  editor.selectObjectsInRect(altShift, band, QVariantList());
+  QVERIFY(editor.isObjectSelected(0));
+
+  // Out-of-range contained indices are dropped, not propagated.
+  editor.selectObjectsInRect(shift, band, QVariantList{1, 999, -3});
+  QVERIFY(editor.isObjectSelected(1));
+  QVERIFY(!editor.isObjectSelected(0));
+}
+
+// SEL-MODIFIERS-RECT (GLSelectionRectangle::contains projection primitive,
+// GLSelectionRectangle.cpp:33-49): a synthetic packed mesh blob feeds
+// PrepareSceneData::setModelMeshData exactly like the viewport picking scene,
+// the batch bounds are projected with RhiViewport::projectBoundsToScreenRect,
+// the upstream partial-overlap containment (GLCanvas3D.cpp:7019-7030) picks
+// the included batch and excludes the other one, and the resulting list drives
+// EditorViewModel::selectObjectsInRect end-to-end.
+void ViewModelSmokeTests::rectangleSelectionProjectsSyntheticMeshBatchesForContainment()
+{
+  // Two one-triangle batches in a 100x100 world window: batch A near the
+  // origin, batch B far from it (both on the Z=0 bed plane).
+  const float batchATriangle[3][3] = {{10.f, 20.f, 0.f}, {30.f, 20.f, 0.f}, {10.f, 40.f, 0.f}};
+  const float batchBTriangle[3][3] = {{60.f, 60.f, 0.f}, {80.f, 60.f, 0.f}, {60.f, 80.f, 0.f}};
+
+  QByteArray blob;
+  const auto appendInt32 = [&blob](qint32 value) {
+    blob.append(reinterpret_cast<const char *>(&value), sizeof(qint32));
+  };
+  const auto appendFloat = [&blob](float value) {
+    blob.append(reinterpret_cast<const char *>(&value), sizeof(float));
+  };
+  const auto appendTriangle = [&blob, &appendFloat](const float triangle[3][3]) {
+    for (int vertex = 0; vertex < 3; ++vertex)
+      for (int axis = 0; axis < 3; ++axis)
+        appendFloat(triangle[vertex][axis]);
+  };
+  // Blob layout (PrepareSceneData::setModelMeshData): objectCount header, then
+  // per batch [renderObjectId, triangleCount, verts...], then a 6-float
+  // trailer.
+  appendInt32(2);
+  for (int batch = 0; batch < 2; ++batch) {
+    appendInt32(batch); // renderObjectId
+    appendInt32(1);     // triangleCount
+    appendTriangle(batch == 0 ? batchATriangle : batchBTriangle);
+  }
+  for (int i = 0; i < 6; ++i)
+    appendFloat(0.f);
+
+  PrepareSceneData scene;
+  scene.setModelMeshData(blob,
+                         QList<int>{0, 1},
+                         QList<int>{0, 0},
+                         QList<int>{0, 0},
+                         QList<int>{0, 1});
+  QCOMPARE(scene.modelBatches().size(), 2);
+
+  // Item-local projection mirroring the GLCanvas conventions: world
+  // (0,0) -> screen top-left, world (100,100) -> bottom-right, screen Y
+  // growing downward (projectWorldToScreen).
+  QMatrix4x4 viewProjection;
+  viewProjection.ortho(0.0f, 100.0f, 100.0f, 0.0f, -10.0f, 10.0f);
+  const QSizeF viewportSize(100.0, 100.0);
+  const QRectF screenA = RhiViewport::projectBoundsToScreenRect(
+      scene.modelBatches().at(0).bounds, viewProjection, viewportSize);
+  const QRectF screenB = RhiViewport::projectBoundsToScreenRect(
+      scene.modelBatches().at(1).bounds, viewProjection, viewportSize);
+  // QRectF operator== is exact in Qt 6 and the projection runs in float
+  // precision (QVector4D), so compare the projected edges with an absolute
+  // thousandth-of-a-pixel tolerance (the ortho map is 1 world unit = 1 pixel).
+  const auto fuzzyRectEquals = [](const QRectF &actual, double left, double top,
+                                  double right, double bottom) {
+    const double kTolerance = 0.001;
+    return qAbs(actual.left() - left) <= kTolerance
+        && qAbs(actual.top() - top) <= kTolerance
+        && qAbs(actual.right() - right) <= kTolerance
+        && qAbs(actual.bottom() - bottom) <= kTolerance;
+  };
+  QVERIFY2(fuzzyRectEquals(screenA, 10.0, 20.0, 30.0, 40.0),
+           qPrintable(QStringLiteral("batch A projected to L=%1 T=%2 R=%3 B=%4")
+                          .arg(QString::number(screenA.left(), 'f', 12))
+                          .arg(QString::number(screenA.top(), 'f', 12))
+                          .arg(QString::number(screenA.right(), 'f', 12))
+                          .arg(QString::number(screenA.bottom(), 'f', 12))));
+  QVERIFY2(fuzzyRectEquals(screenB, 60.0, 60.0, 80.0, 80.0),
+           qPrintable(QStringLiteral("batch B projected to %1 %2x%3")
+                          .arg(screenB.left())
+                          .arg(screenB.top())
+                          .arg(screenB.width())));
+
+  // Containment: a band fully around batch A; a partial band over A still
+  // hits (upstream pixel semantics); a band far away hits nothing; a
+  // click-sized band on A behaves like the upstream 1x1 pixel fallback.
+  const QRectF bandAroundA(0.0, 0.0, 50.0, 50.0);
+  QVERIFY(RhiViewport::rectHitsProjectedBounds(bandAroundA, screenA));
+  QVERIFY(!RhiViewport::rectHitsProjectedBounds(bandAroundA, screenB));
+  QVERIFY(RhiViewport::rectHitsProjectedBounds(QRectF(25.0, 25.0, 10.0, 10.0), screenA));
+  QVERIFY(!RhiViewport::rectHitsProjectedBounds(QRectF(85.0, 85.0, 10.0, 10.0), screenA));
+  QVERIFY(RhiViewport::rectHitsProjectedBounds(QRectF(15.0, 25.0, 0.5, 0.5), screenA));
+
+  // The viewport containment loop replicated over the projected batches, then
+  // the result routed through the EditorViewModel backend method.
+  QVariantList contained;
+  for (const PrepareSceneData::ModelBatch &batch : scene.modelBatches()) {
+    const QRectF screenBounds = RhiViewport::projectBoundsToScreenRect(
+        batch.bounds, viewProjection, viewportSize);
+    if (RhiViewport::rectHitsProjectedBounds(bandAroundA, screenBounds))
+      contained.append(batch.sourceObjectIndex);
+  }
+  QCOMPARE(contained.size(), 1);
+  QCOMPARE(contained.first().toInt(), 0);
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(editor.selectSourceObject(1));
+
+  // Shift rect containing only batch A: replaces the object-1 selection.
+  editor.selectObjectsInRect(int(Qt::ShiftModifier), bandAroundA, contained);
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(!editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 0);
+
+  // The Alt form of the same band removes batch A again.
+  editor.selectObjectsInRect(int(Qt::ShiftModifier) | int(Qt::AltModifier),
+                             bandAroundA, contained);
+  QVERIFY(!editor.isObjectSelected(0));
 }
 
 // P15.11 (SIDEBAR-LOCAL-AXES): selectedHintLocalRotation feeds the sidebar

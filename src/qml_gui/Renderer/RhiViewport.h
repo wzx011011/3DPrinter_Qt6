@@ -7,6 +7,7 @@
 #include <QPointF>
 #include <QQuickRhiItem>
 #include <QRectF>
+#include <QSize>
 #include <QString>
 #include "core/rendering/NavigatorCube.h"
 
@@ -108,6 +109,13 @@ class RhiViewport : public QQuickRhiItem
   // it); the setter calls update() like its single-index twin.
   Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices WRITE setSelectedSourceObjectIndices)
   Q_PROPERTY(int hoveredSourceObjectIndex READ hoveredSourceObjectIndex WRITE setHoveredSourceObjectIndex)
+  // SEL-MODIFIERS-RECT: rubber-band rectangle overlay state, in item-local
+  // pixels (top-left origin). The viewport computes the drag rect; the QML
+  // overlay only draws it (upstream GLSelectionRectangle::render,
+  // GLSelectionRectangle.cpp:57-121). SoftwareViewport carries the same pair
+  // as inert properties so both QML paths bind identically.
+  Q_PROPERTY(QRectF selectionRubberBand READ selectionRubberBand NOTIFY selectionRubberBandChanged)
+  Q_PROPERTY(bool selectionRubberBandActive READ selectionRubberBandActive NOTIFY selectionRubberBandChanged)
   // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
   // Assembly measurement overlay annotates (volume A and volume B). Default -1
   // = not set. The setter calls update() so the renderer re-renders the
@@ -453,6 +461,22 @@ public:
   void setSelectedSourceObjectIndices(const QVariantList &value);
   int hoveredSourceObjectIndex() const { return m_hoveredSourceObjectIndex; }
   void setHoveredSourceObjectIndex(int value);
+  // SEL-MODIFIERS-RECT: rubber-band overlay getters (see the Q_PROPERTYs).
+  QRectF selectionRubberBand() const { return m_selectionRubberBand; }
+  bool selectionRubberBandActive() const { return m_selectionRubberBandActive; }
+  // SEL-MODIFIERS-RECT: GLSelectionRectangle::contains projection primitive
+  // (GLSelectionRectangle.cpp:33-49) applied to a world-space scene batch:
+  // project the bounds corners into item-local screen pixels and return the
+  // enclosing rect. Static + pure so the smoke tests can drive it with a
+  // synthetic view-projection (no window, no scene graph).
+  static QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
+                                          const QMatrix4x4 &viewProjection,
+                                          const QSizeF &viewportSize);
+  // Upstream containment direction: the rubber-band rect contains part of the
+  // projected geometry. The upstream picking pass selects a volume when any of
+  // its rendered pixels falls inside the rectangle (GLCanvas3D.cpp:7019-7030);
+  // the projected-bounds approximation keeps that partial-overlap semantics.
+  static bool rectHitsProjectedBounds(const QRectF &rect, const QRectF &screenBounds);
   // Phase 92 (ASMMEASURE-02): Assembly measurement overlay selection indices.
   int assemblyMeasureSelectedA() const { return m_assemblyMeasureSelectedA; }
   void setAssemblyMeasureSelectedA(int value);
@@ -690,6 +714,26 @@ signals:
   void thumbnailCapturedForPlate(int plateIndex, const QString &data,
                                  int variant = 0);
   void objectPickedSource(int sourceIndex);
+  // SEL-MODIFIERS-RECT (KBShortcutsDialog.cpp:235-236): click pick carrying
+  // the press modifiers. Ctrl+click = additive toggle (GLCanvas3D.cpp:4152-4168),
+  // Alt+click = volume-scope pick of the part under the cursor
+  // (GLCanvas3D.cpp:4135). volumeIndex is -1 when no Ctrl/Alt was held (the
+  // plain objectPickedSource signal above stays the no-modifier path) or when
+  // the click missed every volume. QML forwards to the matching
+  // EditorViewModel backend methods; the selection math stays in C++.
+  void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,
+                                       int modifiers);
+  // SEL-MODIFIERS-RECT (upstream m_rectangle_selection, GLCanvas3D.cpp:1872,
+  // 3506-3508, 4136-4145): emitted on release of a Shift+left-drag rectangle.
+  // modifiers are the press-time modifiers (Alt turns the stroke into a
+  // deselect rectangle, GLCanvas3D.cpp:8676). rect is the item-local rubber
+  // band; containedSourceIndices lists the visible source objects whose
+  // projected bounds the rect hits. QML forwards all three opaquely to
+  // EditorViewModel::selectObjectsInRect.
+  void rectangleSelectionFinished(int modifiers, QRectF rect,
+                                  QVariantList containedSourceIndices);
+  // SEL-MODIFIERS-RECT: rubber-band overlay property change notify.
+  void selectionRubberBandChanged();
   void contextMenuRequested(int targetKind,
                             int sourceObjectIndex,
                             int volumeIndex,
@@ -859,6 +903,12 @@ private:
   bool activeToolCapturesContextGesture() const;
   int pickSourceObjectAt(const QPointF &position);
   ViewportContextHit classifyContextAt(const QPointF &position);
+  // SEL-MODIFIERS-RECT: rectangle-selection drag helpers.
+  // updateSelectionRubberBand grows the overlay rect while Shift+drag moves;
+  // containedRectangleSelectionSources projects every visible pick-scene batch
+  // and collects the source objects the rect hits (QML never sees geometry).
+  void updateSelectionRubberBand(const QPointF &position);
+  QVariantList containedRectangleSelectionSources(const QRectF &rect);
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
   // GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate). The cube
   // consumes left presses/drags before any scene interaction, mirrors the
@@ -1116,6 +1166,16 @@ private:
   bool m_contextToolCapturedAtPress = false;
   bool m_contextLayerEditingAtPress = false;
   int m_pressPickedSourceObjectIndex = -1;
+  // SEL-MODIFIERS-RECT: click/drag modifier state. m_pressModifiers is
+  // captured at press (upstream reads the live key state at LeftDown,
+  // GLCanvas3D.cpp:4135-4142) and drives the release routing; the volume
+  // index is only valid for Ctrl/Alt clicks (full ObjectPicking::pick hit).
+  Qt::KeyboardModifiers m_pressModifiers = Qt::NoModifier;
+  int m_pressPickedVolumeIndex = -1;
+  bool m_rectSelectActive = false;
+  QPointF m_rectSelectStart;
+  QRectF m_selectionRubberBand;
+  bool m_selectionRubberBandActive = false;
   bool m_cameraDirty = true;
   bool m_bedTextureDirty = true;   // v5.15 (BEDTEX): consumed by renderer synchronize
 

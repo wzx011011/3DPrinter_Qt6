@@ -7159,6 +7159,132 @@ void EditorViewModel::clearObjectSelection()
   emit stateChanged();
 }
 
+// SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4152-4168): Ctrl+click on an
+// already selected object removes it from the selection; Ctrl+click on an
+// unselected object adds it without disturbing the rest of the selection.
+void EditorViewModel::toggleSourceObjectSelection(int sourceIndex)
+{
+  if (sourceIndex < 0 || sourceIndex >= m_objects.size())
+    return;
+
+  simplifyPreviewCancel();
+  if (m_selectedSourceIndices.contains(sourceIndex))
+  {
+    m_selectedSourceIndices.remove(sourceIndex);
+    if (m_primarySelectedSourceIndex == sourceIndex)
+      m_primarySelectedSourceIndex = -1;
+    if (m_selectedVolumeObjectSourceIndex == sourceIndex)
+    {
+      m_selectedVolumeObjectSourceIndex = -1;
+      m_selectedVolumeIndices.clear();
+      m_selectedVolumeIndex = -1;
+    }
+    ensureValidObjectSelection(false);
+  }
+  else
+  {
+    m_selectedSourceIndices.insert(sourceIndex);
+    m_primarySelectedSourceIndex = sourceIndex;
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+  }
+
+  emit stateChanged();
+}
+
+// SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135 Alt = volume selection
+// mode + KBShortcutsDialog.cpp:235): source-index twin of selectVolume() --
+// the viewport pick carries (sourceObjectIndex, volumeIndex) directly and has
+// no filtered-list row to map through.
+void EditorViewModel::selectVolumeBySource(int sourceIndex, int volumeIndex)
+{
+  simplifyPreviewCancel();
+  if (sourceIndex < 0 || sourceIndex >= m_objects.size())
+    return;
+  if (volumeIndex < 0 || !projectService_ || projectService_->objectVolumeCount(sourceIndex) <= volumeIndex)
+    return;
+
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(sourceIndex);
+  m_primarySelectedSourceIndex = sourceIndex;
+  m_selectedVolumeObjectSourceIndex = sourceIndex;
+  m_selectedVolumeIndices.clear();
+  m_selectedVolumeIndices.insert(volumeIndex);
+  m_selectedVolumeIndex = volumeIndex;
+  emit stateChanged();
+}
+
+// SEL-MODIFIERS-RECT (upstream _update_selection_from_hover,
+// GLCanvas3D.cpp:9518-9600): apply a finished rubber-band stroke. The
+// viewport owns the projection (which visible objects the screen rect hits);
+// this method owns the selection state transition.
+void EditorViewModel::selectObjectsInRect(int modifiers, const QRectF &rect,
+                                          const QVariantList &containedSourceIndices)
+{
+  // rect rides along for traceability of the upstream data flow
+  // (GLSelectionRectangle); the containment decision itself is the viewport's.
+  Q_UNUSED(rect);
+
+  // Upstream reads the live modifiers at release (:9520): Alt turns the
+  // rectangle into a deselect stroke (GLCanvas3D.cpp:8676).
+  const bool altPressed = (modifiers & int(Qt::AltModifier)) != 0;
+  const bool ctrlPressed = (modifiers & int(Qt::ControlModifier)) != 0;
+
+  QList<int> contained;
+  for (const QVariant &entry : containedSourceIndices)
+  {
+    const int sourceIndex = entry.toInt();
+    if (sourceIndex >= 0 && sourceIndex < m_objects.size() && !contained.contains(sourceIndex))
+      contained.append(sourceIndex);
+  }
+
+  simplifyPreviewCancel();
+  if (!altPressed)
+  {
+    // Select stroke: nothing contained clears the selection unless Ctrl is
+    // held (:9522-9526). Otherwise Select clears first (:9576-9577) and adds
+    // every contained object (:9579-9587) -- Ctrl keeps the previous
+    // selection for an additive stroke.
+    if (contained.isEmpty())
+    {
+      if (!ctrlPressed)
+        clearObjectSelection();
+      return;
+    }
+    if (!ctrlPressed)
+      m_selectedSourceIndices.clear();
+    for (int sourceIndex : contained)
+      m_selectedSourceIndices.insert(sourceIndex);
+    m_primarySelectedSourceIndex = contained.front();
+    m_selectedVolumeObjectSourceIndex = -1;
+    m_selectedVolumeIndices.clear();
+    m_selectedVolumeIndex = -1;
+    emit stateChanged();
+  }
+  else
+  {
+    // Deselect stroke: remove every contained object (:9588-9589); nothing
+    // contained leaves the selection untouched.
+    if (contained.isEmpty())
+      return;
+    for (int sourceIndex : contained)
+    {
+      m_selectedSourceIndices.remove(sourceIndex);
+      if (m_primarySelectedSourceIndex == sourceIndex)
+        m_primarySelectedSourceIndex = -1;
+      if (m_selectedVolumeObjectSourceIndex == sourceIndex)
+      {
+        m_selectedVolumeObjectSourceIndex = -1;
+        m_selectedVolumeIndices.clear();
+        m_selectedVolumeIndex = -1;
+      }
+    }
+    ensureValidObjectSelection(false);
+    emit stateChanged();
+  }
+}
+
 void EditorViewModel::selectAllVisibleObjects()
 {
   simplifyPreviewCancel();
