@@ -260,22 +260,40 @@ Item {
         return true
     }
 
-    // Keyboard shortcuts matching upstream CrealityPrint Plater
+    // GAP-4 (HOTKEYS-UPSTREAM-ALIGN): keyboard shortcuts matching the
+    // upstream OrcaSlicer Plater table (KBShortcutsDialog.cpp:222-274,
+    // implemented in GLCanvas3D.cpp:3089-3306 on_char):
+    //   M/S/R = gizmo move/scale/rotate, C = cut, F = place face on bed,
+    //   P = paint-on seam, T = text emboss, A / Shift+A = arrange all /
+    //   selected plate, Shift+R = auto orient, I / O = zoom, Tab = switch
+    //   Prepare/Preview, Shift+Tab = collapse sidebar, 1-9(0) = set
+    //   extruder. Arrows nudge, Esc deselects, Ctrl+A select all, Ctrl+D is
+    //   Delete all (bound in main.qml -- the old per-page Ctrl+D duplicate
+    //   was the conflict, now removed). Ctrl+U measure and Ctrl+Shift+X cut
+    //   remain as documented OWzx extensions; W/E (Blender-style) were
+    //   self-invented and are gone.
     Keys.onPressed: (event) => {
         if (!root.editorVm)
             return
         var key = event.key
         var mod = event.modifiers
         switch (key) {
-        case Qt.Key_W:
+        case Qt.Key_M:
             event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)
             break
-        case Qt.Key_E:
-            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoRotate)
-            break
-        case Qt.Key_R:
+        case Qt.Key_S:
             if (!(mod & Qt.ControlModifier)) {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoScale)
+            }
+            break
+        case Qt.Key_R:
+            if (mod & Qt.ShiftModifier) {
+                // Upstream Shift+R: auto orientate selected objects (or all
+                // when nothing is selected) -- EditorViewModel::autoOrientSelected.
+                root.editorVm.autoOrientSelected()
+                event.accepted = true
+            } else if (!(mod & Qt.ControlModifier)) {
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoRotate)
             }
             break
         case Qt.Key_Z:
@@ -307,11 +325,9 @@ Item {
             if (mod & Qt.ControlModifier) {
                 root.editorVm.selectAllVisibleObjects()
                 event.accepted = true
-            }
-            break
-        case Qt.Key_D:
-            if (mod & Qt.ControlModifier) {
-                root.editorVm.duplicateSelectedObjects()
+            } else if (!(mod & Qt.AltModifier)) {
+                // Upstream "A": arrange all objects.
+                root.editorVm.arrangeAllObjects()
                 event.accepted = true
             }
             break
@@ -319,6 +335,9 @@ Item {
             if (mod & Qt.ControlModifier) {
                 root.editorVm.copySelectedObjects()
                 event.accepted = true
+            } else {
+                // Upstream "C": gizmo cut.
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoCut)
             }
             break
         case Qt.Key_V:
@@ -328,28 +347,62 @@ Item {
             }
             break
         case Qt.Key_X:
-            if ((mod & Qt.ControlModifier) && !(mod & Qt.ShiftModifier)) {
+            // Ctrl+X keeps the standard clipboard cut (the cut GIZMO moved
+            // to plain "C" per the upstream table; the old Ctrl+Shift+X
+            // binding is gone).
+            if (mod & Qt.ControlModifier) {
                 root.editorVm.cutSelectedObjects()
                 event.accepted = true
-            } else if ((mod & Qt.ControlModifier) && (mod & Qt.ShiftModifier)) {
-                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoCut)
             }
             break
         case Qt.Key_F:
-            root.applyFitHintIfReady()
-            event.accepted = true
+            // Upstream "F": gizmo place face on bed (flatten).
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoFlatten)
             break
         case Qt.Key_U:
+            // OWzx extension (kept, listed in the shortcuts dialog): measure
+            // gizmo. Upstream binds no plater key for it.
             if (mod & Qt.ControlModifier) {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMeasure)
             }
             break
-        case Qt.Key_G:
-            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoFlatten)
-            break
         case Qt.Key_P:
             if (!(mod & Qt.ControlModifier)) {
-                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSupportPaint)
+                // Upstream "P": gizmo FDM paint-on seam (KBShortcutsDialog
+                // .cpp:259). Support painting stays on the toolbar.
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSeamPaint)
+            }
+            break
+        case Qt.Key_T:
+            // Upstream "T": text emboss / engrave gizmo.
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoText)
+            break
+        case Qt.Key_I:
+            // Upstream "I": zoom in.
+            if (!(mod & (Qt.ControlModifier | Qt.AltModifier))) {
+                viewport3d.requestZoom(1.0)
+                event.accepted = true
+            }
+            break
+        case Qt.Key_O:
+            // Upstream "O": zoom out.
+            if (!(mod & (Qt.ControlModifier | Qt.AltModifier))) {
+                viewport3d.requestZoom(-1.0)
+                event.accepted = true
+            }
+            break
+        case Qt.Key_Tab:
+            if (!(mod & Qt.ControlModifier)) {
+                if (mod & Qt.ShiftModifier) {
+                    // Upstream Shift+Tab: collapse/expand the sidebar.
+                    backend.requestToggleSidebar()
+                } else {
+                    // Upstream Tab: switch between Prepare and Preview.
+                    backend.requestSelectTab(
+                        backend.currentPage === backend.tpPreview
+                            ? backend.tp3DEditor : backend.tpPreview)
+                }
+                event.accepted = true
             }
             break
         case Qt.Key_Left:
@@ -371,6 +424,42 @@ Item {
                 event.accepted = true
             }
             break
+        default:
+            // GAP-5 (upstream GLCanvas3D.cpp:3248-3269): digits 1-9 (0 as
+            // the second digit of 10..16) set the filament/extruder of the
+            // selection. A second digit within 500ms forms a two-digit
+            // number; MMU paint gizmo swallows digits (upstream gate), and
+            // modified presses stay with their shortcuts.
+            if (key >= Qt.Key_0 && key <= Qt.Key_9
+                    && mod === Qt.NoModifier
+                    && viewport3d.gizmoMode !== GLViewport.GizmoMmuSegmentation) {
+                var digit = key - Qt.Key_0
+                if (root.pendingExtruderDigit >= 0) {
+                    var two = root.pendingExtruderDigit * 10 + digit
+                    if (two >= 1 && two <= 16)
+                        root.editorVm.setExtruderForSelectedItems(two)
+                    root.pendingExtruderDigit = -1
+                    root.extruderDigitTimer.stop()
+                } else {
+                    root.pendingExtruderDigit = digit
+                    root.extruderDigitTimer.restart()
+                }
+                event.accepted = true
+            }
+            break
+        }
+    }
+
+    // GAP-5: 500ms two-digit filament window (upstream on_char starts a
+    // 500ms timer on the first digit and commits on expiry).
+    property int pendingExtruderDigit: -1
+    Timer {
+        id: extruderDigitTimer
+        interval: 500
+        onTriggered: {
+            if (root.pendingExtruderDigit >= 1 && root.editorVm)
+                root.editorVm.setExtruderForSelectedItems(root.pendingExtruderDigit)
+            root.pendingExtruderDigit = -1
         }
     }
 

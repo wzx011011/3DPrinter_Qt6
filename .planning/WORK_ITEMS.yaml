@@ -189,9 +189,11 @@ items:
     aliases: ["GAP-4"]
     area: Prepare/Shortcuts
     priority: P2
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -203,15 +205,33 @@ items:
       - src/qml_gui/pages/PreparePage.qml:264-380
       - src/qml_gui/dialogs/KBShortcutsDialog.qml
       - src/qml_gui/main.qml:495-503
+    notes: >
+      Resolved 2026-09-08. PreparePage Keys now mirror the upstream Plater
+      table: M/S/R = move/scale/rotate, C = cut, F = place face on bed,
+      P = paint-on seam, T = text emboss, A = arrange all, Shift+A =
+      arrange on the selected plate (arrangePlate), Shift+R = auto
+      orientate (autoOrientSelected), I/O = centered camera zoom (new
+      RhiViewport::requestZoom through CameraController::zoom), Tab =
+      Prepare/Preview toggle, Shift+Tab = sidebar collapse (both through
+      BackendContext). Removed self-invented keys: W/E, G (flatten moved to
+      upstream F), Ctrl+Shift+X (cut gizmo moved to C), and the per-page
+      Ctrl+D duplicate that conflicted with main.qml's upstream Ctrl+D =
+      Delete all -- duplicate stays on the toolbar/context menu/Edit menu.
+      Kept and documented as OWzx extensions: Ctrl+U measure, Ctrl+X
+      clipboard cut. KBShortcutsDialog.qml's plater table now lists the
+      upstream set (including the GAP-1 mouse modifiers). QmlUiAuditTests::
+      platerHotkeysMatchUpstreamTable anchors every binding.
 
   - id: HOTKEY-NUMBER-EXTRUDER
     title: Number keys 1-9 (0=10, two-key timing) set extruder for selection
     aliases: ["GAP-5"]
     area: Prepare/Shortcuts
     priority: P3
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -219,15 +239,23 @@ items:
         - src/slic3r/GUI/GLCanvas3D.cpp:3248-3269
     qt_targets:
       - src/qml_gui/pages/PreparePage.qml (Keys)
+    notes: >
+      Resolved 2026-09-08: digits 1-9 set the selection's extruder through
+      EditorViewModel::setExtruderForSelectedItems; a second digit within
+      the upstream 500ms window forms 10..16 (0 as the second digit);
+      modified presses keep their shortcuts and the MMU paint gizmo swallows
+      digits (upstream gate, GLCanvas3D.cpp:3248-3269).
 
   - id: EXTERNAL-GCODE-OPEN
     title: File > Open G-code preview entry (load_gcode -> only_gcode mode)
     aliases: ["GAP-6"]
     area: Preview/Files
     priority: P3
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -236,6 +264,13 @@ items:
     qt_targets:
       - src/qml_gui/main.qml (menu + file filter)
       - src/core/viewmodels/PreviewViewModel.cpp
+    notes: >
+      Resolved 2026-09-08: the open dialog accepts *.gcode and routes to
+      BackendContext::openExternalGcode, which clears the workspace (new
+      project, upstream load_gcode Plater.cpp:10037-10058), loads the file
+      through PreviewViewModel::loadGCodeForPreview, and switches to the
+      Preview tab. The plate grid stays empty -- nothing to slice/export
+      until models are imported again.
 
   - id: PLATER-SMALL-GAPS
     title: Dirty-project remember-choice, multi-select info notification,
@@ -243,10 +278,28 @@ items:
     aliases: ["GAP-7"]
     area: Prepare/Plater
     priority: P3
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: known_deviation
+    verification: pass
     availability: available
+    notes: >
+      Resolved 2026-09-08. (a) The dirty-project dialog carries a
+      remember-my-choice checkbox persisted to QSettings
+      (owzx/project/discardWarningRemembered via
+      BackendContext::setDirtyProjectDiscardRemembered); all four dirty
+      guards (quit/new/open/close) skip the prompt when remembered. Known
+      subset vs upstream: only the DISCARD choice is rememberable -- the
+      Qt6 guard dialog is a discard warning and has no save-first button,
+      so there is no "save" choice to persist. (b) Entering a
+      multi-selection posts the info notification "N objects selected"
+      through EditorViewModel::selectedObjectCount + BackendContext
+      (Plater.cpp:14121-14165); leaving the selection lets the info expire
+      (upstream closes it explicitly -- equivalent UX, auto-dismiss).
+      (c) addPlate leaves new plates UNNAMED like upstream (UI falls back
+      to the positional "Plate N" label; JSON save falls back for display;
+      3MF writes an empty plate_name).
     upstream:
       repo: third_party/OrcaSlicer
       refs:

@@ -276,6 +276,12 @@ private slots:
   void int06_FtpUrlAndSendPrintRouting();
   void monitorDeviceFilesystemCapabilityIsExplicit();
   void appSettingsAndEditorBedShapePersistDeterministically();
+  // GAP-4/5/6/7 review-loop additions.
+  void platerHotkeysBackendAnchorsPresent();
+  void multiSelectPostsInfoNotification();
+  void openExternalGcodeOpensPreviewOnlyProject();
+  void addPlateLeavesDefaultNameEmpty();
+  void dirtyProjectDiscardRememberPersists();
   void editor_import_model_updates_state();
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
   // 260822-x4n B1 (upstream BackgroundSlicingProcess::can_switch_print,
@@ -9560,6 +9566,113 @@ void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
   QSKIP("P16.11 per-instance printable requires HAS_LIBSLIC3R");
 }
 #endif
+
+// ── GAP-4/5: the upstream plater hotkey table routes through the backend ──
+void ViewModelSmokeTests::platerHotkeysBackendAnchorsPresent()
+{
+  // The QML wiring is asserted in QmlUiAuditTests; this test pins the
+  // backend halves the keys call into: arrange, auto-orient, and the
+  // extruder setter must exist and actually run.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  editor.addPrimitiveToPlate(0);
+  editor.selectSourceObject(0);
+
+  // Upstream "A": arrange all objects (ProjectServiceMock::arrangeObjects
+  // needs a printable area string; EditorViewModel::arrangeAllObjects
+  // derives it from the merged config -- here a default preset is absent,
+  // so call the service-level path the QML key ultimately drives).
+  const bool arranged = project.arrangeObjects(
+      6.0f, false, false, QStringLiteral("0,0,220,0,220,220,0,220"));
+  QVERIFY2(arranged, "a lone primitive must arrange on an empty 220 bed");
+
+  // Upstream Shift+R: auto orientate.
+  editor.autoOrientSelected();
+
+  // Upstream 1-9: set extruder for the selection.
+  editor.setExtruderForSelectedItems(2);
+  QCOMPARE(editor.statusText().isEmpty(), false);
+}
+
+// ── GAP-7: multi-select info notification ──────────────────────────────
+void ViewModelSmokeTests::multiSelectPostsInfoNotification()
+{
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  QVERIFY2(editor != nullptr, "BackendContext must expose the editor viewmodel");
+
+  QCOMPARE(editor->selectedObjectCount(), 0);
+  editor->addPrimitiveToPlate(0);
+  editor->addPrimitiveToPlate(0);
+  editor->selectAllVisibleObjects();
+  QCOMPARE(editor->selectedObjectCount(), 2);
+
+  const QVariantList stack = ctx.notificationStack();
+  bool found = false;
+  for (const QVariant &entry : stack) {
+    const QVariantMap item = entry.toMap();
+    if (item.value(QStringLiteral("message")).toString()
+            .contains(QStringLiteral("2 objects selected"))) {
+      found = true;
+      break;
+    }
+  }
+  QVERIFY2(found, "entering a multi-selection must post the info notification"
+                  " (upstream bbl_show_objects_info_notification)");
+}
+
+// ── GAP-6: external G-code opens as a preview-only project ─────────────
+void ViewModelSmokeTests::openExternalGcodeOpensPreviewOnlyProject()
+{
+  BackendContext ctx;
+  auto *preview = qobject_cast<PreviewViewModel *>(ctx.previewViewModel());
+  QVERIFY2(preview != nullptr, "BackendContext must expose the preview viewmodel");
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  QVERIFY2(editor != nullptr, "BackendContext must expose the editor viewmodel");
+
+  const QString gcode = kOrcaGcodePath;
+  QVERIFY2(QFileInfo::exists(gcode), "the sample gcode fixture must exist");
+
+  // Missing files fail cleanly.
+  QVERIFY2(!ctx.openExternalGcode(QStringLiteral("nonexistent.gcode")),
+           "a missing gcode must be rejected");
+
+  QVERIFY2(ctx.openExternalGcode(gcode), "the sample gcode must open");
+  QVERIFY2(preview->gcodeLineCount() > 0,
+           "the preview parser must consume the external gcode");
+  QCOMPARE(editor->modelCount(), 0);
+}
+
+// ── GAP-7: new plates are unnamed (upstream leaves m_name empty) ────────
+void ViewModelSmokeTests::addPlateLeavesDefaultNameEmpty()
+{
+  ProjectServiceMock project;
+  QVERIFY(project.addPlate());
+  QVERIFY(project.addPlate());
+  // The UI falls back to a positional "Plate N" label; the stored name
+  // stays empty so renames and 3MF round-trips carry only user data.
+  QVERIFY(project.plateNames().value(1).isEmpty());
+
+  QVERIFY(project.renamePlate(1, "Named"));
+  QCOMPARE(project.plateNames().value(1), QStringLiteral("Named"));
+}
+
+// ── GAP-7: the dirty-guard remember-choice persists ─────────────────────
+void ViewModelSmokeTests::dirtyProjectDiscardRememberPersists()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("DirtyGuardRemember"));
+  BackendContext ctx;
+  QVERIFY(!ctx.dirtyProjectDiscardRemembered());
+  ctx.setDirtyProjectDiscardRemembered(true);
+  // A fresh context reads the same QSettings-backed flag (same org/app).
+  BackendContext ctx2;
+  QVERIFY(ctx2.dirtyProjectDiscardRemembered());
+  ctx2.setDirtyProjectDiscardRemembered(false);
+  QVERIFY(!ctx.dirtyProjectDiscardRemembered());
+}
 
 QTEST_MAIN(ViewModelSmokeTests)
 #include "ViewModelSmokeTests.moc"

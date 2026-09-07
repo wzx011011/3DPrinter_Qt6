@@ -1826,8 +1826,12 @@ bool ProjectServiceMock::addPlate()
   OWzx::PartPlate *p = m_plateList->createPlate();
   if (!p)
     return false;  // kMaxPlateCount reached
-  // Default name mirrors the previous behavior ("平板 N" 1-based).
-  p->setName(tr("平板 %1").arg(p->plateIndex() + 1).toStdString());
+  // GAP-7 (upstream PartPlate.cpp:3581): new plates are UNNAMED -- upstream
+  // leaves m_name empty and the UI falls back to a positional label. The Qt6
+  // consumers already do that (PreparePage plate card shows "Plate N +
+  // Untitled"; the JSON save falls back for display; the 3MF writes an empty
+  // plate_name like upstream store_to_3mf_structure).
+  // The rename action (renamePlate / the plate-name dialog) still names it.
 
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());

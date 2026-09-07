@@ -54,13 +54,30 @@ Dialog {
         { key: "Ctrl+P", desc: qsTr("Preferences") },
         { key: "Del", desc: qsTr("Delete selected") }
     ]
-    // Prepare: canvas interaction (handled in C++ keyPressEvent).
+    // GAP-4 (HOTKEYS-UPSTREAM-ALIGN): the plater canvas keys now mirror the
+    // upstream table (KBShortcutsDialog.cpp:222-274) implemented in
+    // PreparePage.qml Keys; OWzx extensions are listed explicitly.
     readonly property var prepareShortcuts: [
-        { key: "F", desc: qsTr("Fit view") },
-        { key: "W", desc: qsTr("Move mode") },
-        { key: "E", desc: qsTr("Rotate mode") },
-        { key: "R", desc: qsTr("Scale mode") },
-        { key: "Escape", desc: qsTr("Deselect / cancel gizmo") }
+        { key: "M", desc: qsTr("Gizmo move") },
+        { key: "S", desc: qsTr("Gizmo scale") },
+        { key: "R", desc: qsTr("Gizmo rotate") },
+        { key: "C", desc: qsTr("Gizmo cut") },
+        { key: "F", desc: qsTr("Gizmo Place face on bed") },
+        { key: "P", desc: qsTr("Gizmo FDM paint-on seam") },
+        { key: "T", desc: qsTr("Gizmo Text emboss / engrave") },
+        { key: "A", desc: qsTr("Arrange all objects") },
+        { key: "Shift+A", desc: qsTr("Arrange objects on selected plates") },
+        { key: "Shift+R", desc: qsTr("Auto orientate selected objects") },
+        { key: "I", desc: qsTr("Zoom in") },
+        { key: "O", desc: qsTr("Zoom out") },
+        { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
+        { key: "Shift+Tab", desc: qsTr("Collapse/Expand the sidebar") },
+        { key: "1-9", desc: qsTr("Set filament for object/part (0 as second digit for 10..16)") },
+        { key: "Shift+Left mouse", desc: qsTr("Select objects by rectangle") },
+        { key: "Alt+Left mouse", desc: qsTr("Select a part") },
+        { key: "Ctrl+Left mouse", desc: qsTr("Select multiple objects") },
+        { key: "Arrow keys", desc: qsTr("Move selection 10 mm (Shift: 1 mm)") },
+        { key: "Ctrl+U", desc: qsTr("Measure gizmo (OWzx extension)") }
     ]
     // Toolbar: preset camera views (Phase 237 VIEW-01, bound via QML
     // Shortcut{} in main.qml; upstream list at KBShortcutsDialog.cpp:247-253).

@@ -717,6 +717,7 @@ private slots:
   // unit-inference plumbing, project-config restore routing, and sliced-file
   // export surface.
   void viewMenuShortcutsAndImportSourceAudit();
+  void platerHotkeysMatchUpstreamTable();
   // Phase 238 (PREV-01..07): preview completion source audits -- ghost
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
@@ -10654,6 +10655,94 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-06: EditorViewModel must expose scaleSelectionToFitBed");
   QVERIFY2(projectHeader.contains(QStringLiteral("selectionWorldBoundingBox")),
            "VIEW-06: ProjectServiceMock must expose selectionWorldBoundingBox");
+}
+
+// GAP-4 (HOTKEYS-UPSTREAM-ALIGN): the Prepare canvas keys must mirror the
+// upstream Plater table (KBShortcutsDialog.cpp:222-274, on_char
+// GLCanvas3D.cpp:3089-3306): M/S/R gizmos, C cut, F place-face-on-bed,
+// P seam paint, T text emboss, A / Shift+A arrange, Shift+R auto orient,
+// I / O zoom, Tab Prepare<->Preview, Shift+Tab sidebar, 1-9(0) extruder,
+// and no per-page Ctrl+D (main.qml owns upstream Ctrl+D = Delete all).
+void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString kbDialog = readSource(QStringLiteral("src/qml_gui/dialogs/KBShortcutsDialog.qml"));
+  const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  QVERIFY2(!preparePage.isEmpty() && !kbDialog.isEmpty() && !rhiHeader.isEmpty(),
+           "Unable to read PreparePage.qml / KBShortcutsDialog.qml / RhiViewport.h");
+
+  // Gizmo keys (upstream "M"/"S"/"R"/"C"/"F"/"P"/"T").
+  QVERIFY2(preparePage.contains(QStringLiteral("case Qt.Key_M:"))
+               && preparePage.contains(QStringLiteral("Key_M:"))
+               && preparePage.contains(
+                   QStringLiteral("case Qt.Key_M:\n            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)")),
+           "HOTKEYS: plain M must select the move gizmo (upstream Gizmo move)");
+  QVERIFY2(preparePage.contains(QStringLiteral("case Qt.Key_S:")),
+           "HOTKEYS: plain S must select the scale gizmo (upstream Gizmo scale)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_R:"))
+               && preparePage.contains(QStringLiteral("autoOrientSelected()")),
+           "HOTKEYS: R must select rotate and Shift+R must auto-orientate"
+           " (upstream Shift+R)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_C:\n            if (mod & Qt.ControlModifier) {\n                root.editorVm.copySelectedObjects()")),
+           "HOTKEYS: Ctrl+C must stay clipboard copy");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoCut)")),
+           "HOTKEYS: plain C must select the cut gizmo (upstream Gizmo cut)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoFlatten)")),
+           "HOTKEYS: plain F must select place-face-on-bed (upstream Gizmo F)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoSeamPaint)")),
+           "HOTKEYS: plain P must select the seam paint gizmo (upstream P)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoText)")),
+           "HOTKEYS: plain T must select the text emboss gizmo (upstream T)");
+
+  // Arrange keys (upstream "A" / "Shift+A").
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.arrangeAllObjects()")),
+           "HOTKEYS: plain A must arrange all objects");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_A:\n            if (mod & Qt.ControlModifier) {")),
+           "HOTKEYS: Ctrl+A must stay select-all");
+
+  // Zoom keys (upstream "I"/"O") route into the viewport camera zoom.
+  QVERIFY2(preparePage.contains(QStringLiteral("viewport3d.requestZoom(1.0)"))
+               && preparePage.contains(QStringLiteral("viewport3d.requestZoom(-1.0)")),
+           "HOTKEYS: I/O must zoom through the viewport camera");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_INVOKABLE void requestZoom(float delta);")),
+           "HOTKEYS: RhiViewport must expose requestZoom(delta)");
+
+  // Tab / Shift+Tab route through the backend page/sidebar actions.
+  QVERIFY2(preparePage.contains(QStringLiteral("backend.requestSelectTab("))
+               && preparePage.contains(QStringLiteral("backend.requestToggleSidebar()")),
+           "HOTKEYS: Tab must switch Prepare/Preview and Shift+Tab must toggle"
+           " the sidebar through BackendContext");
+
+  // Extruder digits route through the ViewModel (no QML business logic).
+  QVERIFY2(preparePage.contains(QStringLiteral("setExtruderForSelectedItems(")),
+           "HOTKEYS: digits must set the extruder through the viewmodel");
+  QVERIFY2(preparePage.contains(QStringLiteral("interval: 500")),
+           "HOTKEYS: the two-digit filament window must be 500ms (upstream"
+           " on_char timer)");
+
+  // The Blender-style self-invented keys are gone.
+  QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_W:")),
+           "HOTKEYS: the self-invented W binding must be removed");
+  QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_E:\n")),
+           "HOTKEYS: the self-invented E binding must be removed");
+  QVERIFY2(!preparePage.contains(QStringLiteral("Key_G:")),
+           "HOTKEYS: the self-invented G flatten binding must be removed"
+           " (flatten moved to upstream F)");
+
+  // Ctrl+D is Delete all in main.qml only; the per-page duplicate binding
+  // (the conflict) must be gone while duplicate stays menu/toolbar
+  // reachable.
+  QVERIFY2(!preparePage.contains(QStringLiteral("Key_D:")),
+           "HOTKEYS: PreparePage must not swallow Ctrl+D (upstream Ctrl+D is"
+           " Delete all, bound in main.qml)");
+
+  // The shortcuts dialog documents the upstream plater table.
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"M\", desc: qsTr(\"Gizmo move\") }")),
+           "HOTKEYS: the help dialog must document M = gizmo move");
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"Shift+R\", desc: qsTr(\"Auto orientate selected objects\") }")),
+           "HOTKEYS: the help dialog must document Shift+R auto orientate");
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"I\", desc: qsTr(\"Zoom in\") }")),
+           "HOTKEYS: the help dialog must document I/O zoom");
 }
 
 

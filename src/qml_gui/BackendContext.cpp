@@ -95,6 +95,18 @@ BackendContext::BackendContext(QObject *parent)
 
   editorViewModel_ = new EditorViewModel(projectService_, sliceService_, this);
   connect(editorViewModel_, &EditorViewModel::stateChanged, this, &BackendContext::displayProjectTitleChanged);
+  // GAP-7: multi-select info notification (upstream
+  // Plater::bbl_show_objects_info_notification, Plater.cpp:14121-14165 --
+  // entering a multi-selection posts an informational "N objects selected"
+  // notification; leaving it lets the info expire). Post only on the
+  // transition so repeated stateChanged ticks do not stack toasts.
+  connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
+    const int count = editorViewModel_ ? editorViewModel_->selectedObjectCount() : 0;
+    if (count >= 2 && count != m_lastSelectedObjectsInfoCount)
+      postNotification(tr("%1 objects selected").arg(count),
+                       QString(), int(NotiInfo));
+    m_lastSelectedObjectsInfoCount = count;
+  });
 
   // Undo/Redo 框架（对齐上游 UndoRedo）：创建管理器并注入到 EditorViewModel
   auto *undoManager = new UndoRedoManager(this);
@@ -404,6 +416,45 @@ BackendContext::~BackendContext()
   // while the project service is still alive.
   delete sliceService_;
   sliceService_ = nullptr;
+}
+
+bool BackendContext::openExternalGcode(const QString &filePath)
+{
+  // GAP-6 (upstream Plater::load_gcode, Plater.cpp:10037-10058): an
+  // externally sliced .gcode opens as a NEW project in a preview-only
+  // context -- the workspace resets (upstream load_gcode clears the plater)
+  // and the Preview page consumes the file through PreviewViewModel's
+  // parser. The plate grid stays empty, so there is nothing to slice or
+  // export until the user imports models again.
+  if (filePath.isEmpty() || !QFileInfo::exists(filePath))
+    return false;
+  if (!previewViewModel_)
+    return false;
+  if (editorViewModel_)
+    editorViewModel_->clearWorkspace();
+  if (!previewViewModel_->loadGCodeForPreview(filePath))
+    return false;
+  requestSelectTab(tpPreview());
+  return true;
+}
+
+bool BackendContext::dirtyProjectDiscardRemembered() const
+{
+  // GAP-7: upstream Plater.cpp:11125-11140 persists "save_project_choise".
+  QSettings settings;
+  return settings.value(QStringLiteral("owzx/project/discardWarningRemembered"),
+                        false)
+      .toBool();
+}
+
+void BackendContext::setDirtyProjectDiscardRemembered(bool remembered)
+{
+  {
+    QSettings settings;
+    settings.setValue(QStringLiteral("owzx/project/discardWarningRemembered"),
+                      remembered);
+  }
+  emit dirtyProjectDiscardRememberedChanged();
 }
 
 QObject *BackendContext::editorViewModel() const { return editorViewModel_; }

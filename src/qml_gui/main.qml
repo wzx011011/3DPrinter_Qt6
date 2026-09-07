@@ -52,7 +52,8 @@ ApplicationWindow {
             close.accepted = true
             return
         }
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             close.accepted = false
             root.pendingGuardAction = "quit"
             root.pendingOpenPath = ""
@@ -68,7 +69,8 @@ ApplicationWindow {
     // quit entry point. Dirty projects get the confirm dialog; clean projects
     // (or an approved forceClose) quit directly.
     function requestQuit() {
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "quit"
             root.pendingOpenPath = ""
             newProjectDialog.open()
@@ -79,7 +81,8 @@ ApplicationWindow {
     }
 
     function requestNewProject() {
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "new"
             root.pendingOpenPath = ""
             newProjectDialog.open()
@@ -95,7 +98,8 @@ ApplicationWindow {
             backend.topbarOpenProject(path)
             return
         }
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "open"
             root.pendingOpenPath = path
             newProjectDialog.open()
@@ -116,6 +120,7 @@ ApplicationWindow {
             qsTr("OBJ 文件 (*.obj)"),
             qsTr("STEP 文件 (*.step *.stp)"),
             qsTr("AMF 文件 (*.amf)"),
+            qsTr("G-code 文件 (*.gcode)"),
             qsTr("压缩包 (*.zip)"),
             qsTr("所有文件 (*)")
         ]
@@ -125,6 +130,13 @@ ApplicationWindow {
             var modelPath = selectedFile.toString()
             if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".zip") {
                 fileArchiveDialog.openFor(modelPath)
+                return
+            }
+            // GAP-6: an externally sliced .gcode opens as a new project in
+            // the preview-only context (upstream Plater::load_gcode,
+            // Plater.cpp:10037-10058).
+            if (modelPath.toLowerCase().substring(modelPath.length - 6) === ".gcode") {
+                backend.openExternalGcode(modelPath)
                 return
             }
             backend.topbarImportModel(selectedFile.toString())
@@ -341,14 +353,17 @@ ApplicationWindow {
         id: aboutDialog
     }
 
-    // New project confirmation dialog
+    // New project confirmation dialog. GAP-7: carries the upstream
+    // "remember my choice" checkbox (Plater.cpp:11125-11140 persists
+    // save_project_choise); a remembered discard makes every dirty guard
+    // proceed without prompting.
     Dialog {
         id: newProjectDialog
         title: qsTr("新建项目")
         modal: true
         anchors.centerIn: parent
         width: 360
-        height: 140
+        height: 180
         padding: 20
 
         Column {
@@ -360,6 +375,12 @@ ApplicationWindow {
                 font.pixelSize: Theme.fontSize13
                 wrapMode: Text.Wrap
                 width: parent.width
+            }
+            CheckBox {
+                id: rememberDiscardCheck
+                text: qsTr("记住我的选择（不再提醒）")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSize13
             }
             Row {
                 anchors.right: parent.right
@@ -386,6 +407,8 @@ ApplicationWindow {
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                            if (rememberDiscardCheck.checked)
+                                backend.setDirtyProjectDiscardRemembered(true)
                             var action = root.pendingGuardAction
                             var path = root.pendingOpenPath
                             root.pendingGuardAction = ""

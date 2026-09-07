@@ -366,11 +366,25 @@ public:
   /// Emits tabSelectRequested before updating currentPage.
   /// Invalid tab positions are rejected with a warning.
   Q_INVOKABLE void requestSelectTab(int position);
+  /// GAP-6: File > Open G-code (upstream Plater::load_gcode,
+  /// Plater.cpp:10037-10058): an externally sliced .gcode opens as a NEW
+  /// project in a preview-only context -- the workspace is cleared and the
+  /// Preview page consumes the file through PreviewViewModel's parser.
+  /// Returns false when the file is missing or parsing failed.
+  Q_INVOKABLE bool openExternalGcode(const QString &filePath);
   /// Request a Plater canvas view-mode change.
   /// Emits viewModeChangeRequested before updating currentViewMode.
   Q_INVOKABLE void requestChangeViewMode(int mode);
   // Phase 4: dockable sidebar state aligns with upstream collapsed sidebar behavior.
   Q_INVOKABLE void requestToggleSidebar();           ///< Toggle sidebar collapsed state.
+  /// GAP-7: remember-the-choice persistence for the dirty-project guard
+  /// (upstream Plater.cpp:11125-11140 stores "save_project_choise" in the
+  /// app config). True = the user checked "remember" on the discard
+  /// warning, so future dirty guards proceed without prompting. Upstream
+  /// also remembers "save"; the Qt6 guard dialog currently only offers
+  /// discard, so only that choice is remembered.
+  Q_INVOKABLE bool dirtyProjectDiscardRemembered() const;
+  Q_INVOKABLE void setDirtyProjectDiscardRemembered(bool remembered);
   Q_INVOKABLE void requestSetSidebarCollapsed(bool c);  ///< Set persisted sidebar collapsed state.
   Q_INVOKABLE void requestSetSidebarWidth(int w);       ///< Set persisted sidebar width clamped to [min,max].
   Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< Set persisted sidebar dock area.
@@ -544,6 +558,9 @@ public:
   int lastLatencyMs() const;
 
 signals:
+  /// GAP-7: emitted when the remembered dirty-guard choice flips.
+  void dirtyProjectDiscardRememberedChanged();
+
   void currentPageChanged();
   /// Phase 51 SHELL-03: bulk shell-state refresh signal for action gates + labels.
   void stateChanged();
@@ -666,6 +683,7 @@ private:
   static constexpr int kSidebarMaxWidth = 520;
   static constexpr int kSidebarDefaultWidth = 320;
   bool sidebarCollapsed_ = false;
+  int m_lastSelectedObjectsInfoCount = 0;  ///< GAP-7 multi-select notification dedupe.
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;
   QString lastErrorMessage_;

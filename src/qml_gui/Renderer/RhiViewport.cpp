@@ -870,6 +870,15 @@ void RhiViewport::requestPreviewFit()
   update();
 }
 
+void RhiViewport::requestZoom(float delta)
+{
+  // GAP-4: centered keyboard zoom (upstream GLCanvas3D.cpp on_char
+  // 'I'/'O' -> zoom delta +-1 through update_zoom, Camera.cpp:83), the same
+  // math the plain wheel path uses (RhiViewport.cpp wheelEvent -> m_camera.zoom).
+  m_camera.zoom(delta);
+  update();
+}
+
 void RhiViewport::requestViewPreset(int preset)
 {
   m_viewPreset = preset;

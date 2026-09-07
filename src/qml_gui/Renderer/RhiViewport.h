@@ -649,6 +649,11 @@ public:
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
+  // GAP-4 (upstream KBShortcutsDialog.cpp:262-263 "I"/"O" = Zoom in/out):
+  // centered keyboard zoom through the same Camera::zoom path the wheel
+  // uses (CameraController::zoom, upstream update_zoom Camera.cpp:83 with
+  // +-1 per notch, bounds clamped by the scene box).
+  Q_INVOKABLE void requestZoom(float delta);
   // Phase 237 (VIEW-01): upstream-named view selection (mirrors
   // GLCanvas3D::select_view -> Camera::select_view, Camera.cpp:86-107). The
   // accepted directions match the upstream key map "plate"/"top"/"bottom"/
