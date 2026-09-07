@@ -531,6 +531,35 @@ items:
       gate: single canonical run EXIT=0 2026-09-06, 12 suites 564 tests 0 failed
       last_verified: 2026-09-06
 
+  - id: BRANCH-CONSOLIDATION
+    title: Merge completed work to main and dispose of stale branches
+    aliases: ["branch-cleanup"]
+    area: Repo/Governance
+    priority: P1
+    status: resolved
+    resolved: 2026-09-07
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      2026-09-07: main fast-forwarded to the reviewed tip (3105e98) and the
+      self-contained parameter-regression automation from codex/param-
+      regression-automation was cherry-picked onto main as 829cb36
+      (scripts/param_regression.ps1 + tools/gcode_compare.py +
+      tests/param_regression/; the branch's other commits are net-zero doc
+      add/revert pairs). review/v5.16-gap-closure tracks main. perf/waves is
+      deliberately NOT merged: its diff vs main is ~960k lines/2565 files
+      including root-junk artifacts (mangled paths like
+      testsQmlUiAuditTests.cpp, vpctest*.txt) and dead-end experiments, and
+      its one valuable idea (persistent per-plate Print, Wave 4a) was
+      reimplemented properly on main as 564a51d with the review P0-1/P0-2
+      defects designed out -- recorded under PLATE-PRINT-LIFECYCLE batch 2.
+      The branch and its worktree are kept for archaeology; do not merge.
+    evidence:
+      commits: [829cb36]
+      last_verified: 2026-09-07
+
   - id: STASH-WIP-DISPOSITION
     title: Dispose of stash@{0} and stash@{1} (user decision required)
     aliases: ["stash@{0}", "stash@{1}"]
