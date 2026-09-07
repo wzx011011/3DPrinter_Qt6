@@ -45,6 +45,159 @@ alias_map:
   "P17.8": CONFLICT-MARKERS
 
 items:
+  # ── Gap rescan 2026-09-07 (6-face upstream sweep) ────────────────────────
+  - id: SEL-MODIFIERS-RECT
+    title: Viewport selection modifiers (Shift rect / Alt rect-deselect / Ctrl
+      additive / Alt part pick)
+    aliases: ["GAP-1"]
+    area: Prepare/Canvas
+    priority: P1
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GLCanvas3D.cpp:8673-8679 (shift=rect select,
+          alt=rect deselect, ctrl=toggle), :1872, :3506-3508
+          (m_rectangle_selection), KBShortcutsDialog.cpp:241-244
+    qt_targets:
+      - src/qml_gui/Renderer/RhiViewport.cpp
+      - src/core/viewmodels/EditorViewModel.h/.cpp
+      - src/qml_gui/pages/PreparePage.qml
+
+  - id: PLATE-DELETE-DOCK
+    title: delete_plate moves instances off-plate (upstream unprintable dock)
+      instead of merging into neighbor
+    aliases: ["GAP-2"]
+    area: Prepare/Plate
+    priority: P1
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/PartPlate.cpp:3708-3816 (delete_plate ->
+          compute_origin_for_unprintable + with_instance_move),
+          :2483-2498 (move_instances_to intersects only the last plate)
+    qt_targets:
+      - src/core/model/PartPlateList.cpp (deletePlate)
+      - tests/PartPlateTests.cpp::deletePlateMigratesInstancesToNeighbor
+    notes: >
+      Resolved 2026-09-08 in the review-fix batch (commit 2e513ec): upstream
+      delete_plate teleports the deleted plate's instances to the unprintable
+      dock (PartPlate.cpp:3761) BEFORE the move_instances_to intersect test
+      (:2483-2497, :3810), so instances virtually never join a neighbor --
+      the net behavior is docking. Qt6 deletePlate clears memberships
+      without a neighbor merge, and ProjectServiceMock::deletePlate moves
+      each fully-orphaned OBJECT to the dock slot
+      (compute_origin_for_unprintable formula via computeOrigin(plateCount,
+      plateCols)) so rebuild/arrange passes cannot reabsorb it; per-instance
+      orphans whose object still lives on another plate stay put.
+      deletePlateMigratesInstancesToNeighbor rewritten to the dock contract.
+      Undo fidelity holds: the deep plate snapshot restores members with
+      their pre-delete transforms.
+    evidence:
+      commits: [2e513ec]
+      gate: full ninja -t clean rebuild, canonical run EXIT=0 2026-09-08,
+        12 suites 577 tests 0 failed 0 skipped
+      last_verified: 2026-09-08
+
+  - id: PREVIEW-VIEWMODES-UPSTREAM
+    title: Preview view-mode list deviates (17 self-invented vs upstream 10
+      fixed order)
+    aliases: ["GAP-3"]
+    area: Preview
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GCodeViewer.cpp:884-911 (view_type_items fixed
+          order), GCodeViewer.hpp:711-725 (EViewType)
+    qt_targets:
+      - src/core/viewmodels/PreviewViewModel.cpp:709-732
+
+  - id: HOTKEYS-UPSTREAM-ALIGN
+    title: Gizmo/tool hotkeys deviate + missing Plater keys + Ctrl+D double-bind
+    aliases: ["GAP-4"]
+    area: Prepare/Shortcuts
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/KBShortcutsDialog.cpp:222-274 (M/S/R/C/F/P/T, I/O,
+          A, Shift+A, Shift+R, Tab, Shift+Tab, 1-9),
+          GLCanvas3D.cpp:3089-3306 (on_char)
+    qt_targets:
+      - src/qml_gui/pages/PreparePage.qml:264-380
+      - src/qml_gui/dialogs/KBShortcutsDialog.qml
+      - src/qml_gui/main.qml:495-503
+
+  - id: HOTKEY-NUMBER-EXTRUDER
+    title: Number keys 1-9 (0=10, two-key timing) set extruder for selection
+    aliases: ["GAP-5"]
+    area: Prepare/Shortcuts
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GLCanvas3D.cpp:3248-3269
+    qt_targets:
+      - src/qml_gui/pages/PreparePage.qml (Keys)
+
+  - id: EXTERNAL-GCODE-OPEN
+    title: File > Open G-code preview entry (load_gcode -> only_gcode mode)
+    aliases: ["GAP-6"]
+    area: Preview/Files
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Plater.cpp:10037-10058 (load_gcode)
+    qt_targets:
+      - src/qml_gui/main.qml (menu + file filter)
+      - src/core/viewmodels/PreviewViewModel.cpp
+
+  - id: PLATER-SMALL-GAPS
+    title: Dirty-project remember-choice, multi-select info notification,
+      ASCII default plate name
+    aliases: ["GAP-7"]
+    area: Prepare/Plater
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Plater.cpp:11125-11140 (save_project_choise),
+          :14121-14165 + NotificationManager.hpp:325-326 (objects info)
+    qt_targets:
+      - src/qml_gui/main.qml:55-103
+      - src/core/services/ProjectServiceMock.cpp (addPlate default name)
+
   # ── In progress ──────────────────────────────────────────────────────────
   - id: PLATE-RESULT-STABLE-KEY
     title: Slice results keyed by stable per-plate print identity (SliceService)
@@ -559,6 +712,35 @@ items:
     evidence:
       commits: [829cb36]
       last_verified: 2026-09-07
+
+  - id: WIPE-TOWER-BEDTEMP-GATE
+    title: Wipe-tower arrange gate refinement -- per-extruder bed-temperature
+      equality inside the allow_multi gate
+    aliases: ["P1-5-refinement"]
+    area: Prepare/Arrange
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Jobs/ArrangeJob.cpp:308-319 (bedTemp2extruderIds --
+          tower needed when several extruders share one bed temperature)
+    qt_targets:
+      - src/core/services/ProjectServiceMock.cpp (appendArrangeWipeTowers)
+      - src/core/viewmodels/EditorViewModel.cpp (arrangeWipeTowerContext)
+    notes: >
+      The allow_multi_materials_on_same_plate gate is ported (review P1-5
+      fix) but currently assumes "same bed temperature" for every extruder,
+      which can only create an extra arrange obstacle (conservative
+      direction, never misplaces geometry). The exact refinement needs the
+      extruder -> filament preset -> bed_temp data channel plumbed into
+      EditorViewModel::arrangeWipeTowerContext (per-extruder bed temps from
+      the filament preset slots) plus a per-object bed-temp map in
+      appendArrangeWipeTowers matching upstream's bedTemp2extruderIds
+      grouping.
 
   - id: STASH-WIP-DISPOSITION
     title: Dispose of stash@{0} and stash@{1} (user decision required)
