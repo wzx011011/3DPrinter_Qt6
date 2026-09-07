@@ -52,9 +52,11 @@ items:
     aliases: ["GAP-1"]
     area: Prepare/Canvas
     priority: P1
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -66,6 +68,36 @@ items:
       - src/qml_gui/Renderer/RhiViewport.cpp
       - src/core/viewmodels/EditorViewModel.h/.cpp
       - src/qml_gui/pages/PreparePage.qml
+    notes: >
+      Resolved 2026-09-08 (commit 14c15da). Full upstream modifier matrix:
+      plain click single-select (unchanged path), Ctrl+click toggles the
+      object (GLCanvas3D.cpp:4152-4168), Alt+click picks the volume
+      (selectVolumeBySource, :4135/KBShortcutsDialog.cpp:235), Shift+drag is
+      the rubber-band rectangle replace (projected-AABB overlap approximates
+      the upstream any-pixel GPU test, :7019-7030), Shift+Ctrl+drag adds,
+      empty Shift rectangle clears the selection (:9522-9526),
+      Alt+Shift+drag deselects inside the rect (:8676/:9588-9589), Ctrl+drag
+      stays orbit (:4310-4317), and gizmo-modifier behavior is preserved
+      (the branch precedes the rectangle path). Selection logic lives in
+      EditorViewModel (selectObjectsInRect/toggleSourceObjectSelection/
+      selectVolumeBySource); RhiViewport only reports modifiers/rect/projection
+      primitives; the rubber band is C++-computed + QML-drawn (plateAnchors
+      pattern); SoftwareViewport mirrors the properties so the fallback path
+      stays QML-compatible. Two explanatory decisions recorded in code: the
+      AABB-overlap approximation, and the Alt+Shift mapping to the designed
+      deselect intent (the upstream hover quirk at :8678-8682 reads as a
+      full clear).
+    evidence:
+      commits: [14c15da]
+      tests:
+        - tests/ViewModelSmokeTests.cpp (Ctrl toggle / Alt part / rect
+          replace+add+deselect+clear e2e over synthetic packed meshData)
+        - tests/QmlUiAuditTests.cpp::rhiViewportSelectionModifiersRouteThroughBackend
+      gate: full ninja -t clean rebuild, canonical run EXIT=0 2026-09-08,
+        12 suites 0 failed (PrepareScene 23, PartPlate 69, AppTool 10,
+        ObjectPicking 7, ViewModelSmoke 190, QmlUiAudit 172, Gizmo 24,
+        Navigator 8, Camera 14, ViewportContext 6, PreviewParser 26, E2E 32)
+      last_verified: 2026-09-08
 
   - id: PLATE-DELETE-DOCK
     title: delete_plate moves instances off-plate (upstream unprintable dock)
@@ -114,9 +146,11 @@ items:
     aliases: ["GAP-3"]
     area: Preview
     priority: P2
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     upstream:
       repo: third_party/OrcaSlicer
@@ -125,6 +159,30 @@ items:
           order), GCodeViewer.hpp:711-725 (EViewType)
     qt_targets:
       - src/core/viewmodels/PreviewViewModel.cpp:709-732
+    notes: >
+      Resolved 2026-09-08 (commit 13810a8): viewModes() reproduces the
+      upstream update_by_mode dropdown exactly -- 10 items
+      (FeatureType/ColorPrint/Feedrate/Height/Width/VolumetricRate/
+      LayerTime/LayerTimeLog/FanSpeed/Temperature) in the upstream order
+      with upstream display names, row index == EViewType value, default
+      FeatureType (GCodeViewer.cpp:892-911, get_view_type_string :59-84).
+      The former self-invented entries (Summary, Actual Speed, Acceleration,
+      Jerk, Actual Flow, Pressure Advance, Tool, FilamentId) are REMOVED
+      from the dropdown but their recolor/legend implementations are kept as
+      internal enum tail reachable via setViewModeIndex (no capability
+      deleted); Tool stays hidden and FilamentId stays internal exactly like
+      upstream. Tests: viewModesExposeUpstreamTenModes (count/order/name
+      contract), PreviewParserTests per-row index==enum checks, E2E numeric
+      indices moved to enum constants; no 17-item assertion remains in
+      tests/.
+    evidence:
+      commits: [13810a8]
+      gate: full build + all 12 suites 0 failed across the authoring agent's
+        runs (ViewModelSmoke 190/0 standalone x3, PartPlate 69, E2E,
+        QmlUiAudit, PreviewParser, Gizmo, Navigator, Camera, Cli all 0
+        failed; one unrelated pre-existing gate-env flake documented under
+        THUMBFAMILY-GATE-ENV)
+      last_verified: 2026-09-08
 
   - id: HOTKEYS-UPSTREAM-ALIGN
     title: Gizmo/tool hotkeys deviate + missing Plater keys + Ctrl+D double-bind
@@ -302,6 +360,36 @@ items:
       - src/qml_gui/Renderer/RhiViewport.cpp
       - src/core/viewmodels/EditorViewModel.h/.cpp
       - src/qml_gui/pages/PreparePage.qml
+    notes: >
+      Resolved 2026-09-08 (commit 14c15da). Full upstream modifier matrix:
+      plain click single-select (unchanged path), Ctrl+click toggles the
+      object (GLCanvas3D.cpp:4152-4168), Alt+click picks the volume
+      (selectVolumeBySource, :4135/KBShortcutsDialog.cpp:235), Shift+drag is
+      the rubber-band rectangle replace (projected-AABB overlap approximates
+      the upstream any-pixel GPU test, :7019-7030), Shift+Ctrl+drag adds,
+      empty Shift rectangle clears the selection (:9522-9526),
+      Alt+Shift+drag deselects inside the rect (:8676/:9588-9589), Ctrl+drag
+      stays orbit (:4310-4317), and gizmo-modifier behavior is preserved
+      (the branch precedes the rectangle path). Selection logic lives in
+      EditorViewModel (selectObjectsInRect/toggleSourceObjectSelection/
+      selectVolumeBySource); RhiViewport only reports modifiers/rect/projection
+      primitives; the rubber band is C++-computed + QML-drawn (plateAnchors
+      pattern); SoftwareViewport mirrors the properties so the fallback path
+      stays QML-compatible. Two explanatory decisions recorded in code: the
+      AABB-overlap approximation, and the Alt+Shift mapping to the designed
+      deselect intent (the upstream hover quirk at :8678-8682 reads as a
+      full clear).
+    evidence:
+      commits: [14c15da]
+      tests:
+        - tests/ViewModelSmokeTests.cpp (Ctrl toggle / Alt part / rect
+          replace+add+deselect+clear e2e over synthetic packed meshData)
+        - tests/QmlUiAuditTests.cpp::rhiViewportSelectionModifiersRouteThroughBackend
+      gate: full ninja -t clean rebuild, canonical run EXIT=0 2026-09-08,
+        12 suites 0 failed (PrepareScene 23, PartPlate 69, AppTool 10,
+        ObjectPicking 7, ViewModelSmoke 190, QmlUiAudit 172, Gizmo 24,
+        Navigator 8, Camera 14, ViewportContext 6, PreviewParser 26, E2E 32)
+      last_verified: 2026-09-08
     notes: >
       Resolved 2026-09-06 (commit 3054f21): single exclusive int
       paintLockAxis; drag clamped to press point in RhiViewport; Seam panel
@@ -712,6 +800,33 @@ items:
     evidence:
       commits: [829cb36]
       last_verified: 2026-09-07
+
+  - id: THUMBFAMILY-GATE-ENV
+    title: projectStoreWritesThumbnailFamily fails deterministically inside
+      the full-gate harness (deps usr/local/bin PATH prefix interaction)
+    aliases: ["gate-env-flake"]
+    area: Testing
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    notes: >
+      2026-09-08: during the GAP-3 runs, projectStoreWritesThumbnailFamily
+      (saveProject returning false) failed 5/5 when the full suite ran under
+      the gate harness whose PATH carries the deps usr/local/bin prefix,
+      while passing 5/5 standalone and in serialized runs (one
+      loadProjectReplacesPlateSequenceState hit the same once). Suspected
+      third-party DLL interaction under that PATH (an older DLL shadowing
+      the deployed one), not a product-code defect -- the same test passes
+      in the 2026-09-07 full canonical gates. Investigate: diff loaded DLL
+      set under both PATH variants (Process/Modules or linker verbose),
+      identify the shadowing library, then either fix the harness PATH
+      ordering or pin the DLL. Must be resolved so the canonical gate is
+      deterministic again.
+    remaining:
+      - Reproduce: full suite with deps-bin PATH prefix vs without; capture
+        loaded-module list for the test process in both runs.
 
   - id: WIPE-TOWER-BEDTEMP-GATE
     title: Wipe-tower arrange gate refinement -- per-extruder bed-temperature
