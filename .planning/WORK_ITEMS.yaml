@@ -1,0 +1,1115 @@
+# Canonical Work-Item Ledger — OWzx Slicer
+#
+# This file is the SINGLE source of truth for CURRENT task state.
+# Other documents are views or evidence, never state owners:
+#   - docs/源码对照迁移任务追踪.md      developer-readable feature-domain view (long form)
+#   - docs/代码评审报告_2026-09-04.md   immutable 2026-09-04 review snapshot (findings only)
+#   - .planning/REQUIREMENTS.md         v5.16 acceptance definitions (closed 2026-08-16)
+#   - .planning/phases/*/…-SUMMARY.md   immutable per-phase execution evidence
+#   - .planning/quick/*/…-SUMMARY.md    immutable one-shot task evidence
+#
+# Rules:
+#   * One problem = one canonical id. Historical ids (R-P0.*, R-P1.*, G-*, P*.*) live
+#     in `aliases` and must not be re-used as new work items.
+#   * "phase complete", "requirement complete" and "ledger item complete" are
+#     different claims; only this ledger claims source-truth parity state.
+#   * Every verification claim must cite commit(s) + suite evidence + date.
+#     A green run without a commit anchor is `stale`, not `pass`.
+#
+# Status model (four independent dimensions — do not collapse into one checkbox):
+#   implementation: not_started | mock | hybrid | real
+#   parity:         not_checked | partial | aligned | known_deviation
+#   verification:   none | pass | fail | stale | partial
+#   availability:   available | blocked_external | blocked_user_decision | declined | superseded
+
+schema_version: 1
+updated: 2026-09-06
+head_at_update: ccea3ac
+
+# ---------------------------------------------------------------------------
+# Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
+# kept so stale checkboxes anywhere can be resolved without re-deriving.
+# ---------------------------------------------------------------------------
+alias_map:
+  R-P0.4: G-04
+  R-P1.A: [G-06, G-11]
+  R-P1.B: preview-parity-fixes-2026-09-05
+  R-P1.G: G-04
+  R-P1.H: G-07
+  R-P1.K: G-11
+  R-P1.L: G-08
+  "P2.8.2": PREVIEW-GHOST-SHELL
+  "P17.5": PREVIEW-GHOST-SHELL
+  "P11.B2.3": PAINT-AXIS-LOCK
+  "P12.2": SUBMODULE-PUSH-AUTH
+  "P17.8": CONFLICT-MARKERS
+
+items:
+  # ── Gap rescan 2026-09-07 (6-face upstream sweep) ────────────────────────
+  - id: SEL-MODIFIERS-RECT
+    title: Viewport selection modifiers (Shift rect / Alt rect-deselect / Ctrl
+      additive / Alt part pick)
+    aliases: ["GAP-1"]
+    area: Prepare/Canvas
+    priority: P1
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GLCanvas3D.cpp:8673-8679 (shift=rect select,
+          alt=rect deselect, ctrl=toggle), :1872, :3506-3508
+          (m_rectangle_selection), KBShortcutsDialog.cpp:241-244
+    qt_targets:
+      - src/qml_gui/Renderer/RhiViewport.cpp
+      - src/core/viewmodels/EditorViewModel.h/.cpp
+      - src/qml_gui/pages/PreparePage.qml
+    notes: >
+      Resolved 2026-09-08 (commit 14c15da). Full upstream modifier matrix:
+      plain click single-select (unchanged path), Ctrl+click toggles the
+      object (GLCanvas3D.cpp:4152-4168), Alt+click picks the volume
+      (selectVolumeBySource, :4135/KBShortcutsDialog.cpp:235), Shift+drag is
+      the rubber-band rectangle replace (projected-AABB overlap approximates
+      the upstream any-pixel GPU test, :7019-7030), Shift+Ctrl+drag adds,
+      empty Shift rectangle clears the selection (:9522-9526),
+      Alt+Shift+drag deselects inside the rect (:8676/:9588-9589), Ctrl+drag
+      stays orbit (:4310-4317), and gizmo-modifier behavior is preserved
+      (the branch precedes the rectangle path). Selection logic lives in
+      EditorViewModel (selectObjectsInRect/toggleSourceObjectSelection/
+      selectVolumeBySource); RhiViewport only reports modifiers/rect/projection
+      primitives; the rubber band is C++-computed + QML-drawn (plateAnchors
+      pattern); SoftwareViewport mirrors the properties so the fallback path
+      stays QML-compatible. Two explanatory decisions recorded in code: the
+      AABB-overlap approximation, and the Alt+Shift mapping to the designed
+      deselect intent (the upstream hover quirk at :8678-8682 reads as a
+      full clear).
+    evidence:
+      commits: [14c15da]
+      tests:
+        - tests/ViewModelSmokeTests.cpp (Ctrl toggle / Alt part / rect
+          replace+add+deselect+clear e2e over synthetic packed meshData)
+        - tests/QmlUiAuditTests.cpp::rhiViewportSelectionModifiersRouteThroughBackend
+      gate: full ninja -t clean rebuild, canonical run EXIT=0 2026-09-08,
+        12 suites 0 failed (PrepareScene 23, PartPlate 69, AppTool 10,
+        ObjectPicking 7, ViewModelSmoke 190, QmlUiAudit 172, Gizmo 24,
+        Navigator 8, Camera 14, ViewportContext 6, PreviewParser 26, E2E 32)
+      last_verified: 2026-09-08
+
+  - id: PLATE-DELETE-DOCK
+    title: delete_plate moves instances off-plate (upstream unprintable dock)
+      instead of merging into neighbor
+    aliases: ["GAP-2"]
+    area: Prepare/Plate
+    priority: P1
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/PartPlate.cpp:3708-3816 (delete_plate ->
+          compute_origin_for_unprintable + with_instance_move),
+          :2483-2498 (move_instances_to intersects only the last plate)
+    qt_targets:
+      - src/core/model/PartPlateList.cpp (deletePlate)
+      - tests/PartPlateTests.cpp::deletePlateMigratesInstancesToNeighbor
+    notes: >
+      Resolved 2026-09-08 in the review-fix batch (commit 2e513ec): upstream
+      delete_plate teleports the deleted plate's instances to the unprintable
+      dock (PartPlate.cpp:3761) BEFORE the move_instances_to intersect test
+      (:2483-2497, :3810), so instances virtually never join a neighbor --
+      the net behavior is docking. Qt6 deletePlate clears memberships
+      without a neighbor merge, and ProjectServiceMock::deletePlate moves
+      each fully-orphaned OBJECT to the dock slot
+      (compute_origin_for_unprintable formula via computeOrigin(plateCount,
+      plateCols)) so rebuild/arrange passes cannot reabsorb it; per-instance
+      orphans whose object still lives on another plate stay put.
+      deletePlateMigratesInstancesToNeighbor rewritten to the dock contract.
+      Undo fidelity holds: the deep plate snapshot restores members with
+      their pre-delete transforms.
+    evidence:
+      commits: [2e513ec]
+      gate: full ninja -t clean rebuild, canonical run EXIT=0 2026-09-08,
+        12 suites 577 tests 0 failed 0 skipped
+      last_verified: 2026-09-08
+
+  - id: PREVIEW-VIEWMODES-UPSTREAM
+    title: Preview view-mode list deviates (17 self-invented vs upstream 10
+      fixed order)
+    aliases: ["GAP-3"]
+    area: Preview
+    priority: P2
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GCodeViewer.cpp:884-911 (view_type_items fixed
+          order), GCodeViewer.hpp:711-725 (EViewType)
+    qt_targets:
+      - src/core/viewmodels/PreviewViewModel.cpp:709-732
+    notes: >
+      Resolved 2026-09-08 (commit 13810a8): viewModes() reproduces the
+      upstream update_by_mode dropdown exactly -- 10 items
+      (FeatureType/ColorPrint/Feedrate/Height/Width/VolumetricRate/
+      LayerTime/LayerTimeLog/FanSpeed/Temperature) in the upstream order
+      with upstream display names, row index == EViewType value, default
+      FeatureType (GCodeViewer.cpp:892-911, get_view_type_string :59-84).
+      The former self-invented entries (Summary, Actual Speed, Acceleration,
+      Jerk, Actual Flow, Pressure Advance, Tool, FilamentId) are REMOVED
+      from the dropdown but their recolor/legend implementations are kept as
+      internal enum tail reachable via setViewModeIndex (no capability
+      deleted); Tool stays hidden and FilamentId stays internal exactly like
+      upstream. Tests: viewModesExposeUpstreamTenModes (count/order/name
+      contract), PreviewParserTests per-row index==enum checks, E2E numeric
+      indices moved to enum constants; no 17-item assertion remains in
+      tests/.
+    evidence:
+      commits: [13810a8]
+      gate: full build + all 12 suites 0 failed across the authoring agent's
+        runs (ViewModelSmoke 190/0 standalone x3, PartPlate 69, E2E,
+        QmlUiAudit, PreviewParser, Gizmo, Navigator, Camera, Cli all 0
+        failed; one unrelated pre-existing gate-env flake documented under
+        THUMBFAMILY-GATE-ENV)
+      last_verified: 2026-09-08
+
+  - id: HOTKEYS-UPSTREAM-ALIGN
+    title: Gizmo/tool hotkeys deviate + missing Plater keys + Ctrl+D double-bind
+    aliases: ["GAP-4"]
+    area: Prepare/Shortcuts
+    priority: P2
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/KBShortcutsDialog.cpp:222-274 (M/S/R/C/F/P/T, I/O,
+          A, Shift+A, Shift+R, Tab, Shift+Tab, 1-9),
+          GLCanvas3D.cpp:3089-3306 (on_char)
+    qt_targets:
+      - src/qml_gui/pages/PreparePage.qml:264-380
+      - src/qml_gui/dialogs/KBShortcutsDialog.qml
+      - src/qml_gui/main.qml:495-503
+    notes: >
+      Resolved 2026-09-08. PreparePage Keys now mirror the upstream Plater
+      table: M/S/R = move/scale/rotate, C = cut, F = place face on bed,
+      P = paint-on seam, T = text emboss, A = arrange all, Shift+A =
+      arrange on the selected plate (arrangePlate), Shift+R = auto
+      orientate (autoOrientSelected), I/O = centered camera zoom (new
+      RhiViewport::requestZoom through CameraController::zoom), Tab =
+      Prepare/Preview toggle, Shift+Tab = sidebar collapse (both through
+      BackendContext). Removed self-invented keys: W/E, G (flatten moved to
+      upstream F), Ctrl+Shift+X (cut gizmo moved to C), and the per-page
+      Ctrl+D duplicate that conflicted with main.qml's upstream Ctrl+D =
+      Delete all -- duplicate stays on the toolbar/context menu/Edit menu.
+      Kept and documented as OWzx extensions: Ctrl+U measure, Ctrl+X
+      clipboard cut. KBShortcutsDialog.qml's plater table now lists the
+      upstream set (including the GAP-1 mouse modifiers). QmlUiAuditTests::
+      platerHotkeysMatchUpstreamTable anchors every binding.
+
+  - id: HOTKEY-NUMBER-EXTRUDER
+    title: Number keys 1-9 (0=10, two-key timing) set extruder for selection
+    aliases: ["GAP-5"]
+    area: Prepare/Shortcuts
+    priority: P3
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GLCanvas3D.cpp:3248-3269
+    qt_targets:
+      - src/qml_gui/pages/PreparePage.qml (Keys)
+    notes: >
+      Resolved 2026-09-08: digits 1-9 set the selection's extruder through
+      EditorViewModel::setExtruderForSelectedItems; a second digit within
+      the upstream 500ms window forms 10..16 (0 as the second digit);
+      modified presses keep their shortcuts and the MMU paint gizmo swallows
+      digits (upstream gate, GLCanvas3D.cpp:3248-3269).
+
+  - id: EXTERNAL-GCODE-OPEN
+    title: File > Open G-code preview entry (load_gcode -> only_gcode mode)
+    aliases: ["GAP-6"]
+    area: Preview/Files
+    priority: P3
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Plater.cpp:10037-10058 (load_gcode)
+    qt_targets:
+      - src/qml_gui/main.qml (menu + file filter)
+      - src/core/viewmodels/PreviewViewModel.cpp
+    notes: >
+      Resolved 2026-09-08: the open dialog accepts *.gcode and routes to
+      BackendContext::openExternalGcode, which clears the workspace (new
+      project, upstream load_gcode Plater.cpp:10037-10058), loads the file
+      through PreviewViewModel::loadGCodeForPreview, and switches to the
+      Preview tab. The plate grid stays empty -- nothing to slice/export
+      until models are imported again.
+
+  - id: PLATER-SMALL-GAPS
+    title: Dirty-project remember-choice, multi-select info notification,
+      ASCII default plate name
+    aliases: ["GAP-7"]
+    area: Prepare/Plater
+    priority: P3
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: known_deviation
+    verification: pass
+    availability: available
+    notes: >
+      Resolved 2026-09-08. (a) The dirty-project dialog carries a
+      remember-my-choice checkbox persisted to QSettings
+      (owzx/project/discardWarningRemembered via
+      BackendContext::setDirtyProjectDiscardRemembered); all four dirty
+      guards (quit/new/open/close) skip the prompt when remembered. Known
+      subset vs upstream: only the DISCARD choice is rememberable -- the
+      Qt6 guard dialog is a discard warning and has no save-first button,
+      so there is no "save" choice to persist. (b) Entering a
+      multi-selection posts the info notification "N objects selected"
+      through EditorViewModel::selectedObjectCount + BackendContext
+      (Plater.cpp:14121-14165); leaving the selection lets the info expire
+      (upstream closes it explicitly -- equivalent UX, auto-dismiss).
+      (c) addPlate leaves new plates UNNAMED like upstream (UI falls back
+      to the positional "Plate N" label; JSON save falls back for display;
+      3MF writes an empty plate_name).
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Plater.cpp:11125-11140 (save_project_choise),
+          :14121-14165 + NotificationManager.hpp:325-326 (objects info)
+    qt_targets:
+      - src/qml_gui/main.qml:55-103
+      - src/core/services/ProjectServiceMock.cpp (addPlate default name)
+
+  # ── In progress ──────────────────────────────────────────────────────────
+  - id: PLATE-RESULT-STABLE-KEY
+    title: Slice results keyed by stable per-plate print identity (SliceService)
+    aliases: ["P0.5.5b/stable-result-key"]
+    status: resolved
+    resolved: 2026-09-06
+    area: Prepare/Plate
+    priority: P0
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/PartPlate.hpp (m_print_list / m_gcode_result_list)
+        - src/slic3r/GUI/PartPlate.cpp:3675-3816 (destroy_print / delete_plate)
+    qt_targets:
+      - src/core/services/SliceService.h
+      - src/core/services/SliceService.cpp
+      - src/core/services/ProjectServiceMock.h
+      - src/core/services/ProjectServiceMock.cpp
+      - tests/E2EWorkflowTests.cpp
+    notes: >
+      Resolved 2026-09-06 (commit cc0df24): plateResults_ keys are stable
+      printIndex values; start/completion/cancel/error/previous-G-code reuse/
+      batch export route through the stable-key helpers; batch export skips
+      results whose plate was deleted and names files by current position;
+      activeTargetResultKey_ is reset on every terminal path. The earlier
+      batch-export failure root-caused to a TEST timing race (the reorder
+      insertion changed which export file the worker writes last; the
+      synchronous second-file assert now QTRY-waits), not a service defect.
+    evidence:
+      commits: [cc0df24]
+      tests:
+        - tests/E2EWorkflowTests.cpp::test_slice_all_stores_outputs_for_printable_unlocked_plates_only (reorder assertions)
+      gate: canonical verifier EXIT=0 2026-09-06, 12 suites 560 tests 0 failed (E2E 29/29 included)
+      last_verified: 2026-09-06
+
+  - id: QML-BINDING-LOOPS
+    title: Remaining QML binding loops (post two-loop fix)
+    aliases: ["G-12/remaining", "G-12(剩余绑定环)"]
+    status: resolved
+    resolved: 2026-09-06
+    area: QML/Quality
+    priority: P2
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    qt_targets:
+      - src/qml_gui/dialogs/SettingsDialog.qml
+      - src/qml_gui/pages/PreparePage.qml
+      - src/qml_gui/dialogs/EnableLiteModeDialog.qml
+      - src/qml_gui/dialogs/AMSSettingsDialog.qml
+      - src/qml_gui/dialogs/SpeedLimitDialog.qml
+      - src/qml_gui/dialogs/PluginManagerDialog.qml
+    notes: >
+      G-12 closed its scope on 2026-09-05 (smoke_test.ps1 expectations,
+      commit 100b685; SettingsDialog TabBar width loop + two PreparePage
+      CxCheckBox write-back loops, commit 849cfce). Closed 2026-09-06
+      (commit 5f351e3): runtime capture at 95f4a2a found 0 binding-loop
+      warnings across 19 page/dialog open states, a 25s window-resize
+      stress probe, and scripted Settings-dialog click interaction, so the
+      historical ~75 counts no longer reproduce (loop warnings repeat per
+      relayout; the fixed G-12 sites were the repeat sources). Static sweep
+      then converted the 4 remaining G-12-pattern write-backs (checked
+      bound declaratively + onCheckedChanged writing back) to onToggled:
+      EnableLiteModeDialog liteModeEnabled, AMSSettingsDialog per-slot
+      auto-swap, SpeedLimitDialog limitItems delegate, PluginManagerDialog
+      guarded plugin enable. Post-fix: same 19-state sweep + click probe
+      still 0 binding loops (before 0, after 0); smoke 60/61 -- the single
+      fail is 15 pre-existing non-loop type/reference QML warnings,
+      unchanged before/after (SettingsDialog:767 QString->int, HomePage
+      loginError/bindError ReferenceErrors, PreparePage:2931
+      undefined->bool); those are tracked outside this loop-governance item.
+    evidence:
+      commits: [100b685, 849cfce, 5f351e3]
+      gate: auto_verify_with_vcvars EXIT=0 2026-09-06, 12 suites 566 tests 0 failed (QmlUiAuditTests 171/171 included)
+      last_verified: 2026-09-06
+
+  # ── Not started (next candidates, unblocked) ─────────────────────────────
+  - id: PAINT-AXIS-LOCK
+    title: Support painting Vertical/Horizontal axis lock (Circle/Sphere brush)
+    aliases: ["P11.B2.3"]
+    status: resolved
+    resolved: 2026-09-06
+    area: Prepare/Paint
+    priority: P2
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp (Vertical/Horizontal checkboxes, mutually exclusive)
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:738-742 (drag clamp)
+        - src/slic3r/GUI/Gizmos/GLGizmoSeam.cpp:322 (Seam shows only Vertical)
+        - src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp:717-724 (MMU shows both)
+    qt_targets:
+      - src/qml_gui/Renderer/RhiViewport.cpp
+      - src/core/viewmodels/EditorViewModel.h/.cpp
+      - src/qml_gui/pages/PreparePage.qml
+    notes: >
+      Resolved 2026-09-08 (commit 14c15da). Full upstream modifier matrix:
+      plain click single-select (unchanged path), Ctrl+click toggles the
+      object (GLCanvas3D.cpp:4152-4168), Alt+click picks the volume
+      (selectVolumeBySource, :4135/KBShortcutsDialog.cpp:235), Shift+drag is
+      the rubber-band rectangle replace (projected-AABB overlap approximates
+      the upstream any-pixel GPU test, :7019-7030), Shift+Ctrl+drag adds,
+      empty Shift rectangle clears the selection (:9522-9526),
+      Alt+Shift+drag deselects inside the rect (:8676/:9588-9589), Ctrl+drag
+      stays orbit (:4310-4317), and gizmo-modifier behavior is preserved
+      (the branch precedes the rectangle path). Selection logic lives in
+      EditorViewModel (selectObjectsInRect/toggleSourceObjectSelection/
+      selectVolumeBySource); RhiViewport only reports modifiers/rect/projection
+      primitives; the rubber band is C++-computed + QML-drawn (plateAnchors
+      pattern); SoftwareViewport mirrors the properties so the fallback path
+      stays QML-compatible. Two explanatory decisions recorded in code: the
+      AABB-overlap approximation, and the Alt+Shift mapping to the designed
+      deselect intent (the upstream hover quirk at :8678-8682 reads as a
+      full clear).
+    evidence:
+      commits: [14c15da]
+      tests:
+        - tests/ViewModelSmokeTests.cpp (Ctrl toggle / Alt part / rect
+          replace+add+deselect+clear e2e over synthetic packed meshData)
+        - tests/QmlUiAuditTests.cpp::rhiViewportSelectionModifiersRouteThroughBackend
+      gate: full ninja -t clean rebuild, canonical run EXIT=0 2026-09-08,
+        12 suites 0 failed (PrepareScene 23, PartPlate 69, AppTool 10,
+        ObjectPicking 7, ViewModelSmoke 190, QmlUiAudit 172, Gizmo 24,
+        Navigator 8, Camera 14, ViewportContext 6, PreviewParser 26, E2E 32)
+      last_verified: 2026-09-08
+    notes: >
+      Resolved 2026-09-06 (commit 3054f21): single exclusive int
+      paintLockAxis; drag clamped to press point in RhiViewport; Seam panel
+      Vertical-only, MMU panel both, FDM supports none (upstream-faithful).
+      Same commit closes right-button paint and Shift-erase semantics.
+    evidence:
+      commits: [3054f21]
+      gate: clean-rebuild 2026-09-06, 12 suites 561 tests 0 failed
+      last_verified: 2026-09-06
+
+  - id: PREVIEW-GCODE-SOURCE-TOKENS
+    title: Preview G-code source panel semantic tokenization
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GCodeViewer.cpp:509-540 (55-char truncate, split, colors)
+    qt_targets:
+      - src/core/viewmodels/PreviewViewModel.cpp (rebuildGcodeLineWindow)
+      - src/qml_gui/pages/PreviewPage.qml (delegate)
+    notes: >
+      Resolved 2026-09-06 (commit 9bb840b): >55-char lines truncate to
+      52 + "..."; rows carry command/parameters/comment; delegate colors
+      command yellow / parameters primary / comment muted per upstream
+      ImGui colors.
+    evidence:
+      commits: [9bb840b]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::gcodeLineWindowTokenizesAndTruncatesLikeUpstream
+      gate: single canonical run EXIT=0 2026-09-06, 12 suites 564 tests 0 failed
+      last_verified: 2026-09-06
+
+  - id: PLATE-PRINT-LIFECYCLE
+    title: Persistent per-plate Print / GCodeResult ownership and deep plate semantics
+    aliases: ["P0.5.5b/remainder"]
+    area: Prepare/Plate
+    priority: P1
+    status: resolved
+    resolved: 2026-09-07
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/PartPlate.hpp (unprintable_plate, m_shape, m_exclude_areas)
+        - src/slic3r/GUI/PartPlate.cpp:3141-3150, 4027-4065, 4110-4167, 4989-5044
+    qt_targets:
+      - src/core/model/PartPlate.h
+      - src/core/model/PartPlateList.h/.cpp
+      - src/core/services/SliceService.h/.cpp
+    notes: >
+      Stable printIndex allocation is DONE (see PLATE-RESULT-STABLE-KEY
+      prerequisite and resolved PLATE-PRINT-IDENTITY). Still missing: durable
+      Print/GCodeResult lifetime per plate, unprintable/shared plate semantics,
+      full find_instance/contains geometry, plate shape/exclude/extruder
+      areas, per-plate wipe-tower/Print context, complete slice-state/result
+      API.
+      Batch 1 (instance geometry + unprintable semantics) resolved 18dd03e:
+      PartPlate gains m_shape storage with the origin-centered default
+      rectangle (set_shape/calc_bounding_boxes semantics), contains(Vec3d),
+      contains/intersects(BoundingBoxf3) with the BedEpsilon print volume
+      (PartPlate.cpp:2694-2725), and findInstance(point) over member
+      instances with injected ModelObject::instance_bounding_box bounds
+      (notify_instance_update, PartPlate.cpp:4198-4250);
+      PartPlateList::findInstance(BoundingBoxf3) + contains/intersects
+      aggregates (:3948-3964, 4131-4149) and findInstanceAt(point) skip
+      unprintable plates (upstream keeps unprintable_plate out of
+      m_plate_list, PartPlate.hpp:541); updatePlateOrigins now writes
+      per-plate size like upstream set_pos_and_size (:4004-4014, :1810);
+      ProjectServiceMock attaches the bounds provider at every plate list
+      (re)creation and exposes plateIndexAtPoint. Slice chain verified
+      reading PartPlate::isPrintable domain state (export-all filter
+      SliceService.cpp:1557; slice-all queue EditorViewModel::requestSliceAll).
+      Batch 2 (durable per-plate Print / GCodeResult lifetime) resolved
+      564a51d: SliceService keeps one persistent Slic3r::Print + applied model
+      clone per plate keyed by stable printIndex (upstream PartPlate per-plate
+      Print + GCodeResult, PartPlate.cpp:2839-2840), GUI-thread-exclusive
+      single-owner handoff to the slice worker (no locks, no shared
+      container). Incremental reslice judgment (conservative): reuse only when
+      the plate geometry fingerprint (new ProjectServiceMock::
+      currentPlateGeometrySignature: object/volume/instance counts, ids,
+      mesh sizes, transforms, config + supported/seam/mmu facet timestamps,
+      printable flags) is unchanged and no calib params are involved;
+      config-only changes flow through Print::apply diff invalidation with
+      process() at the upstream default use_cache=false; mesh change, cancel,
+      failure, calib, deletePlate, and project resets rebuild fully.
+      deletePlate emits plateRemoved(printIndex) so the slot + result entry
+      are released synchronously; startSlice reconciles pruned identities.
+      ~SliceService cancels then joins the worker via QFuture. Review
+      2026-09-04 P0-1 (shared locked map) and P0-2 (QThread wait-timeout
+      qFatal) are resolved by design (single ownership; task wait, not
+      thread wait). perf/waves divergence: use_cache=true was not ported
+      (no upstream call site uses it; it force-completes invalidated steps).
+      Batch 3 partial: 9fd126b persists existing PartPlateList width/depth and
+      PartPlate instanceOutsideSet through the JSON fallback, with symmetric
+      legacy-default loading; 859db5b fixes empty-model services to select that
+      fallback instead of emitting an empty 3MF archive. This is not full
+      upstream 3MF PlateData shape/exclude/extruder-area parity.
+      Batch 4 (bed geometry round-trip) resolved d47a7ce. Scope correction
+      from the upstream re-read: shape/exclude areas are NOT PlateData fields
+      (bbs_3mf.hpp:52-108 has none) -- they persist as machine-config keys
+      printable_area / bed_exclude_area / printable_height and load_project
+      restores them via set_bed_shape -> PartPlateList::set_shapes
+      (Plater.cpp:12996-12998, :8135-8169); "extruder areas" has no upstream
+      PartPlate field. Qt6 save now embeds the plate-list bed geometry as
+      typed config options (overlay keys keep priority); load parses them
+      worker-side and applies setPlateSize + the new list-level
+      PartPlateList::excludeAreas (upstream m_exclude_areas raw semantics,
+      PartPlate.cpp:4898) before plates are created; JSON fallback mirrors
+      the same fields.
+      Batch 5 (arrange obstacles) resolved ccea3ac: arrangeObjects now feeds
+      the two-list arrangement::arrange overload with the upstream fixed
+      virtual objects -- bed_exclude_area rectangles as per-plate exclude
+      polygons (preprocess_exclude_areas, PartPlate.cpp:4586-4623) and the
+      per-unlocked-plate wipe-tower rectangle (ArrangeJob.cpp:279-359,
+      estimate_wipe_tower_polygon geometry, PartPlate.cpp:1739-1777, with the
+      WipeTower::min_depth_per_height depth interpolation and the
+      WIPE_TOWER_MARGIN + brim inflation), pinned to its unlocked virtual
+      bed; locked plates keep items fixed and get no tower. The upstream
+      paint-color / bed-temperature tower gates are not observable from the
+      service layer (documented scope note); the extruder-count and smooth-
+      timelapse gates cover the dominant cases. Item closed: the drop /
+      out-of-bounds consumer concern was re-audited 2026-09-07 -- upstream
+      OnDropFiles loads into the CURRENT plate (no under-cursor plate
+      routing exists upstream), the SVG drop path already resolves
+      screenToBedPoint, and the outside-bed check already consumes
+      PartPlate instanceOutsideSet; the GL<->slic3r coordinate "unification"
+      prerequisite is therefore not a gate for any remaining upstream
+      behavior. The slice-state/result API parity is delivered through
+      PartPlate validity gates + the stable-printIndex result store +
+      all-plates aggregates; upstream PartPlate::update_slice_context
+      bridging is SliceService-owned by the D-05 architecture (same
+      behavior, different owner).
+    remaining: []
+    evidence:
+      commits: [18dd03e, 564a51d, 9fd126b, 859db5b, d47a7ce, ccea3ac]
+      tests:
+        - tests/PartPlateTests.cpp::platePrintVolumeContainsTests
+        - tests/PartPlateTests.cpp::plateFindInstancePointLookup
+        - tests/PartPlateTests.cpp::plateListBoxAndPointLookups
+        - tests/PartPlateTests.cpp::unprintablePlateExcludedFromFindInstanceAt
+        - tests/PartPlateTests.cpp::servicePlateIndexAtPointUsesInstanceBounds
+        - tests/PartPlateTests.cpp::jsonPersistenceRoundTripGeometryAndOutsideState
+        - tests/PartPlateTests.cpp::plateBedShapeRoundTripsThroughProject
+        - tests/PartPlateTests.cpp::arrangeAvoidsWipeTowerAndExcludeAreas
+        - tests/E2EWorkflowTests.cpp::test_persistent_print_reused_on_same_plate_reslice
+        - tests/E2EWorkflowTests.cpp::test_plate_deletion_releases_persistent_print_entry
+        - tests/E2EWorkflowTests.cpp::test_cancelled_slice_restart_rebuilds_persistent_print
+      gate batch 5 2026-09-07: canonical run EXIT=0, 12 suites 577 tests
+        0 failed 0 skipped (PartPlate 69 incl. the arrange-obstacle test,
+        ViewModelSmoke 187, QmlUiAudit 171, E2E 32, PrepareScene 23,
+        PreviewParser 26, Gizmo 24, AppTool 10, ObjectPicking 7,
+        Navigator 8, Camera 14, ViewportContext 6)
+      gate batch 2: canonical run EXIT=0 2026-09-06, 12 suites 574 tests
+        0 failed 0 skipped (E2E 32 incl. the 3 new slots, PartPlate 66,
+        ViewModelSmoke 187, QmlUiAudit 171); batch 3 follow-up gate also
+        EXIT=0 with 12 suites and 575 tests (PartPlate 67), 0 failed and
+        0 skipped; one prior interim run's
+        PartPlate/E2E 0xC0000005 was the known stale-obj-after-header-change
+        issue, green after purging objs older than SliceService.h
+      gate batch 4 2026-09-07: post ninja -t clean full rebuild, in-run
+        PrepareScene 23 / PartPlate 68 (incl. the bed-shape round-trip) /
+        AppTool 10 / ObjectPicking 7 all green; ViewModelSmoke hit the
+        known dirWritable=0 AV file-churn flake on
+        projectStoreWritesThumbnailFamily in-run (186/187) but passed
+        187/187 EXIT=0 on the standalone rerun, and QmlUiAudit,
+        PreviewParser, Navigator, Camera, ViewportContextMenu,
+        GizmoGeometry, and E2E all passed EXIT=0 on standalone reruns
+      gate: canonical run after ninja -t clean full rebuild EXIT=0 2026-09-06,
+        12 suites 571 tests 0 failed (PartPlate 66 incl. the 5 new slots);
+        one in-suite ViewModelSmoke write flake (dirWritable=0, known AV
+        file-churn G-11 pattern) passed 187/187 on the individual rerun
+      last_verified: 2026-09-07
+
+  - id: PAINT-RIGHT-BUTTON
+    title: Right-button paint stroke (alternate state / context-menu suppression)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: RightDown strokes the alternate state (PainterBase.cpp:649);
+      MMU right stays disabled (GLGizmoMmuSegmentation.hpp:94).
+    evidence:
+      commits: [3054f21]
+      gate: clean-rebuild 2026-09-06, 12 suites 561 tests 0 failed
+
+  - id: PAINT-SHIFT-ERASER
+    title: Shift = temporary eraser semantics (was inverted to smart fill)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: Upstream PainterBase.cpp:662-671 holds new_state NONE with Shift;
+      the Phase 240 Shift->smart-fill+Blocker mapping was inverted and is
+      replaced; SmartFill remains tool-chip-only.
+    evidence:
+      commits: [3054f21]
+
+  - id: PAINT-CTRL-WHEEL
+    title: Ctrl+wheel adjusts brush radius / smart-fill angle (paint gizmos)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: partial
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:584-631
+    qt_targets:
+      - src/qml_gui/Renderer/RhiViewport.cpp (wheelEvent paint branch)
+    notes: >
+      Resolved 2026-09-06 (commit d9d52e0) for the tools present on main:
+      brush cursors step radius 0.2 within [0.4, 8]; SmartFill steps its
+      angle 1 deg within [0, 90]. HeightRange height and GapFill area wheel
+      steps belong to tools not yet on main and are tracked with
+      PAINT-GAPFILL-PORT / PAINT-MMU-TOOLS.
+    evidence:
+      commits: [d9d52e0]
+      gate: 12 suites 562 tests 0 failed 2026-09-06 (in-gate + standalone on same binaries; one env write-flake passed standalone)
+      last_verified: 2026-09-07
+
+  - id: PAINT-ALT-WHEEL-CLIP
+    title: Alt+wheel clipping-plane sweep inside paint gizmos
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: partial
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:632-646
+    qt_targets:
+      - src/core/rendering/PaintEngine.cpp (buildPaintClippingPlane volume-coords helper)
+      - src/core/viewmodels/EditorViewModel.cpp (paintClippingPosition + clipped-side pick rejection)
+      - src/qml_gui/Renderer/RhiViewport.cpp (Alt+wheel sweep + cameraForward pick signals)
+      - src/qml_gui/pages/PreparePage.qml (support/seam/MMU section slider + reset rows)
+    notes: >
+      Resolved 2026-09-06 (commit b33f61f) for the paint pipeline on main:
+      Alt+wheel steps the shared ratio +-0.01 within [0, 1] and the panel
+      reset turns it off (upstream models off via set_position_by_ratio
+      -1/0). The plane is built in volume coordinates through the upstream
+      ObjectClipper + get_clipping_plane_in_volume_coordinates chain
+      (normal = -camera forward, bounding-radius offset) and paintAtFacet /
+      smartFillAtFacet reject hits on the clipped side (is_mesh_point_
+      clipped); GapFill rides the brush path so it is covered too. The
+      section plane itself is not rendered as a cut contour yet -- that
+      visual belongs with a future overlay task.
+    evidence:
+      commits: [b33f61f]
+      gate: 12 suites 565 tests 0 failed 2026-09-06 (single canonical run after an ABI-refresh rebuild of stale ninja objects)
+      last_verified: 2026-09-06
+
+  - id: PAINT-MMU-TOOLS
+    title: MMU panel tool set (pointer brush / bucket fill / height range / gap fill)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoMmuSegmentation.cpp:594-595, 620-622, 667-668, 703-704
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:778-787 (bucket), 515-573 (height range scan)
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp:242-245 (CursorHeight 0.1..8 step 0.2)
+    qt_targets:
+      - src/core/rendering/PaintEngine.h/.cpp
+      - src/core/viewmodels/EditorViewModel.h/.cpp
+      - src/qml_gui/Renderer/RhiViewport.h/.cpp
+      - src/qml_gui/pages/PreparePage.qml (MMU panel)
+    notes: >
+      Resolved 2026-09-06 (commit 0b3834c, ported from the interrupted
+      agent's work and completed): bucketFillAt two-phase upstream path with
+      pointer/edge-detection variants; height-range world-Z band applied
+      across all part volumes via pure helpers; MMU tool chip + edge
+      detection + band span UI; Ctrl+wheel height step; MMU gap-fill
+      fragment view (-3, kind 2).
+    evidence:
+      commits: [0b3834c]
+      gate: canonical run after full clean rebuild EXIT=0 2026-09-06, 12 suites 566 tests 0 failed
+      last_verified: 2026-09-06
+
+  - id: PAINT-GAPFILL-PORT
+    title: Support Gap Fill tool + engine fragments
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Gizmos/GLGizmoFdmSupports.cpp:378-386
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.cpp:1234-1236 (is_fragment), 624-627 (wheel step)
+        - src/slic3r/GUI/Gizmos/GLGizmoPainterBase.hpp:117-119 (GapArea 0..5 step 0.2)
+    notes: >
+      Resolved 2026-09-06 (commit ff5ff29), reimplemented on main from the
+      upstream contract (not blind-copied from perf/waves): PaintSelector
+      read-only subclass + getGapFragments strict area filter, -3 amber
+      overlay marker in both renderers, tool chip + slider on the support
+      panel, Ctrl+wheel step with gapAreaTuned write-back.
+    evidence:
+      commits: [ff5ff29]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::paintEngineGapFragmentsRespectAreaThreshold
+      gate: single canonical run EXIT=0 2026-09-06 after full clean rebuild, 12 suites 563 tests 0 failed
+      last_verified: 2026-09-06
+
+  - id: VIEW-ARROW-NUDGE
+    title: Arrow-key nudge of selected objects (10mm, Shift=1mm)
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/GLCanvas3D.cpp:3360-3457
+    qt_targets:
+      - src/qml_gui/pages/PreparePage.qml (Keys handling)
+      - src/core/viewmodels/EditorViewModel.h/.cpp (nudgeSelectedObjects)
+    notes: >
+      Resolved 2026-09-06: arrows translate the selection on the bed plane
+      through nudgeSelectedObjects; TransformCommand mergeWith coalesces key
+      repeats into one undo step (upstream do_move on key-up). Camera-space
+      Ctrl variant not ported (Qt6 shell has no equivalent binding need yet).
+    evidence:
+      commits: [ae513c3]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::arrowNudgeTranslatesSelectionWithCoalescedUndo
+      gate: canonical run EXIT=0 2026-09-06, 12 suites 561 tests 0 failed
+      last_verified: 2026-09-06
+
+  - id: MENU-EDIT-EXPAND
+    title: Edit menu clipboard/delete/clone entries
+    aliases: []
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/MainFrame.cpp:2400-2467
+    notes: >
+      Resolved 2026-09-06: Edit menu exposes Cut/Copy/Paste/Delete
+      selected (with confirm)/Delete all/Clone selected/Duplicate current
+      plate, routed to the same ViewModel actions as the shortcuts.
+    evidence:
+      commits: [a216932]
+      gate: single canonical run EXIT=0 2026-09-06, 12 suites 564 tests 0 failed
+      last_verified: 2026-09-06
+
+  - id: BRANCH-CONSOLIDATION
+    title: Merge completed work to main and dispose of stale branches
+    aliases: ["branch-cleanup"]
+    area: Repo/Governance
+    priority: P1
+    status: resolved
+    resolved: 2026-09-07
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      2026-09-07: main fast-forwarded to the reviewed tip (3105e98) and the
+      self-contained parameter-regression automation from codex/param-
+      regression-automation was cherry-picked onto main as 829cb36
+      (scripts/param_regression.ps1 + tools/gcode_compare.py +
+      tests/param_regression/; the branch's other commits are net-zero doc
+      add/revert pairs). review/v5.16-gap-closure tracks main. perf/waves is
+      deliberately NOT merged: its diff vs main is ~960k lines/2565 files
+      including root-junk artifacts (mangled paths like
+      testsQmlUiAuditTests.cpp, vpctest*.txt) and dead-end experiments, and
+      its one valuable idea (persistent per-plate Print, Wave 4a) was
+      reimplemented properly on main as 564a51d with the review P0-1/P0-2
+      defects designed out -- recorded under PLATE-PRINT-LIFECYCLE batch 2.
+      The branch and its worktree are kept for archaeology; do not merge.
+    evidence:
+      commits: [829cb36]
+      last_verified: 2026-09-07
+
+  - id: THUMBFAMILY-GATE-ENV
+    title: projectStoreWritesThumbnailFamily fails deterministically inside
+      the full-gate harness (deps usr/local/bin PATH prefix interaction)
+    aliases: ["gate-env-flake"]
+    area: Testing
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: available
+    notes: >
+      2026-09-08: during the GAP-3 runs, projectStoreWritesThumbnailFamily
+      (saveProject returning false) failed 5/5 when the full suite ran under
+      the gate harness whose PATH carries the deps usr/local/bin prefix,
+      while passing 5/5 standalone and in serialized runs (one
+      loadProjectReplacesPlateSequenceState hit the same once). Suspected
+      third-party DLL interaction under that PATH (an older DLL shadowing
+      the deployed one), not a product-code defect -- the same test passes
+      in the 2026-09-07 full canonical gates. Investigate: diff loaded DLL
+      set under both PATH variants (Process/Modules or linker verbose),
+      identify the shadowing library, then either fix the harness PATH
+      ordering or pin the DLL. Must be resolved so the canonical gate is
+      deterministic again.
+    remaining:
+      - Reproduce: full suite with deps-bin PATH prefix vs without; capture
+        loaded-module list for the test process in both runs.
+
+  - id: WIPE-TOWER-BEDTEMP-GATE
+    title: Wipe-tower arrange gate refinement -- per-extruder bed-temperature
+      equality inside the allow_multi gate
+    aliases: ["P1-5-refinement"]
+    area: Prepare/Arrange
+    priority: P3
+    status: resolved
+    resolved: 2026-09-08
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    upstream:
+      repo: third_party/OrcaSlicer
+      refs:
+        - src/slic3r/GUI/Jobs/ArrangeJob.cpp:308-319 (bedTemp2extruderIds --
+          tower needed when several extruders share one bed temperature)
+    qt_targets:
+      - src/core/services/ProjectServiceMock.cpp (appendArrangeWipeTowers)
+      - src/core/viewmodels/EditorViewModel.cpp (arrangeWipeTowerContext)
+    notes: >
+      Resolved 2026-09-08. EditorViewModel::arrangeWipeTowerContext parses
+      the merged "bed_temp" coInts (per-extruder filament bed temps) into
+      the context; ProjectServiceMock::wipeTowerNeededForPlate (extracted,
+      exposed as the arrangeWipeTowerNeededForPlate test seam) groups the
+      plate's extruders by bed temperature exactly like upstream
+      bedTemp2extruderIds (ArrangeJob.cpp:308-319) -- with allow_multi the
+      tower is needed only when several extruders SHARE one temperature.
+      The multi-extruder-OBJECT gate (:296-304) sits upstream of allow_multi
+      and is independent of it, matching the upstream gate order; no data
+      falls back to the conservative same-temp assumption. Truth-table
+      regression in PartPlateTests::arrangeWipeTowerBedTempGateTruthTable
+      covers: disabled tower, different temps, same temps, no data, and the
+      multi-extruder-object case.
+    evidence:
+      commits: [195b9d8]
+      tests:
+        - tests/PartPlateTests.cpp::arrangeWipeTowerBedTempGateTruthTable
+      gate: full rebuild; canonical suites green on 2026-09-08 (PartPlate 70
+        incl. the truth table; all other suites standalone EXIT=0 -- in-gate
+        ViewModelSmoke abort was the tracked THUMBFAMILY-GATE-ENV AV flake)
+      last_verified: 2026-09-08
+
+  - id: STASH-WIP-DISPOSITION
+    title: Dispose of stash@{0} and stash@{1} (user decision required)
+    aliases: ["stash@{0}", "stash@{1}"]
+    area: Repo/Governance
+    priority: P1
+    implementation: hybrid
+    parity: not_checked
+    verification: none
+    availability: blocked_user_decision
+    notes: >
+      stash@{0}: small plate-per-file CLI WIP. stash@{1}: large perf-waves +
+      v5.16 WIP (59 files, +7916/-1171). Neither may be applied or dropped
+      without the user. If merged, the 2026-09-04 review P0 findings that
+      exist only inside that WIP must be fixed first (review report §4/§5).
+    remaining:
+      - User decides: dedicated branch/worktree for repair vs. drop.
+
+  - id: SUBMODULE-PUSH-AUTH
+    title: Push authorization for third_party/OrcaSlicer submodule fork
+    aliases: ["P12.2"]
+    area: Repo/Governance
+    priority: P2
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: blocked_user_decision
+
+  - id: CONFLICT-MARKERS
+    title: Conflict-marker feature (review P17.8)
+    aliases: ["P17.8"]
+    area: Prepare
+    priority: P3
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: blocked_external
+    notes: Classified Blocked in the 2026-09-04 review; blocker detail in the
+      ledger P17.8 entry.
+
+  - id: EXTERNAL-BLOCKERS
+    title: Standing external blockers (unchanged exemptions)
+    aliases: ["OpenVDB/SLA", "FFmpeg/WebRTC", "Paho-MQTT", "bambu_networking/MALL-01", "cr_tpms", "CGAL-5.4", "GCodeProcessor-conflict-channel"]
+    area: Platform
+    implementation: not_started
+    parity: not_checked
+    verification: none
+    availability: blocked_external
+    notes: >
+      OpenVDB (hollow/support-paint VDB paths), FFmpeg/WebRTC (camera),
+      Paho MQTT real-device, bambu_networking/Model Mall (MALL-01 locked),
+      cr_tpms (DLL removed at deploy), CGAL 5.4 (mesh boolean/cut surface
+      need 5.6+), GCodeProcessor collision/conflict channels. Maintain as
+      blocked_external; never count as open work.
+
+  # ── Resolved (keep for alias resolution; do not re-implement) ───────────
+  - id: PLATE-PRINT-IDENTITY
+    title: Stable monotonic non-reused per-plate print identity
+    aliases: ["P0.5.5b/stable-identity"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [288a09f]
+      tests:
+        - tests/PartPlateTests.cpp::platePrintIdentityLifecycle
+      last_verified: 2026-09-05
+    notes: PartPlateList assigns monotonic print identity; reorder/delete keep
+      survivor identity; new plates never reuse deleted identity.
+
+  - id: LOADPROJECT-GUI-THREAD-PUBLISH
+    title: loadProject publishes pending plate state + version on GUI thread
+    aliases: ["R-P1.K"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [8b87060, c6c33a3]
+      tests:
+        - tests/ViewModelSmokeTests.cpp::loadProjectReplacesPlateSequenceState
+      last_verified: 2026-09-05
+
+  - id: RES-G04-THUMBNAIL-FAMILY
+    title: 3MF thumbnail family + SaveStrategy semantics
+    aliases: ["G-04"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [9aa1f94, 926f70c]
+      notes: Includes picking render variant (926f70c) and no_light variant.
+
+  - id: RES-G10-LEADING-ZEROS
+    title: G02/G03 + G00/G01 leading-zero parsing
+    aliases: ["G-10"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [8b87060]
+
+  - id: RES-G11-LOADFILE-WORKER
+    title: loadFile worker direct-write + undo snapshot temp file in install dir
+    aliases: ["G-11", "R-P1.K'"]
+    status: resolved
+    resolved: 2026-09-05
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    evidence:
+      commits: [8b87060]
+      notes: Pending state now collected into worker-local containers and
+        published via queued lambda; snapshot scratch moved to QTemporaryDir
+        (ProjectServiceMock.cpp:5029).
+
+  - id: PREVIEW-GHOST-SHELL
+    title: Preview ghost object shells
+    aliases: ["P2.8.2", "P17.5"]
+    status: resolved
+    resolved: 2026-09-07
+    implementation: real
+    parity: known_deviation
+    verification: pass
+    availability: available
+    notes: >
+      P17.5 (2026-08-29) delivered the RHI ghost-shell pass (extruder
+      coloring, sliced geometry, alpha 0.15 -> upstream
+      set_shell_transparency 0.15). 85d641f (2026-09-07) closed the
+      per-volume lifecycle gap: the ghost buffer is built PER ModelBatch
+      with upstream load_shells eligibility (only model-part volumes;
+      modifier/negative/blocker/enforcer dropped, GCodeViewer.cpp:3163-3171)
+      and per-volume extruder tint through the first-color fallback
+      (update_colors_by_extruder, 3DScene.cpp:1216-1224); ModelBatch now
+      carries extruderId; an empty eligible set is the explicit reset_shell
+      transition (GCodeViewer.cpp:1193-1198, :3091-3095). A GPU-scale
+      rewrite was NOT needed (ModelBatch already had object/volume/instance
+      ranges). Two narrow accepted deviations remain (not the deferred
+      per-volume lifecycle): (a) the shell cache keys on the Qt6 model
+      generation instead of upstream print_id + get_modified_count, so a
+      brand-new Print with an identical mesh keeps the old shell where
+      upstream would rebuild; (b) an extruder-color-only change rebuilds
+      through the full scene-generation path instead of a shells-only
+      recolor (efficiency-only divergence).
+    evidence:
+      commits: [85d641f]
+      tests:
+        - tests/QmlUiAuditTests.cpp::previewCompletionSourceAudit
+      gate: canonical run after ninja -t clean full rebuild EXIT=0
+        2026-09-07, 12 suites 576 tests 0 failed 0 skipped (PrepareScene
+        23 incl. batch parsing, PartPlate 68, ViewModelSmoke 187, QmlUiAudit
+        171 incl. the new GHOST-PER-VOLUME assertions, PreviewParser 26,
+        Gizmo 24, AppTool 10, ObjectPicking 7, Navigator 8, Camera 14,
+        ViewportContext 6, E2E 32)
+      last_verified: 2026-09-07
+
+  - id: REVIEW-P1-RESIDUE
+    title: Unverified 2026-09-04 review P1 residue
+    aliases: ["R-P1.C'/deleteObject-mirror", "R-P1.E'/mock-disclosure"]
+    status: resolved
+    resolved: 2026-09-06
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      Resolved 2026-09-06 by verification + one small fix: (a) deleteObject
+      canonical path fully resyncs mirrors from the Model (no manual-shift
+      desync possible); splitObject double-free already fixed in 63bf0ad;
+      the only real residue was the pure-mock branch transform mirrors not
+      shifting -- fixed in 3ad7937 (canonical builds unaffected).
+      (b) User-visible mock disclosures already in place: cloud login +
+      binding banners (HomePage.qml) and monitor demo-mode banner
+      (MonitorPage.qml), landed with the P1.E batch (9b6fb82).
+    evidence:
+      commits: [3ad7937]
+      gate: 12 suites 565 tests 0 failed 2026-09-06 (in-gate + standalone; one C:-temp env write flake passed on retry)
+      last_verified: 2026-09-06

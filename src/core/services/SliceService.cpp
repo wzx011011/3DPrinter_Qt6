@@ -266,6 +266,21 @@ SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
   if (projectService_)
     connect(projectService_, &ProjectServiceMock::plateRemoved, this,
             [this](int printId) { removePlateResultByPrintId(printId); });
+  // PLATE-PRINT-LIFECYCLE (batch 2): a deleted plate releases its persistent
+  // Print/model slot immediately (printIndex identities are never reused, so
+  // the entry could never re-validate) and its stored G-code result entry.
+  // The GUI-thread invalidateAllSliceResults flow on top of deletePlate keeps
+  // the rest of the result store in sync.
+  if (projectService_)
+  {
+    connect(projectService_, &ProjectServiceMock::plateRemoved, this, [this](int printIndex) {
+#ifdef HAS_LIBSLIC3R
+      releasePersistentSlice(printIndex);
+#endif
+      if (printIndex >= 0 && plateResults_.remove(printIndex) > 0)
+        emit resultChanged();
+    });
+  }
 }
 
 SliceService::~SliceService()
@@ -278,12 +293,75 @@ SliceService::~SliceService()
   // outlive wait() and destroy a running QThread = qFatal).
   if (activeCancelFlag_)
     activeCancelFlag_->store(true);
+  // PLATE-PRINT-LIFECYCLE (batch 2) destruction order (design resolution of
+  // review P0-2, docs/代码评审报告_2026-09-04.md section 4):
+  //  1. Cancel first: flip the flag and cancel the active Print so a running
+  //     Print::process throws at the next step boundary (PrintBase state
+  //     machine calls throw_if_canceled on every step start/done,
+  //     PrintBase.hpp:150-186 + 542). The load-then-cancel pair is safe
+  //     since review P1-1: the worker no longer destroys the Print -- a
+  //     cancelled/failed slot is carried into the queued completion lambda,
+  //     so the Print outlives this load/cancel race window.
+  //  2. Join the worker via its QFuture BEFORE any member is destroyed. This
+  //     is a plain blocking wait on the QtConcurrent task (no owned QThread,
+  //     so the qFatal wait()-timeout failure mode of the perf/waves WIP
+  //     cannot happen) and it guarantees the worker -- the single owner of
+  //     the in-flight PersistentSlice -- finishes touching this service's
+  //     state and posts its completion before teardown continues. Idle slots
+  //     in persistentSlices_ then die here on the GUI thread.
+  //     Review P2-4: ALL workers are tracked now -- the slice worker plus
+  //     the previous-G-code, export-all, and export-copy auxiliary workers
+  //     each carry a stored future that the destructor cancels (flags) and
+  //     joins below. No worker class relies on call-site discipline.
+  //  Review P1-2 (BackendContext): the context destructor deletes the slice
+  //  service FIRST so the joined worker cannot touch an already-destroyed
+  //  ProjectServiceMock (Qt would otherwise destroy children in creation
+  //  order).
+  if (activeCancelFlag_)
+    activeCancelFlag_->store(true);
+  if (activeExportCancelFlag_)
+    activeExportCancelFlag_->store(true);
 #ifdef HAS_LIBSLIC3R
   if (Slic3r::Print *active = activePrint_.load(std::memory_order_acquire))
     active->cancel();
 #endif
   m_sliceThread.quit();
   m_sliceThread.wait(30000);
+  // Review P2-4: join EVERY worker this service ever launched -- the slice
+  // worker plus the three auxiliary ones -- so none can touch this object
+  // (or, via BackendContext ~dtor ordering, the project service) after its
+  // owner began teardown.
+  activeSliceFuture_.waitForFinished();
+  previousGcodeFuture_.waitForFinished();
+  exportAllFuture_.waitForFinished();
+  exportCopyFuture_.waitForFinished();
+}
+
+int SliceService::persistentSliceCount() const
+{
+#ifdef HAS_LIBSLIC3R
+  return int(persistentSlices_.size());
+#else
+  return 0;
+#endif
+}
+
+qint64 SliceService::persistentSliceReuseCount() const
+{
+#ifdef HAS_LIBSLIC3R
+  return persistentSliceReuseCount_;
+#else
+  return 0;
+#endif
+}
+
+qint64 SliceService::persistentSliceRebuildCount() const
+{
+#ifdef HAS_LIBSLIC3R
+  return persistentSliceRebuildCount_;
+#else
+  return 0;
+#endif
 }
 
 int SliceService::progress() const
@@ -412,6 +490,53 @@ void SliceService::storePlateResult(int printId, const PlateSliceResult &result)
     plateResults_[printId] = result;
     setDomainResultValid(printId, true);
   }
+    const int resultKey = activeTargetResultKey_ >= 0
+        ? activeTargetResultKey_ : resultKeyForPlateIndex(activeTargetPlateIndex_);
+    plateResults_.remove(resultKey);
+    const int currentPlateIndex = plateIndexForResultKey(resultKey);
+    if (currentPlateIndex >= 0)
+      setDomainResultValid(currentPlateIndex, false);
+  }
+  if (resultPlateIndex_ == activeTargetPlateIndex_)
+    clearStoredResult();
+  activeTargetResultKey_ = -1;
+}
+
+int SliceService::resultKeyForPlateIndex(int plateIndex) const
+{
+  if (projectService_) {
+    const int stableId = projectService_->platePrintIndex(plateIndex);
+    if (stableId >= 0)
+      return stableId;
+  }
+  return plateIndex;
+}
+
+int SliceService::plateIndexForResultKey(int resultKey) const
+{
+  if (projectService_) {
+    const int plateIndex = projectService_->plateIndexForPrintIndex(resultKey);
+    if (plateIndex >= 0)
+      return plateIndex;
+  }
+  return resultKey;
+}
+
+const PlateSliceResult *SliceService::resultForPlateIndex(int plateIndex) const
+{
+  const auto it = plateResults_.constFind(resultKeyForPlateIndex(plateIndex));
+  return it == plateResults_.constEnd() ? nullptr : &it.value();
+}
+
+bool SliceService::removeResultForPlateIndex(int plateIndex)
+{
+  return plateResults_.remove(resultKeyForPlateIndex(plateIndex)) > 0;
+}
+
+void SliceService::storePlateResultForKey(int resultKey, const PlateSliceResult &result)
+{
+  if (resultKey >= 0)
+    plateResults_[resultKey] = result;
 }
 
 void SliceService::removePlateResultByPrintId(int printId)
@@ -432,6 +557,8 @@ void SliceService::removePlateResultByPrintId(int printId)
   {
     emit resultChanged();
     emit sliceResultCleared();
+    storePlateResultForKey(resultKeyForPlateIndex(plateIndex), result);
+    setDomainResultValid(plateIndex, true);
   }
 }
 
@@ -449,7 +576,20 @@ void SliceService::clearResults()
 
   clearStoredResult();
   activeTargetPrintId_ = -1;
+  activeTargetPlateIndex_ = -1;
+  activeTargetResultKey_ = -1;
   plateResults_.clear();
+  // Review P1-3: project-scoped reset bumps the generation so queued
+  // completion lambdas from the discarded context are dropped on arrival.
+  ++sliceGeneration_;
+#ifdef HAS_LIBSLIC3R
+  // PLATE-PRINT-LIFECYCLE (batch 2): clearResults is the project-scoped reset
+  // (import, clear workspace, undo/redo, external scene change) -- those flows
+  // can mutate anything, so every idle persistent slot is dropped and the next
+  // slice of any plate is a conservative full rebuild. In-flight slots are not
+  // in the map (single-ownership handoff) and die on their worker path.
+  persistentSlices_.clear();
+#endif
   setAllDomainResultsValid(false);
   emit resultChanged();
   emit sliceResultCleared();
@@ -685,7 +825,17 @@ void SliceService::startSlice(const QString &projectName)
   const int targetPrintId = printIdForPlateIndex(targetPlateIndex);
   activeTargetPrintId_ = targetPrintId;
   removePlateResultByPrintId(targetPrintId);
+  activeTargetPlateIndex_ = targetPlateIndex;
+  const int targetResultKey = resultKeyForPlateIndex(targetPlateIndex);
+  activeTargetResultKey_ = targetResultKey;
+  plateResults_.remove(targetResultKey);
+  setDomainResultValid(targetPlateIndex, false);
   clearStoredResult();
+#ifdef HAS_LIBSLIC3R
+  // PLATE-PRINT-LIFECYCLE (batch 2): drop slots of plates pruned through
+  // paths that bypass deletePlate before the reuse decision below.
+  reconcilePersistentSlices();
+#endif
   emit resultChanged();
   emit sliceResultCleared();
 
@@ -693,6 +843,26 @@ void SliceService::startSlice(const QString &projectName)
 #ifdef HAS_LIBSLIC3R
   std::unique_ptr<Slic3r::Model> modelForSlice;
   quint64 geometrySignatureOut = 0; // Wave 4a: plate geometry fingerprint
+  // PLATE-PRINT-LIFECYCLE (batch 2) incremental-reslice decision (upstream
+  // BackgroundSlicingProcess truth: PartPlate keeps a persistent per-plate
+  // Print and re-applies into it, PartPlate.cpp:2839-2840; Print::apply
+  // diffs configs/objects against the previous apply and invalidates only
+  // the affected steps, PrintApply.cpp:1022+ and Print.cpp:73-353; process()
+  // re-runs only invalidated steps -- the PrintBase step state machine skips
+  // still-DONE steps, PrintBase.hpp:150-186).
+  //
+  // Judgment (conservative: prefer a full rebuild over a wrong reuse):
+  //  - REUSE the persistent Print+model clone only when the plate geometry
+  //    fingerprint is UNCHANGED (mesh did not move/mutate) and no calibration
+  //    params are involved on either side (set_calib_params is not modeled by
+  //    apply()). Config/preset/bed changes do NOT block reuse: they flow
+  //    through Print::apply's diff-based invalidation, exactly like upstream.
+  //  - FULL REBUILD (fresh clone + fresh Print) on any geometry change,
+  //    missing/stale slot, calibration involvement, cancel or error -- a
+  //    cancelled or failed Print state is never reused.
+  std::shared_ptr<PersistentSlice> reusedSlice;
+  quint64 plateGeometrySignature = 0;
+  bool reusePersistentPrint = false;
 #endif
   if (projectService_)
   {
@@ -733,6 +903,39 @@ void SliceService::startSlice(const QString &projectName)
 #else
     quint64 geometrySignature = 0;
     geometrySignatureOut = geometrySignature;
+    // The fingerprint is computed on the GUI thread while the model state is
+    // stable (O(objects) metadata walk -- no mesh content traversal).
+    plateGeometrySignature = projectService_->currentPlateGeometrySignature();
+    const auto slotIt = persistentSlices_.find(targetResultKey);
+    if (slotIt != persistentSlices_.end())
+    {
+      const bool signatureMatch = slotIt->second &&
+          slotIt->second->geometrySignature == plateGeometrySignature;
+      const bool calibClean = calibConfig_.mode == 0 && !slotIt->second->calibParamsApplied;
+      if (signatureMatch && calibClean)
+      {
+        // Take the slot out of the map: the GUI thread gives up ownership
+        // here and does not touch it again until the completion lambda
+        // re-inserts it (single-owner handoff, no lock).
+        reusedSlice = std::move(slotIt->second);
+        reusePersistentPrint = true;
+        qInfo("[SliceService] reusing persistent plate print (sig=%llx, print id %d)",
+              static_cast<unsigned long long>(plateGeometrySignature),
+              targetResultKey);
+      }
+      else
+      {
+        qInfo("[SliceService] dropping stale persistent plate print (sig %llx vs %llx, calib %d/%d, print id %d)",
+              static_cast<unsigned long long>(slotIt->second ? slotIt->second->geometrySignature : 0ull),
+              static_cast<unsigned long long>(plateGeometrySignature),
+              int(calibConfig_.mode),
+              int(slotIt->second && slotIt->second->calibParamsApplied),
+              targetResultKey);
+      }
+      persistentSlices_.erase(slotIt);
+    }
+    if (!reusePersistentPrint)
+      modelForSlice = projectService_->cloneCurrentPlateModel();
 #endif
   }
 
@@ -746,9 +949,11 @@ void SliceService::startSlice(const QString &projectName)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
-  emit sliceStateChanged();
+    emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
       activeTargetPrintId_ = -1;
+    activeTargetPlateIndex_ = -1;
+    activeTargetResultKey_ = -1;
     return;
   }
 
@@ -763,6 +968,10 @@ void SliceService::startSlice(const QString &projectName)
   // is being REUSED (geometry signature unchanged) — the slot's model has
   // the objects; only a freshly cloned empty model is an error.
   if ((!modelForSlice && !hasPersistentSlot)
+  // On the reuse path modelForSlice is intentionally null -- the slot's
+  // model already holds the plate objects; only a fresh clone without a
+  // reused slot means the plate has no sliceable objects.
+  if ((!modelForSlice && !reusedSlice)
       || (modelForSlice && modelForSlice->objects.empty()))
   {
     sliceState_ = State::Error;
@@ -773,9 +982,11 @@ void SliceService::startSlice(const QString &projectName)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
-  emit sliceStateChanged();
+    emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
       activeTargetPrintId_ = -1;
+    activeTargetPlateIndex_ = -1;
+    activeTargetResultKey_ = -1;
     return;
   }
 #endif
@@ -835,6 +1046,21 @@ void SliceService::startSlice(const QString &projectName)
   const bool posted = QMetaObject::invokeMethod(
       &m_sliceWorker,
       [receiver, cancelFlag, payload]()
+  // PLATE-PRINT-LIFECYCLE (batch 2): keep the future so ~SliceService can
+  // cancel-then-join the worker (no orphaned worker can race destruction).
+  activeSliceFuture_ = QtConcurrent::run([receiver, cancelFlag, sourcePath, targetPlateIndex, targetResultKey, targetPlateLabel
+#ifdef HAS_LIBSLIC3R
+                     , modelForSlice = std::move(modelForSlice)
+                     // PLATE-PRINT-LIFECYCLE (batch 2): the persistent slot
+                     // (null on the full-rebuild path) is handed to THIS
+                     // worker with single ownership; the GUI thread will not
+                     // touch it until the queued completion lambda runs.
+                     , persistentSlot = std::move(reusedSlice)
+                     , plateGeometrySignature
+#endif
+                     // Review P1-3: project reset generation at start time.
+                     , generation = receiver ? receiver->sliceGeneration_ : quint64(0)
+                     ]() mutable
                     {
     // Aliases keep the original worker body untouched.
     const QString &sourcePath = payload->sourcePath;
@@ -891,6 +1117,9 @@ void SliceService::startSlice(const QString &projectName)
     SlicePreviewData capturedPreview{};
 
 #ifdef HAS_LIBSLIC3R
+    // PLATE-PRINT-LIFECYCLE (batch 2): true when this run reused a persistent
+    // Print (reported by the completion lambda for diagnostics only).
+    bool reusedPersistentPrint = false;
     try
     {
       auto notify = [receiver](int progress, const QString &label) {
@@ -940,11 +1169,37 @@ void SliceService::startSlice(const QString &projectName)
       const bool modelMissing = (slot->model == nullptr
                                  || slot->model->objects.empty());
       if (modelMissing)
+      // PLATE-PRINT-LIFECYCLE (batch 2): resolve the working Print/model pair
+      // from the persistent slot (reuse) or build a fresh slot (full rebuild).
+      // The slot leaves this lambda exactly once: on success it is carried
+      // into the GUI-thread completion lambda for re-insertion; on cancel or
+      // failure it is destroyed HERE on the worker thread so stale engine
+      // state can never be resurrected (conservative invalidation).
+      if (persistentSlot && (!persistentSlot->print || !persistentSlot->model))
+        persistentSlot.reset();  // defensive: a torn slot is a full rebuild
+      if (!persistentSlot)
+      {
+        persistentSlot = std::make_shared<PersistentSlice>();
+        persistentSlot->model = std::move(modelForSlice);
+        persistentSlot->print = std::make_unique<Slic3r::Print>();
+        persistentSlot->geometrySignature = plateGeometrySignature;
+      }
+      else
+      {
+        reusedPersistentPrint = true;
+      }
+      Slic3r::Model *modelForSlicePtr = persistentSlot->model.get();
+      Slic3r::Print &print = *persistentSlot->print;
+      receiver->activePrint_.store(&print, std::memory_order_release);
+
+      notify(2, QObject::tr("Preparing current plate model"));
+      if (!modelForSlicePtr || modelForSlicePtr->objects.empty())
         throw std::runtime_error("Current plate has no sliceable objects");
       {
         int totalVolumes = 0;
         int totalInstances = 0;
         for (const auto *obj : slot->model->objects) {
+        for (const auto *obj : modelForSlicePtr->objects) {
           if (obj) {
             totalVolumes += int(obj->volumes.size());
             totalInstances += int(obj->instances.size());
@@ -1069,6 +1324,17 @@ void SliceService::startSlice(const QString &projectName)
       // invalidates only the affected steps (PrintApply.cpp:1071-1141);
       // identical objects keep their sliced steps (Print.cpp:1851-1940).
       print.apply(*slot->model, config);
+      // PLATE-PRINT-LIFECYCLE (batch 2): always apply against the persistent
+      // slot's model. Print::apply diffs the incoming model/config against
+      // the previous apply and invalidates ONLY the affected steps
+      // (print_diff/object_diff/region_diff, PrintApply.cpp:1022+;
+      // invalidate_state_by_config_options, Print.cpp:73-353), and process()
+      // skips still-DONE steps through the PrintBase state machine -- this is
+      // the upstream incremental-reslice mechanism (BackgroundSlicingProcess
+      // keeps one persistent Print per plate and calls apply+process with
+      // default use_cache=false, BackgroundSlicingProcess.cpp:229/277/441;
+      // no upstream call site passes use_cache=true).
+      print.apply(*modelForSlicePtr, config);
 
       // v2.7 P1: inject calibration parameters after apply() and before process().
       // GCode::do_export then enters Calib_PA_Line / Calib_Flow_Rate / Calib_Temp_Tower.
@@ -1082,6 +1348,9 @@ void SliceService::startSlice(const QString &projectName)
         cp.step = receiver->calibConfig_.step;
         cp.print_numbers = receiver->calibConfig_.printNumbers;
         print.set_calib_params(cp);
+        // The slot must never be reused across a calibration slice
+        // (conservative: apply() does not model calib params).
+        persistentSlot->calibParamsApplied = true;
       }
 
 
@@ -1120,6 +1389,10 @@ void SliceService::startSlice(const QString &projectName)
       // step results from the previous incremental apply (Print.hpp:841).
       long long cachedTimeCost = 0;
       print.process(&cachedTimeCost, reusePrint);
+      // Default use_cache=false: step-level reuse is governed by the apply()
+      // invalidation set and the PrintBase step state machine (upstream
+      // contract -- no upstream call site passes use_cache=true).
+      print.process();
       if (cancelFlag && cancelFlag->load())
       {
         // R-P0.1: drop activePrint_ BEFORE the slot dies so a concurrent
@@ -1341,6 +1614,13 @@ void SliceService::startSlice(const QString &projectName)
     {
       receiver->activePrint_.store(nullptr, std::memory_order_release);
       discardPersistent(); // failed state is not reusable
+      // PLATE-PRINT-LIFECYCLE (batch 2) / review P1-1: the slot is NOT
+      // destroyed here. It is carried by value into the queued completion
+      // lambda (which only re-inserts it on success), so a cancelled or
+      // failed Print is never reused while the Print object itself stays
+      // ALIVE until the GUI thread drops the lambda. Destroying it here
+      // would race ~SliceService/cancelSlice, which load activePrint_ and
+      // call cancel() between this store(nullptr) and the destruction.
       errorText = QString::fromUtf8(ex.what());
     }
     catch (...)
@@ -1405,6 +1685,23 @@ void SliceService::startSlice(const QString &projectName)
       return;
 
     QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, targetPrintId, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance, capturedSupportPreview, capturedPreview]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, targetResultKey, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance
+#ifdef HAS_LIBSLIC3R
+                                         // PLATE-PRINT-LIFECYCLE (batch 2):
+                                         // on success carries the finished
+                                         // persistent Print back to the GUI
+                                         // thread; on cancel/failure it now
+                                         // ALSO carries the slot (review
+                                         // P1-1) so the Print stays alive
+                                         // until this lambda dies on the GUI
+                                         // thread -- never destroyed while
+                                         // ~SliceService/cancelSlice may
+                                         // still call activePrint_->cancel().
+                                         , persistentSlot, reusedPersistentPrint
+#endif
+                                         // Review P1-3: generation gate.
+                                         , generation
+    ]() {
       if (!receiver)
         return;
 
@@ -1430,6 +1727,8 @@ void SliceService::startSlice(const QString &projectName)
         emit receiver->sliceResultCleared();
         emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
+        receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1460,6 +1759,8 @@ void SliceService::startSlice(const QString &projectName)
         emit receiver->sliceResultCleared();
         emit receiver->stateChanged();
         emit receiver->sliceStateChanged();
+        receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1478,6 +1779,15 @@ void SliceService::startSlice(const QString &projectName)
 
       // Store per-plate result for multi-plate tracking by stable print identity.
       if (receiver->plateIndexForPrintId(targetPrintId) >= 0) {
+      // Store per-plate result for multi-plate tracking
+      // Review P1-3: gated on the slice generation. A project load/reset
+      // (invalidateAllSliceResults -> clearResults) bumps the generation and
+      // rebuilds the plate list, so a completion lambda queued after the
+      // reset must not attach its stale result -- the new project's plate 0
+      // can legitimately carry the same printIndex again (the counter resets
+      // with the list), which would defeat the identity liveness checks
+      // below on their own.
+      if (resultPlateIndex >= 0 && generation == receiver->sliceGeneration_) {
         PlateSliceResult pr;
         pr.estimatedTimeLabel = estimatedTimeLabel;
         pr.resultWeightLabel = resultWeightLabel;
@@ -1490,6 +1800,47 @@ void SliceService::startSlice(const QString &projectName)
         receiver->storePlateResult(targetPrintId, pr);
       }
       receiver->activeTargetPrintId_ = -1;
+        receiver->storePlateResultForKey(targetResultKey, pr);
+        const int currentPlateIndex = receiver->plateIndexForResultKey(targetResultKey);
+        if (currentPlateIndex >= 0)
+          receiver->setDomainResultValid(currentPlateIndex, true);
+      }
+#ifdef HAS_LIBSLIC3R
+      // PLATE-PRINT-LIFECYCLE (batch 2): the slice succeeded and the worker
+      // handed the persistent Print back -- re-insert it for the next slice
+      // unless the plate vanished mid-slice or the generation moved on (a
+      // stale Print from a discarded project must never re-enter the new
+      // project's slot store), then the slot dies with this lambda.
+      if (persistentSlot && generation == receiver->sliceGeneration_)
+      {
+        // Authoritative liveness check: the stable printIndex must still
+        // resolve to a live plate (plateIndexForResultKey's positional
+        // fallback would always succeed here, so resolve directly).
+        if (targetResultKey >= 0 && receiver->projectService_
+            && receiver->projectService_->plateIndexForPrintIndex(targetResultKey) >= 0)
+        {
+          receiver->persistentSlices_[targetResultKey] = persistentSlot;
+          if (reusedPersistentPrint)
+          {
+            ++receiver->persistentSliceReuseCount_;
+            qInfo("[SliceService] persistent print reused (print id %d, reuse count %lld)",
+                  targetResultKey,
+                  static_cast<long long>(receiver->persistentSliceReuseCount_));
+          }
+          else
+          {
+            ++receiver->persistentSliceRebuildCount_;
+            qInfo("[SliceService] persistent print stored (print id %d, rebuild count %lld)",
+                  targetResultKey,
+                  static_cast<long long>(receiver->persistentSliceRebuildCount_));
+          }
+        }
+        // No explicit reset: this completion lambda is const; the shared_ptr
+        // copy dies with it right after the re-insert above.
+      }
+#endif
+      receiver->activeTargetPlateIndex_ = -1;
+      receiver->activeTargetResultKey_ = -1;
       qInfo("[SliceService] slice finished plate=%d output=%s layers=%d",
             resultPlateIndex,
             outputPath.toUtf8().constData(),
@@ -1585,6 +1936,9 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   const int targetPlateIndex = projectService_ ? projectService_->currentPlateIndex() : -1;
   const int targetPrintId = printIdForPlateIndex(targetPlateIndex);
   activeTargetPrintId_ = targetPrintId;
+  const int targetResultKey = resultKeyForPlateIndex(targetPlateIndex);
+  activeTargetPlateIndex_ = targetPlateIndex;
+  activeTargetResultKey_ = targetResultKey;
   // Phase 239 (ENGN-02): keep the previous per-plate labels (weight/filament/
   // cost/layer count). The reuse re-reads the SAME file the metadata was
   // computed from (upstream keeps gcode_result statistics alive on the
@@ -1593,6 +1947,10 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   // from the parsed file.
   const PlateSliceResult previousMeta = plateResults_.value(targetPrintId);
   removePlateResultByPrintId(targetPrintId);
+  const PlateSliceResult previousMeta = resultForPlateIndex(targetPlateIndex)
+      ? *resultForPlateIndex(targetPlateIndex) : PlateSliceResult{};
+  removeResultForPlateIndex(targetPlateIndex);
+  setDomainResultValid(targetPlateIndex, false);
   clearStoredResult();
   emit resultChanged();
   emit sliceResultCleared();
@@ -1607,9 +1965,11 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
              statusLabel_.toUtf8().constData());
     emit progressChanged();
     emit stateChanged();
-  emit sliceStateChanged();
+    emit sliceStateChanged();
     emit sliceFailed(statusLabel_);
       activeTargetPrintId_ = -1;
+    activeTargetPlateIndex_ = -1;
+    activeTargetResultKey_ = -1;
     return false;
   }
 
@@ -1635,6 +1995,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
   }
 
   QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetPrintId, targetPlateLabel, previousMeta]()
+  previousGcodeFuture_ = QtConcurrent::run([receiver, cancelFlag, localPath, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]()
                     {
     QString errorText;
     QString estimatedTimeLabel;
@@ -1667,6 +2028,7 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       return;
 
     QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetPrintId, targetPlateLabel, previousMeta]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]() {
       if (!receiver)
         return;
 
@@ -1692,6 +2054,8 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         emit receiver->sliceResultCleared();
         emit receiver->stateChanged();
         emit receiver->sliceFailed(receiver->statusLabel_);
+        receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1720,6 +2084,8 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         emit receiver->sliceResultCleared();
         emit receiver->stateChanged();
         emit receiver->sliceStateChanged();
+        receiver->activeTargetPlateIndex_ = -1;
+        receiver->activeTargetResultKey_ = -1;
         return;
       }
 
@@ -1749,6 +2115,13 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
         receiver->storePlateResult(targetPrintId, pr);
       }
       receiver->activeTargetPrintId_ = -1;
+        receiver->storePlateResultForKey(targetResultKey, pr);
+        const int currentPlateIndex = receiver->plateIndexForResultKey(targetResultKey);
+        if (currentPlateIndex >= 0)
+          receiver->setDomainResultValid(currentPlateIndex, true);
+      }
+      receiver->activeTargetPlateIndex_ = -1;
+      receiver->activeTargetResultKey_ = -1;
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -1825,6 +2198,8 @@ bool SliceService::exportPlateGCodeToPath(int plateIndex, const QString &targetP
   const int printId = printIdForPlateIndex(plateIndex);
   const auto it = plateResults_.constFind(printId);
   if (it == plateResults_.constEnd())
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  if (!result)
   {
     setExportStatus(State::Completed, progress_, QObject::tr("No G-code result for plate %1").arg(plateIndex + 1));
     logExportFailure(QStringLiteral("plate"),
@@ -1834,7 +2209,7 @@ bool SliceService::exportPlateGCodeToPath(int plateIndex, const QString &targetP
     emit exportFailed(statusLabel_);
     return false;
   }
-  return exportSourceToPath(it->outputPath, targetPath, defaultExportGCodeFileName(plateIndex));
+  return exportSourceToPath(result->outputPath, targetPath, defaultExportGCodeFileName(plateIndex));
 }
 
 bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, const QString &baseName)
@@ -1927,6 +2302,9 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
     const int plateIndex = plateIndexForPrintId(printId);
     if (plateIndex < 0)
       continue;
+    const int plateIndex = plateIndexForResultKey(it.key());
+    if (plateIndex < 0)
+      continue;  // plate was deleted after the result was produced
     if (projectService_ && (projectService_->isPlateLocked(plateIndex) || !projectService_->isPlatePrintable(plateIndex)))
       continue;
     if (it->outputPath.isEmpty())
@@ -1959,7 +2337,7 @@ bool SliceService::exportAllPlateGCodeToDirectory(const QString &directoryPath, 
   setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs, generation]() {
+  exportAllFuture_ = QtConcurrent::run([receiver, cancelFlag, jobs, totalJobs, generation]() {
     QString failureReason;
     QString failureSource;
     QString failureTarget;
@@ -2117,7 +2495,7 @@ bool SliceService::exportSourceToPath(const QString &sourcePath, const QString &
   setExportStatus(State::Exporting, 0, QObject::tr("Exporting G-code"));
   emit exportStarted(statusLabel_);
 
-  QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes, generation]() {
+  exportCopyFuture_ = QtConcurrent::run([receiver, cancelFlag, sourceAbs, targetAbs, displayName, totalBytes, generation]() {
     const auto onProgress = [receiver](int percent) {
       if (!receiver)
         return;
@@ -2190,48 +2568,65 @@ bool SliceService::hasPlateResult(int plateIndex) const
   if (it == plateResults_.constEnd() || it->outputPath.isEmpty())
     return false;
   return QFileInfo::exists(it->outputPath);
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result && !result->outputPath.isEmpty()
+      && QFileInfo::exists(result->outputPath);
 }
 
 QString SliceService::plateEstimatedTime(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->estimatedTimeLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->estimatedTimeLabel : QString();
 }
 
 QString SliceService::plateWeight(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->resultWeightLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultWeightLabel : QString();
 }
 
 QString SliceService::plateFilament(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->resultFilamentLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultFilamentLabel : QString();
 }
 
 QString SliceService::plateCost(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->resultCostLabel : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultCostLabel : QString();
 }
 
 int SliceService::plateLayerCount(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->resultLayerCount : 0;
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->resultLayerCount : 0;
 }
 
 QString SliceService::plateOutputPath(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->outputPath : QString();
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->outputPath : QString();
 }
 
 int SliceService::plateResultSource(int plateIndex) const
 {
   auto it = plateResults_.constFind(printIdForPlateIndex(plateIndex));
   return it != plateResults_.constEnd() ? it->source : int(ResultSource::None);
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  return result ? result->source : int(ResultSource::None);
 }
 
 bool SliceService::activatePlateResult(int plateIndex)
@@ -2242,6 +2637,8 @@ bool SliceService::activatePlateResult(int plateIndex)
   const int printId = printIdForPlateIndex(plateIndex);
   const auto it = plateResults_.constFind(printId);
   if (it == plateResults_.constEnd() || it->outputPath.isEmpty() || !QFileInfo::exists(it->outputPath))
+  const PlateSliceResult *result = resultForPlateIndex(plateIndex);
+  if (!result || result->outputPath.isEmpty() || !QFileInfo::exists(result->outputPath))
   {
     if (resultPlateIndex_ != -1 || !outputPath_.isEmpty())
     {
@@ -2249,24 +2646,27 @@ bool SliceService::activatePlateResult(int plateIndex)
       emit resultChanged();
       emit sliceResultCleared();
       emit stateChanged();
-  emit sliceStateChanged();
+      emit sliceStateChanged();
     }
     return false;
   }
 
   sliceState_ = State::Completed;
   progress_ = 100;
-  statusLabel_ = it->source == int(ResultSource::PreviousGCode)
+  statusLabel_ = result->source == int(ResultSource::PreviousGCode)
       ? QObject::tr("Existing G-code reuse complete")
       : QObject::tr("Slice complete");
-  outputPath_ = it->outputPath;
-  estimatedTimeLabel_ = it->estimatedTimeLabel;
-  resultWeightLabel_ = it->resultWeightLabel;
+  outputPath_ = result->outputPath;
+  estimatedTimeLabel_ = result->estimatedTimeLabel;
+  resultWeightLabel_ = result->resultWeightLabel;
   resultPlateIndex_ = plateIndex;
   resultPlatePrintId_ = printId;
   resultFilamentLabel_ = it->resultFilamentLabel;
   resultLayerCount_ = it->resultLayerCount;
   resultCostLabel_ = it->resultCostLabel;
+  resultFilamentLabel_ = result->resultFilamentLabel;
+  resultLayerCount_ = result->resultLayerCount;
+  resultCostLabel_ = result->resultCostLabel;
 
   if (projectService_)
   {
@@ -2289,7 +2689,14 @@ bool SliceService::activatePlateResult(int plateIndex)
 void SliceService::clearPlateResults()
 {
   clearStoredResult();
+  activeTargetResultKey_ = -1;
   plateResults_.clear();
+  // Review P1-3: same generation bump as clearResults.
+  ++sliceGeneration_;
+#ifdef HAS_LIBSLIC3R
+  // PLATE-PRINT-LIFECYCLE (batch 2): same conservative reset as clearResults.
+  persistentSlices_.clear();
+#endif
   setAllDomainResultsValid(false);
   emit resultChanged();
   emit sliceResultCleared();
@@ -2297,12 +2704,44 @@ void SliceService::clearPlateResults()
   emit sliceStateChanged();
 }
 
+#ifdef HAS_LIBSLIC3R
+void SliceService::reconcilePersistentSlices()
+{
+  // Drop slots whose stable printIndex no longer resolves to a live plate.
+  // Catches plate pruning paths that bypass deletePlate (e.g. deleteObject
+  // emptying trailing plates). Positional fallback keys (plates without a
+  // stable identity) never resolve through plateIndexForPrintIndex and are
+  // treated as dead -- no persistence for identity-less plates (conservative).
+  for (auto it = persistentSlices_.begin(); it != persistentSlices_.end();)
+  {
+    if (!projectService_ || projectService_->plateIndexForPrintIndex(it->first) < 0)
+    {
+      qInfo("[SliceService] persistent print released (plate gone) print id %d", it->first);
+      it = persistentSlices_.erase(it);
+    }
+    else
+    {
+      ++it;
+    }
+  }
+}
+
+void SliceService::releasePersistentSlice(int printIndex)
+{
+  if (printIndex < 0)
+    return;
+  if (persistentSlices_.erase(printIndex) > 0)
+    qInfo("[SliceService] persistent print released (plate removed) print id %d", printIndex);
+}
+#endif
+
 void SliceService::removePlateResult(int plateIndex)
 {
   const int printId = printIdForPlateIndex(plateIndex);
   if (printId < 0)
     return;
   const bool removedPlateMetadata = plateResults_.remove(printId) > 0;
+  const bool removedPlateMetadata = removeResultForPlateIndex(plateIndex);
   if (removedPlateMetadata)
     setDomainResultValid(printId, false);
   bool clearedCurrentOutput = false;

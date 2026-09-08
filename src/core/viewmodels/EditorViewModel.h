@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QRectF>
 #include <QSet>
 #include <QString>
 #include <QByteArray>
@@ -397,6 +398,27 @@ public:
                                       QVector3D rayOrigin, QVector3D rayDir,
                                       QVector3D cameraPosition,
                                       QVector3D cameraForward);
+  /// PAINT-MMU-TOOLS: the MMU gizmo's own tool chip (upstream
+  /// GLGizmoMmuSegmentation m_current_tool, each painter gizmo instance keeps
+  /// its own). 0=Brush (circle/sphere/pointer cursor via
+  /// supportPaintCursorType), 1=BucketFill, 3=GapFill, 4=HeightRange. The
+  /// values mirror supportPaintToolType where the tools overlap so the shared
+  /// channels stay comparable.
+  int mmuPaintTool() const;
+  void setMmuPaintTool(int tool);
+  /// PAINT-MMU-TOOLS: bucket-fill edge detection (upstream
+  /// m_detect_geometry_edge, GLGizmoMmuSegmentation.cpp:623-637). Checked =
+  /// the fill stops at facet edges steeper than the smart-fill angle;
+  /// unchecked = angle -1 (no edge detection, floods every same-state
+  /// neighbour).
+  bool mmuBucketEdgeDetection() const;
+  void setMmuBucketEdgeDetection(bool on);
+  /// PAINT-MMU-TOOLS: height-range band span in mm (upstream m_cursor_height,
+  /// CursorHeightMin=0.1 / Max=8 / Step=0.2, GLGizmoPainterBase.hpp:242-245).
+  /// Clamped to [0.1, 8]; Ctrl+wheel on the height-range tool steps it 0.2
+  /// (round-trips through RhiViewport::heightRangeTuned).
+  float paintHeightRange() const;
+  void setPaintHeightRange(float height);
   bool supportPaintOnOverhangsOnly() const;
   void setSupportPaintOnOverhangsOnly(bool on);
   /// P2.3-1: cross-section (clipping) plane position for the painter gizmos,
@@ -449,6 +471,9 @@ public:
   // cameraForward (P2.3-1) is the viewport camera look direction (world
   // space) — upstream builds the cross-section plane normal from
   // -camera.get_dir_forward() (ObjectClipper::set_position_by_ratio,
+  // cameraForward (PAINT-ALT-WHEEL-CLIP) is the viewport camera look
+  // direction (world space) -- upstream builds the cross-section plane normal
+  // from -camera.get_dir_forward() (ObjectClipper::set_position_by_ratio,
   // GLGizmosCommon.cpp:346).
   Q_INVOKABLE bool paintAtFacet(int obj, int vol, int facetIdx,
                                 double hitX, double hitY, double hitZ,
@@ -465,7 +490,8 @@ public:
   /// supportPaintSmartFillAngle Q_PROPERTY; overhangsOnly threads the
   /// overhang filter angle (upstream m_paint_on_overhangs_only ->
   /// m_highlight_by_angle_threshold_deg). Returns true when a facet was hit
-  /// and the seed fill committed.
+  /// and the seed fill committed. cameraForward (PAINT-ALT-WHEEL-CLIP) is the
+  /// camera look direction the cross-section plane normal derives from.
   Q_INVOKABLE bool smartFillAtFacet(int state,
                                     double seedFillAngle,
                                     bool overhangsOnly,
@@ -473,6 +499,44 @@ public:
                                     int pickedSourceIndex,
                                     QVector3D rayOrigin, QVector3D rayDir,
                                     QVector3D cameraForward);
+  /// PAINT-MMU-TOOLS: bucket (connected-region) fill pick entry. Same
+  /// two-stage pick contract as smartFillAtFacet, but drives
+  /// TriangleSelector::bucket_fill_select_triangles (upstream POINTER brush +
+  /// BUCKET_FILL tool click, GLGizmoPainterBase.cpp:778-787). seedFillAngle
+  /// is the edge-detection threshold; a negative value disables it (pointer
+  /// brush + unchecked edge detection). propagate=true floods the connected
+  /// same-state region (bucket fill); false stages only the hit facet
+  /// (pointer brush). Returns true when a facet was hit and the fill ran.
+  Q_INVOKABLE bool bucketFillAtFacet(int state,
+                                     double seedFillAngle,
+                                     bool propagate,
+                                     int pickedSourceIndex,
+                                     QVector3D rayOrigin, QVector3D rayDir,
+                                     QVector3D cameraForward);
+  /// PAINT-MMU-TOOLS: height-range pick entry (upstream HEIGHT_RANGE brush,
+  /// GLGizmoPainterBase.cpp:703-733 + GLGizmoMmuSegmentation.cpp:667-668).
+  /// The world Z of the ray hit anchors the band [z, z + height]; the band is
+  /// applied to EVERY part volume of the picked object whose facets intersect
+  /// it (upstream get_projected_height_range scans all part volumes,
+  /// GLGizmoPainterBase.cpp:515-573). Returns true when at least one volume
+  /// was painted.
+  Q_INVOKABLE bool paintHeightRangeAt(int state,
+                                      double height,
+                                      int pickedSourceIndex,
+                                      QVector3D rayOrigin, QVector3D rayDir,
+                                      QVector3D cameraPosition,
+                                      QVector3D cameraForward);
+  /// PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position for the
+  /// painter gizmos, 0..1 (upstream ObjectClipper m_clp_ratio; 0 = clipping
+  /// off). While > 0 paint picks that hit the mesh on the clipped side of
+  /// the plane are rejected (upstream is_mesh_point_clipped,
+  /// GLGizmoPainterBase.cpp:383-393).
+  double paintClippingPosition() const;
+  void setPaintClippingPosition(double pos);
+  /// PAINT-ALT-WHEEL-CLIP: reset the plane to 0 = off (upstream
+  /// SLAGizmoEventType::ResetClippingPlane -> set_position_by_ratio(-1.),
+  /// GLGizmoPainterBase.cpp:643-646; the Qt6 port models "off" as ratio 0).
+  Q_INVOKABLE void resetPaintClippingPlane();
   /// Phase 120 (PAINT-01): drop all PaintEngine selectors for one object.
   /// Called on gizmo-exit cleanup (mirrors GLGizmoPainterBase on_exit).
   Q_INVOKABLE void clearPaintOnObject(int objectIndex);
@@ -505,6 +569,9 @@ public:
   void setSeamPaintCursorRadius(float radius);
   bool seamPaintOnOverhangsOnly() const;
   void setSeamPaintOnOverhangsOnly(bool on);
+  // P11.B2.3 brush-drag axis lock (paint gizmos)
+  int paintLockAxis() const;
+  void setPaintLockAxis(int axis);
   /// Clear all seam painting on selected volumes
   Q_INVOKABLE void clearSeamPaintOnSelection();
   // Hollow gizmo (对齐上游 GLGizmoHollow)
@@ -701,6 +768,10 @@ public:
   Q_INVOKABLE void beginGizmoMoveDrag();
   Q_INVOKABLE void applyGizmoMoveDelta(float dx, float dy, float dz);
   Q_INVOKABLE void endGizmoMoveDrag();
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470): relative bed-plane
+  // translation of the whole selection; per-object TransformCommands merge
+  // via mergeWith so key repeats collapse into one undo step.
+  Q_INVOKABLE void nudgeSelectedObjects(double dxMm, double dyMm);
   Q_INVOKABLE void beginGizmoRotateDrag();
   Q_INVOKABLE void applyGizmoRotateDelta(int axis, float radians);
   Q_INVOKABLE void endGizmoRotateDrag();
@@ -792,6 +863,26 @@ public:
   Q_INVOKABLE void selectObject(int i);
   Q_INVOKABLE bool selectSourceObject(int sourceIndex);
   Q_INVOKABLE void toggleObjectSelection(int i);
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4152-4168, Ctrl+click removes
+  // an already selected volume / adds a missed one additively): source-index
+  // form of toggleObjectSelection() for the viewport pick path, which has no
+  // filtered-list index to map.
+  Q_INVOKABLE void toggleSourceObjectSelection(int sourceIndex);
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135, Alt+click switches the
+  // click into volume selection mode, KBShortcutsDialog.cpp:235 "Alt+Left
+  // mouse button = Select a part"): select one volume (part) of an object by
+  // source index.
+  Q_INVOKABLE void selectVolumeBySource(int sourceIndex, int volumeIndex);
+  // SEL-MODIFIERS-RECT: rubber-band rectangle selection backend. The viewport
+  // resolves which visible source objects the screen rect hits (the upstream
+  // GLSelectionRectangle::contains projection test) and forwards the raw press
+  // modifiers + rect + contained source indices; this method owns the state
+  // change (upstream _update_selection_from_hover, GLCanvas3D.cpp:9518-9600):
+  // Shift rect replaces the selection (additive when Ctrl is held, :9576),
+  // Alt rect removes the contained objects (:9588-9589), an empty Shift rect
+  // clears the whole selection (:9522-9526). QML forwards opaquely.
+  Q_INVOKABLE void selectObjectsInRect(int modifiers, const QRectF &rect,
+                                       const QVariantList &containedSourceIndices);
   Q_INVOKABLE void clearObjectSelection();
   Q_INVOKABLE void selectAllVisibleObjects();
   Q_INVOKABLE void setSelectedObjectsPrintable(bool printable);
@@ -996,6 +1087,19 @@ public:
   /// P2.3-5: MMU edge-detection checkbox + height-range brush span.
   Q_PROPERTY(bool paintEdgeDetection READ paintEdgeDetection WRITE setPaintEdgeDetection NOTIFY stateChanged)
   Q_PROPERTY(float paintHeightRange READ paintHeightRange WRITE setPaintHeightRange NOTIFY stateChanged)
+  // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip (0=Brush, 1=BucketFill,
+  // 3=GapFill, 4=HeightRange; upstream GLGizmoMmuSegmentation m_current_tool
+  // Triangle/Fill/HeightRange/GapFill icons) + the bucket-fill edge-detection
+  // checkbox (m_detect_geometry_edge) + the height-range band span
+  // (m_cursor_height, 0.1..8 step 0.2). mmuPaintTool changes also emit
+  // paintDataChanged so the -3 gap-fragment preview follows the chip.
+  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool NOTIFY stateChanged)
+  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection NOTIFY stateChanged)
+  Q_PROPERTY(float paintHeightRange READ paintHeightRange WRITE setPaintHeightRange NOTIFY stateChanged)
+  // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position 0..1
+  // (0 = off) -- upstream ObjectClipper m_clp_ratio swept by Alt+wheel
+  // (GLGizmoPainterBase.cpp:632-641) and reset via resetPaintClippingPlane.
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition NOTIFY stateChanged)
   Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
   /// Phase 240 (GIZ-02): overhang filter angle (see supportPaintOverhangAngle).
   Q_PROPERTY(float supportPaintOverhangAngle READ supportPaintOverhangAngle WRITE setSupportPaintOverhangAngle NOTIFY stateChanged)
@@ -1031,6 +1135,10 @@ public:
   Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY stateChanged)
   Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY stateChanged)
   Q_PROPERTY(bool seamPaintOnOverhangsOnly READ seamPaintOnOverhangsOnly WRITE setSeamPaintOnOverhangsOnly NOTIFY stateChanged)
+  /// P11.B2.3 笔刷拖动轴锁（对齐上游 GLGizmoPainterBase m_vertical_only/
+  /// m_horizontal_only）：0=关，1=垂直（锁屏幕 X），2=水平（锁屏幕 Y）。
+  /// 单值天然互斥，等价上游 MMU 面板两个复选框的联动行为。
+  Q_PROPERTY(int paintLockAxis READ paintLockAxis WRITE setPaintLockAxis NOTIFY stateChanged)
   /// SLA 空洞标记设置（对齐上游 GLGizmoHollow）
   Q_PROPERTY(bool hollowEnabled READ hollowEnabled WRITE setHollowEnabled NOTIFY stateChanged)
   Q_PROPERTY(float hollowHoleRadius READ hollowHoleRadius WRITE setHollowHoleRadius NOTIFY stateChanged)
@@ -1378,6 +1486,9 @@ public:
   Q_PROPERTY(QString sliceActionHint READ sliceActionHint NOTIFY stateChanged)
   Q_INVOKABLE int sliceProgress() const;
   Q_INVOKABLE bool isSlicing() const;
+  /// G-13 followup (E2E timing): true while an async G-code export worker is
+  /// still running -- requestExportAllGCode refuses until it clears.
+  Q_INVOKABLE bool exportBusy() const;
   /// Phase 196 (FEAT-01): returns the SliceService::State enum value so QML
   /// (SliceProgress.qml) can render Cancelled/Error-specific UI. Values map to
   /// SliceService::State (Idle=0, Slicing=1, Exporting=2, Completed=3,
@@ -1761,6 +1872,11 @@ signals:
   void paintDataChanged();
   /// P2.3-3: the support preview byte pipe changed (new slice or stale clear).
   void supportPreviewDataChanged();
+  /// G-03: emitted on every successful slice with the fresh G-code path —
+  /// the print dialog listens for this to continue into device selection
+  /// after an on-demand slice (upstream Plater.cpp:7172 slices from the
+  /// print flow; BackgroundSlicingProcess finished -> send).
+  void printSliceReady(const QString &gcodePath);
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();
@@ -1807,6 +1923,11 @@ private:
   void refreshMeshCacheAndFitHint();
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
+  /// Review P1-5: the wipe-tower arrange obstacle reads the GLOBAL merged
+  /// preset config (upstream ArrangeJob reads preset_bundle::full_config,
+  /// not the per-plate config). Built once per arrange call and handed to
+  /// ProjectServiceMock::arrangeObjects as the wipeTowerContext map.
+  QVariantMap arrangeWipeTowerContext() const;
   // P15.11: drag-time sequential clearance preview (upstream
   // GLCanvas3D::update_sequential_clearance + reset_sequential_print_clearance).
   // begin is called by every beginGizmo{Move,Rotate,Scale}Drag (the
@@ -2026,6 +2147,11 @@ private:
   float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold
   bool m_paintEdgeDetection = true; ///< P2.3-5 MMU edge detection (upstream default true)
   float m_paintHeightRange = 0.2f;  ///< P2.3-5 height-range span mm (upstream 0.2, 0.1..8)
+  float m_supportPaintGapArea = 1.0f;      ///< Gap fill area threshold mm2 (upstream TriangleSelectorPatch::gap_area, 0..5 step 0.2)
+  int m_mmuPaintTool = 0;                 ///< PAINT-MMU-TOOLS: 0=Brush, 1=BucketFill, 3=GapFill, 4=HeightRange (upstream m_current_tool)
+  bool m_mmuBucketEdgeDetection = false;  ///< PAINT-MMU-TOOLS: bucket-fill edge detection (upstream m_detect_geometry_edge)
+  float m_paintHeightRange = 0.2f;        ///< PAINT-MMU-TOOLS: height-range band span mm (upstream m_cursor_height, 0.2 default, 0.1..8)
+  double m_paintClippingPosition = 0.0;   ///< PAINT-ALT-WHEEL-CLIP: cross-section ratio, 0 = off (upstream ObjectClipper m_clp_ratio)
   bool m_supportPaintOnOverhangsOnly = false; ///< Restrict painting to overhangs
   double m_paintClippingPosition = 0.0; ///< P2.3-1 cross-section slider, 0 = off
   /// P2.3-2: EnforcerBlockerType the staged seed-fill region will commit with
@@ -2041,6 +2167,8 @@ private:
   int m_seamPaintTool = 0;                 ///< 0=None, 1=Enforcer, 2=Blocker
   float m_seamPaintCursorRadius = 2.0f;
   bool m_seamPaintOnOverhangsOnly = false;
+  // P11.B2.3 brush-drag axis lock: 0=off, 1=Vertical, 2=Horizontal
+  int m_paintLockAxis = 0;
   // Hollow gizmo (对齐上游 GLGizmoHollow)
   bool m_hollowEnabled = true;             ///< m_enable_hollowing
   float m_hollowHoleRadius = 2.0f;        ///< m_new_hole_radius

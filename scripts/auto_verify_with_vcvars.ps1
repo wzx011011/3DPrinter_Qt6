@@ -278,6 +278,25 @@ $configureSucceeded = $false
 # llama-server on this box starves the qsb shader compiles; retry the
 # configure up to 4 times with backoff before giving up.
 $configureAttempts = 0
+
+# Build-speed fast path (2026-09-05): CMake configure costs minutes on this
+# project (FindBoost, Qt shader/tooling discovery). Skip it entirely when the
+# existing build.ninja is NEWER than every CMake input that could change it
+# (root/cmake CMakeLists + the script's own -D switches are fixed values).
+$cmakeInputs = @('..\CMakeLists.txt') + (Get-ChildItem '..\cmake' -Filter '*.cmake' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+$buildNinja = Join-Path (Get-Location) 'build.ninja'
+$skipConfigure = $false
+if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0)) {
+  $ninjaTime = (Get-Item $buildNinja).LastWriteTimeUtc
+  $newestInput = ($cmakeInputs | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
+  if ($null -ne $newestInput -and $newestInput.LastWriteTimeUtc -le $ninjaTime) {
+    $skipConfigure = $true
+    $configureSucceeded = $true
+    Write-Stage 'Configure' ("Skipped (build.ninja up to date vs " + (Split-Path $newestInput.FullName -Leaf) + ")")
+  }
+}
+
+if (-not $skipConfigure) {
 for ($attempt = 1; $attempt -le 3; ++$attempt) {
   Write-Stage 'Configure' ("CMake configure attempt " + $attempt)
   $configureOutput = & cmake @cmakeArgs 2>&1
@@ -321,6 +340,7 @@ for ($attempt = 1; $attempt -le 3; ++$attempt) {
 if (-not $configureSucceeded) {
   Fail-Stage 'Configure' ("CMake configure failed after retries with exit code " + $lastConfigureExitCode) $lastConfigureExitCode
 }
+}  # end of skip-configure fast path
 
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
@@ -352,6 +372,17 @@ function Invoke-NinjaTarget([string]$Target, [bool]$Required = $true) {
 }
 
 Invoke-NinjaTarget 'OWzxSlicer.exe'
+
+# G-12 followup (2026-09-05): redirect test temp files to an ISOLATED E:
+# directory. QTemporaryDir (Qt tests, E2E fixtures) resolves from TMP/TEMP;
+# the shared C: Temp is contended by parallel automation sessions whose
+# multi-GB writes made QSaveFile targets transiently unwritable
+# (store_bbs_3mf dirWritable=0 flake). E: has its own headroom.
+$testTemp = Join-Path $BuildDir 'test_temp'
+New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+$env:TMP = $testTemp
+$env:TEMP = $testTemp
+Write-Host "[TestEnv] TMP/TEMP -> $testTemp"
 
 # Build test targets (if BUILD_TESTING is ON)
 Invoke-NinjaTarget 'E2EWorkflowTests'

@@ -61,6 +61,12 @@ private slots:
   void previewRoleColorModesAreHonestAndPayloadSafe();
   void previewRestorationMilestoneHasFinalCleanupCoverage();
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
+  // SEL-MODIFIERS-RECT: modifier clicks + the rubber-band rectangle selection
+  // must carry the modifiers in dedicated signals, resolve containment in
+  // C++, apply the state change through an EditorViewModel backend method,
+  // and keep the no-modifier objectPickedSource -> selectSourceObject path
+  // unchanged.
+  void rhiViewportSelectionModifiersRouteThroughBackend();
   void prepareViewportContextMenuWorkflowIsCppOwned();
   void rhiViewportModelDragOrbitsAfterClickThreshold();
   void rhiMoveGizmoDragBridgeStaysCppOwned();
@@ -721,16 +727,7 @@ private slots:
   // unit-inference plumbing, project-config restore routing, and sliced-file
   // export surface.
   void viewMenuShortcutsAndImportSourceAudit();
-  // P7.2 (navigation baseline): the main.qml StackLayout must keep the
-  // upstream 9-slot surface (Plater single-instance contract for
-  // Prepare+Preview, placeholder slots hidden), every routed page file must
-  // exist, and the navigation entry must go through backend.requestSelectTab.
-  void pageNavigationBaselineMatchesUpstreamSurface();
-  // P7.2 (upstream parity baseline): every anchor in
-  // tests/data/upstream_parity_baseline.json must resolve -- the Qt
-  // counterpart file contains the symbol and the locking test exists in the
-  // named test source. Guards the baseline against silent rot.
-  void upstreamParityBaselineEntriesResolveInSource();
+  void platerHotkeysMatchUpstreamTable();
   // Phase 238 (PREV-01..07): preview completion source audits -- ghost
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
@@ -1202,9 +1199,7 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
 void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
 
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.canExportGCode")),
            "Prepare export dialog must be guarded by EditorViewModel::canExportGCode");
@@ -1212,37 +1207,16 @@ void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
            "Prepare export guard must route blocked attempts through the backend for a reason");
   QVERIFY2(preparePage.contains(QStringLiteral("plateSliceResultStatus(index)")),
            "Prepare plate cards must render explicit valid/stale/missing result status");
-
-  const QStringList backendBindings = {
-    QStringLiteral("root.editorVm.canPreview"),
-    QStringLiteral("root.editorVm.canExportGCode"),
-    QStringLiteral("root.editorVm.previewActionHint"),
-    QStringLiteral("root.editorVm.exportActionHint"),
-    QStringLiteral("root.editorVm.plateSliceResultStatus(index)")
-  };
-  for (const QString &binding : backendBindings) {
-    QVERIFY2(sliceProgress.contains(binding),
-             qPrintable(QStringLiteral("SliceProgress must bind backend readiness property: %1").arg(binding)));
-  }
-
-  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canPreview")),
-           "Preview action must be disabled through backend availability");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canExportGCode")),
-           "Export action must be disabled through backend availability");
-  QVERIFY2(!sliceProgress.contains(QStringLiteral("visible: root.hasSliceResult && !root.slicingNow")),
-           "Preview/export action row must not disappear solely because the current result is missing or stale");
 }
 
 void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString errorToast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
   QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
@@ -1260,12 +1234,6 @@ void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
 
   QVERIFY2(editorHeader.contains(QStringLiteral("defaultExportGCodeFileName")),
            "EditorViewModel must expose a default G-code export filename to QML");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("exportRequested")),
-           "SliceProgress export button must ask the page to open a save dialog");
-  QVERIFY2(!sliceProgress.contains(QStringLiteral("requestExportGCode(path)"))
-               && !sliceProgress.contains(QStringLiteral("requestExportGCode(root.outputPath)"))
-               && !sliceProgress.contains(QStringLiteral("? root.outputPath")),
-           "SliceProgress must not export directly to the generated source outputPath");
   QVERIFY2(!errorToast.contains(QStringLiteral("requestExportGCode(\"output.gcode\")")),
            "Notification export button must open the export dialog instead of writing output.gcode");
   QVERIFY2(errorToast.contains(QStringLiteral("exportGCodeRequested")),
@@ -1985,10 +1953,86 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
            "Selection/hover changes must not reupload the full model vertex buffer");
 }
 
+// SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:8673-8679 shift=rect select /
+// alt=rect deselect / ctrl=toggle, :1872 + :3506-3508 m_rectangle_selection,
+// KBShortcutsDialog.cpp:235-239): the modifier selection surface must (a)
+// carry the press modifiers in dedicated viewport signals, (b) resolve the
+// rectangle containment in C++ (projected pick-scene batches), (c) apply the
+// state change through EditorViewModel backend methods with QML forwarding
+// only, and (d) keep the no-modifier objectPickedSource -> selectSourceObject
+// path untouched.
+void QmlUiAuditTests::rhiViewportSelectionModifiersRouteThroughBackend()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString viewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  const QString softwareHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
+  QVERIFY2(!softwareHeader.isEmpty(), "Unable to read SoftwareViewport.h");
+
+  // (a) dedicated signals carry the press modifiers.
+  QVERIFY2(viewportHeader.contains(
+               QStringLiteral("void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,")),
+           "RhiViewport must expose a modifier-carrying click pick signal");
+  QVERIFY2(viewportHeader.contains(
+               QStringLiteral("void rectangleSelectionFinished(int modifiers, QRectF rect,")),
+           "RhiViewport must expose a modifier-carrying rectangle selection signal");
+  QVERIFY2(viewportSource.contains(QStringLiteral("emit objectPickedSourceWithModifiers"))
+               && viewportSource.contains(QStringLiteral("emit rectangleSelectionFinished")),
+           "RhiViewport must emit the modifier-carrying selection signals");
+
+  // (b) rectangle containment stays C++-owned (projection primitive + visible
+  // pick-scene batches); QML never computes it.
+  QVERIFY2(viewportHeader.contains(QStringLiteral("static QRectF projectBoundsToScreenRect"))
+               && viewportSource.contains(
+                   QStringLiteral("QRectF RhiViewport::projectBoundsToScreenRect")),
+           "RhiViewport must own the GLSelectionRectangle projection primitive");
+  QVERIFY2(viewportSource.contains(QStringLiteral("containedRectangleSelectionSources"))
+               && viewportSource.contains(QStringLiteral("m_pickScene.modelBatches()")),
+           "RhiViewport must resolve rectangle containment over the pick-scene batches");
+  QVERIFY2(!preparePage.contains(QStringLiteral("projectBoundsToScreenRect"))
+               && !preparePage.contains(QStringLiteral("selectionRubberBand.x()")),
+           "PreparePage must not recompute or mutate the selection rectangle geometry");
+
+  // (c) the state change flows through EditorViewModel backend methods, QML
+  // forwards opaquely.
+  QVERIFY2(editorHeader.contains(QStringLiteral("selectObjectsInRect(int modifiers, const QRectF &rect,"))
+               && editorSource.contains(QStringLiteral("void EditorViewModel::selectObjectsInRect")),
+           "EditorViewModel must own the rectangle selection state change");
+  QVERIFY2(editorHeader.contains(QStringLiteral("void toggleSourceObjectSelection(int sourceIndex);"))
+               && editorSource.contains(QStringLiteral("void EditorViewModel::toggleSourceObjectSelection")),
+           "EditorViewModel must own the Ctrl+click toggle state change");
+  QVERIFY2(editorHeader.contains(QStringLiteral("void selectVolumeBySource(int sourceIndex, int volumeIndex);"))
+               && editorSource.contains(QStringLiteral("void EditorViewModel::selectVolumeBySource")),
+           "EditorViewModel must own the Alt+click volume (part) selection");
+  QVERIFY2(preparePage.contains(
+               QStringLiteral("root.editorVm.selectObjectsInRect(modifiers, rect, containedIndices)")),
+           "PreparePage must forward the rectangle stroke to EditorViewModel");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.toggleSourceObjectSelection(sourceIndex)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.selectVolumeBySource(sourceIndex, volumeIndex)")),
+           "PreparePage must forward modifier clicks to EditorViewModel");
+
+  // (d) the no-modifier path stays unchanged: objectPickedSource still routes
+  // to selectSourceObject, and the modifier branch must not swallow it.
+  QVERIFY2(preparePage.contains(QStringLiteral("onObjectPickedSource: function(sourceIndex)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.selectSourceObject(sourceIndex)")),
+           "PreparePage must keep forwarding the plain pick to selectSourceObject");
+  QVERIFY2(viewportSource.contains(QStringLiteral("else\n        emit objectPickedSource(m_pressPickedSourceObjectIndex);")),
+           "RhiViewport must keep emitting the plain objectPickedSource signal");
+  QVERIFY2(softwareHeader.contains(QStringLiteral("void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,"))
+               && softwareHeader.contains(QStringLiteral("Q_PROPERTY(bool selectionRubberBandActive")),
+           "SoftwareViewport fallback must keep QML signal/property compatibility");
+}
+
 void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
   const QString menuComponent = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString projectService = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
@@ -2027,9 +2071,7 @@ void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
                && !preparePage.contains(QStringLiteral("id: plateContextMenu")),
            "PreparePage must not retain legacy context-menu presentation surfaces");
   QVERIFY2(menuComponent.contains(QStringLiteral("splitSelectedToObjects"))
-               && menuComponent.contains(QStringLiteral("splitSelectedToParts"))
-               && objectList.contains(QStringLiteral("splitSelectedToObjects"))
-               && objectList.contains(QStringLiteral("splitSelectedToParts")),
+               && menuComponent.contains(QStringLiteral("splitSelectedToParts")),
            "Object and part split entries must route to distinct C++ actions");
   QVERIFY2(menuComponent.contains(QStringLiteral("requestReplaceAll"))
                && preparePage.contains(QStringLiteral("replaceAllOnPlateDlg"))
@@ -2181,7 +2223,7 @@ void QmlUiAuditTests::previewRoleColorModesAreHonestAndPayloadSafe()
   QVERIFY2(previewSource.contains(QStringLiteral("viewModeUsesUnavailableData"))
               && previewSource.contains(QStringLiteral("VT_ActualSpeed"))
               && previewSource.contains(QStringLiteral("VT_PressureAdvance")),
-           "PreviewViewModel must centrally list data-unavailable view modes");
+           "PreviewViewModel must keep the internal capability view modes addressable in the recolor switch (GAP-3)");
 }
 
 void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
@@ -3472,9 +3514,16 @@ void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
            "W1A: SavePresetDialog must not use shared activePresetTier");
 
   // Duplicate and persistence failures remain in the modal; only a successful
-  // creation accepts it, and the ViewModel failure is rendered to the user.
-  QVERIFY2(saveDialog.contains(QStringLiteral("if (root.configVm.createCustomPreset(category, name)) {\n                            root.accept()")),
-           "W1A: SavePresetDialog must accept only after createCustomPreset succeeds");
+  // save accepts it, and the ViewModel failure is rendered to the user.
+  // R-P1.J + G-13: the save routes are save-in-place (saveCurrentPreset),
+  // Detach (detachPresetFromParent), replace (overwriteUserPreset) and
+  // create (createCustomPreset) — accept() is gated on the shared result.
+  QVERIFY2(saveDialog.contains(QStringLiteral("root.configVm.saveCurrentPreset()"))
+               && saveDialog.contains(QStringLiteral("root.configVm.detachPresetFromParent(category, name)"))
+               && saveDialog.contains(QStringLiteral("ok = root.configVm.overwriteUserPreset(category, name)"))
+               && saveDialog.contains(QStringLiteral("ok = root.configVm.createCustomPreset(category, name)"))
+               && saveDialog.contains(QStringLiteral("if (ok) {\n                            root.accept()")),
+           "W1A: SavePresetDialog must accept only after the save (detach/overwrite/create) succeeds");
   QVERIFY2(saveDialog.contains(QStringLiteral("root.saveError = root.configVm.lastPresetError")),
            "W1A: SavePresetDialog must show the ViewModel save failure");
   QVERIFY2(configVmHeader.contains(QStringLiteral("lastPresetError"))
@@ -3534,10 +3583,8 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
-  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
 
   QVERIFY2(!preparePage.contains(QStringLiteral("plateCount < 10"))
                && !preparePage.contains(QStringLiteral("plateCount < 36"))
@@ -3552,27 +3599,24 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
            "Prepare plate controls must bind to EditorViewModel::canAddPlate");
 
   QVERIFY2(!preparePage.contains(QStringLiteral("canActivateGizmo("))
-               && !glToolbars.contains(QStringLiteral("canActivateGizmo("))
-               && !objectList.contains(QStringLiteral("canActivateGizmo(")),
+               && !glToolbars.contains(QStringLiteral("canActivateGizmo(")),
            "QML gizmo controls must bind to availableGizmoMask for reactive updates");
   QVERIFY2(preparePage.contains(QStringLiteral("availableGizmoMask"))
-               && glToolbars.contains(QStringLiteral("availableGizmoMask"))
-               && objectList.contains(QStringLiteral("availableGizmoMask")),
+               && glToolbars.contains(QStringLiteral("availableGizmoMask")),
            "Prepare gizmo controls must bind to EditorViewModel::availableGizmoMask");
-  QVERIFY2(!preparePage.contains(QStringLiteral("deleteSelectedObjects("))
-               && !objectList.contains(QStringLiteral("deleteSelectedObjects("))
-               && !objectList.contains(QStringLiteral("deleteObject(")),
+  QVERIFY2(!preparePage.contains(QStringLiteral("deleteSelectedObjects(")),
            "Prepare delete actions must route through EditorViewModel::deleteSelection");
 
+  // v5.16 (G-08): canRenameSelectedObject/canSetSelectionPrintable only ever
+  // had a QML consumer in the deleted object-list panel; the surviving
+  // gates stay anchored on the live PreparePage/GLToolbars carriers.
   const QStringList requiredObjectGates = {
-    QStringLiteral("canRenameSelectedObject"),
     QStringLiteral("canDuplicateSelectedObjects"),
     QStringLiteral("canDeleteSelection"),
-    QStringLiteral("canSetSelectionPrintable"),
     QStringLiteral("canTransformSelection")
   };
   for (const QString &gate : requiredObjectGates) {
-    QVERIFY2(preparePage.contains(gate) || objectList.contains(gate),
+    QVERIFY2(preparePage.contains(gate) || glToolbars.contains(gate),
              qPrintable(QStringLiteral("Prepare object actions must bind to %1").arg(gate)));
   }
 }
@@ -3592,30 +3636,13 @@ void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
-  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
 
   QVERIFY2(!glToolbars.contains(QStringLiteral("id: sliceButton")),
            "Phase 76 removes the large floating viewport Slice button");
   QVERIFY2(!glToolbars.contains(QStringLiteral("text: \">>\"")),
            "Viewport overlays must not expose the legacy floating >> Slice affordance");
-
-  const QStringList objectListTokens = {
-    QStringLiteral("readonly property int objectRowHeight: 38"),
-    QStringLiteral("readonly property int volumeRowHeight: 26"),
-    QStringLiteral("readonly property int groupHeaderHeight: 18"),
-    QStringLiteral("objectListStatusPill"),
-    QStringLiteral("row.objPrintable ? Theme.accent : Theme.textDisabled"),
-    QStringLiteral("enabled: !!root.editorVm && root.editorVm.canDeleteSelection")
-  };
-  for (const QString &token : objectListTokens) {
-    QVERIFY2(objectList.contains(token),
-             qPrintable(QStringLiteral("ObjectList must preserve Phase 76 compact/tree contract token: %1").arg(token)));
-  }
 
   const QStringList plateStripTokens = {
     QStringLiteral("height: 44"),
@@ -3629,13 +3656,6 @@ void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
     QVERIFY2(preparePage.contains(token),
              qPrintable(QStringLiteral("Prepare plate strip must preserve Phase 76 compact/state contract token: %1").arg(token)));
   }
-
-  QVERIFY2(sliceProgress.contains(QStringLiteral("readonly property bool primaryActionEnabled")),
-           "SliceProgress must expose one backend-gated primary action state");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("readonly property bool canSliceAll")),
-           "Slice-all must be explicitly gated instead of being an always-clickable button");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
-           "Slice-all button must bind to the explicit backend-derived gate");
 }
 
 void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
@@ -3744,10 +3764,6 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
                && !leftSidebar.contains(QStringLiteral("id: printerThumbnail")),
            "v5.14: printer preset must stay a compact row (hero card removed for screenshot-truth density)");
 
-  QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {")),
-           "Default screenshot sidebar must not mount ObjectList in the left parameter column");
-  QVERIFY2(!leftSidebar.contains(QStringLiteral("SliceProgress {")),
-           "Default screenshot sidebar must not mount SliceProgress in the left parameter column");
   // Phase 162 (TK-01): the sidebar palette was previously checked via specific
   // hex literals (#303236/#313337/#323438 -- the screenshot gray panel surface).
   // The v5.2 color sweep migrated those to Theme tokens (bgElevated/bgHover/
@@ -3888,9 +3904,6 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString dockableSidebar = readSource(QStringLiteral("src/qml_gui/panels/DockableSidebar.qml"));
-  const QString leftSidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
-  const QString objectList = readSource(QStringLiteral("src/qml_gui/panels/ObjectList.qml"));
-  const QString sliceProgress = readSource(QStringLiteral("src/qml_gui/panels/SliceProgress.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
   const QString cxTextArea = readSource(QStringLiteral("src/qml_gui/controls/CxTextArea.qml"));
   const QString auditTests = readSource(QStringLiteral("tests/QmlUiAuditTests.cpp"));
@@ -3899,9 +3912,6 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!dockableSidebar.isEmpty(), "Unable to read DockableSidebar.qml");
-  QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
-  QVERIFY2(!objectList.isEmpty(), "Unable to read ObjectList.qml");
-  QVERIFY2(!sliceProgress.isEmpty(), "Unable to read SliceProgress.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
   QVERIFY2(!cxTextArea.isEmpty(), "Unable to read CxTextArea.qml");
 
@@ -3909,8 +3919,6 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
     QStringLiteral("pages/PreparePage.qml"),
     QStringLiteral("pages/Plater.qml"),
     QStringLiteral("panels/LeftSidebar.qml"),
-    QStringLiteral("panels/ObjectList.qml"),
-    QStringLiteral("panels/SliceProgress.qml"),
     QStringLiteral("panels/DockableSidebar.qml"),
     QStringLiteral("components/GLToolbars.qml")
   };
@@ -3950,17 +3958,9 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   }
   QVERIFY2(dockableSidebar.contains(QStringLiteral("LeftSidebar {")),
            "DockableSidebar must wrap the restored LeftSidebar path");
-  QVERIFY2(!leftSidebar.contains(QStringLiteral("ObjectList {"))
-              && !leftSidebar.contains(QStringLiteral("SliceProgress {")),
-           "Default screenshot sidebar must stay focused on printer, filament, process, and params");
   QVERIFY2(dockableSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
               && preparePage.contains(QStringLiteral("onExportRequested: root.openExportDialog()")),
-           "SliceProgress export must propagate to PreparePage.openExportDialog instead of exporting directly");
-  QVERIFY2(objectList.contains(QStringLiteral("objectListStatusPill")),
-           "ObjectList must keep the compact restored status pill");
-  QVERIFY2(sliceProgress.contains(QStringLiteral("primaryActionEnabled"))
-              && sliceProgress.contains(QStringLiteral("enabled: root.canSliceAll")),
-           "SliceProgress must keep backend-gated primary and slice-all controls");
+           "Sidebar export must propagate to PreparePage.openExportDialog instead of exporting directly");
   QVERIFY2(glToolbars.contains(QStringLiteral("id: viewportActionToolbar"))
               && glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar")),
            "GLToolbars must keep the restored top and right toolbar groups");
@@ -5060,7 +5060,7 @@ void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
 
   // (6) Queued callback (THUMBCAP-03): deliverThumbnail is defined on the item
   //     and the renderer posts the QImage via Qt::QueuedConnection.
-  QVERIFY2(viewportHeader.contains(QStringLiteral("deliverThumbnail(const QImage &image, int plateIndex)")),
+  QVERIFY2(viewportHeader.contains(QStringLiteral("deliverThumbnail(const QImage &image, int plateIndex, int variant = 0)")),
            "RhiViewport.h must declare the deliverThumbnail GUI-thread delivery slot");
   QVERIFY2(viewportSource.contains(QStringLiteral("void RhiViewport::deliverThumbnail")),
            "RhiViewport.cpp must define the deliverThumbnail delivery slot");
@@ -5070,7 +5070,7 @@ void QmlUiAuditTests::rhiViewportThumbnailCaptureUsesRealReadback()
   // (7) Public contract preserved (THUMBCAP-01): requestThumbnailCapture still
   //     sets the request + calls update(); lastThumbnailData/thumbnailCaptured
   //     remain the Q_PROPERTY/signal contract.
-  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128)")),
+  QVERIFY2(viewportHeader.contains(QStringLiteral("Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128,")),
            "RhiViewport.h must keep the requestThumbnailCapture Q_INVOKABLE signature unchanged");
   QVERIFY2(viewportHeader.contains(QStringLiteral("Q_PROPERTY(QString lastThumbnailData")),
            "RhiViewport.h must keep the lastThumbnailData Q_PROPERTY contract");
@@ -6811,6 +6811,215 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "PAINT-01: CMakeLists.txt must register PaintEngine.cpp in owzx_app_core");
   QVERIFY2(cmakeLists.contains(QStringLiteral("src/core/rendering/PaintEngine.h")),
            "PAINT-01: CMakeLists.txt must register PaintEngine.h in owzx_app_core");
+
+  // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only,
+  // GLGizmoPainterBase.cpp:738-742, GLGizmoSeam.cpp:322,
+  // GLGizmoMmuSegmentation.cpp:717-724): brush-drag axis lock. The drag path
+  // must clamp to the press point, the ViewModel must expose the lock, and
+  // the Seam panel gets only Vertical while MMU gets both checkboxes
+  // (upstream FDM supports exposes neither).
+  const QString preparePagePaint = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(!preparePagePaint.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintLockAxis == 1")) &&
+           rhiSource.contains(QStringLiteral("paintPos.setX(m_paintPressPosition.x())")),
+           "P11.B2.3: RhiViewport drag path must clamp screen X to the press point for Vertical lock");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintLockAxis == 2")) &&
+           rhiSource.contains(QStringLiteral("paintPos.setY(m_paintPressPosition.y())")),
+           "P11.B2.3: RhiViewport drag path must clamp screen Y to the press point for Horizontal lock");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintPressPosition = event->position()")),
+           "P11.B2.3: RhiViewport press must record the axis-lock anchor");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(int paintLockAxis")),
+           "P11.B2.3: RhiViewport.h must expose paintLockAxis");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::setPaintLockAxis")),
+           "P11.B2.3: EditorViewModel must implement the paintLockAxis setter");
+  QVERIFY2(preparePagePaint.count(QStringLiteral("paintLockAxis === 1")) >= 2,
+           "P11.B2.3: Seam + MMU panels must bind the Vertical lock checkbox");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("paintLockAxis === 2")),
+           "P11.B2.3: MMU panel must bind the Horizontal lock checkbox");
+  const int lockCheckboxes = preparePagePaint.count(QStringLiteral("root.editorVm.paintLockAxis = checked"));
+  QCOMPARE(lockCheckboxes, 3); // Seam Vertical + MMU Vertical/Horizontal; support panel exposes none
+
+  // P11: right-button paint (upstream GLGizmoPainterBase.cpp:649 RightDown,
+  // MMU disabled via GLGizmoMmuSegmentation.hpp:94) and Shift = temporary
+  // eraser (PainterBase.cpp:662-671 keeps new_state NONE).
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_paintButton = 2")) &&
+           rhiSource.contains(QStringLiteral("paintState = (m_paintState == 2) ? 1 : 2")),
+           "P11: RhiViewport must paint the alternate state on the right button");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_gizmoMode != GizmoMmuSegmentation")),
+           "P11: MMU right button must stay disabled (upstream returns -1)");
+  QVERIFY2(rhiSource.contains(QStringLiteral("else if (shiftHeld)")) &&
+           rhiSource.contains(QStringLiteral("paintState = 0;")),
+           "P11: Shift must act as a temporary eraser (paintState NONE), not smart fill");
+
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3360-3457): arrow keys must
+  // nudge the selection through the ViewModel with Shift=1mm scaling.
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("Qt.Key_Left")) &&
+           preparePagePaint.contains(QStringLiteral("nudgeSelectedObjects")),
+           "VIEW-ARROW-NUDGE: PreparePage must route arrow keys to nudgeSelectedObjects");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("ShiftModifier) ? 1.0 : 10.0")),
+           "VIEW-ARROW-NUDGE: Shift must step 1mm, default 10mm");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::nudgeSelectedObjects")),
+           "VIEW-ARROW-NUDGE: EditorViewModel must implement nudgeSelectedObjects");
+
+  // PAINT-CTRL-WHEEL (upstream GLGizmoPainterBase.cpp:584-631): Ctrl+wheel
+  // with a paint gizmo active tunes brush radius (0.2 step, [0.4, 8]) or the
+  // SmartFill seed angle (1 deg step, [0, 90]) instead of zooming.
+  QVERIFY2(rhiSource.contains(QStringLiteral("PAINT-CTRL-WHEEL")) &&
+           rhiSource.contains(QStringLiteral("m_brushRadius = qBound(0.4f, next, 8.0f)")),
+           "PAINT-CTRL-WHEEL: wheelEvent must step the brush radius on Ctrl+wheel");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_smartFillAngle = qBound(0.0f, next, 90.0f)")),
+           "PAINT-CTRL-WHEEL: wheelEvent must step the SmartFill angle on Ctrl+wheel");
+
+  // PAINT-GAPFILL-PORT (upstream GLGizmoFdmSupports.cpp:378-386 Gap Fill tool
+  // + gap_area slider, TriangleSelectorPatch::GapAreaMin=0/Max=5/Step=0.2,
+  // GLGizmoPainterBase.hpp:117-119; TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236): the ported pipeline must keep the
+  // engine fragment reader, the -3 overlay marker, the tool chip on the
+  // shared paintToolType channel, and the Ctrl+wheel step.
+  QVERIFY2(paintHeader.contains(QStringLiteral("getGapFragments")),
+           "PAINT-GAPFILL-PORT: PaintEngine.h must declare getGapFragments(obj, vol, gapAreaMm2)");
+  QVERIFY2(paintSource.contains(QStringLiteral("PaintEngine::getGapFragments")),
+           "PAINT-GAPFILL-PORT: PaintEngine.cpp must implement getGapFragments");
+  QVERIFY2(paintSource.contains(QStringLiteral("gapFragmentsIts")),
+           "PAINT-GAPFILL-PORT: PaintEngine.cpp must flatten fragment leaves via gapFragmentsIts");
+  QVERIFY2(paintSource.contains(QStringLiteral("area >= gapAreaMm2")),
+           "PAINT-GAPFILL-PORT: fragment filter must keep the strict area < threshold (is_fragment)");
+  // The ViewModel emits the dedicated -3 marker when the gap-fill tool is
+  // active on the support gizmo with a positive threshold.
+  QVERIFY2(editorSource.contains(QStringLiteral("m_supportPaintToolType == 3")),
+           "PAINT-GAPFILL-PORT: paintOverlayData must gate the fragment view on the GapFill tool");
+  QVERIFY2(editorSource.contains(QStringLiteral("rec.state = -3")),
+           "PAINT-GAPFILL-PORT: paintOverlayData must mark fragments with the -3 marker");
+  // The overlay refresh must fire when the tool chip or threshold changes
+  // (upstream slider -> request_update_render_data).
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::setSupportPaintGapArea")),
+           "PAINT-GAPFILL-PORT: EditorViewModel must implement setSupportPaintGapArea");
+  // Renderers color the -3 marker amber.
+  const QString rhiRendererSource =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rhiRendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(rhiRendererSource.contains(QStringLiteral("state == -3")),
+           "PAINT-GAPFILL-PORT: RhiViewportRenderer must color the -3 fragment marker");
+  // The wheel branch steps the gap area 0.2 within [0, 5] and reports the
+  // value for the QML -> ViewModel write-back.
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_gapArea = qBound(0.0f, next, 5.0f)")) &&
+           rhiSource.contains(QStringLiteral("emit gapAreaTuned")),
+           "PAINT-GAPFILL-PORT: Ctrl+wheel must step the gap area 0.2 within [0, 5] on the GapFill tool");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(float gapArea")),
+           "PAINT-GAPFILL-PORT: RhiViewport.h must expose the gapArea brush-param channel");
+  // The support panel must carry the gap-fill tool chip (val 3 on the shared
+  // paintToolType channel) + the gap_area slider bound to the ViewModel.
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("val: 3}")),
+           "PAINT-GAPFILL-PORT: PreparePage support panel must carry the GapFill tool chip (toolType 3)");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("gapArea:")) &&
+           preparePagePaint.contains(QStringLiteral("supportPaintGapArea")),
+           "PAINT-GAPFILL-PORT: PreparePage must bind the gap area channel + slider");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("onGapAreaTuned")),
+           "PAINT-GAPFILL-PORT: PreparePage must forward gapAreaTuned into the ViewModel");
+
+  // PAINT-ALT-WHEEL-CLIP (upstream GLGizmoPainterBase.cpp:632-646): Alt+wheel
+  // with a paint gizmo active sweeps the ObjectClipper ratio +-0.01 within
+  // [0, 1]; the plane is built in volume coordinates (normal = -camera
+  // forward, center + bounding-radius offset by ratio,
+  // ObjectClipper::set_position_by_ratio + get_clipping_plane_in_volume_
+  // coordinates) and paint picks that hit the clipped side are rejected
+  // (is_mesh_point_clipped, GLGizmoPainterBase.cpp:383-393).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(double paintClippingPosition")),
+           "PAINT-ALT-WHEEL-CLIP: EditorViewModel.h must expose the paintClippingPosition property");
+  QVERIFY2(editorHeader.contains(QStringLiteral("resetPaintClippingPlane")),
+           "PAINT-ALT-WHEEL-CLIP: EditorViewModel.h must expose the resetPaintClippingPlane invokable");
+  QVERIFY2(paintHeader.contains(QStringLiteral("buildPaintClippingPlane")),
+           "PAINT-ALT-WHEEL-CLIP: PaintEngine.h must declare the volume-coordinate plane builder");
+  QVERIFY2(paintSource.contains(QStringLiteral("buildPaintClippingPlane")),
+           "PAINT-ALT-WHEEL-CLIP: PaintEngine.cpp must implement the plane builder (set_position_by_ratio + volume-coords chain)");
+  QVERIFY2(paintSource.contains(QStringLiteral("cameraForwardWorld.norm()")),
+           "PAINT-ALT-WHEEL-CLIP: the plane builder must derive the normal from -camera forward");
+  QVERIFY2(editorSource.contains(QStringLiteral("buildPaintClippingPlane")) &&
+           editorSource.contains(QStringLiteral("is_mesh_point_clipped(hit.meshLocalPosition)")),
+           "PAINT-ALT-WHEEL-CLIP: paintAtFacet/smartFillAtFacet must reject hits on the clipped side");
+  QVERIFY2(rhiSource.contains(QStringLiteral("Qt::AltModifier")) &&
+           rhiSource.contains(QStringLiteral("qBound(0.0, next, 1.0)")) &&
+           rhiSource.contains(QStringLiteral("emit paintClippingTuned")),
+           "PAINT-ALT-WHEEL-CLIP: wheelEvent must sweep the ratio +-0.01 clamped to [0, 1] on Alt+wheel");
+  QVERIFY2(rhiSource.contains(QStringLiteral("- 0.01")) &&
+           rhiSource.contains(QStringLiteral("+ 0.01")),
+           "PAINT-ALT-WHEEL-CLIP: the Alt+wheel step must be 0.01 (upstream GLGizmoPainterBase.cpp:636-639)");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("paintClippingTuned")),
+           "PAINT-ALT-WHEEL-CLIP: RhiViewport.h must declare the paintClippingTuned write-back signal");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("cameraForward")) &&
+           rhiSource.contains(QStringLiteral("m_camera.forwardVector()")),
+           "PAINT-ALT-WHEEL-CLIP: the paint pick signals must carry the camera forward (upstream get_dir_forward)");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("onPaintClippingTuned")) &&
+           preparePagePaint.contains(QStringLiteral("paintClippingPosition = position")),
+           "PAINT-ALT-WHEEL-CLIP: PreparePage must forward paintClippingTuned into the ViewModel");
+  QVERIFY2(preparePagePaint.count(QStringLiteral("paintClippingPosition = value / 100.0")) >= 3,
+           "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each bind the section slider");
+  QVERIFY2(preparePagePaint.count(QStringLiteral("resetPaintClippingPlane()")) >= 3,
+           "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each expose the reset action");
+
+  // PAINT-MMU-TOOLS (upstream GLGizmoMmuSegmentation.cpp:594-595 Pointer
+  // brush, 620-637 Bucket fill + edge detection, 667-676 Height range span,
+  // 703-713 Gap fill; GLGizmoPainterBase.cpp:703-733 height-range apply,
+  // 778-787 pointer/bucket click path, 584-592 Ctrl+wheel height step): the
+  // MMU panel tool set must route through the MMU gizmo's own channels on
+  // every layer (engine -> ViewModel -> viewport -> panel).
+  QVERIFY2(paintHeader.contains(QStringLiteral("bucketFillAt")),
+           "PAINT-MMU-TOOLS: PaintEngine.h must declare bucketFillAt");
+  QVERIFY2(paintSource.contains(QStringLiteral("PaintEngine::bucketFillAt")) &&
+           paintSource.contains(QStringLiteral("bucket_fill_select_triangles")),
+           "PAINT-MMU-TOOLS: PaintEngine must drive the upstream bucket_fill_select_triangles");
+  QVERIFY2(paintHeader.contains(QStringLiteral("paintHeightRangeAt")) &&
+           paintHeader.contains(QStringLiteral("applyHeightRangeToSelector")),
+           "PAINT-MMU-TOOLS: PaintEngine.h must declare the height-range entry + pure helper");
+  QVERIFY2(paintSource.contains(QStringLiteral("PaintEngine::paintHeightRangeAt")),
+           "PAINT-MMU-TOOLS: PaintEngine.cpp must implement paintHeightRangeAt");
+  QVERIFY2(paintSource.contains(QStringLiteral("applyBucketFillToSelector")) &&
+           paintSource.contains(QStringLiteral("applyHeightRangeToSelector")),
+           "PAINT-MMU-TOOLS: PaintEngine.cpp must implement the unit-testable pure helpers");
+  // ViewModel: the MMU tool chip property + the two pick entries + the MMU
+  // gap-fragment view (the -3 marker also fires for kind 2 = Mmu).
+  QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(int mmuPaintTool")),
+           "PAINT-MMU-TOOLS: EditorViewModel.h must expose the mmuPaintTool tool chip");
+  QVERIFY2(editorHeader.contains(QStringLiteral("bucketFillAtFacet")) &&
+           editorHeader.contains(QStringLiteral("paintHeightRangeAt")),
+           "PAINT-MMU-TOOLS: EditorViewModel.h must declare the bucket-fill + height-range pick entries");
+  QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::bucketFillAtFacet")) &&
+           editorSource.contains(QStringLiteral("EditorViewModel::paintHeightRangeAt")),
+           "PAINT-MMU-TOOLS: EditorViewModel.cpp must implement the pick entries");
+  QVERIFY2(editorSource.contains(QStringLiteral("m_activePaintKind == 2 && m_mmuPaintTool == 3")),
+           "PAINT-MMU-TOOLS: paintOverlayData must gate the -3 fragment view on the MMU gap-fill chip (kind 2)");
+  // Viewport: the MMU pick routing + the dedicated wheel channel.
+  QVERIFY2(rhiHeader.contains(QStringLiteral("heightRangePickRequested")) &&
+           rhiHeader.contains(QStringLiteral("bucketFillPickRequested")),
+           "PAINT-MMU-TOOLS: RhiViewport.h must declare the height-range + bucket-fill pick signals");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_PROPERTY(double brushHeightRange")) &&
+           rhiHeader.contains(QStringLiteral("Q_PROPERTY(int mmuPaintTool")),
+           "PAINT-MMU-TOOLS: RhiViewport.h must expose the brushHeightRange + mmuPaintTool channels");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("heightRangeTuned")),
+           "PAINT-MMU-TOOLS: RhiViewport.h must declare the heightRangeTuned write-back signal");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_mmuPaintTool == 4")) &&
+           rhiSource.contains(QStringLiteral("emit heightRangePickRequested")),
+           "PAINT-MMU-TOOLS: the MMU height-range chip must dispatch the band pick");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_brushCursorType == 2")) &&
+           rhiSource.contains(QStringLiteral("emit bucketFillPickRequested")),
+           "PAINT-MMU-TOOLS: the MMU pointer cursor must dispatch the single-facet bucket fill");
+  QVERIFY2(rhiSource.contains(QStringLiteral("m_brushHeightRange = qBound(0.1, next, 8.0)")) &&
+           rhiSource.contains(QStringLiteral("emit heightRangeTuned")),
+           "PAINT-MMU-TOOLS: Ctrl+wheel must step the band 0.2 within [0.1, 8] on the height-range tool");
+  // Panel: the four tool chips + the circle/sphere/pointer cursor chips + the
+  // opaque pick/wheel forwards.
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("mmuPaintTool === modelData.val")) &&
+           preparePagePaint.contains(QStringLiteral("editorVm.mmuPaintTool = modelData.val")),
+           "PAINT-MMU-TOOLS: MMU panel must carry the tool chips bound to mmuPaintTool");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("supportPaintCursorType === modelData.val")) &&
+           preparePagePaint.contains(QStringLiteral("editorVm.supportPaintCursorType = modelData.val")),
+           "PAINT-MMU-TOOLS: MMU panel must carry the circle/sphere/pointer cursor-type chips");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("onHeightRangePickRequested")) &&
+           preparePagePaint.contains(QStringLiteral("onBucketFillPickRequested")) &&
+           preparePagePaint.contains(QStringLiteral("onHeightRangeTuned")),
+           "PAINT-MMU-TOOLS: PreparePage must forward the MMU pick signals + the wheel write-back");
+  QVERIFY2(preparePagePaint.contains(QStringLiteral("paintHeightRange = height")),
+           "PAINT-MMU-TOOLS: PreparePage must write the stepped height back into the ViewModel");
 }
 
 void QmlUiAuditTests::calibrationTowerModesDispatchToLibslic3r()
@@ -8313,9 +8522,10 @@ void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
   // (3) RhiViewport carries the plateIndex through a per-plate signal so
   //     captured bytes can be routed back to the right plate. (deliverThumbnail
   //     previously Q_UNUSED'd the index -- Phase 156 closes that.)
-  QVERIFY2(rhiH.contains(QStringLiteral("thumbnailCapturedForPlate(int plateIndex, const QString &data)")),
+  QVERIFY2(rhiH.contains(QStringLiteral("thumbnailCapturedForPlate(int plateIndex, const QString &data,")) &&
+         rhiH.contains(QStringLiteral("int variant = 0);")),
            "CLOS-03: RhiViewport.h must declare thumbnailCapturedForPlate(int, QString) signal carrying the plate index");
-  QVERIFY2(rhiCpp.contains(QStringLiteral("emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData)")),
+  QVERIFY2(rhiCpp.contains(QStringLiteral("emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData, variant)")),
            "CLOS-03: RhiViewport::deliverThumbnail must emit thumbnailCapturedForPlate with the real plateIndex (no longer Q_UNUSED)");
 
   // (4) PreparePage QML: per-plate capture handler persists bytes + a
@@ -8647,7 +8857,6 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
   const QString cxButton = readSource(QStringLiteral("src/qml_gui/controls/CxButton.qml"));
   const QString cxIconButton = readSource(QStringLiteral("src/qml_gui/controls/CxIconButton.qml"));
   const QString cxSpinBox = readSource(QStringLiteral("src/qml_gui/controls/CxSpinBox.qml"));
-  const QString cxPillAction = readSource(QStringLiteral("src/qml_gui/controls/CxPillAction.qml"));
 
   QVERIFY2(!cxButton.isEmpty(), "Unable to read CxButton.qml");
   QVERIFY2(!cxIconButton.isEmpty(), "Unable to read CxIconButton.qml");
@@ -8689,8 +8898,6 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
   // (5) Sanity: the rest of the Cx* library still uses Theme tokens for fonts.
   QVERIFY2(cxSpinBox.contains(QStringLiteral("Theme.fontSize")),
            "DS-03: CxSpinBox must use Theme.fontSize* tokens for typography");
-  QVERIFY2(cxPillAction.contains(QStringLiteral("Theme.fontSize")),
-           "DS-03: CxPillAction must use Theme.fontSize* tokens for typography");
 }
 
 // Phase 162 (TK-01): color hardcode sweep gate.
@@ -9247,9 +9454,8 @@ void QmlUiAuditTests::v53LayerRangeEditor()
 // Investigation revealed the real simplify pipeline already existed:
 // simplifySelected() at EditorViewModel.cpp:1355 calls simplifyObject() which
 // already calls QuadricEdgeCollapse. The duplicate simplifyMeshSelected()
-// method was the no-op stub that PreparePage.qml:447 + ObjectList.qml:928
-// were calling. Phase 176 fixes the wiring (delegation) rather than re-
-// implementing the simplify math.
+// method was the no-op stub that PreparePage.qml:447 was calling. Phase 176
+// fixes the wiring (delegation) rather than re-implementing the simplify math.
 void QmlUiAuditTests::v53SimplifyGizmoReal()
 {
   const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
@@ -9563,7 +9769,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
              "GATE-01/UI-02: main.qml must instantiate KBShortcutsDialog (not an inline Dialog)");
   }
 
-  // -- v5.6 FEAT-01 (Phase 196): Emboss spinner + SliceProgress states.
+  // -- v5.6 FEAT-01 (Phase 196): Emboss spinner + slice-state banners.
   // EditorViewModel exposes the embossRunning getter (QML binds a CxBusyIndicator
   // to it); SliceService exposes the sliceState Q_PROPERTY + sliceStateChanged.
   {
@@ -9575,7 +9781,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
     const QString sliceH = readSource(QStringLiteral("src/core/services/SliceService.h"));
     QVERIFY2(!sliceH.isEmpty(), "GATE-01/FEAT-01: Unable to read SliceService.h");
     QVERIFY2(sliceH.contains(QStringLiteral("Q_PROPERTY(State sliceState READ sliceState NOTIFY sliceStateChanged")),
-             "GATE-01/FEAT-01: SliceService must keep the sliceState Q_PROPERTY (SliceProgress Cancelled/Error banner)");
+             "GATE-01/FEAT-01: SliceService must keep the sliceState Q_PROPERTY (Cancelled/Error slice-state banner)");
     QVERIFY2(sliceH.contains(QStringLiteral("void sliceStateChanged()")),
              "GATE-01/FEAT-01: SliceService must keep the sliceStateChanged signal");
   }
@@ -9610,13 +9816,13 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
              "GATE-01/FEAT-02: CalibrationServiceMock must not carry the legacy '.drc' term (3DPrinter is an FDM slicer)");
   }
 
-  // -- v5.6 FEAT-03 (Phase 198): ObjectList tree deepening.
+  // -- v5.6 FEAT-03 (Phase 198): object tree deepening.
   // EditorViewModel exposes selectedVolumeIndex as a Q_PROPERTY so the deepened
-  // ObjectList tree (layer-range entry + fold triangle) binds to a real index.
+  // object tree (layer-range entry + fold triangle) binds to a real index.
   {
     const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
     QVERIFY2(vmH.contains(QStringLiteral("Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged")),
-             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (ObjectList tree deepening)");
+             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (object tree deepening)");
     QVERIFY2(vmH.contains(QStringLiteral("int selectedVolumeIndex() const")),
              "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex getter");
   }
@@ -9791,7 +9997,7 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
                && processTabs.contains(QStringLiteral("TabBar"))
                && processTabs.contains(QStringLiteral("TabButton")),
            "Process tabs must consume the C++ page contract with extractable presentation labels");
-  QVERIFY2(processTabs.contains(QStringLiteral("processTabBar.width - processTabBar.spacing * (processTabBar.count - 1)"))
+  QVERIFY2(processTabs.contains(QStringLiteral("processTabStrip.width - processTabBar.spacing * (processTabBar.count - 1)"))
                && processTabs.contains(QStringLiteral("height: 38"))
                && processTabs.contains(QStringLiteral("Text.ElideRight")),
            "Process tabs must remain six equal-width one-line cells within the available strip width");
@@ -10856,6 +11062,94 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-06: ProjectServiceMock must expose selectionWorldBoundingBox");
 }
 
+// GAP-4 (HOTKEYS-UPSTREAM-ALIGN): the Prepare canvas keys must mirror the
+// upstream Plater table (KBShortcutsDialog.cpp:222-274, on_char
+// GLCanvas3D.cpp:3089-3306): M/S/R gizmos, C cut, F place-face-on-bed,
+// P seam paint, T text emboss, A / Shift+A arrange, Shift+R auto orient,
+// I / O zoom, Tab Prepare<->Preview, Shift+Tab sidebar, 1-9(0) extruder,
+// and no per-page Ctrl+D (main.qml owns upstream Ctrl+D = Delete all).
+void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
+{
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString kbDialog = readSource(QStringLiteral("src/qml_gui/dialogs/KBShortcutsDialog.qml"));
+  const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  QVERIFY2(!preparePage.isEmpty() && !kbDialog.isEmpty() && !rhiHeader.isEmpty(),
+           "Unable to read PreparePage.qml / KBShortcutsDialog.qml / RhiViewport.h");
+
+  // Gizmo keys (upstream "M"/"S"/"R"/"C"/"F"/"P"/"T").
+  QVERIFY2(preparePage.contains(QStringLiteral("case Qt.Key_M:"))
+               && preparePage.contains(QStringLiteral("Key_M:"))
+               && preparePage.contains(
+                   QStringLiteral("case Qt.Key_M:\n            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)")),
+           "HOTKEYS: plain M must select the move gizmo (upstream Gizmo move)");
+  QVERIFY2(preparePage.contains(QStringLiteral("case Qt.Key_S:")),
+           "HOTKEYS: plain S must select the scale gizmo (upstream Gizmo scale)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_R:"))
+               && preparePage.contains(QStringLiteral("autoOrientSelected()")),
+           "HOTKEYS: R must select rotate and Shift+R must auto-orientate"
+           " (upstream Shift+R)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_C:\n            if (mod & Qt.ControlModifier) {\n                root.editorVm.copySelectedObjects()")),
+           "HOTKEYS: Ctrl+C must stay clipboard copy");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoCut)")),
+           "HOTKEYS: plain C must select the cut gizmo (upstream Gizmo cut)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoFlatten)")),
+           "HOTKEYS: plain F must select place-face-on-bed (upstream Gizmo F)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoSeamPaint)")),
+           "HOTKEYS: plain P must select the seam paint gizmo (upstream P)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoText)")),
+           "HOTKEYS: plain T must select the text emboss gizmo (upstream T)");
+
+  // Arrange keys (upstream "A" / "Shift+A").
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.arrangeAllObjects()")),
+           "HOTKEYS: plain A must arrange all objects");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_A:\n            if (mod & Qt.ControlModifier) {")),
+           "HOTKEYS: Ctrl+A must stay select-all");
+
+  // Zoom keys (upstream "I"/"O") route into the viewport camera zoom.
+  QVERIFY2(preparePage.contains(QStringLiteral("viewport3d.requestZoom(1.0)"))
+               && preparePage.contains(QStringLiteral("viewport3d.requestZoom(-1.0)")),
+           "HOTKEYS: I/O must zoom through the viewport camera");
+  QVERIFY2(rhiHeader.contains(QStringLiteral("Q_INVOKABLE void requestZoom(float delta);")),
+           "HOTKEYS: RhiViewport must expose requestZoom(delta)");
+
+  // Tab / Shift+Tab route through the backend page/sidebar actions.
+  QVERIFY2(preparePage.contains(QStringLiteral("backend.requestSelectTab("))
+               && preparePage.contains(QStringLiteral("backend.requestToggleSidebar()")),
+           "HOTKEYS: Tab must switch Prepare/Preview and Shift+Tab must toggle"
+           " the sidebar through BackendContext");
+
+  // Extruder digits route through the ViewModel (no QML business logic).
+  QVERIFY2(preparePage.contains(QStringLiteral("setExtruderForSelectedItems(")),
+           "HOTKEYS: digits must set the extruder through the viewmodel");
+  QVERIFY2(preparePage.contains(QStringLiteral("interval: 500")),
+           "HOTKEYS: the two-digit filament window must be 500ms (upstream"
+           " on_char timer)");
+
+  // The Blender-style self-invented keys are gone.
+  QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_W:")),
+           "HOTKEYS: the self-invented W binding must be removed");
+  QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_E:\n")),
+           "HOTKEYS: the self-invented E binding must be removed");
+  QVERIFY2(!preparePage.contains(QStringLiteral("Key_G:")),
+           "HOTKEYS: the self-invented G flatten binding must be removed"
+           " (flatten moved to upstream F)");
+
+  // Ctrl+D is Delete all in main.qml only; the per-page duplicate binding
+  // (the conflict) must be gone while duplicate stays menu/toolbar
+  // reachable.
+  QVERIFY2(!preparePage.contains(QStringLiteral("Key_D:")),
+           "HOTKEYS: PreparePage must not swallow Ctrl+D (upstream Ctrl+D is"
+           " Delete all, bound in main.qml)");
+
+  // The shortcuts dialog documents the upstream plater table.
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"M\", desc: qsTr(\"Gizmo move\") }")),
+           "HOTKEYS: the help dialog must document M = gizmo move");
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"Shift+R\", desc: qsTr(\"Auto orientate selected objects\") }")),
+           "HOTKEYS: the help dialog must document Shift+R auto orientate");
+  QVERIFY2(kbDialog.contains(QStringLiteral("{ key: \"I\", desc: qsTr(\"Zoom in\") }")),
+           "HOTKEYS: the help dialog must document I/O zoom");
+}
+
 
 // ── Phase 238 (PREV-01..07): preview completion source audit ───────────────
 // Mirrors the Phase 117/120/237 readSource + QVERIFY2 source-audit pattern.
@@ -10866,6 +11160,7 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
 {
   const QString rendererCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString rendererH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
+  const QString prepareSceneH = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
   const QString visFilter = readSource(QStringLiteral("src/qml_gui/components/VisibilityFilter.qml"));
@@ -10875,6 +11170,7 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   const QString previewVmCpp = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
   QVERIFY2(!rendererCpp.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
   QVERIFY2(!rendererH.isEmpty(), "Unable to read RhiViewportRenderer.h");
+  QVERIFY2(!prepareSceneH.isEmpty(), "Unable to read PrepareSceneData.h");
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
   QVERIFY2(!layerRail.isEmpty(), "Unable to read PreviewLayerRail.qml");
   QVERIFY2(!visFilter.isEmpty(), "Unable to read VisibilityFilter.qml");
@@ -10898,6 +11194,35 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   // (mirrors the upstream shells-always-loaded behavior).
   QVERIFY2(previewPage.contains(QStringLiteral("meshData: root.editorVm ? root.editorVm.meshData : null")),
            "PREV-01: PreviewPage must bind editorVm.meshData so shells have data in preview");
+
+  // ── PREVIEW-GHOST-SHELL: per-volume shell lifecycle ────────────────────
+  // Upstream Shells is a per-volume GLVolumeCollection (GCodeViewer.hpp:381-
+  // 389); load_shells walks object x volume x printable instance
+  // (GCodeViewer.cpp:3076-3189), deletes modifier volumes (:3163-3171), and
+  // tints each volume with its own extruder color
+  // (update_colors_by_extruder, 3DScene.cpp:1216-1224, first-color fallback
+  // :1220-1222). reset_shell (:1193-1198) empties the collection when the
+  // eligible set is empty (:3091-3095).
+  QVERIFY2(rendererCpp.contains(QStringLiteral("m_prepareScene.modelBatches()")),
+           "GHOST-PER-VOLUME: the ghost build must iterate per-batch ModelBatch"
+           " ranges, not one merged vertex blob");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.volumeType != 0")),
+           "GHOST-PER-VOLUME: only model-part volumes may become shells"
+           " (modifier/negative/blocker/enforcer are dropped, upstream"
+           " GCodeViewer.cpp:3163-3171)");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.extruderId - 1")),
+           "GHOST-PER-VOLUME: each shell volume must tint with its own"
+           " extruder color (upstream filament_colour[extruder-1],"
+           " 3DScene.cpp:1216-1224)");
+  QVERIFY2(!rendererCpp.contains(QStringLiteral("m_extrudersColorsParsed.first()")),
+           "GHOST-PER-VOLUME: the extruder-1-only merged tint must not return"
+           " (first-color fallback is allowed only through the clamped index"
+           " path)");
+  QVERIFY2(rendererCpp.contains(QStringLiteral("batch.vertexCount <= 0")),
+           "GHOST-PER-VOLUME: empty/zero-vertex batches must be skipped");
+  QVERIFY2(prepareSceneH.contains(QStringLiteral("int extruderId = 0;")),
+           "GHOST-PER-VOLUME: ModelBatch must carry the per-volume extruder id"
+           " for the ghost tint");
 
   // ── PREV-02: tool marker consumed by the renderer ─────────────────────
   // Upstream Marker::render (GCodeViewer.cpp:306-330) draws the stylized
@@ -11042,6 +11367,24 @@ void QmlUiAuditTests::previewWave5GcodeWindowAndAddMenuHonesty()
   QVERIFY2(topbar.contains(QStringLiteral("currentPage === backend.tpPreview"))
                && topbar.contains(QStringLiteral("backend.previewViewModel.previewReady")),
            "W5: Show G-code Window must remain Preview-scoped and data-gated");
+
+  // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-540): the
+  // source window tokenizes each line (55-char truncate, command/parameters/
+  // comment split, per-part colors) instead of rendering one raw text field.
+  const QString previewVm =
+      readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
+  QVERIFY2(!previewVm.isEmpty(), "Unable to read PreviewViewModel.cpp");
+  QVERIFY2(previewVm.contains(QStringLiteral("PREVIEW-GCODE-SOURCE-TOKENS"))
+               && previewVm.contains(QStringLiteral("gline.left(52) + QStringLiteral(\"...\")")),
+           "TOKENS: rebuildGcodeLineWindow must truncate >55-char lines to 52 + \"...\"");
+  QVERIFY2(previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"command\"), command)"))
+               && previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"parameters\"), parameters)"))
+               && previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"comment\"), comment)")),
+           "TOKENS: rows must carry the command/parameters/comment split");
+  QVERIFY2(page.contains(QStringLiteral("modelData.command"))
+               && page.contains(QStringLiteral("#CCCC00"))
+               && page.contains(QStringLiteral("modelData.comment")),
+           "TOKENS: the delegate must color command (yellow) and comment parts");
 }
 
 void QmlUiAuditTests::engineSemanticsSourceAudit()
@@ -11239,6 +11582,23 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
                && mainQml.contains(QStringLiteral("active: backend.currentPage === backend.tpPreferences"))
                && mainQml.contains(QStringLiteral("+ (backend.tpPreferences + 1)")),
            "WAVE-4: Preferences must remain mounted at its semantic route and status index");
+
+  // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the Edit menu must
+  // expose the clipboard/delete/clone set, wired to the same ViewModel
+  // actions as the shortcuts.
+  QVERIFY2(topbar.contains(QStringLiteral("editCutRequested")) &&
+           topbar.contains(QStringLiteral("editCopyRequested")) &&
+           topbar.contains(QStringLiteral("editPasteRequested")) &&
+           topbar.contains(QStringLiteral("editDeleteRequested")) &&
+           topbar.contains(QStringLiteral("editCloneRequested")) &&
+           topbar.contains(QStringLiteral("editDuplicatePlateRequested")),
+           "MENU-EDIT-EXPAND: the Edit menu must expose cut/copy/paste/delete/clone/duplicate-plate");
+  QVERIFY2(mainQml.contains(QStringLiteral("onEditCutRequested")) &&
+           mainQml.contains(QStringLiteral("cutSelectedObjects()")) &&
+           mainQml.contains(QStringLiteral("onEditDuplicatePlateRequested")) &&
+           mainQml.contains(QStringLiteral("clonePlate(backend.editorViewModel.currentPlateIndex)")) &&
+           mainQml.contains(QStringLiteral("confirmDeleteSelection()")),
+           "MENU-EDIT-EXPAND: entries must route to the real ViewModel actions (delete keeps the confirm)");
 }
 
 void QmlUiAuditTests::pageHonestyAndCliSourceAudit()

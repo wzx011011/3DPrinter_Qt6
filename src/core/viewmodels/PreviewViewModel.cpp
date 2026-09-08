@@ -356,80 +356,23 @@ namespace
     return QStringLiteral("%1 g").arg(grams, 0, 'f', 1);
   }
 
-  // Canonical view-mode indices matching upstream libvgcode EViewType order
-  // (libvgcode/include/Types.hpp:80-103). Every mode-to-field mapping in
-  // recolorAndPackSegments() and buildLegendItems() uses these named constants
-  // instead of raw integers so the 17-mode renumber cannot silently mislabel a
-  // gradient (55-RESEARCH Pitfall 2).
-  enum EViewType
-  {
-    VT_Summary = 0,          // statistics only, no gradient legend
-    VT_LineType = 1,         // FeatureType: per-role colors (kRoleColors)
-    VT_Filament = 2,         // ColorPrint: per-extruder palette
-    VT_Speed = 3,            // gradient on feedrate
-    VT_ActualSpeed = 4,      // uniform (data unavailable in fixture-driven path)
-    VT_Acceleration = 5,     // gradient on acceleration
-    VT_Jerk = 6,             // uniform (data unavailable)
-    VT_Height = 7,           // gradient on layer height
-    VT_Width = 8,            // gradient on line width
-    VT_Flow = 9,             // gradient on volumetric_rate
-    VT_ActualFlow = 10,      // uniform (data unavailable)
-    VT_LayerTime = 11,       // gradient on layer_time
-    VT_LayerTimeLog = 12,    // gradient on log(layer_time)
-    VT_FanSpeed = 13,        // gradient on fan_speed
-    VT_Temperature = 14,     // gradient on temperature
-    VT_PressureAdvance = 15, // uniform (data unavailable)
-    VT_Tool = 16,            // per-extruder palette
-    // P17.1: upstream EViewType::FilamentId (GCodeViewer.hpp:711-726, 12th
-    // entry). Hidden diagnostic mode — pseudo-color {id, role, id}, no
-    // legend (GCodeViewer.cpp:910-911 gates it out of the dropdown).
-    VT_FilamentId = 17
-  };
+  // PreviewViewModel::EViewType (declared in the header) is the single source
+  // of truth for view-mode indices: rows 0..9 are the upstream view_type_items
+  // order (GCodeViewer.cpp:892-901) and the tail keeps the internal
+  // capabilities. Every mode-to-field mapping in recolorAndPackSegments() and
+  // buildLegendItems() uses the named VT_ constants instead of raw integers so
+  // a renumber cannot silently mislabel a gradient (55-RESEARCH Pitfall 2).
 
-  // One-time log guard for the modes whose underlying field is unavailable in
-  // the fixture-driven path (Jerk/PA/ActualSpeed/ActualFlow). Logs once per mode
-  // so users are informed without spamming on every recolor.
+  // Availability gate for modes whose underlying field is missing from the
+  // parsed payload. v5.11: every mode (ActualSpeed/Jerk/ActualFlow/PA included)
+  // now parses real data from M220/M221/M205/M900, so nothing is gated. The
+  // hook stays because the availability plumbing and the QML honesty pill are
+  // part of the view-mode contract (QmlUiAuditTests pins the symbol).
   bool viewModeUsesUnavailableData(int mode)
   {
-    // v5.11: all 4 previously-unavailable modes (ActualSpeed/Jerk/ActualFlow/
-    // PressureAdvance) now parse real data from M220/M221/M205/M900. None are
-    // unavailable anymore.
     Q_UNUSED(mode);
     return false;
   }
-
-  bool logOnceIfNeeded(int mode)
-  {
-    static bool logged[4] = {false, false, false, false};
-    static const int modes[4] = {VT_ActualSpeed, VT_Jerk, VT_ActualFlow, VT_PressureAdvance};
-    for (int i = 0; i < 4; ++i)
-    {
-      if (modes[i] == mode && !logged[i])
-      {
-        logged[i] = true;
-        qInfo("[Preview] Jerk/PA/ActualSpeed/ActualFlow data unavailable in fixture-driven path (mode=%d)", mode);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Cached compiled axis patterns. Constructing a QRegularExpression
-  // compiles the PCRE2 pattern (tens of microseconds each); doing that per
-  // parsed token made the whole-file gcode parse ~100x slower
-  // (docs/perf-baseline.md, preview.parse_loop baseline 87s / 460k lines).
-  // QRegularExpression::match() is const and reentrant on a shared instance.
-  struct AxisPatternTable
-  {
-    QRegularExpression re[26];
-    AxisPatternTable()
-    {
-      const QString pattern =
-          QStringLiteral("(?:^|\\s)%1([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))");
-      for (int i = 0; i < 26; ++i)
-        re[i].setPattern(pattern.arg(QChar(QLatin1Char('A' + i))));
-    }
-  };
 
   bool parseAxis(const QString &line, QChar axis, float &value)
   {
@@ -762,27 +705,25 @@ QString PreviewViewModel::timeAtMove(int moveIndex) const
 
 QStringList PreviewViewModel::viewModes() const
 {
-  // The 17 upstream EViewType display names in upstream update_by_mode order
-  // (libvgcode/include/Types.hpp:80-103 + GCodeViewer.cpp:66-103). Index order
-  // matches the EViewType enum so viewModeIndex_ maps 1:1 to the recolor switch.
+  // The upstream-visible view types ONLY, in the fixed update_by_mode order
+  // (GCodeViewer.cpp:892-901): FeatureType, ColorPrint, Feedrate, Height,
+  // Width, VolumetricRate, LayerTime, LayerTimeLog, FanSpeed, Temperature.
+  // Tool is hidden upstream (commented out, GCodeViewer.cpp:902-904) and
+  // FilamentId is internal-only (appended after the string table is built,
+  // GCodeViewer.cpp:911). Display strings are get_view_type_string
+  // (GCodeViewer.cpp:59-84). Row index equals the EViewType value, so
+  // viewModeIndex_ doubles as the combo row and the recolor switch key.
   return {
-      QStringLiteral("Summary"),
-      QStringLiteral("Line Type"),
-      QStringLiteral("Filament"),
-      QStringLiteral("Speed"),
-      QStringLiteral("Actual Speed"),
-      QStringLiteral("Acceleration"),
-      QStringLiteral("Jerk"),
-      QStringLiteral("Layer Height"),
-      QStringLiteral("Line Width"),
-      QStringLiteral("Flow"),
-      QStringLiteral("Actual Flow"),
-      QStringLiteral("Layer Time"),
-      QStringLiteral("Layer Time (log)"),
-      QStringLiteral("Fan Speed"),
-      QStringLiteral("Temperature"),
-      QStringLiteral("Pressure Advance"),
-      QStringLiteral("Tool")};
+      QStringLiteral("Line Type"),        // FeatureType
+      QStringLiteral("Filament"),         // ColorPrint
+      QStringLiteral("Speed"),            // Feedrate
+      QStringLiteral("Layer Height"),     // Height
+      QStringLiteral("Line Width"),       // Width
+      QStringLiteral("Flow"),             // VolumetricRate
+      QStringLiteral("Layer Time"),       // LayerTime
+      QStringLiteral("Layer Time (log)"), // LayerTimeLog
+      QStringLiteral("Fan Speed"),        // FanSpeed
+      QStringLiteral("Temperature")};     // Temperature
 }
 
 bool PreviewViewModel::currentViewModeAvailable() const
@@ -1271,7 +1212,32 @@ void PreviewViewModel::rebuildGcodeLineWindow()
     QVariantMap row;
     row.insert(QStringLiteral("line"), source.lineNumber);
     row.insert(QStringLiteral("move"), source.moveIndex);
-    row.insert(QStringLiteral("text"), source.text);
+    // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-536):
+    // lines longer than 55 characters truncate to 52 + "..."; the line then
+    // splits at the first ';' (comment) and the first space (command vs
+    // parameters) so the delegate can color the three parts separately.
+    QString gline = source.text;
+    if (gline.size() > 55)
+      gline = gline.left(52) + QStringLiteral("...");
+    QString command = gline;
+    QString comment;
+    const int semicolon = gline.indexOf(QLatin1Char(';'));
+    if (semicolon >= 0) {
+      command = gline.left(semicolon);
+      comment = gline.mid(semicolon);
+    }
+    QString parameters;
+    if (!command.isEmpty()) {
+      const int space = command.indexOf(QLatin1Char(' '));
+      if (space >= 0) {
+        parameters = command.mid(space + 1);
+        command = command.left(space);
+      }
+    }
+    row.insert(QStringLiteral("text"), gline);
+    row.insert(QStringLiteral("command"), command);
+    row.insert(QStringLiteral("parameters"), parameters);
+    row.insert(QStringLiteral("comment"), comment);
     row.insert(QStringLiteral("current"), i == anchor);
     gcodeLines_.append(row);
   }
@@ -1301,7 +1267,11 @@ void PreviewViewModel::togglePlayPause()
 
 void PreviewViewModel::setViewModeIndex(int index)
 {
-  const int clamped = qBound(0, index, viewModes().size() - 1);
+  // The QML combo only offers the 10 upstream dropdown rows, but the internal
+  // capability tail (VT_Summary..VT_FilamentId) stays addressable so the
+  // recolor/legend branches and the tests keep exercising them (GAP-3 kept
+  // capabilities).
+  const int clamped = qBound(0, index, VT_ModeCount - 1);
   if (clamped == viewModeIndex_)
     return;
   viewModeIndex_ = clamped;
@@ -2479,8 +2449,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     // also matched G20/G21/G28-G29, so e.g. "G28 X0 Y0" was parsed as an
     // R=0 arc (upstream GCodeProcessor tokenizes the command word,
     // GCodeProcessor.cpp processG2_G3 dispatch).
-    const bool arcCW = upper == QStringLiteral("G2") || upper.startsWith(QStringLiteral("G2 "));
-    const bool arcCCW = upper == QStringLiteral("G3") || upper.startsWith(QStringLiteral("G3 "));
+    // G-10: also accept the leading-zero spellings (G02/G03) -- upstream
+    // tokenizes the command number so "G02" dispatches with "G2"
+    // (GCodeProcessor.cpp); slicer output is canonical, but post-processors
+    // and firmware echoes sometimes zero-pad the word.
+    const bool arcCW = upper == QStringLiteral("G2") || upper.startsWith(QStringLiteral("G2 "))
+                    || upper == QStringLiteral("G02") || upper.startsWith(QStringLiteral("G02 "));
+    const bool arcCCW = upper == QStringLiteral("G3") || upper.startsWith(QStringLiteral("G3 "))
+                     || upper == QStringLiteral("G03") || upper.startsWith(QStringLiteral("G03 "));
     if (arcCW || arcCCW)
     {
       const bool clockwise = arcCW;
@@ -2543,8 +2519,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       continue;
     }
 
-    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "));
-    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "));
+    // G-10: leading-zero spellings (G00/G01) dispatch like G0/G1.
+    const bool isG0 = upper == QStringLiteral("G0") || upper.startsWith(QStringLiteral("G0 "))
+                   || upper == QStringLiteral("G00") || upper.startsWith(QStringLiteral("G00 "));
+    const bool isG1 = upper == QStringLiteral("G1") || upper.startsWith(QStringLiteral("G1 "))
+                   || upper == QStringLiteral("G01") || upper.startsWith(QStringLiteral("G01 "));
     if (!isG0 && !isG1)
       continue;
 
@@ -3021,10 +3000,10 @@ void PreviewViewModel::recolorAndPackSegments()
 
   const int count = int(visibleIndices.size());
 
-  // Determine value range for gradient modes. Uses the EViewType enum so the
-  // 17-mode renumber cannot silently mislabel a gradient (55-RESEARCH Pitfall 2).
-  // Summary / LineType / Filament / Tool / ActualSpeed / Jerk / ActualFlow /
-  // PressureAdvance do not contribute to the gradient range.
+  // Determine value range for gradient modes. Uses the PreviewViewModel::EViewType
+  // named constants so a renumber cannot silently mislabel a gradient
+  // (55-RESEARCH Pitfall 2). Summary / LineType / Filament / Tool / FilamentId
+  // do not contribute to the gradient range.
   float minV = FLT_MAX, maxV = -FLT_MAX;
   for (const int idx : visibleIndices)
   {
@@ -3046,9 +3025,8 @@ void PreviewViewModel::recolorAndPackSegments()
     case VT_Jerk:             v = s.jerk; break;
     case VT_ActualFlow:       v = s.actual_flow; break;
     case VT_PressureAdvance:  v = s.pressure_advance; break;
-    default: continue;  // VT_Summary, VT_LineType, VT_Filament, VT_Tool do not
-                        // data-unavailable modes (ActualSpeed/Jerk/ActualFlow/PA)
-                        // do not compute a gradient range.
+    default: continue;  // VT_Summary/VT_LineType/VT_Filament/VT_Tool/
+                        // VT_FilamentId do not compute a gradient range.
     }
     if (v < minV) minV = v;
     if (v > maxV) maxV = v;
@@ -3316,7 +3294,9 @@ void PreviewViewModel::buildLegendItems(int mode, float minV, float maxV)
     case VT_LayerTimeLog: label = QStringLiteral("Layer Time (log)"); break;
     case VT_FanSpeed:     label = QStringLiteral("Fan Speed"); break;
     case VT_Temperature:  label = QStringLiteral("Temperature"); break;
-    // Data-unavailable modes render a uniform gradient; label by mode name.
+    // Internal gradient capabilities (Actual Speed / Acceleration / Jerk /
+    // Actual Flow / Pressure Advance) label by mode name; any other
+    // unlisted mode (VT_FilamentId diagnostic) falls back to viewModes().
     case VT_ActualSpeed:      label = QStringLiteral("Actual Speed"); break;
     case VT_Jerk:             label = QStringLiteral("Jerk"); break;
     case VT_ActualFlow:       label = QStringLiteral("Actual Flow"); break;

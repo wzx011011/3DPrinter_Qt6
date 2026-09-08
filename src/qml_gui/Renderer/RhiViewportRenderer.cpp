@@ -702,6 +702,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   if (viewport->m_thumbnailRequestPending) {
     m_thumbnailRequestPending = true;
     m_thumbnailPlateIndex = viewport->m_thumbnailPlateIndex;
+    m_thumbnailVariant = viewport->m_thumbnailVariant;
     m_thumbnailSize = viewport->m_thumbnailSize;
     viewport->m_thumbnailRequestPending = false;
   }
@@ -1550,6 +1551,7 @@ void RhiViewportRenderer::releaseThumbnailResources()
 {
   m_thumbnailFillPipeline.reset();
   m_thumbnailLinePipeline.reset();
+  m_pickVertexBuffer.reset();
   m_thumbnailSrb.reset();
   m_thumbnailUniformBuffer.reset();
   m_thumbnailUniformBufferBytes = 0;
@@ -1672,6 +1674,8 @@ bool RhiViewportRenderer::ensureThumbnailRenderTarget(int size)
     return false;
   }
 
+
+
   m_thumbnailLastBuiltSize = size;
   return true;
 }
@@ -1725,7 +1729,18 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
     cb->draw(m_bedLineVertexCount);
   }
   // Model mesh (triangles) — the actual rendered scene, not just a clear color.
-  if (m_modelVertexBuffer && m_modelVertexCount > 0) {
+  if (m_thumbnailVariant == ThumbnailPicking) {
+    // G-04: picking pass -- the pick vertex buffer bakes one flat palette
+    // color per ModelBatch (keyed by sourceObjectIndex), so the same unlit
+    // fragment path renders the upstream pick_thumbnail family
+    // (Plater.cpp:12086-12094).
+    if (m_pickVertexBuffer && m_pickVertexCount > 0) {
+      cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+      const QRhiCommandBuffer::VertexInput pickBinding(m_pickVertexBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &pickBinding);
+      cb->draw(m_pickVertexCount);
+    }
+  } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
     cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
     const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
     cb->setVertexInput(0, 1, &modelBinding, m_modelIndexBuffer.get(), 0,
@@ -1781,16 +1796,17 @@ void RhiViewportRenderer::deliverCompletedThumbnail()
                         QImage::Format_RGBA8888).copy();
 
   const int plateIndex = m_thumbnailResultPlateIndex;
+  const int variant = m_thumbnailVariant;
   const QPointer<RhiViewport> viewport = m_viewportItem;
   if (viewport == nullptr)
     return;
   QMetaObject::invokeMethod(
       viewport.data(),
-      [viewport, image, plateIndex]() {
+      [viewport, image, plateIndex, variant]() {
         // The queued callback runs on the GUI thread. Recheck the guarded item
         // there because it may have been destroyed after readback completion.
         if (viewport != nullptr)
-          viewport->deliverThumbnail(image, plateIndex);
+          viewport->deliverThumbnail(image, plateIndex, variant);
       },
       Qt::QueuedConnection);
 }
@@ -3051,6 +3067,36 @@ bool RhiViewportRenderer::uploadModelBuffer(QRhiResourceUpdateBatch *updates, qu
     updates->uploadStaticBuffer(m_modelIndexBuffer.get(), 0, modelIndexBytes,
                                 modelIndices.constData());
   }
+  // G-04: picking variant vertex buffer -- same soup positions, but every
+  // vertex's color is overwritten with its batch's flat palette color
+  // (keyed by sourceObjectIndex, deterministic hash like upstream id
+  // encoding). Built alongside the main buffer so a picking capture needs
+  // no GPU-side state changes.
+  QVector<Vertex> pickVertices;
+  pickVertices.reserve(modelVertices.size());
+  for (const PrepareSceneData::ModelBatch &batch : sceneBatches) {
+    if (batch.translucent
+        || batch.firstVertex < 0
+        || qsizetype(batch.firstVertex) + batch.vertexCount > allVertices.size())
+      continue;
+    const quint32 h = quint32(batch.sourceObjectIndex) * 2654435761u;
+    const float pr = float((h >> 16) & 0xFF) / 255.0f;
+    const float pg = float((h >> 8) & 0xFF) / 255.0f;
+    const float pb = float(h & 0xFF) / 255.0f;
+    for (int i = 0; i < batch.vertexCount; ++i) {
+      Vertex v = allVertices.at(batch.firstVertex + i);
+      v.r = pr; v.g = pg; v.b = pb; v.a = 1.0f;
+      pickVertices.append(v);
+    }
+  }
+  m_pickVertexCount = quint32(pickVertices.size());
+  const quint32 pickBytes = quint32(pickVertices.size() * int(sizeof(Vertex)));
+  if (!ensureBuffer(m_pickVertexBuffer, pickBytes, m_pickVertexBufferBytes,
+                    QRhiBuffer::VertexBuffer))
+    return false;
+  if (m_pickVertexBuffer && pickBytes > 0)
+    updates->uploadStaticBuffer(m_pickVertexBuffer.get(), 0, pickBytes,
+                                pickVertices.constData());
 
   const quint32 translucentBytes = quint32(translucentVertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_modelTranslucentBuffer, translucentBytes,
@@ -4516,6 +4562,14 @@ inline void stateColor(int state, const QVariantList &extruderColors,
     out[1] = std::min(base[1] * 1.25f, 1.0f);
     out[2] = std::min(base[2] * 1.25f, 1.0f);
     out[3] = 1.0f;
+  // PAINT-GAPFILL-PORT: -3 = gap fragment marker (facets whose leaf area is
+  // below the gap-area threshold while the support gap-fill tool is active;
+  // upstream TrianglePatch::is_fragment, GLGizmoPainterBase.cpp:1234-1236).
+  // Upstream keeps per-type colors in the filtered fragment view; the Qt6
+  // port uses a dedicated amber so fragments read at a glance.
+  if (state == -3)
+  {
+    out[0] = 1.0f; out[1] = 0.9f; out[2] = 0.4f; out[3] = 1.0f;
     return;
   }
   // EnforcerBlockerType: 1=Enforcer, 2=Blocker, 3..16=Extruder3..16
@@ -5032,6 +5086,7 @@ bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updat
   // comparison.
   const bool inputsChanged =
       (m_brushButtonState != m_brushCursorLastButtonState) ||
+      (m_brushCursorType != m_brushCursorLastCursorType) ||
       !qFuzzyCompare(m_brushMouseScreenX, m_brushCursorLastScreenX) ||
       !qFuzzyCompare(m_brushMouseScreenY, m_brushCursorLastScreenY) ||
       !qFuzzyCompare(m_brushRadius, m_brushCursorLastRadius);
@@ -5039,13 +5094,20 @@ bool RhiViewportRenderer::uploadBrushCursorBuffer(QRhiResourceUpdateBatch *updat
     return true;
 
   m_brushCursorLastButtonState = m_brushButtonState;
+  m_brushCursorLastCursorType = m_brushCursorType;
   m_brushCursorLastScreenX = m_brushMouseScreenX;
   m_brushCursorLastScreenY = m_brushMouseScreenY;
   m_brushCursorLastRadius = m_brushRadius;
 
   // Hidden (buttonState < 0): emit zero verts so the draw is skipped.
+  // PAINT-MMU-TOOLS: the brush ball exists only for the Circle/Sphere brush
+  // cursors (m_brushCursorType 0/1). The MMU pointer brush and height-range
+  // band have no ball upstream (GLGizmoPainterBase renders a small pointer
+  // marker / the band highlight instead, GLGizmoMmuSegmentation.cpp:
+  // 594-595, 667-668) -- drawing the sphere there would be misleading.
   QVector<Vertex> vertices;
-  if (m_brushButtonState >= 0 && m_brushRadius > 0.f)
+  if (m_brushButtonState >= 0 && m_brushRadius > 0.f &&
+      m_brushCursorType >= 0 && m_brushCursorType <= 1)
   {
     // Unproject the mouse to a world ray and intersect the bed plane (Y=0).
     // m_cameraMvp is the view-projection; invert it to map NDC->world. The
@@ -5561,6 +5623,20 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
 // from the SAME prepare-pass mesh staging (m_prepareScene.modelVertices --
 // fed by PreviewPage.qml's meshData/meshBatch* bindings, mirroring
 // PreparePage), with the per-vertex alpha overridden to the ghost alpha.
+//
+// PREVIEW-GHOST-SHELL per-volume lifecycle: the ghost buffer is built PER
+// ModelBatch, not as one merged blob (upstream Shells is a per-volume
+// GLVolumeCollection, GCodeViewer.hpp:381-389). Eligibility mirrors
+// load_shells: only model-part volumes become shells -- modifier/negative/
+// blocker/enforcer volumes are dropped (upstream deletes modifier shell
+// volumes, GCodeViewer.cpp:3163-3171; load_object only feeds model parts,
+// 3DScene.cpp:689-743). Each surviving batch is tinted with ITS OWN extruder
+// color (update_colors_by_extruder filament_colour[extruder-1] with the
+// first-color fallback for an invalid id, 3DScene.cpp:1216-1224), replacing
+// the previous extruder-1-only tint. An empty eligible set is the upstream
+// reset_shell transition (clear volumes + empty collection,
+// GCodeViewer.cpp:1193-1198, :3091-3095): the generation is recorded so an
+// empty scene does not rebuild every frame and no stale shell draws.
 bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *updates)
 {
   if (updates == nullptr || rhi() == nullptr)
@@ -5571,37 +5647,50 @@ bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *update
   if (m_ghostShellBufferUploaded && m_ghostShellModelGeneration == m_modelGeneration)
     return true;
 
-  const QVector<Vertex> source = buildModelVertices(m_prepareScene.modelVertices());
-  if (source.isEmpty())
-  {
-    // No meshes loaded (e.g. empty plate) -- nothing to ghost; still record
-    // the generation so empty scenes do not rebuild every frame.
-    m_ghostShellModelGeneration = m_modelGeneration;
-    m_ghostShellBufferUploaded = true;
-    m_ghostShellVertexCount = 0;
-    return true;
-  }
-
   // Ghost alpha override (upstream renders the shell volumes in Transparent
   // mode so toolpaths stay readable on top; shell_transparency 0.15,
   // GCodeViewer.cpp:3076-3186 m_shells.alpha).
   constexpr float kGhostAlpha = 0.15f;
-  // P17.5: tint the shell with the extruder-1 configured color (upstream
-  // update_colors_by_extruder tints per volume; the Qt6 ghost is one merged
-  // mesh, so extruder 1 — the default part color source — applies).
-  float tintR = 0.8f, tintG = 0.8f, tintB = 0.8f;
-  if (!m_extrudersColorsParsed.isEmpty())
-  {
-    tintR = m_extrudersColorsParsed.first().x();
-    tintG = m_extrudersColorsParsed.first().y();
-    tintB = m_extrudersColorsParsed.first().z();
-  }
+
   QVector<Vertex> ghost;
-  ghost.resize(source.size());
-  for (int i = 0; i < source.size(); ++i)
+  const QList<PrepareSceneData::ModelBatch> &batches = m_prepareScene.modelBatches();
+  if (!batches.isEmpty()) {
+    // 1:1 with modelVertices() for CanvasPreview (buildModelVertices only
+    // diverges for the AssembleView explosion/transform paths), so per-batch
+    // [firstVertex, firstVertex+vertexCount) ranges map directly onto the
+    // built output.
+    const QVector<Vertex> built = buildModelVertices(m_prepareScene.modelVertices());
+    ghost.reserve(built.size());
+    for (const PrepareSceneData::ModelBatch &batch : batches) {
+      if (batch.volumeType != 0 || batch.vertexCount <= 0)
+        continue; // shell eligibility: model parts only (load_shells rules)
+      float tintR = 0.8f, tintG = 0.8f, tintB = 0.8f;
+      if (!m_extrudersColorsParsed.isEmpty()) {
+        int colorIndex = batch.extruderId - 1;
+        if (colorIndex < 0 || colorIndex >= m_extrudersColorsParsed.size())
+          colorIndex = 0; // invalid extruder falls back to the first color
+        const QVector4D &color = m_extrudersColorsParsed.at(colorIndex);
+        tintR = color.x();
+        tintG = color.y();
+        tintB = color.z();
+      }
+      const int first = batch.firstVertex;
+      for (int i = 0; i < batch.vertexCount; ++i) {
+        const Vertex &v = built.at(first + i);
+        ghost.append(Vertex{v.x, v.y, v.z, tintR, tintG, tintB, kGhostAlpha});
+      }
+    }
+  }
+
+  if (ghost.isEmpty())
   {
-    const Vertex &v = source[i];
-    ghost[i] = Vertex{v.x, v.y, v.z, tintR, tintG, tintB, kGhostAlpha};
+    // reset_shell equivalent: no eligible shell volumes (empty plate or only
+    // modifier/negative volumes). Record the generation so empty scenes do
+    // not rebuild every frame and no stale shell geometry survives.
+    m_ghostShellModelGeneration = m_modelGeneration;
+    m_ghostShellBufferUploaded = true;
+    m_ghostShellVertexCount = 0;
+    return true;
   }
 
   const quint32 byteSize = quint32(ghost.size()) * sizeof(Vertex);

@@ -2224,6 +2224,88 @@ bool PresetServiceMock::createCustomPreset(int category, const QString &name,
   return true;
 }
 
+bool PresetServiceMock::overwriteUserPreset(int category, const QString &name,
+                                            const QHash<QString, QVariant> &values)
+{
+  // G-01: replace an existing USER preset in place. Unlike createCustomPreset
+  // there is no duplicate rejection -- but builtin/read-only (vendor/bundle)
+  // presets are never replaceable, and the preset's inheritance link (if any)
+  // is preserved: the stored chain stays the parent, overlaid with `values`.
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty() || !isUserPreset(trimmedName))
+    return false;
+
+  QHash<QString, QVariant> resolved;
+  const QString parent = m_presetInherits.value(trimmedName);
+  if (!parent.isEmpty() && m_presetStore.contains(parent))
+    resolved = m_presetStore.value(parent);
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    resolved.insert(it.key(), it.value());
+
+  if (!writePresetJsonFile(userPresetDirResolved(), category, trimmedName, resolved, parent))
+    return false;
+
+  m_presetStore[trimmedName] = resolved;
+  return true;
+}
+
+bool PresetServiceMock::detachPresetFromParent(int category, const QString &name,
+                                               const QHash<QString, QVariant> &values)
+{
+  // G-13 (upstream "detach from system preset"): flatten an inherited USER
+  // preset -- the stored chain-resolved values overlaid with `values` become
+  // the preset's own, the inherits link is cut, and the user JSON is
+  // rewritten without a parent. Builtin/read-only presets are refused; the
+  // name and current selection are unchanged.
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty() || !isUserPreset(trimmedName))
+    return false;
+
+  auto inheritIt = m_presetInherits.constFind(trimmedName);
+  if (inheritIt == m_presetInherits.constEnd() || inheritIt.value().isEmpty())
+    return true;  // already standalone
+
+  const QString parent = inheritIt.value();
+  auto storeIt = m_presetStore.constFind(trimmedName);
+  if (storeIt == m_presetStore.constEnd())
+    return false;
+
+  QHash<QString, QVariant> resolved;
+  if (m_presetStore.contains(parent))
+    resolved = m_presetStore.value(parent);
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    resolved.insert(it.key(), it.value());
+
+  if (!writePresetJsonFile(userPresetDirResolved(), category, trimmedName, resolved, QString()))
+    return false;
+
+  m_presetStore[trimmedName] = resolved;
+  m_presetInherits.remove(trimmedName);
+  return true;
+}
+
+bool PresetServiceMock::adoptProjectEmbeddedPreset(int category, const QString &name,
+                                                   const QHash<QString, QVariant> &values,
+                                                   const QString &inherits)
+{
+  // G-13: register an in-project embedded preset (from a saved 3MF).
+  // Memory-only registration: the values ride m_presetStore so the preset
+  // shows up in the lists and can be selected, but nothing is written to
+  // the user preset directory. A stored preset with the same name wins.
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty() || values.isEmpty())
+    return false;
+  if (m_presetStore.contains(trimmedName))
+    return false;
+
+  m_presetStore[trimmedName] = values;
+  registerPresetMetadata(trimmedName, category, false, false);
+  if (!inherits.isEmpty())
+    m_presetInherits[trimmedName] = inherits;
+  emit projectEmbeddedPresetsAdopted();
+  return true;
+}
+
 bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
   // v5.16 (PSET2-03): Transfer primitive — selected keys land on the target

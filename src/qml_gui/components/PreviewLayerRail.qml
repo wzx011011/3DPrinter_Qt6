@@ -101,8 +101,23 @@ Item {
                 snapMode: RangeSlider.SnapAlways
                 enabled: root.previewVm && root.totalLayers > 0
                 property bool lowerHandleSelected: false
-                first.value: root.previewVm ? root.previewVm.currentLayerMin : 0
-                second.value: root.previewVm ? root.previewVm.currentLayerMax : 0
+                // G-07: the handles are synced IMPERATIVELY from the viewmodel
+                // (syncFromVm below). The original declarative value bindings
+                // broke permanently on the first user drag — RangeSlider writes
+                // value imperatively while dragging, which severed the binding,
+                // after which jump-to-layer/playback/plate switches no longer
+                // moved the thumbs.
+                function syncFromVm() {
+                    if (!root.previewVm || first.pressed || second.pressed)
+                        return
+                    first.value = root.previewVm.currentLayerMin
+                    second.value = root.previewVm.currentLayerMax
+                }
+                Component.onCompleted: syncFromVm()
+                Connections {
+                    target: root.previewVm
+                    function onStateChanged() { layerRangeSlider.syncFromVm() }
+                }
                 first.onPressedChanged: if (first.pressed) layerRangeSlider.lowerHandleSelected = true
                 second.onPressedChanged: if (second.pressed) layerRangeSlider.lowerHandleSelected = false
                 first.onMoved: root.commitRange(first.value, second.value)

@@ -11,6 +11,9 @@ CxDialog {
     id: root
     required property var editorVm
     property var monitorVm: null  // v2.5 DEV-05: SelectMachineDialog 需要
+    // G-03: true while an on-demand slice requested from this dialog is in
+    // flight; printSliceReady() then continues into device selection.
+    property bool slicingForPrint: false
 
     dialogTitle: qsTr("发送打印")
     titleIcon: "🖨"
@@ -122,28 +125,36 @@ CxDialog {
             }
 
             // Print
-            // R-P1.E: the send flow needs BOTH a sliced G-code and the device
-            // VM. Previously it read a nonexistent `lastGcodePath` and opened
-            // SelectMachineDialog with an empty path + empty device list, which
-            // still accepted() -- a fake-completed print send. The button is
-            // now gated and disabled with an honest reason.
+            // R-P1.E + G-03: the send flow needs the device VM and a G-code
+            // target. With no slice result yet, clicking print starts an
+            // on-demand slice and the flow continues automatically when
+            // printSliceReady fires (upstream Plater.cpp:7172 slices from the
+            // print flow; SelectMachine.cpp:2049 gates Send on readiness).
             Rectangle {
                 width: 80; height: 30; radius: 4
-                readonly property bool canPrint: root.editorVm !== null
+                readonly property bool hasResult: root.editorVm !== null
                     && (root.editorVm.lastGcodePath || "") !== ""
+                readonly property bool canPrint: root.editorVm !== null
                     && root.monitorVm !== null
+                    && !root.slicingForPrint
+                    && (hasResult || !root.editorVm.isSlicing())
                 color: !canPrint ? Theme.bgPressed
                       : printHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                Text { anchors.centerIn: parent; text: qsTr("▶ 打印"); color: "white"; font.pixelSize: Theme.fontSizeSM; font.bold: true }
+                Text { anchors.centerIn: parent; text: root.slicingForPrint ? qsTr("切片中…") : qsTr("▶ 打印"); color: "white"; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                 MouseArea {
                     id: printHov; anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: parent.canPrint ? Qt.PointingHandCursor : Qt.ForbiddenCursor
                     enabled: parent.canPrint
                     onClicked: {
-                        selectMachineDialog.gcodePath = root.editorVm.lastGcodePath
-                        selectMachineDialog.open()
-                        root.close()
+                        if (parent.hasResult) {
+                            selectMachineDialog.gcodePath = root.editorVm.lastGcodePath
+                            selectMachineDialog.open()
+                            root.close()
+                        } else {
+                            root.slicingForPrint = true
+                            root.editorVm.requestSlice()
+                        }
                     }
                 }
             }
@@ -151,11 +162,38 @@ CxDialog {
 
         Text {
             Layout.fillWidth: true
-            visible: root.editorVm === null || (root.editorVm.lastGcodePath || "") === ""
-            text: qsTr("请先对当前平板切片，再发送打印。")
-            color: Theme.textDisabled
+            text: {
+                if (root.slicingForPrint)
+                    return qsTr("正在切片，完成后将自动选择设备…")
+                if (root.editorVm !== null && (root.editorVm.lastGcodePath || "") !== "")
+                    return qsTr("G-code 已就绪，选择设备后发送。")
+                return qsTr("当前平板还没有切片结果——点击打印将自动切片。")
+            }
+            visible: true
+            color: root.slicingForPrint ? Theme.textSecondary : Theme.textDisabled
             font.pixelSize: Theme.fontSizeXS
             horizontalAlignment: Text.AlignHCenter
+        }
+    }
+
+    // G-03: continue into device selection once the on-demand slice lands.
+    Connections {
+        target: root.slicingForPrint ? root.editorVm : null
+        enabled: root.slicingForPrint
+        function onPrintSliceReady(gcodePath) {
+            root.slicingForPrint = false
+            if (root.monitorVm === null || !gcodePath)
+                return
+            selectMachineDialog.gcodePath = gcodePath
+            selectMachineDialog.open()
+            root.close()
+        }
+        // A failed or cancelled slice releases the on-demand state (the
+        // status line returns to the actionable hint).
+        function onStateChanged() {
+            if (root.editorVm && !root.editorVm.isSlicing()
+                && (root.editorVm.lastGcodePath || "") === "")
+                root.slicingForPrint = false
         }
     }
 

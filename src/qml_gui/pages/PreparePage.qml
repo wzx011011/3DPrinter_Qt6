@@ -197,7 +197,9 @@ Item {
     function _activeBrushCursorType() {
         if (!root.editorVm)
             return 1
-        // All three gizmos reuse supportPaintCursorType (0=Circle, 1=Sphere).
+        // All three gizmos reuse supportPaintCursorType (0=Circle, 1=Sphere;
+        // PAINT-MMU-TOOLS adds 2=Pointer for the MMU triangle brush, routed
+        // by the viewport to the single-facet bucket fill).
         return root.editorVm.supportPaintCursorType
     }
     function _activePaintState() {
@@ -260,22 +262,40 @@ Item {
         return true
     }
 
-    // Keyboard shortcuts matching upstream CrealityPrint Plater
+    // GAP-4 (HOTKEYS-UPSTREAM-ALIGN): keyboard shortcuts matching the
+    // upstream OrcaSlicer Plater table (KBShortcutsDialog.cpp:222-274,
+    // implemented in GLCanvas3D.cpp:3089-3306 on_char):
+    //   M/S/R = gizmo move/scale/rotate, C = cut, F = place face on bed,
+    //   P = paint-on seam, T = text emboss, A / Shift+A = arrange all /
+    //   selected plate, Shift+R = auto orient, I / O = zoom, Tab = switch
+    //   Prepare/Preview, Shift+Tab = collapse sidebar, 1-9(0) = set
+    //   extruder. Arrows nudge, Esc deselects, Ctrl+A select all, Ctrl+D is
+    //   Delete all (bound in main.qml -- the old per-page Ctrl+D duplicate
+    //   was the conflict, now removed). Ctrl+U measure and Ctrl+Shift+X cut
+    //   remain as documented OWzx extensions; W/E (Blender-style) were
+    //   self-invented and are gone.
     Keys.onPressed: (event) => {
         if (!root.editorVm)
             return
         var key = event.key
         var mod = event.modifiers
         switch (key) {
-        case Qt.Key_W:
+        case Qt.Key_M:
             event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)
             break
-        case Qt.Key_E:
-            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoRotate)
-            break
-        case Qt.Key_R:
+        case Qt.Key_S:
             if (!(mod & Qt.ControlModifier)) {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoScale)
+            }
+            break
+        case Qt.Key_R:
+            if (mod & Qt.ShiftModifier) {
+                // Upstream Shift+R: auto orientate selected objects (or all
+                // when nothing is selected) -- EditorViewModel::autoOrientSelected.
+                root.editorVm.autoOrientSelected()
+                event.accepted = true
+            } else if (!(mod & Qt.ControlModifier)) {
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoRotate)
             }
             break
         case Qt.Key_Z:
@@ -307,11 +327,9 @@ Item {
             if (mod & Qt.ControlModifier) {
                 root.editorVm.selectAllVisibleObjects()
                 event.accepted = true
-            }
-            break
-        case Qt.Key_D:
-            if (mod & Qt.ControlModifier) {
-                root.editorVm.duplicateSelectedObjects()
+            } else if (!(mod & Qt.AltModifier)) {
+                // Upstream "A": arrange all objects.
+                root.editorVm.arrangeAllObjects()
                 event.accepted = true
             }
             break
@@ -319,6 +337,9 @@ Item {
             if (mod & Qt.ControlModifier) {
                 root.editorVm.copySelectedObjects()
                 event.accepted = true
+            } else {
+                // Upstream "C": gizmo cut.
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoCut)
             }
             break
         case Qt.Key_V:
@@ -328,30 +349,119 @@ Item {
             }
             break
         case Qt.Key_X:
-            if ((mod & Qt.ControlModifier) && !(mod & Qt.ShiftModifier)) {
+            // Ctrl+X keeps the standard clipboard cut (the cut GIZMO moved
+            // to plain "C" per the upstream table; the old Ctrl+Shift+X
+            // binding is gone).
+            if (mod & Qt.ControlModifier) {
                 root.editorVm.cutSelectedObjects()
                 event.accepted = true
-            } else if ((mod & Qt.ControlModifier) && (mod & Qt.ShiftModifier)) {
-                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoCut)
             }
             break
         case Qt.Key_F:
-            root.applyFitHintIfReady()
-            event.accepted = true
+            // Upstream "F": gizmo place face on bed (flatten).
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoFlatten)
             break
         case Qt.Key_U:
+            // OWzx extension (kept, listed in the shortcuts dialog): measure
+            // gizmo. Upstream binds no plater key for it.
             if (mod & Qt.ControlModifier) {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMeasure)
             }
             break
-        case Qt.Key_G:
-            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoFlatten)
-            break
         case Qt.Key_P:
             if (!(mod & Qt.ControlModifier)) {
-                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSupportPaint)
+                // Upstream "P": gizmo FDM paint-on seam (KBShortcutsDialog
+                // .cpp:259). Support painting stays on the toolbar.
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSeamPaint)
             }
             break
+        case Qt.Key_T:
+            // Upstream "T": text emboss / engrave gizmo.
+            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoText)
+            break
+        case Qt.Key_I:
+            // Upstream "I": zoom in.
+            if (!(mod & (Qt.ControlModifier | Qt.AltModifier))) {
+                viewport3d.requestZoom(1.0)
+                event.accepted = true
+            }
+            break
+        case Qt.Key_O:
+            // Upstream "O": zoom out.
+            if (!(mod & (Qt.ControlModifier | Qt.AltModifier))) {
+                viewport3d.requestZoom(-1.0)
+                event.accepted = true
+            }
+            break
+        case Qt.Key_Tab:
+            if (!(mod & Qt.ControlModifier)) {
+                if (mod & Qt.ShiftModifier) {
+                    // Upstream Shift+Tab: collapse/expand the sidebar.
+                    backend.requestToggleSidebar()
+                } else {
+                    // Upstream Tab: switch between Prepare and Preview.
+                    backend.requestSelectTab(
+                        backend.currentPage === backend.tpPreview
+                            ? backend.tp3DEditor : backend.tpPreview)
+                }
+                event.accepted = true
+            }
+            break
+        case Qt.Key_Left:
+        case Qt.Key_Right:
+        case Qt.Key_Up:
+        case Qt.Key_Down:
+            // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470): arrows
+            // nudge the selection on the bed plane; Shift steps 1mm instead
+            // of 10mm. TransformCommand mergeWith coalesces key repeats.
+            if (root.editorVm && root.editorVm.hasSelection) {
+                var step = (mod & Qt.ShiftModifier) ? 1.0 : 10.0
+                var dx = 0.0
+                var dy = 0.0
+                if (key === Qt.Key_Left) dx = -step
+                else if (key === Qt.Key_Right) dx = step
+                else if (key === Qt.Key_Up) dy = step
+                else dy = -step
+                root.editorVm.nudgeSelectedObjects(dx, dy)
+                event.accepted = true
+            }
+            break
+        default:
+            // GAP-5 (upstream GLCanvas3D.cpp:3248-3269): digits 1-9 (0 as
+            // the second digit of 10..16) set the filament/extruder of the
+            // selection. A second digit within 500ms forms a two-digit
+            // number; MMU paint gizmo swallows digits (upstream gate), and
+            // modified presses stay with their shortcuts.
+            if (key >= Qt.Key_0 && key <= Qt.Key_9
+                    && mod === Qt.NoModifier
+                    && viewport3d.gizmoMode !== GLViewport.GizmoMmuSegmentation) {
+                var digit = key - Qt.Key_0
+                if (root.pendingExtruderDigit >= 0) {
+                    var two = root.pendingExtruderDigit * 10 + digit
+                    if (two >= 1 && two <= 16)
+                        root.editorVm.setExtruderForSelectedItems(two)
+                    root.pendingExtruderDigit = -1
+                    root.extruderDigitTimer.stop()
+                } else {
+                    root.pendingExtruderDigit = digit
+                    root.extruderDigitTimer.restart()
+                }
+                event.accepted = true
+            }
+            break
+        }
+    }
+
+    // GAP-5: 500ms two-digit filament window (upstream on_char starts a
+    // 500ms timer on the first digit and commits on expiry).
+    property int pendingExtruderDigit: -1
+    Timer {
+        id: extruderDigitTimer
+        interval: 500
+        onTriggered: {
+            if (root.pendingExtruderDigit >= 1 && root.editorVm)
+                root.editorVm.setExtruderForSelectedItems(root.pendingExtruderDigit)
+            root.pendingExtruderDigit = -1
         }
     }
 
@@ -1640,6 +1750,13 @@ Item {
                         // TriangleSelector, GLGizmoPainterBase.hpp:247; the
                         // EditorViewModel comment on activePaintKind already
                         // documented this mapping).
+                        // PAINT-MMU-TOOLS: entering a paint gizmo routes the
+                        // stroke write-back kind (0=Support, 1=Seam, 2=Mmu).
+                        // Upstream each gizmo instance writes its own
+                        // FacetsAnnotation member (GLGizmoPainterBase.hpp:247
+                        // supported/seam/mmu_segmentation facets) -- the Qt6
+                        // port routes the shared PaintEngine commit through
+                        // this kind flag (pure value routing, no geometry).
                         if (root.editorVm) {
                             if (gizmoMode === GLViewport.GizmoSupportPaint)
                                 root.editorVm.activePaintKind = 0
@@ -1648,6 +1765,13 @@ Item {
                             else if (gizmoMode === GLViewport.GizmoMmuSegmentation)
                                 root.editorVm.activePaintKind = 2
                         }
+                        // Phase 220 (HOLLOW-REFRESH): entering Hollow rebuilds
+                        // the marker stream.
+                        if (gizmoMode === GLViewport.GizmoHollow && root.editorVm)
+                            root.editorVm.refreshHollowMarkers()
+                        // v5.13: entering AdvancedCut rebuilds the pin markers.
+                        else if (gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm)
+                            root.editorVm.refreshAdvancedCutConnectors()
                     }
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     // v5.12: camera preferences wired from settingsViewModel
@@ -1693,6 +1817,30 @@ Item {
                     onObjectPickedSource: function(sourceIndex) {
                         if (root.editorVm)
                             root.editorVm.selectSourceObject(sourceIndex)
+                    }
+                    // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135 and
+                    // 4152-4168, KBShortcutsDialog.cpp:235-236): Ctrl+click
+                    // toggles the clicked object in/out of the selection,
+                    // Alt+click selects the volume (part) under the cursor.
+                    // Pure forwarding -- the selection state changes live in
+                    // EditorViewModel.
+                    onObjectPickedSourceWithModifiers: function(sourceIndex, volumeIndex, modifiers) {
+                        if (!root.editorVm)
+                            return
+                        if ((modifiers & Qt.ControlModifier) !== 0)
+                            root.editorVm.toggleSourceObjectSelection(sourceIndex)
+                        else if ((modifiers & Qt.AltModifier) !== 0)
+                            root.editorVm.selectVolumeBySource(sourceIndex, volumeIndex)
+                    }
+                    // SEL-MODIFIERS-RECT (upstream m_rectangle_selection,
+                    // GLCanvas3D.cpp:1872 + 3506-3508 + 4384-4391): a finished
+                    // Shift(+Alt) rubber-band stroke. The viewport already
+                    // resolved the contained source objects in C++; QML only
+                    // forwards modifiers + rect + indices to the backend
+                    // method that owns the selection change.
+                    onRectangleSelectionFinished: function(modifiers, rect, containedIndices) {
+                        if (root.editorVm)
+                            root.editorVm.selectObjectsInRect(modifiers, rect, containedIndices)
                     }
                     onContextMenuRequested: function(targetKind, sourceObjectIndex, volumeIndex, instanceIndex, plateIndex, popupX, popupY) {
                         if (!root.editorVm)
@@ -1785,6 +1933,52 @@ Item {
                     onHeightRangePickRequested: function(worldOrigin, worldDirection, cameraPosition, cameraForward, pickedSourceIndex, paintState, height) {
                         if (root.editorVm)
                             root.editorVm.paintHeightRangeAt(paintState, height, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition, cameraForward)
+                        if (root.editorVm)
+                            root.editorVm.smartFillAtFacet(paintState, smartFillAngle, overhangsOnly, overhangAngle, pickedSourceIndex, worldOrigin, worldDirection, cameraForward)
+                    }
+                    // PAINT-MMU-TOOLS: bucket (connected-region) fill pick --
+                    // routed to EditorViewModel::bucketFillAtFacet (upstream
+                    // POINTER brush angle -1 propagate false / BUCKET_FILL
+                    // tool edge-detection angle propagate true,
+                    // GLGizmoPainterBase.cpp:778-787). Opaque-forward contract
+                    // as above.
+                    onBucketFillPickRequested: function(worldOrigin, worldDirection, cameraForward, pickedSourceIndex, paintState, seedFillAngle, propagate) {
+                        if (root.editorVm)
+                            root.editorVm.bucketFillAtFacet(paintState, seedFillAngle, propagate, pickedSourceIndex, worldOrigin, worldDirection, cameraForward)
+                    }
+                    // PAINT-MMU-TOOLS: height-range pick -- routed to
+                    // EditorViewModel::paintHeightRangeAt (upstream
+                    // HEIGHT_RANGE brush: world-Z anchor band painted across
+                    // every part volume, GLGizmoPainterBase.cpp:703-733).
+                    onHeightRangePickRequested: function(worldOrigin, worldDirection, cameraPosition, cameraForward, pickedSourceIndex, paintState, height) {
+                        if (root.editorVm)
+                            root.editorVm.paintHeightRangeAt(paintState, height, pickedSourceIndex, worldOrigin, worldDirection, cameraPosition, cameraForward)
+                    }
+                    // PAINT-MMU-TOOLS: Ctrl+wheel stepped the height-range
+                    // band span in the viewport; write it back into the
+                    // ViewModel so the band + panel slider follow (same
+                    // opaque-value forward contract as onGapAreaTuned).
+                    onHeightRangeTuned: function(height) {
+                        if (root.editorVm)
+                            root.editorVm.paintHeightRange = height
+                    }
+                    // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area
+                    // threshold in the viewport; write it back into the
+                    // ViewModel so the -3 fragment overlay + panel slider
+                    // follow (same opaque-value forward contract -- no logic
+                    // in QML).
+                    onGapAreaTuned: function(gapArea) {
+                        if (root.editorVm)
+                            root.editorVm.supportPaintGapArea = gapArea
+                    }
+                    // PAINT-ALT-WHEEL-CLIP: Alt+wheel swept the cross-section
+                    // (clipping) plane ratio in the viewport; write it back
+                    // into the ViewModel so the clipped-side pick rejection +
+                    // the panel sliders follow (opaque-value forward contract,
+                    // no logic in QML).
+                    onPaintClippingTuned: function(position) {
+                        if (root.editorVm)
+                            root.editorVm.paintClippingPosition = position
                     }
                     // Phase 240 (GIZ-03): flatten hover highlight + click-to-
                     // place. The ViewModel runs the stage-2 pick; hover updates
@@ -1864,6 +2058,22 @@ Item {
                     // Phase 240 (GIZ-02): smart-fill params for the paint path.
                     paintToolType: root.editorVm ? root.editorVm.supportPaintToolType : 0
                     smartFillAngle: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                    // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip +
+                    // bucket edge detection + height-range band span (upstream
+                    // GLGizmoMmuSegmentation m_current_tool /
+                    // m_detect_geometry_edge / m_cursor_height). The viewport
+                    // routes MMU picks by these before the shared channels.
+                    mmuPaintTool: root.editorVm ? root.editorVm.mmuPaintTool : 0
+                    mmuBucketEdgeDetection: root.editorVm ? root.editorVm.mmuBucketEdgeDetection : false
+                    brushHeightRange: root.editorVm ? root.editorVm.paintHeightRange : 0.2
+                    // PAINT-GAPFILL-PORT: gap-fill area threshold for the
+                    // Ctrl+wheel step (the wheel value round-trips back via
+                    // onGapAreaTuned below).
+                    gapArea: root.editorVm ? root.editorVm.supportPaintGapArea : 1
+                    // PAINT-ALT-WHEEL-CLIP: cross-section plane ratio for the
+                    // Alt+wheel sweep (the wheel value round-trips back via
+                    // onPaintClippingTuned above).
+                    paintClippingPosition: root.editorVm ? root.editorVm.paintClippingPosition : 0
                     paintOnOverhangsOnly: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
                     paintOverhangAngle: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
                     // P2.3-5: height-range band span for the height-range tool.
@@ -1964,6 +2174,24 @@ Item {
                             }
                         }
                     }
+                }
+
+                // SEL-MODIFIERS-RECT: rubber-band selection band (upstream
+                // GLSelectionRectangle::render, GLSelectionRectangle.cpp:57-121
+                // -- dashed screen-space line loop). The drag rect comes from
+                // the viewport in item-local pixels; this overlay only draws
+                // it (same C++-computed/QML-drawn pattern as plateAnchors).
+                Rectangle {
+                    readonly property rect band: viewport3d.selectionRubberBand
+                    x: band.x
+                    y: band.y
+                    width: band.width
+                    height: band.height
+                    visible: viewport3d.selectionRubberBandActive
+                    color: "transparent"
+                    border.color: Theme.accent
+                    border.width: 1
+                    z: 97
                 }
 
         // ── 视口告警覆盖层（对齐上游 EWarning / Plater::_set_warning_notification）──
@@ -2218,6 +2446,10 @@ Item {
                 // the gap-area threshold). Selecting SmartFill makes clicks
                 // seed-fill (Shift+click also triggers a seed fill
                 // regardless of the tool).
+                // 3=GapFill (PAINT-GAPFILL-PORT, upstream GLGizmoFdmSupports
+                // ImGui::GapFillIcon). Selecting SmartFill makes clicks
+                // seed-fill (Shift+click also triggers a seed fill regardless
+                // of the tool); GapFill shows the fragment view + area slider.
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
@@ -2284,6 +2516,62 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: "Consolas, monospace"
                         Layout.preferredWidth: 32
+                    }
+                }
+
+                // Gap-fill area threshold (PAINT-GAPFILL-PORT, upstream
+                // gap_area slider, GLGizmoFdmSupports.cpp:383-386: mm2, 0..5,
+                // 0.2 step; TriangleSelectorPatch::GapAreaMin/Max/Step).
+                // Facets whose leaf area is below it render in the amber -3
+                // fragment view.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.supportPaintToolType === 3
+                    Text { text: qsTr("缝隙面积:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 5; stepSize: 0.2
+                        value: root.editorVm ? root.editorVm.supportPaintGapArea : 1
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintGapArea = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.supportPaintGapArea : 1).toFixed(2) + "mm²"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 52
+                    }
+                }
+
+                // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane slider
+                // (upstream ObjectClipper m_clp_ratio surfaced through the
+                // gizmo's ClippingPlaneWidget, 0 = off). While > 0 paint picks
+                // on the clipped side of the plane are rejected; Alt+wheel
+                // sweeps the same ratio in the viewport.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    Text { text: qsTr("截面:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 100; stepSize: 1
+                        value: root.editorVm ? Math.round(root.editorVm.paintClippingPosition * 100) : 0
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.paintClippingPosition = value / 100.0
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                    CxButton {
+                        text: qsTr("重置")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
+                        onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
                 }
 
@@ -3192,6 +3480,11 @@ Item {
                 // "clipping_of_view" + "reset_direction"; shares the ViewModel
                 // paintClippingPosition with the support panel — the plane is
                 // gizmo-wide state, GLGizmoPainterBase).
+                // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane slider
+                // (upstream GLGizmoSeam "clipping_of_view" + "reset_direction"
+                // imgui slider, GLGizmoSeam.cpp:305-319). Shares the ViewModel
+                // paintClippingPosition with the support panel -- the plane is
+                // one shared ObjectClipper ratio across the painter gizmos.
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
@@ -3211,9 +3504,20 @@ Item {
                     }
                     CxButton {
                         text: qsTr("重置")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
                         enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
                         onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
+                }
+
+                // P11.B2.3（对齐上游 GLGizmoSeam.cpp:322）：缝线面板只提供
+                // Vertical 锁——拖动笔画锁定在按下点所在列。
+                CxCheckBox {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: qsTr("垂直")
+                    checked: root.editorVm ? root.editorVm.paintLockAxis === 1 : false
+                    onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 1 : 0
                 }
 
                 // 清除按钮
@@ -3563,8 +3867,11 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("启用镂空:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     CxCheckBox {
+                        // G-12: onToggled instead of onCheckedChanged -- the
+                        // programmatic checked refresh (VM stateChanged) no
+                        // longer writes back, breaking the binding loop.
                         checked: root.editorVm ? root.editorVm.hollowEnabled : false
-                        onCheckedChanged: if (root.editorVm) root.editorVm.hollowEnabled = checked
+                        onToggled: if (root.editorVm) root.editorVm.hollowEnabled = checked
                     }
                 }
 
@@ -3771,6 +4078,14 @@ Item {
                 // P2.3-5: tool row (upstream MMU panel tools: paint / smart
                 // fill / height range). Shares supportPaintToolType with the
                 // support panel -- the viewport dispatch reads the same tool.
+                // PAINT-MMU-TOOLS: tool selector (对齐上游
+                // GLGizmoMmuSegmentation.cpp:504-551 六个工具图标 -- Qt6 以
+                // chip 呈现). 0=笔刷(Brush), 1=桶填充(Bucket fill /
+                // FillButtonIcon), 4=高度范围(Height range / HeightRangeIcon),
+                // 3=缝隙填充(Gap fill / GapFillIcon); 指针笔刷(Pointer /
+                // TriangleButtonIcon)是笔刷工具下的光标类型, 见下一行.
+                // Bound to the MMU gizmo's own mmuPaintTool (upstream keeps
+                // one m_current_tool per painter gizmo instance).
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
@@ -3781,17 +4096,25 @@ Item {
                             width: 76; height: 24; radius: 4
                             color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                        model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("桶填充"), val: 1}, {label: qsTr("高度范围"), val: 4}, {label: qsTr("缝隙填充"), val: 3}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 64; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.label
                                 color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeXS
                             }
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: if (root.editorVm) root.editorVm.supportPaintToolType = modelData.val
+                                onClicked: if (root.editorVm) root.editorVm.mmuPaintTool = modelData.val
                             }
                         }
                     }
@@ -3814,6 +4137,48 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     visible: root.editorVm && root.editorVm.supportPaintToolType === 3
+                // PAINT-MMU-TOOLS: cursor type selector for the brush tool
+                // (对齐上游 Circle/Sphere/Triangle 三个刷子图标,
+                // GLGizmoMmuSegmentation.cpp:504-509). 0=Circle 圆, 1=Sphere
+                // 球, 2=Pointer 指针 (upstream Triangle button: a click hits
+                // the single facet under the cursor, cpp:594-595). Shared
+                // channel with the other paint gizmos (supportPaintCursorType).
+                Row {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 0
+                    Repeater {
+                        model: [{label: qsTr("圆"), val: 0}, {label: qsTr("球"), val: 1}, {label: qsTr("指针"), val: 2}]
+                        delegate: Rectangle {
+                            required property var modelData
+                            width: 48; height: 24; radius: 4
+                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
+                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.label
+                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
+                            }
+                        }
+                    }
+                }
+
+                // PAINT-MMU-TOOLS: height-range band span (对齐上游
+                // m_cursor_height slider, GLGizmoMmuSegmentation.cpp:669-676;
+                // CursorHeightMin=0.1/Max=8/Step=0.2,
+                // GLGizmoPainterBase.hpp:242-245). Ctrl+wheel on the
+                // height-range tool steps the same value.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 4
                     Text { text: qsTr("高度范围:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     CxSlider {
                         from: 0.1; to: 8; stepSize: 0.1
@@ -3833,6 +4198,85 @@ Item {
                 // P2.3-4: cross-section slider (upstream MMU panel
                 // "clipping_of_view" + "reset_direction"; shares the
                 // ViewModel paintClippingPosition with the other paint gizmos).
+                // PAINT-MMU-TOOLS: bucket-fill edge detection (对齐上游
+                // m_detect_geometry_edge 复选框 + smart_fill_angle 滑条,
+                // GLGizmoMmuSegmentation.cpp:623-636). Unchecked = no edge
+                // detection (angle -1): the fill floods every same-state
+                // neighbour.
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 1
+                    CxCheckBox {
+                        text: qsTr("边缘检测")
+                        checked: root.editorVm ? root.editorVm.mmuBucketEdgeDetection : false
+                        onToggled: if (root.editorVm) root.editorVm.mmuBucketEdgeDetection = checked
+                    }
+                    CxSlider {
+                        visible: root.editorVm && root.editorVm.mmuBucketEdgeDetection
+                        from: 1; to: 90; stepSize: 1
+                        value: root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30
+                        implicitWidth: 80
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintSmartFillAngle = value
+                    }
+                    Text {
+                        visible: root.editorVm && root.editorVm.mmuBucketEdgeDetection
+                        text: (root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30).toFixed(0) + "°"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 32
+                    }
+                }
+
+                // PAINT-MMU-TOOLS: gap-fill area threshold (对齐上游 gap_area
+                // 滑条, GLGizmoMmuSegmentation.cpp:705-713; GapAreaMin=0/
+                // Max=5/Step=0.2). While the tool is active the -3 amber
+                // fragment preview follows this threshold (preview only -- the
+                // upstream Perform merge stays a follow-up).
+                RowLayout {
+                    spacing: 6
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.editorVm && root.editorVm.mmuPaintTool === 3
+                    Text { text: qsTr("缝隙面积:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
+                    CxSlider {
+                        from: 0; to: 5; stepSize: 0.2
+                        value: root.editorVm ? root.editorVm.supportPaintGapArea : 1
+                        implicitWidth: 90
+                        onMoved: if (root.editorVm) root.editorVm.supportPaintGapArea = value
+                    }
+                    Text {
+                        text: (root.editorVm ? root.editorVm.supportPaintGapArea : 1).toFixed(2) + "mm²"
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeXS
+                        font.family: "Consolas, monospace"
+                        Layout.preferredWidth: 52
+                    }
+                }
+
+                // P11.B2.3（对齐上游 GLGizmoMmuSegmentation.cpp:717-724）：
+                // MMU 面板提供 Vertical/Horizontal 两个互斥轴锁复选框。
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 12
+                    CxCheckBox {
+                        text: qsTr("垂直")
+                        checked: root.editorVm ? root.editorVm.paintLockAxis === 1 : false
+                        onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 1 : 0
+                    }
+                    CxCheckBox {
+                        text: qsTr("水平")
+                        checked: root.editorVm ? root.editorVm.paintLockAxis === 2 : false
+                        onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 2 : 0
+                    }
+                }
+
+                // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane slider
+                // (upstream GLGizmoMmuSegmentation "clipping_of_view" +
+                // "reset_direction" imgui slider, GLGizmoMmuSegmentation.cpp:
+                // 604-617). Shares the ViewModel paintClippingPosition with
+                // the other paint gizmos -- the plane is one shared
+                // ObjectClipper ratio across the painter gizmos.
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
@@ -3852,6 +4296,8 @@ Item {
                     }
                     CxButton {
                         text: qsTr("重置")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
                         enabled: root.editorVm && root.editorVm.paintClippingPosition > 0
                         onClicked: if (root.editorVm) root.editorVm.resetPaintClippingPlane()
                     }
@@ -4204,7 +4650,7 @@ Item {
                 Text { text: qsTr("位置"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 CxSpinBox { Layout.preferredWidth: 80; value: root.editorVm ? root.editorVm.advCutPosition : 0; from: -500; to: 500; onValueModified: if (root.editorVm) root.editorVm.advCutPosition = value }
 
-                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.advCutKeepBoth : true; onCheckedChanged: if (root.editorVm) root.editorVm.advCutKeepBoth = checked }
+                CxCheckBox { text: qsTr("保留两侧"); checked: root.editorVm ? root.editorVm.advCutKeepBoth : true; onToggled: if (root.editorVm) root.editorVm.advCutKeepBoth = checked }
 
                 // Tongue-groove parameters (executor: independent groove params
                 // if >0, else connectorSize-derived defaults — upstream Cut::Groove).
@@ -4454,9 +4900,20 @@ Item {
             // ProjectServiceMock write path so non-current plates retain real
             // thumbnails within the session (the gap that forced Phase 151 to
             // ship persisted-only).
-            function onThumbnailCapturedForPlate(plateIndex, data) {
+            // G-04: variant-aware routing -- 0=main (writes the main AND
+            // no_light caches server-side), 1=picking (writes the picking
+            // cache). A completed main capture cascades one picking capture
+            // for the same plate so both families stay populated for save.
+            function onThumbnailCapturedForPlate(plateIndex, data, variant) {
                 if (!root.editorVm || !data || data.length === 0) return
+                const v = (variant === undefined) ? 0 : variant
+                if (v === 1) {
+                    root.editorVm.setPlatePickThumbnailFromBase64(plateIndex, data)
+                    return
+                }
                 root.editorVm.setPlateThumbnailFromBase64(plateIndex, data)
+                if (viewport3d)
+                    viewport3d.requestThumbnailCapture(plateIndex, 128, 1)
             }
         }
 

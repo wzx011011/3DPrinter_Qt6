@@ -52,7 +52,7 @@ PartPlate* PartPlateList::createPlate() {
   // Upstream create_plate guards against exceeding MAX_PLATE_COUNT.
   if (plateCount() >= kMaxPlateCount) return nullptr;
   auto p = std::make_unique<PartPlate>(plateCount());
-  p->setPrintIndex(m_next_print_id++);
+  p->setPrintIndex(m_next_print_index++);
   PartPlate* raw = p.get();
   m_plate_list.push_back(std::move(p));
   // Keep grid geometry consistent with the new count (Phase 29 D-29-4).
@@ -65,21 +65,20 @@ bool PartPlateList::deletePlate(int index) {
   if (plateCount() <= 1) return false;  // upstream invariant: keep >= 1 plate
   if (index < 0 || index >= plateCount()) return false;
 
-  // Migrate the deleted plate's instance memberships instead of dropping them.
-  // Upstream delete_plate keeps the instances ("keep its instance at origin
-  // position and add them into next plate if have", PartPlate.cpp:3708-3810;
-  // move_instances_to re-homes every obj_to_instance_set entry and carries no
-  // instance_outside_set state). Qt6 destination rule: the next plate at the
-  // same index position after erase; deleting the last plate merges into the
-  // previous one. Memberships re-home wholesale through addInstance so the
-  // destination's slice readiness is re-evaluated.
-  const std::set<std::pair<int, int>> migrated =
+  // PLATE-DELETE-DOCK (GAP-2): upstream delete_plate re-homes the deleted
+  // plate's instances by first teleporting them to the unprintable dock slot
+  // (set_pos_and_size(compute_origin_for_unprintable(), with_instance_move=
+  // true), PartPlate.cpp:3761) and only then running the move_instances_to
+  // intersect test against the last plate (PartPlate.cpp:2483-2497, :3810)
+  // -- instances sitting at the off-grid dock virtually never intersect it,
+  // so the NET behavior is: the deleted plate's objects keep their geometry
+  // but leave EVERY printable plate. Qt6 mirror: clear the memberships here
+  // (the ProjectServiceMock wrapper physically moves the orphaned objects to
+  // the dock slot); no unconditional neighbor merge.
+  const std::set<std::pair<int, int>> orphans =
       m_plate_list[index]->objToInstanceSet();
+  Q_UNUSED(orphans);
   m_plate_list.erase(m_plate_list.begin() + index);
-  const int destIndex = (index < plateCount()) ? index : index - 1;
-  for (const auto& key : migrated) {
-    m_plate_list[destIndex]->addInstance(key.first, key.second);
-  }
 
   reindex();
   // Keep current plate index valid after deletion.
@@ -168,6 +167,52 @@ int PartPlateList::findInstanceBelongs(int objectIndex, int instanceIndex) const
   }
   return -1;
 }
+
+// -- Print-volume geometry (upstream PartPlateList overloads) ----------------
+
+#ifdef HAS_LIBSLIC3R
+int PartPlateList::findInstance(const Slic3r::BoundingBoxf3& boundingBox) const {
+  // PartPlate.cpp:4131-4149: first plate whose print volume intersects.
+  for (int i = 0; i < plateCount(); ++i) {
+    if (m_plate_list[i]->intersects(boundingBox)) return i;
+  }
+  return -1;
+}
+
+PartPlateList::InstanceHit PartPlateList::findInstanceAt(
+    const Slic3r::Vec3d& point) const {
+  // Upstream find_instance loop structure (PartPlate.cpp:4110-4129: first hit
+  // wins). The unprintable shared plate is excluded: upstream keeps it out of
+  // m_plate_list (PartPlate.hpp:541), so find_instance can never return it;
+  // the printable flag reproduces that filter (see header).
+  if (!m_instance_bounds_fn) return {};
+  for (int i = 0; i < plateCount(); ++i) {
+    const PartPlate* p = m_plate_list[i].get();
+    if (!p || !p->isPrintable()) continue;
+    const std::pair<int, int> key = p->findInstance(point, m_instance_bounds_fn);
+    if (key.first >= 0) return {i, key.first, key.second};
+  }
+  return {};
+}
+
+bool PartPlateList::contains(const Slic3r::BoundingBoxf3& boundingBox) const {
+  // PartPlate.cpp:3956-3964 (the upstream loop never breaks; same boolean).
+  bool result = false;
+  for (const auto& plate : m_plate_list) {
+    if (plate && plate->contains(boundingBox)) result = true;
+  }
+  return result;
+}
+
+bool PartPlateList::intersects(const Slic3r::BoundingBoxf3& boundingBox) const {
+  // PartPlate.cpp:3948-3954.
+  bool result = false;
+  for (const auto& plate : m_plate_list) {
+    if (plate && plate->intersects(boundingBox)) result = true;
+  }
+  return result;
+}
+#endif  // HAS_LIBSLIC3R
 
 bool PartPlateList::isAllPlatesReadyForSlice() const {
   for (const auto& plate : m_plate_list) {
@@ -332,18 +377,25 @@ void PartPlateList::updatePlateCols() {
 }
 
 void PartPlateList::updatePlateOrigins() {
-  // Mirrors update_all_plates_pos_and_size core loop (PartPlate.cpp:4872-4892);
+  // Mirrors the update_all_plates_pos_and_size core loop (PartPlate.cpp:4004,
+  // per-plate set_pos_and_size at :4014, PartPlate::set_pos_and_size :1810);
   // wipe-tower and unprintable branches stripped (out of Phase 29 scope).
+  // Upstream set_pos_and_size writes BOTH the position and the plate size, so
+  // every plate carries its own width/depth/height (the per-plate print
+  // volume used by contains/intersects); Phase 29 dropped the size half.
 #ifdef HAS_LIBSLIC3R
   for (int i = 0; i < plateCount(); ++i) {
     PartPlate* p = plate(i);
-    if (p) p->setOrigin(computeOrigin(i, m_plate_cols));
+    if (!p) continue;
+    p->setSize(m_plate_width, m_plate_depth, m_plate_height);
+    p->setOrigin(computeOrigin(i, m_plate_cols));
   }
 #else
   // Non-HAS_LIBSLIC3R fallback: write via the 3-double setOrigin overload.
   for (int i = 0; i < plateCount(); ++i) {
     PartPlate* p = plate(i);
     if (!p) continue;
+    p->setSize(m_plate_width, m_plate_depth, m_plate_height);
     const int row = (m_plate_cols > 0) ? i / m_plate_cols : 0;
     const int col = (m_plate_cols > 0) ? i % m_plate_cols : 0;
     p->setOrigin(col * plateStrideX(), -row * plateStrideY(), 0.0);

@@ -107,7 +107,11 @@ CxDialog {
                             text: modelData.isInstalled ? qsTr("启用") : qsTr("安装")
                             checked: modelData.isEnabled
                             enabled: modelData.isInstalled
-                            onCheckedChanged: {
+                            // QML-BINDING-LOOPS: onToggled instead of
+                            // onCheckedChanged -- only user interaction may
+                            // drive the PluginService write (the guard below
+                            // stays as belt-and-braces for the same purpose).
+                            onToggled: {
                                 if (!root.pluginService)
                                     return
                                 // Guard against the binding seeding the value:

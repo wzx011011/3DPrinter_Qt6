@@ -296,16 +296,25 @@ transform/export surface.
 
 ## Progress
 
+> Corrected 2026-09-06: this table previously showed all phases "Not started"
+> while the phase list above and every phase SUMMARY recorded completion —
+> a stale row set from roadmap creation. Per STATE.md, each phase closed with
+> exactly one plan (11/11); per-phase dates and evidence live in
+> `.planning/phases/NNN-*/NNN-01-SUMMARY.md`.
+
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 231. P0 Circuit Break Quick Fixes | 0/2 | Not started | - |
-| 232. P0 AdvancedCut Execution And Multi-Slot Filaments | 0/2 | Not started | - |
-| 233. P0 Plate Data Chain | 0/2 | Not started | - |
-| 234. Undo Coverage And Fidelity | 0/2 | Not started | - |
-| 235. Preset System Completion | 0/3 | Not started | - |
-| 236. Dialog Reachability And Completion | 0/2 | Not started | - |
-| 237. Menus, Shortcuts, Drag-Drop, And Import | 0/2 | Not started | - |
-| 238. Preview Completion | 0/3 | Not started | - |
-| 239. Slicing Engine Semantics | 0/2 | Not started | - |
-| 240. Notification Stacking And Gizmo Interaction Depth | 0/3 | Not started | - |
-| 241. Page Honesty And CLI Surface | 0/2 | Not started | - |
+| 231. P0 Circuit Break Quick Fixes | 1/1 | Complete | 2026-08-15 |
+| 232. P0 AdvancedCut Execution And Multi-Slot Filaments | 1/1 | Complete | 2026-08-16 |
+| 233. P0 Plate Data Chain | 1/1 | Complete | 2026-08-16 |
+| 234. Undo Coverage And Fidelity | 1/1 | Complete | 2026-08-16 |
+| 235. Preset System Completion | 1/1 | Complete | 2026-08-16 |
+| 236. Dialog Reachability And Completion | 1/1 | Complete | 2026-08-16 |
+| 237. Menus, Shortcuts, Drag-Drop, And Import | 1/1 | Complete | 2026-08-16 |
+| 238. Preview Completion | 1/1 | Complete | 2026-08-16 |
+| 239. Slicing Engine Semantics | 1/1 | Complete | 2026-08-16 |
+| 240. Notification Stacking And Gizmo Interaction Depth | 1/1 | Complete | 2026-08-16 |
+| 241. Page Honesty And CLI Surface | 1/1 | Complete | 2026-08-16 |
+
+Milestone v5.16 closed 2026-08-16. Post-milestone task state is tracked in
+[WORK_ITEMS.yaml](WORK_ITEMS.yaml), not here.

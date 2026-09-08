@@ -2,6 +2,13 @@
 
 Last updated: 2026-07-23
 
+> **SUPERSEDED AS A STATE SOURCE (2026-09-06).** This file is a v5.5-era
+> candidate backlog kept for history. Its "current active milestone: v5.5"
+> line and candidate lists below are stale — v5.16 Full Gap Closure closed
+> 2026-08-16 and many candidates (PartPlate, preset completion, wizard
+> multi-vendor) have since landed. Do NOT read task state from this file:
+> current work items live in [WORK_ITEMS.yaml](WORK_ITEMS.yaml).
+
 This is the ordered backlog after reconciling planning with current implementation. If older milestone wording conflicts with the dated audits or current code evidence, the code evidence and latest audit win.
 
 ## Scope and Assumptions

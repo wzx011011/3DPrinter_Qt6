@@ -52,7 +52,8 @@ ApplicationWindow {
             close.accepted = true
             return
         }
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             close.accepted = false
             root.pendingGuardAction = "quit"
             root.pendingOpenPath = ""
@@ -68,7 +69,8 @@ ApplicationWindow {
     // quit entry point. Dirty projects get the confirm dialog; clean projects
     // (or an approved forceClose) quit directly.
     function requestQuit() {
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "quit"
             root.pendingOpenPath = ""
             newProjectDialog.open()
@@ -79,7 +81,8 @@ ApplicationWindow {
     }
 
     function requestNewProject() {
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "new"
             root.pendingOpenPath = ""
             newProjectDialog.open()
@@ -95,7 +98,8 @@ ApplicationWindow {
             backend.topbarOpenProject(path)
             return
         }
-        if (backend.projectViewModel && backend.projectViewModel.isDirty) {
+        if (backend.projectViewModel && backend.projectViewModel.isDirty
+                && !backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "open"
             root.pendingOpenPath = path
             newProjectDialog.open()
@@ -116,6 +120,7 @@ ApplicationWindow {
             qsTr("OBJ 文件 (*.obj)"),
             qsTr("STEP 文件 (*.step *.stp)"),
             qsTr("AMF 文件 (*.amf)"),
+            qsTr("G-code 文件 (*.gcode)"),
             qsTr("压缩包 (*.zip)"),
             qsTr("所有文件 (*)")
         ]
@@ -125,6 +130,13 @@ ApplicationWindow {
             var modelPath = selectedFile.toString()
             if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".zip") {
                 fileArchiveDialog.openFor(modelPath)
+                return
+            }
+            // GAP-6: an externally sliced .gcode opens as a new project in
+            // the preview-only context (upstream Plater::load_gcode,
+            // Plater.cpp:10037-10058).
+            if (modelPath.toLowerCase().substring(modelPath.length - 6) === ".gcode") {
+                backend.openExternalGcode(modelPath)
                 return
             }
             backend.topbarImportModel(selectedFile.toString())
@@ -348,14 +360,17 @@ ApplicationWindow {
         id: aboutDialog
     }
 
-    // New project confirmation dialog
+    // New project confirmation dialog. GAP-7: carries the upstream
+    // "remember my choice" checkbox (Plater.cpp:11125-11140 persists
+    // save_project_choise); a remembered discard makes every dirty guard
+    // proceed without prompting.
     Dialog {
         id: newProjectDialog
         title: qsTr("新建项目")
         modal: true
         anchors.centerIn: parent
         width: 360
-        height: 140
+        height: 180
         padding: 20
 
         Column {
@@ -367,6 +382,12 @@ ApplicationWindow {
                 font.pixelSize: Theme.fontSize13
                 wrapMode: Text.Wrap
                 width: parent.width
+            }
+            CheckBox {
+                id: rememberDiscardCheck
+                text: qsTr("记住我的选择（不再提醒）")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSize13
             }
             Row {
                 anchors.right: parent.right
@@ -393,6 +414,8 @@ ApplicationWindow {
                     MouseArea {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
+                            if (rememberDiscardCheck.checked)
+                                backend.setDirtyProjectDiscardRemembered(true)
                             var action = root.pendingGuardAction
                             var path = root.pendingOpenPath
                             root.pendingGuardAction = ""
@@ -657,6 +680,16 @@ ApplicationWindow {
                 onExportModelRequested: exportModelDialog.open()
                 onUndoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
                 onRedoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
+                // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the
+                // Edit-menu clipboard/delete/clone set routes through the same
+                // ViewModel actions as the shortcuts; delete-selected keeps the
+                // Phase 169 confirm, duplicate-plate clones the current plate.
+                onEditCutRequested: if (backend.editorViewModel) backend.editorViewModel.cutSelectedObjects()
+                onEditCopyRequested: if (backend.editorViewModel) backend.editorViewModel.copySelectedObjects()
+                onEditPasteRequested: if (backend.editorViewModel) backend.editorViewModel.pasteObjects()
+                onEditDeleteRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.confirmDeleteSelection()
+                onEditCloneRequested: if (backend.editorViewModel) backend.editorViewModel.duplicateSelectedObjects()
+                onEditDuplicatePlateRequested: if (backend.editorViewModel) backend.editorViewModel.clonePlate(backend.editorViewModel.currentPlateIndex)
                 onCalibrationRequested: backend.requestSelectTab(backend.tpCalibration)
                 onPreferencesRequested: backend.openSettings()
                 onAboutRequested: aboutDialog.open()
@@ -929,12 +962,18 @@ ApplicationWindow {
             // wizard must APPLY the chosen printer/filament presets, not just
             // persist the vendor/model — otherwise the wizard's choices never
             // took effect and the app kept the previous presets.
+            // G-02: upstream load_presets also chains the print (process)
+            // preset; Qt6 selects the first available print preset, mirroring
+            // the chain's default pick.
             var dlg = configWizardDialog
             if (backend.configViewModel) {
                 if (dlg.selectedPrinter && dlg.selectedPrinter.length > 0)
                     backend.configViewModel.requestCurrentPrinterPreset(dlg.selectedPrinter)
                 if (dlg.selectedFilament && dlg.selectedFilament.length > 0)
                     backend.configViewModel.requestCurrentFilamentPreset(dlg.selectedFilament)
+                var printNames = backend.configViewModel.printPresetNames
+                if (printNames && printNames.length > 0)
+                    backend.configViewModel.requestCurrentPrintPreset(printNames[0])
             }
         }
     }

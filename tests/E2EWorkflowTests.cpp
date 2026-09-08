@@ -102,6 +102,10 @@ private slots:
   void test_previous_gcode_reuse_marks_reused_result_and_refreshes_preview();
   void test_preview_rebuilds_on_active_result_switch_without_slice_finished();
   void test_cancelled_slice_clears_active_result_and_blocks_preview_export();
+  // PLATE-PRINT-LIFECYCLE (batch 2): persistent per-plate Print lifecycle.
+  void test_persistent_print_reused_on_same_plate_reslice();
+  void test_plate_deletion_releases_persistent_print_entry();
+  void test_cancelled_slice_restart_rebuilds_persistent_print();
   void test_slice_all_stores_outputs_for_printable_unlocked_plates_only();
   // Phase 55-04 (GCODE-01/05): no-placeholder real-data path, reslice/export/
   // page-switch/slice-failed/slice-result-cleared/plate-switch-invalid
@@ -573,7 +577,7 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   preview.setLayerRange(0, qMin(1, maxLayer));
   preview.moveLayerRange(1);
   preview.setCurrentMove(qMin(2, preview.moveCount()));
-  preview.setViewModeIndex(3);
+  preview.setViewModeIndex(PreviewViewModel::VT_Speed);
   preview.setShowTravelMoves(false);
   QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
            "Preview payload must survive layer/move/view interactions");
@@ -598,6 +602,10 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   QVERIFY2(QFileInfo::exists(generatedOutput),
            "current export must preserve the generated source G-code");
 
+  // G-13 followup: the previous export's worker may still be finalizing (the
+  // destination file appears before the busy flag clears); wait it out or the
+  // request below is refused with "already in progress".
+  QTRY_VERIFY_WITH_TIMEOUT(!editor.exportBusy(), 30000);
   QVERIFY2(editor.requestExportAllGCode(exportDir.path(), QStringLiteral("workflow_all")),
            "all-valid-plate export should succeed for the sliced workflow result");
   const QString allExportPath = exportDir.filePath(QStringLiteral("workflow_all_plate1.gcode"));
@@ -762,10 +770,10 @@ G1 X50 Y20 E0.60
   QVERIFY2(preview.currentLayerLabel().contains(QStringLiteral("/")),
            "Preview should expose a user-facing layer summary");
 
-  // Filament mode (EViewType index 2) exposes the per-extruder legend. The old
-  // 13-mode list mapped the tool/extruder view to index 3; the 17-mode renumber
-  // (Plan 55-02) moves it to Filament(2) / Tool(16), so use the new index here.
-  preview.setViewModeIndex(2);
+  // Filament (ColorPrint) mode exposes the per-extruder legend. GAP-3 put the
+  // dropdown on the upstream view_type_items order (GCodeViewer.cpp:892-901,
+  // Filament = row 1); the enum constant keeps the mapping explicit.
+  preview.setViewModeIndex(PreviewViewModel::VT_Filament);
   QCOMPARE(preview.legendType(), 2);
   QVERIFY2(preview.legendItems().size() >= 2, "filament mode should expose both extruders in the legend");
 
@@ -888,24 +896,25 @@ G1 X30 Y10 E0.10 F1800
   QVERIFY2(preview.toolWidth() > 0.44 && preview.toolWidth() < 0.46,
            qPrintable(QStringLiteral("WIDTH metadata should be stored on the segment, got %1").arg(preview.toolWidth())));
 
-  // The 17-mode EViewType renumber (Plan 55-02) shifts these indices:
-  // Fan Speed 5->13, Temperature 6->14, Acceleration 12->5, Tool 3->16/2.
-  preview.setViewModeIndex(13); // Fan Speed
+  // GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): Fan Speed and Temperature are upstream
+  // dropdown rows (addressed by their EViewType constants); Acceleration and
+  // Tool are retained internal capabilities addressed directly.
+  preview.setViewModeIndex(PreviewViewModel::VT_FanSpeed);
   QCOMPARE(preview.legendType(), 1);
   QVERIFY2(preview.legendGradientMaxLabel().toDouble() > preview.legendGradientMinLabel().toDouble(),
            "fan-speed mode should expose a non-degenerate parsed range");
 
-  preview.setViewModeIndex(14); // Temperature
+  preview.setViewModeIndex(PreviewViewModel::VT_Temperature);
   QCOMPARE(preview.legendType(), 1);
   QVERIFY2(preview.legendGradientMaxLabel().toDouble() > preview.legendGradientMinLabel().toDouble(),
            "temperature mode should expose a non-degenerate parsed range");
 
-  preview.setViewModeIndex(5); // Acceleration
+  preview.setViewModeIndex(PreviewViewModel::VT_Acceleration);
   QCOMPARE(preview.legendType(), 1);
   QVERIFY2(preview.legendGradientMaxLabel().toDouble() > preview.legendGradientMinLabel().toDouble(),
            "acceleration mode should expose S/P/T M204 variants as a parsed range");
 
-  preview.setViewModeIndex(16); // Tool
+  preview.setViewModeIndex(PreviewViewModel::VT_Tool);
   QCOMPARE(preview.legendType(), 2);
   QVERIFY2(preview.legendItems().size() >= 2, "tool mode should list both used extruders");
 }
@@ -1308,6 +1317,177 @@ void E2EWorkflowTests::test_cancelled_slice_clears_active_result_and_blocks_prev
   QVERIFY2(!editor.canExportGCode(), "cancelled slice must block export");
 }
 
+// ── PLATE-PRINT-LIFECYCLE (batch 2): persistent per-plate Print lifecycle ───
+// Upstream PartPlate keeps one persistent Print + GCodeResult per plate
+// (PartPlate.cpp:2839-2840) and re-applies into it on reslice. The Qt port
+// now mirrors that lifecycle in SliceService with single-owner handoff
+// between the GUI thread and the slice worker.
+
+// 1) Two consecutive slices of the SAME plate with no mutation between them
+// must hit the persistent-reuse path: the second slice reuses the stored
+// Print (apply diffs nothing, process skips done steps) instead of building a
+// fresh one. Observable through the persistentSliceReuseCount diagnostic and
+// the exactly-one live slot invariant; the exported G-code must still be a
+// fresh, valid ModelSlice result.
+void E2EWorkflowTests::test_persistent_print_reused_on_same_plate_reslice()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(project.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+
+  QCOMPARE(slice.persistentSliceCount(), 0);
+  QCOMPARE(slice.persistentSliceReuseCount(), 0);
+  QCOMPARE(slice.persistentSliceRebuildCount(), 0);
+
+  slice.startSlice(QStringLiteral("persistent_reuse_first"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP(qPrintable(QStringLiteral("Slice failed: %1").arg(failedSpy.first().at(0).toString())));
+  const QString firstOutput = slice.outputPath();
+  QVERIFY2(QFileInfo::exists(firstOutput), "first slice output should exist");
+  QCOMPARE(slice.persistentSliceCount(), 1);
+  QCOMPARE(slice.persistentSliceRebuildCount(), 1);
+  QCOMPARE(slice.persistentSliceReuseCount(), 0);
+
+  // Second slice: nothing about the plate changed, so the persistent Print
+  // must be reused rather than rebuilt.
+  slice.startSlice(QStringLiteral("persistent_reuse_second"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() == 2 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP(qPrintable(QStringLiteral("Reslice failed: %1").arg(failedSpy.first().at(0).toString())));
+
+  QCOMPARE(slice.persistentSliceReuseCount(), 1);
+  QCOMPARE(slice.persistentSliceCount(), 1);
+  QCOMPARE(slice.persistentSliceRebuildCount(), 1);
+  QCOMPARE(slice.sliceState(), SliceService::State::Completed);
+  const int plateIndex = project.currentPlateIndex();
+  QVERIFY2(slice.hasPlateResult(plateIndex), "reslice must keep a valid per-plate result");
+  QCOMPARE(slice.plateResultSource(plateIndex), int(SliceService::ResultSource::ModelSlice));
+  QVERIFY2(QFileInfo::exists(slice.outputPath()), "reslice output file should exist");
+  QVERIFY2(slice.resultLayerCount() > 0, "reslice must keep the layer statistics");
+
+  if (QFileInfo::exists(firstOutput))
+    QFile::remove(firstOutput);
+  if (QFileInfo::exists(slice.outputPath()))
+    QFile::remove(slice.outputPath());
+}
+
+// 2) Deleting a plate must release its persistent Print entry synchronously
+// (printIndex identities are never reused, so the entry could never
+// re-validate). The live-slot count is the leak/dangling proxy: exactly one
+// slot exists after slicing, zero right after the plate is deleted.
+void E2EWorkflowTests::test_plate_deletion_releases_persistent_print_entry()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(project.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  QVERIFY2(project.clonePlate(0), "a second plate is required so deletePlate is allowed");
+  QVERIFY(project.setCurrentPlateIndex(0));
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+  slice.startSlice(QStringLiteral("persistent_release"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  if (failedSpy.count() > 0)
+    QSKIP(qPrintable(QStringLiteral("Slice failed: %1").arg(failedSpy.first().at(0).toString())));
+
+  QCOMPARE(slice.persistentSliceCount(), 1);
+  const int removedPrintIndex = project.platePrintIndex(0);
+  QVERIFY2(removedPrintIndex >= 0, "the sliced plate must carry a stable print identity");
+
+  // Service-level deletePlate: fires plateRemoved(printIndex) synchronously,
+  // which must drop BOTH the per-plate result and the persistent Print slot.
+  QVERIFY2(project.deletePlate(0), "deleting the first of two plates should succeed");
+  QCOMPARE(slice.persistentSliceCount(), 0);
+  QVERIFY2(project.plateIndexForPrintIndex(removedPrintIndex) < 0,
+           "the removed print identity must not resolve to any live plate");
+  QVERIFY2(!slice.hasPlateResult(0), "the deleted plate's result entry must be released");
+}
+
+// 3) Cancel-then-restart regression for the 2026-09-04 review P0-1 scenario
+// (worker and GUI sharing persistent slice state): cancelling a running slice
+// must invalidate the persistent Print state, and the restart must rebuild
+// from scratch and still produce a fully consistent result.
+void E2EWorkflowTests::test_cancelled_slice_restart_rebuilds_persistent_print()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+
+  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(project.loadFile(kStlPath), "importing a model should start");
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
+
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QVERIFY(failedSpy.isValid());
+
+  applyMinimalPrinterConfig(slice, project);
+  ensureModelOnBed(project);
+
+  slice.startSlice(QStringLiteral("persistent_cancel"));
+  QTRY_VERIFY_WITH_TIMEOUT(slice.slicing(), 5000);
+  slice.cancelSlice();
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
+  QVERIFY2(finishedSpy.count() == 0, "cancelled slice must not emit a successful result");
+  QCOMPARE(slice.sliceState(), SliceService::State::Cancelled);
+  QVERIFY2(!slice.slicing(), "cancel must reach terminal cleanup");
+  // The worker destroyed the cancelled slot BEFORE the terminal completion
+  // ran, so no partial Print state can leak into the restart.
+  QCOMPARE(slice.persistentSliceCount(), 0);
+
+  // Restart: conservative full rebuild, consistent completed result. Wait on
+  // the finished-count DELTA -- failedSpy already holds the cancellation
+  // failure above, so an absolute `failedSpy.count() > 0` would trip early.
+  const int failuresBeforeRestart = failedSpy.count();
+  slice.startSlice(QStringLiteral("persistent_cancel_restart"));
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0
+                               || failedSpy.count() > failuresBeforeRestart,
+                           120000);
+  if (failedSpy.count() > failuresBeforeRestart)
+    QSKIP(qPrintable(QStringLiteral("Restart slice failed: %1").arg(failedSpy.last().at(0).toString())));
+  QVERIFY2(finishedSpy.count() > 0, "restart slice must emit a successful result");
+  QCOMPARE(slice.sliceState(), SliceService::State::Completed);
+  const int plateIndex = project.currentPlateIndex();
+  QVERIFY2(slice.hasPlateResult(plateIndex), "restart must produce a valid per-plate result");
+  QCOMPARE(slice.plateResultSource(plateIndex), int(SliceService::ResultSource::ModelSlice));
+  QVERIFY2(QFileInfo::exists(slice.outputPath()), "restart output file should exist");
+  QVERIFY2(slice.resultLayerCount() > 0, "restart must carry layer statistics");
+  QVERIFY2(!slice.estimatedTimeLabel().isEmpty(), "restart must carry the estimated time");
+  QCOMPARE(slice.persistentSliceCount(), 1);
+  QCOMPARE(slice.persistentSliceRebuildCount(), 1);
+  QCOMPARE(slice.persistentSliceReuseCount(), 0);
+
+  if (QFileInfo::exists(slice.outputPath()))
+    QFile::remove(slice.outputPath());
+}
+
 void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plates_only()
 {
   ProjectServiceMock project;
@@ -1355,6 +1535,17 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   QVERIFY2(QFileInfo::exists(slice.plateOutputPath(1)),
            qPrintable(QStringLiteral("plate 1 output should exist: %1").arg(slice.plateOutputPath(1))));
 
+  // P0.5.5b: result ownership follows the stable per-plate print identity,
+  // not the mutable positional index. Reordering the plates must therefore
+  // move the result lookup with the plate rather than swapping or losing it.
+  const QString plate0ResultBeforeMove = slice.plateOutputPath(0);
+  const QString plate1ResultBeforeMove = slice.plateOutputPath(1);
+  QVERIFY(project.movePlate(0, 1));
+  QCOMPARE(slice.plateOutputPath(0), plate1ResultBeforeMove);
+  QCOMPARE(slice.plateOutputPath(1), plate0ResultBeforeMove);
+  QVERIFY(slice.hasPlateResult(0));
+  QVERIFY(slice.hasPlateResult(1));
+
   QTemporaryDir exportDir(QDir::tempPath() + QStringLiteral("/owzx_export_all_XXXXXX"));
   QVERIFY2(exportDir.isValid(), "temporary all-plate export directory should be available");
   // 260822-x4n B3 (upstream is_all_slice_results_ready_for_print,
@@ -1386,8 +1577,12 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   const QString exportedPlate0 = exportDir.filePath(QStringLiteral("allplates_plate1.gcode"));
   const QString exportedPlate1 = exportDir.filePath(QStringLiteral("allplates_plate2.gcode"));
   const QString skippedPlate2 = exportDir.filePath(QStringLiteral("allplates_plate3.gcode"));
-  // Phase 239 (ENGN-03): the batch export runs on one QtConcurrent worker --
-  // wait for the LAST plate's file to commit before asserting.
+  // Phase 239 (ENGN-03): the batch export runs on one QtConcurrent worker
+  // copying jobs sequentially. With stable result keys the reorder above
+  // swapped which key lands in which target file, so NEITHER filename is
+  // guaranteed to be the worker's last write -- wait for each file with a
+  // QTRY instead of asserting the second one synchronously.
+  QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportedPlate0), 30000);
   QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(exportedPlate1), 30000);
   QVERIFY2(QFileInfo::exists(exportedPlate0),
            qPrintable(QStringLiteral("plate 0 export should exist: %1").arg(exportedPlate0)));

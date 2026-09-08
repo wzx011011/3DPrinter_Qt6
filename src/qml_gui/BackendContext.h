@@ -291,6 +291,13 @@ public:
   int sdaRight() const { return static_cast<int>(SidebarDockArea::Right); }
 
   explicit BackendContext(QObject *parent = nullptr);
+  /// Review P1-2: the slice worker dereferences projectService_ while
+  /// ~SliceService joins it. Qt deletes children in creation order, which
+  /// would destroy ProjectServiceMock (created first) BEFORE SliceService
+  /// (created second) and leave the joined worker touching a dangling
+  /// service. Deleting the slice service explicitly first closes that
+  /// window by construction.
+  ~BackendContext() override;
 
   QObject *editorViewModel() const;
   QObject *previewViewModel() const;
@@ -359,11 +366,25 @@ public:
   /// Emits tabSelectRequested before updating currentPage.
   /// Invalid tab positions are rejected with a warning.
   Q_INVOKABLE void requestSelectTab(int position);
+  /// GAP-6: File > Open G-code (upstream Plater::load_gcode,
+  /// Plater.cpp:10037-10058): an externally sliced .gcode opens as a NEW
+  /// project in a preview-only context -- the workspace is cleared and the
+  /// Preview page consumes the file through PreviewViewModel's parser.
+  /// Returns false when the file is missing or parsing failed.
+  Q_INVOKABLE bool openExternalGcode(const QString &filePath);
   /// Request a Plater canvas view-mode change.
   /// Emits viewModeChangeRequested before updating currentViewMode.
   Q_INVOKABLE void requestChangeViewMode(int mode);
   // Phase 4: dockable sidebar state aligns with upstream collapsed sidebar behavior.
   Q_INVOKABLE void requestToggleSidebar();           ///< Toggle sidebar collapsed state.
+  /// GAP-7: remember-the-choice persistence for the dirty-project guard
+  /// (upstream Plater.cpp:11125-11140 stores "save_project_choise" in the
+  /// app config). True = the user checked "remember" on the discard
+  /// warning, so future dirty guards proceed without prompting. Upstream
+  /// also remembers "save"; the Qt6 guard dialog currently only offers
+  /// discard, so only that choice is remembered.
+  Q_INVOKABLE bool dirtyProjectDiscardRemembered() const;
+  Q_INVOKABLE void setDirtyProjectDiscardRemembered(bool remembered);
   Q_INVOKABLE void requestSetSidebarCollapsed(bool c);  ///< Set persisted sidebar collapsed state.
   Q_INVOKABLE void requestSetSidebarWidth(int w);       ///< Set persisted sidebar width clamped to [min,max].
   Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< Set persisted sidebar dock area.
@@ -469,6 +490,9 @@ public:
   Q_INVOKABLE bool topbarImportConfigs(const QString &filePath);
   Q_INVOKABLE bool topbarSaveProject();
   Q_INVOKABLE bool topbarSaveProjectAs(const QString &filePath);
+  /// G-13: the current tier selections as an embeddable payload
+  /// (setProjectEmbeddedPresets) -- see topbarSaveProject.
+  QVariantList collectProjectEmbeddedPresets() const;
   Q_INVOKABLE int beginLatency(const QString &operation, const QString &detail = QString());
   Q_INVOKABLE void endLatency(int token);
   Q_INVOKABLE void recordLatency(const QString &operation, int elapsedMs, const QString &detail = QString());
@@ -534,6 +558,9 @@ public:
   int lastLatencyMs() const;
 
 signals:
+  /// GAP-7: emitted when the remembered dirty-guard choice flips.
+  void dirtyProjectDiscardRememberedChanged();
+
   void currentPageChanged();
   /// Phase 51 SHELL-03: bulk shell-state refresh signal for action gates + labels.
   void stateChanged();
@@ -656,6 +683,7 @@ private:
   static constexpr int kSidebarMaxWidth = 520;
   static constexpr int kSidebarDefaultWidth = 320;
   bool sidebarCollapsed_ = false;
+  int m_lastSelectedObjectsInfoCount = 0;  ///< GAP-7 multi-select notification dedupe.
   int sidebarWidth_ = kSidebarDefaultWidth;
   SidebarDockArea sidebarDockArea_ = SidebarDockArea::Left;
   QString lastErrorMessage_;

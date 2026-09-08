@@ -2,6 +2,7 @@
 
 **Milestone:** v5.16 Full Gap Closure
 **Defined:** 2026-08-15
+**Closed:** 2026-08-16 (11/11 phases; canonical verify exit 0)
 **Core Value:** OrcaSlicer upstream behavior is the product source of truth;
 Qt6 code must inherit that behavior and must not invent new product behavior
 without an explicit upstream mapping or documented block.
@@ -9,173 +10,180 @@ without an explicit upstream mapping or documented block.
 full-delta re-audit; every requirement below maps to a baseline gap item with
 file:line evidence).
 
+> Completion semantics (clarified 2026-09-06): the `[x]` checkboxes below mean
+> the requirement's acceptance criteria were met at milestone close, with
+> per-requirement evidence in the owning phase's
+> `.planning/phases/NNN-*/NNN-01-SUMMARY.md`. This file does NOT track
+> post-milestone regressions or new gaps — current task state lives in
+> [WORK_ITEMS.yaml](WORK_ITEMS.yaml).
+
 ## v5.16 Requirements
 
 ### CIRC: Broken-Circuit Fixes (P0 — clickable but functionally dead)
 
-- [ ] **CIRC-01**: User can undo/redo through every UI entry (Ctrl+Z/Y,
+- [x] **CIRC-01**: User can undo/redo through every UI entry (Ctrl+Z/Y,
   topbar buttons, menus) and the last editor action actually reverts/reapplies.
-- [ ] **CIRC-02**: User runs each calibration mode and the generated G-code
+- [x] **CIRC-02**: User runs each calibration mode and the generated G-code
   sweeps the correct parameter axis (symbolic CalibMode constants; stale
   QmlUiAudit mapping assertion corrected).
-- [ ] **CIRC-03**: User can execute groove/connector cuts from the AdvancedCut
+- [x] **CIRC-03**: User can execute groove/connector cuts from the AdvancedCut
   panel, place connectors interactively, and the connector toggle/click states
   stay coherent between Cut and AdvancedCut modes.
-- [ ] **CIRC-04**: User can select a different filament preset per extruder
+- [x] **CIRC-04**: User can select a different filament preset per extruder
   slot, sees each slot's real selection and color, and no slot falsely reports
   incompatible (no mojibake category match).
-- [ ] **CIRC-05**: User exports all objects as one STL and gets a merged mesh
+- [x] **CIRC-05**: User exports all objects as one STL and gets a merged mesh
   of every object, not only the first.
-- [ ] **CIRC-06**: User never sees mojibake strings (export-failure title and
+- [x] **CIRC-06**: User never sees mojibake strings (export-failure title and
   any other GBK-corrupted tr() strings fixed at source).
-- [ ] **CIRC-07**: CLI `--plate` behavior matches its help (0 = all plates).
+- [x] **CIRC-07**: CLI `--plate` behavior matches its help (0 = all plates).
 
 ### PLATE: Plate Data-Chain Fixes (P0)
 
-- [ ] **PLATE-01**: User changes a plate's bed type and the sliced output
+- [x] **PLATE-01**: User changes a plate's bed type and the sliced output
   reflects it (config sync into slicing, upstream `curr_bed_type` semantics).
-- [ ] **PLATE-02**: User changes a plate's spiral mode and the sliced output
+- [x] **PLATE-02**: User changes a plate's spiral mode and the sliced output
   reflects it.
-- [ ] **PLATE-03**: User edits per-plate first/other-layer filament sequence
+- [x] **PLATE-03**: User edits per-plate first/other-layer filament sequence
   and it reaches slicing, persists to 3MF, and round-trips on reopen.
-- [ ] **PLATE-04**: User opens a multi-plate 3MF and every object returns to
+- [x] **PLATE-04**: User opens a multi-plate 3MF and every object returns to
   its saved plate (no forced 220x220 re-arrange; upstream exact restore).
-- [ ] **PLATE-05**: User sees an accurate unsaved-changes indicator driven by
+- [x] **PLATE-05**: User sees an accurate unsaved-changes indicator driven by
   real edits and gets a guard dialog on new/open/close with unsaved changes.
 
 ### UNDO: Undo Coverage And Fidelity (P0/P1)
 
-- [ ] **UNDO-01**: User deletes an object and undo restores the full mesh,
+- [x] **UNDO-01**: User deletes an object and undo restores the full mesh,
   transforms, and volume structure (redo by object identity, not name).
-- [ ] **UNDO-02**: User deletes a volume and undo restores it.
-- [ ] **UNDO-03**: User adds/deletes/moves/clones/locks a plate and undo
+- [x] **UNDO-02**: User deletes a volume and undo restores it.
+- [x] **UNDO-03**: User adds/deletes/moves/clones/locks a plate and undo
   restores the previous plate state.
-- [ ] **UNDO-04**: User paints support/seam/MMU facets and undo reverts the
+- [x] **UNDO-04**: User paints support/seam/MMU facets and undo reverts the
   paint strokes.
-- [ ] **UNDO-05**: User pastes a copied object and gets mesh, transforms, and
+- [x] **UNDO-05**: User pastes a copied object and gets mesh, transforms, and
   config overrides — not a name-only empty object; show/hide no longer writes
   printability.
-- [ ] **UNDO-06**: User edits object-level layer ranges and the ranges reach
+- [x] **UNDO-06**: User edits object-level layer ranges and the ranges reach
   `layer_config_ranges` so variable layer height affects slicing.
 
 ### PSET2: Preset System Completion (P0/P1)
 
-- [ ] **PSET2-01**: User creates/edits a preset and it persists to disk in
+- [x] **PSET2-01**: User creates/edits a preset and it persists to disk in
   the upstream user-directory JSON format, surviving restart.
-- [ ] **PSET2-02**: User creates a preset of the chosen category with the
+- [x] **PSET2-02**: User creates a preset of the chosen category with the
   chosen inheritance in CreatePresetsDialog (scope mapping + inherits honored).
-- [ ] **PSET2-03**: User triggers a dirty guard and sees exactly one modal
+- [x] **PSET2-03**: User triggers a dirty guard and sees exactly one modal
   with Save / Transfer / Discard / Cancel and per-item selection (upstream
   UnsavedChangesDialog semantics).
-- [ ] **PSET2-04**: User imports/exports preset bundles in a form upstream
+- [x] **PSET2-04**: User imports/exports preset bundles in a form upstream
   OrcaSlicer can read, with correct category mapping.
-- [ ] **PSET2-05**: User sees preset combos sectioned (Project/User/System)
+- [x] **PSET2-05**: User sees preset combos sectioned (Project/User/System)
   with incompatible presets grayed in-list (upstream PresetComboBoxes).
-- [ ] **PSET2-06**: User configures per-extruder filament presets backed by a
+- [x] **PSET2-06**: User configures per-extruder filament presets backed by a
   real multi-slot data model (upstream `filament_presets` vector semantics).
-- [ ] **PSET2-07**: User renames/deletes presets from the UI with upstream
+- [x] **PSET2-07**: User renames/deletes presets from the UI with upstream
   guards ("in use" protection).
-- [ ] **PSET2-08**: User sees no permanently-empty settings tabs (Printer
+- [x] **PSET2-08**: User sees no permanently-empty settings tabs (Printer
   Material/Extruder, Filament Overrides/Multimaterial/Dependencies either
   populated or removed).
 
 ### DLG: Dialog Reachability And Completion (P1)
 
-- [ ] **DLG-01**: User can open every implemented dialog from the UI
+- [x] **DLG-01**: User can open every implemented dialog from the UI
   (BedShape, EditGCode, AMS, Firmware, SpeedLimit, WipeTower, PluginManager,
   EnableLiteMode, CreatePresets, ExportBundle) or it is honestly gated.
-- [ ] **DLG-02**: User saves custom G-code from EditGCodeDialog and it lands
+- [x] **DLG-02**: User saves custom G-code from EditGCodeDialog and it lands
   in the config; WipeTower flush matrix OK persists to the preset.
-- [ ] **DLG-03**: User gets the upstream load-feedback dialogs: archive file
+- [x] **DLG-03**: User gets the upstream load-feedback dialogs: archive file
   tree selection (FileArchive), out-of-bed recenter prompt (RecenterDialog),
   OBJ color mapping (ObjColorDialog), 3MF version/incompatible/legacy
   warnings, SysInfo viewer, single-choice dialog.
-- [ ] **DLG-04**: User sees the correct license and copyright in AboutDialog
+- [x] **DLG-04**: User sees the correct license and copyright in AboutDialog
   (upstream AGPL).
 
 ### VIEW: Menus, Shortcuts, Drag-Drop, Import (P1)
 
-- [ ] **VIEW-01**: User can use the View menu: 6 camera presets (Ctrl+0..6),
+- [x] **VIEW-01**: User can use the View menu: 6 camera presets (Ctrl+0..6),
   perspective/orthographic toggle, G-code window toggle, overhang and outline
   display.
-- [ ] **VIEW-02**: User can Delete All (Ctrl+D), import zip archives and
+- [x] **VIEW-02**: User can Delete All (Ctrl+D), import zip archives and
   config files, and the 11 missing upstream shortcuts are bound
   (Ctrl+N/Shift+S/A/Esc/P/E/C…).
-- [ ] **VIEW-03**: User can drag model files onto the window to import them
+- [x] **VIEW-03**: User can drag model files onto the window to import them
   (multi-file, SVG point-drop included).
-- [ ] **VIEW-04**: User importing a model saved in wrong units gets the
+- [x] **VIEW-04**: User importing a model saved in wrong units gets the
   upstream meters/inches detection and conversion prompt; zero-volume objects
   are reported.
-- [ ] **VIEW-05**: User opens a project 3MF and its embedded config and
+- [x] **VIEW-05**: User opens a project 3MF and its embedded config and
   presets are restored (LoadModel|LoadConfig semantics).
-- [ ] **VIEW-06**: User can export the plate sliced file (.gcode.3mf) and
+- [x] **VIEW-06**: User can export the plate sliced file (.gcode.3mf) and
   scale selection to fit the build volume.
 
 ### PREV: Preview Completion (P1)
 
-- [ ] **PREV-01**: User sees ghost object shells behind toolpaths in preview
+- [x] **PREV-01**: User sees ghost object shells behind toolpaths in preview
   (upstream render_shells).
-- [ ] **PREV-02**: User sees the 3D tool-position marker rendered at the
+- [x] **PREV-02**: User sees the 3D tool-position marker rendered at the
   current move position.
-- [ ] **PREV-03**: User can show/hide Seam, Retract, Unretract, and Wipe
+- [x] **PREV-03**: User can show/hide Seam, Retract, Unretract, and Wipe
   moves, parsed and rendered like upstream.
-- [ ] **PREV-04**: User can add a filament change (ToolChange) from the layer
+- [x] **PREV-04**: User can add a filament change (ToolChange) from the layer
   rail with extruder/color picker, sees tick hover tooltips, and gets the
   Jump-to-Layer dialog.
-- [ ] **PREV-05**: User sees filament statistics split (Model/Support/
+- [x] **PREV-05**: User sees filament statistics split (Model/Support/
   Flushed/Tower), a real stealth-mode estimate, and configurable cost.
-- [ ] **PREV-06**: User sees Tool/ColorPrint modes using the configured
+- [x] **PREV-06**: User sees Tool/ColorPrint modes using the configured
   extruder colors with per-extruder visibility toggles.
-- [ ] **PREV-07**: User on the software-render fallback still sees the
+- [x] **PREV-07**: User on the software-render fallback still sees the
   G-code preview.
 
 ### ENGN: Slicing Engine Semantics (P1)
 
-- [ ] **ENGN-01**: User switches to Preview with stale results and the app
+- [x] **ENGN-01**: User switches to Preview with stale results and the app
   auto-reslices (upstream do_reslice).
-- [ ] **ENGN-02**: User re-enters preview with valid results and the app
+- [x] **ENGN-02**: User re-enters preview with valid results and the app
   reuses the existing G-code without re-slicing (loadGCodeFromPrevious path).
-- [ ] **ENGN-03**: User exports G-code without the UI freezing, and slicing
+- [x] **ENGN-03**: User exports G-code without the UI freezing, and slicing
   validation warnings (not just errors) are surfaced.
-- [ ] **ENGN-04**: User running slice-all on a project with an empty plate
+- [x] **ENGN-04**: User running slice-all on a project with an empty plate
   does not lose the remaining plates' results.
 
 ### NOTI: Notification System (P2)
 
-- [ ] **NOTI-01**: User sees multiple notifications stacked with upstream
+- [x] **NOTI-01**: User sees multiple notifications stacked with upstream
   priority ordering, duplicate compression with counters, and hyperlink
   actions where upstream provides them.
 
 ### GIZ: Gizmo Interaction Depth (P2)
 
-- [ ] **GIZ-01**: User can type exact position/rotation/scale values in the
+- [x] **GIZ-01**: User can type exact position/rotation/scale values in the
   gizmo mini panel (world/local coordinates).
-- [ ] **GIZ-02**: User can smart-fill/seed-fill painter gizmo selections and
+- [x] **GIZ-02**: User can smart-fill/seed-fill painter gizmo selections and
   filter by overhangs/angle (upstream TriangleSelector smart fill).
-- [ ] **GIZ-03**: User sees hovered face highlight on Flatten and can click a
+- [x] **GIZ-03**: User sees hovered face highlight on Flatten and can click a
   specific face to place the object on.
-- [ ] **GIZ-04**: User can drag and rotate the cutting plane directly in 3D.
-- [ ] **GIZ-05**: User sees measure annotations rendered in the 3D scene.
-- [ ] **GIZ-06**: User can edit an existing text volume in place, preview
+- [x] **GIZ-04**: User can drag and rotate the cutting plane directly in 3D.
+- [x] **GIZ-05**: User sees measure annotations rendered in the 3D scene.
+- [x] **GIZ-06**: User can edit an existing text volume in place, preview
   simplification before applying (with cancel), and use the SVG drop workbench.
 
 ### PAGE: Top-Level Page Honesty (P2)
 
-- [ ] **PAGE-01**: User's home page shows real recent projects (clickable)
+- [x] **PAGE-01**: User's home page shows real recent projects (clickable)
   and working quick actions; DailyTips rotate with upstream hint data.
-- [ ] **PAGE-02**: User sees a Project page without dead controls (no
+- [x] **PAGE-02**: User sees a Project page without dead controls (no
   console.log buttons, real file tree/details, or honest gating).
-- [ ] **PAGE-03**: User can run PA_Pattern/PA_Tower calibration modes, the
+- [x] **PAGE-03**: User can run PA_Pattern/PA_Tower calibration modes, the
   two-pass FlowRate flow, save calibration results into presets, and keep
   calibration history across restarts.
-- [ ] **PAGE-04**: User's preferences actually take effect (default start
+- [x] **PAGE-04**: User's preferences actually take effect (default start
   page, units, backup) or are honestly gated with a reason.
 
 ### CLI: Command-Line Surface (P2)
 
-- [ ] **CLI-01**: User can run upstream CLI transforms (arrange, orient, cut,
+- [x] **CLI-01**: User can run upstream CLI transforms (arrange, orient, cut,
   split, assemble, repair, scale-to-fit) and exports (STL/3MF/slicedata).
-- [ ] **CLI-02**: User can override any PrintConfig key from the CLI.
+- [x] **CLI-02**: User can override any PrintConfig key from the CLI.
 
 ## Carried: v5.11 Process Settings (reserved, deferred)
 

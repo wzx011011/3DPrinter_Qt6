@@ -124,8 +124,11 @@ CxDialog {
             CxCheckBox {
                 text: qsTr("启用精简预览模式")
                 font.pixelSize: Theme.fontSizeMD
+                // QML-BINDING-LOOPS: onToggled instead of onCheckedChanged --
+                // the programmatic checked refresh (liteModeEnabled write)
+                // no longer writes back, breaking the write-back cycle.
                 checked: root.liteModeEnabled
-                onCheckedChanged: root.liteModeEnabled = checked
+                onToggled: root.liteModeEnabled = checked
             }
 
             Text {

@@ -553,8 +553,12 @@ ApplicationWindow {
                             required property var modelData
                             required property int index
                             readonly property string pageKey: modelData.key
-                            width: processTabBar.count > 0
-                                   ? (processTabBar.width - processTabBar.spacing * (processTabBar.count - 1))
+                            // G-12: size from the outer strip, not the
+                            // TabBar itself -- referencing processTabBar.width
+                            // closed a binding loop (implicitWidth aggregates
+                            // the child buttons).
+                            width: processTabStrip.width > 0
+                                   ? (processTabStrip.width - processTabBar.spacing * (processTabBar.count - 1))
                                      / processTabBar.count
                                    : 0
                             height: 38

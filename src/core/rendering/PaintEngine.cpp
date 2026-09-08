@@ -29,6 +29,18 @@ namespace {
 // exactly the same reason and brightens leaves with is_selected_by_seed_fill
 // (GLGizmoPainterBase.cpp:1123-1157). No behavior is overridden -- read-only
 // accessors.
+// PAINT-GAPFILL-PORT: exposes the PROTECTED TriangleSelector state
+// (m_vertices / m_triangles are protected, TriangleSelector.hpp:364+) so the
+// gap-fragment leaves can be flattened for the gap-fill tool view. This
+// mirrors upstream TriangleSelectorGUI, which subclasses TriangleSelector for
+// exactly the same reason (read-only leaf access for rendering,
+// GLGizmoPainterBase.cpp:1123-1157). No behavior is overridden.
+//
+// Destruction note: the cache stores unique_ptr<TriangleSelector> over this
+// subclass exactly like upstream GLGizmoPainterBase::m_triangle_selectors
+// stores TriangleSelectorGUI/TriangleSelectorPatch instances
+// (GLGizmoPainterBase.hpp:250). TriangleSelector adds no data members to the
+// derived layout, so the base-subobject address equals the object address.
 class PaintSelector final : public Slic3r::TriangleSelector
 {
 public:
@@ -73,6 +85,13 @@ public:
   // threshold (upstream TrianglePatch::is_fragment,
   // GLGizmoPainterBase.cpp:1234-1236). Area is the mesh-space triangle area
   // (mm2, matching the upstream mm2 slider range).
+  // PAINT-GAPFILL-PORT: gap fragments = leaf triangles whose mesh-space area
+  // is below the gap-area threshold (upstream TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236: `area < TriangleSelectorPatch::
+  // gap_area`). Areas are mm2 (mesh units), matching the upstream slider
+  // range GapAreaMin=0 / GapAreaMax=5 / GapAreaStep=0.2
+  // (GLGizmoPainterBase.hpp:117-119). A threshold <= 0 disables the view.
+  // Output is vertex-compacted like the upstream get_facets result.
   indexed_triangle_set gapFragmentsIts(float gapAreaMm2) const
   {
     indexed_triangle_set out;
@@ -144,6 +163,9 @@ Slic3r::TriangleSelector *PaintEngine::ensureSelector(
   entry->mesh = meshSharedPtr;
   // PaintSelector (P2.3-2) subclasses the upstream selector read-only to
   // expose the staged seed-fill region; no behavior override.
+  // PaintSelector (PAINT-GAPFILL-PORT) subclasses the upstream selector
+  // read-only to expose the leaf triangles for the gap-fragment reader; no
+  // behavior override.
   entry->selector = std::make_unique<PaintSelector>(*meshSharedPtr);
   Slic3r::TriangleSelector *raw = entry->selector.get();
   m_cache.emplace(key, std::move(*entry));
@@ -229,6 +251,44 @@ bool PaintEngine::paintHeightRangeAt(int objectIndex, int volumeIndex,
   return true;
 }
 
+// PAINT-MMU-TOOLS: bucket fill. See PaintEngine.h for the upstream mapping
+// (GLGizmoPainterBase.cpp:778-787 -- the POINTER brush passes angle -1 +
+// propagate false, the BUCKET_FILL tool passes the edge-detection angle + propagate
+// true).
+bool PaintEngine::bucketFillAt(int objectIndex, int volumeIndex, int facetIdx,
+                               const Slic3r::Vec3f &meshLocalHit,
+                               float seedFillAngle,
+                               Slic3r::EnforcerBlockerType state,
+                               const Slic3r::Transform3d &trafo, bool propagate)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  if (!selector)
+    return false; // mesh source had no mesh for the pair
+
+  applyBucketFillToSelector(*selector, facetIdx, meshLocalHit, seedFillAngle,
+                            state, trafo, propagate);
+  return true;
+}
+
+// PAINT-MMU-TOOLS: height-range paint. See PaintEngine.h for the upstream
+// mapping (GLGizmoPainterBase.cpp:703-733).
+bool PaintEngine::paintHeightRangeAt(int objectIndex, int volumeIndex,
+                                     float hitWorldZ, float height,
+                                     Slic3r::EnforcerBlockerType state,
+                                     const Slic3r::Transform3d &trafoWorld,
+                                     const Slic3r::Transform3d &trafoNoTranslate,
+                                     const Slic3r::Vec3f &cameraPosMeshLocal,
+                                     int facetStart)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
+  if (!selector)
+    return false; // mesh source had no mesh for the pair
+
+  applyHeightRangeToSelector(*selector, hitWorldZ, height, state, trafoWorld,
+                             trafoNoTranslate, cameraPosMeshLocal, facetStart);
+  return true;
+}
+
 std::shared_ptr<indexed_triangle_set>
 PaintEngine::getFacets(int objectIndex, int volumeIndex, PaintKind kind,
                        Slic3r::EnforcerBlockerType state)
@@ -290,6 +350,13 @@ PaintEngine::getGapFragments(int objectIndex, int volumeIndex, PaintKind kind,
 {
   Slic3r::TriangleSelector *selector =
       ensureSelector(objectIndex, volumeIndex, kind);
+// PAINT-GAPFILL-PORT: fragment leaves below the gap-area threshold. Reads the
+// cached selector without rebuilding unrelated volumes; ensureSelector lazily
+// builds for the requested pair only (same contract as getFacets' neighbors).
+std::shared_ptr<indexed_triangle_set>
+PaintEngine::getGapFragments(int objectIndex, int volumeIndex, float gapAreaMm2)
+{
+  Slic3r::TriangleSelector *selector = ensureSelector(objectIndex, volumeIndex);
   if (!selector)
     return nullptr;
   auto *paintSelector = static_cast<PaintSelector *>(selector);
@@ -422,6 +489,98 @@ void applySmartFillToSelector(Slic3r::TriangleSelector &selector,
                                       /*seed_fill_angle=*/seedFillAngle,
                                       /*highlight_by_angle_deg=*/highlightByAngleDeg,
                                       /*force_reselection=*/true);
+}
+
+// applyBucketFillToSelector -- pure helper (PAINT-MMU-TOOLS). Unit-testable
+// without a Model. Mirrors the upstream POINTER / BUCKET_FILL click sequence
+// (GLGizmoPainterBase.cpp:778-787): seed_fill_apply_on_triangles commits the
+// region staged by the previous click, then bucket_fill_select_triangles
+// stages the connected region under the current click. A negative
+// seedFillAngle disables edge detection (upstream passes -1.f for the
+// POINTER brush and whenever the edge_detection checkbox is off,
+// GLGizmoMmuSegmentation.cpp:625-637); propagate=false keeps only the hit
+// facet (POINTER), propagate=true floods the connected same-state region
+// (BUCKET_FILL). force_reselection=true mirrors the upstream call so a
+// re-click on an already staged facet restages it.
+void applyBucketFillToSelector(Slic3r::TriangleSelector &selector,
+                               int facetIdx,
+                               const Slic3r::Vec3f &meshLocalHit,
+                               float seedFillAngle,
+                               Slic3r::EnforcerBlockerType state,
+                               const Slic3r::Transform3d &trafo,
+                               bool propagate)
+{
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
+  selector.seed_fill_apply_on_triangles(/*new_state=*/state);
+  // The trafo argument is unused by bucket_fill_select_triangles (the flood
+  // walks topology + facet normals only); it is kept in the signature so the
+  // helper mirrors the production call-site contract.
+  (void)trafo;
+  selector.bucket_fill_select_triangles(/*hit=*/meshLocalHit,
+                                        /*facet_start=*/facetIdx,
+                                        /*clp=*/clippingPlane,
+                                        /*seed_fill_angle=*/seedFillAngle,
+                                        /*propagate=*/propagate,
+                                        /*force_reselection=*/true);
+}
+
+// applyHeightRangeToSelector -- pure helper (PAINT-MMU-TOOLS). Unit-testable
+// without a Model. Mirrors the upstream HEIGHT_RANGE brush apply
+// (GLGizmoPainterBase.cpp:726-733): the SinglePointCursor::cursor_factory
+// overload taking a float world Z builds the TriangleSelector::HeightRange
+// cursor over the [hitWorldZ, hitWorldZ + height] band; select_patch's
+// hr_cursor branch then collects every original facet intersecting the band
+// (TriangleSelector.cpp:259-269 -- facetStart is not consumed there).
+// highlight_by_angle_deg stays 0: the MMU gizmo exposes no overhang filter
+// (upstream m_paint_on_overhangs_only is false for MMU,
+// GLGizmoMmuSegmentation has no such checkbox).
+void applyHeightRangeToSelector(Slic3r::TriangleSelector &selector,
+                                float hitWorldZ, float height,
+                                Slic3r::EnforcerBlockerType state,
+                                const Slic3r::Transform3d &trafoWorld,
+                                const Slic3r::Transform3d &trafoNoTranslate,
+                                const Slic3r::Vec3f &cameraPosMeshLocal,
+                                int facetStart)
+{
+  const Slic3r::TriangleSelector::ClippingPlane clippingPlane;
+  auto cursorPtr = Slic3r::TriangleSelector::SinglePointCursor::cursor_factory(
+      /*z_world=*/hitWorldZ, cameraPosMeshLocal, height, trafoWorld,
+      clippingPlane);
+  selector.select_patch(/*facet_start=*/facetStart, std::move(cursorPtr),
+                        /*new_state=*/state,
+                        /*trafo_no_translate=*/trafoNoTranslate,
+                        /*triangle_splitting=*/true,
+                        /*highlight_by_angle_deg=*/0.f);
+}
+
+// buildPaintClippingPlane -- pure helper (PAINT-ALT-WHEEL-CLIP). Mirrors the
+// upstream chain ObjectClipper::set_position_by_ratio
+// (GLGizmosCommon.cpp:346-367 -- normal = -camera forward, world offset =
+// normal.dot(center) + boundingRadius - ratio * 2 * boundingRadius) followed
+// by get_clipping_plane_in_volume_coordinates (GLGizmoPainterBase.cpp:
+// 1101-1117 -- the plane point transforms via the inverse, the normal via
+// the transpose linear part, the volume-local offset is their dot). Returns
+// the inactive plane (offset FLT_MAX) when the ratio is off so callers can
+// branch on is_active().
+Slic3r::TriangleSelector::ClippingPlane buildPaintClippingPlane(
+    double ratio, const Slic3r::Vec3d &cameraForwardWorld,
+    const Slic3r::Vec3d &objectCenterWorld, double boundingRadius,
+    const Slic3r::Transform3d &worldTransform)
+{
+  if (ratio <= 0.0 || boundingRadius <= 0.0 ||
+      cameraForwardWorld.norm() < 1e-12)
+    return {};
+  const Slic3r::Vec3d normal = (-cameraForwardWorld).normalized();
+  const double dist = normal.dot(objectCenterWorld);
+  const double offset = dist + boundingRadius - ratio * 2.0 * boundingRadius;
+  const Slic3r::Vec3d pointOnPlane = normal * offset;
+  const Slic3r::Vec3d pointTransformed = worldTransform.inverse() * pointOnPlane;
+  const Slic3r::Transform3d trafoNormal(worldTransform.linear().transpose());
+  const Slic3r::Vec3d normalTransformed = trafoNormal * normal;
+  return Slic3r::TriangleSelector::ClippingPlane(
+      {float(normalTransformed.x()), float(normalTransformed.y()),
+       float(normalTransformed.z()),
+       float(pointTransformed.dot(normalTransformed))});
 }
 
 } // namespace OWzx

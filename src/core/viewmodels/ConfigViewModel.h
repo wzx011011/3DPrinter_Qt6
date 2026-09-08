@@ -165,6 +165,19 @@ public:
   /// preset's values start from the parent's resolved chain (CreatePresetsDialog
   /// "inherits from" selection, upstream CreatePresetsDialog.cpp).
   Q_INVOKABLE bool createCustomPreset(int category, const QString &name, const QString &inherits);
+  /// G-01: replace an existing USER preset with the current tier edits
+  /// (upstream SavePresetDialog replace path). Keeps the current selection;
+  /// fails for builtin/read-only targets.
+  Q_INVOKABLE bool overwriteUserPreset(int category, const QString &name);
+  /// G-13: rebuild the preset lists from the service (fired after in-project
+  /// embedded presets from a loaded 3MF were adopted).
+  Q_INVOKABLE void refreshPresetLists();
+  /// G-13: Detach — flatten an inherited USER preset (cut the inherits link,
+  /// the resolved values become its own) and persist it. Keeps the current
+  /// selection; fails for builtin/read-only targets.
+  Q_INVOKABLE bool detachPresetFromParent(int category, const QString &name);
+  /// G-13: name of the parent preset `name` inherits from (empty = none).
+  Q_INVOKABLE QString presetInheritsParent(const QString &name) const;
   Q_INVOKABLE bool deletePreset(int category, const QString &name);
   Q_INVOKABLE bool renamePreset(int category, const QString &oldName, const QString &newName);
   Q_INVOKABLE bool canDeletePreset(const QString &name) const;

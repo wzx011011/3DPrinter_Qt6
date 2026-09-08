@@ -101,8 +101,8 @@ $objFiles = @(
     "PreviewViewModel.cpp.obj",
     "ConfigViewModel.cpp.obj",
     "ProjectServiceMock.cpp.obj",
-    "GLViewportRenderer.cpp.obj",
-    "GCodeRenderer.cpp.obj",
+    "RhiViewportRenderer.cpp.obj",
+    "SoftwareViewport.cpp.obj",
     "MonitorViewModel.cpp.obj",
     "MultiMachineViewModel.cpp.obj",
     "CalibrationViewModel.cpp.obj",
@@ -114,7 +114,7 @@ $objFiles = @(
     "SliceService.cpp.obj",
     "ConfigOptionModel.cpp.obj",
     "CameraController.cpp.obj",
-    "GLViewport.cpp.obj",
+    "RhiViewport.cpp.obj",
     "GLShaderUtil.cpp.obj",
     "UndoCommands.cpp.obj",
     "JobBase.cpp.obj",
@@ -134,21 +134,18 @@ $qmlFiles = @(
     "pages/PreparePage.qml",
     "pages/PreviewPage.qml",
     "pages/MonitorPage.qml",
-    "pages/SettingsPage.qml",
-    "pages/ConfigPage.qml",
+    "dialogs/SettingsDialog.qml",
+    "pages/AssemblePage.qml",
     "pages/CalibrationPage.qml",
     "pages/MultiMachinePage.qml",
     "pages/HomePage.qml",
     "pages/ProjectPage.qml",
     "components/StatsPanel.qml",
-    "components/LayerSlider.qml",
+    "components/PreviewLayerRail.qml",
     "components/MoveSlider.qml",
     "components/Legend.qml",
-    "panels/PrintSettings.qml",
-    "panels/ObjectList.qml",
-    "panels/Sidebar.qml",
-    "panels/SliceProgress.qml",
-    "components/SearchDialog.qml",
+    "panels/LeftSidebar.qml",
+    "panels/DockableSidebar.qml",
     "components/NotificationCenter.qml",
     "components/ToolPositionTooltip.qml",
     "components/CollapsibleSection.qml",
@@ -164,6 +161,14 @@ foreach ($qml in $qmlFiles) {
     Report-Test "$qml source exists" (Test-Path $sourcePath)
 }
 Write-Host ""
+
+# G-12: the proxy environment carries BOTH http_proxy and HTTP_PROXY (same
+# for https/all variants); .NET's child-process environment block rejects
+# case-duplicate keys and Start-Process threw "An item with the same key has
+# already been added". Keep only the lowercase spelling of each proxy var.
+foreach ($proxyVar in @('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY')) {
+    if (Test-Path "Env:$proxyVar") { Remove-Item "Env:$proxyVar" -ErrorAction SilentlyContinue }
+}
 
 # --- Test 7: Standalone startup (no vcvars) ---
 Write-Host "[Phase 7] Standalone startup (deployment check)"

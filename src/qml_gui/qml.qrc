@@ -51,8 +51,6 @@
         <file>dialogs/ObjColorDialog.qml</file>
         <file>dialogs/SysInfoDialog.qml</file>
         <!-- Panels -->
-        <file>panels/ObjectList.qml</file>
-        <file>panels/SliceProgress.qml</file>
         <file>panels/LeftSidebar.qml</file>
         <file>panels/DockableSidebar.qml</file>
         <file>panels/ChatSidebar.qml</file>
@@ -88,7 +86,6 @@
         <file>controls/CxSpinBox.qml</file>
         <file>controls/CxIconButton.qml</file>
         <file>controls/CxNumericEdit.qml</file>
-        <file>controls/CxPillAction.qml</file>
         <file>controls/CxStepButton.qml</file>
         <file>controls/CxSwitch.qml</file>
         <file>controls/CxDialog.qml</file>

@@ -289,6 +289,25 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
         && indexCount <= kMaxPackedTrianglesPerBatch * 3;
     if (!valid)
       break;
+  qint32 objectCount = 0;
+  qsizetype offset = 0;
+  // P15.1 (COLOR): the render-channel arrays are optional (the picking scene
+  // passes none); when present they must cover every batch.
+  bool valid = readValue(meshData, offset, objectCount)
+      && objectCount >= 0
+      && objectCount <= kMaxPackedObjects
+      && batchSourceObjectIndices.size() == objectCount
+      && batchVolumeIndices.size() == objectCount
+      && batchInstanceIndices.size() == objectCount
+      // Review P2-5: each optional channel must be empty or cover every
+      // batch -- a partially supplied array would send .at(objectIndex) out
+      // of bounds below (QList::at is unchecked in release).
+      && (batchVolumeTypes.isEmpty()
+          || batchVolumeTypes.size() == objectCount)
+      && (batchExtruderIds.isEmpty()
+          || batchExtruderIds.size() == objectCount)
+      && (batchPrintableFlags.isEmpty()
+          || batchPrintableFlags.size() == objectCount);
 
     const qsizetype positionBytes = qsizetype(vertexCount) * 3 * 4;
     const qsizetype indexBytes = qsizetype(indexCount) * 4;
@@ -415,6 +434,35 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
         g = color.y();
         blue = color.z();
         a = color.w() > 0.0f ? color.w() : 1.0f;
+    if (!batchVolumeTypes.isEmpty()) {
+      const int volumeType = batchVolumeTypes.at(objectIndex);
+      // Review P2-5: each channel is independently optional -- only index
+      // into an array that actually covers this batch.
+      const int extruderId = batchExtruderIds.size() == objectCount
+                                 ? batchExtruderIds.at(objectIndex) : 0;
+      const bool printable = batchPrintableFlags.size() == objectCount
+                                 ? batchPrintableFlags.at(objectIndex) != 0 : true;
+      switch (volumeType) {
+      case 1: r = 0.3f; g = 0.3f; b = 0.3f; a = 0.4f; break; // MODEL_NEGTIVE_COL
+      case 2: r = 1.0f; g = 1.0f; b = 0.0f; a = 0.6f; break; // MODEL_MIDIFIER_COL
+      case 3: r = 1.0f; g = 0.3f; b = 0.3f; a = 0.4f; break; // SUPPORT_BLOCKER_COL
+      case 4: r = 0.3f; g = 0.3f; b = 1.0f; a = 0.4f; break; // SUPPORT_ENFORCER_COL
+      default: {
+        if (!extruderColors.isEmpty()) {
+          int colorIndex = extruderId - 1;
+          if (colorIndex < 0 || colorIndex >= extruderColors.size())
+            colorIndex = 0;
+          const QVector4D color = extruderColors.at(colorIndex);
+          r = color.x();
+          g = color.y();
+          b = color.z();
+          a = color.w() > 0.0f ? color.w() : 1.0f;
+        }
+        if (!printable) { // UNPRINTABLE_COLOR (3DScene.cpp:170)
+          r = 0.0f; g = 0.0f; b = 0.0f; a = 0.5f;
+        }
+        break;
+      }
       }
       if (!printable) { // UNPRINTABLE_COLOR (3DScene.cpp:170)
         r = 0.0f; g = 0.0f; blue = 0.0f; a = 0.5f;
@@ -447,6 +495,25 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     batch.translucent = a < 0.999f;
     batch.volumeType = volumeType;
     bool batchHasBounds = false;
+    // P15.3 (OUTOFBED): ProjectVolumeType for the outside-state gate.
+    batch.volumeType = batchVolumeTypes.isEmpty() ? 0
+                                                  : batchVolumeTypes.at(objectIndex);
+    // PREVIEW-GHOST-SHELL: per-volume extruder identity for the ghost pass.
+    batch.extruderId =
+        batchExtruderIds.size() == objectCount ? batchExtruderIds.at(objectIndex) : 0;
+
+    for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+      float x = 0.0f;
+      float y = 0.0f;
+      float z = 0.0f;
+      valid = readValue(meshData, offset, x)
+          && readValue(meshData, offset, y)
+          && readValue(meshData, offset, z)
+          && std::isfinite(x)
+          && std::isfinite(y)
+          && std::isfinite(z);
+      if (!valid)
+        break;
 
     // P15.10 (MIRROR): the GL matrix folds in the slic3r->GL axis swap
     // (det -1), so det(M3) > 0 marks a mirrored instance — the compat soup

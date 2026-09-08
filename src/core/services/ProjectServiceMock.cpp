@@ -2,6 +2,7 @@
 
 #include "core/util/PerfLog.h"
 #include "core/rendering/FastStlImport.h"
+#include "PresetServiceMock.h"  // G-13: project-embedded presets
 
 #include <QFileInfo>
 #include <QFile>
@@ -21,7 +22,9 @@
 #include <QImage>
 #include <QPainter>
 #include <QBuffer>
+#include <QThread>
 #include <algorithm>
+#include <map>
 #include <QMetaObject>
 #include <QPointer>
 #include <QCoreApplication>
@@ -30,12 +33,14 @@
 #include <limits>
 #include <cstdint>
 #include <unordered_map>
+#include <set>
 #include <unordered_set>
 #include <QtMath>
 #include <cmath>
 
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
+#include <libslic3r/Preset.hpp>  // G-13: project-embedded presets
 #include <libslic3r/Utils.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleMeshDeal.hpp>
@@ -50,6 +55,8 @@
 #include <libslic3r/TextConfiguration.hpp>
 #include <libslic3r/Orient.hpp>
 #include <libslic3r/ModelArrange.hpp>
+#include <libslic3r/Arrange.hpp>
+#include <libslic3r/GCode/WipeTower.hpp>
 #include <libslic3r/TriangleMeshSlicer.hpp>
 #include <libslic3r/MeshBoolean.hpp>
 #include <libslic3r/FaceDetector.hpp>  // P2.7: real exterior-face recognition
@@ -77,6 +84,19 @@ using OwzxPlateFilamentStates = QHash<int, OwzxPlateFilamentState>;
 static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archivePath);
 static bool writeOwzxPlateFilamentStates(const QString &archivePath,
                                          const QByteArray &payload);
+
+// G-13: in-project embedded preset read back from a saved 3MF. Full
+// definition must precede the load worker (the delivery lambda captures the
+// list by value); the reader implementation sits below with the other
+// miniz-based helpers.
+struct ProjectEmbeddedPreset
+{
+  int category = -1;
+  QString name;
+  QString inherits;
+  QHash<QString, QVariant> values;
+};
+static QList<ProjectEmbeddedPreset> readProjectEmbeddedPresets(const QString &archivePath);
 #endif
 
 namespace
@@ -408,6 +428,7 @@ ProjectServiceMock::ProjectServiceMock(QObject *parent)
   Slic3r::set_temporary_dir(QDir::tempPath().toStdString());
   model_ = new Slic3r::Model();
 #endif
+  attachPlateInstanceBounds();
 }
 
 #ifdef HAS_LIBSLIC3R
@@ -805,15 +826,48 @@ inline void fnvMixDouble(quint64 &h, double value)
   std::memcpy(&bits, &value, sizeof(bits));
   fnvMix(h, bits);
 }
+namespace
+{
+  // PLATE-PRINT-LIFECYCLE (batch 2): FNV-1a helpers for the plate geometry
+  // fingerprint (ProjectServiceMock::currentPlateGeometrySignature).
+  constexpr quint64 kFnvOffsetBasis = 0xcbf29ce484222325ULL;
+  constexpr quint64 kFnvPrime = 0x00000100000001b3ULL;
+
+  inline void fnvMix(quint64 &h, quint64 value)
+  {
+    h ^= value;
+    h *= kFnvPrime;
+  }
+
+  inline void fnvMixDouble(quint64 &h, double value)
+  {
+    quint64 bits = 0;
+    static_assert(sizeof(bits) == sizeof(value), "64-bit double expected");
+    std::memcpy(&bits, &value, sizeof(bits));
+    fnvMix(h, bits);
+  }
 } // namespace
 
 quint64 ProjectServiceMock::currentPlateGeometrySignature() const
 {
+  // Conservative fingerprint of everything that changes how the plate slices,
+  // mirroring the upstream PrintObject identity inputs (Print.cpp:1852-1902
+  // is_print_object_the_same) plus object/volume/instance config timestamps
+  // and the supported/seam/mmu facet-annotation timestamps (paint edits can
+  // change slicing without touching mesh sizes). Timestamps are process-wide
+  // mutation counters, so ANY config/paint touch forces a full rebuild --
+  // deliberate "prefer full reslice over wrong reuse".
+  // Review P2-3 note: this intentionally does NOT hash mesh CONTENT -- it
+  // relies on the Qt6 convention that any mesh mutation creates a new volume
+  // (fresh volume/config timestamps land in the hash). An in-place same-size
+  // mesh swap that also preserved every timestamp would defeat it; no code
+  // path does that today.
   if (!model_)
     return 0;
 
   const QList<int> plateObjectIndices = currentPlateObjectIndices();
   quint64 h = 0xcbf29ce484222325ULL;
+  quint64 h = kFnvOffsetBasis;
   fnvMix(h, quint64(plateObjectIndices.size()));
   for (int objectIndex : plateObjectIndices)
   {
@@ -825,6 +879,18 @@ quint64 ProjectServiceMock::currentPlateGeometrySignature() const
     fnvMix(h, quint64(obj->volumes.size()));
     fnvMix(h, quint64(obj->instances.size()));
     fnvMix(h, quint64(obj->id().id));
+    fnvMix(h, quint64(obj->id().id));
+    fnvMix(h, quint64(obj->volumes.size()));
+    fnvMix(h, quint64(obj->instances.size()));
+    fnvMix(h, quint64(obj->printable ? 1 : 0));
+    fnvMix(h, quint64(obj->config.ModelConfig::timestamp()));
+    fnvMix(h, quint64(obj->layer_config_ranges.size()));
+    for (const auto &range : obj->layer_config_ranges)
+    {
+      fnvMixDouble(h, double(range.first.first));
+      fnvMixDouble(h, double(range.first.second));
+      fnvMix(h, quint64(range.second.timestamp()));
+    }
     for (const Slic3r::ModelVolume *vol : obj->volumes)
     {
       if (!vol)
@@ -834,6 +900,33 @@ quint64 ProjectServiceMock::currentPlateGeometrySignature() const
       fnvMix(h, quint64(its.indices.size()));
       fnvMix(h, quint64(int(vol->type())));
       fnvMix(h, quint64(vol->extruder_id()));
+      // Review P2-3: hash the mesh CONTENT itself (raw vertex/index bytes),
+      // closing the in-place same-size mesh-swap hole that metadata-only
+      // inputs leave open. This makes the signature an O(vertices) walk;
+      // startSlice already clones the plate model right after, so the extra
+      // pass is noise next to the clone + Print::apply cost.
+      {
+        const unsigned char *vertexBytes =
+            its.vertices.empty()
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(its.vertices.front().data());
+        const size_t vertexByteCount = its.vertices.size() * sizeof(its.vertices.front());
+        for (size_t b = 0; b < vertexByteCount; ++b)
+          fnvMix(h, quint64(vertexBytes[b]));
+        const unsigned char *indexBytes =
+            its.indices.empty()
+                ? nullptr
+                : reinterpret_cast<const unsigned char *>(its.indices.front().data());
+        const size_t indexByteCount = its.indices.size() * sizeof(its.indices.front());
+        for (size_t b = 0; b < indexByteCount; ++b)
+          fnvMix(h, quint64(indexBytes[b]));
+      }
+      fnvMix(h, quint64(int(vol->type())));
+      fnvMix(h, quint64(vol->extruder_id()));
+      fnvMix(h, quint64(vol->config.ModelConfig::timestamp()));
+      fnvMix(h, quint64(vol->supported_facets.timestamp()));
+      fnvMix(h, quint64(vol->seam_facets.timestamp()));
+      fnvMix(h, quint64(vol->mmu_segmentation_facets.timestamp()));
       const Slic3r::Transform3d m = vol->get_transformation().get_matrix();
       for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 4; ++c)
@@ -969,6 +1062,22 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     Slic3r::PlateDataPtrs plateDataList;
     QStringList loadedPlateNames;
     QList<QList<int>> loadedPlateObjectIndices;
+    // G-11: per-plate state is collected into WORKER-LOCAL containers and
+    // handed to the GUI thread through the delivery-lambda capture. The
+    // receiver's pendingPlate* members are plain QList/QImage (non-atomic);
+    // writing them directly from this thread raced any concurrent GUI read
+    // (e.g. cancelLoad path).
+    QList<bool> pendingLocked;
+    QList<int> pendingBedType;
+    QList<int> pendingPrintSeq;
+    QList<int> pendingSpiral;
+    QList<QList<int>> pendingFirstLayerSeq;
+    QList<QList<int>> pendingOtherLayersSeq;
+    QList<int> pendingOtherLayersSeqNums;
+    QList<QImage> pendingThumbnails;
+    QList<QList<int>> pendingFilamentMaps;
+    QList<int> pendingFilamentMapMode;
+    QVariantList embeddedPayload;  // G-13: filled in the plate-data block below
 
     Slic3r::Import3mfProgressFn progressFn = [receiver, cancelFlag](int import_stage, int current, int total, bool &cancel) {
       cancel = cancelFlag && cancelFlag->load();
@@ -1084,21 +1193,38 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
           // v3.0 Phase 18 (D-12): capture locked + bed-type + print-seq + spiral from
           // PlateData onto the receiver so the later rebuild lambda can restore them.
-          receiver->pendingPlateLocked_.clear();
-          receiver->pendingPlateBedType_.clear();
-          receiver->pendingPlatePrintSeq_.clear();
-          receiver->pendingPlateSpiral_.clear();
-          receiver->pendingPlateFirstLayerSeq_.clear();   // v5.16 (PLATE-03)
-          receiver->pendingPlateOtherLayersSeq_.clear();  // v5.16 (PLATE-03)
-          receiver->pendingPlateOtherLayersSeqNums_.clear(); // v5.16 (PLATE-03)
-          receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
-      receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
-      receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
-          receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
-          receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
+          pendingLocked.clear();
+          pendingBedType.clear();
+          pendingPrintSeq.clear();
+          pendingSpiral.clear();
+          pendingFirstLayerSeq.clear();   // v5.16 (PLATE-03)
+          pendingOtherLayersSeq.clear();  // v5.16 (PLATE-03)
+          pendingOtherLayersSeqNums.clear(); // v5.16 (PLATE-03)
+          pendingThumbnails.clear();  // v3.2 Phase 30 (THUMB-02)
+      pendingFilamentMaps.clear();   // v3.2 Phase 31 (FMAP-02)
+      pendingFilamentMapMode.clear(); // v3.2 Phase 31 (FMAP-02)
+          pendingFilamentMaps.clear();   // v3.2 Phase 31 (FMAP-02)
+          pendingFilamentMapMode.clear(); // v3.2 Phase 31 (FMAP-02)
 
           const OwzxPlateFilamentStates persistedFilamentStates =
               readOwzxPlateFilamentStates(localPath);
+          // G-13: read the in-project embedded presets (writer side:
+          // storeProject3mf -> params.project_presets).
+          const QList<ProjectEmbeddedPreset> embeddedPresets =
+              readProjectEmbeddedPresets(localPath);
+          embeddedPayload.reserve(embeddedPresets.size());
+          for (const ProjectEmbeddedPreset &preset : embeddedPresets)
+          {
+            QVariantMap entry;
+            entry.insert(QStringLiteral("category"), preset.category);
+            entry.insert(QStringLiteral("name"), preset.name);
+            QVariantMap values;
+            for (auto it = preset.values.constBegin();
+                 it != preset.values.constEnd(); ++it)
+              values.insert(it.key(), it.value());
+            entry.insert(QStringLiteral("values"), values);
+            embeddedPayload.append(entry);
+          }
           if (!plateDataList.empty())
           {
             loadedPlateNames.reserve(loadedPlateCount);
@@ -1113,7 +1239,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                                             : QObject::tr("平板 %1").arg(plateIdx + 1);
               loadedPlateNames << plateName;
 
-              receiver->pendingPlateLocked_.append(plate ? plate->locked : false);
+              pendingLocked.append(plate ? plate->locked : false);
               int bedType = 0, printSeq = 0, spiral = 0;
               if (plate) {
                 if (auto *opt = plate->config.option("curr_bed_type"))
@@ -1128,9 +1254,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                 if (auto *opt = plate->config.option<Slic3r::ConfigOptionBool>("spiral_mode"))
                   spiral = (opt->value ? 1 : 0);
               }
-              receiver->pendingPlateBedType_.append(bedType);
-              receiver->pendingPlatePrintSeq_.append(printSeq);
-              receiver->pendingPlateSpiral_.append(spiral);
+              pendingBedType.append(bedType);
+              pendingPrintSeq.append(printSeq);
+              pendingSpiral.append(spiral);
               // v5.16 (PLATE-03): filament print sequences (coInts keys).
               {
                 QList<int> firstSeq;
@@ -1144,9 +1270,9 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                   if (auto *opt = plate->config.option("other_layers_print_sequence_nums"))
                     otherNums = int(opt->getInt());
                 }
-                receiver->pendingPlateFirstLayerSeq_.append(firstSeq);
-                receiver->pendingPlateOtherLayersSeq_.append(otherSeq);
-                receiver->pendingPlateOtherLayersSeqNums_.append(otherNums);
+                pendingFirstLayerSeq.append(firstSeq);
+                pendingOtherLayersSeq.append(otherSeq);
+                pendingOtherLayersSeqNums.append(otherNums);
               }
 
               // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): extract
@@ -1188,8 +1314,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                 fmap = state.maps;
                 fmapMode = state.mode;
               }
-              receiver->pendingPlateFilamentMaps_.append(fmap);
-              receiver->pendingPlateFilamentMapMode_.append(fmapMode);
+              pendingFilamentMaps.append(fmap);
+              pendingFilamentMapMode.append(fmapMode);
 
               // Phase 97 fix (THUMBRT-01): restore the persisted per-plate
               // thumbnail so it survives save->reload. The normal model-load
@@ -1206,7 +1332,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
               QImage loadedThumb;
               if (plate)
                 loadedThumb = extractPlateThumbnailFrom3mf(localPath, plate->plate_index);
-              receiver->pendingPlateThumbnails_.append(loadedThumb);
+              pendingThumbnails.append(loadedThumb);
 
               QSet<int> uniq;
               QList<int> objList;
@@ -1230,10 +1356,10 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           {
             loadedPlateCount = 1;
             loadedPlateNames << QObject::tr("平板 1");
-            receiver->pendingPlateLocked_.append(false);
-            receiver->pendingPlateBedType_.append(0);
-            receiver->pendingPlatePrintSeq_.append(0);
-            receiver->pendingPlateSpiral_.append(0);
+            pendingLocked.append(false);
+            pendingBedType.append(0);
+            pendingPrintSeq.append(0);
+            pendingSpiral.append(0);
 
             QList<int> allObjects;
             allObjects.reserve(int(loadedModel->objects.size()));
@@ -1321,12 +1447,28 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
       if (!receiver)
       {
         delete loadedModel;
         return;
       }
+      // G-11: publish the worker-collected per-plate state to the receiver
+      // HERE, on the GUI thread -- the worker no longer writes these
+      // non-atomic members directly (data-race fix).
+      receiver->pendingPlateLocked_ = pendingLocked;
+      receiver->pendingPlateBedType_ = pendingBedType;
+      receiver->pendingPlatePrintSeq_ = pendingPrintSeq;
+      receiver->pendingPlateSpiral_ = pendingSpiral;
+      receiver->pendingPlateFirstLayerSeq_ = pendingFirstLayerSeq;
+      receiver->pendingPlateOtherLayersSeq_ = pendingOtherLayersSeq;
+      receiver->pendingPlateOtherLayersSeqNums_ = pendingOtherLayersSeqNums;
+      receiver->pendingPlateThumbnails_ = pendingThumbnails;
+      receiver->pendingPlateFilamentMaps_ = pendingFilamentMaps;
+      receiver->pendingPlateFilamentMapMode_ = pendingFilamentMapMode;
+      // G-13: hand the embedded presets to BackendContext via take() on
+      // loadFinished (the same lambda emits loadFinished below).
+      receiver->m_projectEmbeddedPresetsFromLoad = embeddedPayload;
 
       receiver->loading_ = false;
       receiver->activeCancelFlag_.reset();
@@ -1414,6 +1556,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
           // previous per-object representation. Phase 18 will populate true instance
           // pairs from PlateData::objects_and_instances.)
           receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+          receiver->attachPlateInstanceBounds();
           receiver->m_plateList->resetToSinglePlate();
           for (int pi = 0; pi < plateObjs.size(); ++pi) {
             OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
@@ -1507,6 +1650,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         receiver->modelCount_ = 0;
         // Reset plate storage to a fresh single-plate list (D-05).
         receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+        receiver->attachPlateInstanceBounds();
         receiver->m_plateList->setCurrentPlateIndex(-1);
         receiver->sourceFilePath_.clear();
         receiver->objectNames_.clear();
@@ -1680,6 +1824,15 @@ bool ProjectServiceMock::exportModel(const QString &filePath, const QString &for
 #endif
 }
 
+QVariantList ProjectServiceMock::takeProjectEmbeddedPresets()
+{
+  // G-13: handed to BackendContext on loadFinished so the embedded presets
+  // are adopted into the PresetServiceMock (see readProjectEmbeddedPresets).
+  QVariantList out = m_projectEmbeddedPresetsFromLoad;
+  m_projectEmbeddedPresetsFromLoad.clear();
+  return out;
+}
+
 void ProjectServiceMock::cancelLoad()
 {
   if (!loading_ || !activeCancelFlag_)
@@ -1730,8 +1883,12 @@ bool ProjectServiceMock::addPlate()
   OWzx::PartPlate *p = m_plateList->createPlate();
   if (!p)
     return false;  // kMaxPlateCount reached
-  // Default name mirrors the previous behavior ("平板 N" 1-based).
-  p->setName(tr("平板 %1").arg(p->plateIndex() + 1).toStdString());
+  // GAP-7 (upstream PartPlate.cpp:3581): new plates are UNNAMED -- upstream
+  // leaves m_name empty and the UI falls back to a positional label. The Qt6
+  // consumers already do that (PreparePage plate card shows "Plate N +
+  // Untitled"; the JSON save falls back for display; the 3MF writes an empty
+  // plate_name like upstream store_to_3mf_structure).
+  // The rename action (renamePlate / the plate-name dialog) still names it.
 
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
@@ -1749,6 +1906,49 @@ bool ProjectServiceMock::deletePlate(int plateIndex)
     return false;  // refuses last plate / invalid index
 
   emit plateRemoved(removedPrintId);
+  // PLATE-PRINT-LIFECYCLE (batch 2): capture the stable print identity BEFORE
+  // removal so identity-keyed stores (SliceService persistent Print slot and
+  // per-plate result) can release their entries; identities are never reused.
+  const int removedPrintIndex = platePrintIndex(plateIndex);
+  // PLATE-DELETE-DOCK (GAP-2): capture the dying plate's memberships so the
+  // orphaned objects can be moved to the upstream unprintable dock slot
+  // (PartPlate.cpp:3761 teleport + :3810 move_instances_to) after the plate
+  // leaves the list.
+  std::set<std::pair<int, int>> orphanedInstances;
+  if (const OWzx::PartPlate *dying = m_plateList->plate(plateIndex))
+    orphanedInstances = dying->objToInstanceSet();
+  if (!m_plateList->deletePlate(plateIndex))
+    return false;  // refuses last plate / invalid index
+
+#ifdef HAS_LIBSLIC3R
+  // Physically move each fully-orphaned object to the dock slot one grid
+  // position past the last plate (upstream compute_origin_for_unprintable,
+  // PartPlate.cpp:3196-3202) so later rebuildPlateMembership /
+  // rebuildPlatesAfterArrangement passes cannot silently reabsorb it.
+  // Per-instance orphans whose object still has another plate membership are
+  // left untouched (Qt6 moves whole objects).
+  if (!orphanedInstances.empty())
+  {
+    const Slic3r::Vec3d dock =
+        m_plateList->computeOrigin(m_plateList->plateCount(),
+                                   m_plateList->plateCols());
+    std::set<int> dockedObjects;
+    for (const auto &key : orphanedInstances)
+    {
+      const int objIdx = key.first;
+      if (dockedObjects.count(objIdx) > 0)
+        continue;
+      dockedObjects.insert(objIdx);
+      if (plateIndexForObject(objIdx) >= 0)
+        continue;  // another instance of the object still lives on a plate
+      // GL(X,Z,Y) -> slic3r(X,Y,Z): GL.y carries the slic3r z (keep 0).
+      setObjectPosition(objIdx, float(dock.x()), 0.0f, float(dock.y()));
+    }
+  }
+#endif
+
+  if (removedPrintIndex >= 0)
+    emit plateRemoved(removedPrintIndex);
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
   if (m_plateList->currentPlateIndex() != prevCurrent)
@@ -1819,6 +2019,68 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
   m_plateList->setPlatePrintable(plateIndex, printable);
   emit projectChanged();
   return true;
+}
+
+// ── Plate print-volume geometry (PLATE-PRINT-LIFECYCLE batch 1) ────────────
+
+void ProjectServiceMock::attachPlateInstanceBounds()
+{
+  if (!m_plateList)
+    return;
+#ifdef HAS_LIBSLIC3R
+  // Upstream PartPlateList derives instance world bounds from m_model inside
+  // notify_instance_update (PartPlate.cpp:4198-4250,
+  // ModelObject::instance_bounding_box). Qt6 injects the same source so
+  // PartPlateList stays free of the Model type; this service owns model_,
+  // so the provider is re-attached wherever m_plateList is (re)created.
+  m_plateList->setInstanceBoundsFn(
+      [this](int objectIndex, int instanceIndex) -> Slic3r::BoundingBoxf3 {
+        if (!model_ || objectIndex < 0 ||
+            size_t(objectIndex) >= model_->objects.size())
+          return Slic3r::BoundingBoxf3();
+        const Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+        if (!obj || instanceIndex < 0 ||
+            instanceIndex >= int(obj->instances.size()))
+          return Slic3r::BoundingBoxf3();
+        return obj->instance_bounding_box(size_t(instanceIndex));
+      });
+#endif
+}
+
+int ProjectServiceMock::plateIndexAtPoint(double x, double y) const
+{
+  if (!m_plateList)
+    return -1;
+#ifdef HAS_LIBSLIC3R
+  // Bed-plane point (z=0): the plate bounding box is built from shape points
+  // at z=0 (upstream calc_bounding_boxes, PartPlate.cpp:349-356), so the
+  // upstream point test only holds on the bed plane.
+  const OWzx::PartPlateList::InstanceHit hit =
+      m_plateList->findInstanceAt(Slic3r::Vec3d(x, y, 0.0));
+  return hit.plateIndex;
+#else
+  Q_UNUSED(x);
+  Q_UNUSED(y);
+  return -1;
+#endif
+}
+
+int ProjectServiceMock::platePrintIndex(int plateIndex) const
+{
+  const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
+  return p ? p->printIndex() : -1;
+}
+
+int ProjectServiceMock::plateIndexForPrintIndex(int printIndex) const
+{
+  if (!m_plateList || printIndex < 0)
+    return -1;
+  for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex) {
+    const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+    if (p && p->printIndex() == printIndex)
+      return plateIndex;
+  }
+  return -1;
 }
 
 bool ProjectServiceMock::isPlateReadyForSlice(int plateIndex) const
@@ -4240,8 +4502,349 @@ bool ProjectServiceMock::orientObject(int objectIndex)
 #endif
 }
 
+#ifdef HAS_LIBSLIC3R
+namespace {
+// PLATE-PRINT-LIFECYCLE (batch 5): wipe-tower min-depth table lookup, ported
+// verbatim from PartPlate::estimate_wipe_tower_size (PartPlate.cpp:1701-1734)
+// over WipeTower::min_depth_per_height ({100mm->20mm, 250mm->40mm}).
+float wipeTowerMinDepthForHeight(float maxHeight)
+{
+  float minDepth = 0.f;
+  auto iter = Slic3r::WipeTower::min_depth_per_height.begin();
+  while (iter != Slic3r::WipeTower::min_depth_per_height.end())
+  {
+    const auto curr = *iter;
+    // Tower height below the first table entry uses that entry's min depth.
+    if (curr.first >= maxHeight)
+    {
+      minDepth = curr.second;
+      break;
+    }
+    ++iter;
+    // Last entry reached: use its min depth.
+    if (iter == Slic3r::WipeTower::min_depth_per_height.end())
+    {
+      minDepth = curr.second;
+      break;
+    }
+    // Between two entries: linear interpolation.
+    const auto next = *iter;
+    if (next.first > maxHeight)
+    {
+      const float heightDiff = next.first - curr.first;
+      const float depthDiff = next.second - curr.second;
+      minDepth = curr.second + (maxHeight - curr.first) / heightDiff * depthDiff;
+      break;
+    }
+  }
+  return minDepth;
+}
+
+// Distinct extruder ids used by the plate's member volumes (the core of
+// upstream PartPlate::get_extruders, PartPlate.cpp:1355+ -- volume extruder
+// ids, no custom-gcode plates in the Qt6 model).
+std::set<int> collectPlateExtruders(const Slic3r::Model *model, const OWzx::PartPlate *plate)
+{
+  std::set<int> ids;
+  if (!model || !plate)
+    return ids;
+  for (const auto &pr : plate->objToInstanceSet())
+  {
+    if (pr.first < 0 || size_t(pr.first) >= model->objects.size())
+      continue;
+    const auto *obj = model->objects[size_t(pr.first)];
+    if (!obj)
+      continue;
+    for (const auto *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      // ModelConfig::option is the plain pointer accessor (not a template).
+      const auto *extOpt = static_cast<const Slic3r::ConfigOptionInt *>(
+          vol->config.option("extruder"));
+      const int ext = extOpt ? int(extOpt->getInt()) : 0;
+      ids.emplace(ext > 0 ? ext : 1);
+    }
+  }
+  return ids;
+}
+
+// Upstream ArrangeJob.cpp:296-304: a tower is needed when SOME OBJECT uses
+// more than one extruder (multi-color part / painted support material).
+bool plateHasMultiExtruderObject(const Slic3r::Model *model,
+                                 const OWzx::PartPlate *plate)
+{
+  if (!model || !plate)
+    return false;
+  for (const auto &pr : plate->objToInstanceSet())
+  {
+    if (pr.first < 0 || size_t(pr.first) >= model->objects.size())
+      continue;
+    const auto *obj = model->objects[size_t(pr.first)];
+    if (!obj)
+      continue;
+    std::set<int> ids;
+    for (const auto *vol : obj->volumes)
+    {
+      if (!vol)
+        continue;
+      const auto *extOpt = static_cast<const Slic3r::ConfigOptionInt *>(
+          vol->config.option("extruder"));
+      const int ext = extOpt ? int(extOpt->getInt()) : 0;
+      ids.emplace(ext > 0 ? ext : 1);
+      if (ids.size() > 1)
+        return true;
+    }
+  }
+  return false;
+}
+
+// Upstream PartPlateList::preprocess_exclude_areas (PartPlate.cpp:4586-4623):
+// the raw config-space exclude points are grouped into 4-point rectangles and
+// each rectangle becomes one virtual ArrangePolygon PER plate (bed_idx = j).
+void appendArrangeExcludeAreas(const OWzx::PartPlateList *plateList,
+                               Slic3r::ArrangePolygons &unselected)
+{
+  if (!plateList)
+    return;
+  const auto &raw = plateList->excludeAreas();
+  const int plateCount = plateList->plateCount();
+  // Review P3: a non-multiple-of-4 tail cannot form a rectangle -- upstream
+  // asserts on the grouping; warn and skip the tail instead.
+  if (raw.size() % 4 != 0)
+    qWarning("[Arrange] bed_exclude_area point count %lld is not a multiple "
+             "of 4; dropping the trailing %lld points",
+             static_cast<long long>(raw.size()),
+             static_cast<long long>(raw.size() % 4));
+  for (size_t i = 0; i + 3 < raw.size(); i += 4)
+  {
+    double minX = raw[i].x(), minY = raw[i].y();
+    double maxX = minX, maxY = minY;
+    for (size_t k = 1; k < 4; ++k)
+    {
+      minX = std::min(minX, raw[i + k].x());
+      maxX = std::max(maxX, raw[i + k].x());
+      minY = std::min(minY, raw[i + k].y());
+      maxY = std::max(maxY, raw[i + k].y());
+    }
+    const Slic3r::Polygon rect({
+        {Slic3r::scaled(minX), Slic3r::scaled(minY)},
+        {Slic3r::scaled(maxX), Slic3r::scaled(minY)},
+        {Slic3r::scaled(maxX), Slic3r::scaled(maxY)},
+        {Slic3r::scaled(minX), Slic3r::scaled(maxY)}});
+    for (int j = 0; j < plateCount; ++j)
+    {
+      Slic3r::arrangement::ArrangePolygon ap;
+      ap.poly.contour = rect;
+      ap.translation = Slic3r::Vec2crd(0, 0);
+      ap.rotation = 0.0f;
+      ap.is_virt_object = true;
+      ap.bed_idx = j;
+      ap.height = 1;
+      ap.name = "ExcludedRegion" + std::to_string(i / 4);
+      unselected.emplace_back(std::move(ap));
+    }
+  }
+}
+
+// WIPE-TOWER-BEDTEMP-GATE: upstream groups extruder ids by the filament
+// bed temperature (ArrangeJob.cpp:308-319 bedTemp2extruderIds). Qt6 reads
+// the per-extruder temps from the merged "bed_temp" coInts handed in via
+// the wipe-tower context; an extruder beyond the vector falls back to the
+// first entry (upstream ConfigOptionVector::get_at semantics).
+int extruderBedTemp(const QVariantMap &towerContext, int extruderId)
+{
+  const QVariantList temps = towerContext.value(
+      QStringLiteral("extruderBedTemps")).toList();
+  if (temps.isEmpty())
+    return 0;  // no data -> caller treats all extruders as same-temp
+  const int idx = extruderId - 1;
+  return temps.value(idx >= 0 && idx < temps.size() ? idx : 0).toInt();
+}
+
+// Upstream ArrangeJob::prepare_wipe_tower + PartPlate::estimate_wipe_tower_polygon
+// (ArrangeJob.cpp:279-359, PartPlate.cpp:1739-1777): per UNLOCKED plate, when
+// the prime tower is enabled, sequence print is by-layer, and the tower is
+// needed -- smooth timelapse, some object with multiple extruders, or
+// allow_multi_materials_on_same_plate with several extruders on the plate
+// (a single-extruder tower has zero depth upstream) -- emit a fixed
+// wipe-tower rectangle at wipe_tower_x/y clamped inside the plate, inflated
+// by the tower brim. Review P1-5: the tower parameters come from the GLOBAL
+// merged preset config handed in by the view model (upstream reads
+// preset_bundle, not the per-plate config -- the Qt6 plate config never
+// carries these keys in real flows). The allow_multi branch
+// groups the plate's extruders by their configured bed temperature
+// (extruderBedTemps from the context) exactly like upstream
+// bedTemp2extruderIds.
+float towerContextFloat(const QVariantMap &ctx, const char *key, float fallback)
+{
+  const QVariant value = ctx.value(QLatin1String(key));
+  if (!value.isValid())
+    return fallback;
+  bool ok = false;
+  const float parsed = value.toFloat(&ok);
+  return ok ? parsed : fallback;
+}
+
+QVariant towerContextPerPlate(const QVariantMap &ctx, const char *key, int bedid)
+{
+  const QVariant value = ctx.value(QLatin1String(key));
+  if (!value.isValid())
+    return {};
+  if (value.typeId() == QMetaType::Type::QVariantList) {
+    const QVariantList list = value.toList();
+    return list.isEmpty() ? QVariant()
+                          : list.value(size_t(bedid) < list.size() ? bedid : 0);
+  }
+  if (value.typeId() == QMetaType::Type::QString) {
+    const QStringList parts = value.toString().split(QLatin1Char(','),
+                                                     Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+      return {};
+    const int idx = (bedid >= 0 && bedid < parts.size()) ? bedid : 0;
+    return parts.value(idx).trimmed();
+  }
+  return value;  // a plain per-plate scalar
+}
+
+// WIPE-TOWER-BEDTEMP-GATE: the per-plate "does this plate need the tower"
+// decision, extracted so the truth table is unit-testable through the
+// arrangeWipeTowerNeededForPlate test seam.
+bool wipeTowerNeededForPlate(const OWzx::PartPlate *pl,
+                             const Slic3r::Model *model,
+                             const QVariantMap &towerContext)
+{
+  // Upstream ArrangeJob.cpp:287: sequential print suppresses the tower on
+  // every path (the enable_prime_tower hard gate is checked by the caller).
+  if (pl->printSequence() != 0)  // 0 = by layer
+    return false;
+  // Upstream ArrangeJob.cpp:292: smooth timelapse always needs the tower.
+  if (towerContext.value(QStringLiteral("timelapse_type")).toInt()
+          == int(Slic3r::TimelapseType::tlSmooth))
+    return true;
+  // Upstream ArrangeJob.cpp:296-304: some OBJECT carries multiple extruders
+  // (multi-color part / painted supports) -- independent of allow_multi.
+  if (plateHasMultiExtruderObject(model, pl))
+    return true;
+  // Upstream ArrangeJob.cpp:308-319: with allow_multi_materials_on_same_plate
+  // the tower is needed when several extruders SHARE one bed temperature
+  // (extruderBedTemps grouping; no data = conservative same-temp assumption).
+  if (!towerContext.value(QStringLiteral("allow_multi_materials_on_same_plate")).toBool())
+    return false;
+  const std::set<int> extruders = collectPlateExtruders(model, pl);
+  if (extruders.size() <= 1)
+    return false;
+  std::map<int, int> bedTempExtruderCount;
+  for (int ext : extruders)
+    ++bedTempExtruderCount[extruderBedTemp(towerContext, ext)];
+  for (const auto &kv : bedTempExtruderCount) {
+    if (kv.second > 1)
+      return true;
+  }
+  return false;
+}
+
+void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
+                             const Slic3r::Model *model,
+                             const QVariantMap &towerContext,
+                             Slic3r::ArrangePolygons &unselected)
+{
+  constexpr float kWipeTowerMargin = 1.f;  // libslic3r.h:88 WIPE_TOWER_MARGIN
+  if (!plateList || !model || towerContext.isEmpty())
+    return;
+  // Upstream ArrangeJob.cpp:286-287: an explicitly disabled prime tower
+  // means NO tower, regardless of the other gates.
+  const bool towerEnabled =
+      towerContext.value(QStringLiteral("enable_prime_tower")).toBool();
+  if (!towerEnabled)
+    return;
+  const bool smoothTimelapse =
+      towerContext.value(QStringLiteral("timelapse_type")).toInt()
+          == int(Slic3r::TimelapseType::tlSmooth);
+  const float towerWidth = towerContextFloat(towerContext, "prime_tower_width", 60.f);
+  const double primeVolume = towerContextFloat(towerContext, "prime_volume", 0.f);
+  const float towerBrim = towerContextFloat(towerContext, "prime_tower_brim_width", 0.f);
+  const int plateCount = plateList->plateCount();
+  int bedidUnlock = 0;
+  for (int bedid = 0; bedid < plateCount; ++bedid)
+  {
+    const OWzx::PartPlate *pl = plateList->plate(bedid);
+    if (!pl || pl->isLocked())
+      continue;  // locked beds keep their items fixed and get no virtual bed
+    const bool needTower = wipeTowerNeededForPlate(pl, model, towerContext);
+    if (needTower)
+    {
+      const QVariant xValue = towerContextPerPlate(towerContext, "wipe_tower_x", bedid);
+      const QVariant yValue = towerContextPerPlate(towerContext, "wipe_tower_y", bedid);
+      bool okX = false, okY = false;
+      const float x0 = xValue.toFloat(&okX);
+      const float y0 = yValue.toFloat(&okY);
+      if (okX && okY)
+      {
+        // Max member-object height (bounding_box_exact, upstream object loop).
+        const std::set<int> extruders = collectPlateExtruders(model, pl);
+        double maxHeight = 0.0;
+        for (const auto &pr : pl->objToInstanceSet())
+        {
+          if (pr.first < 0 || size_t(pr.first) >= model->objects.size())
+            continue;
+          const auto *obj = model->objects[size_t(pr.first)];
+          if (!obj)
+            continue;
+          maxHeight = std::max(obj->bounding_box_exact().size().z(), maxHeight);
+        }
+        double depth = extruders.size() <= 1 ? 0.0 : double(primeVolume);
+        if (smoothTimelapse || depth > 1e-6)  // upstream EPSILON
+          depth = std::max<double>(wipeTowerMinDepthForHeight(float(maxHeight)), depth);
+        const float margin = kWipeTowerMargin + towerBrim;
+        // Upstream clamps with plate_width - w - margin - brim; a degenerate
+        // (negative) range means the tower cannot fit -- keep the margin
+        // edge like the upstream formula would.
+        const float x = std::clamp(x0, margin,
+                                   std::max(margin, float(pl->width()) - towerWidth - margin - towerBrim));
+        const float y = std::clamp(y0, margin,
+                                   std::max(margin, float(pl->depth()) - float(depth) - margin - towerBrim));
+        Slic3r::arrangement::ArrangePolygon ap;
+        ap.poly.contour = Slic3r::Polygon({
+            {Slic3r::scaled(x - towerBrim), Slic3r::scaled(y - towerBrim)},
+            {Slic3r::scaled(x + towerWidth + towerBrim), Slic3r::scaled(y - towerBrim)},
+            {Slic3r::scaled(x + towerWidth + towerBrim), Slic3r::scaled(y + float(depth) + towerBrim)},
+            {Slic3r::scaled(x - towerBrim), Slic3r::scaled(y + float(depth) + towerBrim)}});
+        ap.bed_idx = bedidUnlock;
+        ap.setter = nullptr;  // do not move the wipe tower
+        ap.translation = Slic3r::Vec2crd(0, 0);
+        ap.name = "WipeTower";
+        ap.is_virt_object = true;
+        ap.is_wipe_tower = true;
+        unselected.emplace_back(std::move(ap));
+      }
+    }
+    ++bedidUnlock;
+  }
+}
+}  // namespace
+#endif  // HAS_LIBSLIC3R
+
+bool ProjectServiceMock::arrangeWipeTowerNeededForPlate(
+    int plateIndex, const QVariantMap &wipeTowerContext) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList || !model_ || plateIndex < 0
+      || plateIndex >= m_plateList->plateCount()
+      || wipeTowerContext.value(QStringLiteral("enable_prime_tower")).toBool() == false)
+    return false;
+  return wipeTowerNeededForPlate(m_plateList->plate(plateIndex), model_,
+                                 wipeTowerContext);
+#else
+  Q_UNUSED(plateIndex);
+  Q_UNUSED(wipeTowerContext);
+  return false;
+#endif
+}
+
 bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY,
-                                          const QString &printableArea)
+                                          const QString &printableArea,
+                                          const QVariantMap &wipeTowerContext)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || model_->objects.empty())
@@ -4316,7 +4919,20 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
         // branches) deferred per CONTEXT.
         // 传入容错 vfn：失败 item 不抛，arrange_objects 返回 false 表示有 item 未摆放。
         // 即使部分 item 未摆放，已成功摆放的 item 坐标已被 apply_arrange_polys 写回模型实例。
-        const bool arranged = Slic3r::arrange_objects(*model_, bed_bb, params, tolerantVfn);
+        // PLATE-PRINT-LIFECYCLE (batch 5): mirror upstream ArrangeJob by feeding
+        // the fixed virtual objects (wipe towers + exclude areas) into arrange
+        // through the two-list overload instead of the no-excludes
+        // arrange_objects convenience wrapper (ArrangeJob.cpp:248-251, :337-359;
+        // PartPlate.cpp:4586, :1739-1777).
+        Slic3r::ModelInstancePtrs arrangeInstances;
+        auto arrangeInput = Slic3r::get_arrange_polys(*model_, arrangeInstances);
+        Slic3r::ArrangePolygons fixedObstacles;
+        appendArrangeExcludeAreas(m_plateList.get(), fixedObstacles);
+        appendArrangeWipeTowers(m_plateList.get(), model_, wipeTowerContext,
+                                fixedObstacles);
+        Slic3r::arrangement::arrange(arrangeInput, fixedObstacles, bed_bb, params);
+        const bool arranged =
+            Slic3r::apply_arrange_polys(arrangeInput, arrangeInstances, tolerantVfn);
         // D-29-12: only rebuild plate membership when arrange succeeded
         // (all-locked returns false → no rebuild, no membership changes).
         if (arranged && m_plateList)
@@ -4349,7 +4965,7 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
   Q_UNUSED(allowRotation);
   Q_UNUSED(alignY);
   Q_UNUSED(printableArea);
-  Q_UNUSED(alignY);
+  Q_UNUSED(wipeTowerContext);
   return false;
 #endif
 }
@@ -5351,13 +5967,14 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
     // one PlateData with the object membership, and one (invalid) thumbnail
     // placeholder per plate so the writer's thumbnail_status indexing stays
     // in bounds.
-    // Write next to the app binary (the directory where the proven
-    // storeProject3mf renames succeed); the user temp dir denied the writer's
-    // .tmp rename in the unattended test session.
-    const QString snapPath = QCoreApplication::applicationDirPath()
-        + QStringLiteral("/owzx_obj_snap_%1.3mf")
-              .arg(QDateTime::currentMSecsSinceEpoch());
-    QFile::remove(snapPath);
+    // G-11: write the scratch 3mf into a dedicated QTemporaryDir instead of
+    // next to the app binary -- Program Files installs are read-only (capture
+    // failed -> delete-plate undo silently degraded), and the dir auto-removes
+    // the file AND any writer ".tmp" leftover on scope exit.
+    QTemporaryDir snapDir;
+    if (!snapDir.isValid())
+      return {};
+    const QString snapPath = snapDir.filePath(QStringLiteral("owzx_obj_snap.3mf"));
     const QByteArray pathBytes = snapPath.toUtf8();
     Slic3r::StoreParams params;
     params.path = pathBytes.constData();
@@ -5374,7 +5991,19 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
     Slic3r::ThumbnailData *thumbPlaceholder = new Slic3r::ThumbnailData();
     params.thumbnail_data.push_back(thumbPlaceholder);
 
-    const bool stored = Slic3r::store_bbs_3mf(params);
+    // G-11 lesson: the bbs writer writes "<final>.tmp" and renames it into
+    // place; under full-suite file churn (antivirus/indexer briefly holding
+    // freshly created files) the rename can fail transiently -- this flaked
+    // projectBackupWritesSnapshotFile in-suite while passing standalone.
+    // Bounded retry with a short backoff.
+    bool stored = false;
+    const int backoffMs[] = {0, 200, 800};
+    for (int attempt = 0; attempt < 3 && !stored; ++attempt)
+    {
+      if (attempt > 0)
+        QThread::msleep(backoffMs[attempt]);
+      stored = Slic3r::store_bbs_3mf(params);
+    }
     delete scratchPlate;
     delete thumbPlaceholder;
     if (!stored)
@@ -5790,7 +6419,11 @@ bool ProjectServiceMock::restoreVolumeSnapshot(int objectIndex, int volumeIndex,
 namespace {
 // "OWPS" plate snapshot header; bumped on any format change.
 constexpr quint32 kPlateSnapshotMagic = 0x4F575053u;
-constexpr quint32 kPlateSnapshotVersion = 1;
+// G-06: v2 adds stable per-object ids (Slic3r::ObjectID) parallel to the
+// name list and inside each deep object snapshot, so undo reconciliation
+// is exact even when several objects share a name (same STL imported on
+// different plates). v1 (name-only) snapshots remain readable.
+constexpr quint32 kPlateSnapshotVersion = 2;
 
 struct PlateSnapshotEntry {
   bool valid = false;
@@ -5817,6 +6450,7 @@ struct PlateSnapshotEntry {
 
 struct PlateObjectSnapshot {
   qint32 objectIndex = -1;
+  quint64 stableId = 0;  ///< G-06 (v2): Slic3r::ObjectID of the captured object; 0 = unknown (v1).
   QByteArray full3mf;
   QString name;
   double pos[3] = {0, 0, 0};
@@ -5898,6 +6532,23 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
   ds << qint32(names.size());
   for (const QString &n : names) ds << n;
 
+  // G-06 (v2): stable per-object ids (Slic3r::ObjectID, monotonic within the
+  // process) parallel to `names`. restore() reconciles by id first and only
+  // falls back to name matching, so duplicate object names can no longer
+  // mismatch during undo (delete-plate/clone-plate undo with the same STL on
+  // several plates).
+  QList<quint64> stableIds;
+#ifdef HAS_LIBSLIC3R
+  if (model_)
+  {
+    stableIds.reserve(int(model_->objects.size()));
+    for (const auto *obj : model_->objects)
+      stableIds << quint64(obj ? obj->id().id : 0);
+  }
+#endif
+  ds << qint32(stableIds.size());
+  for (quint64 id : stableIds) ds << id;
+
   // Deep per-object 3MF blobs for every object referenced by any plate.
   // delete-plate undo uses these to restore members with full mesh fidelity
   // (mirrors upstream whole-model snapshot fidelity).
@@ -5917,10 +6568,15 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
     ds << qint32(sorted.size());
     for (qint32 idx : sorted)
     {
+      quint64 sid = 0;
+#ifdef HAS_LIBSLIC3R
+      if (model_ && size_t(idx) < model_->objects.size() && model_->objects[size_t(idx)])
+        sid = quint64(model_->objects[size_t(idx)]->id().id);
+#endif
       const QVector3D pos = objectPosition(int(idx));
       const QVector3D rot = objectRotation(int(idx));
       const QVector3D scl = objectScale(int(idx));
-      ds << idx << captureFullObjectSnapshot(int(idx))
+      ds << idx << quint64(sid) << captureFullObjectSnapshot(int(idx))
          << objectNames().value(int(idx));
       ds << double(pos.x()) << double(pos.y()) << double(pos.z());
       ds << double(rot.x()) << double(rot.y()) << double(rot.z());
@@ -5936,6 +6592,22 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
   return buffer;
 }
 
+int ProjectServiceMock::indexOfStableId(quint64 stableId) const
+{
+  // G-06: locate a current object by its Slic3r::ObjectID — the exact
+  // identity used for undo snapshot reconciliation (see restorePlateListSnapshot).
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || stableId == 0)
+    return -1;
+  for (size_t i = 0; i < model_->objects.size(); ++i)
+  {
+    if (model_->objects[i] && quint64(model_->objects[i]->id().id) == stableId)
+      return int(i);
+  }
+#endif
+  return -1;
+}
+
 bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
 {
   if (loading_ || !m_plateList || snapshot.isEmpty())
@@ -5945,7 +6617,8 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
   QDataStream ds(snapshot);
   quint32 magic = 0, version = 0;
   ds >> magic >> version;
-  if (magic != kPlateSnapshotMagic || version != kPlateSnapshotVersion)
+  // G-06: v2 carries stable object ids; v1 (name-only) stays readable.
+  if (magic != kPlateSnapshotMagic || (version != 1 && version != kPlateSnapshotVersion))
     return false;
 
   qint32 count = 0, currentIdx = 0;
@@ -6009,6 +6682,22 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
     targetNames.append(n);
   }
 
+  // G-06 (v2): stable ids parallel to targetNames. Empty for v1 snapshots,
+  // which keep the legacy by-name reconciliation below.
+  QList<quint64> targetIds;
+  if (version >= 2)
+  {
+    qint32 idCount = 0;
+    ds >> idCount;
+    targetIds.reserve(idCount);
+    for (qint32 i = 0; i < idCount; ++i)
+    {
+      quint64 id = 0;
+      ds >> id;
+      targetIds.append(id);
+    }
+  }
+
   qint32 deepCount = 0;
   ds >> deepCount;
   QList<PlateObjectSnapshot> deepObjects;
@@ -6018,7 +6707,10 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
     PlateObjectSnapshot o;
     double posx = 0, posy = 0, posz = 0, rotx = 0, roty = 0, rotz = 0;
     double sclx = 1, scly = 1, sclz = 1;
-    ds >> o.objectIndex >> o.full3mf >> o.name;
+    ds >> o.objectIndex;
+    if (version >= 2)
+      ds >> o.stableId;
+    ds >> o.full3mf >> o.name;
     ds >> posx >> posy >> posz >> rotx >> roty >> rotz >> sclx >> scly >> sclz;
     ds >> o.printable >> o.visible >> o.plateIndex;
     o.pos[0] = posx; o.pos[1] = posy; o.pos[2] = posz;
@@ -6035,34 +6727,65 @@ bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
   // 2a. Remove objects that were not in the snapshot (clone-plate undo). The
   // mock duplicateObject branch can insert mid-list, so re-scan after each
   // delete instead of assuming the extras sit at the tail.
+  // G-06: v2 snapshots reconcile by STABLE object id — exact even when
+  // several objects share a name (same STL on different plates). v1
+  // snapshots (empty id list) keep the legacy by-name multiset match.
   bool removedAny = true;
   while (removedAny)
   {
     removedAny = false;
-    const QStringList current = objectNames();
-    QStringList remaining = targetNames;
-    for (int i = 0; i < current.size(); ++i)
+    if (!targetIds.isEmpty())
     {
-      const int pos = remaining.indexOf(current[i]);
-      if (pos < 0)
+#ifdef HAS_LIBSLIC3R
+      if (!model_)
+        break;
+      QSet<quint64> remaining(targetIds.cbegin(), targetIds.cend());
+      for (size_t i = 0; i < model_->objects.size(); ++i)
       {
-        deleteObject(i);
+        const quint64 sid =
+            model_->objects[i] ? quint64(model_->objects[i]->id().id) : 0;
+        if (remaining.remove(sid))
+          continue;
+        deleteObject(int(i));
         removedAny = true;
         break;
       }
-      remaining.removeAt(pos);
+#endif
+    }
+    else
+    {
+      const QStringList current = objectNames();
+      QStringList remaining = targetNames;
+      for (int i = 0; i < current.size(); ++i)
+      {
+        const int pos = remaining.indexOf(current[i]);
+        if (pos < 0)
+        {
+          deleteObject(i);
+          removedAny = true;
+          break;
+        }
+        remaining.removeAt(pos);
+      }
     }
   }
 
   // 2b. Re-insert missing deep-snapshot objects at their original indices
   // (delete-plate undo: members that died with the plate come back with full
   // mesh/volumes/config — UNDO-01 captureFullObjectSnapshot fidelity).
+  // G-06: survivors are resolved by stable id first (exact under duplicate
+  // names); v1 snapshots without ids fall back to the index+name check.
   for (const PlateObjectSnapshot &o : deepObjects)
   {
     if (o.full3mf.isEmpty())
       continue;
-    if (o.objectIndex >= 0 && o.objectIndex < objectNames().size()
-        && objectNames().value(o.objectIndex) == o.name)
+    if (o.stableId != 0)
+    {
+      if (indexOfStableId(o.stableId) >= 0)
+        continue;  // object survived the operation — nothing to restore
+    }
+    else if (o.objectIndex >= 0 && o.objectIndex < objectNames().size()
+             && objectNames().value(o.objectIndex) == o.name)
       continue;  // object survived the operation — nothing to restore
     const int newIdx = restoreFullObjectSnapshot(
         o.full3mf, o.objectIndex, o.name, o.printable, o.visible, o.plateIndex);
@@ -6895,6 +7618,15 @@ bool ProjectServiceMock::deleteObject(int index)
     objectPrintableStates_.removeAt(index);
     if (index < objectVisibleStates_.size())
       objectVisibleStates_.removeAt(index);
+    // REVIEW-P1-RESIDUE: the transform mirrors must shift with the rest of
+    // the parallel arrays in the mock branch (the HAS_LIBSLIC3R branch above
+    // fully resyncs from the model, so only this path could desync).
+    if (index < objectPositions_.size())
+      objectPositions_.removeAt(index);
+    if (index < objectRotations_.size())
+      objectRotations_.removeAt(index);
+    if (index < objectScales_.size())
+      objectScales_.removeAt(index);
 #endif
 
     modelCount_ = objectNames_.size();
@@ -6902,6 +7634,7 @@ bool ProjectServiceMock::deleteObject(int index)
     {
       // No objects left: reset to a single empty plate, current unset.
       m_plateList = std::make_unique<OWzx::PartPlateList>();
+      attachPlateInstanceBounds();
       m_plateList->setCurrentPlateIndex(-1);
     }
     else
@@ -9121,6 +9854,53 @@ bool ProjectServiceMock::setPlateThumbnailFromBase64(int plateIndex, const QStri
   if (!img.loadFromData(pngBytes, "PNG") || img.isNull()) return false;
 
   p->setThumbnail(img);
+  // G-04: the no_light variant is the SAME image by construction -- the Qt6
+  // RHI pipeline is unlit end to end (rhi_viewport.frag passes vertex color
+  // straight through, no lighting term), so the regular capture already IS
+  // the "no scene lighting" rendering upstream generates as a separate pass
+  // (Plater.cpp:12051-12063). Persisting it here keeps the no_light family
+  // populated in the saved 3MF without a second render pass. The picking
+  // variant needs per-object flat colors and stays unimplemented (see
+  // 15.7) -- it is saved as an invalid placeholder the writer skips.
+  p->setNoLightThumbnail(img);
+  // NOTE: no projectChanged() here — this is a high-frequency capture-result
+  // write; the caller (PreparePage.qml capture handler) is responsible for
+  // triggering any UI refresh (plate cards re-bind on the next paint).
+  return true;
+#else
+  Q_UNUSED(plateIndex); Q_UNUSED(base64);
+  return false;
+#endif
+}
+
+bool ProjectServiceMock::setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList || base64.isEmpty()) return false;
+  OWzx::PartPlate *p = m_plateList->plate(plateIndex);
+  if (!p) return false;
+
+  // Strip the optional `data:image/png;base64,` prefix that QML thumbnail
+  // sources typically carry (and that our own deliverThumbnail emits).
+  QByteArray raw = base64.toUtf8();
+  const int comma = raw.indexOf(',');
+  if (comma >= 0 && comma < 64) raw = raw.mid(comma + 1);
+
+  const QByteArray pngBytes = QByteArray::fromBase64(raw);
+  if (pngBytes.isEmpty()) return false;
+  QImage img;
+  if (!img.loadFromData(pngBytes, "PNG") || img.isNull()) return false;
+
+    p->setPickThumbnail(img);
+  // G-04: the no_light variant is the SAME image by construction -- the Qt6
+  // RHI pipeline is unlit end to end (rhi_viewport.frag passes vertex color
+  // straight through, no lighting term), so the regular capture already IS
+  // the "no scene lighting" rendering upstream generates as a separate pass
+  // (Plater.cpp:12051-12063). Persisting it here keeps the no_light family
+  // populated in the saved 3MF without a second render pass. The picking
+  // variant needs per-object flat colors and stays unimplemented (see
+  // 15.7) -- it is saved as an invalid placeholder the writer skips.
+  p->setNoLightThumbnail(img);
   // NOTE: no projectChanged() here — this is a high-frequency capture-result
   // write; the caller (PreparePage.qml capture handler) is responsible for
   // triggering any UI refresh (plate cards re-bind on the next paint).
@@ -9347,7 +10127,10 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
     // 对齐上游：如果只有一个结果，表示无法拆分
     if (newObjects.size() <= 1)
     {
-      lastError_.clear();
+      // G-05: the object cannot be split -- surface it to the user instead of
+      // silently succeeding (upstream warning_catcher, Plater.cpp:5107
+      // "The selected object couldn't be split.").
+      lastError_ = tr("无法拆分：所选对象没有可分割的多个部分");
       emit projectChanged();
       return newIndices;
     }
@@ -9936,6 +10719,7 @@ void ProjectServiceMock::clearProject()
   // Reset plate storage to a fresh single-plate list (current unset), matching the
   // previous "no project loaded" state (plateCount=0, currentPlateIndex=-1).
   m_plateList = std::make_unique<OWzx::PartPlateList>();
+  attachPlateInstanceBounds();
   m_plateList->setCurrentPlateIndex(-1);
   sourceFilePath_.clear();
   objectNames_.clear();
@@ -10109,6 +10893,98 @@ static OwzxPlateFilamentStates readOwzxPlateFilamentStates(const QString &archiv
 
   Slic3r::close_zip_reader(&archive);
   return states;
+}
+
+// G-13: in-project embedded presets saved by upstream-compatible writers
+// (Metadata/{process,filament,machine}_settings_N.config, JSON dumped from a
+// DynamicPrintConfig). Qt6 reads them with mz directly -- Model::read_from_file
+// discards load_bbs_3mf's project_presets output parameter.
+static QHash<QString, QVariant> parseEmbeddedPresetJson(const QByteArray &payload,
+                                                        const QString &idKey,
+                                                        QString *nameOut)
+{
+  QHash<QString, QVariant> values;
+  const QJsonDocument document = QJsonDocument::fromJson(payload);
+  if (!document.isObject())
+    return values;
+  const QJsonObject root = document.object();
+  // G-13: filament_settings_id is a ConfigOptionStrings (JSON array of one
+  // name); the scalar *_settings_id keys are JSON strings. Accept both.
+  const QJsonValue idValue = root.value(idKey);
+  QString name = idValue.toString();
+  if (name.isEmpty() && idValue.isArray() && !idValue.toArray().isEmpty())
+    name = idValue.toArray().first().toString();
+  if (name.isEmpty())
+    return values;
+  static const QSet<QString> kHeaderKeys = {
+      QStringLiteral("version"), QStringLiteral("name"),
+      QStringLiteral("from"), QStringLiteral("is_custom")};
+  for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
+    if (kHeaderKeys.contains(it.key()))
+      continue;
+    const QJsonValue v = it.value();
+    if (v.isArray()) {
+      QStringList parts;
+      for (const QJsonValue &element : v.toArray())
+        parts << element.toVariant().toString();
+      values.insert(it.key(), parts);
+    } else {
+      values.insert(it.key(), v.toVariant());
+    }
+  }
+  *nameOut = name;
+  return values;
+}
+
+static QList<ProjectEmbeddedPreset> readProjectEmbeddedPresets(const QString &archivePath)
+{
+  QList<ProjectEmbeddedPreset> presets;
+  if (archivePath.isEmpty())
+    return presets;
+
+  struct EmbeddedEntry
+  {
+    const char *entry;
+    int category;
+    const char *idKey;
+  };
+  const EmbeddedEntry entries[] = {
+      {"Metadata/process_settings_1.config", PresetServiceMock::PrintCat, "print_settings_id"},
+      {"Metadata/filament_settings_1.config", PresetServiceMock::FilamentCat, "filament_settings_id"},
+      {"Metadata/machine_settings_1.config", PresetServiceMock::PrinterCat, "printer_settings_id"},
+  };
+
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return presets;
+
+  for (const EmbeddedEntry &entry : entries)
+  {
+    const int entryIndex =
+        mz_zip_reader_locate_file(&archive, entry.entry, nullptr, 0);
+    if (entryIndex < 0)
+      continue;
+    mz_zip_archive_file_stat stat;
+    if (!mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(entryIndex), &stat) ||
+        stat.m_uncomp_size > 4 * 1024 * 1024)
+      continue;
+    QByteArray payload(static_cast<int>(stat.m_uncomp_size), Qt::Uninitialized);
+    if (!mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(entryIndex),
+                                      payload.data(), payload.size(), 0))
+      continue;
+
+    ProjectEmbeddedPreset preset;
+    preset.category = entry.category;
+    QString name;
+    preset.values = parseEmbeddedPresetJson(payload, QString::fromLatin1(entry.idKey), &name);
+    preset.name = name;
+    if (!preset.name.isEmpty() && !preset.values.isEmpty())
+      presets.append(preset);
+  }
+
+  Slic3r::close_zip_reader(&archive);
+  return presets;
 }
 
 static bool writeOwzxPlateFilamentStates(const QString &archivePath,
@@ -10366,7 +11242,93 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   Slic3r::StoreParams params;
   params.path = filePath.toUtf8().constData();
   params.model = model_;
-  params.strategy = Slic3r::SaveStrategy::Zip64;
+  // G-04: align the save strategy with upstream save_project
+  // (Plater.cpp:12136: strategy | Zip64; the project strategy carries
+  // FullPathSources + ShareMesh + SplitModel). FullPathSources preserves
+  // source references; ShareMesh dedups meshes shared by duplicated
+  // objects; SplitModel (0x1000|ProductionExt) enables the 3MF production
+  // layout the multi-plate/plate-data writer targets.
+  params.strategy = static_cast<Slic3r::SaveStrategy>(
+      static_cast<unsigned int>(Slic3r::SaveStrategy::Zip64)
+      | static_cast<unsigned int>(Slic3r::SaveStrategy::FullPathSources)
+      | static_cast<unsigned int>(Slic3r::SaveStrategy::ShareMesh)
+      | static_cast<unsigned int>(Slic3r::SaveStrategy::SplitModel));
+
+  // G-13 (upstream save_project, Plater.cpp:12125-12143): embed the tier
+  // selections pushed by BackendContext (setProjectEmbeddedPresets) as
+  // project presets. The writer serializes each Preset::config to JSON under
+  // the model's backup path and archives it as
+  // Metadata/{process,filament,machine}_settings_N.config; the reader names
+  // the preset from the *_settings_id key, which is forced to the preset
+  // name here. Same push-before-save pattern as setProjectConfigOverlay
+  // (PSET2-06).
+  std::vector<Slic3r::Preset *> projectPresets;
+  QTemporaryDir embedDir;
+  if (!m_projectEmbeddedPresets.isEmpty() && embedDir.isValid())
+  {
+    const std::map<int, Slic3r::Preset::Type> tierTypes = {
+      {PresetServiceMock::PrinterCat,  Slic3r::Preset::TYPE_PRINTER},
+      {PresetServiceMock::FilamentCat, Slic3r::Preset::TYPE_FILAMENT},
+      {PresetServiceMock::PrintCat,    Slic3r::Preset::TYPE_PRINT},
+    };
+    const std::map<int, const char *> idKeys = {
+      {PresetServiceMock::PrintCat,    "print_settings_id"},
+      {PresetServiceMock::FilamentCat, "filament_settings_id"},
+      {PresetServiceMock::PrinterCat,  "printer_settings_id"},
+    };
+    auto variantToString = [](const QVariant &value) -> QString {
+      if (value.type() == QVariant::Double)
+        return QString::number(value.toDouble(), 'g', 17);
+      return value.toString();
+    };
+    for (const QVariant &entryVar : m_projectEmbeddedPresets) {
+      const QVariantMap entry = entryVar.toMap();
+      const int category = entry.value(QStringLiteral("category")).toInt();
+      const QString name = entry.value(QStringLiteral("name")).toString();
+      const QVariantMap valuesMap = entry.value(QStringLiteral("values")).toMap();
+      const auto typeIt = tierTypes.find(category);
+      const auto idIt = idKeys.find(category);
+      if (typeIt == tierTypes.end() || idIt == idKeys.end() ||
+          name.isEmpty() || valuesMap.isEmpty())
+        continue;
+      auto *preset = new Slic3r::Preset(typeIt->second, name.toStdString(), false);
+      preset->loaded = true;
+      preset->is_project_embedded = true;
+      for (auto it = valuesMap.constBegin(); it != valuesMap.constEnd(); ++it) {
+        try {
+          const QVariant v = it.value();
+          if (v.canConvert<QVariantList>()) {
+            QStringList parts;
+            for (const QVariant &element : v.toList())
+              parts << variantToString(element);
+            const std::string keyStr = it.key().toStdString();
+            const std::string valueStr = parts.join(QStringLiteral(",")).toStdString();
+            preset->config.set_deserialize_strict(keyStr, valueStr);
+          } else {
+            const std::string keyStr = it.key().toStdString();
+            const std::string valueStr = variantToString(v).toStdString();
+            preset->config.set_deserialize_strict(keyStr, valueStr);
+          }
+        } catch (...) {
+          // Unknown key for this build's schema -- skip it (the embedded
+          // preset is a convenience snapshot, not a source of truth).
+        }
+      }
+      try {
+        // The reader names the preset from this key -- force it to match.
+        const std::string idKeyStr(idIt->second);
+        const std::string nameStr = name.toStdString();
+        preset->config.set_deserialize_strict(idKeyStr, nameStr);
+      } catch (...) {}
+      projectPresets.push_back(preset);
+    }
+    if (!projectPresets.empty()) {
+      const QString embedPath = embedDir.path();
+      QDir().mkpath(embedPath);
+      model_->set_backup_path(QDir::toNativeSeparators(embedPath).toStdString());
+      params.project_presets = projectPresets;
+    }
+  }
   // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
   // WITHOUT a default member initializer and the empty StoreParams() {}
   // constructor does NOT zero it, so an unassigned params.config is a WILD
@@ -10387,6 +11349,37 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
     overlayConfig.set_key_value(it.key().toStdString(),
                                 new Slic3r::ConfigOptionString(
                                     it.value().toString().toStdString()));
+  }
+  // PLATE-PRINT-LIFECYCLE (batch 4): embed the plate-list bed geometry as
+  // typed machine-config options so a project reload restores it. Upstream
+  // embeds the printer profile in the 3MF and load_project feeds
+  // printable_area/bed_exclude_area/printable_height back through
+  // set_bed_shape -> PartPlateList::set_shapes (Plater.cpp:12996-12998,
+  // :8135-8169). Keys already present in the overlay win (explicit override).
+  // The rect is corner-origin raw profile data, like the upstream config.
+  if (m_plateList && m_plateList->plateWidth() > 0 && m_plateList->plateDepth() > 0
+      && !overlayConfig.has("printable_area"))
+  {
+    const double w = m_plateList->plateWidth();
+    const double d = m_plateList->plateDepth();
+    overlayConfig.set_key_value(
+        "printable_area",
+        new Slic3r::ConfigOptionPoints(
+            std::vector<Slic3r::Vec2d>{{0.0, 0.0}, {w, 0.0}, {w, d}, {0.0, d}}));
+  }
+  if (m_plateList && m_plateList->plateHeight() > 0
+      && !overlayConfig.has("printable_height"))
+  {
+    overlayConfig.set_key_value(
+        "printable_height",
+        new Slic3r::ConfigOptionFloat(double(m_plateList->plateHeight())));
+  }
+  if (m_plateList && !m_plateList->excludeAreas().empty()
+      && !overlayConfig.has("bed_exclude_area"))
+  {
+    overlayConfig.set_key_value(
+        "bed_exclude_area",
+        new Slic3r::ConfigOptionPoints(m_plateList->excludeAreas()));
   }
   params.config = overlayConfig.keys().empty() ? nullptr : &overlayConfig;
 
@@ -10421,9 +11414,20 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // store_bbs_3mf (called below at :5187) returns and the block exits past
   // the release_PlateData_list cleanup.
   std::vector<Slic3r::ThumbnailData> plateThumbs;
+  // G-04: per-view thumbnail families (upstream Plater.cpp:12131-12136 pushes
+  // no_light/top/picking vectors into StoreParams). A variant stays an
+  // INVALID placeholder when it was never captured -- the writer skips
+  // invalid entries (bbs_3mf.cpp is_valid guard), exactly upstream behaviour
+  // when generation is skipped.
+  std::vector<Slic3r::ThumbnailData> noLightThumbs;
+  std::vector<Slic3r::ThumbnailData> topThumbs;
+  std::vector<Slic3r::ThumbnailData> pickThumbs;
   if (m_plateList && m_plateList->plateCount() > 0)
   {
     plateThumbs.reserve(m_plateList->plateCount());
+    noLightThumbs.reserve(m_plateList->plateCount());
+    topThumbs.reserve(m_plateList->plateCount());
+    pickThumbs.reserve(m_plateList->plateCount());
     for (int i = 0; i < m_plateList->plateCount(); ++i)
     {
       const OWzx::PartPlate *p = m_plateList->plate(i);
@@ -10431,6 +11435,10 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
         plateThumbs.push_back(qimageToThumbnailData(p->thumbnail()));
       else
         plateThumbs.push_back(Slic3r::ThumbnailData());  // invalid placeholder
+      // G-04: view variants from the per-plate caches (null -> invalid).
+      noLightThumbs.push_back(qimageToThumbnailData(p ? p->noLightThumbnail() : QImage()));
+      topThumbs.push_back(qimageToThumbnailData(p ? p->topThumbnail() : QImage()));
+      pickThumbs.push_back(qimageToThumbnailData(p ? p->pickThumbnail() : QImage()));
     }
     // Take addresses of the non-const ThumbnailData entries and push as raw
     // pointers into StoreParams::thumbnail_data (vector<ThumbnailData*>,
@@ -10442,13 +11450,31 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
     // ThumbnailData*.)
     for (Slic3r::ThumbnailData &td : plateThumbs)
       params.thumbnail_data.push_back(&td);
+    // G-04: same lifetime contract for the three variant families (the
+    // noLight/top/pick locals declared above outlive store_bbs_3mf).
+    for (Slic3r::ThumbnailData &td : noLightThumbs)
+      params.no_light_thumbnail_data.push_back(&td);
+    for (Slic3r::ThumbnailData &td : topThumbs)
+      params.top_thumbnail_data.push_back(&td);
+    for (Slic3r::ThumbnailData &td : pickThumbs)
+      params.pick_thumbnail_data.push_back(&td);
   }
 
-  bool ok = false;
-  try
-  {
-    ok = Slic3r::store_bbs_3mf(params);
-  }
+    // G-11: bounded retry with exponential backoff (50/200/800ms) -- the bbs
+    // writer's ".tmp" rename can be blocked briefly by antivirus/indexer file
+    // holds under full-suite churn. When all attempts fail, the qWarning
+    // diagnostics above name the observable cause.
+    bool ok = false;
+    try
+    {
+      const int backoffMs[] = {0, 200, 800};
+      for (int attempt = 0; attempt < 3 && !ok; ++attempt)
+      {
+        if (attempt > 0)
+          QThread::msleep(backoffMs[attempt]);
+        ok = Slic3r::store_bbs_3mf(params);
+      }
+    }
   catch (const std::exception &ex)
   {
     Slic3r::release_PlateData_list(plateData);  // free heap PlateData even on throw
@@ -10459,9 +11485,27 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
 
   // Free the heap PlateData objects after store (success or failure).
   Slic3r::release_PlateData_list(plateData);
+  // G-13: the writer borrowed the preset pointers and the backup path; both
+  // are release-time bookkeeping only.
+  for (Slic3r::Preset *preset : projectPresets)
+    delete preset;
+  projectPresets.clear();
+  if (model_)
+    model_->set_backup_path("");
 
   if (!ok)
   {
+    // G-11 diagnostics: store_bbs_3mf returns bool only; log the observable
+    // state so in-suite failures name their cause.
+    QFileInfo outInfo(filePath);
+    qWarning("[Project] store_bbs_3mf failed path=%s dirExists=%d dirWritable=%d "
+             "outExists=%d tmpExists=%d plates=%d objects=%d",
+             filePath.toUtf8().constData(),
+             int(outInfo.dir().exists()), int(outInfo.isWritable()),
+             int(outInfo.exists()),
+             int(QFileInfo(outInfo.dir(), outInfo.fileName() + QStringLiteral(".tmp")).exists()),
+             m_plateList ? m_plateList->plateCount() : -1,
+             model_ ? int(model_->objects.size()) : -1);
     lastError_ = tr("3MF 保存失败");
     emit projectChanged();
     return false;
@@ -10484,9 +11528,10 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   }
 
 #ifdef HAS_LIBSLIC3R
-  if (!model_)
+  if (!model_ || model_->objects.empty())
   {
-    // No real model — fall through to JSON mock save
+    // An empty model has no 3MF payload; keep the JSON fallback usable for
+    // plate-only state and for newly constructed services.
   }
   else
   {
@@ -10522,6 +11567,22 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   root[QStringLiteral("name")] = projectName_;
   root[QStringLiteral("source")] = sourceFilePath_;
   root[QStringLiteral("currentPlate")] = m_plateList ? m_plateList->currentPlateIndex() : -1;
+  // Persist list geometry; absent fields retain PartPlateList defaults on load.
+  if (m_plateList)
+  {
+    root[QStringLiteral("plateWidth")] = m_plateList->plateWidth();
+    root[QStringLiteral("plateDepth")] = m_plateList->plateDepth();
+    root[QStringLiteral("plateHeight")] = m_plateList->plateHeight();
+#ifdef HAS_LIBSLIC3R
+    // PLATE-PRINT-LIFECYCLE (batch 4): list-level raw exclude areas, the JSON
+    // mirror of the 3MF bed_exclude_area round-trip.
+    QJsonArray excludeArr;
+    for (const auto &pt : m_plateList->excludeAreas())
+      excludeArr.append(QJsonArray{pt.x(), pt.y()});
+    if (!excludeArr.isEmpty())
+      root[QStringLiteral("bedExcludeArea")] = excludeArr;
+#endif
+  }
 
   // Save plates
   QJsonArray platesArr;
@@ -10598,6 +11659,17 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
       objsArr.append(objObj);
     }
     plateObj[QStringLiteral("objects")] = objsArr;
+    // Persist the existing per-instance outside-area state. No new geometry
+    // container is introduced because PartPlate already owns this set.
+    QJsonArray outsideArr;
+    if (pp)
+    {
+      for (const auto &key : pp->instanceOutsideSet())
+      {
+        outsideArr.append(QJsonArray{key.first, key.second});
+      }
+    }
+    plateObj[QStringLiteral("outsideInstances")] = outsideArr;
     platesArr.append(plateObj);
   }
   root[QStringLiteral("plates")] = platesArr;
@@ -10673,6 +11745,12 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       auto *loadedModel = new Slic3r::Model();
       std::string err;
       int loadedPlateCount = 0;
+      // PLATE-PRINT-LIFECYCLE (batch 4): embedded bed geometry parsed from the
+      // project config (upstream set_bed_shape inputs). -1 sentinel = absent.
+      int loadedBedWidthMm = -1;
+      int loadedBedDepthMm = -1;
+      int loadedBedHeightMm = -1;
+      std::vector<Slic3r::Vec2d> loadedBedExcludeArea;
       Slic3r::PlateDataPtrs plateDataList;
       Slic3r::DynamicPrintConfig loadedConfig;
       Slic3r::ConfigSubstitutionContext configSubstCtx(Slic3r::ForwardCompatibilitySubstitutionRule::Enable);
@@ -10718,6 +11796,26 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             progressFn);
         *loadedModel = std::move(loaded);
 
+        // PLATE-PRINT-LIFECYCLE (batch 4): parse the embedded bed geometry
+        // (upstream Plater::load_project -> set_bed_shape,
+        // Plater.cpp:12996-12998) on the worker. The values are handed to the
+        // GUI publish step, which applies them to the rebuilt PartPlateList.
+        if (const auto *areaOpt = loadedConfig.option<Slic3r::ConfigOptionPoints>("printable_area"))
+        {
+          if (areaOpt->values.size() >= 3)
+          {
+            // Pointfs extents are 2D (BoundingBoxf, Point.hpp:311) -- the bed
+            // shape is a plane polygon, so only x/y sizes matter here.
+            const Slic3r::BoundingBoxf bedBox(Slic3r::get_extents(areaOpt->values));
+            loadedBedWidthMm = int(bedBox.size().x() + 0.5);
+            loadedBedDepthMm = int(bedBox.size().y() + 0.5);
+          }
+        }
+        if (const auto *heightOpt = loadedConfig.option<Slic3r::ConfigOptionFloat>("printable_height"))
+          loadedBedHeightMm = int(heightOpt->value + 0.5);
+        if (const auto *excludeOpt = loadedConfig.option<Slic3r::ConfigOptionPoints>("bed_exclude_area"))
+          loadedBedExcludeArea = excludeOpt->values;
+
         if (!loadedModel->objects.empty())
         {
           ok = true;
@@ -10742,16 +11840,22 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       // Extract plate data BEFORE releasing (matching loadFile() pattern)
       QStringList loadedPlateNames;
       QList<QList<int>> loadedPlateObjectIndices;
+      // Keep all pending plate state worker-local until the queued GUI delivery.
+      // These containers are plain QList/QImage and must not be shared with QML
+      // reads while the archive is being parsed.
+      QList<bool> pendingLocked;
+      QList<int> pendingBedType;
+      QList<int> pendingPrintSeq;
+      QList<int> pendingSpiral;
+      QList<QList<int>> pendingFirstLayerSeq;
+      QList<QList<int>> pendingOtherLayersSeq;
+      QList<int> pendingOtherLayersSeqNums;
+      QList<QList<int>> pendingFilamentMaps;
+      QList<int> pendingFilamentMapMode;
+      QList<QImage> pendingThumbnails;
 
-      // v3.0 Phase 18 (D-12): capture locked + bed-type/print-seq/spiral onto the
-      // receiver so the rebuild lambda restores ALL plate state.
-      receiver->pendingPlateLocked_.clear();
-      receiver->pendingPlateBedType_.clear();
-      receiver->pendingPlatePrintSeq_.clear();
-      receiver->pendingPlateSpiral_.clear();
-      receiver->pendingPlateThumbnails_.clear();  // v3.2 Phase 30 (THUMB-02)
-      receiver->pendingPlateFilamentMaps_.clear();   // v3.2 Phase 31 (FMAP-02)
-      receiver->pendingPlateFilamentMapMode_.clear(); // v3.2 Phase 31 (FMAP-02)
+      // v3.0 Phase 18 (D-12): capture locked + bed-type/print-seq/spiral onto
+      // worker-local state; the GUI delivery lambda restores ALL plate state.
 
       const OwzxPlateFilamentStates persistedFilamentStates =
           readOwzxPlateFilamentStates(localPath);
@@ -10770,7 +11874,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
                                         : QObject::tr("平板 %1").arg(plateIdx + 1);
           loadedPlateNames << plateName;
 
-          receiver->pendingPlateLocked_.append(plate ? plate->locked : false);
+          pendingLocked.append(plate ? plate->locked : false);
           int bedType = 0, printSeq = 0, spiral = 0;
           if (plate) {
             if (auto *opt = plate->config.option("curr_bed_type"))
@@ -10784,9 +11888,24 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             if (auto *opt = plate->config.option<Slic3r::ConfigOptionBool>("spiral_mode"))
               spiral = (opt->value ? 1 : 0);
           }
-          receiver->pendingPlateBedType_.append(bedType);
-          receiver->pendingPlatePrintSeq_.append(printSeq);
-          receiver->pendingPlateSpiral_.append(spiral);
+          pendingBedType.append(bedType);
+          pendingPrintSeq.append(printSeq);
+          pendingSpiral.append(spiral);
+
+          QList<int> firstSeq;
+          QList<int> otherSeq;
+          int otherNums = 0;
+          if (plate) {
+            if (auto *opt = plate->config.option<Slic3r::ConfigOptionInts>("first_layer_print_sequence"))
+              for (int value : opt->values) firstSeq.append(value);
+            if (auto *opt = plate->config.option<Slic3r::ConfigOptionInts>("other_layers_print_sequence"))
+              for (int value : opt->values) otherSeq.append(value);
+            if (auto *opt = plate->config.option("other_layers_print_sequence_nums"))
+              otherNums = int(opt->getInt());
+          }
+          pendingFirstLayerSeq.append(firstSeq);
+          pendingOtherLayersSeq.append(otherSeq);
+          pendingOtherLayersSeqNums.append(otherNums);
 
           // v3.2 Phase 31 (FMAP-02) + v4.5 Phase 107 (FMAP-02): extract
           // filament maps + mode. The mode read applies the Pitfall 2 / FM-03
@@ -10823,8 +11942,8 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
             fmap = state.maps;
             fmapMode = state.mode;
           }
-          receiver->pendingPlateFilamentMaps_.append(fmap);
-          receiver->pendingPlateFilamentMapMode_.append(fmapMode);
+          pendingFilamentMaps.append(fmap);
+          pendingFilamentMapMode.append(fmapMode);
 
           // v3.2 Phase 30 (THUMB-02) + Phase 97 fix (THUMBRT-01): restore the
           // persisted per-plate thumbnail so it survives save->reload. The
@@ -10840,7 +11959,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           QImage loadedThumb;
           if (plate)
             loadedThumb = extractPlateThumbnailFrom3mf(localPath, plate->plate_index);
-          receiver->pendingPlateThumbnails_.append(loadedThumb);
+          pendingThumbnails.append(loadedThumb);
 
           QSet<int> uniq;
           QList<int> objList;
@@ -10873,6 +11992,8 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       QList<bool> visibleStates;
       QString errorText;
       QString loadedProjectName;
+      const QString loadedProjectVersion =
+          (ok && !canceled) ? read3mfGeneratorVersion(localPath) : QString{};
 
       if (ok && !canceled)
       {
@@ -10920,8 +12041,17 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 #ifdef HAS_LIBSLIC3R
       if (ok && !canceled)
       {
+        // Review P1-4: the bed-geometry keys are machine-profile data. They
+        // are consumed by the plate-list restore above; letting them flow
+        // into the preset-value channel (projectConfigLoaded ->
+        // printPresetValues_ -> slice injection) would override the CURRENT
+        // bed with the bed baked into the project on every later slice.
+        const std::set<std::string> bedKeysSkip = {
+            "printable_area", "printable_height", "bed_exclude_area"};
         for (const auto &key_str : loadedConfig.keys())
         {
+          if (bedKeysSkip.count(key_str) > 0)
+            continue;
           const QString key = QString::fromStdString(key_str);
           const auto *opt = loadedConfig.option(key_str);
           if (!opt) continue;
@@ -10941,8 +12071,21 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
       }
 #endif
 
-      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap]() {
+      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedProjectVersion, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode, loadedBedWidthMm, loadedBedDepthMm, loadedBedHeightMm, loadedBedExcludeArea]() {
         if (!receiver) { delete loadedModel; return; }
+
+        // Publish worker-local plate state only on the GUI thread. This also
+        // clears vectors that may have belonged to an earlier project load.
+        receiver->pendingPlateLocked_ = pendingLocked;
+        receiver->pendingPlateBedType_ = pendingBedType;
+        receiver->pendingPlatePrintSeq_ = pendingPrintSeq;
+        receiver->pendingPlateSpiral_ = pendingSpiral;
+        receiver->pendingPlateFirstLayerSeq_ = pendingFirstLayerSeq;
+        receiver->pendingPlateOtherLayersSeq_ = pendingOtherLayersSeq;
+        receiver->pendingPlateOtherLayersSeqNums_ = pendingOtherLayersSeqNums;
+        receiver->pendingPlateThumbnails_ = pendingThumbnails;
+        receiver->pendingPlateFilamentMaps_ = pendingFilamentMaps;
+        receiver->pendingPlateFilamentMapMode_ = pendingFilamentMapMode;
 
         receiver->loading_ = false;
         receiver->activeCancelFlag_.reset();
@@ -11007,7 +12150,20 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               plateObjs.append(all);
             }
             receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+            receiver->attachPlateInstanceBounds();
             receiver->m_plateList->resetToSinglePlate();
+            // PLATE-PRINT-LIFECYCLE (batch 4): restore the bed geometry from
+            // the project's embedded machine config BEFORE creating plates, so
+            // createPlate/updatePlateOrigins build the grid with the saved
+            // size (upstream load_project -> set_bed_shape ->
+            // PartPlateList::set_shapes, Plater.cpp:12996-12998/:8169).
+            // Sentinel -1 = key absent -> keep constructor defaults.
+            if (loadedBedWidthMm > 0 && loadedBedDepthMm > 0)
+              receiver->m_plateList->setPlateSize(
+                  loadedBedWidthMm, loadedBedDepthMm,
+                  loadedBedHeightMm > 0 ? loadedBedHeightMm : 0);
+            if (!loadedBedExcludeArea.empty())
+              receiver->m_plateList->setExcludeAreas(loadedBedExcludeArea);
             for (int pi = 0; pi < plateObjs.size(); ++pi) {
               OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
                                              : receiver->m_plateList->createPlate();
@@ -11099,10 +12255,10 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
               receiver->m_plateList->createPlate();
             // v3.2 Phase 29 (RESEARCH §6): defensive origin recompute so plate
             // origins are consistent even if the auto-arrange-on-load below is
-            // later conditioned out. Note: m_plate_width/depth default to 0 at
-            // load time (no bed parse before arrange), so computeOrigin yields
-            // (0,0,0) for a 1-plate load — correct. The auto-arrange at line
-            // ~5368 re-derives real sizes via setPlateSize.
+            // later conditioned out. The width/depth come from the embedded
+            // bed geometry restored at the top of this block (batch 4); a
+            // project without embedded printable_area keeps the constructor
+            // defaults, and computeOrigin then yields (0,0,0) for 1 plate.
             receiver->m_plateList->refreshPlateOrigins();
             receiver->m_plateList->setCurrentPlateIndex(
                 receiver->m_plateList->plateCount() > 0 ? 0 : -1);
@@ -11112,18 +12268,12 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           }
           receiver->lastError_.clear();
 
-          // Phase 236 (DLG-03): record the generator version parsed from the
-          // 3MF metadata (Application tag). BackendContext turns this into the
-          // Newer3mfVersion-style notification after loadProject returns.
+          // Phase 236 (DLG-03): publish the worker-parsed generator version
+          // on the GUI thread together with the rest of the loaded state.
+          if (loadedProjectVersion != receiver->m_projectVersionInfo)
           {
-            const QString version = read3mfGeneratorVersion(localPath);
-            if (version != receiver->m_projectVersionInfo)
-            {
-              receiver->m_projectVersionInfo = version;
-              QMetaObject::invokeMethod(receiver, [receiver]() {
-                emit receiver->projectVersionInfoChanged();
-              }, Qt::QueuedConnection);
-            }
+            receiver->m_projectVersionInfo = loadedProjectVersion;
+            emit receiver->projectVersionInfoChanged();
           }
 
           // v5.16 (PLATE-04): project restore keeps the exact saved plate
@@ -11160,6 +12310,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
           delete loadedModel;
           receiver->modelCount_ = 0;
           receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
+          receiver->attachPlateInstanceBounds();
           receiver->m_plateList->setCurrentPlateIndex(-1);
           receiver->sourceFilePath_.clear();
           receiver->objectNames_.clear();
@@ -11235,7 +12386,40 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 
   // v3.0 Phase 16 (D-05): rebuild m_plateList from the JSON plates array.
   m_plateList = std::make_unique<OWzx::PartPlateList>();
+  attachPlateInstanceBounds();
   m_plateList->resetToSinglePlate();
+  // Older JSON files omit geometry and continue using constructor defaults.
+  // Review P3: handle partial geometry objects per-field so a file carrying
+  // only plateDepth does not zero the width (and vice versa).
+  const bool savedHasWidth = root.contains(QStringLiteral("plateWidth"));
+  const bool savedHasDepth = root.contains(QStringLiteral("plateDepth"));
+  const bool savedHasHeight = root.contains(QStringLiteral("plateHeight"));
+  if (savedHasWidth || savedHasDepth || savedHasHeight)
+  {
+    const int width = savedHasWidth ? root.value(QStringLiteral("plateWidth")).toInt(0)
+                                    : m_plateList->plateWidth();
+    const int depth = savedHasDepth ? root.value(QStringLiteral("plateDepth")).toInt(0)
+                                    : m_plateList->plateDepth();
+    const int height = savedHasHeight ? root.value(QStringLiteral("plateHeight")).toInt(0)
+                                      : m_plateList->plateHeight();
+    m_plateList->setPlateSize(width, depth, height);
+  }
+#ifdef HAS_LIBSLIC3R
+  // PLATE-PRINT-LIFECYCLE (batch 4): restore list-level exclude areas.
+  if (root.contains(QStringLiteral("bedExcludeArea")))
+  {
+    std::vector<Slic3r::Vec2d> areas;
+    const QJsonArray excludeArr = root.value(QStringLiteral("bedExcludeArea")).toArray();
+    areas.reserve(size_t(excludeArr.size()));
+    for (const auto &value : excludeArr)
+    {
+      const QJsonArray pt = value.toArray();
+      if (pt.size() == 2)
+        areas.emplace_back(pt[0].toDouble(), pt[1].toDouble());
+    }
+    m_plateList->setExcludeAreas(std::move(areas));
+  }
+#endif
 
   // Restore plates and objects
   const QJsonArray platesArr = root.value(QStringLiteral("plates")).toArray();
@@ -11338,6 +12522,15 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 
       objIndices.append(idx);
       pp->addInstance(idx, 0);  // instance-level membership (single instance per object)
+    }
+
+    // Restore existing outside-area membership after object indices are known.
+    const QJsonArray outsideArr = plateObj.value(QStringLiteral("outsideInstances")).toArray();
+    for (const auto &value : outsideArr)
+    {
+      const QJsonArray pair = value.toArray();
+      if (pair.size() == 2)
+        pp->setInstanceOutside(pair[0].toInt(), pair[1].toInt(), true);
     }
   }
 

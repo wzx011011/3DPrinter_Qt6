@@ -7,6 +7,7 @@
 #include <QPointF>
 #include <QQuickRhiItem>
 #include <QRectF>
+#include <QSize>
 #include <QString>
 #include <atomic>
 #include "core/rendering/NavigatorCube.h"
@@ -117,6 +118,13 @@ class RhiViewport : public QQuickRhiItem
   // thread (queued); PreparePage draws a small overlay bound to it.
   Q_PROPERTY(int fps READ fps NOTIFY fpsChanged)
   Q_PROPERTY(bool showFps READ showFps WRITE setShowFps NOTIFY showFpsChanged)
+  // SEL-MODIFIERS-RECT: rubber-band rectangle overlay state, in item-local
+  // pixels (top-left origin). The viewport computes the drag rect; the QML
+  // overlay only draws it (upstream GLSelectionRectangle::render,
+  // GLSelectionRectangle.cpp:57-121). SoftwareViewport carries the same pair
+  // as inert properties so both QML paths bind identically.
+  Q_PROPERTY(QRectF selectionRubberBand READ selectionRubberBand NOTIFY selectionRubberBandChanged)
+  Q_PROPERTY(bool selectionRubberBandActive READ selectionRubberBandActive NOTIFY selectionRubberBandChanged)
   // Phase 92 (ASMMEASURE-02): the two selected source-object indices the
   // Assembly measurement overlay annotates (volume A and volume B). Default -1
   // = not set. The setter calls update() so the renderer re-renders the
@@ -216,8 +224,46 @@ class RhiViewport : public QQuickRhiItem
   // these so the ViewModel picks the brush vs smart-fill path.
   Q_PROPERTY(int paintToolType READ paintToolType WRITE setPaintToolType)
   Q_PROPERTY(float smartFillAngle READ smartFillAngle WRITE setSmartFillAngle)
+  // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip mirroring
+  // EditorViewModel::mmuPaintTool (0=Brush, 1=BucketFill, 3=GapFill,
+  // 4=HeightRange; upstream GLGizmoMmuSegmentation m_current_tool -- each
+  // painter gizmo instance keeps its own tool). emitPaintPickIfActive routes
+  // MMU picks by it BEFORE the shared paintToolType channel.
+  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool)
+  // PAINT-MMU-TOOLS: bucket-fill edge detection mirroring
+  // EditorViewModel::mmuBucketEdgeDetection (upstream
+  // m_detect_geometry_edge, GLGizmoMmuSegmentation.cpp:623-637). Checked =
+  // the bucket fill stops at facet edges steeper than smartFillAngle;
+  // unchecked = angle -1 (no edge detection).
+  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection)
+  // PAINT-MMU-TOOLS: height-range band span (mm) mirroring
+  // EditorViewModel::paintHeightRange (upstream m_cursor_height, 0.1..8 step
+  // 0.2, GLGizmoPainterBase.hpp:242-245). Ctrl+wheel on the height-range
+  // tool steps it and reports via heightRangeTuned so QML can write the
+  // value back into the ViewModel (same opaque-forward bridge as gapArea).
+  Q_PROPERTY(double brushHeightRange READ brushHeightRange WRITE setBrushHeightRange)
+  // PAINT-GAPFILL-PORT: gap-fill area threshold (mm2) mirroring
+  // EditorViewModel::supportPaintGapArea (upstream TriangleSelectorPatch::
+  // gap_area, 0..5 step 0.2, GLGizmoPainterBase.hpp:117-119). Ctrl+wheel on
+  // the gap-fill tool steps it and reports via gapAreaTuned so QML can write
+  // the value back into the ViewModel (same opaque-forward bridge as the
+  // pick signals).
+  Q_PROPERTY(float gapArea READ gapArea WRITE setGapArea)
+  // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane ratio mirroring
+  // EditorViewModel::paintClippingPosition (upstream ObjectClipper
+  // m_clp_ratio, 0..1, 0 = off, GLGizmoPainterBase.cpp:632-641). Alt+wheel
+  // with a paint gizmo active steps it and reports via paintClippingTuned so
+  // QML can write the value back into the ViewModel (same opaque-forward
+  // bridge as gapArea).
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition)
   Q_PROPERTY(bool paintOnOverhangsOnly READ paintOnOverhangsOnly WRITE setPaintOnOverhangsOnly)
   Q_PROPERTY(float paintOverhangAngle READ paintOverhangAngle WRITE setPaintOverhangAngle)
+  // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only,
+  // GLGizmoPainterBase.cpp:738-742): brush-drag axis lock. 0=off, 1=Vertical
+  // (drag strokes stay on the press column, screen X clamped), 2=Horizontal
+  // (press row, screen Y clamped). The single int keeps the two options
+  // mutually exclusive like the upstream MMU checkbox pair.
+  Q_PROPERTY(int paintLockAxis READ paintLockAxis WRITE setPaintLockAxis)
   Q_PROPERTY(float brushMouseScreenX READ brushMouseScreenX WRITE setBrushMouseScreenX)
   Q_PROPERTY(float brushMouseScreenY READ brushMouseScreenY WRITE setBrushMouseScreenY)
   Q_PROPERTY(int brushButtonState READ brushButtonState WRITE setBrushButtonState)
@@ -444,6 +490,22 @@ public:
   bool fpsOverlayEnabled() const { return m_showFpsAtomic.load(std::memory_order_relaxed); }
   void setFpsFromRenderThread(int fps);
   void setHoveredSourceObjectIndex(int value);
+  // SEL-MODIFIERS-RECT: rubber-band overlay getters (see the Q_PROPERTYs).
+  QRectF selectionRubberBand() const { return m_selectionRubberBand; }
+  bool selectionRubberBandActive() const { return m_selectionRubberBandActive; }
+  // SEL-MODIFIERS-RECT: GLSelectionRectangle::contains projection primitive
+  // (GLSelectionRectangle.cpp:33-49) applied to a world-space scene batch:
+  // project the bounds corners into item-local screen pixels and return the
+  // enclosing rect. Static + pure so the smoke tests can drive it with a
+  // synthetic view-projection (no window, no scene graph).
+  static QRectF projectBoundsToScreenRect(const PrepareSceneData::ModelBounds &bounds,
+                                          const QMatrix4x4 &viewProjection,
+                                          const QSizeF &viewportSize);
+  // Upstream containment direction: the rubber-band rect contains part of the
+  // projected geometry. The upstream picking pass selects a volume when any of
+  // its rendered pixels falls inside the rectangle (GLCanvas3D.cpp:7019-7030);
+  // the projected-bounds approximation keeps that partial-overlap semantics.
+  static bool rectHitsProjectedBounds(const QRectF &rect, const QRectF &screenBounds);
   // Phase 92 (ASMMEASURE-02): Assembly measurement overlay selection indices.
   int assemblyMeasureSelectedA() const { return m_assemblyMeasureSelectedA; }
   void setAssemblyMeasureSelectedA(int value);
@@ -557,8 +619,27 @@ public:
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
   int paintToolType() const { return m_paintToolType; }
   void setPaintToolType(int t) { m_paintToolType = t; }
+  // PAINT-MMU-TOOLS: MMU gizmo tool chip + bucket edge detection (see the
+  // Q_PROPERTY block).
+  int mmuPaintTool() const { return m_mmuPaintTool; }
+  void setMmuPaintTool(int t) { m_mmuPaintTool = t; }
+  bool mmuBucketEdgeDetection() const { return m_mmuBucketEdgeDetection; }
+  void setMmuBucketEdgeDetection(bool b) { m_mmuBucketEdgeDetection = b; }
+  // PAINT-MMU-TOOLS: height-range band span mm clamped to the upstream
+  // CursorHeightMin/Max (0.1..8, GLGizmoPainterBase.hpp:242-245).
+  double brushHeightRange() const { return m_brushHeightRange; }
+  void setBrushHeightRange(double h) { m_brushHeightRange = qBound(0.1, h, 8.0); }
+  int paintLockAxis() const { return m_paintLockAxis; }
+  void setPaintLockAxis(int axis) { m_paintLockAxis = qBound(0, axis, 2); }
   float smartFillAngle() const { return m_smartFillAngle; }
   void setSmartFillAngle(float a) { m_smartFillAngle = a; }
+  // PAINT-GAPFILL-PORT: gap-fill area threshold mm2 (see the Q_PROPERTY block).
+  float gapArea() const { return m_gapArea; }
+  void setGapArea(float a) { m_gapArea = qBound(0.0f, a, 5.0f); }
+  // PAINT-ALT-WHEEL-CLIP: current cross-section ratio the Alt+wheel step
+  // advances from (kept in lockstep with the ViewModel via the QML binding).
+  double paintClippingPosition() const { return m_paintClippingPosition; }
+  void setPaintClippingPosition(double p) { m_paintClippingPosition = qBound(0.0, p, 1.0); }
   bool paintOnOverhangsOnly() const { return m_paintOnOverhangsOnly; }
   void setPaintOnOverhangsOnly(bool b) { m_paintOnOverhangsOnly = b; }
   float paintOverhangAngle() const { return m_paintOverhangAngle; }
@@ -609,6 +690,11 @@ public:
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
+  // GAP-4 (upstream KBShortcutsDialog.cpp:262-263 "I"/"O" = Zoom in/out):
+  // centered keyboard zoom through the same Camera::zoom path the wheel
+  // uses (CameraController::zoom, upstream update_zoom Camera.cpp:83 with
+  // +-1 per notch, bounds clamped by the scene box).
+  Q_INVOKABLE void requestZoom(float delta);
   // Phase 237 (VIEW-01): upstream-named view selection (mirrors
   // GLCanvas3D::select_view -> Camera::select_view, Camera.cpp:86-107). The
   // accepted directions match the upstream key map "plate"/"top"/"bottom"/
@@ -632,13 +718,15 @@ public:
   // GLGizmoSVG workbench, minimal port).
   Q_INVOKABLE QPointF screenToBedPoint(qreal screenX, qreal screenY) const;
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
-  Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128);
+  // G-04: variant 0 = main capture, 1 = picking (per-object flat colors).
+  Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128,
+                                           int variant = 0);
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot the renderer targets via
   // a queued QMetaObject::invokeMethod. Encodes the captured QImage to the
   // base64 PNG m_lastThumbnailData format and emits thumbnailCaptured(), so
   // PreparePage.qml's contract (lastThumbnailData / onThumbnailCaptured) stays
   // unchanged. plateIndex is carried for Phase 96 per-plate routing.
-  void deliverThumbnail(const QImage &image, int plateIndex);
+  void deliverThumbnail(const QImage &image, int plateIndex, int variant = 0);
 
 signals:
   void bedTextureUrlChanged();
@@ -670,8 +758,31 @@ signals:
   /// PartPlate::setThumbnail via ProjectServiceMock::setPlateThumbnailFromBase64.
   /// The legacy no-arg thumbnailCaptured() above stays for back-compat with
   /// QML bindings reading lastThumbnailData for the current plate's live preview.
-  void thumbnailCapturedForPlate(int plateIndex, const QString &data);
+  // G-04: variant rides the delivery (0=main, 1=picking) so the QML
+  // consumer routes each capture into the right PartPlate variant cache.
+  void thumbnailCapturedForPlate(int plateIndex, const QString &data,
+                                 int variant = 0);
   void objectPickedSource(int sourceIndex);
+  // SEL-MODIFIERS-RECT (KBShortcutsDialog.cpp:235-236): click pick carrying
+  // the press modifiers. Ctrl+click = additive toggle (GLCanvas3D.cpp:4152-4168),
+  // Alt+click = volume-scope pick of the part under the cursor
+  // (GLCanvas3D.cpp:4135). volumeIndex is -1 when no Ctrl/Alt was held (the
+  // plain objectPickedSource signal above stays the no-modifier path) or when
+  // the click missed every volume. QML forwards to the matching
+  // EditorViewModel backend methods; the selection math stays in C++.
+  void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,
+                                       int modifiers);
+  // SEL-MODIFIERS-RECT (upstream m_rectangle_selection, GLCanvas3D.cpp:1872,
+  // 3506-3508, 4136-4145): emitted on release of a Shift+left-drag rectangle.
+  // modifiers are the press-time modifiers (Alt turns the stroke into a
+  // deselect rectangle, GLCanvas3D.cpp:8676). rect is the item-local rubber
+  // band; containedSourceIndices lists the visible source objects whose
+  // projected bounds the rect hits. QML forwards all three opaquely to
+  // EditorViewModel::selectObjectsInRect.
+  void rectangleSelectionFinished(int modifiers, QRectF rect,
+                                  QVariantList containedSourceIndices);
+  // SEL-MODIFIERS-RECT: rubber-band overlay property change notify.
+  void selectionRubberBandChanged();
   void contextMenuRequested(int targetKind,
                             int sourceObjectIndex,
                             int volumeIndex,
@@ -754,6 +865,10 @@ signals:
   // angle + overhang filter state. cameraForward (P2.3-1) is the camera look
   // direction the cross-section plane normal derives from
   // (upstream -camera.get_dir_forward(), ObjectClipper::set_position_by_ratio).
+  // angle + overhang filter state. cameraForward (PAINT-ALT-WHEEL-CLIP) is
+  // the camera look direction the cross-section plane normal derives from
+  // (upstream -camera.get_dir_forward(), ObjectClipper::set_position_by_ratio,
+  // GLGizmosCommon.cpp:346).
   void smartFillPickRequested(QVector3D worldOrigin,
                               QVector3D worldDirection,
                               QVector3D cameraForward,
@@ -765,6 +880,26 @@ signals:
   // P2.3-5: height-range pick variant (upstream HEIGHT_RANGE tool,
   // GLGizmoPainterBase.cpp:726-733). Emitted when the height-range tool is
   // active; height is the band span in mm.
+  // PAINT-MMU-TOOLS: bucket (connected-region) fill pick variant (upstream
+  // POINTER brush + BUCKET_FILL tool, GLGizmoPainterBase.cpp:778-787).
+  // Emitted instead of paintPickRequested when the MMU bucket-fill tool or
+  // the pointer brush is active. seedFillAngle is the edge-detection
+  // threshold (negative = disabled); propagate=true floods the connected
+  // same-state region (bucket), false stages only the hit facet (pointer).
+  // cameraForward feeds the cross-section plane rejection (same contract as
+  // smartFillPickRequested).
+  void bucketFillPickRequested(QVector3D worldOrigin,
+                               QVector3D worldDirection,
+                               QVector3D cameraForward,
+                               int pickedSourceIndex,
+                               int paintState,
+                               double seedFillAngle,
+                               bool propagate);
+  // PAINT-MMU-TOOLS: height-range pick variant (upstream HEIGHT_RANGE brush,
+  // GLGizmoPainterBase.cpp:703-733). Emitted on click while the MMU
+  // height-range tool is active; carries the band span (mm). The ViewModel
+  // anchors the band at the world Z of the ray hit and paints every volume
+  // whose facets intersect [z, z + height].
   void heightRangePickRequested(QVector3D worldOrigin,
                                 QVector3D worldDirection,
                                 QVector3D cameraPosition,
@@ -772,6 +907,26 @@ signals:
                                 int pickedSourceIndex,
                                 int paintState,
                                 double height);
+  // PAINT-MMU-TOOLS: Ctrl+wheel stepped the height-range band span (upstream
+  // GLGizmoPainterBase.cpp:585-588 -- m_cursor_height +-CursorHeightStep
+  // clamped to [CursorHeightMin, CursorHeightMax]). Carries the clamped
+  // value; QML writes it into EditorViewModel.paintHeightRange so the panel
+  // slider follows the wheel (same round-trip contract as gapAreaTuned).
+  void heightRangeTuned(double height);
+  // PAINT-GAPFILL-PORT: Ctrl+wheel stepped the gap-fill area threshold
+  // (upstream GLGizmoPainterBase.cpp:624-627 -- SLAGizmoEventType::
+  // MouseWheelDown/Up steps TriangleSelectorPatch::gap_area by GapAreaStep
+  // clamped to [GapAreaMin, GapAreaMax]). Carries the clamped value; QML
+  // writes it into EditorViewModel.supportPaintGapArea so the -3 fragment
+  // overlay + the panel slider follow the wheel.
+  void gapAreaTuned(double gapArea);
+  // PAINT-ALT-WHEEL-CLIP: Alt+wheel swept the cross-section (clipping) plane
+  // ratio +-0.01 within [0, 1] (upstream GLGizmoPainterBase.cpp:632-641 --
+  // ObjectClipper::set_position_by_ratio). Carries the clamped value; QML
+  // writes it into EditorViewModel.paintClippingPosition so the pick
+  // rejection + the panel sliders follow the wheel (same round-trip contract
+  // as gapAreaTuned).
+  void paintClippingTuned(double position);
   // Phase 240 (GIZ-03): flatten gizmo pick/hover. The hover variant feeds
   // the hovered-facet highlight; the click variant rotates the object so the
   // picked facet's normal faces down (upstream GLGizmoFlatten::on_mouse).
@@ -817,6 +972,12 @@ private:
   void ensurePickBvhs();
   QVector<ObjectPicking::Bvh> m_pickBvhs;
   bool m_pickBvhsValid = false;
+  // SEL-MODIFIERS-RECT: rectangle-selection drag helpers.
+  // updateSelectionRubberBand grows the overlay rect while Shift+drag moves;
+  // containedRectangleSelectionSources projects every visible pick-scene batch
+  // and collects the source objects the rect hits (QML never sees geometry).
+  void updateSelectionRubberBand(const QPointF &position);
+  QVariantList containedRectangleSelectionSources(const QRectF &rect);
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
   // GLCanvas3D::_render_3d_navigator + ImGuizmo::ViewManipulate). The cube
   // consumes left presses/drags before any scene interaction, mirrors the
@@ -998,8 +1159,13 @@ private:
   int m_paintState = 1;      // EnforcerBlockerType: 1=Enforcer
   double m_brushHeightRange = 0.2; // P2.3-5 height-range span mm
   // Phase 240 (GIZ-02): smart-fill params (see the Q_PROPERTY block).
-  int m_paintToolType = 0;   // 0=Brush, 2=SmartFill
+  int m_paintToolType = 0;   // 0=Brush, 2=SmartFill, 3=GapFill
+  int m_mmuPaintTool = 0;    // PAINT-MMU-TOOLS: 0=Brush, 1=BucketFill, 3=GapFill, 4=HeightRange
+  bool m_mmuBucketEdgeDetection = false; // PAINT-MMU-TOOLS: bucket edge detection on/off
+  double m_brushHeightRange = 0.2; // PAINT-MMU-TOOLS: height-range band span mm (upstream 0.2 default)
   float m_smartFillAngle = 30.f;
+  float m_gapArea = 1.0f;    // PAINT-GAPFILL-PORT: gap-fill threshold mm2
+  double m_paintClippingPosition = 0.0; // PAINT-ALT-WHEEL-CLIP: section ratio 0..1, 0 = off
   bool m_paintOnOverhangsOnly = false;
   float m_paintOverhangAngle = 0.f;
   /// Phase 240 (GIZ-02): true while the current pick originates from a
@@ -1012,6 +1178,13 @@ private:
   bool m_paintHorizontalOnly = false;
   float m_paintLastClickX = 0.f;
   float m_paintLastClickY = 0.f;
+  // P11.B2.3: brush-drag axis lock (see the Q_PROPERTY block) and the press
+  // anchor the clamp uses (upstream m_last_mouse_click, set on the hit click).
+  int m_paintLockAxis = 0; // 0=off, 1=Vertical (lock screen X), 2=Horizontal
+  QPointF m_paintPressPosition;
+  // P11: button driving the current paint stroke (1=left, 2=right); right
+  // paints the alternate state (upstream RightDown, GLGizmoPainterBase.cpp:649).
+  int m_paintButton = 0;
   float m_brushMouseScreenX = 0.f;
   float m_brushMouseScreenY = 0.f;
   int m_brushButtonState = 0; // 0=hover, 1=left, 2=right
@@ -1045,6 +1218,7 @@ private:
   bool m_thumbnailRequestPending = false;
   int m_thumbnailPlateIndex = 0;
   int m_thumbnailSize = 128;
+  int m_thumbnailVariant = 0;  // G-04: 0=main, 1=picking
   bool m_previewCameraFitted = false;
   QVector4D m_previewFitHint;
   qint64 m_sceneGeneration = 1;
@@ -1075,6 +1249,16 @@ private:
   bool m_contextToolCapturedAtPress = false;
   bool m_contextLayerEditingAtPress = false;
   int m_pressPickedSourceObjectIndex = -1;
+  // SEL-MODIFIERS-RECT: click/drag modifier state. m_pressModifiers is
+  // captured at press (upstream reads the live key state at LeftDown,
+  // GLCanvas3D.cpp:4135-4142) and drives the release routing; the volume
+  // index is only valid for Ctrl/Alt clicks (full ObjectPicking::pick hit).
+  Qt::KeyboardModifiers m_pressModifiers = Qt::NoModifier;
+  int m_pressPickedVolumeIndex = -1;
+  bool m_rectSelectActive = false;
+  QPointF m_rectSelectStart;
+  QRectF m_selectionRubberBand;
+  bool m_selectionRubberBandActive = false;
   bool m_cameraDirty = true;
   bool m_bedTextureDirty = true;   // v5.15 (BEDTEX): consumed by renderer synchronize
 

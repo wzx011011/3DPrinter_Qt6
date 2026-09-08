@@ -483,13 +483,40 @@ Item {
                                                 font.pixelSize: Theme.fontSizeXS
                                                 font.family: Theme.fontMono
                                             }
-                                            Text {
+                                            // PREVIEW-GCODE-SOURCE-TOKENS (upstream
+                                            // GCodeViewer.cpp:537-540): command yellow
+                                            // (0.8,0.8,0), parameters white, comment
+                                            // gray (0.7). The ViewModel pre-tokenizes
+                                            // each line; QML only colors the parts.
+                                            Row {
                                                 Layout.fillWidth: true
-                                                text: gcodeRow.modelData.text
-                                                color: gcodeRow.modelData.current ? Theme.statusWarning : Theme.textSecondary
-                                                elide: Text.ElideRight
-                                                font.pixelSize: Theme.fontSizeXS
-                                                font.family: Theme.fontMono
+                                                spacing: 0
+                                                clip: true
+
+                                                Text {
+                                                    id: gcodeCommandText
+                                                    text: gcodeRow.modelData.command
+                                                    visible: text.length > 0
+                                                    color: "#CCCC00"
+                                                    font.pixelSize: Theme.fontSizeXS
+                                                    font.family: Theme.fontMono
+                                                }
+                                                Text {
+                                                    text: gcodeRow.modelData.parameters
+                                                          && gcodeCommandText.visible
+                                                          ? " " + gcodeRow.modelData.parameters : ""
+                                                    visible: text.length > 0
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: Theme.fontSizeXS
+                                                    font.family: Theme.fontMono
+                                                }
+                                                Text {
+                                                    text: gcodeRow.modelData.comment
+                                                    visible: text.length > 0
+                                                    color: Theme.textTertiary
+                                                    font.pixelSize: Theme.fontSizeXS
+                                                    font.family: Theme.fontMono
+                                                }
                                             }
                                         }
                                     }

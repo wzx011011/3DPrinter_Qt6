@@ -111,8 +111,12 @@ CxDialog {
                                     text: qsTr("自动换色")
                                     font.pixelSize: Theme.fontSizeXS
                                     // Bind directly to the viewmodel so edits persist immediately.
+                                    // QML-BINDING-LOOPS: onToggled instead of
+                                    // onCheckedChanged -- the programmatic checked
+                                    // refresh (VM stateChanged) no longer writes
+                                    // back, so only user interaction mutates the VM.
                                     checked: root._slotAutoSwap[index] === true
-                                    onCheckedChanged: {
+                                    onToggled: {
                                         if (root.amsVm)
                                             root.amsVm.setSlotAutoSwap(index, checked)
                                     }

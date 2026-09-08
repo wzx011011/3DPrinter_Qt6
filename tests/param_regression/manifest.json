@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "description": "Parameter-chain regression matrix. Default automation verifies parameter overlay generation; representative G-code comparison is optional.",
+  "default_action": "generate-parameter-artifacts",
+  "comparison": {
+    "normalized_hard_fail": true,
+    "raw_diff_is_informational": true
+  },
+  "upstream": {
+    "cli_env": "ORCASLICER_CLI",
+    "settings_argument": "--load_settings",
+    "slice_arguments": ["--slice", "0"],
+    "output_argument": "--outputdir",
+    "settings_metadata": {
+      "type": "process",
+      "name": "OWzx Parameter Regression Override",
+      "from": "user",
+      "instantiation": "true",
+      "inherits": "fdm_process_creality_common",
+      "compatible_printers": ["Creality K1C 0.4 nozzle"]
+    }
+  },
+  "owzx": {
+    "cli_default": "build/owzx-cli.exe"
+  },
+  "baseline_models": [
+    {
+      "id": "pa-line-single",
+      "path": "tests/param_regression/baselines/auto_pa_line_single.3mf",
+      "upstream_source": "third_party/OrcaSlicer/resources/calib/pressure_advance/auto_pa_line_single.3mf",
+      "plates": [0]
+    },
+    {
+      "id": "flowrate-pass1",
+      "path": "tests/param_regression/baselines/flowrate-test-pass1.3mf",
+      "upstream_source": "third_party/OrcaSlicer/resources/calib/filament_flow/flowrate-test-pass1.3mf",
+      "plates": [0]
+    },
+    {
+      "id": "pa-pattern",
+      "path": "tests/param_regression/baselines/pa_pattern.3mf",
+      "upstream_source": "third_party/OrcaSlicer/resources/calib/pressure_advance/pa_pattern.3mf",
+      "plates": [0]
+    }
+  ],
+  "parameter_cases": [
+    {
+      "id": "layer-height-016",
+      "description": "Layer height and initial layer height",
+      "risk_area": "process_config_merge",
+      "overrides": {
+        "layer_height": 0.16,
+        "initial_layer_print_height": 0.2
+      }
+    },
+    {
+      "id": "wall-loops-3",
+      "description": "Wall loop count",
+      "risk_area": "process_config_merge",
+      "overrides": {
+        "wall_loops": 3
+      }
+    },
+    {
+      "id": "infill-density-25",
+      "description": "Sparse infill density",
+      "risk_area": "percent_and_string_value_conversion",
+      "overrides": {
+        "sparse_infill_density": "25%"
+      }
+    },
+    {
+      "id": "support-normal",
+      "description": "Enable normal supports",
+      "risk_area": "boolean_and_enum_conversion",
+      "overrides": {
+        "enable_support": true,
+        "support_type": "normal(auto)",
+        "support_threshold_angle": 30
+      }
+    },
+    {
+      "id": "brim-outer",
+      "description": "Outer brim settings",
+      "risk_area": "enum_and_width_conversion",
+      "overrides": {
+        "brim_type": "outer_only",
+        "brim_width": 5
+      }
+    },
+    {
+      "id": "temperature-pla",
+      "description": "Nozzle and bed temperature commands",
+      "risk_area": "vector_temperature_conversion",
+      "overrides": {
+        "nozzle_temperature": [220],
+        "bed_temperature": [65]
+      }
+    },
+    {
+      "id": "machine-limits",
+      "description": "Machine limits emitted to G-code",
+      "risk_area": "vector_machine_limit_conversion",
+      "overrides": {
+        "emit_machine_limits_to_gcode": true,
+        "machine_max_speed_x": [500],
+        "machine_max_speed_y": [500],
+        "machine_max_acceleration_x": [1000],
+        "machine_max_acceleration_y": [1000]
+      }
+    }
+  ],
+  "smoke": {
+    "baseline_ids": ["pa-line-single"],
+    "case_ids": ["layer-height-016", "wall-loops-3"]
+  }
+}

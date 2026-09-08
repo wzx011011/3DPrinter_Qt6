@@ -196,6 +196,13 @@ private:
   void renderThumbnailPass(QRhiCommandBuffer *cb);
   void issueThumbnailReadback(QRhiResourceUpdateBatch *updates);
   void deliverCompletedThumbnail();
+  // G-04: thumbnail variants (upstream Plater.cpp:12051-12094 renders the
+  // main, no_light, top and picking families per plate; 0=main capture,
+  // 1=picking per-object flat colors). no_light is served by the main
+  // capture (the Qt6 pipeline is unlit end to end).
+  enum ThumbnailVariant { ThumbnailMain = 0, ThumbnailPicking = 1 };
+  void setThumbnailVariant(int variant) { m_thumbnailVariant = variant; }
+  int m_thumbnailVariant = 0;
   // Phase 67: instance helper forwarding to the static testable one.
   QVector3D computeGizmoCenter() const;
   // P15.11 (MULTICENTER): the effective selection set -- every mirrored
@@ -618,6 +625,7 @@ private:
   float m_brushCursorLastScreenX = std::numeric_limits<float>::lowest();
   float m_brushCursorLastScreenY = std::numeric_limits<float>::lowest();
   float m_brushCursorLastRadius = -1.f;
+  int m_brushCursorLastCursorType = -1; // PAINT-MMU-TOOLS: hide/show on tool switch
 
   // ── Phase 26: Preview segment pipeline state ──
   QByteArray m_previewData;              // GCV1 blob from RhiViewport
@@ -727,6 +735,12 @@ private:
   std::unique_ptr<QRhiBuffer> m_thumbnailUniformBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_thumbnailSrb;
   quint32 m_thumbnailUniformBufferBytes = 0;
+  // G-04: picking variant vertex buffer -- the soup positions with one flat
+  // palette color per ModelBatch baked into the vertex colors, rendered by
+  // the shared unlit thumbnail pipeline (no extra shader/pipeline state).
+  std::unique_ptr<QRhiBuffer> m_pickVertexBuffer;
+  quint32 m_pickVertexBufferBytes = 0;
+  quint32 m_pickVertexCount = 0;
   // Request mirror (copied from the item in synchronize()).
   bool m_thumbnailRequestPending = false;
   int m_thumbnailPlateIndex = 0;

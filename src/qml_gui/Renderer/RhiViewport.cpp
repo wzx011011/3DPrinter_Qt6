@@ -906,6 +906,15 @@ void RhiViewport::requestPreviewFit()
   update();
 }
 
+void RhiViewport::requestZoom(float delta)
+{
+  // GAP-4: centered keyboard zoom (upstream GLCanvas3D.cpp on_char
+  // 'I'/'O' -> zoom delta +-1 through update_zoom, Camera.cpp:83), the same
+  // math the plain wheel path uses (RhiViewport.cpp wheelEvent -> m_camera.zoom).
+  m_camera.zoom(delta);
+  update();
+}
+
 void RhiViewport::requestViewPreset(int preset)
 {
   m_viewPreset = preset;
@@ -1014,7 +1023,7 @@ void RhiViewport::arrangeSelected(float spacing, bool rotation, bool alignY)
   update();
 }
 
-void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
+void RhiViewport::requestThumbnailCapture(int plateIndex, int size, int variant)
 {
   // Phase 95 (THUMBCAP-01/03): real QRhi texture readback dispatch. The
   // previous solid-color stub (flat dark PNG fabricated on the GUI thread) is
@@ -1025,11 +1034,12 @@ void RhiViewport::requestThumbnailCapture(int plateIndex, int size)
   // requestViewPreset pattern (set state + update()).
   m_thumbnailPlateIndex = plateIndex;
   m_thumbnailSize = qMax(32, size);
+  m_thumbnailVariant = variant;
   m_thumbnailRequestPending = true;
   update();  // schedule synchronize()+render() on the render thread
 }
 
-void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
+void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex, int variant)
 {
   // Phase 95 (THUMBCAP-03): GUI-thread delivery slot targeted by the
   // renderer's queued QMetaObject::invokeMethod. Encodes the captured QImage
@@ -1050,7 +1060,7 @@ void RhiViewport::deliverThumbnail(const QImage &image, int plateIndex)
   m_lastThumbnailData = QStringLiteral("data:image/png;base64,")
                         + QString::fromLatin1(bytes.toBase64());
   emit thumbnailCaptured();
-  emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData);
+  emit thumbnailCapturedForPlate(plateIndex, m_lastThumbnailData, variant);
 }
 
 // ── v5.16 (NAVIGATOR): bottom-left 3D navigator cube ──
@@ -1347,6 +1357,25 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     return;
   }
   if (event->button() == Qt::RightButton) {
+    // P11 (upstream GLGizmoPainterBase.cpp:649 RightDown): with a paint gizmo
+    // active the right button paints instead of opening the context menu.
+    // MMU disables the right button entirely (upstream
+    // GLGizmoMmuSegmentation.hpp:94 returns -1 and the event is dropped).
+    if ((m_gizmoMode == GizmoSupportPaint ||
+         m_gizmoMode == GizmoSeamPaint ||
+         m_gizmoMode == GizmoMmuSegmentation) &&
+        m_gizmoMode != GizmoMmuSegmentation) {
+      m_dragButton = Qt::RightButton;
+      m_paintButton = 2;
+      m_paintPressPosition = event->position();
+      updateBrushCursorState(event->position(), 2 /*right*/);
+      m_paintClickPress = true;
+      emitPaintPickIfActive(event->position(), event->modifiers());
+      m_paintClickPress = false;
+      m_contextPressActive = false;
+      event->accept();
+      return;
+    }
     m_contextPressPosition = event->position();
     m_contextPressActive = true;
     m_contextDragExceeded = false;
@@ -1360,12 +1389,19 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   m_pressPosition = event->position();
   m_dragButton = event->button();
   m_pressPickedSourceObjectIndex = -1;
+  // SEL-MODIFIERS-RECT: press-time modifiers drive the release routing
+  // (upstream reads the live key state at LeftDown, GLCanvas3D.cpp:4135-4142).
+  m_pressModifiers = event->modifiers();
+  m_pressPickedVolumeIndex = -1;
+  m_rectSelectActive = false;
   // Upstream GLCanvas3D.cpp:4310-4317: Ctrl+drag orbits around the canvas
   // center unprojected onto the bed plane (m_rotation_center), cached once
-  // per press.
+  // per press. Shift is excluded: Shift+left belongs to the rectangle
+  // selection drag (GLCanvas3D.cpp:4136-4145), not the orbit pivot.
   m_ctrlRotationCenterActive = false;
   if (event->button() == Qt::LeftButton
-      && (event->modifiers() & Qt::ControlModifier)) {
+      && (event->modifiers() & Qt::ControlModifier)
+      && !(event->modifiers() & Qt::ShiftModifier)) {
     QVector3D hit;
     const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
     if (CameraController::groundPointOnPlane(
@@ -1464,6 +1500,10 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     // m_last_mouse_click is set on actual hits, GLGizmoPainterBase.cpp:746).
     m_paintLastClickX = float(event->position().x());
     m_paintLastClickY = float(event->position().y());
+    // P11.B2.3 (upstream m_last_mouse_click, GLGizmoPainterBase.cpp:715):
+    // remember the press point so an axis-locked drag can clamp to it.
+    m_paintPressPosition = event->position();
+    m_paintButton = 1;
     // Phase 240 (GIZ-02): smart fill fires on PRESS only (a shift-drag keeps
     // the erase-brush path).
     m_paintClickPress = true;
@@ -1512,7 +1552,39 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
   }
 
   if (event->button() == Qt::LeftButton) {
+    // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4136-4145): Shift+left
+    // starts the rectangle selection drag instead of a single pick. Alt turns
+    // the stroke into a deselect rectangle (GLCanvas3D.cpp:8676 "alt_pressed
+    // = deselect by rectangle"; applied through GLSelectionRectangle::EState::
+    // Deselect, GLCanvas3D.cpp:9588-9589). Active gizmos never reach here
+    // (their branches above accept the press first), mirroring the upstream
+    // gizmo-consumed guard.
+    if (event->modifiers() & Qt::ShiftModifier) {
+      m_rectSelectActive = true;
+      m_rectSelectStart = event->position();
+      updateSelectionRubberBand(event->position());
+      event->accept();
+      return;
+    }
     m_pressPickedSourceObjectIndex = pickSourceObjectAt(event->position());
+    // SEL-MODIFIERS-RECT (GLCanvas3D.cpp:4135/4152-4168): Ctrl+click toggles
+    // the object, Alt+click picks the volume (part) under the cursor -- both
+    // need the full hit with the volume index, not just the source index.
+    if (m_pressPickedSourceObjectIndex >= 0
+        && (event->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
+      const QSize viewSize{std::max(1, int(width())), std::max(1, int(height()))};
+      const float aspect = float(viewSize.width()) / float(viewSize.height());
+      auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
+          float(event->position().x()), float(event->position().y()),
+          viewSize,
+          m_camera.projMatrix(aspect),
+          m_camera.viewMatrix());
+      const ObjectPicking::Hit hit = ObjectPicking::pick(
+          rayOrigin, rayDirection,
+          m_pickScene.modelVertices(), m_pickScene.modelBatches());
+      if (hit.isValid())
+        m_pressPickedVolumeIndex = hit.volumeIndex;
+    }
     setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
   }
   event->accept();
@@ -1538,12 +1610,22 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   // TriangleSelector brush (mirrors upstream GLGizmoPainterBase on_mouse
   // move-while-LeftDown). mousePressEvent already accept()-ed the initial
   // click for paint gizmos, so m_gizmoDragging stays false here.
-  if (m_dragButton == Qt::LeftButton &&
+  if ((m_dragButton == Qt::LeftButton || m_dragButton == Qt::RightButton) &&
       (m_gizmoMode == GizmoSupportPaint ||
        m_gizmoMode == GizmoSeamPaint ||
        m_gizmoMode == GizmoMmuSegmentation)) {
-    updateBrushCursorState(event->position(), 1 /*left*/);
-    emitPaintPickIfActive(event->position(), event->modifiers());
+    // P11.B2.3 (upstream GLGizmoPainterBase.cpp:738-742): during a brush
+    // drag, Vertical lock clamps the screen X to the press column and
+    // Horizontal lock clamps the screen Y to the press row, so the stroke
+    // stays a straight line through the click point. The clamp applies to
+    // the whole downstream path (cursor + pick ray).
+    QPointF paintPos = event->position();
+    if (m_paintLockAxis == 1)
+      paintPos.setX(m_paintPressPosition.x());
+    else if (m_paintLockAxis == 2)
+      paintPos.setY(m_paintPressPosition.y());
+    updateBrushCursorState(paintPos, m_dragButton == Qt::RightButton ? 2 : 1);
+    emitPaintPickIfActive(paintPos, event->modifiers());
     event->accept();
     return;
   }
@@ -1637,6 +1719,16 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
         emit gizmoMoveRequested(frameDelta);
       }
     }
+    m_lastMousePosition = event->position();
+    event->accept();
+    return;
+  }
+
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4255-4260): while the
+  // rectangle-selection drag is active, a left-drag only grows the rubber
+  // band -- camera orbit and hover picking stay suppressed.
+  if (m_rectSelectActive && m_dragButton == Qt::LeftButton) {
+    updateSelectionRubberBand(event->position());
     m_lastMousePosition = event->position();
     event->accept();
     return;
@@ -1767,6 +1859,13 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     return;
   }
   if (event->button() == Qt::RightButton) {
+    // P11: a right-button paint stroke ends here; it suppresses the context
+    // menu (m_contextPressActive was cleared at press) and clears the
+    // stroke button so hover painting does not inherit it.
+    if (m_paintButton == 2) {
+      m_paintButton = 0;
+      m_dragButton = Qt::NoButton;
+    }
     const bool suppress = !m_contextPressActive || m_contextDragExceeded
         || m_contextLayerEditingAtPress || m_contextToolCapturedAtPress;
     m_contextPressActive = false;
@@ -1805,14 +1904,47 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     return;
   }
 
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4384-4391): LeftUp applies
+  // the rectangle selection and stops the drag. The containment candidates
+  // are resolved here in C++ (projection of the visible pick-scene batches);
+  // QML only forwards modifiers + rect + contained sources to
+  // EditorViewModel::selectObjectsInRect, which owns the state change.
+  if (event->button() == Qt::LeftButton && m_rectSelectActive) {
+    m_rectSelectActive = false;
+    const QRectF rect = m_selectionRubberBand;
+    if (m_selectionRubberBandActive) {
+      m_selectionRubberBandActive = false;
+      emit selectionRubberBandChanged();
+    }
+    const QVariantList contained = containedRectangleSelectionSources(rect);
+    emit rectangleSelectionFinished(int(m_pressModifiers), rect, contained);
+    m_dragButton = Qt::NoButton;
+    m_pressPickedSourceObjectIndex = -1;
+    m_pressPickedVolumeIndex = -1;
+    event->accept();
+    return;
+  }
+
   if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex >= 0) {
     const QPointF releaseDelta = event->position() - m_pressPosition;
     const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
-    if (isClick && pickSourceObjectAt(event->position()) == m_pressPickedSourceObjectIndex)
-      emit objectPickedSource(m_pressPickedSourceObjectIndex);
+    if (isClick && pickSourceObjectAt(event->position()) == m_pressPickedSourceObjectIndex) {
+      // SEL-MODIFIERS-RECT: Ctrl/Alt clicks route through the modifier-
+      // carrying signal (Ctrl = additive toggle, Alt = part pick); the
+      // no-modifier path keeps emitting objectPickedSource unchanged.
+      const bool modifierClick = (m_pressModifiers & (Qt::ControlModifier | Qt::AltModifier)) != 0;
+      if (modifierClick)
+        emit objectPickedSourceWithModifiers(m_pressPickedSourceObjectIndex,
+                                             m_pressPickedVolumeIndex,
+                                             int(m_pressModifiers));
+      else
+        emit objectPickedSource(m_pressPickedSourceObjectIndex);
+    }
   }
   m_dragButton = Qt::NoButton;
+  m_paintButton = 0;
   m_pressPickedSourceObjectIndex = -1;
+  m_pressPickedVolumeIndex = -1;
   // Phase 121 (PAINT-03): release returns the brush cursor to hover (black).
   if (m_gizmoMode == GizmoSupportPaint ||
       m_gizmoMode == GizmoSeamPaint ||
@@ -1907,6 +2039,87 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 
 void RhiViewport::wheelEvent(QWheelEvent *event)
 {
+  // PAINT-CTRL-WHEEL (upstream GLGizmoPainterBase.cpp:584-631): with a paint
+  // gizmo active, Ctrl+wheel tunes the brush parameters instead of zooming.
+  // Brush cursors step the radius 0.2 within [0.4, 8] (CursorRadius*); the
+  // SmartFill tool steps its seed-fill angle 1 deg within [0, 90]
+  // (SmartFillAngle*); the GapFill tool steps the gap area 0.2 mm2 within
+  // [0, 5] (GapArea*, PAINT-GAPFILL-PORT, GLGizmoPainterBase.cpp:624-627).
+  // PAINT-MMU-TOOLS: the MMU tool set routes its own channels in the upstream
+  // order -- HeightRange steps the band span 0.2 within [0.1, 8]
+  // (CursorHeight*, GLGizmoPainterBase.cpp:584-592, first branch upstream),
+  // BucketFill steps the fill angle, GapFill steps the gap area, and the
+  // pointer brush tunes nothing (upstream POINTER matches no branch -- the
+  // wheel falls through to zoom).
+  const bool mmuTool = (m_gizmoMode == GizmoMmuSegmentation);
+  const bool mmuPointerBrush =
+      mmuTool && m_mmuPaintTool == 0 && m_brushCursorType == 2;
+  if (event->modifiers() & Qt::ControlModifier &&
+      (m_gizmoMode == GizmoSupportPaint ||
+       m_gizmoMode == GizmoSeamPaint ||
+       m_gizmoMode == GizmoMmuSegmentation)) {
+    const float delta = float(event->angleDelta().y()) / 120.0f;
+    if (delta != 0.f && !mmuPointerBrush) {
+      const bool down = delta < 0.f;
+      if (mmuTool && m_mmuPaintTool == 4) {
+        // PAINT-MMU-TOOLS: m_cursor_height step (upstream
+        // GLGizmoPainterBase.cpp:584-592 -- CursorHeightStep 0.2 clamped to
+        // [CursorHeightMin 0.1, CursorHeightMax 8],
+        // GLGizmoPainterBase.hpp:242-245). The new value round-trips through
+        // heightRangeTuned -> QML -> EditorViewModel.paintHeightRange so the
+        // band + the panel slider follow the wheel.
+        const double next = down ? m_brushHeightRange - 0.2
+                                 : m_brushHeightRange + 0.2;
+        m_brushHeightRange = qBound(0.1, next, 8.0);
+        emit heightRangeTuned(m_brushHeightRange);
+      } else if ((m_paintToolType == 3 &&
+                  m_gizmoMode == GizmoSupportPaint) ||
+                 (mmuTool && m_mmuPaintTool == 3)) {
+        // PAINT-GAPFILL-PORT: gap_area step (upstream
+        // GLGizmoPainterBase.cpp:624-627). The new value round-trips through
+        // gapAreaTuned -> QML -> EditorViewModel.supportPaintGapArea so the
+        // -3 fragment overlay and the panel slider follow the wheel.
+        // PAINT-MMU-TOOLS: the MMU GapFill chip steps the same shared
+        // threshold (upstream GAP_FILL wheel is gizmo-independent).
+        const float next = down ? m_gapArea - 0.2f : m_gapArea + 0.2f;
+        m_gapArea = qBound(0.0f, next, 5.0f);
+        emit gapAreaTuned(double(m_gapArea));
+      } else if (m_paintToolType == 2 || (mmuTool && m_mmuPaintTool == 1)) {
+        const float next = down ? m_smartFillAngle - 1.f : m_smartFillAngle + 1.f;
+        m_smartFillAngle = qBound(0.0f, next, 90.0f);
+      } else {
+        const float next = down ? m_brushRadius - 0.2f : m_brushRadius + 0.2f;
+        m_brushRadius = qBound(0.4f, next, 8.0f);
+      }
+      event->accept();
+      update();
+      return;
+    }
+  }
+  // PAINT-ALT-WHEEL-CLIP (upstream GLGizmoPainterBase.cpp:632-641, the
+  // else-if after the ctrl_down branch): with a paint gizmo active, Alt+wheel
+  // sweeps the cross-section (clipping) plane ratio instead of zooming --
+  // wheel down steps -0.01 clamped to 0, wheel up steps +0.01 clamped to 1
+  // (ObjectClipper::set_position_by_ratio). The new ratio round-trips through
+  // paintClippingTuned -> QML -> EditorViewModel.paintClippingPosition so the
+  // clipped-side pick rejection + the panel sliders follow the wheel (same
+  // write-back contract as gapAreaTuned).
+  else if (event->modifiers() & Qt::AltModifier &&
+           (m_gizmoMode == GizmoSupportPaint ||
+            m_gizmoMode == GizmoSeamPaint ||
+            m_gizmoMode == GizmoMmuSegmentation)) {
+    const float delta = float(event->angleDelta().y()) / 120.0f;
+    if (delta != 0.f) {
+      const double next = (delta < 0.f)
+          ? m_paintClippingPosition - 0.01
+          : m_paintClippingPosition + 0.01;
+      m_paintClippingPosition = qBound(0.0, next, 1.0);
+      emit paintClippingTuned(m_paintClippingPosition);
+      event->accept();
+      update();
+      return;
+    }
+  }
   // v5.12 gap-closure: reverseZoom inverts the wheel direction (upstream
   // reverse_mouse_wheel_zoom, GLCanvas3D.cpp:3765). One notch = +-1 like the
   // upstream GetWheelRotation/GetWheelDelta ratio.
@@ -2166,6 +2379,111 @@ ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
 }
 
 // ===========================================================================
+// SEL-MODIFIERS-RECT: rubber-band rectangle selection (upstream
+// GLSelectionRectangle + GLCanvas3D.cpp:4136-4145/4255-4260/4384-4391).
+// Geometry stays C++-owned: the viewport projects the visible pick-scene
+// batches, QML only draws the band and forwards the finished stroke.
+// ===========================================================================
+QRectF RhiViewport::projectBoundsToScreenRect(
+    const PrepareSceneData::ModelBounds &bounds,
+    const QMatrix4x4 &viewProjection,
+    const QSizeF &viewportSize)
+{
+  // GLSelectionRectangle::contains (GLSelectionRectangle.cpp:33-49): project
+  // sample points into screen space and keep the enclosing rectangle. The 8
+  // bounds corners sample the object's extent. Screen Y grows downward --
+  // same convention as projectWorldToScreen(). Corners behind the camera
+  // (w <= 0) are skipped so a partially clipped object does not fold the
+  // rect across the viewport.
+  if (viewportSize.isEmpty())
+    return QRectF();
+
+  const float corners[8][3] = {
+      {bounds.minX, bounds.minY, bounds.minZ},
+      {bounds.maxX, bounds.minY, bounds.minZ},
+      {bounds.minX, bounds.maxY, bounds.minZ},
+      {bounds.minX, bounds.minY, bounds.maxZ},
+      {bounds.maxX, bounds.maxY, bounds.minZ},
+      {bounds.maxX, bounds.minY, bounds.maxZ},
+      {bounds.minX, bounds.maxY, bounds.maxZ},
+      {bounds.maxX, bounds.maxY, bounds.maxZ}};
+
+  float minX = 0.0f, minY = 0.0f, maxX = 0.0f, maxY = 0.0f;
+  bool any = false;
+  for (const auto &corner : corners) {
+    const QVector4D clip = viewProjection * QVector4D(corner[0], corner[1], corner[2], 1.0f);
+    if (clip.w() <= 0.0f)
+      continue;
+    const QVector3D ndc = clip.toVector3D() / clip.w();
+    const float sx = float((ndc.x() * 0.5 + 0.5) * viewportSize.width());
+    const float sy = float((1.0 - (ndc.y() * 0.5 + 0.5)) * viewportSize.height());
+    if (!any) {
+      minX = maxX = sx;
+      minY = maxY = sy;
+      any = true;
+    } else {
+      minX = std::min(minX, sx);
+      minY = std::min(minY, sy);
+      maxX = std::max(maxX, sx);
+      maxY = std::max(maxY, sy);
+    }
+  }
+  if (!any)
+    return QRectF();
+  return QRectF(QPointF(minX, minY), QPointF(maxX, maxY));
+}
+
+bool RhiViewport::rectHitsProjectedBounds(const QRectF &rect, const QRectF &screenBounds)
+{
+  // The upstream picking pass selects a volume when ANY of its rendered
+  // pixels falls inside the rectangle (GLCanvas3D.cpp:7019-7030). The
+  // projected-bounds approximation keeps that partial-overlap semantics; a
+  // degenerate (click-sized) band still behaves like the upstream 1x1 pixel
+  // fallback (GLCanvas3D.cpp:6899-6900).
+  if (screenBounds.isEmpty())
+    return false;
+  return rect.intersects(screenBounds);
+}
+
+void RhiViewport::updateSelectionRubberBand(const QPointF &position)
+{
+  QRectF rect(m_rectSelectStart, position);
+  rect = rect.normalized();
+  if (!m_selectionRubberBandActive || rect != m_selectionRubberBand) {
+    m_selectionRubberBand = rect;
+    m_selectionRubberBandActive = true;
+    emit selectionRubberBandChanged();
+  }
+  update();
+}
+
+QVariantList RhiViewport::containedRectangleSelectionSources(const QRectF &rect)
+{
+  QVariantList contained;
+  if (width() <= 1.0 || height() <= 1.0)
+    return contained;
+
+  updatePickingScene();
+  const QSizeF viewportSize(width(), height());
+  const float aspect = float(width()) / float(height());
+  const QMatrix4x4 viewProjection = cameraMvp(aspect);
+  // Visible = the batches already filtered into the pick scene for the
+  // current plate (PrepareSceneData::setModelMeshData drops every batch whose
+  // source object is not on the active plate). Every batch of a source object
+  // (all volumes + instances) is tested: any hit selects the object, matching
+  // the upstream per-volume hover collection.
+  for (const PrepareSceneData::ModelBatch &batch : m_pickScene.modelBatches()) {
+    if (batch.sourceObjectIndex < 0 || contained.contains(QVariant(batch.sourceObjectIndex)))
+      continue;
+    const QRectF screenBounds =
+        projectBoundsToScreenRect(batch.bounds, viewProjection, viewportSize);
+    if (rectHitsProjectedBounds(rect, screenBounds))
+      contained.append(batch.sourceObjectIndex);
+  }
+  return contained;
+}
+
+// ===========================================================================
 // Phase 69/70: gizmo-axis picking helpers
 // ===========================================================================
 QVector3D RhiViewport::currentGizmoCenter() const
@@ -2388,9 +2706,69 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
   const double brushRadius = double(m_brushRadius);
   const int    cursorType  = m_brushCursorType;
   const bool   shiftHeld   = (modifiers & Qt::ShiftModifier) != 0;
-  // EnforcerBlockerType: 1=Enforcer, 2=Blocker (TriangleSelector.hpp:13-38).
-  const int    paintState  = shiftHeld ? 2 : m_paintState;
-  const bool   smartFill   = (shiftHeld || m_paintToolType == 2) && m_paintClickPress;
+  // P11 (upstream GLGizmoPainterBase.cpp:662-671): Shift holds new_state at
+  // NONE, i.e. Shift is a temporary ERASER for every painter gizmo (the
+  // earlier smart-fill mapping inverted this). The right button paints the
+  // alternate state (PainterBase default right=BLOCKER; the complement of
+  // the active tool keeps the Enforcer/Blocker pair symmetric).
+  int paintState;
+  if (m_paintButton == 2)
+    paintState = (m_paintState == 2) ? 1 : 2;
+  else if (shiftHeld)
+    paintState = 0;
+  else
+    paintState = m_paintState;
+  // PAINT-MMU-TOOLS: the MMU gizmo routes its own tool set BEFORE the shared
+  // channels (upstream GLGizmoMmuSegmentation keeps its own m_current_tool
+  // independent of the other painter gizmos). Press-only like the smart fill
+  // -- a drag would restage the same region on every move event. Shift keeps
+  // its temporary-eraser meaning (paintState NONE above), so Shift+click on
+  // these tools erases the region/band (upstream runs the same fill branch
+  // with new_state NONE).
+  if (m_gizmoMode == GizmoMmuSegmentation) {
+    // HeightRange tool (upstream HeightRangeIcon -> BRUSH + HEIGHT_RANGE):
+    // click anchors the band at the hit's world Z.
+    if (m_mmuPaintTool == 4) {
+      if (m_paintClickPress && m_paintButton != 2) {
+        emit heightRangePickRequested(rayOrigin, rayDirection, m_camera.eye(),
+                                      m_camera.forwardVector(),
+                                      pickedSourceIndex, paintState,
+                                      m_brushHeightRange);
+      }
+      return;
+    }
+    // BucketFill tool (upstream FillButtonIcon -> BUCKET_FILL) and the
+    // pointer brush (upstream TriangleButtonIcon -> BRUSH + POINTER, routed
+    // as bucket_fill with angle -1 + propagate false,
+    // GLGizmoMmuSegmentation.cpp:594-595 + GLGizmoPainterBase.cpp:790-793).
+    const bool bucketTool = (m_mmuPaintTool == 1);
+    const bool pointerBrush =
+        (m_mmuPaintTool == 0 && m_brushCursorType == 2);
+    if ((bucketTool || pointerBrush) && m_paintClickPress &&
+        m_paintButton != 2) {
+      // Unchecked edge detection = angle -1 (upstream m_smart_fill_angle =
+      // -1.f when m_detect_geometry_edge is off,
+      // GLGizmoMmuSegmentation.cpp:633-637).
+      const double seedFillAngle = bucketTool
+          ? (m_mmuBucketEdgeDetection ? double(m_smartFillAngle) : -1.0)
+          : -1.0;
+      emit bucketFillPickRequested(rayOrigin, rayDirection,
+                                   m_camera.forwardVector(),
+                                   pickedSourceIndex, paintState,
+                                   seedFillAngle, /*propagate=*/bucketTool);
+      return;
+    }
+    // GapFill tool (upstream GapFillIcon -> GAP_FILL): clicks paint nothing
+    // (upstream GAP_FILL matches no click branch -- the fragment merge runs
+    // from the Perform button; the Qt6 port keeps the -3 preview only).
+    if (m_mmuPaintTool == 3)
+      return;
+  }
+  // Phase 240 (GIZ-02): SmartFill is the tool chip (paintToolType==2) firing
+  // on PRESS only -- a shift-DRAG keeps the brush path and the right button
+  // never smart-fills.
+  const bool   smartFill   = (m_paintToolType == 2) && !shiftHeld &&
+                             m_paintButton != 2 && m_paintClickPress;
 
   // P2.3-5: toolType 3 is tool-gizmo dependent (upstream: MMU's
   // HeightRangeIcon paints a world-Z band; FDM supports' GapFillIcon is a
@@ -2410,6 +2788,8 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
                                 m_camera.forwardVector(),
                                 pickedSourceIndex, paintState,
                                 double(m_smartFillAngle),
+                                m_camera.forwardVector(), pickedSourceIndex,
+                                paintState, double(m_smartFillAngle),
                                 m_paintOnOverhangsOnly,
                                 double(m_paintOverhangAngle));
     return;
@@ -2417,6 +2797,9 @@ void RhiViewport::emitPaintPickIfActive(const QPointF &position,
 
   // Forward to QML opaquely (no ray math in QML -- same contract as
   // measurePickRequested). QML connects this to EditorViewModel::paintAtFacet.
+  // cameraForward (PAINT-ALT-WHEEL-CLIP) is the camera look direction the
+  // cross-section plane normal derives from (upstream -camera.
+  // get_dir_forward(), ObjectClipper::set_position_by_ratio).
   emit paintPickRequested(rayOrigin, rayDirection, m_camera.eye(),
                           m_camera.forwardVector(),
                           pickedSourceIndex, brushRadius, cursorType, paintState,

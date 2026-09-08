@@ -9,6 +9,7 @@
 #include <QPointF>
 #include <QThread>
 #include <QMutex>
+#include <QFuture>
 #include <map>
 #include <memory>
 #include <atomic>
@@ -200,6 +201,55 @@ struct SupportPreviewData {
   std::vector<float> segmentVerts;
 };
 Q_DECLARE_METATYPE(SupportPreviewData)
+#ifdef HAS_LIBSLIC3R
+/// PLATE-PRINT-LIFECYCLE (batch 2): persistent per-plate Print plus its
+/// applied model clone, mirroring upstream PartPlate's per-plate ownership of
+/// Print + GCodeResult (PartPlate::update_slice_context hands the plate's
+/// m_print / m_gcode_result to BackgroundSlicingProcess, PartPlate.cpp:2839-
+/// 2840). The slot is keyed by the plate's stable printIndex.
+///
+/// OWNERSHIP / THREAD MODEL (design-eliminates the two P0s from the
+/// 2026-09-04 review of the perf/waves persistent WIP, docs/
+/// 代码评审报告_2026-09-04.md section 4 P0-1/P0-2):
+///  - Exactly ONE thread owns a slot at any instant, so no lock exists and no
+///    lock-free handshake is needed. The GUI thread owns idle slots through
+///    SliceService::persistentSlices_. startSlice() takes the slot OUT of the
+///    map and hands it to the slice worker; the worker mutates it unlocked and
+///    is its exclusive owner while slicing_ gates the GUI thread away. On
+///    success the worker carries the slot (by shared_ptr value) into the
+///    queued GUI-thread completion lambda, which re-inserts it; on cancel or
+///    failure the worker destroys it on the worker thread. (P0-1 was a
+///    mutex-guarded map shared live between worker and GUI -- resolved by
+///    design here: no shared mutable container exists.)
+///  - Print lifetime is fully decoupled from SliceService lifetime: a slot
+///    owned by an in-flight worker is never referenced by any SliceService
+///    member, so the destructor cannot destroy a Print a worker still uses.
+///    The destructor cancels (activeCancelFlag_ + activePrint_->cancel();
+///    Print::process observes cancellation through PrintBase::
+///    throw_if_canceled at every step boundary, PrintBase.hpp:150-186/542)
+///    and then JOINS the worker through its QFuture before members die -- a
+///    plain task wait, not a QThread wait, so the wait()-timeout qFatal of
+///    the perf/waves WIP (review P0-2: a Print-carrying QThread destroyed
+///    after a timeout) cannot recur by construction.
+struct PersistentSlice
+{
+  /// The persistent engine state: applied model + completed slicing steps.
+  /// Reused across slices of the same plate when only configs changed
+  /// (Print::apply diffs configs/objects and invalidates only affected
+  /// steps, PrintApply.cpp:1022+ / Print.cpp:73-353; process() skips still-
+  /// DONE steps through the PrintBase step state machine).
+  std::unique_ptr<Slic3r::Print> print;
+  /// The model clone Print::apply consumed for the stored geometrySignature.
+  std::unique_ptr<Slic3r::Model> model;
+  /// Plate geometry fingerprint captured on the GUI thread when the slot was
+  /// built (ProjectServiceMock::currentPlateGeometrySignature).
+  quint64 geometrySignature = 0;
+  /// True when the slice that built this Print ran with calibration params
+  /// (set_calib_params). A slot with calibration state is never reused
+  /// (conservative: apply() does not model calib params).
+  bool calibParamsApplied = false;
+};
+#endif // HAS_LIBSLIC3R
 
 class SliceService final : public QObject
 {
@@ -234,6 +284,17 @@ public:
   State sliceState() const { return sliceState_; }
   explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
   ~SliceService() override;
+  /// PLATE-PRINT-LIFECYCLE (batch 2): cancels an in-flight slice (flag +
+  /// activePrint) then JOINS the slice worker via its QFuture before members
+  /// die; see the PersistentSlice ownership/thread-model note above.
+  ~SliceService() override;
+
+  /// PLATE-PRINT-LIFECYCLE (batch 2) diagnostics: live persistent per-plate
+  /// Print slots, and how many COMPLETED slices reused an existing slot vs.
+  /// rebuilt one. Test/log observability for the persistent lifecycle.
+  Q_INVOKABLE int persistentSliceCount() const;
+  Q_INVOKABLE qint64 persistentSliceReuseCount() const;
+  Q_INVOKABLE qint64 persistentSliceRebuildCount() const;
 
 #ifdef HAS_LIBSLIC3R
   /// P15.11: packs engine polygons into the SequentialPrintClearance value
@@ -299,6 +360,10 @@ public:
   /// a QtConcurrent worker). Mirrors cancelSlice's flag semantics -- the worker
   /// aborts at the next chunk boundary and reports exportFailed("...cancelled").
   Q_INVOKABLE void cancelExport();
+  /// G-13 followup (E2E timing): true while an async G-code export worker is
+  /// still running -- requestExportAllGCode refuses when this is set, so
+  /// tests/back-to-back callers must wait for it to clear.
+  Q_INVOKABLE bool exportBusy() const { return exportActive_; }
   Q_INVOKABLE bool loadGCodeFromPrevious(const QString &gcodeFilePath);
   Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
   Q_INVOKABLE bool exportGCodeToPath(const QString &targetPath);
@@ -389,6 +454,18 @@ signals:
 
 private:
   ProjectServiceMock *projectService_ = nullptr;
+#ifdef HAS_LIBSLIC3R
+  /// PLATE-PRINT-LIFECYCLE (batch 2): GUI-thread-exclusive container of IDLE
+  /// persistent slots keyed by the plate's stable printIndex. A slot being
+  /// processed by a slice worker is NOT in this map (single-ownership
+  /// handoff -- see the PersistentSlice note above). Released per plate when
+  /// ProjectServiceMock::plateRemoved fires, reconciled against the live
+  /// plate set at each startSlice, and dropped wholesale by clearResults /
+  /// clearPlateResults (project-scoped resets are conservative full rebuilds).
+  std::map<int, std::shared_ptr<PersistentSlice>> persistentSlices_;
+  qint64 persistentSliceReuseCount_ = 0;
+  qint64 persistentSliceRebuildCount_ = 0;
+#endif
   int progress_ = 0;
   bool slicing_ = false;
   State sliceState_ = State::Idle;
@@ -403,6 +480,9 @@ private:
   int resultLayerCount_ = 0;
   QString resultCostLabel_ = QString();
   int activeTargetPrintId_ = -1;
+  QString resultCostLabel_;
+  int activeTargetPlateIndex_ = -1;
+  int activeTargetResultKey_ = -1;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
   // Wave 3a (perf): dedicated slice thread (upstream BackgroundSlicingProcess
   // thread_proc, BackgroundSlicingProcess.cpp:305-364) instead of the shared
@@ -439,6 +519,25 @@ private:
   std::shared_ptr<std::atomic_bool> activeExportCancelFlag_;
   bool exportActive_ = false;
   quint64 exportGeneration_ = 0;
+  /// Review P1-3: project-scoped reset counter. Bumped by clearResults /
+  /// clearPlateResults; a slice worker captures it at start and its
+  /// completion lambda applies results / re-inserts the persistent Print
+  /// only when the generation still matches -- a queued completion from a
+  /// discarded project must never attach onto the newly loaded one (the
+  /// plate-list rebuild resets printIndex identities, so identity checks
+  /// alone cannot tell stale from fresh).
+  quint64 sliceGeneration_ = 0;
+  /// PLATE-PRINT-LIFECYCLE (batch 2): future of the in-flight slice worker
+  /// (valid while slicing_). The destructor joins it after cancelling so a
+  /// worker can never race this object's destruction.
+  QFuture<void> activeSliceFuture_;
+  /// Review P2-4: the auxiliary workers (previous-G-code preview load,
+  /// export-all, single-export chunked copy) are ALSO tracked and joined by
+  /// the destructor after their cancel flags are set -- the structural
+  /// guarantee, not a call-site discipline.
+  QFuture<void> previousGcodeFuture_;
+  QFuture<void> exportAllFuture_;
+  QFuture<void> exportCopyFuture_;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
 #endif
@@ -471,6 +570,21 @@ private:
   int plateIndexForPrintId(int printId) const;
   void storePlateResult(int printId, const PlateSliceResult &result);
   void removePlateResultByPrintId(int printId);
+  int resultKeyForPlateIndex(int plateIndex) const;
+  int plateIndexForResultKey(int resultKey) const;
+  const PlateSliceResult *resultForPlateIndex(int plateIndex) const;
+  bool removeResultForPlateIndex(int plateIndex);
+  void storePlateResultForKey(int resultKey, const PlateSliceResult &result);
+  void storePlateResult(int plateIndex, const PlateSliceResult &result);
+#ifdef HAS_LIBSLIC3R
+  /// PLATE-PRINT-LIFECYCLE (batch 2): drops persistent slots whose stable
+  /// printIndex no longer resolves to a live plate (safety net for plate
+  /// pruning that bypasses the plateRemoved signal, e.g. deleteObject).
+  void reconcilePersistentSlices();
+  /// Releases the persistent slot of a deleted plate immediately (printIndex
+  /// identities are never reused, so the entry could never re-validate).
+  void releasePersistentSlice(int printIndex);
+#endif
   void setExportStatus(State state, int progress, const QString &label);
   /// Phase 239 (ENGN-03): validates the source/target synchronously (so
   /// unsafe-target rejections stay immediate) then moves the chunked copy to a

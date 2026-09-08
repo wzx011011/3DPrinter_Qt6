@@ -102,6 +102,21 @@ public:
   // code should go through the Q_INVOKABLE API; this is a test seam.
   OWzx::PartPlateList *plateListMut() { return m_plateList.get(); }
 
+  // ── Plate print-volume geometry (PLATE-PRINT-LIFECYCLE batch 1) ──────────
+  // Upstream PartPlateList::find_instance / contains / intersects
+  // (PartPlate.cpp:3948-3964, 4110-4167) resolve instance geometry from
+  // m_model. Qt6 injects the bounds source into PartPlateList instead (see
+  // PartPlateList::InstanceBoundsFn); this service owns the Model, so it
+  // attaches the provider wherever m_plateList is (re)created.
+  void attachPlateInstanceBounds();
+
+  /// Plate whose print volume holds the bed-plane point (slic3r world X/Y,
+  /// z=0) -- service wrapper over PartPlateList::findInstanceAt
+  /// (PartPlate.cpp:4110-4129 loop structure). Unprintable plates never match
+  /// (upstream keeps the unprintable shared plate out of m_plate_list,
+  /// PartPlate.hpp:541). Returns the plate position index, or -1.
+  Q_INVOKABLE int plateIndexAtPoint(double x, double y) const;
+
   /// Sets plate width/depth/height (mm) and refreshes origins. Test seam.
   void setPlateSize(int width, int depth, int height) {
     if (m_plateList) m_plateList->setPlateSize(width, depth, height);
@@ -128,6 +143,17 @@ public:
 #ifdef HAS_LIBSLIC3R
   std::unique_ptr<Slic3r::Model> cloneCurrentPlateModel() const;
   Slic3r::Model *rawModel() const { return model_; }
+  /// PLATE-PRINT-LIFECYCLE (batch 2): FNV-1a fingerprint of the CURRENT
+  /// plate's sliceable geometry, used by SliceService to decide whether the
+  /// persistent per-plate Print can be reused (config-only reslice) or must
+  /// be rebuilt (mesh change). Conservative superset of the upstream
+  /// PrintObject-identity inputs (Print.cpp:1852-1902 is_print_object_the_same):
+  /// object count/id/config timestamp/printable/layer ranges, per-volume mesh
+  /// size/type/extruder/transform/config timestamp and the supported/seam/mmu
+  /// facet-annotation timestamps, per-instance transform + printable.
+  /// O(objects) metadata walk on the GUI thread -- no mesh content traversal.
+  /// Returns 0 when nothing is sliceable.
+  quint64 currentPlateGeometrySignature() const;
 
   // Phase 122/123 (PAINT-04/05): write the painted TriangleSelector into the
   // ModelVolume FacetsAnnotation member for the given paint kind. Mirrors
@@ -193,10 +219,17 @@ public:
   /// PresetBundle selections in the 3MF config; BackendContext pushes the
   /// ConfigViewModel state here before saveProject/saveProjectAs.
   void setProjectConfigOverlay(const QVariantMap &overlay);
+  /// G-13: tier selections to embed as project presets on the next save
+  /// (BackendContext pushes the current printer/filament/print selections
+  /// before saveProject/saveProjectAs, mirroring upstream save_project).
+  void setProjectEmbeddedPresets(const QVariantList &presets) { m_projectEmbeddedPresets = presets; }
   // v2.4 IO-02: 导出模型（STL/3MF/OBJ 格式）
   Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format);
   /// v2.4: 当前项目路径（saveProjectAs 后更新）
   QString currentProjectPath() const { return currentProjectPath_; }
+  /// G-13: embedded presets read from the last loaded 3MF; returns and
+  /// clears. Empty when the archive carried none (or it was not a project).
+  QVariantList takeProjectEmbeddedPresets();
 
   /// 返回已加载的模型对象名称列表
   Q_INVOKABLE QStringList objectNames() const;
@@ -221,6 +254,11 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+  /// Stable upstream-style print identity for a positional plate index.
+  /// Returns -1 for an invalid index or a plate without an assigned identity.
+  int platePrintIndex(int plateIndex) const;
+  /// Resolves a stable print identity back to the current positional index.
+  int plateIndexForPrintIndex(int printIndex) const;
   /// Slice readiness bridge to the PartPlate domain state machine.
   Q_INVOKABLE bool isPlateReadyForSlice(int plateIndex) const;
   Q_INVOKABLE bool currentPlateCanSlice() const;
@@ -452,8 +490,20 @@ public:
   Q_INVOKABLE bool orientObject(int objectIndex);
   /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → Slic3r::arrange_objects）
   /// HAS_LIBSLIC3R: 调用真实 arrange_objects API；Mock: 返回 false
+  /// wipeTowerContext: review P1-5 -- the wipe-tower arrange obstacle reads
+  /// the GLOBAL preset config (upstream ArrangeJob reads preset_bundle, not
+  /// the plate config): enable_prime_tower(bool), timelapse_type(int),
+  /// prime_tower_width/prime_volume/prime_tower_brim_width(floats) and the
+  /// per-plate wipe_tower_x/wipe_tower_y floats. Empty map = no tower.
   Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY,
-                                    const QString &printableArea = QString());
+                                    const QString &printableArea = QString(),
+                                    const QVariantMap &wipeTowerContext = {});  /// WIPE-TOWER-BEDTEMP-GATE test seam: the per-plate "does this plate need
+  /// the wipe-tower arrange obstacle" decision over the same context map
+  /// arrangeObjects consumes. Truth-table unit tests exercise the gate
+  /// (enable gate, seq print, smooth timelapse, multi-extruder object,
+  /// allow_multi with bed-temp grouping) without running a real arrange.
+  Q_INVOKABLE bool arrangeWipeTowerNeededForPlate(int plateIndex,
+                                                  const QVariantMap &wipeTowerContext) const;
   /// 切割对象（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
   /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
   /// Returns the index of the new object created (≥0 on success, -1 on failure)
@@ -579,6 +629,10 @@ public:
   // (delete-plate undo), then the plates/membership/current index are
   // restored. Returns false on parse failure (state untouched on failure).
   bool restorePlateListSnapshot(const QByteArray &snapshot);
+  /// G-06 (snapshot v2): index of the current object carrying this
+  /// Slic3r::ObjectID, or -1. Exact undo reconciliation identity under
+  /// duplicate object names.
+  int indexOfStableId(quint64 stableId) const;
 
   // ── v5.16 UNDO-04: FacetsAnnotation snapshot (paint-stroke undo) ──
   // Serializes the ModelVolume FacetsAnnotation of the given paint kind
@@ -742,6 +796,9 @@ public:
   /// captured in-session (Phase 151 shipped the read accessor + 3MF save/load
   /// round-trip only). Returns true on successful decode + store.
   Q_INVOKABLE bool setPlateThumbnailFromBase64(int plateIndex, const QString &base64);
+  /// G-04: picking variant cache (per-object flat colors); written by the
+  /// picking thumbnail capture and consumed by storeProject3mf's pick family.
+  Q_INVOKABLE bool setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64);
 
   /// 添加新对象到当前平板（对齐上游 Plater 粘贴剪贴板行为）
   /// 返回新对象的索引，失败返回 -1
@@ -940,6 +997,12 @@ signals:
   /// after addTextVolumeAsync's worker fails (font load, empty shapes, mesh
   /// generation, or cancellation).
   void embossVolumeFailed(const QString &reason);
+  /// PLATE-PRINT-LIFECYCLE (batch 2): fired by deletePlate after the plate
+  /// left the list, carrying the removed plate's stable printIndex so stores
+  /// keyed by that identity (SliceService persistent Print slots and
+  /// per-plate results) release the entry immediately -- printIndex
+  /// identities are never reused.
+  void plateRemoved(int printIndex);
 
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
@@ -1034,6 +1097,13 @@ private:
   QList<QVector3D> assembleOffsets_;   // (x, y, z) in mm
   QList<QVector3D> assembleRotations_; // (x, y, z) in degrees
   QList<QVector3D> assembleScales_;    // (x, y, z) factors
+  /// G-13: see setProjectEmbeddedPresets. Consumed (and cleared-to-last-push)
+  /// by storeProject3mf.
+  QVariantList m_projectEmbeddedPresets;
+  /// G-13: embedded presets read back from the 3MF being loaded (worker
+  /// publishes them through the load-delivery lambda; BackendContext takes
+  /// and adopts them into the PresetServiceMock on loadFinished).
+  QVariantList m_projectEmbeddedPresetsFromLoad;
   int loadProgress_ = 0;
   bool loading_ = false;
 

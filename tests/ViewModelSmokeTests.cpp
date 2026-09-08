@@ -64,6 +64,9 @@
 #include "qml_gui/BackendContext.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
+// SEL-MODIFIERS-RECT: static projection/containment helpers (pure, no QRhi
+// instantiation) reused by the rubber-band selection test.
+#include "qml_gui/Renderer/RhiViewport.h"
 
 namespace
 {
@@ -258,6 +261,14 @@ private slots:
   // Phase 241 (PAGE-04): the backup primitive writes a real .3mf snapshot
   // without hijacking the current project path.
   void projectBackupWritesSnapshotFile();
+  // G-06: delete-plate undo reconciles same-named objects by stable ObjectID.
+  void deletePlateUndoReconcilesDuplicateNamesByStableId();
+  // G-04: storeProject3mf writes the thumbnail family + production strategy.
+  void projectStoreWritesThumbnailFamily();
+  // G-13: Detach flattens an inherited user preset (cut the inherits link).
+  void detachFlattensInheritedUserPreset();
+  // G-13: save embeds the tier selections; loading reads them back.
+  void projectEmbedsAndReloadsSelectedPresets();
   // v2.7 P2-A: INT-04 MQTT connection params + telemetry field mapping
   void int04_MqttConnectionParamsAndTelemetryFields();
   // v2.7 P2-B: INT-05 MQTT command construction + control flow
@@ -266,6 +277,12 @@ private slots:
   void int06_FtpUrlAndSendPrintRouting();
   void monitorDeviceFilesystemCapabilityIsExplicit();
   void appSettingsAndEditorBedShapePersistDeterministically();
+  // GAP-4/5/6/7 review-loop additions.
+  void platerHotkeysBackendAnchorsPresent();
+  void multiSelectPostsInfoNotification();
+  void openExternalGcodeOpensPreviewOnlyProject();
+  void addPlateLeavesDefaultNameEmpty();
+  void dirtyProjectDiscardRememberPersists();
   void editor_import_model_updates_state();
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
   // 260822-x4n B1 (upstream BackgroundSlicingProcess::can_switch_print,
@@ -376,6 +393,9 @@ private slots:
   // 5 CLOS-04 dimensions + per-plate thumbnails survive save→reload. This is
   // the live ctest that Phase 152 could only source-audit-lock.
   void multiPlateFullStateRoundTrip();
+  // G-11 follow-up: loadProject publishes every pending plate field on the GUI
+  // thread and replaces, rather than leaks, sequence state across reloads.
+  void loadProjectReplacesPlateSequenceState();
   // Phase 138 (ASM-01): per-instance assemble transform survives a real 3MF
   // save (saveProjectAs -> store_3mf) + reload (loadProject) through the upstream
   // <assemble> block (bbs_3mf.cpp:8070-8088 write, 4734-4741 read). Proves the
@@ -390,6 +410,21 @@ private slots:
   void activePlateObjectIndicesFollowCurrentPlateWithoutFallback();
   // v3.2 Phase 25-03: QRhi picking selects source objects through the ViewModel
   void rendererPickingSelectsSourceObjectThroughEditorViewModel();
+  // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135/4152-4168): Ctrl+click
+  // toggles a source object in/out of the selection; Alt+click selects the
+  // volume (part) scope -- both routed through EditorViewModel backend
+  // methods, never through QML.
+  void selectionModifierClicksRouteThroughBackendToggleAndVolumePick();
+  // SEL-MODIFIERS-RECT (upstream _update_selection_from_hover,
+  // GLCanvas3D.cpp:9518-9600): Shift rect replaces the selection (additive
+  // with Ctrl), Alt rect removes, an empty Shift rect clears, an empty Alt
+  // rect is a no-op.
+  void selectionRectBackendReplacesAddsDeselectsAndClears();
+  // SEL-MODIFIERS-RECT (GLSelectionRectangle::contains projection primitive):
+  // a synthetic packed mesh blob feeds PrepareSceneData, the batch bounds are
+  // projected with RhiViewport::projectBoundsToScreenRect, and the contained
+  // list drives EditorViewModel::selectObjectsInRect (include/exclude).
+  void rectangleSelectionProjectsSyntheticMeshBatchesForContainment();
   // P15.11 (SIDEBAR-LOCAL-AXES): the sidebar hint orientation mirrors the
   // selected object's local axes (Selection.cpp:2003-2020 orient_matrix).
   void selectedHintLocalRotationMirrorsSelectionRotation();
@@ -412,12 +447,13 @@ private slots:
   void prepareContextMeshAndUnitActionsUseUpstreamModelOperations();
   void prepareContextProcessSettingsCopyPasteUsesScopedConfig();
   // Phase 55-04 (GCODE-02/03): render-side role-toggle no-repack guard,
-  // legend/global-scope coherence, currentMove atomicity, 17-view-mode contract.
+  // legend/global-scope coherence, currentMove atomicity, upstream-10 contract.
   void roleVisibilityToggleDoesNotRepackGcodePreviewData();
   void legendGradientBoundsStableAcrossLayerMoveDrag();
   void currentMoveUpdatesGcodeLineWindowAtomically();
   void stepCurrentMoveClampsAndUpdatesGcodeLineWindow();
-  void viewModesExposeUpstreamSeventeenModes();
+  void gcodeLineWindowTokenizesAndTruncatesLikeUpstream();
+  void viewModesExposeUpstreamTenModes();
   // Phase 55 code-review fix (GCODE-02): the renderer consumes a DENSE 20-bool
   // mask, not the 18-row QVariantMap UI list. Guard the producer shape and the
   // toggle→mask propagation so the role-visibility feature cannot silently
@@ -505,6 +541,8 @@ private slots:
   // boundary: the cursor + select_patch invocation runs WITHOUT a Model or
   // renderer. Mirrors the Phase 114 MeasureEngine readback pattern (synthetic
   // input + pure helper assertion).
+  void arrowNudgeTranslatesSelectionWithCoalescedUndo();
+  void paintAxisLockClampsAndRoundTrips();
   void paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt();
   // P2.3-1 (clipping-plane brush): an active cross-section plane rejects the
   // stroke on the clipped side while the visible side still paints (upstream
@@ -543,6 +581,29 @@ private slots:
   // FaceDetector — a ray grid over the merged object marks exactly the
   // outward-facing facets, so a 20mm cube reports ALL of its triangles.
   void faceDetectorRecognizesAllCubeFacetsAsExterior();
+  // PAINT-GAPFILL-PORT: PaintEngine::getGapFragments area-threshold behavior
+  // on the SAME synthetic unit-square mesh as
+  // paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt. Asserts the strict
+  // `area < gap_area` fragment filter (upstream TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236), the threshold<=0 disable, and that a
+  // brush stroke which subdivides the square grows the fragment set.
+  void paintEngineGapFragmentsRespectAreaThreshold();
+  // PAINT-MMU-TOOLS: bucket fill (pointer single-facet + connected flood) and
+  // the height-range band via the pure helpers. Asserts the upstream click
+  // semantics (apply-on-next-click staging, GLGizmoPainterBase.cpp:778-787),
+  // the angle=-1 no-edge-detection flood, the propagate=false pointer scope,
+  // and the world-Z band anchoring incl. the full-transform translation
+  // (GLGizmoPainterBase.cpp:703-733).
+  void paintEngineMmuToolsBucketFillAndHeightRange();
+  // PAINT-ALT-WHEEL-CLIP: buildPaintClippingPlane volume-coordinate math.
+  // Asserts the upstream chain semantics: normal = -camera forward, world
+  // offset = n.dot(center) + R - ratio*2R (ObjectClipper::
+  // set_position_by_ratio, GLGizmosCommon.cpp:346-367), the plane carried
+  // into volume coordinates via the inverse/transpose transform
+  // (get_clipping_plane_in_volume_coordinates,
+  // GLGizmoPainterBase.cpp:1101-1117), the inactive plane at ratio 0, and
+  // which side is_mesh_point_clipped rejects (TriangleSelector.hpp:65).
+  void paintClippingPlaneMathMatchesUpstream();
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
   // the key viewmodel/service APIs landed by Phases 196-202 are callable at
   // the C++ boundary: EditorViewModel::embossRunning, SliceService::sliceState,
@@ -4068,6 +4129,240 @@ void ViewModelSmokeTests::projectBackupWritesSnapshotFile()
 #endif
 }
 
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
+{
+  // G-06: the plate-list undo snapshot reconciles by Slic3r::ObjectID. With
+  // two objects sharing ONE name, the legacy by-name match treated the
+  // deleted object's recorded (index, name) as "survived" — the same-named
+  // survivor occupied that index after the delete — and skipped its deep
+  // restore, silently dropping the object.
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 0 "立方体"
+  QVERIFY(project.addPrimitiveToPlate(0) >= 1);   // object 1 "立方体" (same name)
+  QCOMPARE(project.objectNames().value(0), project.objectNames().value(1));
+
+  const QByteArray snapshot = project.capturePlateListSnapshot(true);
+  QVERIFY(!snapshot.isEmpty());
+
+  // Delete the FIRST same-named object: the survivor shifts into its
+  // recorded index/name slot.
+  QVERIFY(project.deleteObject(0));
+  QCOMPARE(project.modelCount(), 1);
+
+  QVERIFY(project.restorePlateListSnapshot(snapshot));
+  QCOMPARE(project.modelCount(), 2);
+  QVERIFY(project.volumeMeshTriangleMesh(0, 0) != nullptr);
+  QVERIFY(project.volumeMeshTriangleMesh(1, 0) != nullptr);
+}
+#else
+void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
+{
+  QSKIP("G-06 duplicate-name undo reconciliation requires HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
+{
+  // G-04: storeProject3mf pushes the per-view thumbnail families (main +
+  // no_light/top/picking from the PartPlate variant caches) and saves under
+  // the production SaveStrategy (SplitModel|ShareMesh|FullPathSources|Zip64,
+  // Plater.cpp:12136-12143). The saved archive must round-trip: a fresh load
+  // restores both plates with thumbnails and meshes (the production strategy
+  // stays self-compatible with our reader).
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.addPlate());
+  QVERIFY(project.setCurrentPlateIndex(1));
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QCOMPARE(project.plateCount(), 2);
+
+  // Populate the plate thumbnail caches (16x16 solid PNG) so the writer has
+  // valid entries for the main family on both plates.
+  QByteArray png;
+  {
+    QBuffer buf(&png);
+    buf.open(QIODevice::WriteOnly);
+    QImage img(16, 16, QImage::Format_RGBA8888);
+    img.fill(30);
+    img.save(&buf, "PNG");
+  }
+  const QString b64 = QString::fromLatin1(png.toBase64());
+  QVERIFY(project.setPlateThumbnailFromBase64(0, b64));
+  QVERIFY(project.setPlateThumbnailFromBase64(1, b64));
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.path() + QStringLiteral("/thumbs.3mf");
+  QVERIFY(project.saveProject(path));
+  QVERIFY(QFileInfo(path).size() > 0);
+
+  ProjectServiceMock reload;
+  QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+  QVERIFY(reload.loadFile(path));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(loadSpy.takeFirst().at(0).toBool());
+  QCOMPARE(reload.modelCount(), 2);
+  QCOMPARE(reload.plateCount(), 2);
+  QVERIFY(!reload.plateThumbnailBase64(0).isEmpty());
+  QVERIFY(!reload.plateThumbnailBase64(1).isEmpty());
+}
+#else
+void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
+{
+  QSKIP("G-04 thumbnail-family store requires HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
+{
+  // G-13: Detach (upstream "detach from system preset") cuts the inherits
+  // link of a USER preset, keeping the resolved values as its own.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("G13Detach"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  QTemporaryDir presetDir;
+  QVERIFY(presetDir.isValid());
+  PresetServiceMock presets;
+  presets.setUserPresetDir(presetDir.path());
+  // Base parent first: a bare service instance carries no bundled presets.
+  QHash<QString, QVariant> base;
+  base.insert(QStringLiteral("layer_height"), 0.2);
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("BaseProfile"), base));
+  QHash<QString, QVariant> values;
+  values.insert(QStringLiteral("layer_height"), 0.3);
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("MyProfile"), values,
+                                     QStringLiteral("BaseProfile")));
+  QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")),
+           QStringLiteral("BaseProfile"));
+
+  QVERIFY(presets.detachPresetFromParent(PresetServiceMock::PrintCat,
+                                         QStringLiteral("MyProfile"), values));
+  QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")), QString());
+  // The preset and its values survive the flatten.
+  QVERIFY(presets.hasPreset(QStringLiteral("MyProfile")));
+  QCOMPARE(presets.presetCategory(QStringLiteral("MyProfile")),
+           PresetServiceMock::PrintCat);
+}
+#else
+void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
+{
+  QSKIP("G-13 detach requires HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
+{
+  // G-13: saving a project embeds the tier selections as project presets
+  // (upstream save_project -> project_presets); loading the 3MF reads them
+  // back as an adopt payload.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("G13Embed"));
+  QTemporaryDir presetDir;
+  QVERIFY(presetDir.isValid());
+  PresetServiceMock presets;
+  presets.setUserPresetDir(presetDir.path());
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+                                     QStringLiteral("EmbPrint"),
+                                     {{QStringLiteral("layer_height"), 0.3}}));
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrinterCat,
+                                     QStringLiteral("EmbPrinter"),
+                                     {{QStringLiteral("bed_shape"), QStringLiteral("0,0,200,0,200,200,0,200")}}));
+  QVERIFY(presets.createCustomPreset(PresetServiceMock::FilamentCat,
+                                     QStringLiteral("EmbFilament"),
+                                     {{QStringLiteral("filament_type"), QStringLiteral("PLA")}}));
+  presets.setSelectedPresetForCategory(PresetServiceMock::PrintCat, QStringLiteral("EmbPrint"));
+  presets.setSelectedPresetForCategory(PresetServiceMock::PrinterCat, QStringLiteral("EmbPrinter"));
+  presets.setSelectedPresetForCategory(PresetServiceMock::FilamentCat, QStringLiteral("EmbFilament"));
+
+  // Mirror BackendContext::collectProjectEmbeddedPresets (it cannot run here:
+  // no full BackendContext needed for the service round-trip).
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVariantList embed;
+  const int categories[] = {PresetServiceMock::PrintCat,
+                            PresetServiceMock::FilamentCat,
+                            PresetServiceMock::PrinterCat};
+  for (int category : categories) {
+    const QString name = presets.selectedPresetForCategory(category);
+    QVERIFY(!name.isEmpty());
+    QVariantMap entry;
+    entry.insert(QStringLiteral("category"), category);
+    entry.insert(QStringLiteral("name"), name);
+    QVariantMap values;
+    const auto presetValues = presets.presetValues(name);
+    for (auto it = presetValues.constBegin(); it != presetValues.constEnd(); ++it)
+      values.insert(it.key(), it.value());
+    entry.insert(QStringLiteral("values"), values);
+    embed.append(entry);
+  }
+  project.setProjectEmbeddedPresets(embed);
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString path = dir.path() + QStringLiteral("/embed.3mf");
+  QVERIFY(project.saveProject(path));
+
+  ProjectServiceMock reload;
+  QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+  QVERIFY(reload.loadFile(path));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(loadSpy.takeFirst().at(0).toBool());
+
+  const QVariantList payload = reload.takeProjectEmbeddedPresets();
+  for (const QVariant &entryVar : payload) {
+    const QVariantMap entry = entryVar.toMap();
+    qInfo("[G13] embedded payload: category=%d name=%s values=%lld",
+          entry.value(QStringLiteral("category")).toInt(),
+          qUtf8Printable(entry.value(QStringLiteral("name")).toString()),
+          static_cast<long long>(entry.value(QStringLiteral("values")).toMap().size()));
+  }
+  QCOMPARE(payload.size(), 3);
+
+  // Adopt as BackendContext does on loadFinished.
+  QTemporaryDir adoptDir;
+  QVERIFY(adoptDir.isValid());
+  PresetServiceMock adopted;
+  adopted.setUserPresetDir(adoptDir.path());
+  for (const QVariant &entryVar : payload) {
+    const QVariantMap entry = entryVar.toMap();
+    QHash<QString, QVariant> values;
+    const QVariantMap valuesMap = entry.value(QStringLiteral("values")).toMap();
+    for (auto it = valuesMap.constBegin(); it != valuesMap.constEnd(); ++it)
+      values.insert(it.key(), it.value());
+    const bool adoptedOk = adopted.adoptProjectEmbeddedPreset(
+        entry.value(QStringLiteral("category")).toInt(),
+        entry.value(QStringLiteral("name")).toString(), values,
+        entry.value(QStringLiteral("inherits")).toString());
+    if (!adoptedOk)
+      qInfo("[G13] adopt failed: category=%d name=%s values=%lld exists=%d",
+            entry.value(QStringLiteral("category")).toInt(),
+            qUtf8Printable(entry.value(QStringLiteral("name")).toString()),
+            static_cast<long long>(values.size()),
+            adopted.hasPreset(entry.value(QStringLiteral("name")).toString()) ? 1 : 0);
+    QVERIFY2(adoptedOk, "G-13: adoptProjectEmbeddedPreset must succeed for each embedded entry");
+  }
+  QVERIFY(adopted.hasPreset(QStringLiteral("EmbPrint")));
+  QCOMPARE(adopted.presetValues(QStringLiteral("EmbPrint"))
+               .value(QStringLiteral("layer_height")).toDouble(), 0.3);
+}
+#else
+void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
+{
+  QSKIP("G-13 embedded presets require HAS_LIBSLIC3R");
+}
+#endif
+
 void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
 {
   CalibrationServiceMock service;
@@ -4935,6 +5230,234 @@ void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewMod
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
 }
 
+// SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135/4152-4168, KBShortcutsDialog
+// .cpp:235-236): the viewport's Ctrl/Alt click signals must route through
+// EditorViewModel backend methods. Ctrl+click on an unselected object adds it
+// without touching the rest of the selection; Ctrl+click on a selected object
+// removes it (Selection::remove); Alt+click selects the volume (part) scope.
+void ViewModelSmokeTests::selectionModifierClicksRouteThroughBackendToggleAndVolumePick()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QCOMPARE(editor.objectCount(), 2);
+
+  QSignalSpy spy(&editor, &EditorViewModel::stateChanged);
+  // Ctrl+click on object 0 with an empty selection -> selected.
+  editor.toggleSourceObjectSelection(0);
+  QVERIFY(editor.isObjectSelected(0));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 0);
+  // Ctrl+click on object 1 -> joins additively, object 0 stays.
+  editor.toggleSourceObjectSelection(1);
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedObjectCount(), 2);
+  // Ctrl+click again on object 0 -> removed; object 1 remains.
+  editor.toggleSourceObjectSelection(0);
+  QVERIFY(!editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QVERIFY(spy.count() >= 3);
+
+  // Out-of-range source index is a silent no-op (no state churn).
+  const int signalCountBeforeInvalid = spy.count();
+  editor.toggleSourceObjectSelection(-1);
+  editor.toggleSourceObjectSelection(999);
+  QCOMPARE(spy.count(), signalCountBeforeInvalid);
+  QVERIFY(editor.isObjectSelected(1));
+
+  // Alt+click routes to the volume (part) scope of the clicked object
+  // (upstream m_selection.set_volume_selection_mode(Volume)).
+  editor.selectVolumeBySource(1, 0);
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+  QCOMPARE(editor.selectedVolumeIndex(), 0);
+  QVERIFY(editor.isObjectSelected(1));
+  // Invalid volume index keeps the previous selection.
+  editor.selectVolumeBySource(1, 7);
+  QCOMPARE(editor.selectedVolumeIndex(), 0);
+}
+
+// SEL-MODIFIERS-RECT (upstream _update_selection_from_hover,
+// GLCanvas3D.cpp:9518-9600): Shift rect replaces the selection (:9576),
+// Ctrl+Shift rect is additive, an empty Shift rect clears the whole selection
+// (:9522-9526, gated on Ctrl), Alt rect removes the contained objects
+// (:9588-9589) and an empty Alt rect is a no-op.
+void ViewModelSmokeTests::selectionRectBackendReplacesAddsDeselectsAndClears()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(editor.addPrimitiveToPlate(2));
+  QCOMPARE(editor.objectCount(), 3);
+
+  const QRectF band(10.0, 10.0, 120.0, 90.0);
+  const int shift = int(Qt::ShiftModifier);
+  const int ctrlShift = int(Qt::ShiftModifier) | int(Qt::ControlModifier);
+  const int altShift = int(Qt::ShiftModifier) | int(Qt::AltModifier);
+
+  // Shift rect over {1}: replaces the prior object-0 selection.
+  QVERIFY(editor.selectSourceObject(0));
+  editor.selectObjectsInRect(shift, band, QVariantList{1});
+  QVERIFY(!editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 1);
+
+  // Ctrl+Shift rect over {0, 2}: additive on top of {1}.
+  editor.selectObjectsInRect(ctrlShift, band, QVariantList{0, 2});
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(editor.isObjectSelected(1));
+  QVERIFY(editor.isObjectSelected(2));
+
+  // Alt rect over {1, 2}: removes them, keeps 0.
+  editor.selectObjectsInRect(altShift, band, QVariantList{1, 2});
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(!editor.isObjectSelected(1));
+  QVERIFY(!editor.isObjectSelected(2));
+
+  // Shift rect with nothing contained: clears the selection (upstream
+  // remove_all); the Ctrl variant keeps it.
+  editor.selectObjectsInRect(shift, band, QVariantList());
+  QCOMPARE(editor.selectedSourceObjectIndex(), -1);
+  QVERIFY(editor.selectSourceObject(0));
+  editor.selectObjectsInRect(ctrlShift, band, QVariantList());
+  QVERIFY(editor.isObjectSelected(0));
+
+  // Alt rect with nothing contained: no-op.
+  editor.selectObjectsInRect(altShift, band, QVariantList());
+  QVERIFY(editor.isObjectSelected(0));
+
+  // Out-of-range contained indices are dropped, not propagated.
+  editor.selectObjectsInRect(shift, band, QVariantList{1, 999, -3});
+  QVERIFY(editor.isObjectSelected(1));
+  QVERIFY(!editor.isObjectSelected(0));
+}
+
+// SEL-MODIFIERS-RECT (GLSelectionRectangle::contains projection primitive,
+// GLSelectionRectangle.cpp:33-49): a synthetic packed mesh blob feeds
+// PrepareSceneData::setModelMeshData exactly like the viewport picking scene,
+// the batch bounds are projected with RhiViewport::projectBoundsToScreenRect,
+// the upstream partial-overlap containment (GLCanvas3D.cpp:7019-7030) picks
+// the included batch and excludes the other one, and the resulting list drives
+// EditorViewModel::selectObjectsInRect end-to-end.
+void ViewModelSmokeTests::rectangleSelectionProjectsSyntheticMeshBatchesForContainment()
+{
+  // Two one-triangle batches in a 100x100 world window: batch A near the
+  // origin, batch B far from it (both on the Z=0 bed plane).
+  const float batchATriangle[3][3] = {{10.f, 20.f, 0.f}, {30.f, 20.f, 0.f}, {10.f, 40.f, 0.f}};
+  const float batchBTriangle[3][3] = {{60.f, 60.f, 0.f}, {80.f, 60.f, 0.f}, {60.f, 80.f, 0.f}};
+
+  QByteArray blob;
+  const auto appendInt32 = [&blob](qint32 value) {
+    blob.append(reinterpret_cast<const char *>(&value), sizeof(qint32));
+  };
+  const auto appendFloat = [&blob](float value) {
+    blob.append(reinterpret_cast<const char *>(&value), sizeof(float));
+  };
+  const auto appendTriangle = [&blob, &appendFloat](const float triangle[3][3]) {
+    for (int vertex = 0; vertex < 3; ++vertex)
+      for (int axis = 0; axis < 3; ++axis)
+        appendFloat(triangle[vertex][axis]);
+  };
+  // Blob layout (PrepareSceneData::setModelMeshData): objectCount header, then
+  // per batch [renderObjectId, triangleCount, verts...], then a 6-float
+  // trailer.
+  appendInt32(2);
+  for (int batch = 0; batch < 2; ++batch) {
+    appendInt32(batch); // renderObjectId
+    appendInt32(1);     // triangleCount
+    appendTriangle(batch == 0 ? batchATriangle : batchBTriangle);
+  }
+  for (int i = 0; i < 6; ++i)
+    appendFloat(0.f);
+
+  PrepareSceneData scene;
+  scene.setModelMeshData(blob,
+                         QList<int>{0, 1},
+                         QList<int>{0, 0},
+                         QList<int>{0, 0},
+                         QList<int>{0, 1});
+  QCOMPARE(scene.modelBatches().size(), 2);
+
+  // Item-local projection mirroring the GLCanvas conventions: world
+  // (0,0) -> screen top-left, world (100,100) -> bottom-right, screen Y
+  // growing downward (projectWorldToScreen).
+  QMatrix4x4 viewProjection;
+  viewProjection.ortho(0.0f, 100.0f, 100.0f, 0.0f, -10.0f, 10.0f);
+  const QSizeF viewportSize(100.0, 100.0);
+  const QRectF screenA = RhiViewport::projectBoundsToScreenRect(
+      scene.modelBatches().at(0).bounds, viewProjection, viewportSize);
+  const QRectF screenB = RhiViewport::projectBoundsToScreenRect(
+      scene.modelBatches().at(1).bounds, viewProjection, viewportSize);
+  // QRectF operator== is exact in Qt 6 and the projection runs in float
+  // precision (QVector4D), so compare the projected edges with an absolute
+  // thousandth-of-a-pixel tolerance (the ortho map is 1 world unit = 1 pixel).
+  const auto fuzzyRectEquals = [](const QRectF &actual, double left, double top,
+                                  double right, double bottom) {
+    const double kTolerance = 0.001;
+    return qAbs(actual.left() - left) <= kTolerance
+        && qAbs(actual.top() - top) <= kTolerance
+        && qAbs(actual.right() - right) <= kTolerance
+        && qAbs(actual.bottom() - bottom) <= kTolerance;
+  };
+  QVERIFY2(fuzzyRectEquals(screenA, 10.0, 20.0, 30.0, 40.0),
+           qPrintable(QStringLiteral("batch A projected to L=%1 T=%2 R=%3 B=%4")
+                          .arg(QString::number(screenA.left(), 'f', 12))
+                          .arg(QString::number(screenA.top(), 'f', 12))
+                          .arg(QString::number(screenA.right(), 'f', 12))
+                          .arg(QString::number(screenA.bottom(), 'f', 12))));
+  QVERIFY2(fuzzyRectEquals(screenB, 60.0, 60.0, 80.0, 80.0),
+           qPrintable(QStringLiteral("batch B projected to %1 %2x%3")
+                          .arg(screenB.left())
+                          .arg(screenB.top())
+                          .arg(screenB.width())));
+
+  // Containment: a band fully around batch A; a partial band over A still
+  // hits (upstream pixel semantics); a band far away hits nothing; a
+  // click-sized band on A behaves like the upstream 1x1 pixel fallback.
+  const QRectF bandAroundA(0.0, 0.0, 50.0, 50.0);
+  QVERIFY(RhiViewport::rectHitsProjectedBounds(bandAroundA, screenA));
+  QVERIFY(!RhiViewport::rectHitsProjectedBounds(bandAroundA, screenB));
+  QVERIFY(RhiViewport::rectHitsProjectedBounds(QRectF(25.0, 25.0, 10.0, 10.0), screenA));
+  QVERIFY(!RhiViewport::rectHitsProjectedBounds(QRectF(85.0, 85.0, 10.0, 10.0), screenA));
+  QVERIFY(RhiViewport::rectHitsProjectedBounds(QRectF(15.0, 25.0, 0.5, 0.5), screenA));
+
+  // The viewport containment loop replicated over the projected batches, then
+  // the result routed through the EditorViewModel backend method.
+  QVariantList contained;
+  for (const PrepareSceneData::ModelBatch &batch : scene.modelBatches()) {
+    const QRectF screenBounds = RhiViewport::projectBoundsToScreenRect(
+        batch.bounds, viewProjection, viewportSize);
+    if (RhiViewport::rectHitsProjectedBounds(bandAroundA, screenBounds))
+      contained.append(batch.sourceObjectIndex);
+  }
+  QCOMPARE(contained.size(), 1);
+  QCOMPARE(contained.first().toInt(), 0);
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(1));
+  QVERIFY(editor.selectSourceObject(1));
+
+  // Shift rect containing only batch A: replaces the object-1 selection.
+  editor.selectObjectsInRect(int(Qt::ShiftModifier), bandAroundA, contained);
+  QVERIFY(editor.isObjectSelected(0));
+  QVERIFY(!editor.isObjectSelected(1));
+  QCOMPARE(editor.selectedSourceObjectIndex(), 0);
+
+  // The Alt form of the same band removes batch A again.
+  editor.selectObjectsInRect(int(Qt::ShiftModifier) | int(Qt::AltModifier),
+                             bandAroundA, contained);
+  QVERIFY(!editor.isObjectSelected(0));
+}
+
 // P15.11 (SIDEBAR-LOCAL-AXES): selectedHintLocalRotation feeds the sidebar
 // hint arrows the selected object's local-axis orientation. The accessor
 // mirrors the first instance rotation (Selection.cpp:2010-2013) and returns
@@ -5327,6 +5850,62 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
   QVERIFY2(loader.plateCount() >= 2, "reloaded project must have >= 2 plates");
   QVERIFY2(loader.isPlateLocked(1), "plate 1 locked state must round-trip");
   QCOMPARE(loader.plateBedType(0), 3);
+#endif
+}
+
+void ViewModelSmokeTests::loadProjectReplacesPlateSequenceState()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("loadProject sequence replacement requires libslic3r");
+#else
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/test_model.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "sequence fixture must exist");
+
+  const QString firstPath = QDir(QDir::tempPath()).filePath(
+      QStringLiteral("owzx_sequence_first.3mf"));
+  const QString secondPath = QDir(QDir::tempPath()).filePath(
+      QStringLiteral("owzx_sequence_second.3mf"));
+  QFile::remove(firstPath);
+  QFile::remove(secondPath);
+
+  ProjectServiceMock first;
+  QSignalSpy firstLoad(&first, &ProjectServiceMock::loadFinished);
+  QVERIFY(first.loadFile(fixturePath));
+  QTRY_VERIFY_WITH_TIMEOUT(firstLoad.count() > 0, 10000);
+  QVERIFY(first.setPlateFirstLayerSeqChoice(0, 1));
+  QVERIFY(first.setPlateFirstLayerSeqOrder(0, QVariantList{2, 1}));
+  QVERIFY(first.setPlateOtherLayersSeqChoice(0, 1));
+  QVERIFY(first.addPlateOtherLayersSeqEntry(0, 2, 50));
+  QVERIFY(first.saveProject(firstPath));
+
+  ProjectServiceMock second;
+  QSignalSpy secondLoad(&second, &ProjectServiceMock::loadFinished);
+  QVERIFY(second.loadFile(fixturePath));
+  QTRY_VERIFY_WITH_TIMEOUT(secondLoad.count() > 0, 10000);
+  QVERIFY(second.saveProject(secondPath));
+
+  ProjectServiceMock loader;
+  QSignalSpy loaderSignals(&loader, &ProjectServiceMock::loadFinished);
+  QVERIFY(loader.loadProject(firstPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loaderSignals.count() > 0, 10000);
+  QVERIFY(loaderSignals.last().at(0).toBool());
+  QCOMPARE(loader.plateFirstLayerSeqChoice(0), 1);
+  QCOMPARE(loader.plateFirstLayerSeqOrder(0), QVariantList({2, 1}));
+  QCOMPARE(loader.plateOtherLayersSeqChoice(0), 1);
+  QCOMPARE(loader.plateOtherLayersSeqCount(0), 1);
+
+  loaderSignals.clear();
+  QVERIFY(loader.loadProject(secondPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loaderSignals.count() > 0, 10000);
+  QVERIFY(loaderSignals.last().at(0).toBool());
+  QCOMPARE(loader.plateFirstLayerSeqChoice(0), 0);
+  QVERIFY(loader.plateFirstLayerSeqOrder(0).isEmpty());
+  QCOMPARE(loader.plateOtherLayersSeqChoice(0), 0);
+  QCOMPARE(loader.plateOtherLayersSeqCount(0), 0);
+
+  QFile::remove(firstPath);
+  QFile::remove(secondPath);
 #endif
 }
 
@@ -5775,24 +6354,45 @@ void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
            "gcodeLines window must be populated after a move step");
 }
 
-// Phase 55 (GCODE-02): belt-and-suspenders alongside PreviewParserTests -- the
-// 17 upstream EViewType modes must be present with the canonical names so the
-// QML view-mode combo and recolor switch share one source of truth.
-void ViewModelSmokeTests::viewModesExposeUpstreamSeventeenModes()
+// GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): belt-and-suspenders alongside
+// PreviewParserTests -- viewModes() must equal the upstream GCodeViewer
+// view_type_items table item by item: count, order, and the exact
+// get_view_type_string display names (GCodeViewer.cpp:892-901 + :59-84).
+void ViewModelSmokeTests::viewModesExposeUpstreamTenModes()
 {
   ProjectServiceMock project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
-  QVERIFY2(modes.size() == 17,
-           qPrintable(QStringLiteral("viewModes() should expose 17 upstream modes, got %1").arg(modes.size())));
-  QVERIFY2(modes.contains(QStringLiteral("Line Type")),
-           "viewModes() must contain 'Line Type'");
-  QVERIFY2(modes.contains(QStringLiteral("Summary")),
-           "viewModes() must contain 'Summary'");
-  QVERIFY2(modes.contains(QStringLiteral("Tool")),
-           "viewModes() must contain 'Tool'");
+  const QStringList upstream = {
+      QStringLiteral("Line Type"),        // FeatureType
+      QStringLiteral("Filament"),         // ColorPrint
+      QStringLiteral("Speed"),            // Feedrate
+      QStringLiteral("Layer Height"),     // Height
+      QStringLiteral("Line Width"),       // Width
+      QStringLiteral("Flow"),             // VolumetricRate
+      QStringLiteral("Layer Time"),       // LayerTime
+      QStringLiteral("Layer Time (log)"), // LayerTimeLog
+      QStringLiteral("Fan Speed"),        // FanSpeed
+      QStringLiteral("Temperature"),      // Temperature
+  };
+  QVERIFY2(modes.size() == upstream.size(),
+           qPrintable(QStringLiteral("viewModes() should expose the 10 upstream modes, got %1").arg(modes.size())));
+  for (int i = 0; i < upstream.size(); ++i)
+  {
+    QVERIFY2(modes.at(i) == upstream.at(i),
+             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (upstream order), got '%3'")
+                            .arg(i).arg(upstream.at(i), modes.at(i))));
+  }
+  // Upstream hides Tool (commented out at GCodeViewer.cpp:902-904), keeps
+  // FilamentId internal (GCodeViewer.cpp:911), and has no Summary row.
+  QVERIFY2(!modes.contains(QStringLiteral("Tool")),
+           "Tool is hidden upstream and must not appear in the dropdown");
+  QVERIFY2(!modes.contains(QStringLiteral("Summary")),
+           "Summary has no upstream dropdown row");
+  QVERIFY2(!modes.contains(QStringLiteral("FilamentId")),
+           "FilamentId stays internal (GCodeViewer.cpp:911)");
 }
 
 // -- Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-01..07 --
@@ -6237,6 +6837,52 @@ void ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow()
   QCOMPARE(preview.currentMove(), preview.moveCount());
   preview.stepCurrentMove(-999999);
   QCOMPARE(preview.currentMove(), 0);
+}
+
+void ViewModelSmokeTests::gcodeLineWindowTokenizesAndTruncatesLikeUpstream()
+{
+  // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-536): every
+  // window row carries the command / parameters / comment split; lines longer
+  // than 55 characters truncate to 52 + "..."; a row whose source has a ';'
+  // reports the comment part starting with ';'.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+
+  QVERIFY2(preview.loadGCodeForPreview(kOrcaGcodePath),
+           "loadGCodeForPreview should succeed on the committed Orca fixture");
+  const QVariantList rows = preview.gcodeLines();
+  QVERIFY2(!rows.isEmpty(), "the source window must be populated");
+
+  bool sawComment = false;
+  bool sawParameters = false;
+  for (const QVariant &v : rows) {
+    const QVariantMap row = v.toMap();
+    QVERIFY2(row.contains(QStringLiteral("command")) &&
+             row.contains(QStringLiteral("parameters")) &&
+             row.contains(QStringLiteral("comment")),
+             "every row must carry the command/parameters/comment split");
+    const QString text = row.value(QStringLiteral("text")).toString();
+    QVERIFY2(text.size() <= 55,
+             "rows longer than 55 characters must truncate (52 + \"...\")");
+    if (text.endsWith(QStringLiteral("...")))
+      QCOMPARE(text.size(), 55);
+    const QString command = row.value(QStringLiteral("command")).toString();
+    const QString comment = row.value(QStringLiteral("comment")).toString();
+    const QString parameters = row.value(QStringLiteral("parameters")).toString();
+    QVERIFY2(!command.contains(QLatin1Char(';')),
+             "the command part must never contain the comment");
+    if (!comment.isEmpty()) {
+      QVERIFY2(comment.startsWith(QLatin1Char(';')),
+               "the comment part must start with ';'");
+      sawComment = true;
+    }
+    if (!parameters.isEmpty())
+      sawParameters = true;
+  }
+  QVERIFY2(sawComment, "the fixture window must contain at least one comment line");
+  QVERIFY2(sawParameters,
+           "the fixture window must contain at least one parameterized command");
 }
 
 void ViewModelSmokeTests::testNullableAndVectorOptions()
@@ -6895,6 +7541,59 @@ void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidI
            "MEASURE-01/MI-05: volumeMeshIts(0,out-of-range-volume) must return nullptr");
 }
 
+void ViewModelSmokeTests::arrowNudgeTranslatesSelectionWithCoalescedUndo()
+{
+  // VIEW-ARROW-NUDGE (upstream GLCanvas3D.cpp:3455-3470): arrow keys apply a
+  // relative bed-plane translation to the selection; repeated nudges collapse
+  // into one coalesced TransformCommand (mergeWith) so a single undo
+  // restores the original placement.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.selectSourceObject(0));
+  QVERIFY(editor.hasSelection());
+
+  const QVector3D before = project.objectPosition(0);
+  editor.nudgeSelectedObjects(10.0, 0.0);
+  QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, 0.f, 0.f))).lengthSquared() < 1e-6);
+  editor.nudgeSelectedObjects(0.0, -1.0);
+  QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, -1.f, 0.f))).lengthSquared() < 1e-6);
+
+  const int undoCount = undoManager.stack()->count();
+  QVERIFY(undoCount >= 1);
+  editor.undo();
+  QVERIFY((project.objectPosition(0) - before).lengthSquared() < 1e-6);
+}
+
+void ViewModelSmokeTests::paintAxisLockClampsAndRoundTrips()
+{
+  // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only):
+  // the axis lock is a single 0/1/2 value so Vertical and Horizontal stay
+  // mutually exclusive, and out-of-range writes fall back to off.
+  ProjectServiceMock project;
+  SliceService slice(&project);  EditorViewModel vm(&project, &slice);
+  QCOMPARE(vm.paintLockAxis(), 0);
+
+  QSignalSpy spy(&vm, &EditorViewModel::stateChanged);
+  QVERIFY(spy.isValid());
+
+  vm.setPaintLockAxis(1);
+  QCOMPARE(vm.paintLockAxis(), 1);
+  vm.setPaintLockAxis(2);
+  QCOMPARE(vm.paintLockAxis(), 2);
+  vm.setPaintLockAxis(7);
+  QCOMPARE(vm.paintLockAxis(), 2);
+  vm.setPaintLockAxis(-3);
+  QCOMPARE(vm.paintLockAxis(), 0);
+  // Three effective changes (to 1, to 2, back to 0); the clamped no-op 7
+  // write must not emit.
+  QCOMPARE(spy.count(), 3);
+}
+
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt()
 {
@@ -7104,6 +7803,17 @@ void ViewModelSmokeTests::seedFillStagedRegionReadableBeforeCommit()
   // P2.3-2: the staged seed region must be observable before commit (the
   // preview channel), and the second click commits the first region while
   // staging the second (upstream SMART_FILL click ordering).
+void ViewModelSmokeTests::paintEngineGapFragmentsRespectAreaThreshold()
+{
+  // PAINT-GAPFILL-PORT: exercise PaintEngine::getGapFragments with the SAME
+  // synthetic unit-square mesh as
+  // paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt. The square splits
+  // into two 0.5 mm2 facets, so the untouched selector has exactly two leaves
+  // and the area threshold can be probed exactly around them. This locks the
+  // upstream fragment contract (TrianglePatch::is_fragment,
+  // GLGizmoPainterBase.cpp:1234-1236: leaf area STRICTLY below
+  // TriangleSelectorPatch::gap_area) plus the vertex compaction.
+
   indexed_triangle_set its;
   its.vertices = {
     Slic3r::Vec3f(0.f, 0.f, 0.f),
@@ -7532,6 +8242,183 @@ void ViewModelSmokeTests::faceDetectorRecognizesAllCubeFacetsAsExterior()
 void ViewModelSmokeTests::faceDetectorRecognizesAllCubeFacetsAsExterior()
 {
   QSKIP("FaceDetector test requires HAS_LIBSLIC3R -- skipping");
+    Slic3r::Vec3i32(0, 1, 2),  // facet 0: lower-right triangle (0.5 mm2)
+    Slic3r::Vec3i32(0, 2, 3)   // facet 1: upper-left triangle (0.5 mm2)
+  };
+  const Slic3r::Transform3d trafo = Slic3r::Transform3d::Identity();
+
+  auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+  OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+
+  // Helper: total area + max leaf area of a fragment ITS.
+  auto totalArea = [](const indexed_triangle_set &set) {
+    float area = 0.f;
+    for (const auto &idx : set.indices) {
+      const Slic3r::Vec3f &a = set.vertices[size_t(idx[0])];
+      const Slic3r::Vec3f &b = set.vertices[size_t(idx[1])];
+      const Slic3r::Vec3f &c = set.vertices[size_t(idx[2])];
+      area += 0.5f * (b - a).cross(c - a).norm();
+    }
+    return area;
+  };
+
+  // (a) Threshold <= 0 disables the fragment view (empty ITS, GapAreaMin).
+  auto disabled = engine.getGapFragments(0, 0, 0.0f);
+  QVERIFY2(disabled != nullptr,
+           "PAINT-GAPFILL-PORT: getGapFragments must return a shared_ptr when a selector exists");
+  QVERIFY2(disabled->indices.empty(),
+           "PAINT-GAPFILL-PORT: threshold 0 must disable the fragment view");
+
+  // (b) Threshold 5 covers the whole untouched square: both 0.5 mm2 leaves
+  // come back, vertex-compacted, and their areas sum to the surface area.
+  auto all = engine.getGapFragments(0, 0, 5.0f);
+  QVERIFY2(all != nullptr && all->indices.size() == 2,
+           "PAINT-GAPFILL-PORT: threshold 5 must return both 0.5 mm2 leaves of the untouched square");
+  QVERIFY2(qAbs(totalArea(*all) - 1.0f) < 1e-4f,
+           "PAINT-GAPFILL-PORT: fragment ITS must preserve the leaf geometry (areas sum to 1 mm2)");
+
+  // (c) is_fragment is a STRICT area < gap_area: a 0.5 mm2 leaf is not a
+  // fragment at threshold 0.5.
+  auto strict = engine.getGapFragments(0, 0, 0.5f);
+  QVERIFY2(strict != nullptr && strict->indices.empty(),
+           "PAINT-GAPFILL-PORT: the fragment filter must be a strict area < threshold");
+
+  // (d) A brush stroke that grazes the shared diagonal subdivides both facets
+  // (upstream split_triangle subdivides until sides reach the cursor edge
+  // limit, TriangleSelector.cpp:981-1010), so leaves far smaller than the
+  // 0.5 mm2 parents appear. The cursor must be a SPHERE: the SinglePointCursor
+  // view direction degenerates (0/0 -> NaN) when camera_pos == hit
+  // (TriangleSelector.cpp SinglePointCursor ctor), which kills the Circle
+  // cursor's containment tests, while Sphere ignores the direction entirely
+  // and its is_facet_visible is unconditional (TriangleSelector.hpp:163).
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  const bool painted = engine.paintAt(
+      /*obj=*/0, /*vol=*/0, /*facetIdx=*/0, facet0Center,
+      /*brushRadius=*/0.3f, OWzx::PaintCursorType::Sphere,
+      Slic3r::EnforcerBlockerType::ENFORCER, trafo,
+      /*cameraPosMeshLocal=*/facet0Center);
+  QVERIFY2(painted, "PAINT-GAPFILL-PORT: paintAt must return true when the selector exists");
+
+  auto afterStroke = engine.getGapFragments(0, 0, 5.0f);
+  QVERIFY2(afterStroke != nullptr && afterStroke->indices.size() > 2,
+           "PAINT-GAPFILL-PORT: the subdividing stroke must grow the leaf set beyond the 2 original facets");
+  QVERIFY2(qAbs(totalArea(*afterStroke) - 1.0f) < 1e-4f,
+           "PAINT-GAPFILL-PORT: subdivided fragment ITS must still cover the full surface");
+
+  // (e) The 0.5 threshold now keeps only the subdivided leaves; each
+  // returned leaf must respect area < threshold.
+  auto small = engine.getGapFragments(0, 0, 0.5f);
+  QVERIFY2(small != nullptr && small->indices.size() >= 3,
+           "PAINT-GAPFILL-PORT: the 0.5 threshold must keep the subdivided leaves");
+  bool allBelow = true;
+  for (const auto &idx : small->indices) {
+    const Slic3r::Vec3f &a = small->vertices[size_t(idx[0])];
+    const Slic3r::Vec3f &b = small->vertices[size_t(idx[1])];
+    const Slic3r::Vec3f &c = small->vertices[size_t(idx[2])];
+    if (!(0.5f * (b - a).cross(c - a).norm() < 0.5f))
+      allBelow = false;
+  }
+  QVERIFY2(allBelow,
+           "PAINT-GAPFILL-PORT: every returned fragment leaf must have area strictly below the threshold");
+}
+#else
+void ViewModelSmokeTests::paintEngineGapFragmentsRespectAreaThreshold()
+{
+  QSKIP("PaintEngine smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
+// PAINT-ALT-WHEEL-CLIP: buildPaintClippingPlane volume-coordinate math.
+// The plane semantics are locked against the upstream chain
+// (ObjectClipper::set_position_by_ratio + get_clipping_plane_in_volume_
+// coordinates): a camera looking along -Z sees the sweep cut into the object
+// from the camera side as the ratio grows, the identity transform keeps the
+// plane untouched, and a rotated object carries the plane through the
+// inverse/transpose transform pair.
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::paintClippingPlaneMathMatchesUpstream()
+{
+  const Slic3r::Vec3d center = Slic3r::Vec3d::Zero();
+  const Slic3r::Vec3d forward(0.0, 0.0, -1.0); // camera above, looking down -Z
+  const double radius = 5.0;
+  const Slic3r::Transform3d identity = Slic3r::Transform3d::Identity();
+
+  // (a) ratio 0 (and below) returns the INACTIVE plane -- clipping is off
+  // (upstream ObjectClipper::get_position() == 0 early-out,
+  // GLGizmoPainterBase.cpp:383-393).
+  const Slic3r::TriangleSelector::ClippingPlane off =
+      OWzx::buildPaintClippingPlane(0.0, forward, center, radius, identity);
+  QVERIFY2(!off.is_active(),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0 must yield the inactive plane");
+
+  // (b) Identity transform, ratio 0.5: normal = -forward = +Z and the world
+  // offset = 0 + 5 - 0.5*2*5 = 0, so the plane sits at z=0 through the
+  // object center. A point at z=+1 (camera side) is clipped; z=-1 is not
+  // (is_mesh_point_clipped: normal.dot(p) - offset > 0).
+  const Slic3r::TriangleSelector::ClippingPlane half =
+      OWzx::buildPaintClippingPlane(0.5, forward, center, radius, identity);
+  QVERIFY2(half.is_active(),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0.5 must yield an active plane");
+  QCOMPARE(half.normal.z(), 1.0f);
+  QVERIFY2(qFuzzyIsNull(half.offset),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0.5 on a zero-centered object must put the plane at the center");
+  QVERIFY2(half.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 1.f)),
+           "PAINT-ALT-WHEEL-CLIP: the camera-side point must be clipped at ratio 0.5");
+  QVERIFY2(!half.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, -1.f)),
+           "PAINT-ALT-WHEEL-CLIP: the far-side point must stay paintable at ratio 0.5");
+
+  // (c) The sweep endpoints: ratio 0.25 puts the plane at z=+2.5 (only the
+  // top cap clipped), ratio 1.0 at z=-5 (the whole object clipped).
+  const Slic3r::TriangleSelector::ClippingPlane quarter =
+      OWzx::buildPaintClippingPlane(0.25, forward, center, radius, identity);
+  QVERIFY2(quarter.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 3.f)) &&
+           !quarter.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 2.f)),
+           "PAINT-ALT-WHEEL-CLIP: ratio 0.25 must clip only beyond z=+2.5");
+  const Slic3r::TriangleSelector::ClippingPlane full =
+      OWzx::buildPaintClippingPlane(1.0, forward, center, radius, identity);
+  QVERIFY2(full.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, -4.f)),
+           "PAINT-ALT-WHEEL-CLIP: ratio 1.0 must clip the whole object");
+
+  // (d) Volume coordinates: a +90 deg Z rotation (linear maps
+  // (x,y,z)->(-y,x,z)) keeps the +Z plane normal fixed under the transpose
+  // and leaves the zero-centered plane at offset 0 -- a mesh point at +Z
+  // stays clipped and one at -Z stays visible. The section follows the
+  // OBJECT transform, not just the world axes (upstream
+  // get_clipping_plane_in_volume_coordinates).
+  Slic3r::Transform3d rotZ = Slic3r::Transform3d::Identity();
+  const double c90 = std::cos(M_PI / 2.0), s90 = std::sin(M_PI / 2.0);
+  rotZ(0, 0) = c90; rotZ(0, 1) = -s90;
+  rotZ(1, 0) = s90; rotZ(1, 1) = c90;
+  const Slic3r::TriangleSelector::ClippingPlane rotated =
+      OWzx::buildPaintClippingPlane(0.5, forward, center, radius, rotZ);
+  QVERIFY2(rotated.is_active(),
+           "PAINT-ALT-WHEEL-CLIP: the rotated object must still get an active plane");
+  QCOMPARE(rotated.normal.x(), 0.0f);
+  QCOMPARE(rotated.normal.y(), 0.0f);
+  QCOMPARE(rotated.normal.z(), 1.0f);
+  QVERIFY2(qFuzzyIsNull(rotated.offset),
+           "PAINT-ALT-WHEEL-CLIP: the zero-centered plane must survive the rotation unchanged");
+  QVERIFY2(rotated.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 0.5f)) &&
+           !rotated.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, -0.5f)),
+           "PAINT-ALT-WHEEL-CLIP: the mesh-local clip side must follow the plane through the rotation");
+
+  // (e) A translated object: center (0,0,10) shifts the world plane to
+  // z=10 (ratio 0.5). With the identity volume transform the mesh-local
+  // frame equals the world frame, so the point 1mm above the object center
+  // (z=11) is clipped while 1mm below (z=9) stays paintable -- the sweep is
+  // anchored on the object center, not the world origin.
+  const Slic3r::Vec3d lifted(0.0, 0.0, 10.0);
+  const Slic3r::TriangleSelector::ClippingPlane liftedPlane =
+      OWzx::buildPaintClippingPlane(0.5, forward, lifted, radius, identity);
+  QVERIFY2(liftedPlane.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 11.f)) &&
+           !liftedPlane.is_mesh_point_clipped(Slic3r::Vec3f(0.f, 0.f, 9.f)),
+           "PAINT-ALT-WHEEL-CLIP: the plane must sweep relative to the object center, not the world origin");
+}
+#else
+void ViewModelSmokeTests::paintClippingPlaneMathMatchesUpstream()
+{
+  QSKIP("PaintEngine clipping-plane test requires HAS_LIBSLIC3R -- skipping");
 }
 #endif
 
@@ -8750,6 +9637,135 @@ void ViewModelSmokeTests::paintEngineSmartFillRespectsAngleAndOverhangFilter()
 }
 #endif
 
+#ifdef HAS_LIBSLIC3R
+// ===========================================================================
+// PAINT-MMU-TOOLS: bucket fill (pointer + connected flood) and the
+// height-range band via the pure helpers on a synthetic unit square.
+// ===========================================================================
+void ViewModelSmokeTests::paintEngineMmuToolsBucketFillAndHeightRange()
+{
+  // Same unit-square synthesis as
+  // paintEngineSelectPatchMarksFacetAndGetFacetsReturnsIt: two coplanar
+  // triangles in the XY plane sharing the v0-v2 diagonal. Coplanarity means
+  // the bucket flood crosses the shared edge with ANY angle (and with
+  // angle=-1 the edge check is skipped entirely), so the facet-count
+  // assertions below are exact.
+  indexed_triangle_set its;
+  its.vertices = {
+    Slic3r::Vec3f(0.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 0.f, 0.f),
+    Slic3r::Vec3f(1.f, 1.f, 0.f),
+    Slic3r::Vec3f(0.f, 1.f, 0.f)
+  };
+  its.indices = {
+    Slic3r::Vec3i32(0, 1, 2),
+    Slic3r::Vec3i32(0, 2, 3)
+  };
+  const Slic3r::Vec3f facet0Center = (its.vertices[0] + its.vertices[1] +
+                                      its.vertices[2]) / 3.f;
+  const Slic3r::Transform3d identity = Slic3r::Transform3d::Identity();
+
+  // (a) Pointer brush (angle -1, propagate false): the FIRST click only
+  // stages the hit facet (nothing was staged before), the SECOND click
+  // applies exactly it (upstream POINTER click path,
+  // GLGizmoPainterBase.cpp:790-793 bucket_fill angle -1 propagate false).
+  {
+    Slic3r::TriangleMesh mesh(its);
+    Slic3r::TriangleSelector selector(mesh);
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/false);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+             "PAINT-MMU-TOOLS: first pointer click must only stage the facet");
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/false);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 1,
+             "PAINT-MMU-TOOLS: second pointer click must apply exactly the staged facet");
+  }
+
+  // (b) Bucket fill (angle -1 = edge detection off, propagate true): the
+  // flood crosses the shared edge and stages BOTH facets; the second click
+  // applies both (upstream BUCKET_FILL click path,
+  // GLGizmoPainterBase.cpp:795-797).
+  {
+    Slic3r::TriangleMesh mesh(its);
+    Slic3r::TriangleSelector selector(mesh);
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/true);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+             "PAINT-MMU-TOOLS: first bucket click must only stage the region");
+    OWzx::applyBucketFillToSelector(selector, /*facetIdx=*/0, facet0Center,
+                                    /*seedFillAngle=*/-1.f,
+                                    Slic3r::EnforcerBlockerType::ENFORCER,
+                                    identity, /*propagate=*/true);
+    QVERIFY2(selector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 2,
+             "PAINT-MMU-TOOLS: the no-edge-detection flood must apply both coplanar facets");
+  }
+
+  // (c) Height range: mesh lifted to world Z = 5 by the FULL transform (the
+  // band anchor is a world Z). A band [5, 5.2] covers the square; a band
+  // anchored at 6 covers nothing (all facets strictly below). select_patch's
+  // hr branch sweeps every original facet regardless of facetStart
+  // (TriangleSelector.cpp:259-269).
+  {
+    Slic3r::Transform3d trafoWorld = Slic3r::Transform3d::Identity();
+    trafoWorld.translation() = Slic3r::Vec3d(0.0, 0.0, 5.0);
+    const Slic3r::Transform3d trafoNoTranslate = identity;
+
+    Slic3r::TriangleMesh covered(its);
+    Slic3r::TriangleSelector coveredSelector(covered);
+    OWzx::applyHeightRangeToSelector(coveredSelector,
+                                     /*hitWorldZ=*/5.0f, /*height=*/0.2f,
+                                     Slic3r::EnforcerBlockerType::ENFORCER,
+                                     trafoWorld, trafoNoTranslate,
+                                     /*cameraPosMeshLocal=*/Slic3r::Vec3f(0.5f, 0.5f, 10.f),
+                                     /*facetStart=*/0);
+    QVERIFY2(coveredSelector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 2,
+             "PAINT-MMU-TOOLS: the world-Z band must cover both lifted facets");
+
+    Slic3r::TriangleMesh missed(its);
+    Slic3r::TriangleSelector missedSelector(missed);
+    OWzx::applyHeightRangeToSelector(missedSelector,
+                                     /*hitWorldZ=*/6.0f, /*height=*/0.2f,
+                                     Slic3r::EnforcerBlockerType::ENFORCER,
+                                     trafoWorld, trafoNoTranslate,
+                                     Slic3r::Vec3f(0.5f, 0.5f, 10.f),
+                                     /*facetStart=*/0);
+    QVERIFY2(missedSelector.num_facets(Slic3r::EnforcerBlockerType::ENFORCER) == 0,
+             "PAINT-MMU-TOOLS: a band above the lifted mesh must paint nothing");
+  }
+
+  // (d) PaintEngine wrapper end-to-end: bucketFillAt + paintHeightRangeAt on
+  // the same synthetic mesh (locks the ensureSelector cache contract).
+  {
+    auto meshPtr = std::make_shared<Slic3r::TriangleMesh>(its);
+    OWzx::PaintEngine engine([meshPtr](int, int) { return meshPtr; });
+    const bool filled = engine.bucketFillAt(
+        0, 0, 0, facet0Center, -1.f,
+        Slic3r::EnforcerBlockerType::ENFORCER, identity, /*propagate=*/true);
+    QVERIFY2(filled, "PAINT-MMU-TOOLS: bucketFillAt must accept a valid hit");
+    const Slic3r::Transform3d trafoWorld = identity;
+    const bool painted = engine.paintHeightRangeAt(
+        0, 0, /*hitWorldZ=*/0.0f, /*height=*/0.2f,
+        Slic3r::EnforcerBlockerType::ENFORCER, trafoWorld, identity,
+        Slic3r::Vec3f(0.5f, 0.5f, 10.f), /*facetStart=*/0);
+    QVERIFY2(painted, "PAINT-MMU-TOOLS: paintHeightRangeAt must accept a valid band");
+    QVERIFY2(engine.cachedSelectorCount() == 1,
+             "PAINT-MMU-TOOLS: both wrapper calls must share the cached selector");
+  }
+}
+#else
+void ViewModelSmokeTests::paintEngineMmuToolsBucketFillAndHeightRange()
+{
+  QSKIP("MMU tools smoke test requires HAS_LIBSLIC3R -- skipping");
+}
+#endif
+
 // ===========================================================================
 // Phase 240 (GIZ-03): flatten rotation math (pure helper, no libslic3r).
 // ===========================================================================
@@ -9221,6 +10237,113 @@ void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
   QSKIP("P16.11 per-instance printable requires HAS_LIBSLIC3R");
 }
 #endif
+
+// ── GAP-4/5: the upstream plater hotkey table routes through the backend ──
+void ViewModelSmokeTests::platerHotkeysBackendAnchorsPresent()
+{
+  // The QML wiring is asserted in QmlUiAuditTests; this test pins the
+  // backend halves the keys call into: arrange, auto-orient, and the
+  // extruder setter must exist and actually run.
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+
+  editor.addPrimitiveToPlate(0);
+  editor.selectSourceObject(0);
+
+  // Upstream "A": arrange all objects (ProjectServiceMock::arrangeObjects
+  // needs a printable area string; EditorViewModel::arrangeAllObjects
+  // derives it from the merged config -- here a default preset is absent,
+  // so call the service-level path the QML key ultimately drives).
+  const bool arranged = project.arrangeObjects(
+      6.0f, false, false, QStringLiteral("0,0,220,0,220,220,0,220"));
+  QVERIFY2(arranged, "a lone primitive must arrange on an empty 220 bed");
+
+  // Upstream Shift+R: auto orientate.
+  editor.autoOrientSelected();
+
+  // Upstream 1-9: set extruder for the selection.
+  editor.setExtruderForSelectedItems(2);
+  QCOMPARE(editor.statusText().isEmpty(), false);
+}
+
+// ── GAP-7: multi-select info notification ──────────────────────────────
+void ViewModelSmokeTests::multiSelectPostsInfoNotification()
+{
+  BackendContext ctx;
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  QVERIFY2(editor != nullptr, "BackendContext must expose the editor viewmodel");
+
+  QCOMPARE(editor->selectedObjectCount(), 0);
+  editor->addPrimitiveToPlate(0);
+  editor->addPrimitiveToPlate(0);
+  editor->selectAllVisibleObjects();
+  QCOMPARE(editor->selectedObjectCount(), 2);
+
+  const QVariantList stack = ctx.notificationStack();
+  bool found = false;
+  for (const QVariant &entry : stack) {
+    const QVariantMap item = entry.toMap();
+    if (item.value(QStringLiteral("message")).toString()
+            .contains(QStringLiteral("2 objects selected"))) {
+      found = true;
+      break;
+    }
+  }
+  QVERIFY2(found, "entering a multi-selection must post the info notification"
+                  " (upstream bbl_show_objects_info_notification)");
+}
+
+// ── GAP-6: external G-code opens as a preview-only project ─────────────
+void ViewModelSmokeTests::openExternalGcodeOpensPreviewOnlyProject()
+{
+  BackendContext ctx;
+  auto *preview = qobject_cast<PreviewViewModel *>(ctx.previewViewModel());
+  QVERIFY2(preview != nullptr, "BackendContext must expose the preview viewmodel");
+  auto *editor = qobject_cast<EditorViewModel *>(ctx.editorViewModel());
+  QVERIFY2(editor != nullptr, "BackendContext must expose the editor viewmodel");
+
+  const QString gcode = kOrcaGcodePath;
+  QVERIFY2(QFileInfo::exists(gcode), "the sample gcode fixture must exist");
+
+  // Missing files fail cleanly.
+  QVERIFY2(!ctx.openExternalGcode(QStringLiteral("nonexistent.gcode")),
+           "a missing gcode must be rejected");
+
+  QVERIFY2(ctx.openExternalGcode(gcode), "the sample gcode must open");
+  QVERIFY2(preview->gcodeLineCount() > 0,
+           "the preview parser must consume the external gcode");
+  QCOMPARE(editor->modelCount(), 0);
+}
+
+// ── GAP-7: new plates are unnamed (upstream leaves m_name empty) ────────
+void ViewModelSmokeTests::addPlateLeavesDefaultNameEmpty()
+{
+  ProjectServiceMock project;
+  QVERIFY(project.addPlate());
+  QVERIFY(project.addPlate());
+  // The UI falls back to a positional "Plate N" label; the stored name
+  // stays empty so renames and 3MF round-trips carry only user data.
+  QVERIFY(project.plateNames().value(1).isEmpty());
+
+  QVERIFY(project.renamePlate(1, "Named"));
+  QCOMPARE(project.plateNames().value(1), QStringLiteral("Named"));
+}
+
+// ── GAP-7: the dirty-guard remember-choice persists ─────────────────────
+void ViewModelSmokeTests::dirtyProjectDiscardRememberPersists()
+{
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("DirtyGuardRemember"));
+  BackendContext ctx;
+  QVERIFY(!ctx.dirtyProjectDiscardRemembered());
+  ctx.setDirtyProjectDiscardRemembered(true);
+  // A fresh context reads the same QSettings-backed flag (same org/app).
+  BackendContext ctx2;
+  QVERIFY(ctx2.dirtyProjectDiscardRemembered());
+  ctx2.setDirtyProjectDiscardRemembered(false);
+  QVERIFY(!ctx.dirtyProjectDiscardRemembered());
+}
 
 QTEST_MAIN(ViewModelSmokeTests)
 

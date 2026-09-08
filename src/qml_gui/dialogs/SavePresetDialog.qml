@@ -67,19 +67,64 @@ CxDialog {
         return configVm.currentPrinterPreset
     }
 
-    /// 校验：名称非空 + 不重名（当前预设自身名称除外——覆盖保存）
+    function userPresetNamesForTier(tier) {
+        var category = root.tierToCategory(tier)
+        if (!configVm || category < 0) return []
+        return configVm.userPresetNamesForCategory(category)
+    }
+
+    function isExistingName(name) {
+        if (!configVm) return false
+        return root.presetNamesForTier(root.presetTier).indexOf(name) >= 0
+    }
+
+    /// G-01: an existing USER preset is replaceable (upstream warns and
+    /// replaces, SavePresetDialog.cpp:216-222); builtin/vendor duplicates are
+    /// not.
+    function isOverwriteTarget(name) {
+        return name.length > 0 && root.isExistingName(name)
+            && root.userPresetNamesForTier(root.presetTier).indexOf(name) >= 0
+    }
+
+    /// G-13: current preset's parent (non-empty = inherited from a
+    /// system/vendor preset, so the upstream "detach" option applies).
+    function currentPresetParent() {
+        return (configVm && currentPresetNameForTier().length > 0)
+            ? configVm.presetInheritsParent(currentPresetNameForTier()) : ""
+    }
+
+    /// G-13 (upstream SavePresetDialog.cpp:191-232): name legality beyond
+    /// duplicates — forbidden filesystem characters and the reserved
+    /// "Default" prefix used by bundled presets.
+    readonly property var illegalNameRe: /[<>:"\/\\|?*\u0000-\u001f]/
+    function illegalNameError(name) {
+        if (illegalNameRe.test(name))
+            return qsTr("Preset name contains illegal characters.")
+        if (name.indexOf("Default") === 0)
+            return qsTr("'Default…' is a reserved name for bundled presets.")
+        return ""
+    }
+
+    /// 校验：名称非空合法；重名仅允许覆盖当前预设（saveCurrentPreset）或既有用户
+    /// 预设（overwriteUserPreset），内建/厂商重名仍拒绝
     function isValidName() {
         var name = nameInput.text.trim()
         if (name.length === 0 || root.tierToCategory(root.presetTier) < 0) return false
         // Duplicate validation uses this dialog's tier, not shared page state.
         if (!configVm) return false
+        // G-13: filesystem-illegal characters and the reserved "Default"
+        // prefix (upstream SavePresetDialog.cpp:191-232).
+        if (root.illegalNameError(name) !== "") return false
         // R-P1.J: saving over the CURRENT preset's own name is the upstream
         // primary path (SavePresetDialog overwrite); the suggested name IS the
         // current preset name, so rejecting it made the suggested save
-        // impossible. Other duplicates stay rejected.
+        // impossible.
         if (name === root.currentPresetNameForTier()) return true
-        var existing = root.presetNamesForTier(root.presetTier)
-        return existing.indexOf(name) < 0
+        // G-01: overwriting another existing USER preset is the upstream
+        // replace path (with a visible warning below).
+        if (root.isExistingName(name))
+            return root.isOverwriteTarget(name)
+        return true
     }
 
     contentItem: Rectangle {
@@ -148,12 +193,37 @@ CxDialog {
                 }
             }
 
-            // 重名/空名警告
+            // G-13: Detach option -- applies when saving over the CURRENT
+            // preset and that preset inherits from a system/vendor parent
+            // (upstream SavePresetDialog.cpp:135-165 detach branch).
+            CxCheckBox {
+                id: detachFromParent
+                visible: nameInput.text.trim() === root.currentPresetNameForTier()
+                    && root.currentPresetParent().length > 0
+                text: qsTr("脱离继承的系统预设（Detach）")
+                font.pixelSize: Theme.fontSizeXS
+            }
+
+            // 重名/空名/非法名警告 + G-01 覆盖提示
             Text {
-                visible: root.saveError.length > 0 || (!root.isValidName() && nameInput.text.length > 0)
-                text: root.saveError.length > 0 ? root.saveError
-                                                : qsTr("A preset with this name already exists. Choose another name.")
-                color: Theme.statusError
+                readonly property string typedName: nameInput.text.trim()
+                readonly property string illegalReason: typedName.length > 0
+                    ? root.illegalNameError(typedName) : ""
+                readonly property bool overwriteHint: root.isOverwriteTarget(typedName)
+                readonly property bool blocked: (root.saveError.length > 0)
+                                               || (illegalReason !== "")
+                                               || (!root.isValidName() && typedName.length > 0)
+                visible: blocked || overwriteHint
+                text: {
+                    if (root.saveError.length > 0)
+                        return root.saveError
+                    if (illegalReason !== "")
+                        return illegalReason
+                    if (overwriteHint)
+                        return qsTr("A preset with this name already exists and will be replaced.")
+                    return qsTr("A preset with this name already exists. Choose another name.")
+                }
+                color: blocked ? Theme.statusError : Theme.textSecondary
                 font.pixelSize: Theme.fontSizeXS
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -186,14 +256,20 @@ CxDialog {
                             root.saveError = qsTr("Unsupported preset category.")
                             return
                         }
-                        // R-P1.J: overwriting the CURRENT preset (upstream
-                        // SavePresetDialog main path, SavePresetDialog.cpp
-                        // save-in-place branch) routes through
-                        // saveCurrentPreset; only a NEW name creates a custom
-                        // preset.
+                        // R-P1.J + G-01: three save routes mirroring upstream
+                        // SavePresetDialog -- overwrite the CURRENT preset
+                        // (save-in-place), replace an existing USER preset
+                        // (warned replace), or create a NEW custom preset.
                         var ok
                         if (name === root.currentPresetNameForTier()) {
-                            ok = root.configVm.saveCurrentPreset()
+                            // G-13: Detach flattens the inherited preset with
+                            // the current edits; otherwise the normal
+                            // save-in-place runs.
+                            ok = root.detachFromParent.checked
+                                ? root.configVm.detachPresetFromParent(category, name)
+                                : root.configVm.saveCurrentPreset()
+                        } else if (root.isOverwriteTarget(name)) {
+                            ok = root.configVm.overwriteUserPreset(category, name)
                         } else {
                             ok = root.configVm.createCustomPreset(category, name)
                         }

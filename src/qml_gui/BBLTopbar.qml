@@ -46,6 +46,14 @@ Item {
     signal exportModelRequested()
     signal undoRequested()
     signal redoRequested()
+    // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): Edit-menu entries
+    // for the clipboard/delete/clone set the shortcuts already drive.
+    signal editCutRequested()
+    signal editCopyRequested()
+    signal editPasteRequested()
+    signal editDeleteRequested()
+    signal editCloneRequested()
+    signal editDuplicatePlateRequested()
     signal calibrationRequested()
     signal sliceRequested()
     signal sliceSinglePlateRequested()
@@ -126,6 +134,15 @@ Item {
                 title: qsTr("编辑")
                 MenuItem { text: qsTr("撤销"); onTriggered: root.undoRequested() }
                 MenuItem { text: qsTr("重做"); onTriggered: root.redoRequested() }
+                MenuSeparator {}
+                // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467).
+                MenuItem { text: qsTr("剪切"); onTriggered: root.editCutRequested() }
+                MenuItem { text: qsTr("复制"); onTriggered: root.editCopyRequested() }
+                MenuItem { text: qsTr("粘贴"); onTriggered: root.editPasteRequested() }
+                MenuItem { text: qsTr("删除选中"); onTriggered: root.editDeleteRequested() }
+                MenuItem { text: qsTr("删除全部"); onTriggered: root.deleteAllRequested() }
+                MenuItem { text: qsTr("克隆选中"); onTriggered: root.editCloneRequested() }
+                MenuItem { text: qsTr("克隆当前平板"); onTriggered: root.editDuplicatePlateRequested() }
             }
             Menu {
                 title: qsTr("帮助")
@@ -314,86 +331,6 @@ Item {
                 toolTipText: ""
                 enabled: false
                 visible: false
-            }
-
-            // Stretch spacer (pushes tabs toward center)
-            Item { Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumWidth: 20 }
-
-            // ── CENTER GROUP: 9-page TabBar (对齐上游 Notebook 9 页) ─────
-            TabBar {
-                id: navTabBar
-                Layout.alignment: Qt.AlignVCenter
-                visible: false
-                currentIndex: backend.currentPage
-
-                // 反馈环保护 (Pitfall 2 in 02-RESEARCH.md)：
-                // 仅当 currentIndex 与 backend.currentPage 不同时才发请求
-                onCurrentIndexChanged: {
-                    if (currentIndex !== backend.currentPage
-                            && currentIndex >= 0 && currentIndex <= backend.tpPreferences) {
-                        backend.requestSelectTab(currentIndex)
-                    }
-                }
-
-                background: Rectangle { color: "transparent" }
-
-                // 可见页签模型：标签 + TabPosition 枚举引用 + 启用状态 + 提示
-                Repeater {
-                    model: [
-                        { label: qsTr("首页"),     pos: backend.tpHome },
-                        { label: qsTr("准备"),     pos: backend.tp3DEditor },
-                        { label: qsTr("预览"),     pos: backend.tpPreview },
-                        { label: qsTr("设备"),     pos: backend.tpDevice },
-                        { label: qsTr("多设备"),   pos: backend.tpMultiDevice },
-                        { label: qsTr("项目"),     pos: backend.tpProject },
-                        { label: qsTr("校准"),     pos: backend.tpCalibration }
-                    ]
-
-                    delegate: TabButton {
-                        id: tabBtn
-                        required property var modelData
-                        text: modelData.label
-                        enabled: !modelData.disabled
-                        // 自定义样式以匹配现有 dark theme（Pitfall 7）
-                        background: Rectangle {
-                            implicitHeight: 30
-                            implicitWidth: Math.max(96, tabBtnText.implicitWidth + 24)
-                            radius: 3
-                            color: {
-                                if (!tabBtn.enabled) return "transparent"
-                                if (tabBtn.checked) return Theme.accent
-                                if (tabBtn.hovered) return Theme.accentLight
-                                return "transparent"
-                            }
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
-                        contentItem: Text {
-                            id: tabBtnText
-                            text: tabBtn.text
-                            color: !tabBtn.enabled ? Theme.textDisabled
-                                  : tabBtn.checked ? Theme.textOnAccent
-                                  : tabBtn.hovered ? Theme.textOnAccent
-                                  : Theme.chromeText
-                            font.pixelSize: Theme.fontSizeMD
-                            font.bold: tabBtn.checked
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
-                        ToolTip.visible: tabBtn.hovered && (tabBtn.modelData.tooltip || "").length > 0
-                        ToolTip.text: tabBtn.modelData.tooltip || ""
-                        ToolTip.delay: 400
-                        onClicked: {
-                            if (backend.currentPage === modelData.pos) return
-                            // Latency 跟踪：beginLatency token 通过 lastTabSwitchToken 暴露给 main.qml
-                            root.lastTabSwitchToken = backend.beginLatency("tab-switch", modelData.label)
-                            // 单一派发源 (WR-01): 不在此处直接调用 requestSelectTab，避免与
-                            // onCurrentIndexChanged 双发 tabSelectRequested。设置 currentIndex 触发
-                            // 上方 onCurrentIndexChanged，由其统一调用 requestSelectTab。
-                            navTabBar.currentIndex = modelData.pos
-                        }
-                    }
-                }
             }
 
             // Stretch spacer

@@ -35,6 +35,26 @@ option(BUILD_LIBSLIC3R "Build libslic3r backend (3MF loading etc.)" ON)
 option(BUILD_CLI "Build headless CLI executable (owzx-cli)" OFF)
 option(OWZX_RENDER_BENCH "Build experimental Qt RHI render benchmark" OFF)
 
+# ── Build speed (2026-09-05) ─────────────────────────────────────────────
+# The prebuilt tbb12.lib carries /GL, which forces EVERY link (main exe and
+# all 16 test executables) to restart under /LTCG and run full-program code
+# generation SINGLE-THREADED by default. /CGTHREADS parallelizes that codegen
+# across the machine's cores — on 16 cores this is the single largest link
+# time win available without touching the prebuilt dependencies.
+if(MSVC)
+    cmake_host_system_information(RESULT OWZX_CPU_COUNT QUERY NUMBER_OF_LOGICAL_CORES)
+    if(NOT OWZX_CPU_COUNT GREATER 1)
+        set(OWZX_CPU_COUNT 8)
+    endif()
+    add_link_options("/CGTHREADS:${OWZX_CPU_COUNT}")
+endif()
+# Full PDBs cost ~1.1 GB per link AND a large slice of link time writing them
+# to a nearly-full disk; /DEBUG:FASTLINK is silently ignored under the /LTCG
+# restart, so the only effective knob is not emitting a PDB at all. Default
+# OFF — the QtTest gates don't symbolicate crash dumps; turn ON when a
+# symbolicated crash dump is actually needed.
+option(OWZX_ENABLE_PDB "Emit a full PDB for OWzxSlicer.exe (slow link, ~1.1 GB disk)" OFF)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -439,8 +459,13 @@ if(OWZX_QML_GUI)
             src/qml_gui/Renderer/shaders/model_lit.frag
     )
     if(MSVC)
-        target_compile_options(OWzxSlicer PRIVATE /Zi)
-        target_link_options(OWzxSlicer PRIVATE /DEBUG:FULL)
+        # G-12 followup (2026-09-05): /DEBUG:FASTLINK is ignored under the
+        # /LTCG restart (tbb12.lib is /GL), so the full ~1.1 GB PDB was being
+        # written on every link. Gate the PDB behind OWZX_ENABLE_PDB instead.
+        if(OWZX_ENABLE_PDB)
+            target_compile_options(OWzxSlicer PRIVATE /Zi)
+            target_link_options(OWzxSlicer PRIVATE /DEBUG:FULL)
+        endif()
     # v2.8 P2-C: libcurl(OpenSSL) 与 paho-mqtt 都带静态 SHA1 实现 → LNK2005。
     # /FORCE:MULTIPLE 让链接器取第一个定义（paho 的 SHA1 先链接），忽略后续重复。
     target_link_options(OWzxSlicer PRIVATE /FORCE:MULTIPLE)
@@ -779,6 +804,20 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     )
     target_link_options(PerfBench PRIVATE /FORCE:MULTIPLE)
 
+endif()
+
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME ParamRegressionComparatorTests
+            COMMAND ${Python3_EXECUTABLE} -m unittest
+                tests.param_regression.test_gcode_compare
+                tests.param_regression.test_param_regression_runner
+                -v
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+    endif()
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────
