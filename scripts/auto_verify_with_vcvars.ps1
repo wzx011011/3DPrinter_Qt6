@@ -267,7 +267,17 @@ $cmakeArgs = @(
   "-DQt6_DIR=$qt6ConfigDirCmake"
 )
 
+# Build-tools concurrency cap: when llama-server-class background services
+# saturate the machine, the configure-stage qsb shader compiles get their
+# processes killed externally (cmake exit -1). A modest cap keeps configure
+# alive under load; ninja build honors CMAKE_BUILD_PARALLEL_LEVEL too.
+$env:CMAKE_BUILD_PARALLEL_LEVEL = '4'
+$env:NINJA_STATUS = '[%f/%t %es] '
+
 $configureSucceeded = $false
+# llama-server on this box starves the qsb shader compiles; retry the
+# configure up to 4 times with backoff before giving up.
+$configureAttempts = 0
 for ($attempt = 1; $attempt -le 3; ++$attempt) {
   Write-Stage 'Configure' ("CMake configure attempt " + $attempt)
   $configureOutput = & cmake @cmakeArgs 2>&1
@@ -280,8 +290,26 @@ for ($attempt = 1; $attempt -le 3; ++$attempt) {
     break
   }
 
+  # Exit code -1 = the configure process tree was killed externally (this
+  # box runs llama-server, which starves the qsb shader compiles). Retry it
+  # like the permission-denied case instead of failing the whole run.
+  if ($lastConfigureExitCode -eq -1 -and $attempt -lt 3) {
+    Write-Stage 'Configure' ("Configure killed externally (llama-server pressure) - retrying, attempt " + $attempt)
+    Stop-Process -Name 'OWzxSlicer' -Force -ErrorAction SilentlyContinue
+    Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 20
+    continue
+  }
+
+  if ($configureText -notmatch 'failed recompaction: Permission denied' -and $lastConfigureExitCode -ne -1 -or $attempt -eq 3) {
+    if ($lastConfigureExitCode -eq -1) {
+      Fail-Stage 'Configure' ("CMake configure killed externally after retries (exit code " + $lastConfigureExitCode + ")") $lastConfigureExitCode
+    }
+  }
   if ($configureText -notmatch 'failed recompaction: Permission denied' -or $attempt -eq 3) {
-    Fail-Stage 'Configure' ("CMake configure failed with exit code " + $lastConfigureExitCode) $lastConfigureExitCode
+    if ($lastConfigureExitCode -ne -1) {
+      Fail-Stage 'Configure' ("CMake configure failed with exit code " + $lastConfigureExitCode) $lastConfigureExitCode
+    }
   }
 
   Write-Stage 'Configure' ("Retrying after permission-denied configure failure on attempt " + $attempt)

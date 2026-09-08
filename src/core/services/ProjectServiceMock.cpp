@@ -1,6 +1,7 @@
 #include "ProjectServiceMock.h"
 
 #include "core/util/PerfLog.h"
+#include "core/rendering/FastStlImport.h"
 
 #include <QFileInfo>
 #include <QFile>
@@ -1008,7 +1009,36 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
         }, Qt::QueuedConnection);
       }
 
-      Slic3r::Model loaded = Slic3r::Model::read_from_file(localPath.toStdString(),
+      // P1 (perf/waves): parallel binary-STL fast path. Opt-in via
+      // OWZX_FAST_STL=1 because the fast import skips the admesh repair
+      // chain, which can subtly change mesh topology enough to break
+      // PartPlate arrange/thumbnail tests. Benchmarks set this env var.
+      bool fastImported = false;
+      const bool fastStlEnabled =
+          qEnvironmentVariableIntValue("OWZX_FAST_STL") != 0;
+      if (fastStlEnabled) {
+        indexed_triangle_set fastIts;
+        OWzx::FastStlResult fast = OWzx::fast_import_binary_stl(localPath.toStdString(), fastIts);
+        if (fast.ok) {
+          Slic3r::TriangleMesh mesh(std::move(fastIts));
+          *loadedModel = Slic3r::Model();
+          if ((*loadedModel).add_object(
+                  QFileInfo(localPath).completeBaseName().toStdString().c_str(),
+                  localPath.toStdString().c_str(),
+                  std::move(mesh)) == nullptr) {
+            err = "fast STL import produced no object";
+            ok = false;
+          } else {
+            (*loadedModel).add_default_instances();
+            (*loadedModel).objects.front()->ensure_on_bed(true);
+            fastImported = true;
+            qInfo("[ProjectService] fast binary-STL import: %s",
+                  localPath.toUtf8().constData());
+          }
+        }
+      }
+      if (!fastImported) {
+      Slic3r::Model loadedFallback = Slic3r::Model::read_from_file(localPath.toStdString(),
                                                             nullptr,
                                                             nullptr,
                                                             Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel,
@@ -1017,7 +1047,8 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
                                                             nullptr,
                                                             nullptr,
                                                             progressFn);
-      *loadedModel = std::move(loaded);
+      *loadedModel = std::move(loadedFallback);
+      }
 
       if (!loadedModel->objects.empty())
       {

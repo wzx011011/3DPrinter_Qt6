@@ -203,6 +203,8 @@ if(OWZX_QML_GUI)
         src/core/rendering/AssembleViewDataPool.h
         src/core/rendering/ObjectPicking.cpp
         src/core/rendering/ObjectPicking.h
+        src/core/rendering/FastStlImport.cpp
+        src/core/rendering/FastStlImport.h
         # Phase 113 (MEASURE-02): pure-CPU ray-triangle intersection port.
         # MeshRaycaster wraps a shared_ptr<const indexed_triangle_set> (Phase
         # 112 volumeMeshIts output) over a libslic3r AABBMesh BVH; SceneRaycaster
@@ -380,6 +382,8 @@ if(OWZX_QML_GUI)
         src
         ${OWZX_UPSTREAM_ROOT}/src
     )
+    # FastStlImport uses TBB parallel algorithms directly (P1 perf).
+    target_link_libraries(owzx_app_core PUBLIC tbb_libs)
     target_compile_definitions(owzx_app_core PUBLIC OWZX_QML_GUI=1)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_compile_definitions(owzx_app_core PUBLIC HAS_LIBSLIC3R=1)
@@ -823,11 +827,14 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
         src/core/services/JobManager.h
         src/cli/CliRunner.cpp
         src/cli/CliRunner.h
+        src/core/rendering/FastStlImport.cpp
+        src/core/rendering/FastStlImport.h
     )
     target_include_directories(owzx_cli_core PUBLIC
         src
         ${OWZX_UPSTREAM_ROOT}/src
     )
+    target_link_libraries(owzx_cli_core PUBLIC tbb_libs)
     target_compile_definitions(owzx_cli_core PUBLIC
         HAS_LIBSLIC3R=1
     )
