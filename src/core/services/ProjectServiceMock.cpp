@@ -10832,8 +10832,18 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
     return false;
 
   // Real 3MF export via store_bbs_3mf (对齐上游 Plater::export_3mf → store_bbs_3mf)
+  // LIFETIME: StoreParams::path is a borrowed const char* (bbs_3mf.hpp:211),
+  // so the UTF-8 bytes MUST live in a named local that outlives the
+  // store_bbs_3mf call below. Assigning filePath.toUtf8().constData() here
+  // dangles at the end of the statement; the heavy allocations between the
+  // assignment and the writer (buildPlateDataList, thumbnail vectors, the
+  // overlay config) then recycle that heap block, and store_bbs_3mf opens a
+  // corrupted path -- the G-11 "tmp never created" full-suite failure was
+  // exactly this (boost log showed the path reduced to garbage with embedded
+  // control bytes). Same contract as the snapshot writer above (pathBytes).
+  const QByteArray storePathUtf8 = filePath.toUtf8();
   Slic3r::StoreParams params;
-  params.path = filePath.toUtf8().constData();
+  params.path = storePathUtf8.constData();
   params.model = model_;
   // G-04: align the save strategy with upstream save_project
   // (Plater.cpp:12136: strategy | Zip64; the project strategy carries
