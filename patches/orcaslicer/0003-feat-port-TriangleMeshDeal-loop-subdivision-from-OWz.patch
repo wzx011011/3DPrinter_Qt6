@@ -1,0 +1,88 @@
+From 2946a626b75634412455a8794670d43f57b79bb9 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Sat, 25 Jul 2026 11:32:39 +0800
+Subject: [PATCH 03/11] feat: port TriangleMeshDeal (loop subdivision) from
+ OWzx 4cb3b9ce
+
+ProjectServiceMock::subdivideObject depends on
+TriangleMeshDeal::smooth_triangle_mesh (igl::loop subdivision). This
+is an OWzx-local extension not in upstream mainline; port the .hpp/.cpp
+from 4cb3b9ce onto the 0632bae8 baseline so subdivide keeps working.
+igl/loop.h is present in 0632bae8's libigl.
+---
+ src/libslic3r/TriangleMeshDeal.cpp | 41 ++++++++++++++++++++++++++++++
+ src/libslic3r/TriangleMeshDeal.hpp | 14 ++++++++++
+ 2 files changed, 55 insertions(+)
+ create mode 100644 src/libslic3r/TriangleMeshDeal.cpp
+ create mode 100644 src/libslic3r/TriangleMeshDeal.hpp
+
+diff --git a/src/libslic3r/TriangleMeshDeal.cpp b/src/libslic3r/TriangleMeshDeal.cpp
+new file mode 100644
+index 0000000000..4ea3030e51
+--- /dev/null
++++ b/src/libslic3r/TriangleMeshDeal.cpp
+@@ -0,0 +1,41 @@
++#include "TriangleMeshDeal.hpp"
++
++#include <igl/loop.h>
++#undef NDEBUG
++#include <assert.h>
++#include <boost/log/trivial.hpp>
++
++namespace Slic3r {
++TriangleMesh TriangleMeshDeal::smooth_triangle_mesh(const TriangleMesh& mesh, bool& ok)
++{
++    {
++        using namespace igl;
++        typedef Eigen::Matrix<float, Eigen::Dynamic, 3, Eigen::DontAlign | Eigen::RowMajor> RowMatrixX3f;
++        typedef Eigen::Matrix<int, Eigen::Dynamic, 3, Eigen::DontAlign | Eigen::RowMajor>   RowMatrixX3i;
++
++        auto vertices_count = mesh.its.vertices.size();
++        auto indices_count  = mesh.its.indices.size();
++        // Use Map to map the vertices and indicies into Matrixes without requiring a copy.
++        const Eigen::Map<const RowMatrixX3f> OV(mesh.its.vertices[0].data(), vertices_count, 3);
++        const Eigen::Map<const RowMatrixX3i> OF(mesh.its.indices[0].data(), indices_count, 3);
++        Eigen::MatrixX3f                     V;
++        Eigen::MatrixX3i                     F;
++
++        ok = true;
++        // TODO: add validation checks for the input mesh? Is this really necessary?
++        // if ( <not OK> ) {
++        //    ok = false;
++        //    return TriangleMesh();
++        // }
++        loop(OV, OF, V, F);
++
++        indexed_triangle_set its;
++        auto                 iterv = V.rowwise();
++        auto                 iterf = F.rowwise();
++        its.vertices.assign(iterv.cbegin(), iterv.cend());
++        its.indices.assign(iterf.cbegin(), iterf.cend());
++        TriangleMesh result_mesh(its);
++        return result_mesh;
++    }
++}
++} // namespace Slic3r
+diff --git a/src/libslic3r/TriangleMeshDeal.hpp b/src/libslic3r/TriangleMeshDeal.hpp
+new file mode 100644
+index 0000000000..b1da431229
+--- /dev/null
++++ b/src/libslic3r/TriangleMeshDeal.hpp
+@@ -0,0 +1,14 @@
++#ifndef libslic3r_Timer_hpp_
++#define libslic3r_Timer_hpp_
++
++#include "TriangleMesh.hpp"
++
++namespace Slic3r {
++class TriangleMeshDeal
++{
++public:
++    static TriangleMesh smooth_triangle_mesh(const TriangleMesh &mesh,bool& ok);
++};
++} // namespace Slic3r
++
++#endif // libslic3r_Timer_hpp_
+-- 
+2.32.0.windows.2
+

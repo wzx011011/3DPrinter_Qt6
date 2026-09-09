@@ -69,6 +69,10 @@ if(BUILD_LIBSLIC3R)
     option(LIBSLIC3R_FROM_SOURCE "Build libslic3r from source (fixes static init crash from CRT mismatch with pre-built libs)" ON)
     if(LIBSLIC3R_FROM_SOURCE)
         message(STATUS "=== Building libslic3r FROM SOURCE ===")
+        # The submodule is a pristine upstream checkout; the OWzx compat
+        # series (patches/orcaslicer/*.patch) lands on its working tree at
+        # configure time, before the from-source build reads its sources.
+        include("${CMAKE_SOURCE_DIR}/cmake/ApplyOrcaSlicerPatches.cmake")
         include("${CMAKE_SOURCE_DIR}/cmake/BuildLibslic3rFromSource.cmake")
     else()
         message(STATUS "=== Importing pre-built libslic3r ===")

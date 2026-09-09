@@ -1,0 +1,117 @@
+From 895ea0972aaa087e3887337004b43a91d0e8c5b1 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Thu, 10 Sep 2026 05:46:15 +0800
+Subject: [PATCH 11/11] fix(Config): tolerate null enum keys_map in
+ ConfigOptionEnum<T>
+
+DynamicPrintConfig instances built outside the full StaticPrintConfig
+lifecycle can carry ConfigOptionEnum values whose keys_map is null
+(OWzx test suites hit this in configEnumNullKeysMapGuards). serialize()
+dereferenced the null map and deserialize() could not round-trip the
+numeric form; guard both paths with a numeric fallback. Proven
+load-bearing by A/B: without this patch the ViewModelSmoke suite
+segfaults natively in configEnumNullKeysMapGuards; with it the full
+12-suite gate is green.
+---
+ src/libslic3r/Config.hpp | 52 ++++++++++++++++++++++++++++++++++------
+ 1 file changed, 45 insertions(+), 7 deletions(-)
+
+diff --git a/src/libslic3r/Config.hpp b/src/libslic3r/Config.hpp
+index 3ce062ac39..080da052f1 100644
+--- a/src/libslic3r/Config.hpp
++++ b/src/libslic3r/Config.hpp
+@@ -1623,6 +1623,9 @@ public:
+ 
+     std::string serialize() const override
+     {
++        // Preserve numeric enum values when DynamicPrintConfig has no key map.
++        if (this->keys_map == nullptr)
++            return std::to_string(this->value);
+         for (const auto &kvp : *this->keys_map)
+             if (kvp.second == this->value)
+                 return kvp.first;
+@@ -1632,6 +1635,19 @@ public:
+     bool deserialize(const std::string &str, bool append = false) override
+     {
+         UNUSED(append);
++        if (this->keys_map == nullptr) {
++            // Numeric fallback keeps null-map values round-trippable.
++            std::istringstream iss(str);
++            int parsed_value;
++            iss >> parsed_value;
++            if (iss.fail())
++                return false;
++            iss >> std::ws;
++            if (!iss.eof())
++                return false;
++            this->value = parsed_value;
++            return true;
++        }
+         auto it = this->keys_map->find(str);
+         if (it == this->keys_map->end())
+             return false;
+@@ -1703,25 +1719,42 @@ public:
+ 
+     bool deserialize(const std::string& str, bool append = false) override
+     {
+-        if (!append)
+-            this->values.clear();
++        std::vector<int> parsed_values;
+         std::istringstream is(str);
+         std::string item_str;
+         while (std::getline(is, item_str, ',')) {
+             boost::trim(item_str);
+             if (item_str == "nil") {
+                 if (NULLABLE)
+-                    this->values.push_back(nil_value());
++                    parsed_values.push_back(nil_value());
+                 else
+                     throw ConfigurationError("Deserializing nil into a non-nullable object");
+             }
+             else {
+-                auto it = this->keys_map->find(item_str);
+-                if (it == this->keys_map->end())
+-                    return false;
+-                this->values.push_back(it->second);
++                if (this->keys_map == nullptr) {
++                    // Numeric fallback keeps null-map values round-trippable.
++                    std::istringstream iss(item_str);
++                    int parsed_value;
++                    iss >> parsed_value;
++                    if (iss.fail())
++                        return false;
++                    iss >> std::ws;
++                    if (!iss.eof())
++                        return false;
++                    parsed_values.push_back(parsed_value);
++                }
++                else {
++                    auto it = this->keys_map->find(item_str);
++                    if (it == this->keys_map->end())
++                        return false;
++                    parsed_values.push_back(it->second);
++                }
+             }
+         }
++        if (append)
++            this->values.insert(this->values.end(), parsed_values.begin(), parsed_values.end());
++        else
++            this->values = std::move(parsed_values);
+         return true;
+     }
+ 
+@@ -1735,6 +1768,11 @@ private:
+                 throw ConfigurationError("Serializing NaN");
+         }
+         else {
++            // Preserve numeric enum values when DynamicPrintConfig has no key map.
++            if (this->keys_map == nullptr) {
++                ss << v;
++                return;
++            }
+             for (const auto& kvp : *this->keys_map)
+                 if (kvp.second == v)
+                     ss << kvp.first;
+-- 
+2.32.0.windows.2
+

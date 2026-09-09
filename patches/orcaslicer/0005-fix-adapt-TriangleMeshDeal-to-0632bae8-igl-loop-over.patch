@@ -1,0 +1,59 @@
+From bdbc7ecb84c51ac70ede8bddeea3f259b9e1b127 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Sat, 25 Jul 2026 11:44:41 +0800
+Subject: [PATCH 05/11] fix: adapt TriangleMeshDeal to 0632bae8 igl::loop
+ overload
+
+0632bae8's igl::loop(V,F,NV,NF) requires PlainObjectBase inputs and
+matching Row-major layout; the Map<const RowMatrixX3f> pattern used by
+the 4cb3b9ce port no longer binds (C2672 no matching overload). Copy
+the ITS vertices/faces into RowMatrixX3f/RowMatrixX3i matrices before
+calling loop(), and make V/F outputs Row-major to match.
+---
+ src/libslic3r/TriangleMeshDeal.cpp | 28 ++++++++++++++++++----------
+ 1 file changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/src/libslic3r/TriangleMeshDeal.cpp b/src/libslic3r/TriangleMeshDeal.cpp
+index 4ea3030e51..25e921d3ce 100644
+--- a/src/libslic3r/TriangleMeshDeal.cpp
++++ b/src/libslic3r/TriangleMeshDeal.cpp
+@@ -15,18 +15,26 @@ TriangleMesh TriangleMeshDeal::smooth_triangle_mesh(const TriangleMesh& mesh, bo
+ 
+         auto vertices_count = mesh.its.vertices.size();
+         auto indices_count  = mesh.its.indices.size();
+-        // Use Map to map the vertices and indicies into Matrixes without requiring a copy.
+-        const Eigen::Map<const RowMatrixX3f> OV(mesh.its.vertices[0].data(), vertices_count, 3);
+-        const Eigen::Map<const RowMatrixX3i> OF(mesh.its.indices[0].data(), indices_count, 3);
+-        Eigen::MatrixX3f                     V;
+-        Eigen::MatrixX3i                     F;
++        // Copy the ITS vertices/faces into Eigen matrices. 0632bae8's igl::loop
++        // overload (V, F, NV, NF) requires PlainObjectBase inputs (not Map), and
++        // the input matrices must match the Row-major layout the subdivision
++        // expects. Earlier baselines accepted a Map<const ...>; this one does not.
++        RowMatrixX3f OV(vertices_count, 3);
++        RowMatrixX3i OF(indices_count, 3);
++        for (size_t i = 0; i < vertices_count; ++i) {
++            OV(i, 0) = mesh.its.vertices[i].x();
++            OV(i, 1) = mesh.its.vertices[i].y();
++            OV(i, 2) = mesh.its.vertices[i].z();
++        }
++        for (size_t i = 0; i < indices_count; ++i) {
++            OF(i, 0) = mesh.its.indices[i][0];
++            OF(i, 1) = mesh.its.indices[i][1];
++            OF(i, 2) = mesh.its.indices[i][2];
++        }
++        RowMatrixX3f V;
++        RowMatrixX3i F;
+ 
+         ok = true;
+-        // TODO: add validation checks for the input mesh? Is this really necessary?
+-        // if ( <not OK> ) {
+-        //    ok = false;
+-        //    return TriangleMesh();
+-        // }
+         loop(OV, OF, V, F);
+ 
+         indexed_triangle_set its;
+-- 
+2.32.0.windows.2
+

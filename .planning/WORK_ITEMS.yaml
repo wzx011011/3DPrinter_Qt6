@@ -933,31 +933,35 @@ items:
       last_verified: 2026-09-08
 
   - id: STASH-WIP-DISPOSITION
-    title: Dispose of stash@{0} and stash@{1} (user decision required)
-    aliases: ["stash@{0}", "stash@{1}"]
-    area: Repo/Governance
-    priority: P1
-    implementation: hybrid
-    parity: not_checked
-    verification: none
-    availability: blocked_user_decision
+    title: Disposition of stash@{0}/@{1} WIP carryovers
+    status: resolved
+    resolved: 2026-09-10
+    implementation: real
+    parity: not_applicable
+    verification: pass
+    availability: available
     notes: >
-      stash@{0}: small plate-per-file CLI WIP. stash@{1}: large perf-waves +
-      v5.16 WIP (59 files, +7916/-1171). Neither may be applied or dropped
-      without the user. If merged, the 2026-09-04 review P0 findings that
-      exist only inside that WIP must be fixed first (review report §4/§5).
-    remaining:
-      - User decides: dedicated branch/worktree for repair vs. drop.
+      User decision 2026-09-10: stash@{1} (perf-waves + v5.16 WIP carryover,
+      59 files) DROPPED -- it no longer applied to HEAD, its era's value was
+      already extracted into main, and the original artifact survives on the
+      perf/waves branch. stash@{0} (plate-per-file CLI, 37 lines,
+      --plate-per-file) KEPT unapplied per user decision; it is an OWzx-only
+      bench extension whose product adoption is deliberately deferred.
 
   - id: SUBMODULE-PUSH-AUTH
-    title: Push authorization for third_party/OrcaSlicer submodule fork
-    aliases: ["P12.2"]
-    area: Repo/Governance
-    priority: P2
-    implementation: not_started
-    parity: not_checked
-    verification: none
-    availability: blocked_user_decision
+    title: Authorization to push parent + submodule commits to remotes
+    status: resolved
+    resolved: 2026-09-10
+    implementation: real
+    parity: not_applicable
+    verification: pass
+    availability: available
+    notes: >
+      Resolved as routine backup, not a decision gate: all remotes are the
+      user's own account (wzx011011). Pushed parent main + review/v5.16 to
+      origin (d6d8fd6) and submodule owzx-cgal54-on-0632 to the fork so the
+      pinned gitlink stays resolvable for fresh clones. Upstream
+      (SoftFever/OrcaSlicer) is fetch-only and untouched.
 
   - id: CONFLICT-MARKERS
     title: Conflict-marker feature (review P17.8)
@@ -1162,4 +1166,44 @@ items:
       Post-fix launch log: zero QML warnings.
     evidence:
       gate: 12 suites 588 tests 0 failed 2026-09-10 + Launch PID + E2E 32/0
+      last_verified: 2026-09-10
+
+  - id: SUBMODULE-PATCH-OVERLAY
+    title: Decouple OrcaSlicer submodule from OWzx edits -- pristine
+      upstream checkout + configure-time patch series
+    aliases: ["vendor-patches", "submodule-purity"]
+    area: Build
+    priority: P1
+    status: resolved
+    resolved: 2026-09-10
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      Implements the user's standing intent: the submodule is a pure,
+      upstream-syncable source reference, never a carrier of OWzx edits.
+      The compat branch owzx-cgal54-on-0632 (0632bae8..895ea0972a, 11
+      commits incl. the formerly-uncommitted Config.hpp null-keys_map fix,
+      now committed as 895ea0972a with load-bearing A/B evidence) is
+      exported verbatim as patches/orcaslicer/0001..0011 via format-patch.
+      cmake/ApplyOrcaSlicerPatches.cmake applies the series onto the
+      submodule working tree at configure time (before the from-source
+      libslic3r build reads its sources). Applied-state detection =
+      SHA-256 series fingerprint stamp (.owzx-patches-applied) AND a
+      dirty-working-tree check (a bare submodule update resets the tree
+      but not the untracked stamp); patches apply strictly in order,
+      check+apply per patch, because later patches rework files created
+      by earlier ones (multi-file `git apply` does not compose those
+      intermediate states). Any other tree state fails configure loudly.
+      PROOF OF COMPLETENESS: tree-hash equality -- git write-tree of the
+      patched checkout (0632bae8 + 11 patches) == 895ea0972a^{tree}
+      (a628a61e73d29088b522d3ac3418457ff922c87b). All three lifecycle
+      paths exercised: pristine+configure applies, reconfigure skips,
+      patched tree hash-identical. Gitlink re-pinned to pristine
+      0632bae8; AGENTS.md Upstream Lock line and .codex/rules/
+      build-rules.md document the sync workflow (advance gitlink +
+      regenerate series).
+    evidence:
+      gate: canonical gate run after migration (see last_verified)
       last_verified: 2026-09-10

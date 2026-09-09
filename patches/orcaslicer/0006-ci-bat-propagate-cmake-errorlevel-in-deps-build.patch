@@ -1,0 +1,35 @@
+From 66bf052e22ecd6e70f27a94bda8b48febc796b28 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Fri, 14 Aug 2026 23:08:33 +0800
+Subject: [PATCH 06/11] ci(bat): propagate cmake errorlevel in deps build
+
+The deps configure step could fail (e.g. VS generator not installed) while
+the bat still exited 0, letting CI save a broken deps cache under the
+content key and fail later at prefix verification with a confusing error.
+Deps configure/build failures now fail the script immediately.
+---
+ build_release_vs.bat | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/build_release_vs.bat b/build_release_vs.bat
+index ddbb917b05..91011d93f2 100644
+--- a/build_release_vs.bat
++++ b/build_release_vs.bat
+@@ -118,10 +118,14 @@ REM Set minimum CMake policy to avoid <3.5 errors
+ set CMAKE_POLICY_VERSION_MINIMUM=3.5
+ if "%USE_NINJA%"=="1" (
+     cmake ../ -G %CMAKE_GENERATOR% -DCMAKE_BUILD_TYPE=%build_type%
++    if errorlevel 1 exit /b 1
+     cmake --build . --config %build_type% --target deps
++    if errorlevel 1 exit /b 1
+ ) else (
+     cmake ../ -G %CMAKE_GENERATOR% -A x64 -DCMAKE_BUILD_TYPE=%build_type%
++    if errorlevel 1 exit /b 1
+     cmake --build . --config %build_type% --target deps -- -m
++    if errorlevel 1 exit /b 1
+ )
+ @echo off
+ 
+-- 
+2.32.0.windows.2
+
