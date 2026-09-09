@@ -100,6 +100,7 @@ CxDialog {
             clip: true
 
             ListView {
+                id: extruderList
                 anchors.fill: parent
                 anchors.margins: Theme.spacingXS
                 clip: true

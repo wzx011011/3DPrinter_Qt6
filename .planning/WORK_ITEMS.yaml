@@ -860,34 +860,34 @@ items:
     aliases: ["gate-env-flake"]
     area: Testing
     priority: P1
-    implementation: not_started
-    parity: not_checked
-    verification: none
+    status: resolved
+    resolved: 2026-09-10
+    implementation: real
+    parity: aligned
+    verification: pass
     availability: available
     notes: >
-      ESCALATED 2026-09-09: this is no longer "intermittent AV churn". Since
-      the BEDTEMP/GAP batches, the failure is DETERMINISTIC in full-suite
-      runs (multiple consecutive 194/1 runs) while the SAME test passes
-      standalone (3/0) and passed in earlier full gates. Refined evidence:
-      (a) the earlier "deps PATH prefix" theory is unsupported -- the latest
-      failure wrote to the DEFAULT C:/Users temp, not build/test_temp;
-      (b) dirWritable=0 in the diagnostic is a red herring (Qt isWritable()
-      on Windows directories is unreliable); the real failure is
-      store_bbs_3mf returning false on all 3 retries with tmpExists=0 (the
-      .tmp was never created); (c) this test is the only one that LOADS a
-      3mf and then SAVES to the same path -- the same sequence passes in
-      single-test mode, so suite-accumulated state is implicated. Leading
-      hypothesis: resource exhaustion (handle/memory leak) accumulated over
-      the ~190 prior tests, or an interaction with a specific earlier test.
-      Next diagnostic steps: (1) instrument store_bbs_3mf/mz_zip failure
-      point in a debug build; (2) bisect by running test ranges (QtTest -o
-      with a wrapper driving partial orders); (3) handle/GDI count snapshot
-      before the test in full-suite vs standalone.
-    remaining:
-      - Instrument store_bbs_3mf/mz_zip write failure point (debug build).
-      - Bisect which earlier test poisons the state (range runs).
-      - Fix root cause; meanwhile record canonical-gate runs as 11 green
-        suites + this tracked failure.
+      RESOLVED 2026-09-10 -- not environment, a real use-after-free.
+      store_bbs_3mf's StoreParams::path is a borrowed const char*
+      (bbs_3mf.hpp:211), but storeProject3mf assigned
+      filePath.toUtf8().constData() (ProjectServiceMock.cpp:10836): the
+      temporary QByteArray died at the end of that statement, and the
+      function's later allocations (buildPlateDataList, thumbnail vectors,
+      overlay config) recycled the heap block before the writer copied the
+      path. boost's error log in the canonical native log showed the writer
+      opening the corrupted path 'E:/ai/3D\x10?\x15t\x19.tmp' -- explaining
+      every prior symptom: standalone passes (fresh heap rarely recycles the
+      block), deterministic full-suite failure (~35 prior tests churn the
+      heap), tmpExists=0 (fopen on a garbage path fails), and the
+      dirWritable=0 red herring. Fix: named QByteArray local (storePathUtf8)
+      outliving the call, same contract as the snapshot writer (pathBytes).
+      Repo-wide audit found no other assignment-style borrows of temporary
+      QString conversions into libslic3r pointers. Verification:
+      ViewModelSmokeTests full suite 3/3 runs green (195 passed, 0 failed,
+      Totals written) versus the deterministic pre-fix failure; the
+      suite-end premature death (no Totals) also disappeared. Canonical
+      gate 2026-09-10: all 12 suites green (588 tests, 0 failures) +
+      Launch + E2E 32/0.
 
   - id: WIPE-TOWER-BEDTEMP-GATE
     title: Wipe-tower arrange gate refinement -- per-extruder bed-temperature
@@ -1121,3 +1121,45 @@ items:
       commits: [3ad7937]
       gate: 12 suites 565 tests 0 failed 2026-09-06 (in-gate + standalone; one C:-temp env write flake passed on retry)
       last_verified: 2026-09-06
+
+  - id: QML-LAUNCH-DEAD-BINDINGS
+    title: main.qml compile error blocked app launch since 09-08 + five
+      dead QML bindings surfaced by startup diagnostics
+    aliases: ["gate-launch-unblock"]
+    area: QML/Shell
+    priority: P1
+    status: resolved
+    resolved: 2026-09-10
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      Unblocked when THUMBFAMILY-GATE-ENV stopped aborting the gate before
+      its Launch stage. (1) main.qml newProjectDialog assigned `color:` on a
+      raw QtQuick.Controls CheckBox (nonexistent property) -- a QML COMPILE
+      error, so QQmlApplicationEngine returned zero root objects and the app
+      exit(-1)ed at EVERY launch since 2026-09-08 03:06 (startup_diagnostics
+      "rootObjects is empty"); the shell now uses CxCheckBox, and
+      QmlUiAuditTests::mainQmlBansRawQtQuickControlsCheckBox bans raw
+      CheckBox usage in main.qml for good. (2) Dead bindings fixed in the
+      same sweep, all visible as startup QML warnings since at least 09-08:
+      ObjColorDialog ListView was missing `id: extruderList` (four
+      references -> ReferenceError, selection highlighting dead);
+      PreparePage connector badge gated on the nonexistent
+      `advancedCutConnectors` instead of advCutConnectors (badge could never
+      become visible); SettingsDialog process-options Repeater put OptionRow
+      directly as delegate root -- OptionRow's required properties disabled
+      model context injection, so `rowIndex: index` bound a QString from the
+      outer group scope (6x "Unable to assign QString to int"); replaced
+      with the file's established wrapper-delegate pattern (required
+      index/modelData, like optDelegate); HomePage login/bind dialogs
+      referenced their error properties unqualified from child objects
+      (loginError/bindError never resolvable -> error text dead); qualified
+      with dialog ids including the Connections handlers; SysInfoDialog
+      zebra-stripe delegate used `index` while declaring required
+      modelData (index not injected) -> required property int index added.
+      Post-fix launch log: zero QML warnings.
+    evidence:
+      gate: 12 suites 588 tests 0 failed 2026-09-10 + Launch PID + E2E 32/0
+      last_verified: 2026-09-10

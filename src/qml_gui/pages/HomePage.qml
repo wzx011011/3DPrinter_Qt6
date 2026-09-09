@@ -364,10 +364,10 @@ Item {
 
                 // Error message
                 Label {
-                    text: loginError
+                    text: loginDialog.loginError
                     color: Theme.statusError
                     font.pixelSize: Theme.fontSizeSM
-                    visible: loginError !== ""
+                    visible: loginDialog.loginError !== ""
                 }
 
                 // R-P1.E: user-visible disclosure required by
@@ -402,11 +402,11 @@ Item {
 
             Connections {
                 target: root.homeVm
-                function onCloudLoginFailed(error) { loginError = error }
+                function onCloudLoginFailed(error) { loginDialog.loginError = error }
                 function onCloudStateChanged() {
                     if (root.homeVm.cloudLoggedIn) {
                         loginDialog.close()
-                        loginError = ""
+                        loginDialog.loginError = ""
                     }
                 }
             }
@@ -470,10 +470,10 @@ Item {
                 }
 
                 Text {
-                    text: bindError
+                    text: bindDialog.bindError
                     color: Theme.statusError
                     font.pixelSize: Theme.fontSizeSM
-                    visible: bindError !== ""
+                    visible: bindDialog.bindError !== ""
                 }
 
                 RowLayout {
@@ -505,8 +505,8 @@ Item {
 
             Connections {
                 target: root.homeVm
-                function onCloudLoginFailed(error) { bindError = error }
-                function onCloudStateChanged() { bindDialog.close(); bindError = "" }
+                function onCloudLoginFailed(error) { bindDialog.bindError = error }
+                function onCloudStateChanged() { bindDialog.close(); bindDialog.bindError = "" }
             }
 
             function doBind() {

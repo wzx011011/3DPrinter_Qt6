@@ -22,6 +22,10 @@ private slots:
   void topLevelUiHasNoVisiblePlaceholdersOrNoopActions();
   void monitorSdCardPanelIsExplicitlyUnavailable();
   void mainChromeUsesThemeTokens();
+  // v5.16: a raw QtQuick.Controls CheckBox in main.qml (nonexistent `color:`
+  // assignment) was a QML compile error that zeroed engine root objects and
+  // exit(-1)-ed every launch; the shell document must use CxCheckBox.
+  void mainQmlBansRawQtQuickControlsCheckBox();
   void sidebarCopyIsLocalizedAndOperationalTextIsReadable();
   void guiStartupDeepLinkArgumentsAreExtensible();
   void mainRegistersRhiViewportByDefaultWithSoftwareFallback();
@@ -791,6 +795,20 @@ void QmlUiAuditTests::monitorSdCardPanelIsExplicitlyUnavailable()
   QVERIFY2(!monitorPage.contains(QStringLiteral("id: importMA"))
                && !monitorPage.contains(QStringLiteral("id: deleteMA")),
            "MonitorPage must not retain inert SD-card import or delete controls");
+}
+
+void QmlUiAuditTests::mainQmlBansRawQtQuickControlsCheckBox()
+{
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
+  // "CxCheckBox {" contains "CheckBox {" as a substring, so anchor on a
+  // non-letter before the type name to catch only raw QtQuick.Controls use.
+  static const QRegularExpression rawCheckBox(
+      QStringLiteral("(?<![A-Za-z])CheckBox\\s*\\{"));
+  QVERIFY2(!rawCheckBox.match(mainQml).hasMatch(),
+           "main.qml must use CxCheckBox: raw QtQuick.Controls CheckBox has no "
+           "`color` property, and assigning it is a QML compile error that "
+           "empties engine root objects and exit(-1)s the whole launch");
 }
 
 void QmlUiAuditTests::mainChromeUsesThemeTokens()

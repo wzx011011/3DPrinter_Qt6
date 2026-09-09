@@ -760,23 +760,43 @@ ApplicationWindow {
                                 Repeater {
                                     model: processGroupDelegate.orderedIndices
 
-                                    delegate: OptionRow {
+                                    // Wrapper delegate (same pattern as
+                                    // optDelegate below): OptionRow declares
+                                    // required properties, so the Repeater can
+                                    // no longer inject modelData/index as
+                                    // context roles -- unqualified references
+                                    // here resolved to the outer group
+                                    // delegate's scope instead (a QString for
+                                    // index -> "Unable to assign QString to
+                                    // int" on every row).
+                                    delegate: Item {
+                                        id: processOptionDelegate
+                                        required property int index
+                                        required property var modelData
+                                        readonly property int optIdx: modelData
+
                                         width: processGroupColumn.width
-                                        height: totalHeight
-                                        optionModel: root.optionModel
-                                        optIdx: modelData
-                                        rowIndex: index
-                                        searchText: root.searchText
-                                        showGroupHeader: false
-                                        oGroup: processGroupDelegate.groupName
-                                        compact: true
-                                        compactLabelWidth: 210
-                                        compactFieldWidth: 96
-                                        compactEnumWidth: 190
-                                        valueSource: {
-                                            if (!root.configVm || !root.optionModel) return ""
-                                            var key = root.optionModel.optKey(modelData)
-                                            return root.configVm.valueSourceForKey(key)
+                                        height: processOptRow.totalHeight
+
+                                        OptionRow {
+                                            id: processOptRow
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            optionModel: root.optionModel
+                                            optIdx: processOptionDelegate.optIdx
+                                            rowIndex: processOptionDelegate.index
+                                            searchText: root.searchText
+                                            showGroupHeader: false
+                                            oGroup: processGroupDelegate.groupName
+                                            compact: true
+                                            compactLabelWidth: 210
+                                            compactFieldWidth: 96
+                                            compactEnumWidth: 190
+                                            valueSource: {
+                                                if (!root.configVm || !root.optionModel) return ""
+                                                var key = root.optionModel.optKey(processOptionDelegate.optIdx)
+                                                return root.configVm.valueSourceForKey(key)
+                                            }
                                         }
                                     }
                                 }

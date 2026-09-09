@@ -68,6 +68,7 @@ CxDialog {
                 spacing: 2
 
                 delegate: Rectangle {
+                    required property int index
                     required property var modelData
                     width: parent.width
                     height: 30

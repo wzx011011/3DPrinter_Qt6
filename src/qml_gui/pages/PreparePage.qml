@@ -3059,7 +3059,7 @@ Item {
                     }
                     Rectangle {
                         width: 44; height: 20; radius: 4
-                        visible: root.editorVm && root.editorVm.advancedCutConnectors
+                        visible: root.editorVm && root.editorVm.advCutConnectors
                                  && root.editorVm.advancedCutConnectorCount > 0
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault; border.width: 1

@@ -376,11 +376,9 @@ ApplicationWindow {
                 wrapMode: Text.Wrap
                 width: parent.width
             }
-            CheckBox {
+            CxCheckBox {
                 id: rememberDiscardCheck
                 text: qsTr("记住我的选择（不再提醒）")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSize13
             }
             Row {
                 anchors.right: parent.right
