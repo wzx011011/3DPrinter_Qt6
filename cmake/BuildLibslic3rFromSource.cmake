@@ -461,7 +461,40 @@ if(NOT libnoise_FOUND)
             INTERFACE_INCLUDE_DIRECTORIES "${_libnoise_inc}"
         )
     endif()
-    message(STATUS "libnoise not found; continuing without a binary dependency")
+    # 8b93cc5df baseline: FuzzySkin.cpp links the noise modules, so an
+    # include-only fallback is no longer enough -- the symbols are mandatory
+    # at link time. The upstream Find module only knows libnoise* names while
+    # the vcpkg layout ships noise.lib, so locate the import library in the
+    # known dep roots explicitly and wire it through INTERFACE_LINK_LIBRARIES
+    # (legal on an imported INTERFACE target, so cached target types stay
+    # irrelevant). The runtime DLL is copied next to the executables at
+    # configure time; the gate's Deploy stage already copies noise.dll for
+    # the deployed bundle.
+    set(_libnoise_lib_candidates "")
+    foreach(_libnoise_root IN ITEMS "${DEPS_PREFIX}" "${VCPKG_INSTALLED_DIR}")
+        if(_libnoise_root)
+            foreach(_libnoise_name IN ITEMS libnoise.lib noise.lib libnoise_static.lib noise_static.lib)
+                if(EXISTS "${_libnoise_root}/lib/${_libnoise_name}")
+                    list(APPEND _libnoise_lib_candidates "${_libnoise_root}/lib/${_libnoise_name}")
+                    break()
+                endif()
+            endforeach()
+        endif()
+    endforeach()
+    if(_libnoise_lib_candidates)
+        list(GET _libnoise_lib_candidates 0 _libnoise_lib)
+        set_property(TARGET noise::noise APPEND PROPERTY
+            INTERFACE_LINK_LIBRARIES "${_libnoise_lib}")
+        cmake_path(GET _libnoise_lib PARENT_PATH _libnoise_lib_dir)
+        cmake_path(GET _libnoise_lib_dir PARENT_PATH _libnoise_root_dir)
+        if(EXISTS "${_libnoise_root_dir}/bin/noise.dll")
+            file(COPY_FILE "${_libnoise_root_dir}/bin/noise.dll"
+                "${CMAKE_BINARY_DIR}/noise.dll")
+        endif()
+        message(STATUS "libnoise headers only; linking ${_libnoise_lib}")
+    else()
+        message(STATUS "libnoise not found; continuing without a binary dependency")
+    endif()
 endif()
 
 # GMP/MPFR for CGAL

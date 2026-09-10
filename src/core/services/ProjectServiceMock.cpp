@@ -5063,9 +5063,18 @@ int ProjectServiceMock::cutObjectWithGroove(int objectIndex, int axis, double po
     // Use instance 0 (single instance model)
     const int instance_idx = 0;
 
-    // Perform the groove cut (对齐上游 perform_cut → cut.perform_with_groove)
+    // Perform the groove cut (对齐上游 perform_cut → cut.perform_with_groove).
+    // 8b93cc5df: perform_with_groove gained groove_count/groove_gap/m_radius
+    // (upstream GLGizmoCut.cpp:2562). A single centered groove reproduces the
+    // previous single-groove behaviour (gap is unused at count==1); the
+    // radius mirrors the gizmo's m_radius = box.radius() bounding sphere
+    // (GLGizmoCut.cpp:1916).
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
-    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(groove, rotation_m, false);
+    const float objectRadius =
+        float(obj->instance_bounding_box(instance_idx).radius());
+    const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_groove(
+        groove, rotation_m, /*groove_count=*/1, /*groove_gap=*/0.f,
+        objectRadius, /*keep_as_parts=*/false);
 
     if (new_objects.empty())
       return -1;
@@ -7528,11 +7537,11 @@ bool ProjectServiceMock::splitVolumeIntoParts(int objectIndex, int volumeIndex)
   }
 
   try {
-    // 0632bae8 baseline: ModelVolume::split takes (max_extruders) only;
-    // the bool remap_paint overload is a 4cb3b9ce extension. Paint is remapped
-    // by default in 0632's single-arg path, matching the false (no remap)
-    // intent closely enough for the part-split use case.
-    const size_t partCount = object->volumes[size_t(volumeIndex)]->split(1);
+    // 8b93cc5df baseline: ModelVolume::split takes (max_extruders,
+    // remap_paint). Upstream passes the "keep_painting" preference
+    // (GUI_ObjectList.cpp:2910) which defaults to false when unset; our
+    // integration exposes no such preference, so the unset default applies.
+    const size_t partCount = object->volumes[size_t(volumeIndex)]->split(1, /*remap_paint=*/false);
     if (partCount <= 1) {
       lastError_ = tr("Selected part cannot be split");
       return false;
@@ -9715,7 +9724,11 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
     auto *tempObj = tempModel.objects[size_t(objectIndex)];
 
     Slic3r::ModelObjectPtrs newObjects;
-    tempObj->split(&newObjects);
+    // 8b93cc5df: split takes remap_paint (upstream Plater.cpp:8583 passes
+    // the "keep_painting" preference, which defaults to false when unset;
+    // our integration exposes no such preference, so the unset default
+    // applies).
+    tempObj->split(&newObjects, /*remap_paint=*/false);
 
     // 对齐上游：如果只有一个结果，表示无法拆分
     if (newObjects.size() <= 1)

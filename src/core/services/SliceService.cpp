@@ -1125,23 +1125,31 @@ void SliceService::startSlice(const QString &projectName)
       }
 
       // Pre-slice validation (align upstream BackgroundSlicingProcess::validate).
-      // Phase 239 (ENGN-03): upstream Print::validate reports non-fatal
-      // findings through the `warning` out-param (Print.cpp:1063;
-      // layered_print_cleareance_valid Print.cpp:930-934 writes "too close to
-      // others" into it while returning an empty error). A non-empty RETURN
-      // value still aborts the slice; a warning does not -- it is delivered to
-      // the GUI as a notification (upstream Plater.cpp:13742-13759
-      // process_validation_warning) via the validateWarning signal.
+      // 8b93cc5df baseline: upstream Print::validate reports non-fatal
+      // findings through a std::vector<StringObjectException> out-param
+      // (Print.hpp:952); upstream Plater.cpp:13742-13759 iterates the vector
+      // and delivers each entry to the GUI as a validation warning
+      // notification (our validateWarning signal). A non-empty RETURN value
+      // still aborts the slice; warnings do not.
       {
-        Slic3r::StringObjectException validationWarning;
+        std::vector<Slic3r::StringObjectException> validationWarnings;
         Slic3r::Polygons collisionPolygons;
         std::vector<std::pair<Slic3r::Polygon, float>> heightPolygons;
         Slic3r::StringObjectException validationError = print.validate(
-            &validationWarning, &collisionPolygons, &heightPolygons);
+            &validationWarnings, &collisionPolygons, &heightPolygons);
         capturedClearance = packSequentialClearance(collisionPolygons, heightPolygons);
         if (!validationError.string.empty())
           throw std::runtime_error("Slice validation failed: " + validationError.string);
-        validationWarningText = QString::fromUtf8(validationWarning.string.c_str());
+        QString validationWarningJoined;
+        for (const Slic3r::StringObjectException &warning : validationWarnings)
+        {
+          if (warning.string.empty())
+            continue;
+          if (!validationWarningJoined.isEmpty())
+            validationWarningJoined += QLatin1Char('\n');
+          validationWarningJoined += QString::fromUtf8(warning.string.c_str());
+        }
+        validationWarningText = validationWarningJoined;
       }
 
       notify(25, QObject::tr("Running slice"));

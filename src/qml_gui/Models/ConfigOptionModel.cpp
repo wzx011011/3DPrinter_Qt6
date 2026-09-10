@@ -511,10 +511,10 @@ QStringList ConfigOptionModel::pageNames() const
   // the list (future tiers / upstream additions) appends sorted so nothing is
   // silently dropped.
   const QStringList knownOrder = {
-    // Print tier (TabPrint::build)
+    // Print tier (TabPrint::build at the 8b93cc5df lock: Quality /
+    // Strength / Speed / Support / Multimaterial / Others)
     QStringLiteral("Quality"), QStringLiteral("Strength"), QStringLiteral("Speed"),
-    QStringLiteral("Temperature"), QStringLiteral("Support"), QStringLiteral("Base"),
-    QStringLiteral("Cooling"), QStringLiteral("Retraction"), QStringLiteral("Other"),
+    QStringLiteral("Support"), QStringLiteral("Multimaterial"), QStringLiteral("Others"),
     // Filament tier (TabFilament::build)
     QStringLiteral("Filament"), QStringLiteral("Advanced"), QStringLiteral("Multimaterial"),
     QStringLiteral("Dependencies"), QStringLiteral("Notes"),
@@ -1030,57 +1030,61 @@ namespace
     return result;
   }
 
-  // Source: third_party/OrcaSlicer/src/slic3r/GUI/Tab.cpp:2005-2376.
+  // Source: third_party/OrcaSlicer/src/slic3r/GUI/Tab.cpp:2647-3147
+  // (TabPrint::build at the 8b93cc5df source-truth lock).
   static const QList<ProcessPageDefinition> &processPageDefinitions()
   {
     static const QList<ProcessPageDefinition> definitions = {
         {QStringLiteral("Quality"), {
             {QStringLiteral("Layer height"), processKeys({"layer_height", "initial_layer_print_height"})},
-            {QStringLiteral("Line width"), processKeys({"line_width", "initial_layer_line_width", "outer_wall_line_width", "inner_wall_line_width", "top_surface_line_width", "sparse_infill_line_width", "internal_solid_infill_line_width", "support_line_width"})},
+            {QStringLiteral("Line width"), processKeys({"line_width", "initial_layer_line_width", "outer_wall_line_width", "inner_wall_line_width", "top_surface_line_width", "sparse_infill_line_width", "internal_solid_infill_line_width", "support_line_width", "bridge_line_width"})},
             {QStringLiteral("Seam"), processKeys({"seam_position", "staggered_inner_seams", "seam_gap", "seam_slope_type", "seam_slope_conditional", "scarf_angle_threshold", "scarf_overhang_threshold", "scarf_joint_speed", "seam_slope_start_height", "seam_slope_entire_loop", "seam_slope_min_length", "seam_slope_steps", "scarf_joint_flow_ratio", "seam_slope_inner_walls", "role_based_wipe_speed", "wipe_speed", "wipe_on_loops", "wipe_before_external_loop"})},
-            {QStringLiteral("Precision"), processKeys({"slice_closing_radius", "resolution", "enable_arc_fitting", "xy_hole_compensation", "xy_contour_compensation", "elefant_foot_compensation", "elefant_foot_compensation_layers", "precise_outer_wall", "precise_z_height", "hole_to_polyhole", "hole_to_polyhole_threshold", "hole_to_polyhole_twisted"})},
-            {QStringLiteral("Ironing"), processKeys({"ironing_type", "ironing_pattern", "ironing_speed", "ironing_flow", "ironing_spacing", "ironing_angle"})},
-            {QStringLiteral("Wall generator"), processKeys({"wall_generator", "wall_transition_angle", "wall_transition_filter_deviation", "wall_transition_length", "wall_distribution_count", "initial_layer_min_bead_width", "min_bead_width", "min_feature_size", "min_length_factor"})},
-            {QStringLiteral("Walls and surfaces"), processKeys({"wall_sequence", "is_infill_first", "wall_direction", "print_flow_ratio", "top_solid_infill_flow_ratio", "bottom_solid_infill_flow_ratio", "only_one_wall_top", "min_width_top_surface", "only_one_wall_first_layer", "reduce_crossing_wall", "max_travel_detour_distance", "small_area_infill_flow_compensation", "small_area_infill_flow_compensation_model"})},
-            {QStringLiteral("Bridging"), processKeys({"bridge_flow", "internal_bridge_flow", "bridge_density", "thick_bridges", "thick_internal_bridges", "dont_filter_internal_bridges", "counterbore_hole_bridging"})},
+            {QStringLiteral("Precision"), processKeys({"slice_closing_radius", "resolution", "enable_arc_fitting", "xy_hole_compensation", "xy_contour_compensation", "elefant_foot_compensation", "elefant_foot_layers_density", "elefant_foot_compensation_layers", "precise_outer_wall", "precise_z_height", "hole_to_polyhole", "hole_to_polyhole_threshold", "hole_to_polyhole_twisted", "hole_to_polyhole_max_edges"})},
+            {QStringLiteral("Ironing"), processKeys({"ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing", "ironing_inset", "ironing_angle", "ironing_angle_fixed"})},
+            {QStringLiteral("Z contouring"), processKeys({"zaa_enabled", "zaa_minimize_perimeter_height", "zaa_min_z", "zaa_dont_alternate_fill_direction", "ironing_expansion"})},
+            {QStringLiteral("Wall generator"), processKeys({"wall_generator", "wall_transition_angle", "wall_transition_filter_deviation", "wall_transition_length", "wall_distribution_count", "initial_layer_min_bead_width", "min_bead_width", "min_feature_size", "min_length_factor", "wall_maximum_resolution", "wall_maximum_deviation"})},
+            {QStringLiteral("Walls and surfaces"), processKeys({"wall_sequence", "is_infill_first", "wall_direction", "print_flow_ratio", "top_solid_infill_flow_ratio", "bottom_solid_infill_flow_ratio", "set_other_flow_ratios", "first_layer_flow_ratio", "outer_wall_flow_ratio", "inner_wall_flow_ratio", "overhang_flow_ratio", "sparse_infill_flow_ratio", "internal_solid_infill_flow_ratio", "gap_fill_flow_ratio", "support_flow_ratio", "support_interface_flow_ratio", "only_one_wall_first_layer", "only_one_wall_top", "min_width_top_surface", "reduce_crossing_wall", "max_travel_detour_distance", "small_area_infill_flow_compensation", "small_area_infill_flow_compensation_model"})},
+            {QStringLiteral("Bridging"), processKeys({"bridge_flow", "internal_bridge_flow", "bridge_density", "internal_bridge_density", "thick_bridges", "thick_internal_bridges", "enable_extra_bridge_layer", "dont_filter_internal_bridges", "counterbore_hole_bridging"})},
             {QStringLiteral("Overhangs"), processKeys({"detect_overhang_wall", "make_overhang_printable", "make_overhang_printable_angle", "make_overhang_printable_hole_size", "extra_perimeters_on_overhangs", "overhang_reverse", "overhang_reverse_internal_only", "overhang_reverse_threshold"})},
         }},
         {QStringLiteral("Strength"), {
             {QStringLiteral("Walls"), processKeys({"wall_loops", "alternate_extra_wall", "detect_thin_wall"})},
-            {QStringLiteral("Top/bottom shells"), processKeys({"top_shell_layers", "top_shell_thickness", "top_surface_pattern", "bottom_shell_layers", "bottom_shell_thickness", "bottom_surface_pattern", "top_bottom_infill_wall_overlap"})},
-            {QStringLiteral("Infill"), processKeys({"sparse_infill_density", "sparse_infill_pattern", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "gap_fill_target", "filter_out_gap_fill", "infill_wall_overlap"})},
-            {QStringLiteral("Advanced"), processKeys({"infill_direction", "solid_infill_direction", "rotate_solid_infill_direction", "bridge_angle", "minimum_sparse_infill_area", "infill_combination", "infill_combination_max_layer_height", "detect_narrow_internal_solid_infill", "ensure_vertical_shell_thickness"})},
+            {QStringLiteral("Top/bottom shells"), processKeys({"top_shell_layers", "top_shell_thickness", "top_surface_density", "top_surface_pattern", "top_surface_fill_order", "top_layer_direction", "top_surface_expansion", "top_surface_expansion_margin", "top_surface_expansion_direction", "bottom_shell_layers", "bottom_shell_thickness", "bottom_surface_density", "bottom_surface_pattern", "bottom_surface_fill_order", "bottom_layer_direction", "center_of_surface_pattern", "top_bottom_infill_wall_overlap"})},
+            {QStringLiteral("Infill"), processKeys({"sparse_infill_density", "fill_multiline", "sparse_infill_pattern", "gyroid_optimized", "infill_direction", "sparse_infill_rotate_template", "skin_infill_density", "skeleton_infill_density", "infill_lock_depth", "skin_infill_depth", "skin_infill_line_width", "skeleton_infill_line_width", "symmetric_infill_y_axis", "infill_shift_step", "lateral_lattice_angle_1", "lateral_lattice_angle_2", "infill_overhang_angle", "lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "solid_infill_direction", "solid_infill_rotate_template", "gap_fill_target", "filter_out_gap_fill", "separated_infills", "infill_wall_overlap"})},
+            {QStringLiteral("Advanced"), processKeys({"align_infill_direction_to_model", "extra_solid_infills", "bridge_angle", "internal_bridge_angle", "relative_bridge_angle", "minimum_sparse_infill_area", "infill_combination", "infill_combination_max_layer_height", "detect_narrow_internal_solid_infill", "ensure_vertical_shell_thickness"})},
         }},
         {QStringLiteral("Speed"), {
-            {QStringLiteral("Initial layer speed"), processKeys({"initial_layer_speed", "initial_layer_infill_speed", "initial_layer_travel_speed", "slow_down_layers"})},
-            {QStringLiteral("Other layers speed"), processKeys({"outer_wall_speed", "inner_wall_speed", "small_perimeter_speed", "small_perimeter_threshold", "sparse_infill_speed", "internal_solid_infill_speed", "top_surface_speed", "gap_infill_speed", "support_speed", "support_interface_speed"})},
-            {QStringLiteral("Overhang speed"), processKeys({"enable_overhang_speed", "slowdown_for_curled_perimeters", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed"})},
+            {QStringLiteral("First layer speed"), processKeys({"initial_layer_speed", "initial_layer_infill_speed", "initial_layer_travel_speed", "slow_down_layers"})},
+            {QStringLiteral("Other layers speed"), processKeys({"outer_wall_speed", "inner_wall_speed", "small_perimeter_speed", "small_perimeter_threshold", "sparse_infill_speed", "internal_solid_infill_speed", "top_surface_speed", "gap_infill_speed", "ironing_speed", "support_speed", "support_interface_speed", "small_support_perimeter_speed", "small_support_perimeter_threshold"})},
+            {QStringLiteral("Overhang speed"), processKeys({"overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed", "enable_overhang_speed", "slowdown_for_curled_perimeters"})},
             {QStringLiteral("Travel speed"), processKeys({"travel_speed"})},
-            {QStringLiteral("Acceleration"), processKeys({"default_acceleration", "outer_wall_acceleration", "inner_wall_acceleration", "bridge_acceleration", "sparse_infill_acceleration", "internal_solid_infill_acceleration", "initial_layer_acceleration", "top_surface_acceleration", "travel_acceleration", "accel_to_decel_enable", "accel_to_decel_factor"})},
-            {QStringLiteral("Jerk(XY)"), processKeys({"default_jerk", "outer_wall_jerk", "inner_wall_jerk", "infill_jerk", "top_surface_jerk", "initial_layer_jerk", "travel_jerk"})},
+            {QStringLiteral("Acceleration"), processKeys({"default_acceleration", "outer_wall_acceleration", "inner_wall_acceleration", "bridge_acceleration", "sparse_infill_acceleration", "internal_solid_infill_acceleration", "initial_layer_acceleration", "initial_layer_travel_acceleration", "top_surface_acceleration", "travel_acceleration", "accel_to_decel_enable", "accel_to_decel_factor"})},
+            {QStringLiteral("Junction Deviation"), processKeys({"default_junction_deviation"})},
+            {QStringLiteral("Jerk(XY)"), processKeys({"default_jerk", "outer_wall_jerk", "inner_wall_jerk", "infill_jerk", "top_surface_jerk", "initial_layer_jerk", "initial_layer_travel_jerk", "travel_jerk"})},
             {QStringLiteral("Advanced"), processKeys({"max_volumetric_extrusion_rate_slope", "max_volumetric_extrusion_rate_slope_segment_length", "extrusion_rate_smoothing_external_perimeter_only"})},
         }},
         {QStringLiteral("Support"), {
-            {QStringLiteral("Support"), processKeys({"enable_support", "support_type", "support_style", "support_threshold_angle", "raft_first_layer_density", "raft_first_layer_expansion", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang"})},
+            {QStringLiteral("Support"), processKeys({"enable_support", "support_type", "support_style", "support_threshold_angle", "support_threshold_overlap", "raft_first_layer_density", "raft_first_layer_expansion", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang", "enforce_support_layers"})},
             {QStringLiteral("Raft"), processKeys({"raft_layers", "raft_contact_distance"})},
-            {QStringLiteral("Support filament"), processKeys({"support_filament", "support_interface_filament", "support_interface_not_for_body"})},
-            {QStringLiteral("Advanced"), processKeys({"support_top_z_distance", "support_bottom_z_distance", "support_base_pattern", "support_base_pattern_spacing", "support_angle", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_bottom_interface_spacing", "support_expansion", "support_object_xy_distance", "bridge_no_support", "max_bridge_length", "independent_support_layer_height"})},
-            {QStringLiteral("Tree supports"), processKeys({"tree_support_tip_diameter", "tree_support_branch_distance", "tree_support_branch_distance_organic", "tree_support_top_rate", "tree_support_branch_diameter", "tree_support_branch_diameter_organic", "tree_support_branch_diameter_angle", "tree_support_branch_angle", "tree_support_branch_angle_organic", "tree_support_angle_slow", "tree_support_branch_diameter_double_wall", "tree_support_wall_count", "tree_support_adaptive_layer_height", "tree_support_auto_brim", "tree_support_brim_width"})},
+            {QStringLiteral("Filament for Supports"), processKeys({"support_filament", "support_interface_filament", "support_interface_not_for_body"})},
+            {QStringLiteral("Support ironing"), processKeys({"support_ironing", "support_ironing_pattern", "support_ironing_flow", "support_ironing_spacing"})},
+            {QStringLiteral("Advanced"), processKeys({"support_top_z_distance", "support_bottom_z_distance", "tree_support_wall_count", "support_base_pattern", "support_base_pattern_spacing", "support_angle", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_bottom_interface_spacing", "support_expansion", "support_interface_loop_pattern", "support_object_xy_distance", "support_object_first_layer_gap", "bridge_no_support", "max_bridge_length", "independent_support_layer_height"})},
+            {QStringLiteral("Tree supports"), processKeys({"tree_support_tip_diameter", "tree_support_branch_distance", "tree_support_branch_distance_organic", "tree_support_top_rate", "tree_support_branch_diameter", "tree_support_branch_diameter_organic", "tree_support_branch_diameter_angle", "tree_support_branch_angle", "tree_support_branch_angle_organic", "tree_support_angle_slow", "tree_support_auto_brim", "tree_support_brim_width"})},
         }},
         {QStringLiteral("Multimaterial"), {
-            {QStringLiteral("Prime tower"), processKeys({"enable_prime_tower", "prime_tower_width", "prime_volume", "prime_tower_brim_width", "wipe_tower_rotation_angle", "wipe_tower_bridging", "wipe_tower_cone_angle", "wipe_tower_extra_spacing", "wipe_tower_extra_flow", "wipe_tower_max_purge_speed", "wipe_tower_no_sparse_layers", "single_extruder_multi_material_priming"})},
-            {QStringLiteral("Filament for Features"), processKeys({"wall_filament", "sparse_infill_filament", "solid_infill_filament", "wipe_tower_filament"})},
+            {QStringLiteral("Prime tower"), processKeys({"enable_prime_tower", "prime_tower_skip_points", "enable_tower_interface_features", "enable_tower_interface_cooldown_during_tower", "prime_tower_enable_framework", "prime_tower_width", "prime_volume", "prime_tower_brim_width", "prime_tower_infill_gap", "wipe_tower_rotation_angle", "wipe_tower_bridging", "wipe_tower_extra_spacing", "wipe_tower_extra_flow", "wipe_tower_max_purge_speed", "wipe_tower_wall_type", "wipe_tower_cone_angle", "wipe_tower_extra_rib_length", "wipe_tower_rib_width", "wipe_tower_fillet_wall", "wipe_tower_no_sparse_layers", "single_extruder_multi_material_priming"})},
+            {QStringLiteral("Filament for Features"), processKeys({"outer_wall_filament_id", "inner_wall_filament_id", "sparse_infill_filament_id", "internal_solid_filament_id", "top_surface_filament_id", "bottom_surface_filament_id", "wipe_tower_filament"})},
             {QStringLiteral("Ooze prevention"), processKeys({"ooze_prevention", "standby_temperature_delta", "preheat_time", "preheat_steps"})},
             {QStringLiteral("Flush options"), processKeys({"flush_into_infill", "flush_into_objects", "flush_into_support"})},
-            {QStringLiteral("Advanced"), processKeys({"interlocking_beam", "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth", "interlocking_beam_width", "interlocking_orientation", "interlocking_beam_layer_count", "interlocking_depth", "interlocking_boundary_avoidance"})},
+            {QStringLiteral("Advanced"), processKeys({"interlocking_beam", "toolchange_ordering", "interface_shells", "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth", "interlocking_beam_width", "interlocking_orientation", "interlocking_beam_layer_count", "interlocking_depth", "interlocking_boundary_avoidance"})},
         }},
         {QStringLiteral("Others"), {
-            {QStringLiteral("Skirt"), processKeys({"skirt_loops", "skirt_type", "min_skirt_length", "skirt_distance", "skirt_start_angle", "skirt_height", "skirt_speed", "draft_shield"})},
-            {QStringLiteral("Brim"), processKeys({"brim_type", "brim_width", "brim_object_gap", "brim_ears_max_angle", "brim_ears_detection_length"})},
-            {QStringLiteral("Special mode"), processKeys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "timelapse_type", "fuzzy_skin", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_first_layer"})},
-            {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
-            {QStringLiteral("Post-processing Scripts"), processKeys({"post_process"})},
-            {QStringLiteral("Notes"), processKeys({"notes"})},
+            {QStringLiteral("Skirt"), processKeys({"skirt_loops", "skirt_type", "min_skirt_length", "skirt_distance", "skirt_start_angle", "skirt_speed", "skirt_height", "draft_shield", "single_loop_draft_shield"})},
+            {QStringLiteral("Brim"), processKeys({"brim_type", "brim_width", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length"})},
+            {QStringLiteral("Special mode"), processKeys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio", "timelapse_type", "enable_wrapping_detection"})},
+            {QStringLiteral("Fuzzy skin"), processKeys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
+            {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object"})},
+            {QStringLiteral("Plugin Configuration"), processKeys({"plugin_config_overrides"})},
         }},
     };
     return definitions;
@@ -1145,8 +1149,21 @@ namespace
         QStringLiteral("compatible_printers"),
         QStringLiteral("compatible_printers_condition"),
         QStringLiteral("inherits"),
-        QStringLiteral("overhang_speed_classic"),
+        // overhang_speed_classic was removed from print_options() upstream.
         QStringLiteral("wiping_volumes_extruders"),
+        // 8b93cc5df source-truth additions: print_options() entries upstream
+        // keeps out of TabPrint::build (consumed by other tabs, the slicing
+        // pipeline, or as machine-side metadata).
+        QStringLiteral("filename_format"),
+        QStringLiteral("notes"),
+        QStringLiteral("post_process"),
+        QStringLiteral("prime_tower_flat_ironing"),
+        QStringLiteral("print_extruder_id"),
+        QStringLiteral("print_extruder_variant"),
+        QStringLiteral("plugins"),
+        QStringLiteral("slicing_pipeline_plugin"),
+        QStringLiteral("process_change_extrusion_role_gcode"),
+        QStringLiteral("calib_flowrate_topinfill_special_order"),
     };
     return keys;
   }

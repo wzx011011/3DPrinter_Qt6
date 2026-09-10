@@ -1,0 +1,44 @@
+From 788d990be14dbd74495e916bf33f02f3f4b3e4e6 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Fri, 11 Sep 2026 01:05:18 +0800
+Subject: [PATCH 4/4] fix(GCodeProcessor): bounds-check filament map in HRC
+ slice warning
+
+update_slice_warnings indexed m_filament_maps and nozzle_hrc_lists
+unconditionally, but a processor run without applied config --
+Print::export_gcode_from_previous_file reprocessing a plain G-code file
+that carries no embedded filament_map -- leaves m_filament_maps empty,
+so the first used filament crashed with a null-base index. Guard both
+lookups the same way the adjacent required_nozzle_HRC lookup already
+does; a config-less run defaults the filament to extruder 0.
+---
+ src/libslic3r/GCode/GCodeProcessor.cpp | 13 +++++++++++--
+ 1 file changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/src/libslic3r/GCode/GCodeProcessor.cpp b/src/libslic3r/GCode/GCodeProcessor.cpp
+index 4691af7e0e..e7cb492f22 100644
+--- a/src/libslic3r/GCode/GCodeProcessor.cpp
++++ b/src/libslic3r/GCode/GCodeProcessor.cpp
+@@ -7457,8 +7457,17 @@ void GCodeProcessor::update_slice_warnings()
+         if (used_filaments[idx] < m_result.required_nozzle_HRC.size())
+             filament_hrc = m_result.required_nozzle_HRC[used_filaments[idx]];
+ 
+-        int filament_extruder_id = m_filament_maps[used_filaments[idx]];
+-        int extruder_hrc = nozzle_hrc_lists[filament_extruder_id];
++        // A processor run without applied config (reprocessing a plain
++        // G-code file that carries no embedded filament_map) has an empty
++        // m_filament_maps; default the filament to extruder 0 instead of
++        // indexing out of bounds, mirroring the required_nozzle_HRC guard
++        // above.
++        int filament_extruder_id = used_filaments[idx] < m_filament_maps.size()
++                                       ? m_filament_maps[used_filaments[idx]]
++                                       : 0;
++        int extruder_hrc = size_t(filament_extruder_id) < nozzle_hrc_lists.size()
++                               ? nozzle_hrc_lists[size_t(filament_extruder_id)]
++                               : 0;
+ 
+         BOOST_LOG_TRIVIAL(debug) << __FUNCTION__ << boost::format(": Check HRC: filament:%1%, hrc=%2%, extruder:%3%, hrc:%4%") % used_filaments[idx] % filament_hrc % filament_extruder_id % extruder_hrc;
+ 
+-- 
+2.32.0.windows.2
+

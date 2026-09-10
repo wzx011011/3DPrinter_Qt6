@@ -1,0 +1,60 @@
+From ad3135ce0dd08987734e629d9c1c8920f0a98e4d Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Wed, 22 Jul 2026 17:36:53 +0800
+Subject: [PATCH 1/4] fix(260721-jjs): guard null enum key maps
+
+- preserve numeric serialization without an enum key map
+- reject symbolic deserialization when the key map is absent
+---
+ src/libslic3r/Config.hpp | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/src/libslic3r/Config.hpp b/src/libslic3r/Config.hpp
+index da36321b6f..ab107d4f9b 100644
+--- a/src/libslic3r/Config.hpp
++++ b/src/libslic3r/Config.hpp
+@@ -2110,6 +2110,9 @@ public:
+ 
+     std::string serialize() const override
+     {
++        // Preserve numeric enum values when DynamicPrintConfig has no key map.
++        if (this->keys_map == nullptr)
++            return std::to_string(this->value);
+         for (const auto &kvp : *this->keys_map)
+             if (kvp.second == this->value)
+                 return kvp.first;
+@@ -2119,6 +2122,8 @@ public:
+     bool deserialize(const std::string &str, bool append = false) override
+     {
+         UNUSED(append);
++        // A missing key map cannot resolve a symbolic enum value.
++        if (this->keys_map == nullptr) return false;
+         auto it = this->keys_map->find(str);
+         if (it == this->keys_map->end())
+             return false;
+@@ -2203,6 +2208,8 @@ public:
+                     throw ConfigurationError("Deserializing nil into a non-nullable object");
+             }
+             else {
++                // A missing key map cannot resolve a symbolic enum value.
++                if (this->keys_map == nullptr) return false;
+                 auto it = this->keys_map->find(item_str);
+                 if (it == this->keys_map->end())
+                     return false;
+@@ -2221,7 +2228,12 @@ private:
+             else
+                 throw ConfigurationError("Serializing NaN");
+         }
+-        else if (this->keys_map != nullptr) {
++        else {
++            // Preserve numeric enum values when DynamicPrintConfig has no key map.
++            if (this->keys_map == nullptr) {
++                ss << v;
++                return;
++            }
+             for (const auto& kvp : *this->keys_map)
+                 if (kvp.second == v)
+                     ss << kvp.first;
+-- 
+2.32.0.windows.2
+

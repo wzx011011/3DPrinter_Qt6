@@ -1267,9 +1267,15 @@ bool CalibrationServiceMock::generateAndDispatchPaPattern(const QString &project
         config.set_key_value("filament_retract_when_changing_layer",
                              new Slic3r::ConfigOptionBoolsNullable{false});
         config.set_key_value("filament_wipe", new Slic3r::ConfigOptionBoolsNullable{false});
-        // SuggestedConfigCalibPAPattern overrides (Calib.hpp:233-244).
-        for (const auto &pair : Slic3r::SuggestedConfigCalibPAPattern().float_pairs)
-            config.set_key_value(pair.first, new Slic3r::ConfigOptionFloat(pair.second));
+        // SuggestedConfigCalibPAPattern overrides (8b93cc5df Calib.hpp:293-302;
+        // the float overrides member is floats_pairs).
+        // floats_pairs values are default vectors; upstream takes the first
+        // element into a ConfigOptionFloatsNullable (Plater.cpp:13664-13666).
+        for (const auto &pair : Slic3r::SuggestedConfigCalibPAPattern().floats_pairs)
+            config.set_key_value(
+                pair.first,
+                new Slic3r::ConfigOptionFloatsNullable{
+                    pair.second.empty() ? 0.0 : pair.second[0]});
         for (const auto &pair : Slic3r::SuggestedConfigCalibPAPattern().nozzle_ratio_pairs) {
             const double nozzle = config.opt_float("nozzle_diameter", 0);
             config.set_key_value(pair.first,
@@ -1284,11 +1290,15 @@ bool CalibrationServiceMock::generateAndDispatchPaPattern(const QString &project
 
         // Generate the pattern into the live model (writes
         // model.plates_custom_gcodes for the current plate; consumed by
-        // Print.cpp:470 during slicing).
+        // Print.cpp:470 during slicing). 8b93cc5df takes the anchor
+        // ModelObject& directly, exactly like upstream passes its handle
+        // cube (Plater.cpp:13719-13728).
+        Slic3r::ModelObject &anchorObject = *model->objects.front();
         Slic3r::CalibPressureAdvancePattern paPattern(
-            params, config, /*is_bbl_machine=*/false, *model, Slic3r::Vec3d::Zero());
-        paPattern.generate_custom_gcodes(config, /*is_bbl_machine=*/false, *model,
-                                         Slic3r::Vec3d::Zero());
+            params, config, /*is_bbl_machine=*/false, anchorObject,
+            Slic3r::Vec3d::Zero());
+        paPattern.generate_custom_gcodes(config, /*is_bbl_machine=*/false,
+                                         anchorObject, Slic3r::Vec3d::Zero());
 
         m_sliceService->setCalibParams(kCalibModePA_Pattern, calibType.calibStart,
                                        calibType.calibEnd, calibType.calibStep,

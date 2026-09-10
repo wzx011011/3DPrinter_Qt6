@@ -2722,7 +2722,7 @@ void QmlUiAuditTests::sequentialClearanceUsesEnginePayloadAndDedicatedBuffers()
            "sequential clearance must cross the worker boundary as a value payload");
   QVERIFY2(sliceSource.contains(QStringLiteral("collisionPolygons"))
                && sliceSource.contains(QStringLiteral("heightPolygons"))
-               && sliceSource.contains(QStringLiteral("print.validate(\n            &validationWarning, &collisionPolygons, &heightPolygons)")),
+               && sliceSource.contains(QStringLiteral("print.validate(\n            &validationWarnings, &collisionPolygons, &heightPolygons)")),
            "SliceService must capture both engine collision and height outputs");
   QVERIFY2(editorHeader.contains(QStringLiteral("sequentialClearanceOutline"))
                && editorHeader.contains(QStringLiteral("sequentialHeightFill"))

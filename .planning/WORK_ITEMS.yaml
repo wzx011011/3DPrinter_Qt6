@@ -1207,3 +1207,56 @@ items:
     evidence:
       gate: canonical gate run after migration (see last_verified)
       last_verified: 2026-09-10
+
+  - id: BASELINE-ADVANCE-8B93CC5DF
+    title: Advance the OrcaSlicer submodule baseline to the documented
+      source-truth lock 8b93cc5df and re-map the integration surface
+    aliases: ["upstream-catchup-lock"]
+    area: Engine/Source-truth
+    priority: P1
+    status: resolved
+    resolved: 2026-09-11
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      The user ruled that the submodule lag IS a gap. The old baseline
+      (0632bae8, an OWzx snapshot line) trailed the documented source-truth
+      lock by 276 libslic3r files (+59k/-22k lines). Discovered the prior
+      sync branch owzx-upstream-2026-07-21 = exactly upstream 8b93cc5df plus
+      two compat commits, adopted it as the new compat line
+      (owzx-cgal54-on-0721) and extended it: (1) Config null-keys_map guard
+      (ad3135ce0d), (2) CGAL 5.4 hole refinement (4cb3b9ce79), (3) CGAL 5.4
+      segment() hole-fill fix -- upstream's #else branch used
+      CGAL::parameters::default_values(), absent in CGAL 5.4 (13c5610b63),
+      (4) GCodeProcessor bounds-guard for m_filament_maps/nozzle_hrc_lists
+      in update_slice_warnings -- upstream indexed empty maps when
+      reprocessing a plain G-code file via export_gcode_from_previous_file,
+      crashing our reuse path (788d990be1). Old-line patches for
+      mcut-chrono, DRC port, TriangleMeshDeal port, and arrange seeding are
+      OBSOLETE (upstream covers all four at the lock); CI-bat/TIFF patches
+      dropped (prebuilt deps). gitlink re-pinned to pristine 8b93cc5df.
+      Integration-surface drift fixed: ModelObject::split / ModelVolume::split
+      remap_paint args, Cut::perform_with_groove count/gap/radius args,
+      Print::validate vector-warnings out-param, CalibPressureAdvancePattern
+      ModelObject& + floats_pairs (Plater.cpp:13664 mapping), libnoise link
+      (vcpkg noise.lib via INTERFACE_LINK_LIBRARIES + configure-time
+      noise.dll copy). Process settings manifest re-extracted from the
+      lock's TabPrint::build (Tab.cpp:2647-3147; pages now Quality /
+      Strength / Speed / Support / Multimaterial / Others; 39 groups) and
+      the non-UI preset key list reconciled (audit honest-fail-closed gate
+      loads an empty model on any unmapped key). PROOF: patched-tree
+      write-tree == 788d990be1^{tree} (9df00d785c7a5dff164019be9b03dbd27bc3cfff).
+      New in-truth upstream behaviors absorbed: multi-nozzle G-code
+      processor grouping, PA_Line calibration QOL, dim-lower-layers preview,
+      floating final purge line, skirt/brim duplicated-instance handling,
+      per-user temp dir, ZIP import Chinese filenames, Arachne and
+      tool-ordering OOB fixes (owzx-upstream-sync-2026-07 lineage).
+      OPTIONAL NEXT: upstream/main has moved ~2 months past the lock
+      (b709e3fec0 on 2026-09-10); advancing again follows this same
+      procedure.
+    evidence:
+      gate: canonical gate 2026-09-11 -- 12 suites 589 tests 0 failed +
+        Launch alive + E2E 32/0 (on the advanced baseline)
+      last_verified: 2026-09-11

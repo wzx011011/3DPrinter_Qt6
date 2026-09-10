@@ -1,0 +1,31 @@
+From 13c5610b635d003bdeb5212972f5d1b9c60b95e1 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Fri, 11 Sep 2026 01:04:33 +0800
+Subject: [PATCH 3/4] fix(cgal54): drop default_values() in segment() hole fill
+
+CGAL 5.4 has no CGAL::parameters::default_values(); the live #else branch
+of segment()'s hole fill used it for triangulate_hole. Pass the face
+output iterator through the plain overload instead, matching the fix the
+refine path already received.
+---
+ src/libslic3r/MeshBoolean.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/libslic3r/MeshBoolean.cpp b/src/libslic3r/MeshBoolean.cpp
+index c21dd753ef..fe279f8026 100644
+--- a/src/libslic3r/MeshBoolean.cpp
++++ b/src/libslic3r/MeshBoolean.cpp
+@@ -343,7 +343,9 @@ void segment(CGALMesh& src, std::vector<CGALMesh>& dst, double smoothing_alpha =
+             std::cout << "* Number of facets in constructed patch: " << patch_facets.size() << std::endl;
+             std::cout << "  Number of vertices in constructed patch: " << patch_vertices.size() << std::endl;
+ #else
+-            CGAL::Polygon_mesh_processing::triangulate_hole(out, h, CGAL::parameters::default_values().face_output_iterator(std::back_inserter(patch_facets)));
++            // CGAL 5.4 has no CGAL::parameters::default_values(); pass the
++            // face output iterator through the plain overload instead.
++            CGAL::Polygon_mesh_processing::triangulate_hole(out, h, std::back_inserter(patch_facets));
+ #endif
+         }
+ 
+-- 
+2.32.0.windows.2
+
