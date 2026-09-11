@@ -363,6 +363,26 @@ Item {
                             onActivated: root.settingsVm.setUiScaleIndex(currentIndex)
                         }
                     }
+
+                    // v5.16 (P17.12): G-code preview prefs — upstream hosts the
+                    // "G-code Preview" group in the Graphics pane
+                    // (Preferences.cpp:1907-1915).
+                    Text {
+                        text: qsTr("G-code 预览")
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD; font.bold: true
+                    }
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("变暗下层"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 140 }
+                        CxSwitch { checked: root.settingsVm.previewDimPreviousLayers; onToggled: root.settingsVm.setPreviewDimPreviousLayers(checked) }
+                    }
+                    Text {
+                        text: qsTr("在切片预览中拖动层滑块时，将当前层之下的各层渲染为变暗状态，仅当前查看的层保持全亮。")
+                        color: Theme.textDisabled
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
+                        Layout.preferredWidth: 400
+                    }
                 }
 
                 // Language settings (index=1)

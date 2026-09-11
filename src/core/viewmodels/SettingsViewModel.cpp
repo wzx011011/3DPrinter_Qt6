@@ -62,6 +62,7 @@ void SettingsViewModel::loadFromSettings()
   m_freeCamera       = s.value("freeCamera", false).toBool();
   m_reverseZoom      = s.value("reverseZoom", false).toBool();
   m_show3DNavigator  = s.value("show3DNavigator", true).toBool();
+  m_previewDimPreviousLayers = s.value("previewDimPreviousLayers", false).toBool();
   m_autoUpload       = s.value("autoUpload", false).toBool();
   m_updateChannel    = s.value("updateChannel", 0).toInt();
   m_notificationsEnabled = s.value("notificationsEnabled", true).toBool();
@@ -204,6 +205,7 @@ void SettingsViewModel::resetPreferences()
   setFreeCamera(false);
   setReverseZoom(false);
   setShow3DNavigator(true);
+  setPreviewDimPreviousLayers(false);
   setAutoUpload(false);
   setUpdateChannel(0);
   setNotificationsEnabled(true);
@@ -256,6 +258,7 @@ void SettingsViewModel::saveToSettings() const
   s.setValue(QStringLiteral("freeCamera"), m_freeCamera);
   s.setValue(QStringLiteral("reverseZoom"), m_reverseZoom);
   s.setValue(QStringLiteral("show3DNavigator"), m_show3DNavigator);
+  s.setValue(QStringLiteral("previewDimPreviousLayers"), m_previewDimPreviousLayers);
   s.setValue(QStringLiteral("autoUpload"), m_autoUpload);
   s.setValue(QStringLiteral("updateChannel"), m_updateChannel);
   s.setValue(QStringLiteral("notificationsEnabled"), m_notificationsEnabled);
@@ -359,6 +362,10 @@ void SettingsViewModel::setReverseZoom(bool on)
 void SettingsViewModel::setShow3DNavigator(bool on)
 {
   if (m_show3DNavigator != on) { m_show3DNavigator = on; SAVE_SETTING("show3DNavigator", on); emit settingsChanged(); }
+}
+void SettingsViewModel::setPreviewDimPreviousLayers(bool on)
+{
+  if (m_previewDimPreviousLayers != on) { m_previewDimPreviousLayers = on; SAVE_SETTING("previewDimPreviousLayers", on); emit settingsChanged(); }
 }
 
 void SettingsViewModel::setAutoUpload(bool v)

@@ -378,6 +378,19 @@ BackendContext::BackendContext(QObject *parent)
             m_showProgressNotifications = settingsViewModel_->showProgressNotifications();
           });
 
+  // v5.16 (P17.12): 同步“变暗下层”预览偏好到 PreviewViewModel（对齐上游
+  // preview_dim_previous_layers，Preferences.cpp:1908-1915；GCodeViewer 在
+  // 序贯视图刷层时对下层做 0.60 变暗，ViewerImpl.cpp:1225-1290）。
+  connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
+          [this]()
+          {
+            if (previewViewModel_)
+              previewViewModel_->setDimPreviousLayers(
+                  settingsViewModel_->previewDimPreviousLayers());
+          });
+  if (previewViewModel_)
+    previewViewModel_->setDimPreviousLayers(settingsViewModel_->previewDimPreviousLayers());
+
   // Load config wizard state from QSettings (对齐上游 ConfigWizard 首次运行检测)
   QSettings settings;
   m_configWizardCompleted = settings.value(QStringLiteral("wizard/completed"), false).toBool();

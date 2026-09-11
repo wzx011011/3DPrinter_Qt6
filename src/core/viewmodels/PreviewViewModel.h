@@ -59,6 +59,11 @@ class PreviewViewModel final : public QObject
   // P17.7: upstream top_layer_only — while the sequential view is scrubbed,
   // segments outside the top layer render in Neutral_Color (GV.cpp:3285).
   Q_PROPERTY(bool topLayerOnly READ topLayerOnly WRITE setTopLayerOnly NOTIFY stateChanged)
+  // P17.12: upstream preview_dim_previous_layers — while scrubbing the layer
+  // slider, layers below the current one render darkened so only the viewed
+  // layer is at full brightness (Preferences.cpp:1908-1915; dim applied in
+  // libvgcode ViewerImpl.cpp:1225-1290).
+  Q_PROPERTY(bool dimPreviousLayers READ dimPreviousLayers WRITE setDimPreviousLayers NOTIFY stateChanged)
   // P17.9: full-config key/values parsed from the `; key = value` header
   // block (upstream apply_config(DynamicPrintConfig) from the gcode file).
   Q_PROPERTY(QVariantMap fullConfig READ fullConfig NOTIFY stateChanged)
@@ -194,6 +199,8 @@ public:
   QVariantList legendRoleColumns() const;
   bool topLayerOnly() const { return m_topLayerOnly; }
   void setTopLayerOnly(bool on);
+  bool dimPreviousLayers() const { return m_dimPreviousLayers; }
+  void setDimPreviousLayers(bool on);
   Q_INVOKABLE QString fullConfigValue(const QString &key) const
   {
     return m_fullConfig.value(key).toString();
@@ -472,7 +479,11 @@ private:
   // P17.4/P17.10: per-role filament length (mm) and the prepare time
   // (elapsed before the first extrusion move).
   QHash<int, double> m_roleFilamentLength;
-  bool m_topLayerOnly = false;
+  // Upstream seq_top_layer_only defaults to "1" (AppConfig.cpp:202-203) and
+  // drives top_layer_only_view_range (GCodeViewer.cpp:1132-1135); the
+  // dim-lower-layers pref defaults false (AppConfig.cpp:206-207).
+  bool m_topLayerOnly = true;
+  bool m_dimPreviousLayers = false;
   QVariantMap m_fullConfig;
   float prepareTimeSeconds_ = 0.f;
   bool prepareTimeCaptured_ = false;

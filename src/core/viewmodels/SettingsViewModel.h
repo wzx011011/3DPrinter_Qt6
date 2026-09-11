@@ -39,6 +39,10 @@ class SettingsViewModel : public QObject
   Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse NOTIFY settingsChanged)
   Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera NOTIFY settingsChanged)
   Q_PROPERTY(bool reverseZoom READ reverseZoom WRITE setReverseZoom NOTIFY settingsChanged)
+  /// v5.16 (P17.12): preview_dim_previous_layers — G-code 预览“变暗下层”
+  /// (upstream Preferences.cpp:1908-1915, app_config default false,
+  /// AppConfig.cpp:206-207). Pushed to PreviewViewModel by BackendContext.
+  Q_PROPERTY(bool previewDimPreviousLayers READ previewDimPreviousLayers WRITE setPreviewDimPreviousLayers NOTIFY settingsChanged)
   /// v5.16 (NAVIGATOR): show_3d_navigator (upstream app_config default true,
   /// AppConfig.cpp:200; View-menu check item MainFrame.cpp:2630-2638).
   Q_PROPERTY(bool show3DNavigator READ show3DNavigator WRITE setShow3DNavigator NOTIFY settingsChanged)
@@ -113,6 +117,7 @@ public:
   bool zoomToMouse() const { return m_zoomToMouse; }
   bool freeCamera() const { return m_freeCamera; }
   bool reverseZoom() const { return m_reverseZoom; }
+  bool previewDimPreviousLayers() const { return m_previewDimPreviousLayers; }
   bool show3DNavigator() const { return m_show3DNavigator; }
   bool autoUpload() const { return m_autoUpload; }
   int updateChannel() const { return m_updateChannel; }
@@ -172,6 +177,7 @@ public slots:
   void setFreeCamera(bool on);
   void setReverseZoom(bool on);
   void setShow3DNavigator(bool on);  // v5.16 (NAVIGATOR)
+  void setPreviewDimPreviousLayers(bool on);  // v5.16 (P17.12)
   void setAutoUpload(bool v);
   void setUpdateChannel(int channel);
   void setNotificationsEnabled(bool v);
@@ -230,6 +236,7 @@ private:
   bool m_freeCamera = false;
   bool m_reverseZoom = false;
   bool m_show3DNavigator = true;  // upstream show_3d_navigator default
+  bool m_previewDimPreviousLayers = false;  // upstream preview_dim_previous_layers default
   bool m_autoUpload = false;    // auto upload after slicing
   int m_updateChannel = 0;      // 0=Stable, 1=Beta, 2=Dev
   bool m_notificationsEnabled = true;

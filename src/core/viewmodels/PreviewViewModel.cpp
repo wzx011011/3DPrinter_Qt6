@@ -807,6 +807,19 @@ void PreviewViewModel::setTopLayerOnly(bool on)
   emit stateChanged();
 }
 
+// P17.12: upstream preview_dim_previous_layers (Preferences.cpp:1908-1915,
+// default false AppConfig.cpp:206-207) — layers below the viewed top layer
+// render darkened while the sequential view is scrubbed (ViewerImpl.cpp
+// PREVIOUS_LAYER_DARKEN_FACTOR). Re-pack applies it to the baked colors.
+void PreviewViewModel::setDimPreviousLayers(bool on)
+{
+  if (m_dimPreviousLayers == on)
+    return;
+  m_dimPreviousLayers = on;
+  recolorAndPackSegments();
+  emit stateChanged();
+}
+
 // P17.9: full-config accessor — the header `; key = value` block parsed by
 // rebuildFromGCode (upstream apply_config(DynamicPrintConfig) from the gcode
 // file, GCodeProcessor.cpp:1602/1796).
@@ -2786,11 +2799,18 @@ void PreviewViewModel::recolorAndPackSegments()
     // (GV.cpp:3285 + :750 Neutral_Color = 0.18 gray).
     const bool topLayerGray =
         m_topLayerOnly && currentMove_ < moveCount_ && s.layer != currentLayerMax_;
+    // P17.12: dim-lower-layers — upstream darkens the TRUE color of layers
+    // strictly below the viewed top layer while top-layer-only is scrubbing
+    // (ViewerImpl.cpp:1225-1290: dim > gray precedence, so dimmed layers keep
+    // their hue instead of collapsing to Neutral_Color gray; layers above the
+    // current one stay gray).
+    const bool dimmed =
+        m_dimPreviousLayers && topLayerGray && s.layer < currentLayerMax_;
 
     if (mode == VT_LineType)
     {
       // FeatureType: use the baked per-role base color (kRoleColors).
-      if (topLayerGray)
+      if (topLayerGray && !dimmed)
       {
         p.r = 0.18f;
         p.g = 0.18f;
@@ -2806,7 +2826,7 @@ void PreviewViewModel::recolorAndPackSegments()
       // Filament (ColorPrint) / Tool: per-extruder palette from the
       // CONFIGURED filament colors (Phase 238 PREV-06).
       ColorResult tc = effectiveExtruderColor(s.extruder_id, configuredColors);
-      if (topLayerGray)
+      if (topLayerGray && !dimmed)
       {
         tc.r = 0.18f;
         tc.g = 0.18f;
@@ -2827,7 +2847,7 @@ void PreviewViewModel::recolorAndPackSegments()
       default: break;
       }
       ColorResult c = valueToGradient(value, minV, maxV);
-      if (topLayerGray)
+      if (topLayerGray && !dimmed)
       {
         c.r = 0.18f;
         c.g = 0.18f;
@@ -2864,6 +2884,15 @@ void PreviewViewModel::recolorAndPackSegments()
       p.r = c.r;
       p.g = c.g;
       p.b = c.b;
+    }
+
+    if (dimmed)
+    {
+      // ViewerImpl.cpp:1227 encode_color_darkened — scale toward black by the
+      // keep factor (1 - PREVIOUS_LAYER_DARKEN_FACTOR 0.60), hue preserved.
+      p.r *= 0.4f;
+      p.g *= 0.4f;
+      p.b *= 0.4f;
     }
   }
 
