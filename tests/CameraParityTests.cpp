@@ -55,6 +55,11 @@ private slots:
   void translateWorldClampsTargetTo3xSceneBox();
   void plateViewMatchesUpstreamTopFront();
   void groundPointOnPlaneRoundTrip();
+  void viewPlanePointRoundTrip();
+  void viewPlanePointIsViewParallel();
+  void viewPlanePointStaysSceneBoundedAtLowElevation();
+  void orbitAroundFarPivotKeepsTargetInScene();
+  void zoomToMouseCompositionStaysBounded();
 };
 
 void CameraParityTests::defaultOrientationMatchesLegacyAnalytic()
@@ -275,6 +280,146 @@ void CameraParityTests::groundPointOnPlaneRoundTrip()
   QCOMPARE(CameraController::groundPointOnPlane(levelViewProj, viewport,
                                                 QPointF(400, 300), &ignored),
            false);
+}
+
+void CameraParityTests::viewPlanePointRoundTrip()
+{
+  // The pan/zoom-to-mouse pick (upstream _mouse_to_3d with z=0): a known
+  // point, projected to the screen and picked back at the reference depth,
+  // must round-trip exactly.
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setOrientation(200.0f, -30.0f);
+  const QSizeF viewport(800.0, 600.0);
+  const QMatrix4x4 viewProj =
+      cam.projMatrix(float(viewport.width() / viewport.height()))
+      * cam.viewMatrix();
+  const QVector3D reference(150.0f, 40.0f, 80.0f);
+  const QVector4D clip = viewProj * QVector4D(reference, 1.0f);
+  QVERIFY(clip.w() > 0.0f);
+  const QPointF screen(float((clip.x() / clip.w() + 1.0) * 0.5 * viewport.width()),
+                       float((1.0 - clip.y() / clip.w()) * 0.5 * viewport.height()));
+  QVector3D back;
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport, screen,
+                                           reference, &back));
+  QVERIFY((back - reference).length() < 1e-2f);
+}
+
+void CameraParityTests::viewPlanePointIsViewParallel()
+{
+  // The delta between two picks on the shared depth plane is screen-parallel
+  // (perpendicular to the view direction), like the upstream tight-frustum
+  // z=0 pair -- so pan direction and scale do not depend on the bed plane.
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setOrientation(200.0f, -30.0f);
+  const QSizeF viewport(800.0, 600.0);
+  const QMatrix4x4 viewProj =
+      cam.projMatrix(float(viewport.width() / viewport.height()))
+      * cam.viewMatrix();
+  QVector3D a;
+  QVector3D b;
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport,
+                                           QPointF(300, 200), cam.target(), &a));
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport,
+                                           QPointF(500, 350), cam.target(), &b));
+  const QVector3D delta = b - a;
+  QVERIFY(delta.length() > 1.0f);
+  QVERIFY(qAbs(QVector3D::dotProduct(delta.normalized(),
+                                     cam.forwardVector())) < 1e-3f);
+}
+
+void CameraParityTests::viewPlanePointStaysSceneBoundedAtLowElevation()
+{
+  // FLYAWAY regression: at a 5-degree elevation the cursor ray hits the bed
+  // plane (y=0) thousands of mm away, so the previous ground-plane pan /
+  // zoom-to-mouse displacement flew the camera. The view-parallel depth
+  // plane (upstream tight-frustum z=0, GLCanvas3D.cpp:4011-4028/:4622-4638)
+  // bounds the same full-viewport drag to scene scale.
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setOrientation(45.0f, 5.0f);
+  const QSizeF viewport(800.0, 600.0);
+  const QMatrix4x4 viewProj =
+      cam.projMatrix(float(viewport.width() / viewport.height()))
+      * cam.viewMatrix();
+  QVector3D a;
+  QVector3D b;
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport,
+                                           QPointF(100, 100), cam.target(), &a));
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport,
+                                           QPointF(700, 500), cam.target(), &b));
+  const float viewPlaneDelta = (b - a).length();
+  // The world width visible at the target distance is
+  // 2*tan(fov/2)*distance (~315mm here); a full-viewport drag cannot exceed
+  // a small multiple of it.
+  const float bound =
+      2.0f * qTan(qDegreesToRadians(22.5f)) * cam.distance() * 2.0f;
+  QVERIFY(viewPlaneDelta < bound);
+  // Contrast: the bed-plane pick for two near-horizon screen rows really is
+  // the kilometer-scale outlier this test guards against (at 5 degrees the
+  // horizon sits ~23% of the half-height above the screen center; just
+  // below it the ray grazes the bed plane and lands thousands of mm away).
+  QVector3D gA;
+  QVector3D gB;
+  const bool hasGround =
+      CameraController::groundPointOnPlane(viewProj, viewport,
+                                           QPointF(400, 240), &gA)
+      && CameraController::groundPointOnPlane(viewProj, viewport,
+                                              QPointF(400, 250), &gB);
+  if (hasGround)
+    QVERIFY((gB - gA).length() > viewPlaneDelta);
+}
+
+void CameraParityTests::orbitAroundFarPivotKeepsTargetInScene()
+{
+  // FLYAWAY regression: an unbounded pivot (cursor ground pick far outside
+  // the scene) sweeping the rigid orbit used to carry the target away with
+  // it. The rotated target is now validated like set_target
+  // (Camera.cpp validate_target, 3x scene box).
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  const QVector3D farPivot(1.0e5f, 0.0f, 1.0e5f);
+  for (int i = 0; i < 30; ++i)
+    cam.orbitAround(4.0f, 1.0f, farPivot);
+  const QVector3D t = cam.target();
+  // 3x box: center (110,60,110), half extents (330,180,330).
+  QVERIFY(t.x() >= 110.0f - 330.0f - 1e-3f);
+  QVERIFY(t.x() <= 110.0f + 330.0f + 1e-3f);
+  QVERIFY(t.y() >= 60.0f - 180.0f - 1e-3f);
+  QVERIFY(t.y() <= 60.0f + 180.0f + 1e-3f);
+  QVERIFY(t.z() >= 110.0f - 330.0f - 1e-3f);
+  QVERIFY(t.z() <= 110.0f + 330.0f + 1e-3f);
+}
+
+void CameraParityTests::zoomToMouseCompositionStaysBounded()
+{
+  // The zoom-to-mouse translate/zoom/translate-back round trip (upstream
+  // GLCanvas3D.cpp:4007-4028) keeps the target within a bounded
+  // neighborhood at low elevation.
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setOrientation(45.0f, 5.0f);
+  const QSizeF viewport(800.0, 600.0);
+  const QMatrix4x4 viewProj =
+      cam.projMatrix(float(viewport.width() / viewport.height()))
+      * cam.viewMatrix();
+  const QVector3D target0 = cam.target();
+  QVector3D centerPoint;
+  QVector3D mousePoint;
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport,
+                                           QPointF(400, 300), target0,
+                                           &centerPoint));
+  QVERIFY(CameraController::viewPlanePoint(viewProj, viewport,
+                                           QPointF(750, 560), target0,
+                                           &mousePoint));
+  const QVector3D displacement = mousePoint - centerPoint;
+  cam.translateWorld(displacement);
+  const float distanceBefore = cam.distance();
+  cam.zoom(1.0f);
+  const float distanceAfter = cam.distance();
+  cam.translateWorld(-displacement * (distanceAfter / distanceBefore));
+  QVERIFY((cam.target() - target0).length() < 600.0f);
 }
 
 QTEST_MAIN(CameraParityTests)

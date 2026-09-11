@@ -107,7 +107,13 @@ void CameraController::orbitAround(float dAzimuth, float dElevation,
   const QQuaternion pitch =
       QQuaternion::fromAxisAndAngle(rightVector(), -dElevation);
   const QQuaternion delta = worldYaw * pitch;
-  m_target = pivot + delta.rotatedVector(m_target - pivot);
+  // Upstream rotate_on_sphere_with_target (Camera.cpp:425-443) leaves the
+  // rotated target free, but its pivots are always scene-bounded bbox
+  // centers. The Qt6 Ctrl pivot is a cursor pick that can land far outside
+  // the scene at low elevation, and an unbounded sweep is the observed
+  // camera fly-away, so the rotated target is validated like set_target
+  // would (Camera.cpp validate_target, 3x scene box).
+  m_target = clampTarget(pivot + delta.rotatedVector(m_target - pivot));
   m_rotation = (delta * m_rotation).normalized();
 }
 
@@ -320,6 +326,35 @@ bool CameraController::groundPointOnPlane(const QMatrix4x4 &viewProj,
     return false;
   *outWorld = p0 + dir * t;
   return true;
+}
+
+bool CameraController::viewPlanePoint(const QMatrix4x4 &viewProj,
+                                      const QSizeF &viewport,
+                                      const QPointF &screen,
+                                      const QVector3D &referencePoint,
+                                      QVector3D *outWorld)
+{
+  if (viewport.width() < 1.0 || viewport.height() < 1.0)
+    return false;
+  // The NDC depth of the reference point defines the view-parallel plane.
+  const QVector4D refClip = viewProj * QVector4D(referencePoint, 1.0f);
+  if (qFuzzyIsNull(refClip.w()))
+    return false;
+  const float depth = refClip.z() / refClip.w();
+  if (!std::isfinite(depth))
+    return false;
+  bool invertible = false;
+  const QMatrix4x4 inverse = viewProj.inverted(&invertible);
+  if (!invertible)
+    return false;
+  const float ndcX = float(2.0 * screen.x() / viewport.width() - 1.0);
+  const float ndcY = float(1.0 - 2.0 * screen.y() / viewport.height());
+  const QVector4D point = inverse * QVector4D(ndcX, ndcY, depth, 1.0f);
+  if (qFuzzyIsNull(point.w()))
+    return false;
+  *outWorld = point.toVector3DAffine();
+  return std::isfinite(outWorld->x()) && std::isfinite(outWorld->y())
+      && std::isfinite(outWorld->z());
 }
 
 QMatrix4x4 CameraController::projMatrix(float aspect) const

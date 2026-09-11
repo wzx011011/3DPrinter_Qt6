@@ -1371,8 +1371,13 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     if (CameraController::groundPointOnPlane(
             cameraMvp(aspect), QSizeF(width(), height()),
             QPointF(width() * 0.5, height() * 0.5), &hit)) {
+      // Upstream pivots on _mouse_to_3d(screen_center)
+      // (GLCanvas3D.cpp:4583, raycast/bed fallback). The Qt6 bed-plane pick
+      // lands far outside the scene at low elevation and an unbounded pivot
+      // sweeps the orbit target away, so the pivot is bounded to the same 3x
+      // scene box the camera target uses (Camera.cpp validate_target).
       m_ctrlRotationCenterActive = true;
-      m_ctrlRotationCenter = hit;
+      m_ctrlRotationCenter = m_camera.clampTarget(hit);
     }
   }
   if (m_gizmoDragging)
@@ -1772,20 +1777,26 @@ void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
 }
 
 // P14 (CAM-PARITY): pick-based pan (upstream is_camera_pan block,
-// GLCanvas3D.cpp:4353-4359): unproject the press position and the cursor
-// onto the bed plane and translate the target by the world delta so the
-// picked ground point follows the cursor.
+// GLCanvas3D.cpp:4622-4638): unproject the press position and the cursor at
+// ONE shared depth plane and translate the target by the world delta so the
+// scene follows the cursor. Upstream unprojects both points at window z=0 --
+// the tight-frustum near plane (Camera.cpp calc_tight_frustrum_zs_around),
+// i.e. a plane PERPENDICULAR to the view direction. Qt6 mirrors that with the
+// view plane through the orbit target; the earlier bed-plane (y=0) pick
+// exploded at low elevation (cursor ray -> kilometers away) and made the
+// camera fly away.
 void RhiViewport::applyCameraPan()
 {
   const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
   const QMatrix4x4 mvp = cameraMvp(aspect);
   const QSizeF vp(width(), height());
-  QVector3D pressGround;
-  QVector3D currentGround;
-  if (CameraController::groundPointOnPlane(mvp, vp, m_pressPosition, &pressGround)
-      && CameraController::groundPointOnPlane(mvp, vp, m_lastMousePosition,
-                                              &currentGround)) {
-    m_camera.translateWorld(pressGround - currentGround);
+  QVector3D pressPoint;
+  QVector3D currentPoint;
+  if (CameraController::viewPlanePoint(mvp, vp, m_pressPosition,
+                                       m_camera.target(), &pressPoint)
+      && CameraController::viewPlanePoint(mvp, vp, m_lastMousePosition,
+                                          m_camera.target(), &currentPoint)) {
+    m_camera.translateWorld(pressPoint - currentPoint);
     m_cameraDirty = true;
     update();
     // P15.9 (PLATEANCHOR): pan translates the camera target, so the
@@ -1916,6 +1927,36 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
 bool RhiViewport::activeToolCapturesContextGesture() const
 {
   return m_contextToolInputCaptured || m_gizmoDragging;
+}
+
+void RhiViewport::mouseUngrabEvent()
+{
+  // A stolen grab (popup opening, item hiding, window losing the pointer)
+  // ends event delivery without a release. Leaving the latched drag state
+  // would keep the camera orbit/pan (or an active tool) driving from stale
+  // positions on the next interaction -- the intermittent fly-away class of
+  // bugs. Reset every press-scoped latch the release paths clear.
+  if (m_gizmoDragging) {
+    resetGizmoDragState();
+    emit gizmoDragEnd();
+  }
+  m_dragButton = Qt::NoButton;
+  m_paintButton = 0;
+  m_navigatorPressActive = false;
+  m_contextPressActive = false;
+  m_contextToolCapturedAtPress = false;
+  m_contextLayerEditingAtPress = false;
+  m_ctrlRotationCenterActive = false;
+  m_cutPlaneGrab = 0;
+  m_pressPickedSourceObjectIndex = -1;
+  m_pressPickedVolumeIndex = -1;
+  if (m_rectSelectActive) {
+    m_rectSelectActive = false;
+    if (m_selectionRubberBandActive) {
+      m_selectionRubberBandActive = false;
+      emit selectionRubberBandChanged();
+    }
+  }
 }
 
 void RhiViewport::hoverMoveEvent(QHoverEvent *event)
@@ -2049,19 +2090,24 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
     // Upstream GLCanvas3D.cpp:3768: plain center zoom.
     m_camera.zoom(delta);
   } else {
-    // Upstream zoom_to_mouse (GLCanvas3D.cpp:3770-3783): translate by the
-    // cursor-vs-canvas-center ground displacement, zoom, then translate back
-    // scaled by the zoom ratio so the ground point under the cursor stays.
+    // Upstream zoom_to_mouse (GLCanvas3D.cpp:4007-4028): displacement between
+    // the cursor and the canvas center unprojected at ONE shared depth plane
+    // (upstream window z=0 = tight-frustum near plane; here the view plane
+    // through the orbit target), translate, zoom, then translate back scaled
+    // by the zoom ratio so the point under the cursor stays. The view-parallel
+    // plane keeps the displacement scene-bounded at any elevation -- the
+    // earlier bed-plane pick exploded at low elevation and flew the camera.
     const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
     const QMatrix4x4 mvp = cameraMvp(aspect);
     const QSizeF vp(width(), height());
-    QVector3D centerGround;
-    QVector3D mouseGround;
-    if (CameraController::groundPointOnPlane(
-            mvp, vp, QPointF(width() * 0.5, height() * 0.5), &centerGround)
-        && CameraController::groundPointOnPlane(mvp, vp, event->position(),
-                                                &mouseGround)) {
-      const QVector3D displacement = mouseGround - centerGround;
+    QVector3D centerPoint;
+    QVector3D mousePoint;
+    if (CameraController::viewPlanePoint(
+            mvp, vp, QPointF(width() * 0.5, height() * 0.5),
+            m_camera.target(), &centerPoint)
+        && CameraController::viewPlanePoint(mvp, vp, event->position(),
+                                            m_camera.target(), &mousePoint)) {
+      const QVector3D displacement = mousePoint - centerPoint;
       m_camera.translateWorld(displacement);
       const float distanceBefore = m_camera.distance();
       m_camera.zoom(delta);

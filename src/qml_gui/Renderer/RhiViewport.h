@@ -899,6 +899,10 @@ private:
   void mousePressEvent(QMouseEvent *event) override;
   void mouseMoveEvent(QMouseEvent *event) override;
   void mouseReleaseEvent(QMouseEvent *event) override;
+  // Qt Quick grab steal: a popup/overlay taking the exclusive grab mid-drag
+  // ends event delivery WITHOUT a release; without this reset the latched
+  // drag state keeps driving the camera/tool on the next interaction.
+  void mouseUngrabEvent() override;
   void hoverMoveEvent(QHoverEvent *event) override;
   void hoverLeaveEvent(QHoverEvent *event) override;
   void wheelEvent(QWheelEvent *event) override;

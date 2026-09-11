@@ -112,12 +112,25 @@ public:
   float      elevation() const;
 
   // Screen (item pixel, y-down) -> NDC -> ray hit on the bed plane y=0.
-  // Backs the upstream _mouse_to_3d(..., z=0) pick used by pan and
-  // zoom-to-mouse (GLCanvas3D.cpp:3772-3783, :4353-4359). Returns false when
-  // the ray is parallel to the plane.
+  // Backs the upstream _mouse_to_3d without z (raycast miss -> bed fallback).
+  // Returns false when the ray is parallel to the plane.
   static bool groundPointOnPlane(const QMatrix4x4 &viewProj,
                                  const QSizeF &viewport,
                                  const QPointF &screen, QVector3D *outWorld);
+
+  // Screen (item pixel, y-down) -> world point on the plane perpendicular to
+  // the view direction through `referencePoint`. Backs the upstream pan and
+  // zoom-to-mouse picks, which unproject BOTH screen points at one shared
+  // window z=0 depth (GLCanvas3D.cpp:4011-4028, :4622-4638) -- with the
+  // upstream tight frustum (Camera.cpp calc_tight_frustrum_zs_around) that
+  // plane sits at the scene front, so the delta stays scene-bounded at any
+  // camera elevation. Returns false on degenerate matrices or when the
+  // reference point is not in front of the camera.
+  static bool viewPlanePoint(const QMatrix4x4 &viewProj,
+                             const QSizeF &viewport,
+                             const QPointF &screen,
+                             const QVector3D &referencePoint,
+                             QVector3D *outWorld);
 
 private:
   void clampDistance();
