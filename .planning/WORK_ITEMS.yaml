@@ -23,8 +23,8 @@
 #   availability:   available | blocked_external | blocked_user_decision | declined | superseded
 
 schema_version: 1
-updated: 2026-09-06
-head_at_update: ccea3ac
+updated: 2026-09-12
+head_at_update: 45aeed5
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -1260,3 +1260,94 @@ items:
       gate: canonical gate 2026-09-11 -- 12 suites 589 tests 0 failed +
         Launch alive + E2E 32/0 (on the advanced baseline)
       last_verified: 2026-09-11
+
+  # ── Camera fly-away + lock-window rescan 2026-09-11/12 ──────────────────
+  - id: CAM-FLYAWAY-VIEWPLANE
+    title: Viewport pan/zoom/orbit fly-away — switch to tight-frustum view-plane
+      unprojection, clamp far-pivot orbit, recover from mouse-grab steal
+    aliases: ["GAP-cam-flyaway"]
+    area: Prepare/Canvas
+    priority: P1
+    status: resolved
+    resolved: 2026-09-12
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      User reported the plate camera "flies away" during mouse operations.
+      Root causes located (3): (1) pan and zoom-to-mouse unprojected screen
+      points onto the BED plane (y=0); at low camera elevation the ray runs
+      near-horizon and the intersection lands kilometers away. Upstream
+      unprojects onto the view-parallel plane through the CURRENT TARGET at
+      the tight-frustum near z (GLCanvas3D.cpp:4011-4028 zoom_to_mouse,
+      :4622-4638 pan-pick, calc_tight_frustrum_zs_around makes near =
+      distance to the scene-box front) -- scene-bounded at ANY elevation.
+      Fix: CameraController::viewPlanePoint(viewProj, viewport, screen,
+      referencePoint) unprojects at the reference point's own depth;
+      applyCameraPan and the wheel zoom-to-mouse round trip use it
+      (CameraController.h/.cpp). (2) orbitAround never re-clamped the target
+      after rotating around a far Ctrl-pivot, so a pivot at 1e5 mm swept the
+      camera out of the scene; fix clamps the rotated target via
+      clampTarget (upstream set_target deliberately does NOT validate
+      -- Camera.cpp:81-85 -- but our translateWorld 3x-scene-box + upstream
+      validate_target Camera.cpp:736-751 already gate pan, so orbit follows
+      the same bound; Ctrl pivot itself clamped at press,
+      GLCanvas3D.cpp:4583). (3) Qt Quick can steal the exclusive grab
+      mid-drag (popup/overlay) and only mouseUngrabEvent fires -- the drag
+      state stayed latched and the camera kept drifting; RhiViewport::
+      mouseUngrabEvent now resets gizmo drag, button, paint, navigator/
+      context press, Ctrl-pivot, cut-plane grab, press-pick indices and the
+      rubber band. Tests: CameraParityTests viewPlanePointRoundTrip,
+      viewPlanePointIsViewParallel (delta perp to forward),
+      viewPlanePointStaysSceneBoundedAtLowElevation (5-deg elevation,
+      full-viewport drag < ~630mm while groundPointOnPlane explodes),
+      orbitAroundFarPivotKeepsTargetInScene, zoomToMouseCompositionStaysBounded.
+    evidence:
+      gate: canonical gate 2026-09-12 -- 12 suites 0 failed, CameraParity
+        19/19 PASS incl. 5 new slots, E2E 32/0
+      last_verified: 2026-09-12
+
+  - id: PREVIEW-DIM-LOWER-LAYERS
+    title: G-code preview "Dim lower layers" pref + rendering (P17.12)
+    aliases: ["GAP-dim-layers", "P17.12"]
+    area: Preview
+    priority: P2
+    status: resolved
+    resolved: 2026-09-12
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      Lock-window rescan found the one real GUI gap of the four Phase-A
+      candidates: upstream preferences carry preview_dim_previous_layers
+      (default false, AppConfig.cpp:206-207; checkbox "Dim lower layers" in
+      the G-code Preview group, Preferences.cpp:1908-1915) and libvgcode
+      darkens layers strictly below the viewed top layer while the
+      sequential top-layer-only scrub is active (ViewerImpl.cpp:1225-1290,
+      PREVIOUS_LAYER_DARKEN_FACTOR 0.60 applied as encode_color_darkened
+      keep-factor 0.4, hue preserved; dim > gray precedence so dimmed
+      segments keep their TRUE color instead of collapsing to
+      Neutral_Color 0.18 gray; layers ABOVE the current one stay gray).
+      Qt6 now: PreviewViewModel dimPreviousLayers property + setter
+      (recolorAndPackSegments re-pack); packing loop computes dimmed =
+      dim && topLayerGray && layer < currentLayerMax_, the three gray
+      branches gate on topLayerGray && !dimmed, and a post-chain multiplies
+      rgb by 0.4 when dimmed. m_topLayerOnly default flipped to TRUE per
+      upstream seq_top_layer_only default "1" (AppConfig.cpp:202-203,
+      GCodeViewer.cpp:1132-1135). SettingsViewModel previewDimPreviousLayers
+      persisted to QSettings; Preferences 外观 category gains the
+      "G-code 预览" group (upstream hosts it in the Graphics pane) with the
+      switch + upstream tooltip text; BackendContext pushes
+      settingsChanged -> previewViewModel setDimPreviousLayers with initial
+      sync. The other three Phase-A candidates are engine-inherited at the
+      lock: PA_Line calibration QOL (GCode::do_export Calib_PA_Line branch),
+      floating final purge line fix (GCode.cpp:1848-1851
+      change_layer(m_final_purge.print_z) guard), {first_object_name}
+      placeholder (PrintBase.cpp:24-43) -- the Qt6 export dialog's default
+      name uses its own project+plate scheme, recorded as partial parity
+      under this item's rescan note.
+    evidence:
+      gate: canonical gate 2026-09-12 (this change) -- pending commit anchor
+      last_verified: 2026-09-12
