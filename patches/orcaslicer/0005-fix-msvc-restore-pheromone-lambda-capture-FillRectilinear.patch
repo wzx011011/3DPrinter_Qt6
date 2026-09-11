@@ -1,0 +1,33 @@
+From c82956a76beb3e01e6bb634dec8c8e5b12a3ab30 Mon Sep 17 00:00:00 2001
+From: wzx <673765578@qq.com>
+Date: Sat, 12 Sep 2026 01:17:30 +0800
+Subject: [PATCH] fix: restore explicit pheromone lambda capture in
+ FillRectilinear
+
+Upstream 0a3724ed2f changed path_probability's lambda from an explicit
+[pheromone_alpha, pheromone_beta] capture to an empty capture list,
+relying on constexpr locals being usable without odr-use (C++17
+[expr.prim.lambda.capture]). MSVC 14.50 still rejects the constexpr
+float reads without a capture (C3493) in C++17 mode, and the failed
+lambda cascades C2064 at every path_probability call site. Restore
+upstream's own pre-advance explicit capture form; semantics unchanged.
+---
+ src/libslic3r/Fill/FillRectilinear.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/libslic3r/Fill/FillRectilinear.cpp b/src/libslic3r/Fill/FillRectilinear.cpp
+index 7edf350081..9bb48d8b39 100644
+--- a/src/libslic3r/Fill/FillRectilinear.cpp
++++ b/src/libslic3r/Fill/FillRectilinear.cpp
+@@ -2395,7 +2395,7 @@ static std::vector<MonotonicRegionLink> chain_monotonic_regions(
+     }
+ 
+     // Probability (unnormalized) of traversing a link between two monotonic regions.
+-	auto path_probability = [](AntPath &path) {
++	auto path_probability = [pheromone_alpha, pheromone_beta](AntPath &path) {
+ 		return pow(path.pheromone, pheromone_alpha) * pow(path.visibility, pheromone_beta);
+ 	};
+ 
+-- 
+2.32.0.windows.2
+

@@ -7950,11 +7950,14 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
     return result;
   };
 
-  // Source: third_party/OrcaSlicer/src/slic3r/GUI/Tab.cpp:2647-3147
-  // (TabPrint::build at the 8b93cc5df source-truth lock), mirrored by
-  // ConfigOptionModel::processPageDefinitions().
+  // Source: third_party/OrcaSlicer/src/slic3r/GUI/Tab.cpp (TabPrint::build at
+  // the 0a3724ed2f baseline: Layer height +enable_mixed_color_sublayer :2641,
+  // Infill +sparse_infill_smooth_factor :2803, Brim +brim_ears_outer_only
+  // :3057, Plugin Configuration print_plugin_config_overrides :3126 -- the
+  // shared "plugin_config_overrides" was removed, PrintConfig.cpp:1093-1095),
+  // mirrored by ConfigOptionModel::processPageDefinitions().
   const QList<ExpectedGroup> expected = {
-      {QStringLiteral("Quality"), QStringLiteral("Layer height"), keys({"layer_height", "initial_layer_print_height"})},
+      {QStringLiteral("Quality"), QStringLiteral("Layer height"), keys({"layer_height", "initial_layer_print_height", "enable_mixed_color_sublayer"})},
       {QStringLiteral("Quality"), QStringLiteral("Line width"), keys({"line_width", "initial_layer_line_width", "outer_wall_line_width", "inner_wall_line_width", "top_surface_line_width", "sparse_infill_line_width", "internal_solid_infill_line_width", "support_line_width", "bridge_line_width"})},
       {QStringLiteral("Quality"), QStringLiteral("Seam"), keys({"seam_position", "staggered_inner_seams", "seam_gap", "seam_slope_type", "seam_slope_conditional", "scarf_angle_threshold", "scarf_overhang_threshold", "scarf_joint_speed", "seam_slope_start_height", "seam_slope_entire_loop", "seam_slope_min_length", "seam_slope_steps", "scarf_joint_flow_ratio", "seam_slope_inner_walls", "role_based_wipe_speed", "wipe_speed", "wipe_on_loops", "wipe_before_external_loop"})},
       {QStringLiteral("Quality"), QStringLiteral("Precision"), keys({"slice_closing_radius", "resolution", "enable_arc_fitting", "xy_hole_compensation", "xy_contour_compensation", "elefant_foot_compensation", "elefant_foot_layers_density", "elefant_foot_compensation_layers", "precise_outer_wall", "precise_z_height", "hole_to_polyhole", "hole_to_polyhole_threshold", "hole_to_polyhole_twisted", "hole_to_polyhole_max_edges"})},
@@ -7966,7 +7969,7 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
       {QStringLiteral("Quality"), QStringLiteral("Overhangs"), keys({"detect_overhang_wall", "make_overhang_printable", "make_overhang_printable_angle", "make_overhang_printable_hole_size", "extra_perimeters_on_overhangs", "overhang_reverse", "overhang_reverse_internal_only", "overhang_reverse_threshold"})},
       {QStringLiteral("Strength"), QStringLiteral("Walls"), keys({"wall_loops", "alternate_extra_wall", "detect_thin_wall"})},
       {QStringLiteral("Strength"), QStringLiteral("Top/bottom shells"), keys({"top_shell_layers", "top_shell_thickness", "top_surface_density", "top_surface_pattern", "top_surface_fill_order", "top_layer_direction", "top_surface_expansion", "top_surface_expansion_margin", "top_surface_expansion_direction", "bottom_shell_layers", "bottom_shell_thickness", "bottom_surface_density", "bottom_surface_pattern", "bottom_surface_fill_order", "bottom_layer_direction", "center_of_surface_pattern", "top_bottom_infill_wall_overlap"})},
-      {QStringLiteral("Strength"), QStringLiteral("Infill"), keys({"sparse_infill_density", "fill_multiline", "sparse_infill_pattern", "gyroid_optimized", "infill_direction", "sparse_infill_rotate_template", "skin_infill_density", "skeleton_infill_density", "infill_lock_depth", "skin_infill_depth", "skin_infill_line_width", "skeleton_infill_line_width", "symmetric_infill_y_axis", "infill_shift_step", "lateral_lattice_angle_1", "lateral_lattice_angle_2", "infill_overhang_angle", "lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "solid_infill_direction", "solid_infill_rotate_template", "gap_fill_target", "filter_out_gap_fill", "separated_infills", "infill_wall_overlap"})},
+      {QStringLiteral("Strength"), QStringLiteral("Infill"), keys({"sparse_infill_density", "fill_multiline", "sparse_infill_pattern", "gyroid_optimized", "sparse_infill_smooth_factor", "infill_direction", "sparse_infill_rotate_template", "skin_infill_density", "skeleton_infill_density", "infill_lock_depth", "skin_infill_depth", "skin_infill_line_width", "skeleton_infill_line_width", "symmetric_infill_y_axis", "infill_shift_step", "lateral_lattice_angle_1", "lateral_lattice_angle_2", "infill_overhang_angle", "lightning_overhang_angle", "lightning_prune_angle", "lightning_straightening_angle", "infill_anchor_max", "infill_anchor", "internal_solid_infill_pattern", "solid_infill_direction", "solid_infill_rotate_template", "gap_fill_target", "filter_out_gap_fill", "separated_infills", "infill_wall_overlap"})},
       {QStringLiteral("Strength"), QStringLiteral("Advanced"), keys({"align_infill_direction_to_model", "extra_solid_infills", "bridge_angle", "internal_bridge_angle", "relative_bridge_angle", "minimum_sparse_infill_area", "infill_combination", "infill_combination_max_layer_height", "detect_narrow_internal_solid_infill", "ensure_vertical_shell_thickness"})},
       {QStringLiteral("Speed"), QStringLiteral("First layer speed"), keys({"initial_layer_speed", "initial_layer_infill_speed", "initial_layer_travel_speed", "slow_down_layers"})},
       {QStringLiteral("Speed"), QStringLiteral("Other layers speed"), keys({"outer_wall_speed", "inner_wall_speed", "small_perimeter_speed", "small_perimeter_threshold", "sparse_infill_speed", "internal_solid_infill_speed", "top_surface_speed", "gap_infill_speed", "ironing_speed", "support_speed", "support_interface_speed", "small_support_perimeter_speed", "small_support_perimeter_threshold"})},
@@ -7988,11 +7991,11 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
       {QStringLiteral("Multimaterial"), QStringLiteral("Flush options"), keys({"flush_into_infill", "flush_into_objects", "flush_into_support"})},
       {QStringLiteral("Multimaterial"), QStringLiteral("Advanced"), keys({"interlocking_beam", "toolchange_ordering", "interface_shells", "mmu_segmented_region_max_width", "mmu_segmented_region_interlocking_depth", "interlocking_beam_width", "interlocking_orientation", "interlocking_beam_layer_count", "interlocking_depth", "interlocking_boundary_avoidance"})},
       {QStringLiteral("Others"), QStringLiteral("Skirt"), keys({"skirt_loops", "skirt_type", "min_skirt_length", "skirt_distance", "skirt_start_angle", "skirt_speed", "skirt_height", "draft_shield", "single_loop_draft_shield"})},
-      {QStringLiteral("Others"), QStringLiteral("Brim"), keys({"brim_type", "brim_width", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length"})},
+      {QStringLiteral("Others"), QStringLiteral("Brim"), keys({"brim_type", "brim_width", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length", "brim_ears_outer_only"})},
       {QStringLiteral("Others"), QStringLiteral("Special mode"), keys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio", "timelapse_type", "enable_wrapping_detection"})},
       {QStringLiteral("Others"), QStringLiteral("Fuzzy skin"), keys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
       {QStringLiteral("Others"), QStringLiteral("G-code output"), keys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object"})},
-      {QStringLiteral("Others"), QStringLiteral("Plugin Configuration"), keys({"plugin_config_overrides"})},
+      {QStringLiteral("Others"), QStringLiteral("Plugin Configuration"), keys({"print_plugin_config_overrides"})},
   };
 
 

@@ -322,6 +322,9 @@ list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/IntersectionPoints\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/MeshBoolean\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/TryCatchSignal\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/Triangulation\\.")
+# TexturePainting (baseline 0a3724ed2f) pulls CGAL through
+# TextureToColor/CgalUtils.hpp; compiled in the CGAL target below.
+list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "/TexturePainting\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "SLA/SupportTreeIGL\\.")
 list(FILTER ALL_LIBSLIC3R_SOURCES EXCLUDE REGEX "Arachne/utils/ExtrusionJunction\\.cpp$")
 list(APPEND ALL_LIBSLIC3R_SOURCES
@@ -560,6 +563,19 @@ list(APPEND LIBSLIC3R_CGAL_SOURCES
     "${LIBSLIC3R_SRC_DIR}/MeshBoolean.cpp"
 )
 
+# TexturePainting/TextureToColor (upstream 0a3724ed2f) — vertex-painting and
+# textured-model support; TextureToColor/CgalUtils.hpp + Repair.hpp need CGAL,
+# so they compile in this target (upstream keeps them in libslic3r proper,
+# which carries CGAL includes there).
+list(APPEND LIBSLIC3R_CGAL_SOURCES
+    "${LIBSLIC3R_SRC_DIR}/TexturePainting.hpp"
+    "${LIBSLIC3R_SRC_DIR}/TexturePainting.cpp"
+    "${LIBSLIC3R_SRC_DIR}/TextureToColor/TextureToColor.hpp"
+    "${LIBSLIC3R_SRC_DIR}/TextureToColor/TextureToColor.cpp"
+    "${LIBSLIC3R_SRC_DIR}/TextureToColor/ColorUtils.hpp"
+    "${LIBSLIC3R_SRC_DIR}/TextureToColor/ColorUtils.cpp"
+)
+
 add_library(libslic3r_cgal_from_source STATIC ${LIBSLIC3R_CGAL_SOURCES})
 
 # Debug info for crash address resolution
@@ -582,6 +598,10 @@ target_include_directories(libslic3r_cgal_from_source PRIVATE
     "${LIBSLIC3R_SRC_DIR}"
     "${LIBSLIC3R_GEN_DIR}"
     "${UPSTREAM_SRC}"
+    # TexturePainting.cpp (upstream 0a3724ed2f) includes Model.hpp, whose
+    # Format/STEP.hpp chain pulls OCCT headers (XCAFDoc_DocumentTool.hxx).
+    # The main target gets this path via its SYSTEM PUBLIC block below.
+    "${DEPS_PREFIX}/include/occt"
 )
 
 # Get CGAL target for linking
@@ -662,6 +682,10 @@ target_compile_definitions(libslic3r_from_source PUBLIC
     _CRT_SECURE_NO_WARNINGS
     _SCL_SECURE_NO_WARNINGS
     NOMINMAX
+    # Mirrors upstream libslic3r defs (baseline 0a3724ed2f): the empty value
+    # matches sources that define WIN32_LEAN_AND_MEAN themselves
+    # (BlacklistedLibraryCheck.hpp includes windows.h).
+    WIN32_LEAN_AND_MEAN=
     UNICODE
     _UNICODE
 )
@@ -686,6 +710,9 @@ target_include_directories(libslic3r_from_source SYSTEM PUBLIC
     ${_cgal_inc}
     ${EXPAT_INCLUDE_DIRS}
     "${DEPS_PREFIX}/include/occt"
+    # AssimpImport.cpp (upstream 0a3724ed2f) includes <assimp/*>; the
+    # assimp_from_source imported target ships no interface include dir.
+    "${DEPS_PREFIX}/include"
 )
 
 # Link header-only INTERFACE targets — their SYSTEM INTERFACE include dirs
@@ -723,6 +750,14 @@ set(_delayload_libs "")
 # Only delay-load cr_tpms_library (closed-source TPMS infill DLL)
 if(TARGET cr_tpms_imported)
     list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
+endif()
+
+# assimp-vc142-mt.dll is absent from the pre-built deps package (only the
+# import lib ships). AssimpImport.cpp (upstream 0a3724ed2f) references assimp
+# symbols for .glb/.gltf/.fbx import, so delay-load keeps startup safe; those
+# formats stay unavailable until the DLL is provisioned (cr_tpms pattern).
+if(TARGET assimp_imported)
+    list(APPEND _delayload_libs "/DELAYLOAD:assimp-vc142-mt.dll")
 endif()
 
 # ─── 8. Link all dependencies to libslic3r_from_source ───────────────────────

@@ -32,10 +32,10 @@ Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaS
 ### Constraints
 
 - **Tech Stack**: C++17 / Qt 6.10 / QML / CMake / Ninja / MSVC — Windows 10 构建环境
-- **Upstream Lock**: 官方 `upstream/main` 锁定为 `8b93cc5df3347c657ce6ac9a58f6923a21c2959b`（2026-07-21，已**实际 pin 到构建**）；`third_party/OrcaSlicer` 子模块保持**纯净上游检出**（gitlink = `8b93cc5df`），OWzx 兼容改动全部以 `patches/orcaslicer/*.patch`（4 个补丁：Config null-keys_map 守卫、CGAL 5.4 孔洞精化×2、GCodeProcessor filament-map 越界守卫；源自兼容分支 `owzx-cgal54-on-0721`，顶端 `788d990be1`）在 configure 时自动应用到子模块工作树（`cmake/ApplyOrcaSlicerPatches.cmake`，幂等、指纹校验）。同步上游 = 前移 gitlink + 重生成补丁系列，不得自由设计新行为
+- **Upstream Lock**: 官方 `upstream/main` 基线推进至 `0a3724ed2f106dd40b8a6b6f89c6a83a546cc81c`（2026-09-11 快照，已**实际 pin 到构建**；历史锁定 `8b93cc5df`，2026-07-21）；`third_party/OrcaSlicer` 子模块保持**纯净上游检出**（gitlink = `0a3724ed2f`），OWzx 兼容改动全部以 `patches/orcaslicer/*.patch` 有序系列在 configure 时自动应用到子模块工作树（`cmake/ApplyOrcaSlicerPatches.cmake`，幂等、指纹校验）。当前系列：Config null-keys_map 守卫、CGAL 5.4 孔洞精化×2、GCodeProcessor filament-map 越界守卫（前四个源自兼容分支 `owzx-cgal54-on-0721` 血统，在 0a3724ed2f 上仍干净适用——upstream 新增的 keys_map 赋值采纳只覆盖赋值路径，serialize/deserialize 守卫仍必要），以及 0a3724ed2f 新增的 MSVC 14.50 lambda 显式捕获修复×2（FillRectilinear pheromone、GCodeProcessor axis_jerk_for_preview，C3493）。同步上游 = 前移 gitlink + 重生成补丁系列，不得自由设计新行为
 - **Build Command**: 唯一构建命令 `scripts/auto_verify_with_vcvars.ps1`，唯一构建目录 `build/`
 - **Architecture**: 业务逻辑在 core/，QML 仅做呈现，不得在 QML 内联脚本中承载业务逻辑
-- **Dependency**: CGAL 可用（libslic3r_cgal），OpenVDB 不可用，FFmpeg 不可用
+- **Dependency**: CGAL 可用（libslic3r_cgal），OpenVDB 已接通（Phase 142 起 `openvdb_libs` 门控生效），FFmpeg 不可用；assimp 仅有导入库无 DLL（AssimpImport delay-load，glb/gltf/fbx 导入暂不可用），OpenCV 静态 opencv_world460 可用
 - **Platform**: 当前仅 Windows，上游同时支持 macOS/Linux
 <!-- GSD:project-end -->
 
@@ -96,7 +96,7 @@ Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaS
 - semver - Semantic version parsing
 - libnest2d - 2D bin packing (pre-built from upstream build)
 - qhull / qhullcpp - Convex hull computation
-- assimp - 3D model import (STL, OBJ, STEP, etc.)
+- assimp - 3D model import (.glb/.gltf/.fbx via libslic3r AssimpImport, baseline 0a3724ed2f); import lib only — DLL absent, delay-loaded, so those formats are effectively unavailable (cr_tpms pattern)
 - libigl - Geometry processing library
 - cr_tpms - Closed-source TPMS infill library (delay-loaded DLL; DLL deleted at deploy time, effectively unavailable)
 - Eigen - Linear algebra
@@ -105,7 +105,7 @@ Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaS
 - spline - Spline math
 - stb_dxt - DXT texture compression
 - ankerl/unordered_dense - Fast hash maps
-- OpenVDB - Link failure; required for hollow/support paint gizmos (HMS/VDB-dependent)
+- OpenVDB - Linked since Phase 142 (v50OpenVdbUnlockWired anchors the openvdb_libs shim); enables hollow/support paint gizmo plumbing
 - FFmpeg - Not found; required for RTSP camera stream decoding (blocked)
 - MetaRTC/WebRTC - Required for WebRTC camera streams (blocked)
 - Paho MQTT C++ - Used in upstream for device communication (not yet migrated)
