@@ -24,7 +24,7 @@
 
 schema_version: 1
 updated: 2026-09-12
-head_at_update: 45aeed5
+head_at_update: 9ca0a13
 
 # ---------------------------------------------------------------------------
 # Historical alias map (review 2026-09-04 ids -> later G-* ids). Fixed mapping,
@@ -1350,4 +1350,69 @@ items:
       under this item's rescan note.
     evidence:
       gate: canonical gate 2026-09-12 (this change) -- pending commit anchor
+      last_verified: 2026-09-12
+
+  - id: BASELINE-ADVANCE-0A3724ED2F
+    title: Upstream baseline advance 8b93cc5df -> 0a3724ed2f (740 commits)
+    aliases: ["Phase-B-baseline-advance"]
+    area: Engine
+    priority: P1
+    status: resolved
+    resolved: 2026-09-12
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes: >
+      Phase B of the 2026-09-12 alignment plan: submodule gitlink moved to
+      upstream/main tip 0a3724ed2f106dd40b8a6b6f89c6a83a546cc81c (2026-09-11
+      snapshot; prior lock 8b93cc5df 2026-07-21 kept as historical reference).
+      Procedure per source-truth rules: pristine reset+clean, .owzx-patches-applied
+      stamp removed, cmake applier re-applied the 4-patch series cleanly on the
+      new tip (patch ad3135ce0d Config null-keys_map guard still required --
+      upstream 0a3724ed2f adopts keys_map only on the assignment path;
+      CGAL 5.4 hole refinement x2 and GCodeProcessor HRC bounds unchanged).
+      One NEW 5th patch was required at this tip:
+      patches/orcaslicer/0005-fix-msvc-restore-pheromone-lambda-capture-
+      FillRectilinear.patch -- upstream 0a3724ed2f changed path_probability's
+      lambda from explicit [pheromone_alpha, pheromone_beta] capture to an
+      empty capture list; MSVC 14.50 rejects the constexpr-float reads
+      without capture (C3493, cascading C2064 at call sites). The patch
+      restores upstream's own pre-advance form, semantics unchanged.
+      A 6th patch (0006-fix-msvc-capture-normal_mode-in-axis_jerk_for_previe
+      .patch) fixes the same C3493 class in GCodeProcessor.cpp
+      store_move_vertex: axis_jerk_for_preview's explicit capture list omits
+      the const local enum normal_mode; capture restored, semantics
+      unchanged. Note for future advances: adding a patch file does NOT
+      trigger cmake re-configure -- touch CMakeLists.txt (or reset the
+      submodule to pristine + drop the stamp) so the applier re-runs with
+      the new series fingerprint.
+      New upstream libslic3r sources wired into the from-source build:
+      TexturePainting.cpp + TextureToColor/* appended to LIBSLIC3R_CGAL_SOURCES
+      (needs OCCT include dir + OpenCV; cgal target gained
+      ${DEPS_PREFIX}/include/occt), Format/AssimpImport.cpp picked up by the
+      main glob (assimp headers via ${DEPS_PREFIX}/include SYSTEM PUBLIC,
+      import-lib-only target assimp_from_source linked PUBLIC, DLL absent ->
+      /DELAYLOAD:assimp-vc142-mt.dll so glb/gltf/fbx import is deferred-unavailable
+      like cr_tpms), WIN32_LEAN_AND_MEAN= (empty) define for
+      BlacklistedLibraryCheck.hpp windows.h. Remaining new TUs (FilamentMixer,
+      ColorDecomposeRecipe, FillCornerSmoothing, FillSpiralInset,
+      OrderingStrategies, WipeTowerEstimate, PresetCacheFormat, PublishSettings)
+      compile via existing globs with no extra deps. New upstream config keys
+      surfaced by the runtime process-settings audit and fixed in the same
+      unit: ConfigOptionModel processPageDefinitions manifest gained
+      enable_mixed_color_sublayer (Tab.cpp:2641), sparse_infill_smooth_factor
+      (Tab.cpp:2803), brim_ears_outer_only (Tab.cpp:3057), and
+      plugin_config_overrides -> print_plugin_config_overrides (shared key
+      removed upstream, PrintConfig.cpp:1093-1095; Tab.cpp:3126);
+      ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint
+      expected table mirrored. Remaining follow-up parity items (not
+      blockers): filament_mixed_* / spiralinset manifest coverage and the
+      full Tab.cpp +292 manifest re-extract deferred.
+    evidence:
+      gate: canonical gate 2026-09-12 -- exit 0, 12 suites 0 failed
+        (ViewModelSmokeTests 195/0 incl. sourceMappedProcessHierarchyMatchesTabPrint,
+        E2EWorkflowTests 32/0, CameraParity 19/0) on baseline 0a3724ed2f
+      commit: 9ca0a13 (feat(engine): advance OrcaSlicer baseline
+        8b93cc5df -> 0a3724ed2f)
       last_verified: 2026-09-12
