@@ -1416,3 +1416,62 @@ items:
       commit: 9ca0a13 (feat(engine): advance OrcaSlicer baseline
         8b93cc5df -> 0a3724ed2f)
       last_verified: 2026-09-12
+
+  # ── Freeze investigation 2026-09-12 (interactive acceptance blocker) ─────
+  - id: QSG-DXGI-VSYNC-FREEZE
+    title: Silent UI freeze at launch — Quick render thread blocked forever on
+      QWaitCondition::wait because Qt 6.10 QDxgiVSyncService callbacks never
+      fire on AMD amdxx64 / Win11 build 26200 (WaitForVBlank returns <=1 ms)
+    aliases: []
+    area: QPA/Rendering
+    priority: P0
+    status: resolved
+    resolved: 2026-09-12
+    implementation: real
+    parity: known_deviation
+    verification: pass
+    availability: available
+    notes:
+      Symptom (7+ repros, 100% at launch on the dev machine): after the
+      first frames the window never presents again — status-bar clock stuck,
+      clicks/page switches processed invisibly, resize or tab expose forces
+      exactly one frame, process Responding=True, no crash, no log errors.
+      Root cause chain (proven from Qt 6.10 sources + cdb):
+      QWindowsWindow::requestUpdate() registers a QDxgiVSyncService callback
+      and stops the platform timer fallback whenever supportsWindow() is
+      true; QDxgiVSyncThread::run() only fires that callback when
+      IDXGIOutput::WaitForVBlank takes >1 ms; on this machine it fails or
+      returns instantly so the thread msleeps forever and the callback never
+      runs; the threaded render loop therefore never receives
+      handleUpdateRequest and the render thread parks in
+      QWaitCondition::wait (Qt6Quick +0x9481/+0xa098 frames in cdb dumps)
+      while the GUI thread stays healthy in its dispatcher wait — exactly
+      the observed split. Excluded along the way: Windows update (9/8
+      hotfixes predate good runs), machine-wide Qt breakage (Qt Test gate
+      suites green), message-pump death (PostThreadMessage to the internal
+      qt_internal_proc windows flushed fine), WebEngine init (A/B refuted).
+      Fix: default QT_D3D_NO_VBLANK_THREAD=1 before QGuiApplication in
+      main_qml.cpp (Qt's own escape hatch, read once at service
+      construction; supportsWindow() then returns false and requestUpdate()
+      uses the timer fallback). User-set value is respected. A/B on an
+      identical SendInput/screenshot harness: clean build freezes (fresh
+      cdb dump shows the same dead render-thread wait), fixed build presents
+      tab switches, orbit drags mid-gesture, wheel zoom, middle-drag pan,
+      keyboard I/O zoom and Tab page switch, and the status clock advances.
+      Known deviation: vsync-aligned frame pacing is replaced by the ~5 ms
+      timer fallback (pre-6.10 Qt behavior); acceptable for a slicer and
+      strictly better than no presentation. Follow-up (non-blocking):
+      clicking the 3D viewport steals active focus from the page-level
+      Keys.onPressed handler, so hotkeys (I/O zoom, Tab) go dead until
+      focus returns to the page — upstream keeps canvas key handling alive
+      after canvas clicks; needs a focus-forwarding pass in the viewport
+      item.
+    evidence:
+      gate: canonical gate 2026-09-12 -- exit 0, 12 suites 0 failed
+        (rebuild includes the fix); interactive A/B evidence in
+        build/acc_shots (AB_novblank_*, AB_clean_*, ACC_0..6, FK_0..2,
+        DRAG_*) plus cdb thread dumps /tmp/all_stacks2.txt (frozen),
+        /tmp/ab_stacks.txt (fixed, render thread in QRhi::beginFrame),
+        /tmp/clean_t3.txt (clean freeze reproduced)
+      commit: b72ec2f (fix(qpa): default QT_D3D_NO_VBLANK_THREAD=1 ...)
+      last_verified: 2026-09-12
