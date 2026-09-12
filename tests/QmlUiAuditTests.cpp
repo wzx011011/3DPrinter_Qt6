@@ -732,6 +732,11 @@ private slots:
   // stale-preview auto-reslice, previous-G-code reuse wiring, async export
   // worker, validate-warning notification routing.
   void engineSemanticsSourceAudit();
+  // CANVAS-FOCUS: plater hotkeys follow the upstream canvas-focus contract --
+  // the active page root claims active focus when it becomes visible and its
+  // Keys handler routes the key table; Tab/Shift+Tab are window Shortcuts
+  // gated on text-focus (focus navigation eats Tab before item Keys).
+  void platerHotkeysFollowCanvasFocus();
 
 private:
   QString readSource(const QString &relativePath) const;
@@ -10725,11 +10730,14 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
   QVERIFY2(rhiHeader.contains(QStringLiteral("Q_INVOKABLE void requestZoom(float delta);")),
            "HOTKEYS: RhiViewport must expose requestZoom(delta)");
 
-  // Tab / Shift+Tab route through the backend page/sidebar actions.
-  QVERIFY2(preparePage.contains(QStringLiteral("backend.requestSelectTab("))
-               && preparePage.contains(QStringLiteral("backend.requestToggleSidebar()")),
+  // Tab / Shift+Tab route through the backend page/sidebar actions -- as
+  // window Shortcuts in main.qml (HOTKEY-FWD: focus navigation consumes Tab
+  // before item Keys, so the binding must live at the window level).
+  const QString mainQmlHotkeys = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(mainQmlHotkeys.contains(QStringLiteral("backend.requestSelectTab("))
+               && mainQmlHotkeys.contains(QStringLiteral("backend.requestToggleSidebar()")),
            "HOTKEYS: Tab must switch Prepare/Preview and Shift+Tab must toggle"
-           " the sidebar through BackendContext");
+           " the sidebar through BackendContext (window Shortcuts in main.qml)");
 
   // Extruder digits route through the ViewModel (no QML business logic).
   QVERIFY2(preparePage.contains(QStringLiteral("setExtruderForSelectedItems(")),
@@ -11449,4 +11457,77 @@ void QmlUiAuditTests::deadControlEliminationAudit()
            "PREFS: unavailable cloud and platform integrations must be explicit");
   QVERIFY2(!prefsPage.contains(QStringLiteral("setAutoUpload")),
            "PREFS: device auto-upload has no transport and must stay removed");
+}
+
+// HOTKEY-FWD regression lock. Upstream delivers plater hotkeys through the
+// main frame accelerator table, so they fire regardless of which sibling
+// widget holds keyboard focus (only a focused text control swallows them,
+// GLCanvas3D::on_char IsTextFocused gate). Qt Quick routes keys by item
+// focus, so the pre-fix design -- letter keys on the page root Keys handler
+// -- went dead the moment a toolbar button took active focus. The fix chain
+// is: page key tables become callable functions, Plater routes by viewMode,
+// and the ApplicationWindow forwards unconsumed key events (a focused text
+// field accepts its characters and never reaches the window, giving the
+// IsTextFocused semantics for free) with an Overlay.chain exclusion so a
+// hotkey cannot act underneath a modal dialog. Tab / Shift+Tab must stay
+// window Shortcuts because focus navigation consumes Tab before window Keys.
+void QmlUiAuditTests::platerHotkeysFollowCanvasFocus()
+{
+  const QString prepareQml = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  QVERIFY2(prepareQml.contains(QStringLiteral("function handleCanvasKey(event)")),
+           "CANVAS-FOCUS: PreparePage must expose handleCanvasKey(event) as a callable");
+  QVERIFY2(prepareQml.contains(QStringLiteral("Keys.onPressed: (event) => root.handleCanvasKey(event)")),
+           "CANVAS-FOCUS: PreparePage Keys.onPressed must delegate to handleCanvasKey");
+  QVERIFY2(prepareQml.contains(QStringLiteral("onVisibleChanged: if (visible) forceActiveFocus()")),
+           "CANVAS-FOCUS: PreparePage must claim active focus when it becomes"
+           " visible (fresh launch / page switches / popup close) so the canvas"
+           " key table works without a prior click");
+  QVERIFY2(prepareQml.contains(QStringLiteral("onTriggered: root.forceActiveFocus()")),
+           "CANVAS-FOCUS: PreparePage must re-claim focus after the initial"
+           " construction pass where the Plater root's focus:true wins ordering");
+  QVERIFY2(!prepareQml.contains(QStringLiteral("case Qt.Key_Tab:")),
+           "CANVAS-FOCUS: Tab must live in the window Shortcuts, not the page"
+           " table (focus navigation consumes Tab before item Keys)");
+
+  const QString previewQml = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(previewQml.contains(QStringLiteral("function handlePreviewKey(event)")),
+           "CANVAS-FOCUS: PreviewPage must expose handlePreviewKey(event) as a callable");
+  QVERIFY2(previewQml.contains(QStringLiteral("Keys.onPressed: (event) => root.handlePreviewKey(event)")),
+           "CANVAS-FOCUS: PreviewPage Keys.onPressed must delegate to handlePreviewKey");
+  QVERIFY2(previewQml.contains(QStringLiteral("onVisibleChanged: if (visible) forceActiveFocus()")),
+           "CANVAS-FOCUS: PreviewPage must claim active focus when it becomes"
+           " visible so the playback key table works without a prior click");
+
+  const QString rhiViewportSrc =
+      readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
+  QVERIFY2(rhiViewportSrc.contains(QStringLiteral("forceActiveFocus();")),
+           "CANVAS-FOCUS: RhiViewport mouse-down must grab focus so the page"
+           " key table revives after a sidebar control took it (upstream"
+           " GLCanvas mouse-down focus grab)");
+
+  const QString softViewportSrc =
+      readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.cpp"));
+  QVERIFY2(softViewportSrc.contains(QStringLiteral("forceActiveFocus();")),
+           "CANVAS-FOCUS: SoftwareViewport mouse-down must grab focus like"
+           " RhiViewport (both canvas paths share the upstream contract)");
+
+  const QString platerQml = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
+  QVERIFY2(!platerQml.contains(QStringLiteral("function handleActivePageKey")),
+           "CANVAS-FOCUS: Plater must not route keys -- the focused page's own"
+           " Keys handler owns the table (upstream canvas wxEVT_CHAR model)");
+
+  const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+  QVERIFY2(!mainQml.contains(QStringLiteral("hotkeyFromMainWindowContent")),
+           "CANVAS-FOCUS: no window-level Keys forwarding -- an attached Keys"
+           " handler on ApplicationWindow never fires in Qt 6.10 and forwarding"
+           " would act while sidebar controls hold focus, which upstream does"
+           " not do");
+  QVERIFY2(mainQml.contains(QStringLiteral("sequence: \"Tab\""))
+               && mainQml.contains(QStringLiteral("sequence: \"Shift+Tab\"")),
+           "CANVAS-FOCUS: Tab/Shift+Tab must be window Shortcuts");
+  QVERIFY2(mainQml.contains(QStringLiteral("!root.textEditHoldFocus")),
+           "CANVAS-FOCUS: Tab/Shift+Tab must stand down while a text field has"
+           " focus");
+  QVERIFY2(mainQml.contains(QStringLiteral("readonly property bool textEditHoldFocus")),
+           "CANVAS-FOCUS: textEditHoldFocus must gate the Tab shortcuts");
 }

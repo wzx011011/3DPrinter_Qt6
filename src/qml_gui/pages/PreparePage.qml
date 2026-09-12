@@ -44,6 +44,19 @@ Item {
     property var sidebarToggleRequested: null
     property var sidebarWidthChanged: null
     focus: true
+    // CANVAS-FOCUS: upstream plater letter keys are canvas events -- they
+    // reach GLCanvas3D only while the canvas is the focused child. This page
+    // root is the focus proxy of the canvas in QML, so claim active focus
+    // whenever the page becomes visible (fresh launch, page switches, popup
+    // close). The immediate call covers runtime switches; the deferred timer
+    // covers the initial grab, where the Plater root's own focus:true wins
+    // ordering during construction.
+    onVisibleChanged: if (visible) forceActiveFocus()
+    Timer {
+        running: root.visible
+        interval: 0
+        onTriggered: root.forceActiveFocus()
+    }
 
     // Phase 169 (XD-01): shared destructive-action confirm dialog. Used by
     // deleteSelection (Delete/Backspace key) and other destructive triggers
@@ -272,7 +285,13 @@ Item {
     //   was the conflict, now removed). Ctrl+U measure and Ctrl+Shift+X cut
     //   remain as documented OWzx extensions; W/E (Blender-style) were
     //   self-invented and are gone.
-    Keys.onPressed: (event) => {
+    // CANVAS-FOCUS: the whole key table lives in this function, invoked from
+    // Keys.onPressed below while the page root holds active focus -- the QML
+    // equivalent of upstream routing wxEVT_CHAR into the focused GLCanvas3D
+    // (MainFrame/KBShortcutsDialog.cpp global list). A focused text field
+    // never reaches here because it consumes character keys first, which
+    // matches the upstream IsTextFocused gate.
+    function handleCanvasKey(event) {
         if (!root.editorVm)
             return
         var key = event.key
@@ -391,20 +410,6 @@ Item {
                 event.accepted = true
             }
             break
-        case Qt.Key_Tab:
-            if (!(mod & Qt.ControlModifier)) {
-                if (mod & Qt.ShiftModifier) {
-                    // Upstream Shift+Tab: collapse/expand the sidebar.
-                    backend.requestToggleSidebar()
-                } else {
-                    // Upstream Tab: switch between Prepare and Preview.
-                    backend.requestSelectTab(
-                        backend.currentPage === backend.tpPreview
-                            ? backend.tp3DEditor : backend.tpPreview)
-                }
-                event.accepted = true
-            }
-            break
         case Qt.Key_Left:
         case Qt.Key_Right:
         case Qt.Key_Up:
@@ -449,6 +454,8 @@ Item {
             break
         }
     }
+
+    Keys.onPressed: (event) => root.handleCanvasKey(event)
 
     // GAP-5: 500ms two-digit filament window (upstream on_char starts a
     // 500ms timer on the first digit and commits on expiry).

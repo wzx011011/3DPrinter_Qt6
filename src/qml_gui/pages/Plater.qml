@@ -62,6 +62,13 @@ Item {
 
     focus: true
 
+    // CANVAS-FOCUS: the Plater root also declares focus:true and wins the
+    // initial focus grab at fresh launch, so the active page re-claims focus
+    // with forceActiveFocus() once it becomes visible (see PreparePage /
+    // PreviewPage). Keep no key handling here: plater hotkeys are routed by
+    // the focused page's own Keys handler, mirroring upstream where the key
+    // table lives on the focused canvas (GLCanvas3D wxEVT_CHAR).
+
     // vm 常量（与 BackendContext::ViewMode 数值对齐：View3D=0/Preview=1/AssembleView=2）
     readonly property int vmView3D: 0
     readonly property int vmPreview: 1

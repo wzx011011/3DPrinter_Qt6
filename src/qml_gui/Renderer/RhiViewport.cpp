@@ -1313,6 +1313,11 @@ void RhiViewport::advanceNavigatorSnap()
 
 void RhiViewport::mousePressEvent(QMouseEvent *event)
 {
+  // CANVAS-FOCUS (upstream GLCanvas mouse-down grabs focus): a press on the
+  // canvas makes it the focused item again so the page key table revives
+  // after a sidebar control took focus. QQuickItem does not do this by
+  // default, unlike the wx canvas.
+  forceActiveFocus();
   // v5.16 (NAVIGATOR): the bottom-left cube consumes left presses before any
   // scene interaction (upstream ImGui processes the ImGuizmo hit first).
   if (event->button() == Qt::LeftButton

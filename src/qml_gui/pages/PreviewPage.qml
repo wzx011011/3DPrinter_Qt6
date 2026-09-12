@@ -14,6 +14,16 @@ Item {
     required property var configVm
     property string processCategory: ""
     focus: true
+    // CANVAS-FOCUS: same contract as PreparePage -- the page root is the
+    // focus proxy of the preview canvas; claim active focus whenever the
+    // page becomes visible so the playback key table works without a prior
+    // click (upstream routes these through the focused canvas).
+    onVisibleChanged: if (visible) forceActiveFocus()
+    Timer {
+        running: root.visible
+        interval: 0
+        onTriggered: root.forceActiveFocus()
+    }
 
     // Phase 237 (VIEW-01): expose the preview RhiViewport so the shell View
     // menu / Ctrl+0..6 shortcuts can route camera presets to the ACTIVE
@@ -42,7 +52,11 @@ Item {
         }
     }
 
-    Keys.onPressed: (event) => {
+    // CANVAS-FOCUS: mirror of PreparePage.handleCanvasKey -- the preview
+    // playback key table (upstream preview canvas keys) lives in this
+    // function, invoked from Keys.onPressed below while the page root holds
+    // active focus.
+    function handlePreviewKey(event) {
         if (!root.previewVm)
             return
         switch (event.key) {
@@ -86,6 +100,8 @@ Item {
             break
         }
     }
+
+    Keys.onPressed: (event) => root.handlePreviewKey(event)
 
     Rectangle {
         anchors.fill: parent

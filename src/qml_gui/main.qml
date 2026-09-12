@@ -595,6 +595,48 @@ ApplicationWindow {
         onActivated: bblTopbar.selectViewOnActiveViewport("right")
     }
 
+    // True while a text-input item holds active focus (TextInput / TextEdit
+    // and the controls wrapping them); Tab must stand down so it can move
+    // focus inside the editor, matching upstream IsTextFocused gates.
+    readonly property bool textEditHoldFocus: {
+        var it = activeFocusItem
+        return !!it && it.cursorPosition !== undefined
+    }
+
+    // ── CANVAS-FOCUS hotkey model ───────────────────────────────────────────
+    // Upstream plater letter keys are canvas events: GLCanvas3D receives
+    // wxEVT_CHAR only while the canvas is the focused child (clicking a
+    // sidebar control moves focus and the keys go dead there too). The QML
+    // equivalent is the active page root holding active focus -- the pages
+    // claim it via forceActiveFocus when they become visible (see
+    // PreparePage/PreviewPage). Window-level Keys forwarding is NOT used:
+    // an attached Keys handler on the ApplicationWindow never receives
+    // unhandled events in Qt 6.10 (verified empirically), and forwarding
+    // every unconsumed key would also act while a sidebar control holds
+    // focus, which upstream does not do.
+    //
+    // Tab / Shift+Tab stay window Shortcuts: focus navigation consumes Tab
+    // before item Keys can see it, so a per-item binding is unreliable.
+    Shortcut {
+        // Upstream Tab: switch Prepare <-> Preview (KBShortcutsDialog.cpp
+        // global list).
+        sequence: "Tab"
+        enabled: (backend.currentPage === backend.tp3DEditor
+                  || backend.currentPage === backend.tpPreview)
+                 && !root.textEditHoldFocus
+        onActivated: backend.requestSelectTab(
+            backend.currentPage === backend.tpPreview
+                ? backend.tp3DEditor : backend.tpPreview)
+    }
+    Shortcut {
+        // Upstream Shift+Tab: collapse/expand the sidebar.
+        sequence: "Shift+Tab"
+        enabled: (backend.currentPage === backend.tp3DEditor
+                  || backend.currentPage === backend.tpPreview)
+                 && !root.textEditHoldFocus
+        onActivated: backend.requestToggleSidebar()
+    }
+
     // Phase 237 (VIEW-06): default .gcode.3mf suggestion derived from the
     // gcode export name (upstream derives it from the output template,
     // Plater.cpp:11508-11529).

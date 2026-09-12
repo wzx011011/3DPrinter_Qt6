@@ -920,6 +920,9 @@ void SoftwareViewport::fitToMeshes()
 
 void SoftwareViewport::mousePressEvent(QMouseEvent *event)
 {
+  // CANVAS-FOCUS (upstream GLCanvas mouse-down grabs focus): keep the page
+  // key table alive after another control took focus, same as RhiViewport.
+  forceActiveFocus();
   if (event->button() == Qt::RightButton) {
     m_contextPressPosition = event->position();
     m_contextPressActive = true;
