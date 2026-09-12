@@ -928,6 +928,14 @@ ApplicationWindow {
 
         // WebEngine 聊天面板懒加载：Chromium 进程树只在首次打开侧栏时启动
         // （首开 +~1s），关闭仅隐藏不销毁，重开即恢复。
+        // source (not inline sourceComponent): an inline component reference
+        // forces main.qml to resolve the ChatSidebar type — and therefore
+        // `import QtWebEngine` — at parse time, so a missing WebEngine plugin
+        // aborts the WHOLE application load. With a source URL the import
+        // failure only puts this Loader into the Error state; the rest of the
+        // app keeps running (the degradation this comment block always
+        // promised). main_qml.cpp skips QtWebEngineQuick::initialize() under
+        // OWZX_DISABLE_WEBENGINE=1, which must be paired with this.
         Loader {
             id: aiChatPanelLoader
             active: root.aiChatOpen
@@ -939,9 +947,8 @@ ApplicationWindow {
             width: 360
             z: 50
 
-            sourceComponent: ChatSidebar {
-                onClosed: root.aiChatOpen = false
-            }
+            source: Qt.resolvedUrl("panels/ChatSidebar.qml")
+            onLoaded: item.closed.connect(function () { root.aiChatOpen = false })
         }
     }
 

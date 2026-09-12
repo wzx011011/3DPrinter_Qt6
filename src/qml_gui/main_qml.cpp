@@ -275,8 +275,13 @@ int main(int argc, char *argv[])
   // into the exe makes the loader abort pre-main on machines with old
   // dependency DLLs beside the exe; loading it here keeps startup decoupled.
   // When the DLL is absent the chat panel degrades gracefully (QML plugin
-  // import fails with a message, the rest of the app runs).
-  {
+  // import fails inside the lazy aiChatPanelLoader, the rest of the app
+  // runs).
+  // OWZX_DISABLE_WEBENGINE=1 skips the init entirely (main.qml must be the
+  // source-based lazy Loader for this to stay survivable). Diagnostic/work-
+  // around knob for the Chromium GUI-thread pump interfering with the Qt
+  // event dispatcher on this app (2026-09-12 freeze investigation).
+  if (!qEnvironmentVariableIsSet("OWZX_DISABLE_WEBENGINE")) {
     QLibrary webEngineQuick(QStringLiteral("Qt6WebEngineQuick"));
     if (webEngineQuick.load()) {
       using WebEngineInit = void (*)();
@@ -290,6 +295,26 @@ int main(int argc, char *argv[])
 
   if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
     qputenv("OWZX_RHI_RENDERER", "auto");
+
+  // Qt 6.10 routes window update requests through QDxgiVSyncService: when a
+  // window maps to a DXGI output, QWindowsWindow::requestUpdate() registers a
+  // vsync callback and stops the platform timer fallback, so update requests
+  // are ONLY delivered from QDxgiVSyncThread (which loops on
+  // IDXGIOutput::WaitForVBlank and fires the callback on success). On this
+  // stack (AMD amdxx64, Win11 build 26200) WaitForVBlank returns in <=1 ms or
+  // fails, and that thread then just msleeps -- the callback never fires.
+  // Result: the Quick render thread blocks forever in QWaitCondition::wait
+  // and nothing is presented after the first frames (input keeps being
+  // processed invisibly; only resize/expose forces a frame). Reproduced 100%
+  // at launch and verified via cdb render-thread stacks; setting
+  // QT_D3D_NO_VBLANK_THREAD=1 (Qt's own escape hatch, read once when the
+  // service is constructed) makes supportsWindow() return false so
+  // requestUpdate() falls back to the timer-based delivery. Verified 2026-
+  // 09-12: tab switches, click-to-page and orbit drags present live, clock
+  // repaints, render thread sits in QRhi::beginFrame instead of the dead
+  // wait. Must run before QGuiApplication; a user-set value is respected.
+  if (!qEnvironmentVariableIsSet("QT_D3D_NO_VBLANK_THREAD"))
+    qputenv("QT_D3D_NO_VBLANK_THREAD", "1");
 
   // Phase 105 (D3D12-01): forward OWZX_D3D12_DEBUG to Qt's QSG RHI debug
   // mechanism so the LIVE QQuickRhiItem render path emits GPU validation
