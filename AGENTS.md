@@ -20,6 +20,13 @@ Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaS
 
 不得创建其他构建目录，不得使用其他构建脚本。详见 `.codex/rules/build-rules.md`。
 
+## Self-Test Standing Rules（自测常备规则）
+
+每次做了与下列测试相关的改动后，必须重新运行对应自测，且效果不得倒退：
+
+- **主流程自测**（canonical verify gate）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`。凡改动 C++/QML 源码、测试或构建脚本后都要跑；12 套件必须 0 failed。
+- **效率自测**（stage benchmark）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf/run_stage_bench.ps1`。凡改动模型加载、meshData、场景展开、拾取、切片、预览解析或渲染提交路径后都要跑；各阶段耗时与基线（docs/perf-baseline.md）相比不得出现超出噪声（~10%）的回退，基线由 `build/perf_out/stage_report.json` 更新。
+
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 

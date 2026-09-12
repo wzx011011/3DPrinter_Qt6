@@ -789,6 +789,20 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # PerfBench (PERF): stage-level headless benchmark of the real pipeline
+    # (ProjectServiceMock -> meshData -> PrepareSceneData -> ObjectPicking,
+    # SliceService, PreviewViewModel gcode parse). Deliberately NOT part of
+    # the pass/fail verify gate: run it via scripts/perf/run_stage_bench.ps1
+    # and record results in docs/perf-baseline.md (standing rule: re-run the
+    # efficiency self-test after perf-relevant changes; no regression).
+    # Same link surface as PreviewParserTests; same AUTOMOC weak-moc caveat
+    # (the canonical verify reconfigures).
+    qt_add_executable(PerfBench tests/PerfBench.cpp)
+    target_link_libraries(PerfBench PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    target_link_options(PerfBench PRIVATE /FORCE:MULTIPLE)
+
 endif()
 
 if(BUILD_TESTING)

@@ -52,14 +52,13 @@ double processMemoryMiB()
 
 int batchCountFromMeshData(const QByteArray &meshData)
 {
-  // TLV v2 header: "OMD2" magic, int32 geometryCount, int32 batchCount
-  // (docs/perf-wave2b-design.md).
-  if (meshData.size() < 12
-      || meshData.at(0) != 'O' || meshData.at(1) != 'M'
-      || meshData.at(2) != 'D' || meshData.at(3) != '2')
+  // Real meshData layout (ProjectServiceMock::meshData): int32 batchCount,
+  // then per batch { int32 objectId, int32 triCount, triCount*9 floats },
+  // then a 6-float scene bbox trailer.
+  if (meshData.size() < static_cast<qsizetype>(sizeof(int32_t)))
     return 0;
   int count = 0;
-  std::memcpy(&count, meshData.constData() + 8, sizeof(count));
+  std::memcpy(&count, meshData.constData(), sizeof(count));
   return count;
 }
 
@@ -137,8 +136,8 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
 
   // ── Stage 4: object picking sweep (hover-cost proxy) ───────────────────
   // Fan 32 rays at the scene bbox center (from the batch bounds union) at a
-  // typical camera distance. Measures both the accelerated BVH path (the
-  // production hover path) and the legacy brute-force sweep for the delta.
+  // typical camera distance through the production ObjectPicking::pick path
+  // (ray -> AABB prefilter -> Moller-Trumbore).
   {
     float cminX = 1e30f, cminY = 1e30f, cminZ = 1e30f;
     float cmaxX = -1e30f, cmaxY = -1e30f, cmaxZ = -1e30f;
@@ -153,64 +152,37 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     const QVector3D center((cminX + cmaxX) * 0.5f, (cminY + cmaxY) * 0.5f,
                            (cminZ + cmaxZ) * 0.5f);
 
-    // Build the per-batch BVHs once (the amortized mesh-change cost).
-    timer.start();
-    QVector<ObjectPicking::Bvh> bvhs;
-    bvhs.resize(scene.modelBatches().size());
-    for (int i = 0; i < scene.modelBatches().size(); ++i) {
-      bvhs[i] = ObjectPicking::Bvh::build(
-          scene.modelVertices(), scene.modelBatches().at(i).firstVertex,
-          scene.modelBatches().at(i).vertexCount);
-    }
-    modelReport[QStringLiteral("pick_bvh_build_ms")] = double(timer.elapsed());
-    qInfo("[BENCH] %-24s %8.1f ms", "pick_bvh_build", double(timer.elapsed()));
-
     const int kRayCount = 32;
-    const auto sweep = [&](bool accelerated, QVector<double> *rayMsOut) {
-      QVector<double> rayMs;
-      int hits = 0;
-      timer.start();
-      for (int i = 0; i < kRayCount; ++i) {
-        QElapsedTimer rayTimer;
-        rayTimer.start();
-        const float angle = float(i) * (2.0f * float(M_PI) / kRayCount);
-        const QVector3D origin(center.x() + 200.0f * std::cos(angle),
-                               center.y() + 150.0f,
-                               center.z() + 200.0f * std::sin(angle));
-        const QVector3D direction = (center - origin).normalized();
-        const ObjectPicking::Hit hit = accelerated
-            ? ObjectPicking::pick(origin, direction, scene.modelVertices(),
-                                  scene.modelBatches(), bvhs)
-            : ObjectPicking::pick(origin, direction, scene.modelVertices(),
-                                  scene.modelBatches());
-        rayMs.append(double(rayTimer.nsecsElapsed()) / 1e6);
-        if (hit.isValid())
-          ++hits;
-      }
-      if (rayMsOut != nullptr)
-        *rayMsOut = rayMs;
-      return qMakePair(timer.elapsed(), hits);
-    };
-
+    int hits = 0;
     QVector<double> rayMs;
-    const auto accelResult = sweep(true, &rayMs);
+    timer.start();
+    for (int i = 0; i < kRayCount; ++i) {
+      QElapsedTimer rayTimer;
+      rayTimer.start();
+      const float angle = float(i) * (2.0f * float(M_PI) / kRayCount);
+      const QVector3D origin(center.x() + 200.0f * std::cos(angle),
+                             center.y() + 150.0f,
+                             center.z() + 200.0f * std::sin(angle));
+      const QVector3D direction = (center - origin).normalized();
+      const ObjectPicking::Hit hit =
+          ObjectPicking::pick(origin, direction, scene.modelVertices(),
+                              scene.modelBatches());
+      rayMs.append(double(rayTimer.nsecsElapsed()) / 1e6);
+      if (hit.isValid())
+        ++hits;
+    }
+    const qint64 sweepMs = timer.elapsed();
     std::sort(rayMs.begin(), rayMs.end());
     const double p50 = rayMs.isEmpty() ? -1.0 : rayMs[rayMs.size() / 2];
     const double p95 = rayMs.isEmpty()
                            ? -1.0
                            : rayMs[qMin(rayMs.size() - 1, rayMs.size() * 95 / 100)];
-    modelReport[QStringLiteral("pick_sweep_ms")] = double(accelResult.first);
+    modelReport[QStringLiteral("pick_sweep_ms")] = double(sweepMs);
     modelReport[QStringLiteral("pick_ray_p50_ms")] = p50;
     modelReport[QStringLiteral("pick_ray_p95_ms")] = p95;
-    modelReport[QStringLiteral("pick_hits")] = accelResult.second;
+    modelReport[QStringLiteral("pick_hits")] = hits;
     qInfo("[BENCH] %-24s %8.1f ms | p50=%6.3f p95=%6.3f hits=%d/%d",
-          "pick_sweep_accel", double(accelResult.first), p50, p95,
-          accelResult.second, kRayCount);
-
-    const auto bruteResult = sweep(false, nullptr);
-    modelReport[QStringLiteral("pick_sweep_brute_ms")] = double(bruteResult.first);
-    qInfo("[BENCH] %-24s %8.1f ms | hits=%d/%d", "pick_sweep_brute",
-          double(bruteResult.first), bruteResult.second, kRayCount);
+          "pick_sweep", double(sweepMs), p50, p95, hits, kRayCount);
   }
 
   // ── Stage 5: slice + preview parse (400k tier only by default) ─────────

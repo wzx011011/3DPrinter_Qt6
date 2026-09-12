@@ -372,6 +372,9 @@ Invoke-NinjaTarget 'PartPlateTests'
 Invoke-NinjaTarget 'AppToolTests'
 # Phase 55-01: PreviewParserTests target (parser/role/mode coverage scaffold).
 Invoke-NinjaTarget 'PreviewParserTests'
+# PERF-STAGE-BENCH: efficiency self-test exe (not part of the pass/fail
+# suites; run via scripts/perf/run_stage_bench.ps1 after the gate).
+Invoke-NinjaTarget 'PerfBench'
 Invoke-NinjaTarget 'owzx-cli'
 Invoke-NinjaTarget 'CliTests'
 Invoke-NinjaTarget 'test-slice-direct' $false
