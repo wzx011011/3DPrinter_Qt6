@@ -29,7 +29,7 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
 | scene expand（PrepareSceneData 顶点展开） | scene_expand_ms / verts | 28 / 1,194,480 |
 | ObjectPicking::pick 32-ray sweep | p50 / p95 / sweep / hits | 6.58 / 12.43 / 239 / 32/32 |
 | slice（libslic3r 全切片） | slice_ms | 1692 |
-| preview parse（GCodeProcessor 路径） | preview_parse_ms | 72147 |
+| preview parse（GUI 线程 gcode 重解析） | preview_parse_ms | **850**（2026-09-13 修复后；修复前 72147） |
 | 峰值内存 | after expand / after preview | 100 / 383 MiB |
 
 ### 2m 三角形球体
@@ -44,8 +44,12 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
 
 ## 已知热点与结论
 
-- **preview parse 是当前最大热点**（400k 模型 72s，其余全部 stage 合计 <5s）。
-  这是 GCodeProcessor 全量解析路径，后续优化优先级最高。
+- **preview parse 已修复**（2026-09-13，72s → 0.85s，~85x）。根因：
+  `parseAxis`/`parseSValue`/`parseFValue` 每次调用都重新构造并编译
+  QRegularExpression，每个 G1 move 固定 5 次调用，37.6 万 move 的基准
+  gcode 产生 ~190 万次模式编译（~38µs/次 ≈ 72s）。修复为手写扫描 +
+  常量模式缓存 + role 标签/映射哈希一次性构建，语义保持不变
+  （PreviewParserTests 门禁覆盖）。
 - pick 已走生产路径 `ObjectPicking::pick`（AABB 预过滤 + Moller-Trumbore），
   400k p50 6.6ms 可接受；2m 模型 p50 33.6ms 提示后续可引入空间加速结构。
 - 场景展开与 meshData 序列化随三角形数线性扩展，量级正常。
@@ -58,9 +62,10 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
   `scene_expand_ms`、`pick_ray_p50/p95_ms`、`scene_vertex_count`、
   `meshdata_bytes`。三轮 pick p50 = 6.58 / 6.53 / 6.65。
 - **易变墙钟指标**（随系统负载波动 1.5–2.5 倍，不作单次回归判定）：
-  `load_ms`（1306→2568→3508）、`slice_ms`（1692→1872→3567）、
-  `preview_parse_ms`（72s→79s→80s）。受磁盘缓存/杀软扫描/后台进程影响
-  明显，复测时应等待系统安静，必要时多次取最小值。
+  `load_ms`（1306→2568→3508）、`slice_ms`（1692→1872→3567）。
+  受磁盘缓存/杀软扫描/后台进程影响明显，复测时应等待系统安静，
+  必要时多次取最小值。`preview_parse_ms` 修复前在 72s 量级时同样
+  易变（72/79/80s）；修复后（0.85s）为纯 CPU 解析，按稳定锚点对待。
 - 内存指标轮间一致。
 
 ## 回归规则（常备）

@@ -201,15 +201,19 @@ namespace
 
   // Map an upstream ;TYPE: display string to its canonical libvgcode index.
   // Travel/unrecognized -> 0 (None). Never indexes kRoleColors out of bounds.
+  // PERF(PREV-PARSE): the lookup hash is built once; the previous per-call
+  // loop constructed up to 20 QStrings per invocation and this runs 2-3x per
+  // parsed move (376k moves on the 400k bench sphere).
   int roleForTypeImpl(const QString &type)
   {
-    const QString t = type.trimmed();
-    for (const auto &entry : kRoleMap)
-    {
-      if (t.compare(QString::fromUtf8(entry.name), Qt::CaseSensitive) == 0)
-        return entry.role;
-    }
-    return 0;
+    static const QHash<QString, int> roleHash = [] {
+      QHash<QString, int> m;
+      m.reserve(int(sizeof(kRoleMap) / sizeof(kRoleMap[0])));
+      for (const auto &entry : kRoleMap)
+        m.insert(QString::fromUtf8(entry.name), entry.role);
+      return m;
+    }();
+    return roleHash.value(type.trimmed(), 0);
   }
 
   // Phase 238 (PREV-03): base colors for the non-extrusion move kinds.
@@ -257,6 +261,20 @@ namespace
       case 5: return QStringLiteral("Seam");
       default: return QString::fromUtf8(kRoleLabels[0]);
     }
+  }
+
+  // PERF(PREV-PARSE): canonical role label built once (was a QString
+  // allocation per extruding move in the parser loop).
+  const QString &roleLabel(int role)
+  {
+    static const QList<QString> labels = [] {
+      QList<QString> l;
+      l.reserve(int(sizeof(kRoleLabels) / sizeof(kRoleLabels[0])));
+      for (const char *s : kRoleLabels)
+        l.push_back(QString::fromUtf8(s));
+      return l;
+    }();
+    return labels[role];
   }
 
   // Phase 238 (PREV-05): filament split categories in upstream column order
@@ -373,46 +391,116 @@ namespace
 
   bool parseAxis(const QString &line, QChar axis, float &value)
   {
-    const QRegularExpression re(QStringLiteral("(?:^|\\s)%1([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))").arg(axis));
-    const auto m = re.match(line);
-    if (!m.hasMatch())
-      return false;
-    bool ok = false;
-    const float v = m.captured(1).toFloat(&ok);
-    if (!ok)
-      return false;
-    value = v;
-    return true;
+    // PERF(PREV-PARSE): hand-rolled scan. The previous implementation built
+    // and compiled a QRegularExpression per call and this runs 5x per parsed
+    // G1 move (376k moves on the 400k bench sphere => ~70s of pure pattern
+    // compilation). Semantics of the old pattern (?:^|\s)AXIS([+-]?number)
+    // are preserved: word-start anchor, optional sign, digits with at most
+    // one dot ("12", "12.5", "12.", ".5").
+    const int n = line.size();
+    for (int i = 0; i < n; ++i)
+    {
+      if (line.at(i) != axis)
+        continue;
+      if (i > 0 && !line.at(i - 1).isSpace())
+        continue;
+      int j = i + 1;
+      if (j >= n)
+        continue;
+      const int numStart = j;
+      if (line.at(j) == QLatin1Char('+') || line.at(j) == QLatin1Char('-'))
+        ++j;
+      bool sawDigit = false;
+      bool sawDot = false;
+      while (j < n)
+      {
+        const QChar c = line.at(j);
+        if (c.isDigit())
+          sawDigit = true;
+        else if (c == QLatin1Char('.') && !sawDot)
+          sawDot = true;
+        else
+          break;
+        ++j;
+      }
+      if (!sawDigit)
+        continue;
+      bool ok = false;
+      const float v = line.mid(numStart, j - numStart).toFloat(&ok);
+      if (!ok)
+        continue;
+      value = v;
+      return true;
+    }
+    return false;
+  }
+
+  // Shared scanner for the S/F word values (old pattern \bAXIS(-?\d+(?:\.\d+)?)\b).
+  float parseWordFloatValue(const QString &line, QChar axis)
+  {
+    const int n = line.size();
+    for (int i = 0; i < n; ++i)
+    {
+      if (line.at(i) != axis)
+        continue;
+      if (i > 0 && line.at(i - 1).isLetterOrNumber())
+        continue;
+      int j = i + 1;
+      if (j < n && line.at(j) == QLatin1Char('-'))
+        ++j;
+      const int numStart = i + 1;
+      bool sawDigit = false;
+      while (j < n && line.at(j).isDigit())
+      {
+        sawDigit = true;
+        ++j;
+      }
+      if (!sawDigit)
+        continue;
+      if (j < n && line.at(j) == QLatin1Char('.'))
+      {
+        int k = j + 1;
+        while (k < n && line.at(k).isDigit())
+          ++k;
+        if (k > j + 1)
+          j = k;
+      }
+      if (j < n && line.at(j).isLetterOrNumber())
+        continue; // trailing word character: the old \b anchor rejected this
+      bool ok = false;
+      const float v = line.mid(numStart, j - numStart).toFloat(&ok);
+      if (ok)
+        return v;
+    }
+    return -1.f;
   }
 
   float parseSValue(const QString &line)
   {
-    const QRegularExpression re(QStringLiteral("\\bS(-?\\d+(?:\\.\\d+)?)\\b"));
-    const auto m = re.match(line);
-    if (!m.hasMatch())
-      return -1.f;
-    bool ok = false;
-    const float v = m.captured(1).toFloat(&ok);
-    return ok ? v : -1.f;
+    return parseWordFloatValue(line, QLatin1Char('S'));
   }
 
   float parseFValue(const QString &line)
   {
-    const QRegularExpression re(QStringLiteral("\\bF(-?\\d+(?:\\.\\d+)?)\\b"));
-    const auto m = re.match(line);
-    if (!m.hasMatch())
-      return -1.f;
-    bool ok = false;
-    const float v = m.captured(1).toFloat(&ok);
-    return ok ? v : -1.f;
+    return parseWordFloatValue(line, QLatin1Char('F'));
   }
 
   bool parseTaggedValue(const QString &line, const QString &tag, float &value)
   {
-    const QRegularExpression re(QStringLiteral("%1\\s*[:=]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))")
-                                     .arg(QRegularExpression::escape(tag)),
-                                 QRegularExpression::CaseInsensitiveOption);
-    const auto m = re.match(line);
+    // PERF(PREV-PARSE): the compiled pattern is cached per tag (the five call
+    // sites pass constant tags; the old code recompiled per call on every
+    // comment line).
+    static QHash<QString, QRegularExpression> patternCache;
+    auto it = patternCache.constFind(tag);
+    if (it == patternCache.constEnd())
+    {
+      it = patternCache.insert(
+          tag,
+          QRegularExpression(QStringLiteral("%1\\s*[:=]\\s*([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+))")
+                                 .arg(QRegularExpression::escape(tag)),
+                             QRegularExpression::CaseInsensitiveOption));
+    }
+    const auto m = it->match(line);
     if (!m.hasMatch())
       return false;
     bool ok = false;
@@ -1614,8 +1702,11 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         currentType = raw.mid(6).trimmed();
       else
       {
-        const QRegularExpression featureRe(QStringLiteral("^;\\s*FEATURE\\s*:\\s*(.+)$"),
-                                           QRegularExpression::CaseInsensitiveOption);
+        // PERF(PREV-PARSE): constant pattern, compiled once (was rebuilt per
+        // comment line).
+        static const QRegularExpression featureRe(
+            QStringLiteral("^;\\s*FEATURE\\s*:\\s*(.+)$"),
+            QRegularExpression::CaseInsensitiveOption);
         const auto featureMatch = featureRe.match(raw);
         if (featureMatch.hasMatch())
           currentType = featureMatch.captured(1).trimmed();
@@ -2165,7 +2256,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     }
 
     if (extruding)
-      featureCount_[QString::fromUtf8(kRoleLabels[role])] += 1;
+      featureCount_[roleLabel(role)] += 1;
     else
       featureCount_[kindFeatureLabel(kind)] += 1;
     m_kindCounts[kind] += 1;
