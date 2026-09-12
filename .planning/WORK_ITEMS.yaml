@@ -1460,12 +1460,11 @@ items:
       keyboard I/O zoom and Tab page switch, and the status clock advances.
       Known deviation: vsync-aligned frame pacing is replaced by the ~5 ms
       timer fallback (pre-6.10 Qt behavior); acceptable for a slicer and
-      strictly better than no presentation. Follow-up (non-blocking):
-      clicking the 3D viewport steals active focus from the page-level
-      Keys.onPressed handler, so hotkeys (I/O zoom, Tab) go dead until
-      focus returns to the page — upstream keeps canvas key handling alive
-      after canvas clicks; needs a focus-forwarding pass in the viewport
-      item.
+      strictly better than no presentation. The earlier follow-up note
+      blaming viewport clicks was wrong (RhiViewport has no focus calls and
+      a plain QQuickItem press does not take active focus): the focus-map
+      experiment proved topbar/sidebar CONTROL clicks take active focus and
+      kill the page-level Keys.onPressed. Resolved by CANVAS-FOCUS-KEYS.
     evidence:
       gate: canonical gate 2026-09-12 -- exit 0, 12 suites 0 failed
         (rebuild includes the fix); interactive A/B evidence in
@@ -1475,3 +1474,88 @@ items:
         /tmp/clean_t3.txt (clean freeze reproduced)
       commit: b72ec2f (fix(qpa): default QT_D3D_NO_VBLANK_THREAD=1 ...)
       last_verified: 2026-09-12
+
+  - id: CANVAS-FOCUS-KEYS
+    title: Canvas hotkeys dead at fresh launch and after clicking any toolbar/sidebar control
+    aliases: ["HOTKEY-FWD", "HOTKEY-FOCUS-FORWARD"]
+    area: Shell/Shortcuts
+    priority: P1
+    status: resolved
+    resolved: 2026-09-13
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes:
+      Root cause established by instrumentation (KEYTRACE console probes +
+      a 6 s activeFocusItem tick probe on a fresh launch): at startup the
+      activeFocusItem is the PLATER ROOT (Plater.qml root focus:true wins the
+      initial grab), which has no Keys handler -- letter keys never reached
+      the page-root Keys.onPressed. A second empirical finding killed the
+      first fix attempt: a Keys attached handler on the ApplicationWindow is
+      silently never invoked for unhandled keys in Qt 6.10 (installed without
+      warning, zero traces on keypress), so window-level forwarding is not a
+      viable mechanism. Theory correction: upstream plater letter keys are
+      CANVAS events (GLCanvas3D receives wxEVT_CHAR as the focused child; a
+      wx sidebar control holding focus swallows them too) -- NOT the main
+      frame accelerator table as first assumed. Therefore the parity contract
+      is canvas-focus semantics, not focus-independent forwarding. Final fix
+      (canvas-focus model): PreparePage/PreviewPage claim activeFocus via
+      onVisibleChanged + a deferred timer whenever they become visible
+      (covers fresh launch, page switches, popup close); RhiViewport and
+      SoftwareViewport call forceActiveFocus() in mousePressEvent (upstream
+      GLCanvas mouse-down grabs focus); Tab/Shift+Tab remain window
+      Shortcuts gated on !textEditHoldFocus because focus navigation eats
+      Tab before item Keys; Plater routes nothing (the focused page owns its
+      table). Consequence accepted as upstream parity: after clicking a
+      topbar/sidebar control the letter keys go dead until the canvas is
+      clicked or the page visibility changes -- same as upstream.
+      GUI acceptance (build/acc_canvasfocus.ps1, screenshots acc_shots/CF_*):
+      viewport-click I zoom True; button-focus I produces no zoom (parity);
+      canvas click revives I zoom; button-focus Tab switches page; plus
+      acc_freshkeys2.ps1 fresh-launch no-click I zoom + Tab True.
+    evidence:
+      gate: canonical gate 2026-09-13 incl.
+        QmlUiAuditTests::platerHotkeysFollowCanvasFocus locking the design
+        (page key functions + Keys delegation + visible focus claims,
+        viewport forceActiveFocus on mouse-down, no window Keys forwarding,
+        Tab/Shift+Tab Shortcuts gated on textEditHoldFocus);
+        platerHotkeysMatchUpstreamTable Tab assertion reads main.qml;
+        GUI acceptance build/acc_canvasfocus.ps1 + acc_shots/CF_*,
+        build/acc_freshkeys2.ps1 + acc_shots/FK2_*
+      commit: aaa6f13 (fix(hotkeys): canvas-focus model -- pages claim
+        active focus, viewports grab it on mouse-down)
+      last_verified: 2026-09-13
+
+  - id: PERF-STAGE-BENCH
+    title: Efficiency self-test infrastructure (PerfBench orphaned, no target/harness/baseline)
+    aliases: ["PERF"]
+    area: Tooling/Perf
+    priority: P2
+    status: resolved
+    resolved: 2026-09-13
+    implementation: real
+    parity: not_applicable
+    verification: pass
+    availability: available
+    notes:
+      tests/PerfBench.cpp existed but was unbuildable and unrunnable: no
+      CMake target, no scripts/perf/run_stage_bench.ps1 (its documented
+      harness), no scripts/perf/gen_benchmark_models.py (the model
+      generator its failure message demands), no docs/perf-baseline.md.
+      Wired the PerfBench target into CMakeLists.txt (owzx_app_core link
+      surface, same as PreviewParserTests; deliberately NOT in the
+      pass/fail gate), added the generator (binary-STL UV spheres 400k/2m/
+      5m + a 20-shell spread grid) and the run_stage_bench.ps1 harness
+      (OWZX_PERF_LOG=1, PERF_BENCH_MODELS_DIR, JSON stage report). Standing
+      rule recorded in AGENTS.md Self-Test Standing Rules: re-run the
+      efficiency self-test after perf-relevant changes; per-stage times
+      must not regress beyond ~10% vs docs/perf-baseline.md.
+    evidence:
+      gate: first baseline run recorded in docs/perf-baseline.md from
+        build/perf_out/stage_report.json (2026-09-13); PerfBench target
+        builds through the canonical verify script (Invoke-NinjaTarget
+        'PerfBench')
+      commit: 5c88096 (feat(perf): PerfBench stage-benchmark
+        infrastructure + first efficiency baseline)
+      last_verified: 2026-09-13
