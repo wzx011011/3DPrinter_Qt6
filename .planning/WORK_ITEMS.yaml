@@ -1559,3 +1559,42 @@ items:
       commit: 5c88096 (feat(perf): PerfBench stage-benchmark
         infrastructure + first efficiency baseline)
       last_verified: 2026-09-13
+
+  - id: PREVIEW-PARSE-REGEX-HOTSPOT
+    title: Preview gcode re-parse took 72s on the 400k bench model (per-call QRegularExpression compiles)
+    aliases: ["PREV-PARSE", "PREVIEW-PARSE"]
+    area: Preview/Parser
+    priority: P1
+    status: resolved
+    resolved: 2026-09-13
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes:
+      First efficiency baseline flagged preview_parse_ms = 72147 on the 400k
+      sphere (11 MB / 387k-line gcode; ~186us per line -- orders above any
+      sane per-line cost). Root cause: the PreviewViewModel parse helpers
+      parseAxis / parseSValue / parseFValue built AND compiled a
+      QRegularExpression on EVERY call; the G1 hot path calls them 5x per
+      move (X/Y/Z/E/F), so ~1.88M pattern compilations at ~38us each
+      account for the full 72s. Secondary per-move waste: roleForTypeImpl
+      built up to 20 QStrings per call (2-3 calls/move), featureCount labels
+      allocated per extruding move, and the comment-branch FEATURE regex +
+      parseTaggedValue recompiled per comment line. Fix keeps semantics
+      identical (PreviewParserTests + E2EWorkflowTests gate the behavior):
+      hand-rolled axis/word-float scanners preserving the old pattern
+      anchors ((?:^|\s)X(sign? digits/dot) and \bS/F(-?digits)\b), a
+      per-tag pattern cache in parseTaggedValue, a hoisted constant FEATURE
+      regex, a one-time role hash for roleForTypeImpl, and one-time role
+      label strings. Result: preview_parse_ms 72147 -> 850 (~85x); all
+      stable anchors unchanged (meshdata 23ms, expand 37ms, pick p50
+      7.37ms -- within noise). docs/perf-baseline.md updated; preview parse
+      now treated as a stable anchor metric.
+    evidence:
+      gate: canonical gate 2026-09-13 (see commit) incl. PreviewParserTests
+        + E2EWorkflowTests; efficiency self-test stage_report.json
+        preview_parse_ms 850 (was 72147 baseline, docs/perf-baseline.md)
+      commit: 1de4a69 (perf(preview): cut gcode re-parse 72s -> 0.85s
+        (per-call regex compilation))
+      last_verified: 2026-09-13
