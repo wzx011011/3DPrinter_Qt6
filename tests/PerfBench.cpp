@@ -22,9 +22,11 @@
 #include <QSignalSpy>
 #include <QtTest>
 
+#include <algorithm>
 #include <cmath>
 
 #include "core/rendering/ObjectPicking.h"
+#include "core/rendering/PickingRaycaster.h"
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
@@ -152,24 +154,60 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     const QVector3D center((cminX + cmaxX) * 0.5f, (cminY + cmaxY) * 0.5f,
                            (cminZ + cmaxZ) * 0.5f);
 
+    // PICK-BVH: the production paths pick through the scene's cached
+    // PickingRaycaster (PrepareSceneData::pickingRaycaster, upstream
+    // MeshRaycaster counterpart). The build is one-off per scene revision;
+    // every ray then descends the BVH. The brute-force ObjectPicking::pick
+    // sweep stays in the loop as the per-ray parity reference.
     const int kRayCount = 32;
+    timer.start();
+    PickingRaycaster *raycaster = scene.pickingRaycaster();
+    const qint64 buildMs = timer.elapsed();
+    modelReport[QStringLiteral("pick_build_ms")] = double(buildMs);
+    modelReport[QStringLiteral("pick_bvh_nodes")] =
+        double(raycaster->nodeCount());
+    qInfo("[BENCH] %-24s %8.1f ms | tris=%d nodes=%d",
+          "pick_build", double(buildMs), raycaster->triangleCount(),
+          raycaster->nodeCount());
+
     int hits = 0;
+    int parityMismatches = 0;
     QVector<double> rayMs;
     timer.start();
     for (int i = 0; i < kRayCount; ++i) {
-      QElapsedTimer rayTimer;
-      rayTimer.start();
       const float angle = float(i) * (2.0f * float(M_PI) / kRayCount);
       const QVector3D origin(center.x() + 200.0f * std::cos(angle),
                              center.y() + 150.0f,
                              center.z() + 200.0f * std::sin(angle));
       const QVector3D direction = (center - origin).normalized();
-      const ObjectPicking::Hit hit =
+      const ObjectPicking::Hit brute =
           ObjectPicking::pick(origin, direction, scene.modelVertices(),
                               scene.modelBatches());
+      QElapsedTimer rayTimer;
+      rayTimer.start();
+      const ObjectPicking::Hit hit = raycaster->pick(
+          origin, direction, scene.modelVertices(), scene.modelBatches());
       rayMs.append(double(rayTimer.nsecsElapsed()) / 1e6);
       if (hit.isValid())
         ++hits;
+
+      const bool sameIdentity = hit.isValid() == brute.isValid()
+          && hit.sourceObjectIndex == brute.sourceObjectIndex
+          && hit.volumeIndex == brute.volumeIndex
+          && hit.instanceIndex == brute.instanceIndex;
+      const float tolerance = 1e-3f * std::max(1.0f, brute.distance);
+      const bool sameGeometry = !brute.isValid()
+          || (std::abs(hit.distance - brute.distance) <= tolerance
+              && (hit.position - brute.position).length() <= tolerance);
+      if (!sameIdentity || !sameGeometry) {
+        ++parityMismatches;
+        qWarning("[BENCH] pick parity mismatch on ray %d: bvh(obj=%d vol=%d "
+                 "inst=%d t=%f) brute(obj=%d vol=%d inst=%d t=%f)",
+                 i, hit.sourceObjectIndex, hit.volumeIndex,
+                 hit.instanceIndex, double(hit.distance),
+                 brute.sourceObjectIndex, brute.volumeIndex,
+                 brute.instanceIndex, double(brute.distance));
+      }
     }
     const qint64 sweepMs = timer.elapsed();
     std::sort(rayMs.begin(), rayMs.end());
@@ -181,8 +219,11 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     modelReport[QStringLiteral("pick_ray_p50_ms")] = p50;
     modelReport[QStringLiteral("pick_ray_p95_ms")] = p95;
     modelReport[QStringLiteral("pick_hits")] = hits;
-    qInfo("[BENCH] %-24s %8.1f ms | p50=%6.3f p95=%6.3f hits=%d/%d",
-          "pick_sweep", double(sweepMs), p50, p95, hits, kRayCount);
+    modelReport[QStringLiteral("pick_parity")] =
+        parityMismatches == 0 ? 1.0 : 0.0;
+    qInfo("[BENCH] %-24s %8.1f ms | p50=%6.3f p95=%6.3f hits=%d/%d "
+          "parity=%s", "pick_sweep", double(sweepMs), p50, p95, hits,
+          kRayCount, parityMismatches == 0 ? "ok" : "MISMATCH");
   }
 
   // ── Stage 5: slice + preview parse (400k tier only by default) ─────────

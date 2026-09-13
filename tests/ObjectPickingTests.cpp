@@ -17,9 +17,13 @@
 
 #include "core/rendering/GizmoMath.h"
 #include "core/rendering/ObjectPicking.h"
+#include "core/rendering/PickingRaycaster.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
 
 #include <algorithm>
+
+#include <array>
+#include <cmath>
 
 namespace
 {
@@ -60,21 +64,23 @@ namespace
     return bytes;
   }
 
-  PrepareSceneData sceneFromTriangles(const QList<int> &sourceObjectIndices,
-                                      const QList<QList<float>> &triangles)
+  // PrepareSceneData is intentionally non-copyable (it carries the full
+  // expanded vertex lists), so scene-building helpers fill a caller-owned
+  // scene instead of returning one.
+  void fillTriangleScene(PrepareSceneData &scene,
+                         const QList<int> &sourceObjectIndices,
+                         const QList<QList<float>> &triangles)
   {
     QList<int> objectIds;
     objectIds.reserve(sourceObjectIndices.size());
     for (int i = 0; i < sourceObjectIndices.size(); ++i)
       objectIds.append(100 + i);
 
-    PrepareSceneData scene;
     scene.clearDirtyFlags();
     scene.setPlateContext(0, 1, sourceObjectIndices);
     scene.setModelMeshData(packedMeshWithTriangles(objectIds, triangles),
                            sourceObjectIndices,
                            sourceObjectIndices);
-    return scene;
   }
 
   PrepareSceneData::ModelBounds boundsFor(const QList<PrepareSceneData::ModelVertex> &vertices,
@@ -97,6 +103,67 @@ namespace
       bounds.maxZ = std::max(bounds.maxZ, v.z);
     }
     return bounds;
+  }
+
+  // PICK-BVH: full nearest-hit parity between the BVH raycaster and the
+  // brute-force sweep for one ray.
+  void assertRaycasterParity(const PrepareSceneData &scene,
+                             const QVector3D &origin,
+                             const QVector3D &direction)
+  {
+    PickingRaycaster raycaster;
+    raycaster.build(scene.modelVertices(), scene.modelBatches());
+    const ObjectPicking::Hit brute = ObjectPicking::pick(
+        origin, direction, scene.modelVertices(), scene.modelBatches());
+    const ObjectPicking::Hit fast = raycaster.pick(
+        origin, direction, scene.modelVertices(), scene.modelBatches());
+
+    QCOMPARE(fast.isValid(), brute.isValid());
+    QCOMPARE(fast.sourceObjectIndex, brute.sourceObjectIndex);
+    QCOMPARE(fast.volumeIndex, brute.volumeIndex);
+    QCOMPARE(fast.instanceIndex, brute.instanceIndex);
+    if (!brute.isValid())
+      return;
+    const float tolerance = 1e-4f * std::max(1.0f, brute.distance);
+    QVERIFY(std::abs(fast.distance - brute.distance) <= tolerance);
+    QVERIFY((fast.position - brute.position).length() <= 1e-3f);
+  }
+
+  // Deterministic LCG scene: `batchCount` overlapping boxes of ~`trisPerBox`
+  // big triangles each, scene bbox roughly [0,10] x [0,10] x [0,4.5].
+  void fillRandomBoxesScene(PrepareSceneData &scene, int batchCount,
+                            int trisPerBox)
+  {
+    quint32 seed = 0x12345678u;
+    const auto nextFloat = [&seed](float lo, float hi) {
+      seed = seed * 1664525u + 1013904223u;
+      return lo + float((seed >> 8) & 0xFFFFu) / 65535.0f * (hi - lo);
+    };
+
+    QByteArray mesh;
+    QList<int> objectIds;
+    appendInt32(mesh, batchCount);
+    for (int b = 0; b < batchCount; ++b) {
+      objectIds.append(900 + b);
+      const float ox = nextFloat(0.0f, 6.0f);
+      const float oy = nextFloat(0.0f, 6.0f);
+      const float oz = nextFloat(0.0f, 3.0f);
+      appendInt32(mesh, 900 + b);
+      appendInt32(mesh, trisPerBox);
+      for (int t = 0; t < trisPerBox; ++t) {
+        for (int v = 0; v < 3; ++v) {
+          appendFloat(mesh, ox + nextFloat(0.0f, 4.0f));
+          appendFloat(mesh, oy + nextFloat(0.0f, 4.0f));
+          appendFloat(mesh, oz + nextFloat(0.0f, 1.5f));
+        }
+      }
+    }
+    for (float value : {-20.0f, -20.0f, -20.0f, 40.0f, 40.0f, 40.0f})
+      appendFloat(mesh, value);
+
+    scene.clearDirtyFlags();
+    scene.setPlateContext(0, 1, QList<int>{});
+    scene.setModelMeshData(mesh, objectIds, objectIds);
   }
 
   struct LookDownZ
@@ -134,11 +201,16 @@ private slots:
   void nearestTriangleHitCarriesVolumeAndInstanceIdentity();
   void invalidAndDegenerateBatchesAreIgnored();
   void screenRayUsesGizmoMathAndSceneVertices();
+  void raycasterMatchesBruteForceOnCraftedScenes();
+  void raycasterMatchesBruteForceOnRandomScene();
+  void raycasterNeverHitsInvalidBatchTriangles();
+  void sceneRaycasterRebuildsAfterMeshChange();
 };
 
 void ObjectPickingTests::aabbHitTriangleMissDoesNotPickObject()
 {
-  const PrepareSceneData scene = sceneFromTriangles(
+  PrepareSceneData scene;
+  fillTriangleScene(scene,
       QList<int>{7},
       QList<QList<float>>{
           QList<float>{0.0f, 0.0f, 0.0f,
@@ -156,7 +228,8 @@ void ObjectPickingTests::aabbHitTriangleMissDoesNotPickObject()
 
 void ObjectPickingTests::nearestTriangleHitWinsAcrossBatches()
 {
-  const PrepareSceneData scene = sceneFromTriangles(
+  PrepareSceneData scene;
+  fillTriangleScene(scene,
       QList<int>{4, 7},
       QList<QList<float>>{
           QList<float>{0.0f, 0.0f, 2.0f,
@@ -236,7 +309,8 @@ void ObjectPickingTests::screenRayUsesGizmoMathAndSceneVertices()
       camera.projMatrix(),
       camera.viewMatrix());
 
-  const PrepareSceneData scene = sceneFromTriangles(
+  PrepareSceneData scene;
+  fillTriangleScene(scene,
       QList<int>{42},
       QList<QList<float>>{
           QList<float>{-1.0f, -1.0f, 0.0f,
@@ -250,6 +324,144 @@ void ObjectPickingTests::screenRayUsesGizmoMathAndSceneVertices()
       scene.modelBatches());
 
   QCOMPARE(hit, 42);
+}
+
+void ObjectPickingTests::raycasterMatchesBruteForceOnCraftedScenes()
+{
+  // Two overlapping batches, nearest-hit across batch order.
+  PrepareSceneData twoBatch;
+  fillTriangleScene(twoBatch,
+      QList<int>{4, 7},
+      QList<QList<float>>{
+          QList<float>{0.0f, 0.0f, 2.0f, 1.0f, 0.0f, 2.0f, 0.0f, 1.0f, 2.0f},
+          QList<float>{0.0f, 0.0f, 5.0f, 1.0f, 0.0f, 5.0f, 0.0f, 1.0f, 5.0f}});
+
+  // One batch whose triangle spans a wide area (exercises leaf splitting).
+  PrepareSceneData wide;
+  fillTriangleScene(wide,
+      QList<int>{42},
+      QList<QList<float>>{
+          QList<float>{-30.0f, -30.0f, 0.0f, 30.0f, -30.0f, 0.0f,
+                       30.0f, 30.0f, 0.0f}});
+
+  for (float x = -2.0f; x <= 2.0f; x += 0.5f) {
+    for (float y = -2.0f; y <= 2.0f; y += 0.5f) {
+      assertRaycasterParity(twoBatch,
+                            QVector3D(x, y, 10.0f),
+                            QVector3D(0.0f, 0.0f, -1.0f));
+      assertRaycasterParity(wide,
+                            QVector3D(x, y, 10.0f),
+                            QVector3D(0.0f, 0.0f, -1.0f));
+    }
+  }
+  // Oblique rays against the wide triangle.
+  assertRaycasterParity(wide,
+                        QVector3D(-40.0f, 5.0f, 20.0f),
+                        QVector3D(1.0f, -0.1f, -1.0f));
+  assertRaycasterParity(wide,
+                        QVector3D(40.0f, -5.0f, 20.0f),
+                        QVector3D(-1.0f, 0.1f, -1.0f));
+}
+
+void ObjectPickingTests::raycasterMatchesBruteForceOnRandomScene()
+{
+  PrepareSceneData scene;
+  fillRandomBoxesScene(scene, 5, 60);
+
+  PickingRaycaster raycaster;
+  raycaster.build(scene.modelVertices(), scene.modelBatches());
+  QVERIFY(raycaster.isValid());
+  QCOMPARE(raycaster.triangleCount(), 5 * 60);
+  QVERIFY(raycaster.nodeCount() > 0);
+
+  quint32 raySeed = 0xDEADBEEFu;
+  for (int i = 0; i < 24; ++i) {
+    raySeed = raySeed * 1664525u + 1013904223u;
+    const float ox = float((raySeed >> 8) & 0xFFu) / 255.0f * 24.0f - 12.0f;
+    raySeed = raySeed * 1664525u + 1013904223u;
+    const float oy = float((raySeed >> 8) & 0xFFu) / 255.0f * 24.0f - 12.0f;
+    raySeed = raySeed * 1664525u + 1013904223u;
+    const float oz = float((raySeed >> 8) & 0xFFu) / 255.0f * 12.0f + 8.0f;
+    assertRaycasterParity(scene,
+                          QVector3D(ox, oy, oz),
+                          QVector3D(0.05f, 0.0f, -1.0f));
+  }
+}
+
+void ObjectPickingTests::raycasterNeverHitsInvalidBatchTriangles()
+{
+  // Same situation as invalidAndDegenerateBatchesAreIgnored: the batch
+  // carries a geometrically hittable triangle but an invalid identity, so it
+  // must never enter the BVH.
+  QList<PrepareSceneData::ModelVertex> vertices;
+  vertices << PrepareSceneData::ModelVertex{0.0f, 0.0f, 3.0f, 1.0f, 1.0f, 1.0f, 1.0f}
+           << PrepareSceneData::ModelVertex{1.0f, 0.0f, 3.0f, 1.0f, 1.0f, 1.0f, 1.0f}
+           << PrepareSceneData::ModelVertex{0.0f, 1.0f, 3.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+
+  QList<PrepareSceneData::ModelBatch> batches;
+  batches << PrepareSceneData::ModelBatch{101, -1, -1, -1, 0, 3,
+                                          boundsFor(vertices, 0, 3)};
+
+  PickingRaycaster raycaster;
+  raycaster.build(vertices, batches);
+  QVERIFY(!raycaster.isValid());
+
+  const ObjectPicking::Hit hit = raycaster.pick(
+      QVector3D(0.25f, 0.25f, 10.0f), QVector3D(0.0f, 0.0f, -1.0f),
+      vertices, batches);
+  QVERIFY(!hit.isValid());
+}
+
+void ObjectPickingTests::sceneRaycasterRebuildsAfterMeshChange()
+{
+  // Empty scene: valid empty raycaster, no hit, no crash.
+  PrepareSceneData scene;
+  PickingRaycaster *raycaster = scene.pickingRaycaster();
+  QVERIFY(raycaster != nullptr);
+  QVERIFY(!raycaster->isValid());
+  QVERIFY(!scene
+               .pickingRaycaster()
+               ->pick(QVector3D(0.0f, 0.0f, 5.0f),
+                      QVector3D(0.0f, 0.0f, -1.0f),
+                      scene.modelVertices(), scene.modelBatches())
+               .isValid());
+
+  // First mesh: one triangle of object 11.
+  const QList<int> firstObjects{11};
+  const QList<QList<float>> firstTris{
+      QList<float>{0.0f, 0.0f, 2.0f, 1.0f, 0.0f, 2.0f, 0.0f, 1.0f, 2.0f}};
+  scene.clearDirtyFlags();
+  scene.setPlateContext(0, 1, firstObjects);
+  scene.setModelMeshData(packedMeshWithTriangles(QList<int>{100}, firstTris),
+                         firstObjects, firstObjects);
+  QCOMPARE(scene.pickingRaycaster()->triangleCount(), 1);
+  QCOMPARE(scene.pickingRaycaster()
+               ->pick(QVector3D(0.25f, 0.25f, 10.0f),
+                      QVector3D(0.0f, 0.0f, -1.0f),
+                      scene.modelVertices(), scene.modelBatches())
+               .sourceObjectIndex,
+           11);
+
+  // Replacement mesh (same scene object): the cached tree must reflect the
+  // new geometry, not the first mesh.
+  const QList<int> secondObjects{13};
+  const QList<QList<float>> secondTris{
+      QList<float>{5.0f, 5.0f, 1.0f, 6.0f, 5.0f, 1.0f, 5.0f, 6.0f, 1.0f}};
+  scene.clearDirtyFlags();
+  scene.setPlateContext(0, 1, secondObjects);
+  scene.setModelMeshData(packedMeshWithTriangles(QList<int>{200}, secondTris),
+                         secondObjects, secondObjects);
+  const ObjectPicking::Hit moved = scene.pickingRaycaster()->pick(
+      QVector3D(0.25f, 0.25f, 10.0f), QVector3D(0.0f, 0.0f, -1.0f),
+      scene.modelVertices(), scene.modelBatches());
+  QVERIFY(!moved.isValid());
+  QCOMPARE(scene.pickingRaycaster()->triangleCount(), 1);
+  QCOMPARE(scene.pickingRaycaster()
+               ->pick(QVector3D(5.5f, 5.5f, 10.0f),
+                      QVector3D(0.0f, 0.0f, -1.0f),
+                      scene.modelVertices(), scene.modelBatches())
+               .sourceObjectIndex,
+           13);
 }
 
 QTEST_MAIN(ObjectPickingTests)

@@ -1,6 +1,7 @@
 #include "SoftwareViewport.h"
 
 #include "core/rendering/ObjectPicking.h"
+#include "core/rendering/PickingRaycaster.h"
 
 #include <QBuffer>
 #include <QMouseEvent>
@@ -1049,7 +1050,9 @@ ViewportContextHit SoftwareViewport::classifyContextAt(const QPointF &position)
   const QVector3D localOrigin(rotatedX, rotatedY, -10000.0f);
   const QVector3D rayOrigin = m_center + inverseRotatePoint(localOrigin);
   const QVector3D rayDirection = inverseRotatePoint(QVector3D(0.0f, 0.0f, 1.0f)).normalized();
-  const ObjectPicking::Hit objectHit = ObjectPicking::pick(
+  // PICK-BVH: BVH-backed pick over the picking scene
+  // (PrepareSceneData::pickingRaycaster).
+  const ObjectPicking::Hit objectHit = m_pickScene.pickingRaycaster()->pick(
       rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
   if (objectHit.isValid()) {
     result.target = ViewportContextTarget::Part;

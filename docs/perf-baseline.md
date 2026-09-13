@@ -27,7 +27,8 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
 | load (STL import + ProjectService) | load_ms | 1306 |
 | meshData 序列化 | meshdata_ms / bytes | 22 / 14.3 MB |
 | scene expand（PrepareSceneData 顶点展开） | scene_expand_ms / verts | 28 / 1,194,480 |
-| ObjectPicking::pick 32-ray sweep | p50 / p95 / sweep / hits | 6.58 / 12.43 / 239 / 32/32 |
+| picking BVH 构建（一次性，懒建） | pick_build_ms / nodes | 406 / 133,597 |
+| BVH pick 32-ray sweep | p50 / p95 / hits / parity | **0.0077** / 0.0111 / 32/32 / ok |
 | slice（libslic3r 全切片） | slice_ms | 1692 |
 | preview parse（GUI 线程 gcode 重解析） | preview_parse_ms | **850**（2026-09-13 修复后；修复前 72147） |
 | 峰值内存 | after expand / after preview | 100 / 383 MiB |
@@ -39,8 +40,13 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
 | load | load_ms | 6924 |
 | meshData 序列化 | meshdata_ms / bytes | 121 / 71.9 MB |
 | scene expand | scene_expand_ms / verts | 174 / 5,989,704 |
-| ObjectPicking::pick 32-ray sweep | p50 / p95 / sweep / hits | 33.55 / 41.43 / 1111 / 32/32 |
-| 峰值内存 | after expand | 495 MiB |
+| picking BVH 构建（一次性，懒建） | pick_build_ms / nodes | 2316 / 692,919 |
+| BVH pick 32-ray sweep | p50 / p95 / hits / parity | **0.0098** / 0.0139 / 32/32 / ok |
+| 峰值内存 | after expand | 495 MiB（BVH 另占 ~50 MiB，首次 pick 后） |
+
+注：`pick_sweep_ms` 自 BVH 轮起包含 32 条 brute-force 对照射线
+（ObjectPicking::pick 逐条 parity 校验），不再等于纯加速后的扫描耗时，
+故回归判定只看 `pick_ray_p50/p95_ms` 与 `pick_hits`/`pick_parity`。
 
 ## 已知热点与结论
 
@@ -50,8 +56,15 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
   gcode 产生 ~190 万次模式编译（~38µs/次 ≈ 72s）。修复为手写扫描 +
   常量模式缓存 + role 标签/映射哈希一次性构建，语义保持不变
   （PreviewParserTests 门禁覆盖）。
-- pick 已走生产路径 `ObjectPicking::pick`（AABB 预过滤 + Moller-Trumbore），
-  400k p50 6.6ms 可接受；2m 模型 p50 33.6ms 提示后续可引入空间加速结构。
+- **大模型拾取已加速**（2026-09-13，2m pick p50 33.55ms → 0.0098ms，
+  ~3400x）。`PrepareSceneData::pickingRaycaster()` 懒建 binned-SAH BVH
+  （PickingRaycaster，上游逐 volume `GUI::MeshRaycaster` AABB 树的对位实现，
+  MeshUtils.hpp:159），RhiViewport/SoftwareViewport 全部 4 个生产 pick
+  调用点已切换；`ObjectPicking::pick` 保留为 brute-force 参照，测试与
+  PerfBench 逐射线断言最近命中完全一致。BVH 构建是每次 mesh 修订后
+  首次 pick 的一次性成本（与上游懒建 raycaster 成本结构一致），
+  摊销：2m 模型构建 2.3s ≈ 70 次 33ms 的 brute-force pick，悬停
+  每次鼠标移动都会 pick，交互开始后即纯收益。
 - 场景展开与 meshData 序列化随三角形数线性扩展，量级正常。
 
 ## 噪声特性（2026-09-13 三轮复测结论）
@@ -59,8 +72,11 @@ verify script target list, resolves the Qt bin dir from CMakeCache, runs
 同一二进制连续三轮复测（基线轮 + 门禁后两轮）：
 
 - **稳定锚点**（轮间波动 <5%，作为回归判定依据）：`meshdata_ms`、
-  `scene_expand_ms`、`pick_ray_p50/p95_ms`、`scene_vertex_count`、
-  `meshdata_bytes`。三轮 pick p50 = 6.58 / 6.53 / 6.65。
+  `scene_expand_ms`、`pick_ray_p50/p95_ms`、`pick_build_ms`、
+  `pick_hits`、`pick_parity`、`scene_vertex_count`、
+  `meshdata_bytes`。三轮 pick p50 = 6.58 / 6.53 / 6.65（brute-force 轮）；
+  BVH 轮起 pick p50 进入 ~0.01ms 量级，构建耗时为确定性 CPU 工作，
+  同样按稳定锚点对待。
 - **易变墙钟指标**（随系统负载波动 1.5–2.5 倍，不作单次回归判定）：
   `load_ms`（1306→2568→3508）、`slice_ms`（1692→1872→3567）。
   受磁盘缓存/杀软扫描/后台进程影响明显，复测时应等待系统安静，

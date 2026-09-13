@@ -6,6 +6,11 @@
 #include <QVector4D>
 #include <QtGlobal>
 
+#include <memory>
+
+class PickingRaycaster;
+
+
 class PrepareSceneData
 {
 public:
@@ -104,6 +109,11 @@ public:
   };
 
   PrepareSceneData();
+  // PICK-BVH: movable, non-copyable. Moves are what keep scene builders
+  // ergonomic without ever duplicating the (large) expanded vertex lists;
+  // the shared_ptr member tolerates the incomplete raycaster type.
+  PrepareSceneData(PrepareSceneData &&) = default;
+  PrepareSceneData &operator=(PrepareSceneData &&) = default;
 
   void setBed(float widthMm,
               float depthMm,
@@ -227,6 +237,14 @@ public:
   const QList<ModelBatch> &modelBatches() const;
   const ModelBounds &modelBounds() const;
   bool hasModelBounds() const;
+  // PICK-BVH: BVH-accelerated nearest-triangle pick over the current model
+  // batches -- the Qt6 counterpart of the upstream per-volume
+  // GUI::MeshRaycaster AABB tree (MeshUtils.hpp:159). The tree is rebuilt
+  // lazily on the first pick after every mesh revision (setModelMeshData /
+  // clearModelGeometry drop it); input handling and nearest-hit semantics are
+  // identical to ObjectPicking::pick. Returns null never: an empty scene
+  // yields a valid-but-empty raycaster whose pick reports no hit.
+  PickingRaycaster *pickingRaycaster();
   int selectedSourceObjectIndex() const;
   // P15.11 (MULTICENTER): full multi-selection index list (sorted).
   const QList<int> &selectedSourceObjectIndices() const;
@@ -321,4 +339,9 @@ private:
   PrintVolume m_printVolume;
   bool m_anyVolumeOutside = false;
   float m_printableHeight = 0.0f; // 0 = unbounded top clamp
+  // PICK-BVH: lazily built ray over the model batches; dropped whenever the
+  // mesh geometry is rebuilt (clearModelGeometry). shared_ptr (not
+  // unique_ptr) so the implicitly-defined, inline destructor works in every
+  // TU with PickingRaycaster incomplete.
+  std::shared_ptr<PickingRaycaster> m_pickingRaycaster;
 };

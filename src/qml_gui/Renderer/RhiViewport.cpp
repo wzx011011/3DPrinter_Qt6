@@ -4,6 +4,7 @@
 #include "core/rendering/GizmoMath.h"
 #include "core/rendering/NavigatorCube.h"
 #include "core/rendering/ObjectPicking.h"
+#include "core/rendering/PickingRaycaster.h"
 
 #include <QBuffer>
 #include <QByteArray>
@@ -1549,7 +1550,9 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
           viewSize,
           m_camera.projMatrix(aspect),
           m_camera.viewMatrix());
-      const ObjectPicking::Hit hit = ObjectPicking::pick(
+      // PICK-BVH: BVH-backed pick over the picking scene
+      // (PrepareSceneData::pickingRaycaster).
+      const ObjectPicking::Hit hit = m_pickScene.pickingRaycaster()->pick(
           rayOrigin, rayDirection,
           m_pickScene.modelVertices(), m_pickScene.modelBatches());
       if (hit.isValid())
@@ -2264,10 +2267,11 @@ int RhiViewport::pickSourceObjectAt(const QPointF &position)
       m_camera.projMatrix(aspect),
       m_camera.viewMatrix());
 
-  return ObjectPicking::pickSourceObject(rayOrigin,
-                                         rayDirection,
-                                         m_pickScene.modelVertices(),
-                                         m_pickScene.modelBatches());
+  // PICK-BVH: BVH-backed pick over the picking scene.
+  return m_pickScene.pickingRaycaster()
+      ->pick(rayOrigin, rayDirection,
+             m_pickScene.modelVertices(), m_pickScene.modelBatches())
+      .sourceObjectIndex;
 }
 
 ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
@@ -2285,7 +2289,8 @@ ViewportContextHit RhiViewport::classifyContextAt(const QPointF &position)
   const auto [rayOrigin, rayDirection] = GizmoMath::computeRay(
       float(position.x()), float(position.y()), viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
-  const ObjectPicking::Hit objectHit = ObjectPicking::pick(
+  // PICK-BVH: BVH-backed pick over the picking scene.
+  const ObjectPicking::Hit objectHit = m_pickScene.pickingRaycaster()->pick(
       rayOrigin, rayDirection, m_pickScene.modelVertices(), m_pickScene.modelBatches());
   if (objectHit.isValid()) {
     result.target = ViewportContextTarget::Part;

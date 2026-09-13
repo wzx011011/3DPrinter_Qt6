@@ -1935,12 +1935,14 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
            "ObjectPicking must stay free of renderer, QML item, and OpenGL dependencies");
 
   QVERIFY2(viewportSource.contains(QStringLiteral("#include \"core/rendering/ObjectPicking.h\""))
+               && viewportSource.contains(QStringLiteral("#include \"core/rendering/PickingRaycaster.h\""))
                && pickBody.contains(QStringLiteral("GizmoMath::computeRay"))
-               && pickBody.contains(QStringLiteral("ObjectPicking::pickSourceObject"))
+               && pickBody.contains(QStringLiteral("pickingRaycaster()"))
+               && pickBody.contains(QStringLiteral("->pick(rayOrigin, rayDirection"))
                && pickBody.contains(QStringLiteral("m_pickScene.modelVertices()"))
                && pickBody.contains(QStringLiteral("m_pickScene.modelBatches()"))
                && viewportSource.contains(QStringLiteral("emit objectPickedSource")),
-           "RhiViewport picking must stay in C++ and delegate precise mesh hits to ObjectPicking");
+           "RhiViewport picking must stay in C++ and delegate precise mesh hits to the BVH raycaster carrying ObjectPicking::Hit semantics");
   QVERIFY2(!pickBody.contains(QStringLiteral("projectBoundsToScreenRect(")),
            "RhiViewport precise picking must not select through projected AABB screen rectangles");
   QVERIFY2(viewportSource.contains(QStringLiteral("setHoveredSourceObjectIndex"))

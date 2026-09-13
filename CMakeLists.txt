@@ -227,6 +227,12 @@ if(OWZX_QML_GUI)
         src/core/rendering/AssembleViewDataPool.h
         src/core/rendering/ObjectPicking.cpp
         src/core/rendering/ObjectPicking.h
+        # PICK-BVH: binned-SAH BVH over the scene triangle soup (Qt6
+        # counterpart of the upstream per-volume MeshRaycaster AABB tree);
+        # shared math lives in the header-only PickingPrimitives.h.
+        src/core/rendering/PickingRaycaster.cpp
+        src/core/rendering/PickingRaycaster.h
+        src/core/rendering/PickingPrimitives.h
         # Phase 113 (MEASURE-02): pure-CPU ray-triangle intersection port.
         # MeshRaycaster wraps a shared_ptr<const indexed_triangle_set> (Phase
         # 112 volumeMeshIts output) over a libslic3r AABBMesh BVH; SceneRaycaster
@@ -617,6 +623,10 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         tests/PrepareSceneDataTests.cpp
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
+        # PICK-BVH: PrepareSceneData.cpp references the lazy raycaster.
+        src/core/rendering/PickingRaycaster.cpp
+        src/core/rendering/PickingRaycaster.h
+        src/core/rendering/PickingPrimitives.h
         src/qml_gui/Renderer/ViewportContextHit.h
     )
     target_include_directories(PrepareSceneDataTests PRIVATE src)
@@ -684,6 +694,9 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         tests/ObjectPickingTests.cpp
         src/core/rendering/ObjectPicking.cpp
         src/core/rendering/ObjectPicking.h
+        src/core/rendering/PickingRaycaster.cpp
+        src/core/rendering/PickingRaycaster.h
+        src/core/rendering/PickingPrimitives.h
         src/core/rendering/GizmoMath.cpp
         src/core/rendering/GizmoMath.h
         src/qml_gui/Renderer/PrepareSceneData.cpp

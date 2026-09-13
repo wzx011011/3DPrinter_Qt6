@@ -1,5 +1,7 @@
 #include "PrepareSceneData.h"
 
+#include "core/rendering/PickingRaycaster.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -115,6 +117,15 @@ PrepareSceneData::PrepareSceneData()
 {
   rebuildBedGeometry();
   markDirty(DirtyBed | DirtyGpu);
+}
+
+PickingRaycaster *PrepareSceneData::pickingRaycaster()
+{
+  if (!m_pickingRaycaster) {
+    m_pickingRaycaster = std::make_shared<PickingRaycaster>();
+    m_pickingRaycaster->build(m_modelVertices, m_modelBatches);
+  }
+  return m_pickingRaycaster.get();
 }
 
 void PrepareSceneData::setBed(float widthMm,
@@ -869,6 +880,10 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
 
 void PrepareSceneData::clearModelGeometry()
 {
+  // PICK-BVH: any geometry rebuild invalidates the picking tree; the next
+  // pick rebuilds it lazily (upstream MeshRaycaster is rebuilt the same way
+  // when a volume's mesh changes).
+  m_pickingRaycaster.reset();
   m_modelVertices.clear();
   m_modelBatches.clear();
   m_modelBounds = ModelBounds{};
