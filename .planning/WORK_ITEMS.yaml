@@ -1598,3 +1598,60 @@ items:
       commit: 1de4a69 (perf(preview): cut gcode re-parse 72s -> 0.85s
         (per-call regex compilation))
       last_verified: 2026-09-13
+
+  - id: PICK-BVH-RAYCASTER
+    title: Large-model picking was O(triangles) per ray (33.5ms p50 at 2M tris; upstream uses per-volume AABB trees)
+    aliases: ["PICK-BVH", "PICKING-PERF"]
+    area: Rendering/Picking
+    priority: P1
+    status: resolved
+    resolved: 2026-09-13
+    implementation: real
+    parity: aligned
+    verification: pass
+    availability: available
+    notes:
+      Second efficiency baseline flagged BVH pick 32-ray sweep p50 = 33.55ms
+      on the 2M-triangle bench model: ObjectPicking::pick ran
+      Moller-Trumbore over every triangle of every valid batch for EACH ray,
+      while hover picks fire on every mouse move. Upstream equivalently pays
+      O(log n) per ray via per-volume GUI::MeshRaycaster (MeshUtils.hpp:159)
+      with lazily built AABB trees. Fix: header-only PickingPrimitives math
+      extracted from ObjectPicking (identical epsilon semantics), a
+      binned-SAH BVH (8 bins x 3 axes, leaf<=8, maxdepth 64) in
+      PickingRaycaster reproducing ObjectPicking::pick nearest-hit
+      semantics exactly (same validBatchSpan predicate -- invalid-batch and
+      non-finite triangles never enter the tree), lazily built once per mesh
+      revision and cached inside PrepareSceneData (m_pickingRaycaster,
+      shared_ptr for incomplete-type dtor safety; reset in
+      clearModelGeometry so invalidation is automatic at both viewports'
+      updatePickingScene/rebuildPickingScene). PrepareSceneData is now
+      movable-non-copyable (accidental multi-GB scene copies are compile
+      errors; test helpers use out-params). Production call sites
+      (RhiViewport mousePress / pickSourceObjectAt / classifyContextAt,
+      SoftwareViewport classifyContextAt) go through the raycaster;
+      ObjectPicking::pick stays as the brute-force reference -- PerfBench
+      asserts per-ray raycaster-vs-bruteforce parity (identity + distance)
+      and ObjectPickingTests adds crafted/random/invalid-batch/rebuild
+      parity suites. Result: pick p50 33.55ms -> 0.0098ms (~3400x) at 2M,
+      6.58ms -> 0.0077ms at 400k, hits 32/32, parity ok; one-time
+      pick_build_ms 406 @400k / 2316 @2m documented as a stable anchor
+      (lazy, amortizes after ~70 picks at 2m; upstream MeshRaycaster has
+      the same lazy-build cost shape); BVH memory ~50MiB @2m noted. All
+      other anchors within noise. NOTE: first gate after this change
+      crashed OWzxSlicer at startup -- 62/64 owzx_app_core objs were stale
+      against the PrepareSceneData.h layout change (known ninja
+      header-deps quirk; mixed old/new layout + fresh moc objs = ODR
+      garbage-pointer refcount crash). Purging stale obj dirs and
+      re-running the gate clean resolved it; no code change involved.
+      QmlUiAuditTests rhiViewportSelectionPickingBridgeStaysCppOwned
+      updated to pin the new C++-owned delegation path (raycaster +
+      modelVertices/modelBatches + ObjectPicking include).
+    evidence:
+      gate: canonical gate 2026-09-13 (see commit) incl. ObjectPickingTests
+        raycaster parity suites + QmlUiAuditTests; efficiency self-test
+        stage_report.json pick p50 0.0098ms @2m with parity ok
+        (docs/perf-baseline.md)
+      commit: 1d5e79a (perf(picking): BVH-backed scene picking
+        -- 2m pick p50 33.55ms -> 0.0098ms)
+      last_verified: 2026-09-13
