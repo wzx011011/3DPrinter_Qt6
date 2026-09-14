@@ -1894,5 +1894,5 @@ items:
       0 failed; QmlUiAuditTests 175 passed.
     evidence:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175 passed
-      commit: PENDING_PL
+      commit: 3fd30ad (feat(preview): wave1 batch B -- PREV-LEFT)
       last_verified: 2026-09-15
