@@ -1841,6 +1841,20 @@ items:
         deleteObject/split/assemble) as the last concrete suspect family;
         (b) alternatively run an elevated PageHeap session outside the
         sandbox with the PDB-enabled build to fault at the culprit write.
+      - ROUND 5 (2026-09-15): R-P1.C also DEMOTED as corruption suspect --
+        m_mockLayerRanges is QHash<int, QList<MockLayerRange>> and the
+        per-object overrides are QHash<QString, QVariant>; keyed lookups
+        are bounds-safe, so the "indices not shifted" complaint is a
+        correctness debt (wrong object's ranges/overrides applied), never
+        an out-of-bounds write. Both cited concrete families are now
+        cleared; the corruption culprit is unidentified.
+      - CONCLUSION OF THE HUNT (this pass): root cause requires either an
+        ELEVATED PageHeap session (gflags blocked by sandbox admin rights;
+        run from an admin shell outside the sandbox with the PDB build) or
+        a full lifetime audit across the mesh-upload path with live PDB
+        breakpoints (cdb -cf command file: "bp OWzxSlicer+RVA \"k 40; gc\"").
+        All hardening + findings are recorded; the P0 stays open with these
+        two concrete next actions.
     evidence:
       gate: n/a (open investigation)
       commit: 48f0401 (fix(ui): wave1 batch A)
