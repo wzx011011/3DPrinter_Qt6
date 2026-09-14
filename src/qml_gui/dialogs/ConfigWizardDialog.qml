@@ -504,6 +504,22 @@ CxDialog {
                                 if (root.selectedPrinter.length > 0)
                                     presetSvc.setSelectedPrinterModel(root.selectedPrinter)
                             }
+                            // R-P1.J (upstream ConfigWizard::apply_config):
+                            // finishing the wizard APPLIES the selections --
+                            // the current presets switch to what the user
+                            // picked when a preset of that exact name exists
+                            // (the vendor printer-model entry may not map 1:1
+                            // to a printer preset name; the material entry is
+                            // a filament preset name).
+                            var cfgVm = typeof backend !== "undefined" && backend ? backend.configViewModel : null
+                            if (cfgVm) {
+                                if (root.selectedFilament.length > 0
+                                        && cfgVm.filamentPresetNames.indexOf(root.selectedFilament) >= 0)
+                                    cfgVm.setCurrentFilamentPreset(root.selectedFilament)
+                                if (root.selectedPrinter.length > 0
+                                        && cfgVm.printerPresetNames.indexOf(root.selectedPrinter) >= 0)
+                                    cfgVm.setCurrentPrinterPreset(root.selectedPrinter)
+                            }
                             backend.configWizardCompleted = true;
                             root.wizardFinished();
                             root.close();
