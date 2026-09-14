@@ -75,6 +75,7 @@ docs/*
 !docs/源码对照迁移任务追踪.md
 !docs/代码评审报告_2026-09-04.md
 !docs/perf-baseline.md
+!docs/ui-full-restoration-inventory.md
 
 # === Local Qt/deps caches and logs (v5.5+) ===
 .deps/
