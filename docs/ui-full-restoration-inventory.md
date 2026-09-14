@@ -38,7 +38,7 @@
 | SHELL-TOPBAR | 顶栏导航/保存/撤销 (top bar) | src/qml_gui/BBLTopbar.qml | MainFrame.cpp + BBLTopbar.cpp | Hybrid | upstream-parity-audit | 1 | P1.1 基础闭环已登记；**未完成项**：标题栏 X / 退出绕过脏项目确认（R-P0.6，上游 MainFrame.cpp close_with_confirm 可否决）；Ctrl+S/菜单保存绕过 canSave 切片门禁（R-P1.I）；隐形 TabBar 死代码（R-P1.L） |
 | SHELL-MENUS | 全局菜单/文件入口 (menus) | src/qml_gui/main.qml | MainFrame.cpp m_menubar | Hybrid | upstream-parity-audit | 1 | 已有 viewMenuShortcutsAndImportSourceAudit 锁定；缺：完整上游菜单项逐项对照（导出/导入子菜单、视图菜单项与快捷键绑定一致性） |
 | SHELL-SHORTCUTS | 键盘快捷键表 (shortcuts) | src/qml_gui/main.qml + KBShortcutsDialog.qml | MainFrame.cpp + KBShortcutsDialog.cpp | Hybrid | automated-test | 1 | platerHotkeysMatchUpstreamTable / platerHotkeysFollowCanvasFocus 已锁定；长尾：全表逐项复核 |
-| SHELL-NOTIFY | 通知系统 (notifications) | NotificationCenter.qml + ErrorToast.qml + ErrorBanner.qml + BackendContext notification queue | notification_manager.cpp + SlicingProgressNotification.cpp | Hybrid | upstream-parity-audit | 1 | 队列/进度/持久化/确认已承接（P1.1）；缺：通知历史列表 UI、通知偏好设置 |
+| SHELL-NOTIFY | 通知系统 (notifications) | NotificationCenter.qml + ErrorToast.qml + ErrorBanner.qml + BackendContext notification queue | notification_manager.cpp + SlicingProgressNotification.cpp | Real | upstream-parity-audit | n/a | 2026-09-15 核实：通知历史列表 UI 已完整（100 条历史上限 + 未读徽标 + 标记已读/清空 + 严重度图标/标题/消息/时间戳 + 空态），铃铛按钮/Popup 接线完整，通知+提示偏好开关在 PreferencesPage；P1.1 的"缺历史列表"结论过时 |
 | SHELL-FILEDLG | 文件对话框 (file dialogs) | main.qml FileDialog 流程 + ProjectViewModel | MainFrame.cpp FileOpen/Save + Project.cpp | Hybrid | manual-uat-checklist | 1 | 打开/保存/另存/最近文件已承接；缺：3MF 供应商检查反馈（Check3mfVendor）对照 |
 
 ## 2. 页面 (PAGE-\*)
@@ -115,7 +115,7 @@ Blocked 登记并补披露。
 |---|---|---|---|---|---|---|
 | CVAS-TOOLBAR | GLToolbars.qml | GLToolbar.cpp + Gizmos/GLGizmoBase.cpp | Hybrid | manual-visual | 4 | v3.6 PREP-VTOOLBAR |
 | CVAS-CTXMENU | PrepareContextMenus.qml | Plater.cpp 右键菜单 + GLCanvas3D.cpp | Hybrid | upstream-parity-audit | 4 | R-P1.H：勾选/文案一次性绑定陈旧 |
-| CVAS-GIZMOPANEL | PreparePage 内嵌 gizmo 浮动面板 | Gizmos/GLGizmoAdvancedCut.cpp on_render_input_window + GLGizmoEmboss.cpp + GLGizmoFdmSupports.cpp | Placeholder | manual-visual | 4 | v3.6 PREP-GIZMOFLOAT；P2.7 各 gizmo 控制面板逐个收口 |
+| CVAS-GIZMOPANEL | PreparePage 内嵌 gizmo 浮动面板 | Gizmos/GLGizmoAdvancedCut.cpp on_render_input_window + GLGizmoEmboss.cpp + GLGizmoFdmSupports.cpp | Hybrid | manual-visual | 4 | 2026-09-15 核实：v3.6 的 Placeholder 结论过时——connectorSize 滑条、embossHeight、brushRadius、MMU 16 色选择器等面板已实现并接 EditorViewModel 真实属性；残留：与上游 on_render_input_window 逐面板 parity 复核 |
 | CVAS-PICKING | RhiViewport/SoftwareViewport 拾取链 | GLCanvas3D.cpp _update_picker + MeshRaycaster（MeshUtils.hpp:159） | Real | automated-test | n/a | 本轮 PICK-BVH 已收口（WORK_ITEMS PICK-BVH-RAYCASTER，1d5e79a） |
 | CVAS-NAVIGATOR | NavigatorCube.qml + NavigatorLabels.qml | GLCanvas3D.cpp 导航立方语义 | Real | automated-test | n/a | NavigatorCubeTests 已锁 |
 | CVAS-LAYERRAIL | PreviewLayerRail.qml | IMSlider.cpp | Hybrid | automated-test | 1 | R-P1.H：滑条一次性绑定陈旧 |
