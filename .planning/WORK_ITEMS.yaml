@@ -1710,6 +1710,7 @@ items:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175
         passed incl. new empty-canvas assertions
       commit: 48f0401 (fix(ui): wave1 batch A)
+
       last_verified: 2026-09-15
 
   - id: AI-SIDECAR-STARTUP-RACE
@@ -1744,6 +1745,30 @@ items:
       blocked by this crash; code+audit verified, interactive verification
       deferred until the race is fixed. Machine context: engine->load time
       doubled since 2026-09-13 morning (timing-sensitive race).
+      HARDENING ROUND 2 (2026-09-15, post-5010451 experiments):
+      - Experiment matrix: crash reproduces with sidecar spawn deferred to
+        +8s; with QT_D3D_NO_VBLANK_THREAD=1; with QT_ACCESSIBILITY=0; with
+        OWZX_DISABLE_WEBENGINE=1. ONLY stable configuration remains
+        ai_sidecar files absent (no spawn, no client). Spawn timing and all
+        tested env escapes do NOT clear it; a speculative 8s deferral was
+        tried and REVERTED (no observed benefit).
+      - CrashHandlerWin upgrade: per-frame module file names via
+        SymGetModuleInfo64 (handler trace now reads
+        "Qt6Core.dll!... +0x182" instead of bare letters) +
+        AddVectoredExceptionHandler for fail-fast codes 0xC0000409/41x
+        which bypass SetUnhandledExceptionFilter (explains the silent
+        exit-0 variant with no dump). New crash 2026-09-15 01:34:26
+        captured: worker thread, Qt6Core!removeConnection+0x182 (matches
+        live cdb), app frames T+0x27c220 (deletes a QObject) inside
+        T+0x2805b0 (thread proc; 20 indirect Qt calls: QString/QVariant
+        member-wise moves = config/params struct move). Qt6Gui x2 +
+        Qt6Quick x1 frames nested = the thread touches Quick-side objects.
+        Process uptime 17s (dump-verified).
+      - NEXT (root cause plan): identify thread 0x2805b0 owner by live
+        breakpoint under cdb (bp OWzxSlicer+0x28054e, k on hit); audit
+        SliceService dedicated-thread discipline (R-P0.1/R-P0.2 known UB)
+        as candidate heap-corruption source; consider disabling AI auto
+        start by default until fixed.
     evidence:
       gate: n/a (open investigation)
       commit: 48f0401 (fix(ui): wave1 batch A)
