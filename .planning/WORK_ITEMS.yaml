@@ -1769,6 +1769,35 @@ items:
         SliceService dedicated-thread discipline (R-P0.1/R-P0.2 known UB)
         as candidate heap-corruption source; consider disabling AI auto
         start by default until fixed.
+      - ROOT-CAUSE REFRAME (2026-09-15, PDB-symbolized dump
+        FramelessDialogDemo_20260915_015731_449): the crashing thread is the
+        MAIN/GUI thread (full unwind: RtlUserThreadStart -> CRT -> main ->
+        QCoreApplication::exec -> QEventLoop::exec ->
+        QWindowsGuiEventDispatcher::processEvents -> sendPostedEvents ->
+        notifyInternal2 -> QQuickWindow::event -> QMetaCallEvent::
+        placeMetaCall -> app lambda). NOT a worker thread. Two victim
+        manifestations of the same heap corruption: (a) AV inside
+        QList<QVector3D>::reserve while a queued mesh-update lambda runs,
+        (b) AV in QObjectPrivate::removeConnection during disconnect from
+        the same lambda family. The queued lambda runs AFTER some earlier
+        code already freed/smashed the heap -> sidecar presence is only a
+        load/timing trigger (memory pressure shifts heap layout).
+      - PRIME SUSPECT FAMILIES (ledger R-P0.1/R-P0.2 + R-P1.G): SliceService
+        dedicated-thread lock-free sharing of m_persistentSlices (known UB),
+        RhiViewportRenderer releaseResources missing m_supportPreviewBuffer
+        (R-P1.G) racing the queued mesh-upload lambdas
+        (QList<QVector3D> = meshData vertex list).
+      - TOOLING NOW AVAILABLE: OWZX_ENABLE_PDB=ON (existing CMake option,
+        set in build/CMakeCache, 1.2GB PDB beside the exe) gives full PDB
+        symbolization for cdb/dump analysis; CrashHandlerWin still needs a
+        fix -- the dump's stored exception context is the handler thread's
+        (MiniDumpWriteDump ran after registers were clobbered), so .ecxr is
+        unusable; symbolize via the handler's 19-frame address list +
+        cdb `ln` instead, or fix the handler to capture ContextRecord into
+        a MiniDump context stream before any register-clobbering call.
+      - NEXT: reproduce under PageHeap (gflags /p /enable, requires admin)
+        to fault AT the culprit write, or audit R-P0.1/R-P1.G directly with
+        the PDB live breakpoints.
     evidence:
       gate: n/a (open investigation)
       commit: 48f0401 (fix(ui): wave1 batch A)
