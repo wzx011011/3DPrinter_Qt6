@@ -1798,6 +1798,30 @@ items:
       - NEXT: reproduce under PageHeap (gflags /p /enable, requires admin)
         to fault AT the culprit write, or audit R-P0.1/R-P1.G directly with
         the PDB live breakpoints.
+      - ROUND 3 FINDINGS (2026-09-15): (1) TRUE EXIT CODE captured via cmd
+        wrapper ERRORLEVEL: 0xC0000374 STATUS_HEAP_CORRUPTION -- ntdll
+        detected corrupted heap metadata at a LATER heap operation; this
+        fail-fast bypasses SEH/VEH/unhandled-filter, which is why most runs
+        die with no dump and no crash-log entry (the AV dumps seen earlier
+        are the rarer victim manifestation). (2) SliceService R-P0.1 spot
+        audit: the cited lock-free sharing is GONE in current code --
+        single-ownership persistentSlot handed to the worker, completion via
+        queued lambda with generation gate, destructor cancel-then-join
+        (batch-2 hardening); suspect DEMOTED. (3) gflags/PageHeap blocked in
+        this environment (registry write requires admin: access denied).
+      - REMAINING SUSPECTS (heap-corruption culprits consistent with a
+        GUI-thread queued-mesh-lambda victim): R-P1.G RhiViewportRenderer
+        releaseResources missing m_supportPreviewBuffer + uploadModelBuffer
+        mixed-state (renderer-thread vs GUI-thread object lifetime);
+        R-P1.C stale m_mockLayerRanges/overrides indices after
+        deleteObject/split/assemble (unchecked QList operator[] writes);
+        restoreVolumeSnapshot metadata loss (R-P1.K). Audit order:
+        R-P1.G first (renderer teardown vs queued mesh upload is exactly
+        the victim path), then R-P1.C index arithmetic.
+      - NOTE: handler-side diagnostics may now be redundant -- the crash is
+        heap-corruption fail-fast; the productive path is a targeted
+        lifetime audit of the two families above with live PDB breakpoints
+        (cdb bp via command file works: put bp + "k; gc" in a -cf file).
     evidence:
       gate: n/a (open investigation)
       commit: 48f0401 (fix(ui): wave1 batch A)
