@@ -1841,6 +1841,16 @@ items:
         deleteObject/split/assemble) as the last concrete suspect family;
         (b) alternatively run an elevated PageHeap session outside the
         sandbox with the PDB-enabled build to fault at the culprit write.
+      - ROUND 6 (2026-09-15): shipped OWZX_ENABLE_ASAN CMake option
+        (default OFF) -- /fsanitize=address on owzx_app_core + OWzxSlicer
+        with _DISABLE_STRING/VECTOR_ANNOTATION to keep LNK2038 consistent
+        with uninstrumented third-party libs (initial link failed with 400
+        annotate mismatches before the defines). ASan trial INCONCLUSIVE:
+        under ASan timing the crash did not reproduce (exit 1, no report)
+        in two ~2min runs -- the race did not fire under instrumented
+        timing; no culprit data gained, but the option now exists for any
+        future repro. Cache restored to OFF; canonical gate re-verified 12
+        suites 0 failed on the vanilla build.
       - ROUND 5 (2026-09-15): R-P1.C also DEMOTED as corruption suspect --
         m_mockLayerRanges is QHash<int, QList<MockLayerRange>> and the
         per-object overrides are QHash<QString, QVariant>; keyed lookups

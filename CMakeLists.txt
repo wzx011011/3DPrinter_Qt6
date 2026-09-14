@@ -54,6 +54,14 @@ endif()
 # OFF — the QtTest gates don't symbolicate crash dumps; turn ON when a
 # symbolicated crash dump is actually needed.
 option(OWZX_ENABLE_PDB "Emit a full PDB for OWzxSlicer.exe (slow link, ~1.1 GB disk)" OFF)
+# OWZX-ASAN (diagnostics): instrument owzx_app_core + OWzxSlicer with
+# AddressSanitizer so heap-corruption reports land at the culprit access
+# (use-after-free / overflow) instead of crashing later at a victim
+# allocation. User-mode — no admin/PageHeap/gflags needed. Qt6 DLLs stay
+# uninstrumented (interop supported; only uninstrumented frames lose
+# checking). Pair with OWZX_ENABLE_PDB=ON for symbolized reports. implies
+# a full rebuild of the instrumented targets; ~2x runtime cost.
+option(OWZX_ENABLE_ASAN "Build owzx_app_core + OWzxSlicer with AddressSanitizer (diagnostics only)" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -541,6 +549,23 @@ endif()
 
 if(WIN32)
     set_target_properties(OWzxSlicer PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
+# OWZX-ASAN: instrument the app sources (object lib + exe) so heap
+# corruption reports point at the culprit access. Qt6/third-party DLLs are
+# uninstrumented by design. Requires a relink; pair with OWZX_ENABLE_PDB.
+# The STL annotation defines keep LNK2038 consistent with the
+# uninstrumented third-party libs (mcut/libslic3r objs record 0); core
+# ASan malloc/free interception + quarantine stay fully active.
+if(OWZX_ENABLE_ASAN AND MSVC)
+    target_compile_options(owzx_app_core PRIVATE /fsanitize=address /Zi)
+    target_compile_options(OWzxSlicer PRIVATE /fsanitize=address /Zi)
+    target_compile_definitions(owzx_app_core PRIVATE
+        _DISABLE_STRING_ANNOTATION _DISABLE_VECTOR_ANNOTATION)
+    target_compile_definitions(OWzxSlicer PRIVATE
+        _DISABLE_STRING_ANNOTATION _DISABLE_VECTOR_ANNOTATION)
+    target_link_options(OWzxSlicer PRIVATE /fsanitize=address)
+    target_link_options(OWzxSlicer PRIVATE /DEBUG)
 endif()
 
 # ── Tests ──────────────────────────────────────────────────────────────────
