@@ -272,11 +272,99 @@ Item {
                 border.color: Theme.borderDefault
                 clip: true
 
-                LeftSidebar {
+                // PREV-LEFT (v3.6 closure): the current-plate
+                // summary block above the sidebar -- upstream GUI_Preview's
+                // left bar shows the active plate thumbnail + name. The
+                // thumbnail re-reads on every EditorViewModel stateChanged
+                // (invokable accessors are not auto-reactive); with no
+                // thumbnail cached the plate color stands in (THUMBVERIFY-01:
+                // never fabricate a mock image).
+                property string plateThumbBase64: ""
+                property int plateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
+
+                Connections {
+                    target: root.editorVm
+                    function onStateChanged() {
+                        leftPanel.plateThumbBase64 =
+                            root.editorVm.plateThumbnailBase64(leftPanel.plateIndex)
+                    }
+                }
+                Component.onCompleted: {
+                    if (root.editorVm)
+                        leftPanel.plateThumbBase64 =
+                            root.editorVm.plateThumbnailBase64(leftPanel.plateIndex)
+                }
+
+                ColumnLayout {
                     anchors.fill: parent
-                    editorVm: root.editorVm
-                    configVm: root.configVm
-                    processCategory: root.processCategory
+                    spacing: 0
+
+                    Rectangle {
+                        id: plateSummaryCard
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 84
+                        color: Theme.bgPanel
+                        border.width: 1
+                        border.color: Theme.borderDefault
+
+                        Image {
+                            id: plateThumbImage
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            fillMode: Image.PreserveAspectFit
+                            source: leftPanel.plateThumbBase64.length > 0
+                                ? (leftPanel.plateThumbBase64.indexOf("data:image/") === 0
+                                   ? leftPanel.plateThumbBase64
+                                   : "data:image/png;base64," + leftPanel.plateThumbBase64)
+                                : ""
+                            visible: leftPanel.plateThumbBase64.length > 0
+                            asynchronous: true
+                        }
+
+                        // Thumbnail fallback: the plate color block (same
+                        // accessor the Prepare plate cards use as fallback).
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            visible: leftPanel.plateThumbBase64.length === 0
+                            color: root.editorVm
+                                ? root.editorVm.plateThumbnailColor(leftPanel.plateIndex)
+                                : Theme.bgPanel
+                            radius: 3
+                        }
+
+                        Rectangle {
+                            id: plateBadge
+                            anchors.left: parent.left
+                            anchors.bottom: parent.bottom
+                            anchors.margins: 4
+                            width: plateBadgeLabel.implicitWidth + 10
+                            height: plateBadgeLabel.implicitHeight + 4
+                            radius: 3
+                            color: "#20242bd0"
+                            Label {
+                                id: plateBadgeLabel
+                                anchors.centerIn: parent
+                                text: root.editorVm
+                                    ? qsTr("盘 %1").arg(leftPanel.plateIndex + 1)
+                                    : qsTr("盘")
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                        }
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+
+                        LeftSidebar {
+                            anchors.fill: parent
+                            editorVm: root.editorVm
+                            configVm: root.configVm
+                            processCategory: root.processCategory
+                        }
+                    }
                 }
             }
 

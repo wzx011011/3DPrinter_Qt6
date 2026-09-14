@@ -10988,6 +10988,27 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
            "PREV-07: SoftwareViewport::paintScene must draw the preview segments");
   QVERIFY2(softwareVp.contains(QStringLiteral("GCV1")),
            "PREV-07: the fallback parser must validate the GCV1 wire format");
+
+  // ── PREV-LEFT: the left panel's current-plate summary block ────────────
+  // v3.6 PREV-LEFT placeholder closure: the preview left panel shows the
+  // active plate thumbnail + plate badge. State changes re-read the
+  // invokable accessor (no auto-reactive Q_INVOKABLE), and with no cached
+  // thumbnail the plate color stands in -- never a fabricated mock image
+  // (THUMBVERIFY-01 contract).
+  const QString editorVmHeaderForPreview =
+      readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  QVERIFY2(previewPage.contains(QStringLiteral("plateThumbnailBase64("))
+               && previewPage.contains(QStringLiteral("onStateChanged"))
+               && previewPage.contains(QStringLiteral("plateThumbnailColor(")),
+           "PREV-LEFT: PreviewPage must re-read the plate thumbnail on VM"
+           " state changes and fall back to the plate color when no"
+           " thumbnail is cached");
+  QVERIFY2(editorVmHeaderForPreview.contains(
+               QStringLiteral("Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;"))
+               && editorVmHeaderForPreview.contains(
+                   QStringLiteral("Q_INVOKABLE QString plateThumbnailColor(int plateIndex) const;")),
+           "PREV-LEFT: EditorViewModel must expose the persisted-thumbnail"
+           " and plate-color accessors");
 }
 
 void QmlUiAuditTests::previewWave5SliderSourceAudit()

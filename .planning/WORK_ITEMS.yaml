@@ -1869,3 +1869,30 @@ items:
       gate: n/a (open investigation)
       commit: 48f0401 (fix(ui): wave1 batch A)
       last_verified: 2026-09-15
+
+  - id: PREV-LEFT-PLATE-SUMMARY
+    title: Preview left panel current-plate summary block closed the v3.6 PREV-LEFT placeholder
+    aliases: ["PREV-LEFT"]
+    area: UI/Preview
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: aligned
+    verification: upstream-parity-audit
+    availability: available
+    notes:
+      PreviewPage leftPanel now hosts a current-plate summary card above the
+      sidebar (upstream GUI_Preview left bar: active plate thumbnail + name).
+      The thumbnail re-reads EditorViewModel::plateThumbnailBase64(current-
+      PlateIndex) on every stateChanged (Q_INVOKABLE accessors are not
+      auto-reactive; Connections + initial Component.onCompleted read). With
+      no thumbnail cached the plate color accessor stands in -- never a
+      fabricated mock image (THUMBVERIFY-01 contract). QmlUiAuditTests
+      previewCompletionSourceAudit pins the accessor wiring + the
+      THUMBVERIFY-01 fallback. Evidence: canonical gate 2026-09-15 12 suites
+      0 failed; QmlUiAuditTests 175 passed.
+    evidence:
+      gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175 passed
+      commit: PENDING_PL
+      last_verified: 2026-09-15
