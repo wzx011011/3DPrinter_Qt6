@@ -1822,6 +1822,25 @@ items:
         heap-corruption fail-fast; the productive path is a targeted
         lifetime audit of the two families above with live PDB breakpoints
         (cdb bp via command file works: put bp + "k; gc" in a -cf file).
+      - ROUND 4 (2026-09-15): R-P1.G audited against current code and
+        DEMOTED as P0 suspect -- m_supportPreviewBuffer no longer exists
+        anywhere in src/ (Wave-7 cleanup removed/renamed it);
+        uploadModelBuffer is restructured with the ensureBuffer discipline
+        (bounds-checked batch iteration, counters assigned only after
+        ensureBuffer success, uploads guarded on bytes>0). Residual minor
+        robustness note: a mid-function ensureBuffer OOM failure returns
+        false after m_modelVertexBufferUploaded=true was already set (mixed
+        upload state on allocation failure only) -- not a corruption path
+        and unreachable outside OOM. gflags PageHeap confirmed blocked by
+        the environment (registry write needs admin; access denied), so the
+        PageHeap reproduction requires an elevated shell outside the
+        sandbox. The fail-fast exit code 0xC0000374 with no SEH/VEH
+        interception also matches ntdll RtlReportCriticalFailure semantics.
+      - NEXT: (a) audit R-P1.C stale m_mockLayerRanges/overrides index
+        arithmetic (unchecked QList operator[] writes after
+        deleteObject/split/assemble) as the last concrete suspect family;
+        (b) alternatively run an elevated PageHeap session outside the
+        sandbox with the PDB-enabled build to fault at the culprit write.
     evidence:
       gate: n/a (open investigation)
       commit: 48f0401 (fix(ui): wave1 batch A)
