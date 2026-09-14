@@ -315,15 +315,53 @@ Item {
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoRotate)
             }
             break
+        case Qt.Key_Q:
+            // Upstream plater table (KBShortcutsDialog.cpp:235-238): Q =
+            // auto-orient selected objects (or all when nothing selected),
+            // Shift+Q = auto-orient every object on the active plate.
+            if (mod & Qt.ShiftModifier) {
+                root.editorVm.autoOrientContextPlate()
+                event.accepted = true
+            } else if (!(mod & Qt.ControlModifier)) {
+                root.editorVm.autoOrientSelected()
+                event.accepted = true
+            }
+            break
+        case Qt.Key_B:
+            // Upstream "B": gizmo mesh boolean.
+            if (!(mod & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier)))
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMeshBoolean)
+            break
+        case Qt.Key_L:
+            // Upstream "L": gizmo SLA support points.
+            if (!(mod & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier)))
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoSlaSupports)
+            break
+        case Qt.Key_V:
+            // Upstream "V": toggle printable for the selected object/part
+            // (Selection::toggle_instance_printable state lives in the VM).
+            if (!(mod & (Qt.ControlModifier | Qt.ShiftModifier | Qt.AltModifier))
+                    && root.editorVm && root.editorVm.selectedSourceObjectIndex >= 0) {
+                var si = root.editorVm.selectedSourceObjectIndex
+                root.editorVm.setObjectPrintable(si, !root.editorVm.objectPrintable(si))
+                event.accepted = true
+            }
+            break
         case Qt.Key_Z:
             // Undo handled by Shortcut below
             if (mod & Qt.ControlModifier)
                 event.accepted = true
             break
         case Qt.Key_Y:
-            // Redo handled by Shortcut below
-            if (mod & Qt.ControlModifier)
+            if (mod & Qt.ControlModifier) {
+                // Redo handled by Shortcut below
                 event.accepted = true
+            } else if (!(mod & (Qt.ShiftModifier | Qt.AltModifier))) {
+                // Upstream "Y": gizmo assemble (GLGizmoAssembly); OWzx hosts
+                // it as the assembly-measure gizmo (GizmoAssemblyMeasure).
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoAssemblyMeasure)
+            }
+            break
             break
         case Qt.Key_Delete:
         case Qt.Key_Backspace:
@@ -379,9 +417,13 @@ Item {
             event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoFlatten)
             break
         case Qt.Key_U:
-            // OWzx extension (kept, listed in the shortcuts dialog): measure
-            // gizmo. Upstream binds no plater key for it.
             if (mod & Qt.ControlModifier) {
+                // OWzx extension (kept, listed in the shortcuts dialog): measure
+                // gizmo via Ctrl+U. Upstream binds no plater key for it.
+                event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMeasure)
+            } else if (!(mod & (Qt.ShiftModifier | Qt.AltModifier))) {
+                // Upstream "U" (KBShortcutsDialog.cpp plater table): gizmo
+                // measure -- the plain-key binding the extension extends.
                 event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMeasure)
             }
             break

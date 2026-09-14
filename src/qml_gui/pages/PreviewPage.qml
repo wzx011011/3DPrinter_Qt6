@@ -98,6 +98,12 @@ Item {
             root.previewVm.setSingleLayer(!root.previewVm.singleLayer)
             event.accepted = true
             break
+        case Qt.Key_C:
+            // Upstream preview table (KBShortcutsDialog.cpp): "C" = on/off
+            // the G-code window (show_gcode_window).
+            root.previewVm.setShowGcodeWindow(!root.previewVm.showGcodeWindow)
+            event.accepted = true
+            break
         }
     }
 

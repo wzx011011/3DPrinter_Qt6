@@ -10732,6 +10732,38 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
   QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoText)")),
            "HOTKEYS: plain T must select the text emboss gizmo (upstream T)");
 
+  // Restored upstream plater keys (KBShortcutsDialog.cpp plater table):
+  // B / L / U / Y / Q(+Shift) / V.
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoMeshBoolean)")),
+           "HOTKEYS: plain B must select the mesh boolean gizmo (upstream B)");
+  QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoSlaSupports)")),
+           "HOTKEYS: plain L must select the SLA support points gizmo (upstream L)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Key_Y:"))
+               && preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoAssemblyMeasure)")),
+           "HOTKEYS: plain Y must select the assemble gizmo (upstream Y); Ctrl+Y stays redo");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.autoOrientContextPlate()")),
+           "HOTKEYS: Shift+Q must auto-orientate the active plate (upstream Shift+Q)");
+  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.setObjectPrintable(si, !root.editorVm.objectPrintable(si))")),
+           "HOTKEYS: plain V must toggle printable on the selected object (upstream V)");
+  QVERIFY2(kbDialog.contains(QStringLiteral("Gizmo mesh boolean"))
+               && kbDialog.contains(QStringLiteral("Gizmo SLA support points"))
+               && kbDialog.contains(QStringLiteral("Gizmo assemble"))
+               && kbDialog.contains(QStringLiteral("Auto orientate objects on the active plate"))
+               && kbDialog.contains(QStringLiteral("Toggle printable for selected object/part")),
+           "HOTKEYS: the shortcuts dialog table must list the restored plater keys");
+
+  // Upstream preview keys: C toggles the G-code window, L single-layer mode.
+  const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
+  QVERIFY2(previewPage.contains(QStringLiteral("case Qt.Key_C:"))
+               && previewPage.contains(QStringLiteral("setShowGcodeWindow(!root.previewVm.showGcodeWindow)")),
+           "HOTKEYS: preview C must toggle the G-code window (upstream preview C)");
+  QVERIFY2(previewPage.contains(QStringLiteral("case Qt.Key_L:"))
+               && previewPage.contains(QStringLiteral("setSingleLayer(!root.previewVm.singleLayer)")),
+           "HOTKEYS: preview L must toggle single-layer mode (upstream preview L)");
+  QVERIFY2(kbDialog.contains(QStringLiteral("Toggle G-code window"))
+               && kbDialog.contains(QStringLiteral("Toggle single-layer mode")),
+           "HOTKEYS: the shortcuts dialog table must list the preview C/L keys");
+
   // Arrange keys (upstream "A" / "Shift+A").
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.arrangeAllObjects()")),
            "HOTKEYS: plain A must arrange all objects");

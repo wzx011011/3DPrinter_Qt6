@@ -62,12 +62,19 @@ Dialog {
         { key: "S", desc: qsTr("Gizmo scale") },
         { key: "R", desc: qsTr("Gizmo rotate") },
         { key: "C", desc: qsTr("Gizmo cut") },
+        { key: "B", desc: qsTr("Gizmo mesh boolean") },
+        { key: "L", desc: qsTr("Gizmo SLA support points") },
         { key: "F", desc: qsTr("Gizmo Place face on bed") },
         { key: "P", desc: qsTr("Gizmo FDM paint-on seam") },
         { key: "T", desc: qsTr("Gizmo Text emboss / engrave") },
+        { key: "U", desc: qsTr("Gizmo measure") },
+        { key: "Y", desc: qsTr("Gizmo assemble") },
         { key: "A", desc: qsTr("Arrange all objects") },
         { key: "Shift+A", desc: qsTr("Arrange objects on selected plates") },
+        { key: "Q", desc: qsTr("Auto orientate selected objects (or all)") },
+        { key: "Shift+Q", desc: qsTr("Auto orientate objects on the active plate") },
         { key: "Shift+R", desc: qsTr("Auto orientate selected objects") },
+        { key: "V", desc: qsTr("Toggle printable for selected object/part") },
         { key: "I", desc: qsTr("Zoom in") },
         { key: "O", desc: qsTr("Zoom out") },
         { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
@@ -107,7 +114,9 @@ Dialog {
         { key: "Left / Right", desc: qsTr("Step move +/-100") },
         { key: "Home / End", desc: qsTr("Jump to start / end") },
         { key: "PgUp / PgDn", desc: qsTr("Layer range +/-1") },
-        { key: "Shift+PgUp/Dn", desc: qsTr("Layer range +/-10") }
+        { key: "Shift+PgUp/Dn", desc: qsTr("Layer range +/-10") },
+        { key: "L", desc: qsTr("Toggle single-layer mode") },
+        { key: "C", desc: qsTr("Toggle G-code window") }
     ]
 
     property string currentGroup: "global"

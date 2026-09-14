@@ -11,6 +11,7 @@
 
 #include <cstdio>
 #include <mutex>
+#include <atomic>
 
 #pragma comment(lib, "dbghelp.lib")
 
@@ -88,14 +89,27 @@ namespace
       line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
       DWORD lineDisplacement = 0;
 
+      // WIN-CRASH-DIAG: export-only symbols (deployed Qt6 DLLs) resolve to
+      // generic names; the module file name is what makes a frame
+      // attributable, so print it on every branch.
+      IMAGEHLP_MODULE64 mi = {};
+      mi.SizeOfStruct = sizeof(mi);
+      char moduleName[kNameMax] = {};
+      if (SymGetModuleInfo64(process, frame.AddrPC.Offset, &mi))
+      {
+        const char *sep = strrchr(mi.ImageName, '\\');
+        strncpy_s(moduleName, sizeof(moduleName), sep ? sep + 1 : mi.ImageName, _TRUNCATE);
+      }
+
       const bool hasSymbol = SymFromAddr(process, frame.AddrPC.Offset, &displacement, symbol) == TRUE;
       const bool hasLine = SymGetLineFromAddr64(process, frame.AddrPC.Offset, &lineDisplacement, &line) == TRUE;
 
       if (hasSymbol && hasLine)
       {
-        appendCrashLog(QStringLiteral("#%1 0x%2 %3 +0x%4 (%5:%6)")
+        appendCrashLog(QStringLiteral("#%1 0x%2 %3!%4 +0x%5 (%6:%7)")
                            .arg(i)
                            .arg(qulonglong(frame.AddrPC.Offset), 0, 16)
+                           .arg(QString::fromLocal8Bit(moduleName))
                            .arg(QString::fromUtf8(symbol->Name))
                            .arg(qulonglong(displacement), 0, 16)
                            .arg(QString::fromLocal8Bit(line.FileName))
@@ -103,17 +117,19 @@ namespace
       }
       else if (hasSymbol)
       {
-        appendCrashLog(QStringLiteral("#%1 0x%2 %3 +0x%4")
+        appendCrashLog(QStringLiteral("#%1 0x%2 %3!%4 +0x%5")
                            .arg(i)
                            .arg(qulonglong(frame.AddrPC.Offset), 0, 16)
+                           .arg(QString::fromLocal8Bit(moduleName))
                            .arg(QString::fromUtf8(symbol->Name))
                            .arg(qulonglong(displacement), 0, 16));
       }
       else
       {
-        appendCrashLog(QStringLiteral("#%1 0x%2")
+        appendCrashLog(QStringLiteral("#%1 0x%2 %3")
                            .arg(i)
-                           .arg(qulonglong(frame.AddrPC.Offset), 0, 16));
+                           .arg(qulonglong(frame.AddrPC.Offset), 0, 16)
+                           .arg(QString::fromLocal8Bit(moduleName)));
       }
     }
     appendCrashLog(QStringLiteral("=== stack end ==="));
@@ -173,6 +189,35 @@ namespace
 
     return EXCEPTION_EXECUTE_HANDLER;
   }
+
+  // WIN-CRASH-DIAG: fail-fast terminations (__fastfail / stack cookie,
+  // 0xC0000409; invalid parameter, 0xC0000417) bypass
+  // SetUnhandledExceptionFilter entirely -- the process dies with no log
+  // and no dump. That silent-exit variant was observed in the AI sidecar
+  // startup race (AI-SIDECAR-STARTUP-RACE ledger entry). A first-chance
+  // vectored handler sees them before death: log the faulting context,
+  // then always continue so the normal termination proceeds.
+  std::atomic<bool> g_inFailFastHandler{false};
+  LONG WINAPI failFastVectoredHandler(EXCEPTION_POINTERS *ep)
+  {
+    if (!ep || !ep->ExceptionRecord)
+      return EXCEPTION_CONTINUE_SEARCH;
+    const DWORD code = ep->ExceptionRecord->ExceptionCode;
+    if (code != 0xC0000409u && code != 0xC0000417u)
+      return EXCEPTION_CONTINUE_SEARCH;
+    bool expected = false;
+    if (!g_inFailFastHandler.compare_exchange_strong(expected, true))
+      return EXCEPTION_CONTINUE_SEARCH;
+    appendCrashLog(QStringLiteral("Fail-fast exception code=0x%1 at=0x%2")
+                       .arg(QString::number(code, 16))
+                       .arg(ep->ExceptionRecord->ExceptionAddress
+                                ? QString::number(qulonglong(reinterpret_cast<uintptr_t>(ep->ExceptionRecord->ExceptionAddress)), 16)
+                                : QStringLiteral("unknown")));
+    if (ep->ContextRecord)
+      dumpStackTrace(ep->ContextRecord);
+    g_inFailFastHandler.store(false);
+    return EXCEPTION_CONTINUE_SEARCH;
+  }
 } // namespace
 #endif
 
@@ -188,6 +233,8 @@ namespace CrashHandlerWin
       dir.mkpath(QStringLiteral("."));
     g_dumpDir = QDir::toNativeSeparators(dir.absolutePath()).toStdWString();
     SetUnhandledExceptionFilter(topLevelFilter);
+    // Fail-fast events bypass the unhandled filter; see the handler above.
+    AddVectoredExceptionHandler(1, failFastVectoredHandler);
     appendCrashLog(QStringLiteral("Crash handler installed: %1").arg(dir.absolutePath())); });
 #else
     Q_UNUSED(dumpDir);
