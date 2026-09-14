@@ -1655,3 +1655,96 @@ items:
       commit: 1d5e79a (perf(picking): BVH-backed scene picking
         -- 2m pick p50 33.55ms -> 0.0098ms)
       last_verified: 2026-09-13
+
+  - id: UI-FULL-RESTORATION-INVENTORY
+    title: UI full-restoration program established -- surface-level matrix (10 pages + 34 dialogs + shell + canvas), 7-state baseline, 4 waves
+    aliases: ["UI-INV", "UI-RESTORE"]
+    area: UI/Program
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: aligned
+    verification: deterministic-harness
+    availability: available
+    notes:
+      User directive: execute the full-UI restoration plan. Step 1 produced
+      docs/ui-full-restoration-inventory.md (committed, gitignore exception
+      added): surface-level 7-state matrix consolidating v3.6-ui-inventory,
+      source-truth function matrix, and WORK_ITEMS; wave plan 1-4 with
+      per-surface execution loop (gap analysis -> 4-layer restore -> audit
+      lock -> gate -> screenshot pair + comparison report -> ledger).
+    evidence:
+      gate: n/a (docs only)
+      commit: 9151b40 (docs(ui): full-restoration inventory matrix)
+      last_verified: 2026-09-15
+
+  - id: WAVE1-BATCH-A
+    title: Empty-canvas left-click deselect (CVAS-EMPTYCLICK) + save-gate QML residuals (R-P1.I)
+    aliases: ["WAVE1A"]
+    area: UI/Prepare+Shell
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: aligned
+    verification: upstream-parity-audit
+    availability: available
+    notes:
+      RhiViewport::mouseReleaseEvent gains the upstream GLCanvas3D LeftUp
+      empty-canvas branch: a left click pressed and released on neither a
+      volume nor a plate emits objectPickedSource(-1); guards mirrored
+      (not layer editing; Shift belongs to rect select; gizmo+Ctrl keeps
+      selection). PreparePage forwards the -1 pick to
+      EditorViewModel::clearObjectSelection (deselect_all equivalent);
+      the >=0 path stays on selectSourceObject. QmlUiAuditTests
+      rhiViewportSelectionPickingBridgeStaysCppOwned extended to pin the
+      new behavior (175/175). R-P1.I residual: Ctrl+S (main.qml) and both
+      BBLTopbar "save project" menu items no longer open save-as when
+      topbarSaveProject() was canSave-gated (visible error already posted);
+      menu items carry enabled: backend.canSave. R-P0.6 verified already
+      fixed (all quit paths route through requestQuit); R-P1.B preview
+      correctness items verified already fixed in code (R-P1.B markers at
+      all three sites); tracking doc checkboxes updated.
+    evidence:
+      gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175
+        passed incl. new empty-canvas assertions
+      commit: 48f0401 (fix(ui): wave1 batch A)
+      last_verified: 2026-09-15
+
+  - id: AI-SIDECAR-STARTUP-RACE
+    title: OPEN P0 -- app dies ~30-100s after launch with AI sidecar enabled (worker-thread heap corruption in Qt connection bookkeeping)
+    aliases: ["SIDECAR-RACE", "AI-STARTUP-CRASH"]
+    area: AI/Platform
+    priority: P0
+    status: open
+    implementation: real
+    parity: n/a
+    verification: manual-visual
+    availability: degraded
+    notes:
+      First observed 2026-09-13 14:19 (crash dumps 14:19 + 23:51), 2026-09-15
+      repro 6/6 launches dead within ~100s (empty scene or loaded model).
+      Signature: 0xc0000005 in Qt6Core!QObjectPrivate::removeConnection
+      reading 0xcccccccc-poisoned memory; handler backtrace = worker thread
+      (trampoline -> app thunks T+0x27bce0/T+0x280070 -> Qt internals ->
+      unmapped address outside any loaded module = code-unloaded-under-
+      thread / stack smash on a worker). TOGGLE PROVEN: renaming build/
+      ai_sidecar away -> app fully stable (461MB, loaded model, >100s,
+      interactive); sidecar present -> dies. In-app AI code (McpHttpServer,
+      AiAgentService) audited GUI-thread-clean and bounded (restart max 3);
+      the racing worker thread identity still unknown. HARDENING SHIPPED:
+      (1) main_qml.cpp puts the process into a kill-on-close job object so
+      the sidecar tree can never outlive the app (orphaned SDK clients
+      reconnecting to the next instance's fixed aiPort 27417 caused an
+      escalating cascade; 4 node.exe + 2 python.exe orphans found and
+      reaped 2026-09-15); (2) CrashHandlerWin adds MiniDumpWithUnloadedModules
+      so code-unloaded frames become attributable on next occurrence.
+      NOTE: GUI acceptance of WAVE1-BATCH-A (empty-click deselect) was
+      blocked by this crash; code+audit verified, interactive verification
+      deferred until the race is fixed. Machine context: engine->load time
+      doubled since 2026-09-13 morning (timing-sensitive race).
+    evidence:
+      gate: n/a (open investigation)
+      commit: 48f0401 (fix(ui): wave1 batch A)
+      last_verified: 2026-09-15
