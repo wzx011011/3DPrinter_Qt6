@@ -1919,6 +1919,20 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
       else
         emit objectPickedSource(m_pressPickedSourceObjectIndex);
     }
+  } else if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex < 0) {
+    // Upstream GLCanvas3D.cpp LeftUp empty-canvas branch: a left click that
+    // pressed and released on neither a volume nor a plate deselects all.
+    // Guards mirrored from upstream: not while layer editing; Shift belongs
+    // to the rectangle selection (handled in its own branch); with a gizmo
+    // active a Ctrl+click keeps the selection, a plain click on empty canvas
+    // closes it via deselect_all. The -1 pick forwards to
+    // EditorViewModel::clearObjectSelection (PreparePage).
+    const QPointF releaseDelta = event->position() - m_pressPosition;
+    const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
+    const bool ctrlHeld = (m_pressModifiers & Qt::ControlModifier) != 0;
+    const bool gizmoGuardsSelection = ctrlHeld && m_selectedSourceObjectIndex >= 0;
+    if (isClick && !m_layerEditingInputActive && !gizmoGuardsSelection)
+      emit objectPickedSource(-1);
   }
   m_dragButton = Qt::NoButton;
   m_paintButton = 0;

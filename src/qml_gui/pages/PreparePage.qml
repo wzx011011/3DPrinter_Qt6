@@ -1794,7 +1794,13 @@ Item {
                     // ALL selected objects (upstream Selection::get_bounding_box()).
                     selectedSourceObjectIndices: root.editorVm ? root.editorVm.selectedSourceObjectIndices : []
                     onObjectPickedSource: function(sourceIndex) {
-                        if (root.editorVm)
+                        if (!root.editorVm)
+                            return
+                        // Upstream GLCanvas3D LeftUp empty-canvas branch: a
+                        // -1 pick is the empty-canvas deselect (deselect_all).
+                        if (sourceIndex < 0)
+                            root.editorVm.clearObjectSelection()
+                        else
                             root.editorVm.selectSourceObject(sourceIndex)
                     }
                     // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135 and

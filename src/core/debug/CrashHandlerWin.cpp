@@ -149,7 +149,12 @@ namespace
       mei.ExceptionPointers = ep;
       mei.ClientPointers = FALSE;
 
-      const auto dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithThreadInfo);
+      // WIN-CRASH-DIAG (2026-09-15): MiniDumpWithUnloadedModules records
+      // DLLs that unmounted before the crash -- frames landing in unmapped
+      // memory (observed in the AI-sidecar startup race: worker thread RIPs
+      // pointing outside any module) become attributable. ThreadInfo keeps
+      // per-thread teardown state for thread-exit crashes.
+      const auto dumpType = static_cast<MINIDUMP_TYPE>(MiniDumpWithDataSegs | MiniDumpWithHandleData | MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules);
       const BOOL ok = MiniDumpWriteDump(GetCurrentProcess(),
                                         pid,
                                         hFile,

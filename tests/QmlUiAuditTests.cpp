@@ -2040,6 +2040,19 @@ void QmlUiAuditTests::rhiViewportSelectionModifiersRouteThroughBackend()
            "PreparePage must keep forwarding the plain pick to selectSourceObject");
   QVERIFY2(viewportSource.contains(QStringLiteral("else\n        emit objectPickedSource(m_pressPickedSourceObjectIndex);")),
            "RhiViewport must keep emitting the plain objectPickedSource signal");
+
+  // (e) CVAS-EMPTYCLICK (upstream GLCanvas3D.cpp LeftUp empty-canvas branch):
+  // a left click pressed and released on empty canvas deselects all. The
+  // viewport emits the -1 pick; PreparePage forwards it to
+  // clearObjectSelection (deselect_all), keeping the >=0 path on
+  // selectSourceObject.
+  QVERIFY2(viewportSource.contains(QStringLiteral("emit objectPickedSource(-1)"))
+               && viewportSource.contains(QStringLiteral("LeftUp empty-canvas branch"))
+               && viewportSource.contains(QStringLiteral("!m_layerEditingInputActive")),
+           "RhiViewport must deselect on a left click on empty canvas (upstream GLCanvas3D LeftUp branch)");
+  QVERIFY2(preparePage.contains(QStringLiteral("if (sourceIndex < 0)"))
+               && preparePage.contains(QStringLiteral("root.editorVm.clearObjectSelection()")),
+           "PreparePage must forward the -1 empty-canvas pick to clearObjectSelection");
   QVERIFY2(softwareHeader.contains(QStringLiteral("void objectPickedSourceWithModifiers(int sourceIndex, int volumeIndex,"))
                && softwareHeader.contains(QStringLiteral("Q_PROPERTY(bool selectionRubberBandActive")),
            "SoftwareViewport fallback must keep QML signal/property compatibility");

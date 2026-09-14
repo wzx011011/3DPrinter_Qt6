@@ -127,7 +127,13 @@ Item {
                 title: qsTr("文件")
                 MenuItem { text: qsTr("新建项目"); onTriggered: root.newProjectRequested() }
                 MenuItem { text: qsTr("打开项目..."); onTriggered: root.openProjectRequested("") }
-                MenuItem { text: qsTr("保存项目"); onTriggered: if (!backend.topbarSaveProject()) root.saveAsRequested() }
+                MenuItem {
+                    text: qsTr("保存项目")
+                    // R-P1.I: gated while slicing (topbarSaveProject posts the
+                    // visible error); save-as fallback only for empty path.
+                    enabled: backend.canSave
+                    onTriggered: if (backend.canSave && !backend.topbarSaveProject()) root.saveAsRequested()
+                }
                 MenuItem { text: qsTr("退出"); onTriggered: root.quitRequested() }
             }
             Menu {
@@ -702,8 +708,11 @@ Item {
 
         CxMenuItem {
             text: qsTr("保存项目")
+            // R-P1.I: gated while slicing (topbarSaveProject posts the
+            // visible error); save-as fallback only for empty path.
+            enabled: backend.canSave
             onTriggered: {
-                if (!backend.topbarSaveProject())
+                if (backend.canSave && !backend.topbarSaveProject())
                     root.saveAsRequested()
             }
         }

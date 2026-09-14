@@ -440,7 +440,10 @@ ApplicationWindow {
     Shortcut {
         sequences: [StandardKey.Save]
         onActivated: {
-            if (!backend.topbarSaveProject())
+            // R-P1.I: topbarSaveProject() already gates on canSave() (visible
+            // error posted). The save-as fallback must not fire for a gated
+            // save -- only for the empty-path case.
+            if (backend.canSave && !backend.topbarSaveProject())
                 saveProjectAsDialog.open()
         }
     }

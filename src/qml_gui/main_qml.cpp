@@ -363,6 +363,39 @@ int main(int argc, char *argv[])
   QGuiApplication app(argc, argv);
   app.setOrganizationName(QStringLiteral("OWzx"));
   app.setApplicationName(QStringLiteral("OWzxSlicer"));
+
+#ifdef Q_OS_WIN
+  // WIN-AI-ORPHAN (crash-safe child containment): this process hosts the AI
+  // sidecar tree (python agent.py -> claude.exe/node.exe) via QProcess. If
+  // the app dies -- especially on a crash -- the QProcess children survive
+  // as orphans; an orphaned SDK client then reconnects to the NEXT app
+  // instance's loopback MCP server (fixed aiPort) and its stale-session
+  // churn races the server during startup (observed 2026-09-13..15 as
+  // delayed Qt6Core!QObjectPrivate::removeConnection heap corruption ~60s
+  // after every launch, escalating 6/6 once the first orphan existed).
+  // Putting THIS process into a kill-on-close job object makes every child
+  // inherit membership, so the whole tree is reaped by the kernel on any
+  // exit path -- clean quit, taskkill, or crash. Nested jobs (Win8+) are
+  // legal, so an outer harness job does not break this.
+  {
+    HANDLE job = CreateJobObjectW(nullptr, nullptr);
+    if (job) {
+      JOBOBJECT_EXTENDED_LIMIT_INFORMATION limit = {};
+      limit.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+      if (SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+                                  &limit, sizeof(limit))) {
+        if (!AssignProcessToJobObject(job, GetCurrentProcess()))
+          CloseHandle(job);  // keep no live handle when assignment failed
+      } else {
+        CloseHandle(job);
+      }
+      // Deliberately leak the job handle on success: it is closed by the
+      // kernel when this process exits, which is exactly the trigger for
+      // KILL_ON_JOB_CLOSE.
+    }
+  }
+#endif
+
   const StartupOpenRequest startupOpenRequest = parseStartupOpenRequest(app);
   const QString dumpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/crash_dumps");
   QDir().mkpath(dumpDir);
