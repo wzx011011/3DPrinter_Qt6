@@ -1982,3 +1982,30 @@ items:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 177 passed
       commit: 5c82ebe (fix(layering): repair orphaned ternary continuations + anti-revival audit)
       last_verified: 2026-09-15
+
+  - id: WAVE3-BEHAVIORAL-AUDIT-R2
+    title: Wave-3 behavioral audit round 2 -- ObjectLayers/AMSSettings/Calibration/EditGCode wiring verified clean
+    aliases: ["WAVE3-R2"]
+    area: UI/Audit
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: aligned
+    verification: upstream-parity-audit
+    availability: available
+    notes:
+      Behavioral per-item audit round: (1) zero QSettings/direct-storage
+      access in any dialog QML (persistence lives in services/VMs as
+      documented); (2) ObjectLayersDialog wires the full layer-range API
+      through EditorViewModel (objectLayerRangeCount / layerRangeMinZ/MaxZ /
+      layerRangeValue / setLayerRangeValue / removeObjectLayerRange);
+      (3) AMSSettingsDialog wires slot colors/names/materials/autoSwap/
+      remaining through the AmsViewModel; (4) open/close paths present on
+      all sampled dialogs. No new defects. Remaining wave-3 items are the
+      behavior-level parity passes per dialog (needs side-by-side runtime
+      comparison, blocked by AI-SIDECAR-STARTUP-RACE for GUI runs).
+    evidence:
+      gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 177 passed
+      commit: RP1E-ROUND2-HASH
+      last_verified: 2026-09-15
