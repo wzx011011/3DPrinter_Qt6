@@ -1853,6 +1853,23 @@ items:
         it reads is already freed -> the corruption predates the crash.
         Culprit requires PageHeap (admin) outside the sandbox. All
         artifacts: cdb_sym5_89d8 log + crash_stack.log + dumps.
+      - ROUND 9 (2026-09-15): the crashing QList<QVector3D> identified --
+        the ONLY QList<QVector3D> members in the app are
+        ProjectServiceMock's objectPositions_/objectRotations_/objectScales_
+        (+ assembleOffsets_/assembleRotations_/assembleScales_ mirrors).
+        Their rebuilders: assembleObjectsReturningIndex, the G-11 queued
+        load-completion lambda, and restorePlateListSnapshot (called from
+        UndoCommands.cpp:926/946/1058/1072 -- the plate-list undo commands).
+        The live full stack shows the crash inside QList<QVector3D>::reserve
+        reached via a finalize-time QML binding -> Q_INVOKABLE, with the
+        memcpy reading a FREED source block: i.e. a mirror list was already
+        dangling when a QML binding re-read it during component finalize.
+        PRIME SUSPECT (narrows to): an undo/restore or completion lambda
+        freeing/rebuilding the mirror lists while a QML finalize binding
+        re-enters their accessor -- i.e. the load-completion vs
+        page-finalize ordering window. Next: add a generation-guard/
+        marshal boundary around the mirror rebuilds, or capture a PageHeap
+        run in an elevated shell.
       - ROUND 7 (2026-09-15): R-P1.C completed (see 8fdb2fa/ac06a84 --
         assemble shift + regression test). Live cdb -cf session (command
         file, no quoting issues) captured the crash sequence on the
