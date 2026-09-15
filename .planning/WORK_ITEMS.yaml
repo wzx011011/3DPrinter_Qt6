@@ -1870,6 +1870,19 @@ items:
         page-finalize ordering window. Next: add a generation-guard/
         marshal boundary around the mirror rebuilds, or capture a PageHeap
         run in an elevated shell.
+      - ROUND 10 (2026-09-15): load-worker marshal audit CLEAN. Every
+        receiver-> access in the loadModelFromPath worker body is inside
+        queued GUI-thread lambdas (progress updates + the G-11 completion
+        block); zero direct mirror-list writes off-thread. The
+        "load-completion vs finalize window" cross-thread theory is
+        DISPROVEN. Combined with R-P0.1/R-P1.G/R-P1.C demotions, all
+        app-side candidate races identified so far are cleared. The P0
+        corruption source is NOT in the audited app paths; remaining
+        candidates require the elevated PageHeap session (culprit write
+        faults at the offending access) or a Qt/environment-level
+        interaction investigation. Mirrors stay as-is (no speculative
+        generation-guard added -- the audited paths are clean and a guard
+        would be cargo cult).
       - ROUND 7 (2026-09-15): R-P1.C completed (see 8fdb2fa/ac06a84 --
         assemble shift + regression test). Live cdb -cf session (command
         file, no quoting issues) captured the crash sequence on the
