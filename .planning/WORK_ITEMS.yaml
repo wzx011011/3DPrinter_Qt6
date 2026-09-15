@@ -1957,3 +1957,28 @@ items:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 176 passed
       commit: 1e061d5 (fix(ui): R-P1.E -- MultiMachinePage demo-mode disclosure)
       last_verified: 2026-09-15
+
+  - id: RP1H-STALE-BINDING-SWEEP
+    title: R-P1.H stale-binding sweep -- context menus carry the G-07 tick refresh; rail/sidebar bindings reactive
+    aliases: ["RP1H-SWEEP"]
+    area: UI/Bindings
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: aligned
+    verification: automated-test
+    availability: available
+    notes:
+      Behavioral sweep of the R-P1.H cited sites on the current code:
+      PrepareContextMenus already implements the G-07 menuRefreshTick pattern
+      (flush-option check marks re-read flushOptionValue() on every
+      onAboutToShow); PreviewLayerRail binds previewVm properties directly
+      (layerCount etc., NOTIFY-driven, reactive); the LeftSidebar red-dot
+      marker cited in the review no longer exists under that name. Residual:
+      a full per-item stale-binding census across remaining QML is tracked
+      as ongoing hygiene, not a defect list.
+    evidence:
+      gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 177 passed
+      commit: 5c82ebe (fix(layering): repair orphaned ternary continuations + anti-revival audit)
+      last_verified: 2026-09-15
