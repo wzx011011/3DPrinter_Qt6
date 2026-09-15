@@ -727,6 +727,7 @@ private slots:
   // stats split display, extruder legend visibility, software fallback.
   void previewCompletionSourceAudit();
   void mockSurfacesCarryUserVisibleDisclosure();
+  void wizardAndWipeTowerBindConfigViewModelOnly();
   void previewWave5SliderSourceAudit();
   void previewWave5GcodeWindowAndAddMenuHonesty();
   // Phase 239 (ENGN-01..03): slicing engine semantics source audits --
@@ -11641,4 +11642,23 @@ void QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure()
            "R-P1.E: MultiMachinePage fleet/send must disclose the local mock");
   QVERIFY2(selectMachine.contains(QStringLiteral("演示模式")),
            "R-P1.E: SelectMachineDialog device list must disclose the local mock");
+}
+
+// Layering anti-revival: the wizard/wipe-tower dialogs once carried an
+// orphaned "? backend.presetServiceMock : null" continuation line that made
+// their configVm property evaluate to the SERVICE (runtime TypeErrors on
+// every wizard* call). Pin both dialogs to the viewmodel-only contract.
+void QmlUiAuditTests::wizardAndWipeTowerBindConfigViewModelOnly()
+{
+  const QString wizard = readSource(QStringLiteral("src/qml_gui/dialogs/ConfigWizardDialog.qml"));
+  const QString wipeTower = readSource(QStringLiteral("src/qml_gui/dialogs/WipeTowerDialog.qml"));
+  QVERIFY2(!wizard.isEmpty() && !wipeTower.isEmpty(),
+           "Unable to read ConfigWizardDialog.qml / WipeTowerDialog.qml");
+  QVERIFY2(!wizard.contains(QStringLiteral("presetServiceMock"))
+               && !wipeTower.contains(QStringLiteral("presetServiceMock")),
+           "LAYERING: wizard/wipe-tower dialogs must not reference the preset"
+           " service directly");
+  QVERIFY2(wizard.contains(QStringLiteral("backend.configViewModel"))
+               && wipeTower.contains(QStringLiteral("backend.configViewModel")),
+           "LAYERING: wizard/wipe-tower dialogs must bind configViewModel");
 }

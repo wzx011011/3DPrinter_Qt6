@@ -9,7 +9,7 @@ import "../controls"
 // PresetServiceMock enumeration.
 //
 // Multi-page wizard: Welcome -> Printer -> Filament -> Done
-// Printer / filament / bed lists come from backend.presetServiceMock
+// Printer / filament / bed lists come from backend.configViewModel
 // (Phase 199 WIZ-01), replacing the prior hard-coded mock. Phase 218 (WIZ-03)
 // made the vendor user-selectable: a vendor combo at the top of the Printer
 // page lists all availableVendorNames() and loads the chosen vendor's presets
@@ -42,7 +42,6 @@ CxDialog {
     // PreparePage.qml convention) so the dialog still renders in designer /
     // contexts without a backend context property.
     readonly property var configVm: typeof backend !== "undefined" && backend ? backend.configViewModel : null
-        ? backend.presetServiceMock : null
     // Phase 218 (WIZ-03): all available vendor names (filename scan, no preset
     // load). Drives the vendor picker combo.
     readonly property var availableVendors: configVm ? configVm.wizardAvailableVendorNames() : []
