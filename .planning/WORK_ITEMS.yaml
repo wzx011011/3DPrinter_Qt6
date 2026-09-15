@@ -1933,3 +1933,27 @@ items:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175 passed
       commit: 7f03345 (feat(settings): wave2 -- SettingsDialog footer bar)
       last_verified: 2026-09-15
+
+  - id: RP1E-DISCLOSURE-COVERAGE
+    title: R-P1.E fake-success disclosures -- all four mock-backed surfaces covered + anti-revival audit
+    aliases: ["RP1E-DISCLOSURE"]
+    area: UI/Honesty
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: n/a (Owzx-only honesty policy, docs/依赖与协议边界审计.md)
+    verification: automated-test
+    availability: available
+    notes:
+      Batch audit found HomePage / MonitorPage / SelectMachineDialog
+      disclosures already present; MultiMachinePage was the last uncovered
+      surface (fleet + task send on local mocks). Added the same
+      demo-mode disclosure banner. New QmlUiAudit
+      mockSurfacesCarryUserVisibleDisclosure pins all four surfaces
+      (anti-revival). lastGcodePath + PrintDialog consumption verified
+      already fixed (R-P1.E marker, proper Q_PROPERTY).
+    evidence:
+      gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 176 passed
+      commit: 1e061d5 (fix(ui): R-P1.E -- MultiMachinePage demo-mode disclosure)
+      last_verified: 2026-09-15
