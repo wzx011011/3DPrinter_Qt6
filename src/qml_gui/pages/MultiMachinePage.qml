@@ -63,6 +63,20 @@ Item {
         anchors.fill: parent
         spacing: 0
 
+        // R-P1.E (fake-success disclosure): the device fleet / task send on
+        // this page runs on the local mock services -- no real machine is
+        // reached. Same disclosure pattern as MonitorPage / HomePage.
+        Text {
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.spacingXL
+            Layout.rightMargin: Theme.spacingXL
+            Layout.topMargin: Theme.spacingSM
+            wrapMode: Text.WordWrap
+            color: Theme.statusWarning
+            font.pixelSize: Theme.fontSizeSM
+            text: qsTr("演示模式：多设备列表与任务发送为本地模拟数据，不会连接真实设备（真实设备推送依赖 MQTT，当前为外部阻塞项）。")
+        }
+
         // ── Page header (top bar) ──
         Rectangle {
             Layout.fillWidth: true

@@ -726,6 +726,7 @@ private slots:
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
   void previewCompletionSourceAudit();
+  void mockSurfacesCarryUserVisibleDisclosure();
   void previewWave5SliderSourceAudit();
   void previewWave5GcodeWindowAndAddMenuHonesty();
   // Phase 239 (ENGN-01..03): slicing engine semantics source audits --
@@ -11615,4 +11616,29 @@ void QmlUiAuditTests::platerHotkeysFollowCanvasFocus()
            " focus");
   QVERIFY2(mainQml.contains(QStringLiteral("readonly property bool textEditHoldFocus")),
            "CANVAS-FOCUS: textEditHoldFocus must gate the Tab shortcuts");
+}
+
+// R-P1.E (fake-success disclosure, anti-revival): every surface backed by
+// mock device/cloud/fleet services must carry a user-visible
+// demo-mode disclosure so mock responses are never mistaken for real
+// device state.
+void QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure()
+{
+  const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
+  const QString monitorPage = readSource(QStringLiteral("src/qml_gui/pages/MonitorPage.qml"));
+  const QString multiMachinePage = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
+  const QString selectMachine = readSource(QStringLiteral("src/qml_gui/dialogs/SelectMachineDialog.qml"));
+  QVERIFY2(!homePage.isEmpty() && !monitorPage.isEmpty()
+               && !multiMachinePage.isEmpty() && !selectMachine.isEmpty(),
+           "Unable to read the mock-backed surfaces");
+  QVERIFY2(homePage.contains(QStringLiteral("演示模式")),
+           "R-P1.E: HomePage login/bind must disclose the local mock");
+  QVERIFY2(monitorPage.contains(QStringLiteral("演示模式")),
+           "R-P1.E: MonitorPage device/camera/print controls must disclose"
+           " the local mock");
+  QVERIFY2(multiMachinePage.contains(QStringLiteral("演示模式"))
+               && multiMachinePage.contains(QStringLiteral("任务发送")),
+           "R-P1.E: MultiMachinePage fleet/send must disclose the local mock");
+  QVERIFY2(selectMachine.contains(QStringLiteral("演示模式")),
+           "R-P1.E: SelectMachineDialog device list must disclose the local mock");
 }
