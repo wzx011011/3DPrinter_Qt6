@@ -2007,5 +2007,5 @@ items:
       comparison, blocked by AI-SIDECAR-STARTUP-RACE for GUI runs).
     evidence:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 177 passed
-      commit: RP1E-ROUND2-HASH
+      commit: docs-only round (behavioral audit; latest code state 1e061d5)
       last_verified: 2026-09-15
