@@ -7939,6 +7939,29 @@ int ProjectServiceMock::assembleObjectsReturningIndex(const QList<int> &objIndic
         target->addInstance(adjustedIndex(newIndex), 0);
     }
 
+    // R-P1.C: the scoped-config stores are keyed by object index -- the
+    // merged sources' entries die with them and the survivors shift exactly
+    // like the plate membership above (same adjustedIndex semantics). The
+    // new assembly starts fresh (no layer ranges / overrides), matching the
+    // upstream fresh merged object.
+    {
+      QHash<int, QList<MockLayerRange>> shiftedRanges;
+      for (auto it = m_mockLayerRanges.constBegin(); it != m_mockLayerRanges.constEnd(); ++it) {
+        if (removedSet.contains(it.key()))
+          continue;
+        shiftedRanges[adjustedIndex(it.key())] = it.value();
+      }
+      m_mockLayerRanges = shiftedRanges;
+
+      QHash<int, QHash<QString, QVariant>> shiftedOverrides;
+      for (auto it = m_mockObjectOverrides.constBegin(); it != m_mockObjectOverrides.constEnd(); ++it) {
+        if (removedSet.contains(it.key()))
+          continue;
+        shiftedOverrides[adjustedIndex(it.key())] = it.value();
+      }
+      m_mockObjectOverrides = shiftedOverrides;
+    }
+
     syncTransformsFromModel();
     lastError_.clear();
     emit projectChanged();

@@ -578,6 +578,7 @@ private slots:
   // ModelObject::layer_config_ranges so slicing consumes variable layer
   // heights (upstream GUI_ObjectLayers semantics incl. overlap trimming).
   void layerRangesReachModelConfig();
+  void assembleShiftsScopedConfigStores();
   // v5.16 (UNDO-03): plate operations (delete/add/move/lock) round-trip
   // through the undo stack via PlateCommand's before/after plate-list
   // snapshots — plate count, names, membership and member-object meshes are
@@ -8320,6 +8321,40 @@ void ViewModelSmokeTests::layerRangesReachModelConfig()
   model = project.rawModel();
   obj = model->objects.front();
   QCOMPARE(int(obj->layer_config_ranges.size()), 2);
+#endif
+}
+
+// -- R-P1.C: scoped-config stores must shift on assemble like the mirrors --
+void ViewModelSmokeTests::assembleShiftsScopedConfigStores()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("assemble scoped-store shift requires libslic3r");
+#else
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 0
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 1
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 2
+  QCOMPARE(project.modelCount(), 3);
+
+  // Distinct layer ranges per object.
+  QVERIFY(project.addObjectLayerRange(0, 0.0, 2.0));
+  QVERIFY(project.addObjectLayerRange(1, 2.0, 4.0));
+  QVERIFY(project.addObjectLayerRange(2, 4.0, 6.0));
+
+  // Assemble objects 0 + 1: the sources die, the survivor (old 2) shifts to
+  // 0, and the fresh assembly lands at index 1.
+  const int merged = project.assembleObjectsReturningIndex({0, 1});
+  QVERIFY(merged >= 0);
+  QCOMPARE(project.modelCount(), 2);
+
+  // The merged sources' scoped data dies with them.
+  QVERIFY2(project.objectLayerRanges(merged).isEmpty(),
+           "R-P1.C: the fresh assembly must start without layer ranges");
+  // The survivor kept ITS OWN ranges under the SHIFTED key.
+  const QList<MockLayerRange> survivor = project.objectLayerRanges(0);
+  QCOMPARE(survivor.size(), 1);
+  QCOMPARE(survivor.first().minZ, 4.0);
+  QCOMPARE(survivor.first().maxZ, 6.0);
 #endif
 }
 
