@@ -457,6 +457,21 @@ ApplicationWindow {
         enabled: backend.currentPage === backend.tp3DEditor
         onActivated: plater.preparePageRef.redoFromTopbar()
     }
+    // Ctrl+Tab (upstream KBShortcutsDialog global "Switch table page",
+    // MainFrame tab order): cycle the top-level pages through the guarded
+    // requestSelectTab. Skips the unmapped debug slot; pages that map to no
+    // route keep their current upstream-equivalent no-op.
+    Shortcut {
+        sequences: ["Ctrl+Tab"]
+        onActivated: {
+            var order = [backend.tpHome, backend.tp3DEditor, backend.tpPreview,
+                         backend.tpDevice, backend.tpMultiDevice, backend.tpProject,
+                         backend.tpCalibration, backend.tpPreferences]
+            var cur = order.indexOf(backend.currentPage)
+            var next = order[(cur + 1 + order.length) % order.length]
+            backend.requestSelectTab(next)
+        }
+    }
     Shortcut {
         sequence: "Delete"
         enabled: backend.currentPage === backend.tp3DEditor
