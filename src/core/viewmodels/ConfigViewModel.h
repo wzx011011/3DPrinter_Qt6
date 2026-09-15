@@ -160,6 +160,24 @@ public:
   Q_INVOKABLE int importBundleIni(const QString &dirPath);
   bool isPresetDirty() const;
   int globalModifiedCount() const;
+
+  // ── R-P1.J layering governance: wizard / wipe-tower preset proxies ──
+  // ConfigWizardDialog / WipeTowerDialog must not touch the service
+  // directly (qml-boundaries rule); these thin wrappers keep the QML on
+  // the viewmodel layer. Pure pass-throughs to PresetServiceMock.
+  Q_INVOKABLE QStringList wizardVendors() const;
+  Q_INVOKABLE QStringList wizardAvailableVendorNames() const;
+  Q_INVOKABLE QString wizardSelectedVendor() const;
+  Q_INVOKABLE void wizardLoadVendor(const QString &vendor);
+  Q_INVOKABLE QStringList wizardPrinterModelsForVendor(const QString &vendor) const;
+  Q_INVOKABLE QStringList wizardMaterialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const;
+  Q_INVOKABLE QStringList wizardDefaultBedTypes() const;
+  Q_INVOKABLE void wizardSetSelectedVendor(const QString &vendor);
+  Q_INVOKABLE void wizardSetSelectedPrinterModel(const QString &model);
+  Q_INVOKABLE QVariant wizardPresetValue(const QString &presetName, const QString &key) const;
+  Q_INVOKABLE QVariantList wizardFlushMatrix() const;
+  Q_INVOKABLE bool wizardSaveFlushVolumes(const QVariantList &rows);
+
   Q_INVOKABLE bool createCustomPreset(int category, const QString &name);
   /// v5.16 (PSET2-02): create a preset inheriting from `inherits` — the new
   /// preset's values start from the parent's resolved chain (CreatePresetsDialog

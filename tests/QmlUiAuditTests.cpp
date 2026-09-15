@@ -9701,11 +9701,11 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
     QVERIFY2(!wizardQml.isEmpty(), "GATE-01/WIZ-03: Unable to read ConfigWizardDialog.qml");
     QVERIFY2(wizardQml.contains(QStringLiteral("availableVendorNames()")),
              "GATE-01/WIZ-03: ConfigWizard must bind availableVendorNames() to the vendor picker");
-    QVERIFY2(wizardQml.contains(QStringLiteral("presetSvc.loadVendor(")),
+    QVERIFY2(wizardQml.contains(QStringLiteral("configVm.wizardLoadVendor(activeVendor)")),
              "GATE-01/WIZ-03: ConfigWizard must call loadVendor() on vendor change");
-    QVERIFY2(wizardQml.contains(QStringLiteral("setSelectedVendor(")),
+    QVERIFY2(wizardQml.contains(QStringLiteral("wizardSetSelectedVendor(")),
              "GATE-01/WIZ-03: ConfigWizard must persist selectedVendor on completion");
-    QVERIFY2(wizardQml.contains(QStringLiteral("setSelectedPrinterModel(")),
+    QVERIFY2(wizardQml.contains(QStringLiteral("wizardSetSelectedPrinterModel(")),
              "GATE-01/WIZ-03: ConfigWizard must persist selectedPrinterModel on completion");
     QVERIFY2(!wizardQml.contains(QStringLiteral("single-vendor by design")),
              "GATE-01/WIZ-03: ConfigWizard must no longer be marked 'single-vendor by design'");
@@ -10467,7 +10467,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
   const QString wipeTower = corpus.value(QStringLiteral("dialogs/WipeTowerDialog.qml"));
   QVERIFY2(wipeTower.contains(QStringLiteral("matrix[rowIndex][columnIndex] = value")),
            "DLG-02: WipeTowerDialog edits must write back to the matrix");
-  QVERIFY2(wipeTower.contains(QStringLiteral("saveFlushVolumes(root.copyMatrix(flushMatrix))")),
+  QVERIFY2(wipeTower.contains(QStringLiteral("wizardSaveFlushVolumes(root.copyMatrix(flushMatrix))")),
            "DLG-02: WipeTowerDialog OK must persist the edited matrix copy");
   const QString presetSvcHeader = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
   QVERIFY2(presetSvcHeader.contains(QStringLiteral("saveFlushVolumes")),

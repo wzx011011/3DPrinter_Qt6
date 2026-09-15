@@ -819,6 +819,72 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name)
   return createCustomPreset(category, name, QString());
 }
 
+// ── R-P1.J layering governance: wizard / wipe-tower proxies (pass-throughs)
+QStringList ConfigViewModel::wizardVendors() const
+{
+  return presetService_ ? presetService_->vendors() : QStringList();
+}
+
+QStringList ConfigViewModel::wizardAvailableVendorNames() const
+{
+  return presetService_ ? presetService_->availableVendorNames() : QStringList();
+}
+
+QString ConfigViewModel::wizardSelectedVendor() const
+{
+  return presetService_ ? presetService_->selectedVendor() : QString();
+}
+
+void ConfigViewModel::wizardLoadVendor(const QString &vendor)
+{
+  if (presetService_)
+    presetService_->loadVendor(vendor);
+}
+
+QStringList ConfigViewModel::wizardPrinterModelsForVendor(const QString &vendor) const
+{
+  return presetService_ ? presetService_->printerModelsForVendor(vendor) : QStringList();
+}
+
+QStringList ConfigViewModel::wizardMaterialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const
+{
+  return presetService_
+      ? presetService_->materialsForVendorAndPrinter(vendor, printerModel)
+      : QStringList();
+}
+
+QStringList ConfigViewModel::wizardDefaultBedTypes() const
+{
+  return presetService_ ? presetService_->defaultBedTypes() : QStringList();
+}
+
+void ConfigViewModel::wizardSetSelectedVendor(const QString &vendor)
+{
+  if (presetService_)
+    presetService_->setSelectedVendor(vendor);
+}
+
+void ConfigViewModel::wizardSetSelectedPrinterModel(const QString &model)
+{
+  if (presetService_)
+    presetService_->setSelectedPrinterModel(model);
+}
+
+QVariant ConfigViewModel::wizardPresetValue(const QString &presetName, const QString &key) const
+{
+  return presetService_ ? presetService_->presetValue(presetName, key) : QVariant();
+}
+
+QVariantList ConfigViewModel::wizardFlushMatrix() const
+{
+  return presetService_ ? presetService_->calculateFlushMatrix() : QVariantList();
+}
+
+bool ConfigViewModel::wizardSaveFlushVolumes(const QVariantList &rows)
+{
+  return presetService_ ? presetService_->saveFlushVolumes(rows) : false;
+}
+
 bool ConfigViewModel::createCustomPreset(int category, const QString &name, const QString &inherits)
 {
   lastPresetError_.clear();

@@ -24,7 +24,7 @@ CxDialog {
     // v5.12 gap-closure: flush volume matrix computed from filament colours
     // via PresetServiceMock::calculateFlushMatrix (FlushVolCalculator). Falls
     // back to a flat default when no preset service is available.
-    property var presetSvc: typeof backend !== "undefined" && backend
+    property var configVm: typeof backend !== "undefined" && backend
         ? backend.presetServiceMock : null
     property var flushMatrix: defaultMatrix(4)
     property var extruderNames: [qsTr("耗材1"), qsTr("耗材2"), qsTr("耗材3"), qsTr("耗材4")]
@@ -61,8 +61,8 @@ CxDialog {
         return m
     }
     Component.onCompleted: {
-        if (presetSvc) {
-            var flat = presetSvc.calculateFlushMatrix()
+        if (configVm) {
+            var flat = configVm.wizardFlushMatrix()
             if (flat && flat.length > 0) {
                 var n = Math.sqrt(flat.length)
                 if (n > 0) {
@@ -307,10 +307,10 @@ CxDialog {
                 cxStyle: CxButton.Style.Secondary
                 compact: true
                 // v5.12: recompute flush matrix from filament colours.
-                enabled: presetSvc !== null
+                enabled: configVm !== null
                 onClicked: {
-                    if (!presetSvc) return
-                    var flat = presetSvc.calculateFlushMatrix()
+                    if (!configVm) return
+                    var flat = configVm.wizardFlushMatrix()
                     if (flat && flat.length > 0) {
                         var n = Math.sqrt(flat.length)
                         if (n > 0)
@@ -358,8 +358,8 @@ CxDialog {
                 // Plater.cpp:2125). The saved matrix wins over the derived
                 // one on the next open (calculateFlushMatrix reads it back).
                 onClicked: {
-                    if (presetSvc && flushMatrix && flushMatrix.length > 0)
-                        presetSvc.saveFlushVolumes(root.copyMatrix(flushMatrix))
+                    if (configVm && flushMatrix && flushMatrix.length > 0)
+                        configVm.wizardSaveFlushVolumes(root.copyMatrix(flushMatrix))
                     root.accept()
                 }
             }

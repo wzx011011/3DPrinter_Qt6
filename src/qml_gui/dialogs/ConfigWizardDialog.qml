@@ -41,36 +41,36 @@ CxDialog {
     // Lazily resolve the preset service; null-safe (typeof guard matches the
     // PreparePage.qml convention) so the dialog still renders in designer /
     // contexts without a backend context property.
-    readonly property var presetSvc: typeof backend !== "undefined" && backend
+    readonly property var configVm: typeof backend !== "undefined" && backend ? backend.configViewModel : null
         ? backend.presetServiceMock : null
     // Phase 218 (WIZ-03): all available vendor names (filename scan, no preset
     // load). Drives the vendor picker combo.
-    readonly property var availableVendors: presetSvc ? presetSvc.availableVendorNames() : []
+    readonly property var availableVendors: configVm ? configVm.wizardAvailableVendorNames() : []
     // Phase 218 (WIZ-03): the selected vendor is now user-selectable. Default
     // to the persisted value (AppConfig-lite), else the first already-loaded
     // vendor, else empty.
     property string activeVendor: {
-        if (!presetSvc) return ""
-        const saved = presetSvc.selectedVendor()
+        if (!configVm) return ""
+        const saved = configVm.wizardSelectedVendor()
         if (saved.length > 0) return saved
-        const loaded = presetSvc.vendors()
+        const loaded = configVm.wizardVendors()
         return loaded.length > 0 ? loaded[0] : ""
     }
     // Ensure the active vendor's presets are loaded when it changes.
-    onActiveVendorChanged: if (presetSvc && activeVendor.length > 0) presetSvc.loadVendor(activeVendor)
-    readonly property var vendorList: presetSvc ? presetSvc.vendors() : []
-    readonly property var printerModelList: presetSvc && activeVendor.length > 0
-        ? presetSvc.printerModelsForVendor(activeVendor) : []
+    onActiveVendorChanged: if (configVm && activeVendor.length > 0) configVm.wizardLoadVendor(activeVendor)
+    readonly property var vendorList: configVm ? configVm.wizardVendors() : []
+    readonly property var printerModelList: configVm && activeVendor.length > 0
+        ? configVm.wizardPrinterModelsForVendor(activeVendor) : []
     // Phase 224 (WIZ-04): the printer model currently selected in the wizard's
     // Printer page combo (drives material filtering). Updated by printerCombo.
     property string currentPrinterModel: ""
-    readonly property var materialList: presetSvc && activeVendor.length > 0
+    readonly property var materialList: configVm && activeVendor.length > 0
         // Filter materials by vendor AND the selected printer model (对齐上游
         // PageMaterials::update_lists printer-dimension filter). Empty printer
         // falls back to vendor-only (materialsForVendorAndPrinter handles it).
-        ? presetSvc.materialsForVendorAndPrinter(activeVendor, currentPrinterModel) : []
-    readonly property var bedTypeList: presetSvc
-        ? presetSvc.defaultBedTypes() : []
+        ? configVm.wizardMaterialsForVendorAndPrinter(activeVendor, currentPrinterModel) : []
+    readonly property var bedTypeList: configVm
+        ? configVm.wizardDefaultBedTypes() : []
 
     contentItem: ColumnLayout {
         spacing: Theme.spacingXS
@@ -498,11 +498,11 @@ CxDialog {
                             // Phase 218 (WIZ-03): persist the selected vendor +
                             // printer model (AppConfig-lite) so the next launch
                             // restores them.
-                            if (presetSvc) {
+                            if (configVm) {
                                 if (activeVendor.length > 0)
-                                    presetSvc.setSelectedVendor(activeVendor)
+                                    configVm.wizardSetSelectedVendor(activeVendor)
                                 if (root.selectedPrinter.length > 0)
-                                    presetSvc.setSelectedPrinterModel(root.selectedPrinter)
+                                    configVm.wizardSetSelectedPrinterModel(root.selectedPrinter)
                             }
                             // R-P1.J (upstream ConfigWizard::apply_config):
                             // finishing the wizard APPLIES the selections --
@@ -536,17 +536,17 @@ CxDialog {
     // store. Reads nozzle_temp / bed_temp from the currently selected
     // material preset; returns -1 when unknown so the UI shows "--".
     function currentNozzleTemp() {
-        if (!presetSvc || filamentCombo.currentText.length === 0)
+        if (!configVm || filamentCombo.currentText.length === 0)
             return -1;
-        var v = presetSvc.presetValue(filamentCombo.currentText, "nozzle_temp");
+        var v = configVm.wizardPresetValue(filamentCombo.currentText, "nozzle_temp");
         var n = parseFloat(v);
         return isNaN(n) ? -1 : Math.round(n);
     }
 
     function currentBedTemp() {
-        if (!presetSvc || filamentCombo.currentText.length === 0)
+        if (!configVm || filamentCombo.currentText.length === 0)
             return -1;
-        var v = presetSvc.presetValue(filamentCombo.currentText, "bed_temp");
+        var v = configVm.wizardPresetValue(filamentCombo.currentText, "bed_temp");
         var n = parseFloat(v);
         return isNaN(n) ? -1 : Math.round(n);
     }
