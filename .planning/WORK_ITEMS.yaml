@@ -1841,6 +1841,18 @@ items:
         deleteObject/split/assemble) as the last concrete suspect family;
         (b) alternatively run an elevated PageHeap session outside the
         sandbox with the PDB-enabled build to fault at the culprit write.
+      - ROUND 8 (2026-09-15): FULL SYMBOLIZED VICTIM STACK captured via live
+        cdb -cf (cdb_sym5_89d8 log, crash in VCRUNTIME140!memcpy:
+        main thread, QQmlApplicationEngine::load -> QQmlComponent::
+        create -> QQmlObjectCreator::finalize -> QQmlBinding::setEnabled ->
+        doUpdate -> evaluate -> QV4::QObjectMethod::callInternal ->
+        callPrecise -> metacall -> app invokable -> QList growth ->
+        memcpy from freed heap. The crashing QML binding CALLS a heavy
+        Q_INVOKABLE (QList-building, meshData-class) during component
+        FINALIZATION. Reproduced identically across builds; the heap block
+        it reads is already freed -> the corruption predates the crash.
+        Culprit requires PageHeap (admin) outside the sandbox. All
+        artifacts: cdb_sym5_89d8 log + crash_stack.log + dumps.
       - ROUND 7 (2026-09-15): R-P1.C completed (see 8fdb2fa/ac06a84 --
         assemble shift + regression test). Live cdb -cf session (command
         file, no quoting issues) captured the crash sequence on the
