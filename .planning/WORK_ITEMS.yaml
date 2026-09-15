@@ -1896,3 +1896,28 @@ items:
       gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175 passed
       commit: 3fd30ad (feat(preview): wave1 batch B -- PREV-LEFT)
       last_verified: 2026-09-15
+
+  - id: SETPRINT-FOOTER-BAR
+    title: SettingsDialog bottom button row (Save/Discard/Close) closed the last seven-region shape gap
+    aliases: ["SETPRINT-FOOTER"]
+    area: UI/Settings
+    priority: P1
+    status: resolved
+    resolved: 2026-09-15
+    implementation: real
+    parity: aligned
+    verification: upstream-parity-audit
+    availability: available
+    notes:
+      Wave-2 SettingsDialog seven-region comparison (58aa803) identified the
+      missing bottom action bar as the only shape-level gap. Footer added:
+      Save = requestSaveAndMaybeClose(false), Discard =
+      configVm.requestDiscardPendingChanges(), Close =
+      openUnsavedChangesGuard(true) (the same UnsavedChangesDialog guard as
+      the window close). Save/Discard dirty-gated like the preset-bar save
+      icon. QmlUiAudit presetSystemCompletionSourceAudit pins the buttons,
+      gating, and guard routing.
+    evidence:
+      gate: canonical gate 2026-09-15 (see commit), QmlUiAuditTests 175 passed
+      commit: 7f03345 (feat(settings): wave2 -- SettingsDialog footer bar)
+      last_verified: 2026-09-15
