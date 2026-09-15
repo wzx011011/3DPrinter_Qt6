@@ -127,7 +127,7 @@ Blocked 登记并补披露。
 |---|---|---|---|---|---|---|
 | CVAS-TOOLBAR | GLToolbars.qml | GLToolbar.cpp + Gizmos/GLGizmoBase.cpp | Hybrid | manual-visual | 4 | v3.6 PREP-VTOOLBAR |
 | CVAS-CTXMENU | PrepareContextMenus.qml | Plater.cpp 右键菜单 + GLCanvas3D.cpp | Hybrid | upstream-parity-audit | 4 | R-P1.H：勾选/文案一次性绑定陈旧 |
-| CVAS-GIZMOPANEL | PreparePage 内嵌 gizmo 浮动面板 | Gizmos/GLGizmoAdvancedCut.cpp on_render_input_window + GLGizmoEmboss.cpp + GLGizmoFdmSupports.cpp | Hybrid | manual-visual | 4 | 2026-09-15 核实：v3.6 的 Placeholder 结论过时——connectorSize 滑条、embossHeight、brushRadius、MMU 16 色选择器等面板已实现并接 EditorViewModel 真实属性；残留：与上游 on_render_input_window 逐面板 parity 复核 |
+| CVAS-GIZMOPANEL | PreparePage 内嵌 gizmo 浮动面板 | Gizmos/GLGizmoAdvancedCut.cpp on_render_input_window + GLGizmoEmboss.cpp + GLGizmoFdmSupports.cpp | Real | automated-test | 4 | 2026-09-15 逐面板复核完成：全部面板控件绑定真实 VM 属性——AdvancedCut（位置/三轴旋转/connectorSize/连接销开关）、Drill（drillRadius）、Emboss（embossHeight/Depth + embossSelected/Async）、Text（textSize）、SVG（svgScale）、Simplify（wantedCount/MaxError）、MmuSegmentation（挤出机选择）、Paint（brushRadius + paintAtFacet 全链）；残留仅字段级标签/默认值微调（随运行时对照补充） |
 | CVAS-PICKING | RhiViewport/SoftwareViewport 拾取链 | GLCanvas3D.cpp _update_picker + MeshRaycaster（MeshUtils.hpp:159） | Real | automated-test | n/a | 本轮 PICK-BVH 已收口（WORK_ITEMS PICK-BVH-RAYCASTER，1d5e79a） |
 | CVAS-NAVIGATOR | NavigatorCube.qml + NavigatorLabels.qml | GLCanvas3D.cpp 导航立方语义 | Real | automated-test | n/a | NavigatorCubeTests 已锁 |
 | CVAS-LAYERRAIL | PreviewLayerRail.qml | IMSlider.cpp | Hybrid | automated-test | 1 | R-P1.H：滑条一次性绑定陈旧 |
