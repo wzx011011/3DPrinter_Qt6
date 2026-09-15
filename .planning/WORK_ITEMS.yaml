@@ -1841,6 +1841,18 @@ items:
         deleteObject/split/assemble) as the last concrete suspect family;
         (b) alternatively run an elevated PageHeap session outside the
         sandbox with the PDB-enabled build to fault at the culprit write.
+      - ROUND 7 (2026-09-15): R-P1.C completed (see 8fdb2fa/ac06a84 --
+        assemble shift + regression test). Live cdb -cf session (command
+        file, no quoting issues) captured the crash sequence on the
+        PDB build: a FIRST-CHANCE AV on worker thread 198 was consumed by
+        an in-process handler (session continued), then the process died
+        silently = the 0xC0000409/0xC0000374 fail-fast path (not watched
+        by sxe av). Confirmed victim threads span main (01:57 dump) AND
+        worker 10 (9/13 live) -- a true heap race. CONCLUSION: in-sandbox
+        debugging is exhausted; live debugging only ever shows victims.
+        The culprit write requires PageHeap (gflags, admin) outside the
+        sandbox with this PDB build, or an ASan run whose timing catches
+        the race. Everything is committed for either path.
       - ROUND 6 (2026-09-15): shipped OWZX_ENABLE_ASAN CMake option
         (default OFF) -- /fsanitize=address on owzx_app_core + OWzxSlicer
         with _DISABLE_STRING/VECTOR_ANNOTATION to keep LNK2038 consistent
