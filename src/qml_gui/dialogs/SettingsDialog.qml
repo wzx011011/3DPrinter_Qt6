@@ -869,6 +869,41 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                // SETPRINT-FOOTER (upstream Tab.cpp dialog bottom button row):
+                // Save / Discard / Close. Save and Discard act on the pending
+                // preset edits (gated on the dirty flag like the preset-bar
+                // save icon); Close runs the same UnsavedChangesDialog guard
+                // as the window close (openUnsavedChangesGuard(true)).
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 44
+                    color: Theme.chromeSurface
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Theme.spacingMD
+                        anchors.rightMargin: Theme.spacingMD
+                        spacing: Theme.spacingSM
+
+                        Item { Layout.fillWidth: true }
+
+                        CxButton {
+                            text: qsTr("保存")
+                            enabled: root.configVm && root.configVm.isPresetDirty
+                            onClicked: root.requestSaveAndMaybeClose(false)
+                        }
+                        CxButton {
+                            text: qsTr("放弃")
+                            enabled: root.configVm && root.configVm.isPresetDirty
+                            onClicked: if (root.configVm) root.configVm.requestDiscardPendingChanges()
+                        }
+                        CxButton {
+                            text: qsTr("关闭")
+                            onClicked: root.openUnsavedChangesGuard(true)
+                        }
+                    }
+                }
             }
         }
     }

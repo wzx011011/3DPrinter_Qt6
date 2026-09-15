@@ -3411,6 +3411,23 @@ void QmlUiAuditTests::presetSystemCompletionSourceAudit()
            "LeftSidebar printer combo must use the decorated sectioned list");
   QVERIFY2(sidebar.contains(QStringLiteral("plainPresetName(")),
            "LeftSidebar combos must normalize decorated names via plainPresetName()");
+
+  // SETPRINT-FOOTER (upstream Tab.cpp dialog bottom button row): the
+  // SettingsDialog footer carries Save / Discard / Close. Save and Discard
+  // are dirty-gated like the preset-bar save icon; Close runs the same
+  // UnsavedChangesDialog guard as the window close.
+  QVERIFY2(settingsDialog.contains(QStringLiteral("SETPRINT-FOOTER"))
+               && settingsDialog.contains(QStringLiteral("text: qsTr(\"保存\")"))
+               && settingsDialog.contains(QStringLiteral("text: qsTr(\"放弃\")"))
+               && settingsDialog.contains(QStringLiteral("text: qsTr(\"关闭\")")),
+           "SETPRINT-FOOTER: the footer row must carry the Save/Discard/Close buttons");
+  QVERIFY2(settingsDialog.contains(
+               QStringLiteral("enabled: root.configVm && root.configVm.isPresetDirty")),
+           "SETPRINT-FOOTER: Save and Discard must be dirty-gated");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("root.configVm.requestDiscardPendingChanges()"))
+               && settingsDialog.contains(QStringLiteral("onClicked: root.openUnsavedChangesGuard(true)")),
+           "SETPRINT-FOOTER: Discard must revert pending edits and Close must"
+           " run the unsaved-changes guard");
 }
 
 void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
