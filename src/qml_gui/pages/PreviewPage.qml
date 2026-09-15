@@ -282,18 +282,19 @@ Item {
                 property string plateThumbBase64: ""
                 property int plateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
 
+                function refreshPlateThumb() {
+                    if (!root.editorVm)
+                        return
+                    leftPanel.plateThumbBase64 =
+                        root.editorVm.plateThumbnailBase64(leftPanel.plateIndex)
+                }
                 Connections {
                     target: root.editorVm
-                    function onStateChanged() {
-                        leftPanel.plateThumbBase64 =
-                            root.editorVm.plateThumbnailBase64(leftPanel.plateIndex)
-                    }
+                    function onStateChanged() { leftPanel.refreshPlateThumb() }
                 }
-                Component.onCompleted: {
-                    if (root.editorVm)
-                        leftPanel.plateThumbBase64 =
-                            root.editorVm.plateThumbnailBase64(leftPanel.plateIndex)
-                }
+                // Qt.callLater: the initial read must not run synchronously
+                // inside component finalization (engine->load window).
+                Component.onCompleted: Qt.callLater(leftPanel.refreshPlateThumb)
 
                 ColumnLayout {
                     anchors.fill: parent
