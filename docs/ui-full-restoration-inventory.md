@@ -97,6 +97,18 @@
 | DLG-TROUBLESHOOT | TroubleshootDialog.qml | 上游 HMS/故障排查语义 | Hybrid | manual-visual | 3 | |
 | DLG-MALL | （已移除） | ModelMall.cpp + WebModelLibraryView.cpp + LoginDialog/OAuthDialog/WebUserLoginDialog.cpp | Blocked | upstream-parity-audit | n/a | MALL-01 审计锁定：无核准 Web host/远程契约/认证流；禁止静态目录与模拟下载 |
 
+### 3.0 长尾静态审计（2026-09-15，波次 3 第一轮）
+
+- **分层纪律**：治理后全部 34 个对话框零 service 直引（ConfigWizard/WipeTower
+  已改道 ConfigViewModel 包装；ExportPresetBundle/CreatePresets/Calibration/
+  PresetDiff/ObjectLayers 的 ServiceMock 字样仅存在于来源注释）。
+- **占位标记扫描**：EditGCodeDialog 的"占位符"为 G-code 模板占位符功能本体
+  （非债务）；NetworkTestDialog/TroubleshootDialog 为**自声明的 OWzx 占位**
+  （真实化依赖 NetworkService/DeviceService，属 Blocked 路线，随依赖审计
+  走），其余对话框无 TODO/FIXME/stub 标记。
+- **孤儿引用防护**：新增
+  `wizardAndWipeTowerBindConfigViewModelOnly` 审计（分层治理回归测试）。
+
 ### 3.1 上游存在、Qt 侧缺失的对话框（波次 3 逐项定性）
 
 BindDialog、BonjourDialog、CameraPopup（相机 Blocked）、CloneDialog、
