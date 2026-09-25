@@ -75,5 +75,10 @@ private:
   // the triangle's 3 consecutive vertex indices.
   std::vector<int> m_triangleBatch;
   std::vector<int> m_triangleFirstVertex;
+  // PERF (pick_ray): the same two arrays permuted into leaf-slot order at
+  // the end of build(), so the per-ray leaf loop reads dense slot-indexed
+  // entries instead of chasing the scattered ordinal indirection.
+  std::vector<int> m_leafTriangleBatch;
+  std::vector<int> m_leafTriangleFirstVertex;
   int m_triangleCount = 0;
 };

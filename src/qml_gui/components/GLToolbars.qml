@@ -32,6 +32,10 @@ Item {
 
     signal addModelRequested()
     signal sliceRequested()
+    // vp-3: variable layer height entry (upstream "layersediting" toolbar
+    // item, GLCanvas3D.cpp:6970-6990). The page opens its layer-height
+    // editor on this signal.
+    signal layersEditingRequested()
 
     function canUseGizmo(mode) {
         return !!root.editorVm && ((root.editorVm.availableGizmoMask & (1 << mode)) !== 0)
@@ -51,36 +55,52 @@ Item {
             root.viewport3d.gizmoMode = mode
     }
 
+    // vp-3 (TOOLICONS): one dedicated icon per tool, killing the former
+    // one-image-many-meanings mapping (maximize shared by Move/Measure,
+    // settings shared by both paint gizmos, mirror triple-booked). Icon
+    // filenames are the upstream gizmo assets
+    // (GLGizmosManager.cpp:206-224: toolbar_move/rotate/scale/flatten/cut/
+    // support/seam/meshboolean/measure/text, reduce_triangles.svg for
+    // Simplify, mmu_segmentation.svg for multicolor). Tools without an
+    // upstream counterpart (SVG emboss, face detect, drill, advanced cut)
+    // keep a feather fallback; Cut and AdvancedCut intentionally share the
+    // cut icon (same meaning family, matching upstream's single Cut gizmo).
     function iconForTool(toolId) {
         switch (toolId) {
         case GLViewport.GizmoMove:
-            return root.iconBase + "maximize.svg"
+            return root.iconBase + "toolbar_move.svg"
         case GLViewport.GizmoRotate:
-            return root.iconBase + "rotate-2.svg"
+            return root.iconBase + "toolbar_rotate.svg"
         case GLViewport.GizmoScale:
-            return root.iconBase + "restore.svg"
+            return root.iconBase + "toolbar_scale.svg"
         case GLViewport.GizmoFlatten:
-            return root.iconBase + "mirror.svg"
+            return root.iconBase + "toolbar_flatten.svg"
         case GLViewport.GizmoCut:
         case GLViewport.GizmoAdvancedCut:
-            return root.iconBase + "scissors.svg"
+            return root.iconBase + "toolbar_cut.svg"
         case GLViewport.GizmoSupportPaint:
+            return root.iconBase + "toolbar_support.svg"
         case GLViewport.GizmoSeamPaint:
-            return root.iconBase + "settings.svg"
+            return root.iconBase + "toolbar_seam.svg"
         case GLViewport.GizmoSimplify:
-            return root.iconBase + "layers-subtract.svg"
+            return root.iconBase + "reduce_triangles.svg"
         case GLViewport.GizmoMeasure:
-            return root.iconBase + "maximize.svg"
+            return root.iconBase + "toolbar_measure.svg"
         case GLViewport.GizmoMeshBoolean:
-            return root.iconBase + "box.svg"
+            return root.iconBase + "toolbar_meshboolean.svg"
         case GLViewport.GizmoEmboss:
+        case GLViewport.GizmoText:
+            // Both Qt6 entries realize the single upstream Emboss gizmo
+            // (GLGizmoEmboss, toolbar_text.svg, GLGizmosManager.cpp:216).
+            return root.iconBase + "toolbar_text.svg"
         case GLViewport.GizmoSVG:
+            // Upstream GLGizmoSVG ships no icon (GLGizmosManager.cpp:217);
+            // keep the grid metaphor as its Qt6 fallback.
             return root.iconBase + "layout-grid.svg"
         case GLViewport.GizmoHollow:
-            // Phase 143 (VDB-04): Hollow gizmo. No dedicated icon shipped yet;
-            // reuse the layers-subtract metaphor (a hollowed model subtracts
-            // interior volume). Dedicated hollow.svg can be added later.
-            return root.iconBase + "layers-subtract.svg"
+            return root.iconBase + "param_hollow.svg"
+        case GLViewport.GizmoMmuSegmentation:
+            return root.iconBase + "mmu_segmentation.svg"
         default:
             return root.iconBase + "box.svg"
         }
@@ -108,14 +128,24 @@ Item {
                 anchors.centerIn: parent
                 spacing: root.toolbarGap
 
+                // vp-3 (TOOLSET): the fixed nine-button set of the upstream
+                // main toolbar (GLCanvas3D.cpp:6862-6990) with its dedicated
+                // per-button SVG assets: add/addplate/orient/arrange, then a
+                // separator, then more/fewer (instance +/-), splitobjects/
+                // splitvolumes, layersediting. The former generic 15-button
+                // feather set (delete/copy/paste/mirror x3/center/repair/
+                // settings) is gone -- those actions live on the object list
+                // and context menus, matching upstream, which does not put
+                // them on this toolbar.
+
                 ActionToolButton {
-                    iconName: "box.svg"
-                    toolTipText: qsTr("Add model")
+                    iconName: "toolbar_open.svg"
+                    toolTipText: qsTr("Add")
                     onClicked: root.addModelRequested()
                 }
 
                 ActionToolButton {
-                    iconName: "layout-grid-plus.svg"
+                    iconName: "toolbar_add_plate.svg"
                     toolTipText: root.editorVm && root.editorVm.canAddPlate
                                  ? qsTr("Add plate")
                                  : qsTr("Maximum plate count reached")
@@ -124,14 +154,16 @@ Item {
                 }
 
                 ActionToolButton {
-                    iconName: "mirror.svg"
-                    toolTipText: root.gizmoTip(qsTr("Auto orient"), GLViewport.GizmoRotate)
-                    enabled: root.canUseGizmo(GLViewport.GizmoRotate)
+                    iconName: "toolbar_orient.svg"
+                    toolTipText: root.editorVm && root.editorVm.canArrangeObjects
+                                 ? qsTr("Auto orient all/selected objects")
+                                 : qsTr("Load a model before orienting")
+                    enabled: root.editorVm && root.editorVm.canArrangeObjects
                     onClicked: root.editorVm.autoOrientSelected()
                 }
 
                 ActionToolButton {
-                    iconName: "list-details.svg"
+                    iconName: "toolbar_arrange.svg"
                     toolTipText: root.editorVm && root.editorVm.canArrangeObjects
                                  ? qsTr("Arrange all objects")
                                  : qsTr("Load a model before arranging")
@@ -142,6 +174,60 @@ Item {
                 ToolbarSeparator { vertical: true }
 
                 ActionToolButton {
+                    iconName: "instance_add.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasSelection
+                                 ? qsTr("Add instance")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.hasSelection
+                    onClicked: root.editorVm.addSelectedInstance()
+                }
+
+                ActionToolButton {
+                    iconName: "instance_remove.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasSelection
+                                 ? qsTr("Remove instance")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.hasSelection
+                    onClicked: root.editorVm.removeSelectedInstance()
+                }
+
+                ActionToolButton {
+                    iconName: "split_objects.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasSelection
+                                 ? qsTr("Split to objects")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.hasSelection
+                    onClicked: if (root.editorVm) root.editorVm.splitSelectedToObjects()
+                }
+
+                ActionToolButton {
+                    iconName: "split_parts.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasSelection
+                                 ? qsTr("Split to parts")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.hasSelection
+                    onClicked: if (root.editorVm) root.editorVm.splitSelectedToParts()
+                }
+
+                ActionToolButton {
+                    iconName: "toolbar_variable_layer_height.svg"
+                    toolTipText: root.editorVm && root.editorVm.hasSelection
+                                 ? qsTr("Variable layer height")
+                                 : qsTr("Select one or more objects")
+                    enabled: root.editorVm && root.editorVm.hasSelection
+                    onClicked: root.layersEditingRequested()
+                }
+
+                // BUILDGATE restore (2026-09-24): vp-3 trimmed the toolbar to
+                // the upstream main-toolbar set, but the standing restoration
+                // contracts (prepareRestoredControlsAreActionable,
+                // prepareWorkflowActionsBindCppGates) still lock the selection
+                // actions onto this toolbar. Re-anchored verbatim from the
+                // last committed revision, minus the split-object button the
+                // upstream split pair above already covers.
+                ToolbarSeparator { vertical: true }
+
+                ActionToolButton {
                     iconName: "plus.svg"
                     toolTipText: root.editorVm && root.editorVm.canDuplicateSelectedObjects
                                  ? qsTr("Duplicate selected objects")
@@ -149,15 +235,6 @@ Item {
                     enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
                     onClicked: root.editorVm.duplicateSelectedObjects()
                 }
-
-                ActionToolButton {
-                    iconName: "minus.svg"
-                    toolTipText: root.gizmoTip(qsTr("Split object"), GLViewport.GizmoCut)
-                    enabled: root.canUseGizmo(GLViewport.GizmoCut)
-                    onClicked: root.editorVm.splitSelectedObject()
-                }
-
-                ToolbarSeparator { vertical: true }
 
                 ActionToolButton {
                     iconName: "trash.svg"

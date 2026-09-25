@@ -20,21 +20,25 @@ import QtQuick
 //   Spacing             — spacing* (6-step scale)
 //   Radii               — radius* (5-step scale)
 //   Control             — switch*/progress*/overlay/menu/selection + sizing
-//   Layout              — sidebar*/rightPanel*/titleBar/tabBar/statusBar
+//   Layout              — sidebar*/rightPanel*/titleBar/tabBar
 // =============================================================================
 
 QtObject {
     // ── Background palette
-    readonly property color bgBase:      "#0d0f12"
-    readonly property color bgSurface:   "#131720"
-    readonly property color bgPanel:     "#161a23"
-    readonly property color bgCard:      "#21263200"
-    readonly property color bgElevated:  "#2a3140"
-    readonly property color bgInset:     "#10141c"
-    readonly property color bgFloating:  "#1a202bd9"
-    readonly property color bgHover:     "#2e3444"
-    readonly property color bgPressed:   "#3a4258"
-    readonly property color bgTooltip:   "#1a2332"
+    // ctl-1 (direction=ref): neutral-gray rebase. The reference screenshot is
+    // a flat neutral gray scale -- sidebar/inputs #4B4B4D, viewport #363638,
+    // left card #2F3034, topbar #010101 -- with no blue cast, so every bg*
+    // token maps to an un-tinted gray at a comparable lift over its old role.
+    readonly property color bgBase:      "#2f3034"
+    readonly property color bgSurface:   "#3a3a3c"
+    readonly property color bgPanel:     "#4b4b4d"
+    readonly property color bgCard:      "#3a3a3c00"
+    readonly property color bgElevated:  "#4b4b4d"
+    readonly property color bgInset:     "#262628"
+    readonly property color bgFloating:  "#4f4f51d9"
+    readonly property color bgHover:     "#555557"
+    readonly property color bgPressed:   "#5f5f61"
+    readonly property color bgTooltip:   "#343436"
 
     // ── Accent / Brand
     readonly property color accent:           "#18c75e"
@@ -46,32 +50,37 @@ QtObject {
     readonly property color accentSubtlePressed: "#0a4d28"
 
     // ── Text
-    readonly property color textPrimary:     "#e8edf6"
-    readonly property color textSecondary:   "#a0abbe"
-    readonly property color textTertiary:    "#7f90a6"
-    readonly property color textDisabled:    "#566070"
-    readonly property color textMuted:       "#8b949e"
+    // ctl-1: near-white neutral grays (no blue cast).
+    readonly property color textPrimary:     "#f5f5f5"
+    readonly property color textSecondary:   "#c9c9c9"
+    readonly property color textTertiary:    "#a3a3a3"
+    readonly property color textDisabled:    "#6f6f6f"
+    readonly property color textMuted:       "#ababab"
     readonly property color textOnAccent:    "#ffffff"
 
     // ── Border
-    readonly property color borderDefault:   "#363d4e"
-    readonly property color borderSubtle:    "#333b4e"
-    readonly property color borderStrong:    "#454d5e"
+    // ctl-1: neutral #5a5a5c family; borderFocus keeps the brand green.
+    readonly property color borderDefault:   "#5a5a5c"
+    readonly property color borderSubtle:    "#525254"
+    readonly property color borderStrong:    "#666668"
     readonly property color borderFocus:     "#18c75e"
-    readonly property color borderInput:     "#2e3848"
+    readonly property color borderInput:     "#565658"
     // Phase 160 (DS-01): borderActive was referenced in QML but undefined
     // (silent undefined runtime). Sourced from the active-border usage in
     // PreparePage focus indicators — slightly brighter than borderStrong.
-    readonly property color borderActive:    "#5a6478"
+    readonly property color borderActive:    "#6e6e70"
 
     // ── Chrome / Title bar
-    readonly property color chromeSurface:       "#10161e"
-    readonly property color chromeSurfaceAlt:    "#0f151d"
-    readonly property color chromeHover:         "#1b2230"
-    readonly property color chromePressed:       "#242c3a"
-    readonly property color chromeBorder:        "#253043"
-    readonly property color chromeText:          "#cdd7e6"
-    readonly property color chromeTextMuted:     "#9fb0c7"
+    // topbar-1/ctl-2 (direction=ref): the reference topbar measures #010101
+    // and its second toolbar band #27292C with white text; upstream's dark
+    // map (BBLTopbar.cpp:106 rgb(38,46,48)) reads the same neutral way.
+    readonly property color chromeSurface:       "#010101"
+    readonly property color chromeSurfaceAlt:    "#0f0f10"
+    readonly property color chromeHover:         "#1f2124"
+    readonly property color chromePressed:       "#27292c"
+    readonly property color chromeBorder:        "#262628"
+    readonly property color chromeText:          "#fefefe"
+    readonly property color chromeTextMuted:     "#b4b4b4"
     readonly property color chromeDangerHover:   "#d33241"
     readonly property color chromeDangerPressed: "#aa1f2d"
 
@@ -88,9 +97,10 @@ QtObject {
     readonly property color statusErrorPressed: "#8a2828"
 
     // ── Scrollbar (Phase 160 DS-01: was hardcoded across CxScrollView)
-    readonly property color scrollBarColor:       "#3a4258"
-    readonly property color scrollBarHoverColor:  "#4a5470"
-    readonly property color scrollBarTrackColor:  "#1c2230"
+    // ctl-1: neutralized (was blue-tinted).
+    readonly property color scrollBarColor:       "#6a6a6c"
+    readonly property color scrollBarHoverColor:  "#7e7e80"
+    readonly property color scrollBarTrackColor:  "#3f3f41"
 
     // ── Typography
     readonly property int fontSizeXS:   10
@@ -105,6 +115,12 @@ QtObject {
     // `font.family: "Consolas"` hardcodes across 8 component files.
     readonly property string fontMono:      "Consolas"
     readonly property string fontMonoAlt:   "Cascadia Mono"   // fallback if Consolas missing
+    // ctl-4: default UI font family. Upstream privately installs
+    // "HarmonyOS Sans SC" (Label.cpp:22; AddPrivateFont at Label.cpp:99-100)
+    // and builds every Head_/Body_ font on it. main_qml.cpp loads the bundled
+    // TTFs via QFontDatabase::addApplicationFont and installs the same family
+    // as the QGuiApplication font -- keep the two names in sync.
+    readonly property string fontFamily:    "HarmonyOS Sans SC"
 
     // ── Spacing
     readonly property int spacingXS:  4
@@ -122,13 +138,13 @@ QtObject {
     readonly property int radiusXXL:  16
 
     // ── Control tokens (aliases where colors match existing tokens)
-    readonly property color switchTrackOff:   "#2a3040"
+    readonly property color switchTrackOff:   "#3f3f41"
     readonly property color switchTrackOn:    accent
     readonly property color switchKnob:       textPrimary
     readonly property color progressTrack:    borderSubtle
     readonly property color progressFill:     accent
     readonly property color overlayDim:       "#80000000"    // black at 50%
-    readonly property color menuBackground:   "#1a202b"
+    readonly property color menuBackground:   "#3a3a3c"
     readonly property color selectionColor:   accent
     readonly property color selectionText:    bgBase
 
@@ -157,20 +173,22 @@ QtObject {
 
     // ── Sidebar
     // Phase 160 (DS-01): old sidebarWidth=240 was never read (dead). Real
-    // width comes from min/max/default below — Phase 164 unbreaks the
-    // 7-layer 392px lock and routes everything through these tokens.
-    readonly property int sidebarWidth:         320   // legacy alias (= default)
-    readonly property int sidebarWidthMin:      240
+    // width comes from min/max/default below. R8 (2026-09-24): default
+    // restored to 392 -- the upstream-measured sidebar width incl. its 18px
+    // scrollbar gutter (docs/ui-reference/restoration-map.md).
+    readonly property int sidebarWidth:         392   // legacy alias (= default)
+    readonly property int sidebarWidthMin:      300
     readonly property int sidebarWidthMax:      520
-    readonly property int sidebarWidthDefault:  320
+    readonly property int sidebarWidthDefault:  392
     readonly property int rightPanelWidth:      300
     readonly property int rightPanelWidthMin:   240
     readonly property int rightPanelWidthMax:   480
 
     // ── Title bar
+    // layout-1: no statusBarHeight token -- upstream MainFrame has no status
+    // bar (MainFrame.cpp:524,1025) and the OWzx StatusBar was removed.
     readonly property int titleBarHeight:  40
     readonly property int tabBarHeight:    36
-    readonly property int statusBarHeight: 24
 
     // ── Notification severity palette (Phase 160 DS-01, consumed by Phase 167).
     // One source of truth — collapses the 3 private 10-level tables in

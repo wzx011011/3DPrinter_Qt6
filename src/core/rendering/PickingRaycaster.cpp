@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cfloat>
+#include <cmath>
 #include <limits>
 
 namespace
@@ -14,6 +15,101 @@ namespace
 constexpr int kMaxLeafSize = 8;
 constexpr int kMaxDepth = 64;
 constexpr int kBinCount = 8;
+
+// PERF (pick_ray): finite-check-free twins of the PickingPrimitives math for
+// the raycaster's own traversal. Preconditions are established by callers:
+// pick() validates the ray once at entry, and build() admits only triangles
+// with all-finite vertices, so every node bound and every stored vertex is
+// finite by construction. The arithmetic is statement-for-statement the same
+// as PickingPrimitives::rayAABB / rayTriangleMoller, so results are
+// bit-identical on those inputs (parity with ObjectPicking::pick preserved).
+bool rayAABBFast(const QVector3D &origin,
+                 const QVector3D &direction,
+                 float bminX, float bminY, float bminZ,
+                 float bmaxX, float bmaxY, float bmaxZ,
+                 float &t)
+{
+  float tmin = -FLT_MAX;
+  float tmax = FLT_MAX;
+  const float ov[3] = {origin.x(), origin.y(), origin.z()};
+  const float dv[3] = {direction.x(), direction.y(), direction.z()};
+  const float bmin[3] = {bminX, bminY, bminZ};
+  const float bmax[3] = {bmaxX, bmaxY, bmaxZ};
+
+  for (int axis = 0; axis < 3; ++axis) {
+    if (std::abs(dv[axis]) < 1e-8f) {
+      if (ov[axis] < bmin[axis] || ov[axis] > bmax[axis])
+        return false;
+      continue;
+    }
+
+    float t1 = (bmin[axis] - ov[axis]) / dv[axis];
+    float t2 = (bmax[axis] - ov[axis]) / dv[axis];
+    if (t1 > t2)
+      std::swap(t1, t2);
+    tmin = std::max(tmin, t1);
+    tmax = std::min(tmax, t2);
+    if (tmin > tmax)
+      return false;
+  }
+
+  if (tmax < 0.0f)
+    return false;
+  t = std::max(tmin, 0.0f);
+  return true;
+}
+
+bool rayTriangleFast(const QVector3D &origin,
+                     const QVector3D &direction,
+                     const PrepareSceneData::ModelVertex &a,
+                     const PrepareSceneData::ModelVertex &b,
+                     const PrepareSceneData::ModelVertex &c,
+                     float &t)
+{
+  const float e0x = b.x - a.x;
+  const float e0y = b.y - a.y;
+  const float e0z = b.z - a.z;
+  const float e1x = c.x - a.x;
+  const float e1y = c.y - a.y;
+  const float e1z = c.z - a.z;
+
+  const float dx = direction.x();
+  const float dy = direction.y();
+  const float dz = direction.z();
+  // h = cross(direction, e1) -- component order matches QVector3D::crossProduct.
+  const float hx = dy * e1z - dz * e1y;
+  const float hy = dz * e1x - dx * e1z;
+  const float hz = dx * e1y - dy * e1x;
+
+  const float det = e0x * hx + e0y * hy + e0z * hz;
+  if (det > -1e-6f && det < 1e-6f)
+    return false;
+
+  const float invDet = 1.0f / det;
+  const float sx = origin.x() - a.x;
+  const float sy = origin.y() - a.y;
+  const float sz = origin.z() - a.z;
+
+  const float u = invDet * (sx * hx + sy * hy + sz * hz);
+  if (u < 0.0f || u > 1.0f)
+    return false;
+
+  // q = cross(s, e0).
+  const float qx = sy * e0z - sz * e0y;
+  const float qy = sz * e0x - sx * e0z;
+  const float qz = sx * e0y - sy * e0x;
+
+  const float v = invDet * (dx * qx + dy * qy + dz * qz);
+  if (v < 0.0f || u + v > 1.0f)
+    return false;
+
+  const float hitT = invDet * (e1x * qx + e1y * qy + e1z * qz);
+  if (hitT < 1e-4f || !std::isfinite(hitT))
+    return false;
+
+  t = hitT;
+  return true;
+}
 
 struct Bounds
 {
@@ -201,6 +297,8 @@ void PickingRaycaster::build(const QList<PrepareSceneData::ModelVertex> &vertice
   m_triangleOrder.clear();
   m_triangleBatch.clear();
   m_triangleFirstVertex.clear();
+  m_leafTriangleBatch.clear();
+  m_leafTriangleFirstVertex.clear();
   m_triangleCount = 0;
 
   const int vertexCount = vertices.size();
@@ -248,6 +346,19 @@ void PickingRaycaster::build(const QList<PrepareSceneData::ModelVertex> &vertice
   m_nodes.reserve(2 * size_t(m_triangleCount / kMaxLeafSize + 1));
   scratch.scratchOrder.reserve(size_t(m_triangleCount));
   buildRange(scratch, 0, m_triangleCount, 0);
+
+  // PERF (pick_ray): flatten the double indirection the leaf tests used to
+  // pay (leaf slot -> m_triangleOrder ordinal -> per-ordinal arrays). After
+  // the build partitions, the ordinal for leaf slot k is scattered, so the
+  // ordinal-indexed arrays were touched in near-random order on every ray.
+  // One O(n) permutation gives the leaf loop two dense, slot-ordered arrays.
+  m_leafTriangleBatch.resize(size_t(m_triangleCount));
+  m_leafTriangleFirstVertex.resize(size_t(m_triangleCount));
+  for (int k = 0; k < m_triangleCount; ++k) {
+    const int ordinal = m_triangleOrder[k];
+    m_leafTriangleBatch[size_t(k)] = m_triangleBatch[size_t(ordinal)];
+    m_leafTriangleFirstVertex[size_t(k)] = m_triangleFirstVertex[size_t(ordinal)];
+  }
 }
 
 ObjectPicking::Hit PickingRaycaster::pick(
@@ -267,36 +378,50 @@ ObjectPicking::Hit PickingRaycaster::pick(
   float bestT = std::numeric_limits<float>::max();
   ObjectPicking::Hit bestHit;
 
+  // PERF (pick_ray): every node's AABB is tested exactly once. The previous
+  // traversal re-tested each child at pop time even though it had already
+  // been tested (and bestT-culled) when pushed, doubling the AABB work per
+  // internal node. The pop-time re-check only ever skipped subtrees whose
+  // entry distance already exceeded the then-current bestT -- they hold no
+  // closer triangle -- so dropping it changes the visited set, never the
+  // nearest hit. Bounds are finite by construction (build() admits only
+  // finite triangles) and the ray was validated above, so the unchecked
+  // fast twin is exact here.
+  const Node &root = m_nodes.front();
+  float tRoot = 0.0f;
+  if (!rayAABBFast(rayOrigin, direction, root.minX, root.minY, root.minZ,
+                   root.maxX, root.maxY, root.maxZ, tRoot))
+    return {};
+
   // Near-child-first ordered traversal; the kMaxDepth cap bounds the stack
   // occupancy to kMaxDepth + 1 entries.
   std::array<int, kMaxDepth + 2> stack;
   int stackTop = 0;
   stack[stackTop++] = 0;
+
+  // Hoisted base pointers: the lists are fixed for the duration of the pick
+  // (same lists the tree was built from) and the leaf loop is the hot path.
+  const PrepareSceneData::ModelVertex *const vertexBase = vertices.constData();
+  const PrepareSceneData::ModelBatch *const batchBase = batches.constData();
+
   while (stackTop > 0) {
     const Node &node = m_nodes[stack[--stackTop]];
-
-    float tEnter = 0.0f;
-    if (!PickingPrimitives::rayAABB(rayOrigin, direction, node.bounds(), tEnter)
-        || tEnter > bestT)
-      continue;
 
     if (node.triangleCount > 0) {
       const int end = node.firstChildOrTriangle + node.triangleCount;
       for (int k = node.firstChildOrTriangle; k < end; ++k) {
-        // Leaf slots index into the permuted order; the ordinal addresses the
-        // per-triangle batch/vertex arrays.
-        const int ordinal = m_triangleOrder[k];
-        const int vertexIndex = m_triangleFirstVertex[ordinal];
+        // Leaf slots address the pre-permuted slot-ordered arrays directly.
+        const int vertexIndex = m_leafTriangleFirstVertex[size_t(k)];
         float tTriangle = 0.0f;
-        if (!PickingPrimitives::rayTriangleMoller(rayOrigin, direction,
-                                                  vertices.at(vertexIndex),
-                                                  vertices.at(vertexIndex + 1),
-                                                  vertices.at(vertexIndex + 2),
-                                                  tTriangle))
+        if (!rayTriangleFast(rayOrigin, direction,
+                             vertexBase[vertexIndex],
+                             vertexBase[vertexIndex + 1],
+                             vertexBase[vertexIndex + 2],
+                             tTriangle))
           continue;
         if (tTriangle < bestT) {
           const PrepareSceneData::ModelBatch &batch =
-              batches.at(m_triangleBatch[ordinal]);
+              batchBase[m_leafTriangleBatch[size_t(k)]];
           bestT = tTriangle;
           bestHit.sourceObjectIndex = batch.sourceObjectIndex;
           bestHit.volumeIndex = batch.volumeIndex;
@@ -310,13 +435,19 @@ ObjectPicking::Hit PickingRaycaster::pick(
 
     const int left = node.firstChildOrTriangle;
     const int right = node.secondChildOrZero;
+    const Node &leftNode = m_nodes[left];
+    const Node &rightNode = m_nodes[right];
     float tLeft = 0.0f;
     float tRight = 0.0f;
-    const bool hitLeft = PickingPrimitives::rayAABB(rayOrigin, direction,
-                                                    m_nodes[left].bounds(), tLeft)
+    const bool hitLeft = rayAABBFast(rayOrigin, direction,
+                                     leftNode.minX, leftNode.minY, leftNode.minZ,
+                                     leftNode.maxX, leftNode.maxY, leftNode.maxZ,
+                                     tLeft)
         && tLeft <= bestT;
-    const bool hitRight = PickingPrimitives::rayAABB(rayOrigin, direction,
-                                                     m_nodes[right].bounds(), tRight)
+    const bool hitRight = rayAABBFast(rayOrigin, direction,
+                                      rightNode.minX, rightNode.minY, rightNode.minZ,
+                                      rightNode.maxX, rightNode.maxY, rightNode.maxZ,
+                                      tRight)
         && tRight <= bestT;
     if (!hitLeft && !hitRight)
       continue;

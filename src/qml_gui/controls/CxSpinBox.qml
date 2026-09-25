@@ -2,23 +2,80 @@ import QtQuick
 import QtQuick.Controls
 import ".."
 
+// params-8 / ctl-9: upstream SpinInput structure (SpinInput.cpp:33,198-240):
+// square corners (radius 0), value text LEFT-aligned, two 14px icon step
+// buttons stacked on the LEFT edge (inc above the mid line, dec below) with a
+// 1px horizontal separator between them, and the unit suffix right-aligned
+// INSIDE the field (Field.cpp combine_side_text). Background is the flat
+// panel base color (ctl-12); the border turns accent on hover/focus
+// (SpinInput.cpp:35 Normal #DBDBDB -> Hovered teal).
 SpinBox {
     id: root
 
-    // Unit suffix property for rendering unit text right of the numeric input
-    // (UI-SPEC int-type row: unit suffix rendered as Text right of CxSpinBox)
+    // Unit suffix rendered inside the field, right-aligned (upstream side text).
     property string suffix: ""
 
     implicitHeight: Theme.controlHeightSM
     implicitWidth: 90
     font.pixelSize: Theme.fontSizeMD
 
+    // SpinInput.cpp:225 btnSize = {14, (size.y - 4) / 2}
+    readonly property int btnWidth: 14
+    readonly property int btnHeight: Math.max(6, Math.round((height - 4) / 2))
+    // ctl-10: upstream hover border is teal (SpinInput.cpp:35); OWzx accent
+    // dark tier per the adjudicated value (no matching Theme token yet).
+    readonly property color hoverBorder: "#0e8c46"
+
     background: Rectangle {
-        radius: Theme.radiusSM
-        color: Theme.bgElevated
-        border.color: root.activeFocus ? Theme.borderFocus : Theme.borderDefault
+        radius: 0  // SpinInput.cpp:33
+        color: Theme.bgPanel  // ctl-12: flat, same base as the hosting panel
+        border.color: !root.enabled ? Theme.borderSubtle
+                     : (root.hovered || root.activeFocus || spinInput.activeFocus) ? root.hoverBorder
+                     : Theme.borderDefault
         border.width: 1
         opacity: root.enabled ? 1.0 : 0.45
+        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+
+        // SpinInput.cpp:198-201: 1px horizontal separator across the step
+        // buttons at mid height, starting at the button x, button width - 2.
+        Rectangle {
+            x: 3
+            y: parent.height / 2
+            width: root.btnWidth - 2
+            height: 1
+            color: Theme.borderDefault
+        }
+    }
+
+    // SpinInput.cpp:232-235: buttons at x=3, inc above the mid line, dec below.
+    up.indicator: Rectangle {
+        x: 3
+        y: root.height / 2 - root.btnHeight - 1
+        width: root.btnWidth
+        height: root.btnHeight
+        color: root.up.pressed ? Theme.bgPressed : root.up.hovered ? Theme.bgHover : "transparent"
+
+        Image {
+            anchors.centerIn: parent
+            source: "qrc:/qml/assets/icons/spin_inc.svg"
+            sourceSize: Qt.size(12, 6)
+            fillMode: Image.PreserveAspectFit
+        }
+    }
+
+    down.indicator: Rectangle {
+        x: 3
+        y: root.height / 2 + 1
+        width: root.btnWidth
+        height: root.btnHeight
+        color: root.down.pressed ? Theme.bgPressed : root.down.hovered ? Theme.bgHover : "transparent"
+
+        Image {
+            anchors.centerIn: parent
+            source: "qrc:/qml/assets/icons/spin_dec.svg"
+            sourceSize: Qt.size(12, 6)
+            fillMode: Image.PreserveAspectFit
+        }
     }
 
     contentItem: Item {
@@ -29,12 +86,14 @@ SpinBox {
             id: spinInput
             z: 2
             anchors.left: parent.left
+            anchors.leftMargin: 6 + root.btnWidth  // SpinInput.cpp:231 text x = 6 + btnSize.x
             anchors.right: suffixText.visible ? suffixText.left : parent.right
+            anchors.rightMargin: suffixText.visible ? 5 : 10
             anchors.verticalCenter: parent.verticalCenter
             text: root.textFromValue(root.value, root.locale)
             color: Theme.textPrimary
             font: root.font
-            horizontalAlignment: Qt.AlignHCenter
+            horizontalAlignment: Qt.AlignLeft  // value left-aligned (upstream text ctrl)
             verticalAlignment: Qt.AlignVCenter
             readOnly: !root.editable
             validator: root.validator
@@ -46,29 +105,12 @@ SpinBox {
             id: suffixText
             visible: root.suffix !== ""
             anchors.right: parent.right
-            anchors.rightMargin: root.up.indicator.width + 6
+            anchors.rightMargin: 5  // SpinInput.cpp:205 label drawn at size.x - labelSize.x - 5
             anchors.verticalCenter: parent.verticalCenter
             text: root.suffix
             color: Theme.textTertiary
             font.pixelSize: Theme.fontSizeXS
             font.family: root.font.family
         }
-    }
-
-    up.indicator: Rectangle {
-        x: parent.width - width
-        height: parent.height / 2
-        implicitWidth: 22
-        color: root.up.pressed ? Theme.bgPressed : root.up.hovered ? Theme.bgHover : "transparent"
-        Text { anchors.centerIn: parent; text: "▲"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-    }
-
-    down.indicator: Rectangle {
-        x: parent.width - up.indicator.width
-        y: parent.height / 2
-        height: parent.height / 2
-        implicitWidth: 22
-        color: root.down.pressed ? Theme.bgPressed : root.down.hovered ? Theme.bgHover : "transparent"
-        Text { anchors.centerIn: parent; text: "▼"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
     }
 }

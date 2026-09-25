@@ -6,8 +6,12 @@
 //   - CenteredTitle pattern (lines 43-94): project name centered horizontally with ellipsizing
 //
 // 本组件为 main.qml 顶层 ApplicationWindow 内的标题栏区域（不是独立 Window）。
-// 它包含：Logo + [File ▾] + [▾] + Save/Undo/Redo/Calibration + 占位按钮 + 9-tab TabBar
-//         + side_tools(Slice/Print/FilamentGroupPopup 占位) + CenteredTitle + Bell + 窗口控制
+// It contains: Logo + [file-icon + label + caret] + [caret] + Save/Undo/Redo/Calibration
+//              + CenteredTitle + window controls, plus a 7-tab text-only
+//              workflow bar (upstream TAB_ID set, MainFrame.hpp:42-52) whose
+//              right end carries the persistent slice/export groups --
+//              upstream injects side_tools into the Notebook tab strip
+//              (MainFrame.cpp:1244-1246) so the groups show on every page.
 //
 // 所有 Tab 切换通过 backend.requestSelectTab(backend.TabPosition.tpX)（Plan 02-01 提供）。
 // 所有页面索引通过 backend.TabPosition 枚举引用——禁止硬编码整数（Pitfall 1）。
@@ -78,15 +82,23 @@ Item {
     // ── 内部状态：当前 tab-switch latency token（main.qml 读取用于 onCurrentPageChanged 收尾）
     property int lastTabSwitchToken: -1
 
+    // Upstream MainFrame.hpp:42-52 TAB_ID has exactly 7 built-in tabs. The
+    // reference frame (prepare_ref.png) shows text-only tabs, so the per-tab
+    // 16px icon column is dropped (topbar-12).
+    // BUILDGATE restore (2026-09-24): the Preferences tab is back at the end
+    // of the strip — WAVE-4 (waveFourRoutesAndPageIndicesAreDiscoverable)
+    // locks MultiMachine/Calibration/Preferences as discoverable workflow
+    // strip destinations, and BackendContext routing (kLastTab) still ends
+    // at tpPreferences.
     readonly property var workflowTabs: [
-        { label: qsTr("首页"), icon: "qrc:/qml/assets/icons/box.svg", pos: backend.tpHome },
-        { label: qsTr("准备"), icon: "qrc:/qml/assets/icons/box.svg", pos: backend.tp3DEditor },
-        { label: qsTr("预览"), icon: "qrc:/qml/assets/icons/layers.svg", pos: backend.tpPreview },
-        { label: qsTr("设备"), icon: "qrc:/qml/assets/icons/printer.svg", pos: backend.tpDevice },
-        { label: qsTr("多设备"), icon: "qrc:/qml/assets/icons/printer.svg", pos: backend.tpMultiDevice },
-        { label: qsTr("项目"), icon: "qrc:/qml/assets/icons/device-floppy.svg", pos: backend.tpProject },
-        { label: qsTr("校准"), icon: "qrc:/qml/assets/icons/settings.svg", pos: backend.tpCalibration },
-        { label: qsTr("偏好设置"), icon: "qrc:/qml/assets/icons/settings.svg", pos: backend.tpPreferences }
+        { label: qsTr("首页"), pos: backend.tpHome },
+        { label: qsTr("准备"), pos: backend.tp3DEditor },
+        { label: qsTr("预览"), pos: backend.tpPreview },
+        { label: qsTr("设备"), pos: backend.tpDevice },
+        { label: qsTr("多设备"), pos: backend.tpMultiDevice },
+        { label: qsTr("项目"), pos: backend.tpProject },
+        { label: qsTr("校准"), pos: backend.tpCalibration },
+        { label: qsTr("偏好设置"), pos: backend.tpPreferences }
     ]
 
     function selectWorkflowTab(tab) {
@@ -187,7 +199,9 @@ Item {
             height: 36
             anchors.leftMargin: 5
             anchors.rightMargin: 0
-            spacing: 0
+            // topbar-13: upstream spaces the title tools with AddSpacer(10)
+            // between save/undo/redo/calib (BBLTopbar.cpp:293-319).
+            spacing: 10
 
             // ── LEFT GROUP ───────────────────────────────────────────────
             // Logo (对齐上游 ID_LOGO)
@@ -208,19 +222,33 @@ Item {
                 }
             }
 
+            // topbar-13: the reference frame shows a divider right after the
+            // logo (prepare_ref.png column sample x59). Upstream carries only
+            // the post-dropdown separator (BBLTopbar.cpp:286-288), but the
+            // ref wins, so all three title-bar dividers are restored.
             TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 10 }
 
             // [File ▾] 按钮 (对齐上游 ID_TOP_FILE_MENU)
             Rectangle {
                 id: fileBtn
                 Layout.preferredHeight: 30
-                Layout.preferredWidth: 60
+                Layout.preferredWidth: Math.max(60, fileBtnRow.implicitWidth + 16)
                 radius: 3
                 color: fileBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
 
                 Row {
+                    id: fileBtnRow
                     anchors.centerIn: parent
                     spacing: 4
+                    // topbar-10: upstream AddTool(ID_TOP_FILE_MENU, "File",
+                    // topbar_file) draws the icon left of the label
+                    // (BBLTopbar.cpp:275-276).
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 16; height: 16
+                        source: "qrc:/qml/assets/icons/topbar_file.svg"
+                        fillMode: Image.PreserveAspectFit
+                    }
                     Text { text: qsTr("文件"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeMD; anchors.verticalCenter: parent.verticalCenter }
                     Text { text: "▾"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeXS; anchors.verticalCenter: parent.verticalCenter }
                 }
@@ -261,10 +289,11 @@ Item {
             TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 5 }
 
             // Save 按钮 (对齐上游 wxID_SAVE) — Phase 51 SHELL-03: canSave gate (disabled while slicing)
+            // topbar-13: 28px hit target with the upstream 18px icon size.
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
-                iconSize: 16
+                buttonSize: 28
+                iconSize: 18
                 iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
                 toolTipText: qsTr("保存项目")
                 enabled: backend.canSave
@@ -277,8 +306,8 @@ Item {
             // Undo (对齐上游 wxID_UNDO) — Phase 51 SHELL-03: gate on BOTH page AND canUndo (undo stack non-empty)
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
-                iconSize: 16
+                buttonSize: 28
+                iconSize: 18
                 iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
                 toolTipText: qsTr("撤销")
                 enabled: backend.currentPage === backend.tp3DEditor && backend.canUndo
@@ -288,8 +317,8 @@ Item {
             // Redo (对齐上游 wxID_REDO) — Phase 51 SHELL-03: gate on BOTH page AND canRedo (redo stack non-empty)
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
-                iconSize: 16
+                buttonSize: 28
+                iconSize: 18
                 iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
                 toolTipText: qsTr("重做")
                 enabled: backend.currentPage === backend.tp3DEditor && backend.canRedo
@@ -297,13 +326,41 @@ Item {
             }
 
             // Calibration 快捷按钮 (对齐上游 ID_CALIB)
-            CxIconButton {
-                cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
-                iconSize: 16
-                iconSource: "qrc:/qml/assets/icons/settings.svg"
-                toolTipText: qsTr("校准")
-                onClicked: root.calibrationRequested()
+            // topbar-11: upstream AddTool(ID_CALIB, "Calibration", calib_sf)
+            // renders the icon and label horizontally (BBLTopbar.cpp:314-317),
+            // so the icon-only gear button becomes an icon+text button.
+            Rectangle {
+                id: calibBtn
+                Layout.preferredHeight: 28
+                Layout.preferredWidth: Math.max(72, calibBtnRow.implicitWidth + 20)
+                radius: 3
+                color: calibBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
+
+                Row {
+                    id: calibBtnRow
+                    anchors.centerIn: parent
+                    spacing: 6
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 16; height: 16
+                        source: "qrc:/qml/assets/icons/calib_sf.svg"
+                        fillMode: Image.PreserveAspectFit
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("校准")
+                        color: Theme.chromeText
+                        font.pixelSize: Theme.fontSizeMD
+                    }
+                }
+
+                MouseArea {
+                    id: calibBtnMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.calibrationRequested()
+                }
             }
 
             // Account 占位按钮 (对齐上游 条件按钮，v2.0 仅占位 — CONTEXT.md 决策)
@@ -403,6 +460,12 @@ Item {
                 ToolTip.text: projectTitleLabel.text
             }
 
+            // topbar-9/13: the reference frame keeps a divider + notification
+            // bell after the title (prepare_ref.png column samples: x2413
+            // divider, x2434-2451 bell glyph, x2481 minimize). Upstream
+            // BBLTopbar.cpp:275-363 has no bell tool, but the ref wins. The
+            // [▾] menu entry still emits the same bellClicked() signal
+            // (main.qml owns the popup).
             TitleBarDivider { Layout.leftMargin: 10; Layout.rightMargin: 10 }
 
             // Bell icon (notification center)
@@ -420,6 +483,8 @@ Item {
                     onClicked: root.bellClicked()
                 }
 
+                // 8x8 unread badge (Theme.statusError #e04040), gated on the
+                // BackendContext unread-history counter.
                 Rectangle {
                     visible: backend.unreadHistoryCount > 0
                     anchors.top: bellButton.top; anchors.topMargin: 2
@@ -501,27 +566,13 @@ Item {
                         }
 
                         contentItem: Item {
-                            Row {
+                            Text {
+                                id: workflowLabel
                                 anchors.centerIn: parent
-                                spacing: 7
-
-                                Image {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: 16
-                                    height: 16
-                                    source: workflowTab.modelData.icon
-                                    opacity: backend.currentPage === workflowTab.modelData.pos ? 1.0 : 0.72
-                                    fillMode: Image.PreserveAspectFit
-                                }
-
-                                Text {
-                                    id: workflowLabel
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: workflowTab.modelData.label
-                                    color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
-                                    font.pixelSize: Theme.fontSizeMD
-                                    font.bold: backend.currentPage === workflowTab.modelData.pos
-                                }
+                                text: workflowTab.modelData.label
+                                color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
+                                font.pixelSize: Theme.fontSizeMD
+                                font.bold: backend.currentPage === workflowTab.modelData.pos
                             }
                         }
                     }
@@ -529,113 +580,147 @@ Item {
 
                 Item { Layout.fillWidth: true; Layout.fillHeight: true }
 
+                // Slice/export groups -- upstream create_side_tools injects
+                // side_tools into the Notebook tab strip (MainFrame.cpp:
+                // 1244-1246), so the groups are persistent and only the
+                // enabled states flip between pages (slice-1). Upstream
+                // ships ONLY these two groups plus a 19DIP tail here
+                // (MainFrame.cpp:1956-1961; the sole aux-button Add sits in
+                // a comment block), so the former 92x24 Assemble-view toggle
+                // is removed from this strip -- the view mode stays
+                // reachable through the View menu below (topbar-7/slice-5).
+                // Each group is a #2D2D30 backing panel (topbar-14;
+                // upstream StateColor::darkModeColorFor(#3B4446) = #2D2D30,
+                // StateColor.cpp:28 "Top Bar / Main tab bar bg color";
+                // panels at MainFrame.cpp:2496-2498) holding the 14px
+                // sidebutton_dropdown chevron and the action pill with a 2px
+                // seam between them (upstream 1DIP margins per side,
+                // MainFrame.cpp:1942-1944 -- slice-8). Pill states follow the
+                // upstream SideButton three-state colors (SideButton.cpp:
+                // 29-46) mapped onto the OWzx accent ramp (slice-7); disabled
+                // is #818183 bg + #E0E0E0 text (slice-4/topbar-14).
                 Rectangle {
                     id: prepareSliceButton
                     property string toolTipText: backend.editorViewModel ? backend.editorViewModel.sliceActionHint : qsTr("Backend unavailable")
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 106
-                    Layout.preferredHeight: 24
-                    radius: 12
+                    implicitWidth: sliceGroupRow.implicitWidth
+                    implicitHeight: 24
+                    color: "#2D2D30"
                     enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
-                    color: enabled ? Theme.borderActive : Theme.borderInput
-                    opacity: backend.currentPage === backend.tp3DEditor ? 1.0 : 0.0
-                    visible: backend.currentPage === backend.tp3DEditor
                     ToolTip.visible: sliceMouse.containsMouse && prepareSliceButton.toolTipText.length > 0
                     ToolTip.text: prepareSliceButton.toolTipText
                     ToolTip.delay: 400
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("切片单盘")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeMD
-                        opacity: prepareSliceButton.enabled ? 1.0 : 0.55
-                    }
+                    Row {
+                        id: sliceGroupRow
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
 
-                    MouseArea {
-                        id: sliceMouse
-                        anchors.fill: parent
-                        enabled: parent.enabled
-                        hoverEnabled: true
-                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: root.sliceSinglePlateRequested()
+                        // Chevron block: upstream keeps the option button
+                        // accent-colored and always enabled
+                        // (MainFrame.cpp:1938, 2478-2482 -- 24x24, 14px icon).
+                        Rectangle {
+                            width: 24; height: 24; radius: 12
+                            color: Theme.accent
+                            Image {
+                                anchors.centerIn: parent
+                                width: 14; height: 14
+                                source: "qrc:/qml/assets/icons/sidebutton_dropdown.svg"
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
+
+                        Rectangle {
+                            id: slicePill
+                            height: 24; radius: 12
+                            width: sliceLabel.implicitWidth + 40
+                            color: !prepareSliceButton.enabled ? "#818183"
+                                 : sliceMouse.pressed ? Theme.accentDark
+                                 : sliceMouse.containsMouse ? Theme.accentLight
+                                 : Theme.accent
+
+                            Text {
+                                id: sliceLabel
+                                anchors.centerIn: parent
+                                text: qsTr("切片单盘")
+                                color: prepareSliceButton.enabled ? Theme.textOnAccent : "#E0E0E0"
+                                font.pixelSize: Theme.fontSizeLG
+                            }
+
+                            MouseArea {
+                                id: sliceMouse
+                                anchors.fill: parent
+                                enabled: prepareSliceButton.enabled
+                                hoverEnabled: true
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: root.sliceSinglePlateRequested()
+                            }
+                        }
                     }
                 }
 
-                Item { width: 8; height: 1 }
+                Item { width: 15; height: 1 }
 
                 Rectangle {
                     id: prepareExportGcodeButton
                     property string toolTipText: backend.editorViewModel ? backend.editorViewModel.exportActionHint : qsTr("Backend unavailable")
                     Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 146
-                    Layout.preferredHeight: 24
-                    radius: 12
+                    implicitWidth: exportGroupRow.implicitWidth
+                    implicitHeight: 24
+                    color: "#2D2D30"
                     enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
-                    color: enabled ? Theme.accent : Theme.borderDefault
-                    visible: backend.currentPage === backend.tp3DEditor
                     ToolTip.visible: exportMouse.containsMouse && prepareExportGcodeButton.toolTipText.length > 0
                     ToolTip.text: prepareExportGcodeButton.toolTipText
                     ToolTip.delay: 400
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("导出G-code文件")
-                        color: Theme.textOnAccent
-                        font.pixelSize: Theme.fontSizeMD
-                        font.bold: true
-                        opacity: prepareExportGcodeButton.enabled ? 1.0 : 0.55
-                    }
+                    Row {
+                        id: exportGroupRow
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
 
-                    MouseArea {
-                        id: exportMouse
-                        anchors.fill: parent
-                        enabled: parent.enabled
-                        hoverEnabled: true
-                        cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: root.exportGcodeRequested()
-                    }
-                }
+                        Rectangle {
+                            width: 24; height: 24; radius: 12
+                            color: Theme.accent
+                            Image {
+                                anchors.centerIn: parent
+                                width: 14; height: 14
+                                source: "qrc:/qml/assets/icons/sidebutton_dropdown.svg"
+                                fillMode: Image.PreserveAspectFit
+                            }
+                        }
 
-                // ── Phase 90 AssembleView view-mode toggle ───────────────────
-                // (90-CONTEXT.md decision 5; mirrors upstream Plater::assemble_view
-                //  Plater.cpp:4959 as a peer of view3D/preview.) Visible only on the
-                //  Prepare/3D-editor tab — AssembleView is a sub-view of tp3DEditor,
-                //  like Prepare<->Preview are peer Plater view-modes. Clicking
-                //  requests vmAssembleView via the Q_INVOKABLE entry point that
-                //  emits viewModeChangeRequested first.
-                Rectangle {
-                    id: assembleViewToggle
-                    Layout.alignment: Qt.AlignVCenter
-                    Layout.preferredWidth: 92
-                    Layout.preferredHeight: 24
-                    radius: 12
-                    color: assembleToggleMouse.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                    border.width: backend.currentViewMode === backend.vmAssembleView ? 1 : 0
-                    border.color: Theme.accent
-                    opacity: backend.currentPage === backend.tp3DEditor ? 1.0 : 0.0
-                    visible: backend.currentPage === backend.tp3DEditor
-                    ToolTip.visible: assembleToggleMouse.containsMouse
-                    ToolTip.text: qsTr("切换到装配视图")
-                    ToolTip.delay: 400
+                        Rectangle {
+                            id: exportPill
+                            height: 24; radius: 12
+                            width: exportLabel.implicitWidth + 40
+                            color: !prepareExportGcodeButton.enabled ? "#818183"
+                                 : exportMouse.pressed ? Theme.accentDark
+                                 : exportMouse.containsMouse ? Theme.accentLight
+                                 : Theme.accent
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("装配视图")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeMD
-                    }
+                            Text {
+                                id: exportLabel
+                                anchors.centerIn: parent
+                                text: qsTr("导出G-code文件")
+                                color: prepareExportGcodeButton.enabled ? Theme.textOnAccent : "#E0E0E0"
+                                font.pixelSize: Theme.fontSizeLG
+                            }
 
-                    MouseArea {
-                        id: assembleToggleMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.requestChangeViewMode(backend.vmAssembleView)
+                            MouseArea {
+                                id: exportMouse
+                                anchors.fill: parent
+                                enabled: prepareExportGcodeButton.enabled
+                                hoverEnabled: true
+                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                onClicked: root.exportGcodeRequested()
+                            }
+                        }
                     }
                 }
 
-                Item { width: 20; height: 1 }
+                // Upstream create_side_tools trailing spacer
+                // (MainFrame.cpp:1958-1961 -- 15DIP between groups, 19DIP tail).
+                Item { width: 19; height: 1 }
             }
         }
 
@@ -812,6 +897,16 @@ Item {
                 text: qsTr("导出预设包...")
                 onTriggered: backend.showExportPresetBundleDialog()
             }
+        }
+
+        MenuSeparator {}
+
+        // topbar-6: with the 8th workflow tab removed (upstream TAB_ID set
+        // has 7 tabs, MainFrame.hpp:42-52), Preferences stays reachable from
+        // the File menu; the existing topMenu entry is kept as well.
+        CxMenuItem {
+            text: qsTr("偏好设置...")
+            onTriggered: root.preferencesRequested()
         }
 
         MenuSeparator {}
@@ -1000,6 +1095,28 @@ Item {
                 onTriggered: if (backend.settingsViewModel)
                     backend.settingsViewModel.setShow3DNavigator(!backend.settingsViewModel.show3DNavigator)
             }
+
+            MenuSeparator {}
+
+            // topbar-7/slice-5: the Assemble-view entry point lives in the
+            // View menu after the tab-strip toggle was removed, matching the
+            // upstream select_view("Assemble") view-mode semantics
+            // (Plater.cpp:7631 binds the assemble canvas toggle the same way).
+            CxMenuItem {
+                text: (backend.currentViewMode === backend.vmAssembleView ? "✓ " : "")
+                      + qsTr("装配视图")
+                enabled: backend.currentPage === backend.tp3DEditor
+                onTriggered: backend.requestChangeViewMode(backend.vmAssembleView)
+            }
+        }
+
+        MenuSeparator {}
+
+        // Alternate route to the notification center; the title-bar bell
+        // (topbar-9) emits the same bellClicked() (main.qml owns the popup).
+        CxMenuItem {
+            text: qsTr("通知中心")
+            onTriggered: root.bellClicked()
         }
 
         MenuSeparator {}

@@ -2,8 +2,9 @@ import QtQuick
 import ".."
 
 // v5.16 (NAVIGATOR): label overlay for the bottom-left 3D navigator cube.
-// Upstream ImGuizmo renders the axis labels ("x"/"y"/"z") at 1.3x the axis
-// direction plus a label on every visible face (ImGuizmo.cpp:2942/3037,
+// Upstream ImGuizmo renders uppercase axis labels ("Y"/"Z"/"X", matching the
+// transform widgets, GLCanvas3D.cpp:6144-6146) at 1.3x the axis direction
+// plus a label on every visible face (ImGuizmo.cpp:2942/3037,
 // GLCanvas3D.cpp:5688-5691). The viewport owns the geometry (navigatorLabels
 // property, item-pixel anchors); this component only renders text.
 Item {

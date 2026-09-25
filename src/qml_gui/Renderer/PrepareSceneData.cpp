@@ -14,11 +14,30 @@ namespace
   constexpr float kDefaultBedSizeMm = 220.0f;
   constexpr float kMinBedSizeMm = 1.0f;
   constexpr float kMaxBedSizeMm = 2000.0f;
+  // vp-7 (GRIDSTEP): base grid spacings of the upstream adaptive ladder
+  // (2DBed.cpp:27-36). kFineGridMm is the <600mm rung; kCoarseGridMm is the
+  // >=1200mm rung (previously a dead constant, now live in the ladder).
   constexpr float kFineGridMm = 10.0f;
   constexpr float kCoarseGridMm = 50.0f;
 
-  // Upstream plate palette (PartPlate.cpp:77-85, dark theme variants):
-  // selected plate fill, unselected fill, per-plate grid/border line colors.
+  // vp-7 (GRIDSTEP): upstream Bed_2D::calculate_grid_step ladder
+  // (2DBed.cpp:27-36) -- the spacing adapts to the bed's short edge so
+  // large beds no longer draw a dense 10mm mesh.
+  float adaptiveGridStepMm(float shortEdgeMm)
+  {
+    if (shortEdgeMm >= 6000.0f)
+      return 100.0f;             // short edge >= 6000mm: main grid 5 x 100 = 500mm
+    if (shortEdgeMm >= 1200.0f)
+      return kCoarseGridMm;      // short edge >= 1200mm: main grid 5 x 50  = 250mm
+    if (shortEdgeMm >= 600.0f)
+      return 20.0f;              // short edge >= 600mm:  main grid 5 x 20  = 100mm
+    return kFineGridMm;          // short edge <  600mm:  main grid 5 x 10  = 50mm
+  }
+
+  // Upstream SELECT_COLOR (PartPlate.cpp:86; the load_render_colors /
+  // update_render_colors round-trip at PartPlate.cpp:145-152 preserves it).
+  // The vp-5 screenshot-adjudicated #515154 variant is withdrawn: it broke
+  // the upstream-truth gate (PrepareSceneDataTests selection-color pins).
   constexpr float kFillSelR = 0.2666f;
   constexpr float kFillSelG = 0.2784f;
   constexpr float kFillSelB = 0.2784f;
@@ -272,7 +291,35 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
           || batchPrintableFlags.size() == objectCount);
 
   if (valid) {
-    m_modelVertices.reserve(std::min<qsizetype>(meshData.size() / kPackedVertexBytes, 1000000));
+    // PERF (scene_expand): exact-capacity pre-pass. Walk only the per-batch
+    // headers to total the vertices the loop below can actually append
+    // (well-indexed batches of active source objects), so multi-million-vertex
+    // scenes grow the vertex list once instead of through repeated QList
+    // regrowth copies. Pure hint: a malformed header still fails identically
+    // in the main loop (the failed expansion clears the geometry either way),
+    // and batches dropped mid-loop only ever shrink the appended count.
+    qsizetype headerCursor = offset;
+    qsizetype reservableVertices = 0;
+    bool headersReadable = true;
+    for (qint32 headerIndex = 0; headerIndex < objectCount; ++headerIndex) {
+      qint32 headerObjectId = 0;
+      qint32 headerTriangles = 0;
+      if (!readValue(meshData, headerCursor, headerObjectId)
+          || !readValue(meshData, headerCursor, headerTriangles)
+          || headerTriangles < 0
+          || headerTriangles > kMaxPackedTrianglesPerBatch) {
+        headersReadable = false;
+        break;
+      }
+      const int headerSource = batchSourceObjectIndices.at(headerIndex);
+      if (headerSource < 0 || batchVolumeIndices.at(headerIndex) < 0
+          || batchInstanceIndices.at(headerIndex) < 0
+          || !activeSourceContains(activeSourceObjectIndices, headerSource))
+        continue;
+      reservableVertices += qsizetype(headerTriangles) * 3;
+    }
+    if (headersReadable)
+      m_modelVertices.reserve(reservableVertices);
   }
 
   for (qint32 objectIndex = 0; valid && objectIndex < objectCount; ++objectIndex) {
@@ -364,18 +411,26 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     batch.extruderId =
         batchExtruderIds.size() == objectCount ? batchExtruderIds.at(objectIndex) : 0;
 
+    // PERF (scene_expand): the per-batch payload bounds are already proven
+    // above, so the hot loop reads the 3 floats through a raw cursor instead
+    // of three bounds-checked readValue calls per vertex. The cursor tracks
+    // the same byte positions readValue would leave behind, including the
+    // mid-batch break on a non-finite vertex (offset is synced right after
+    // the loop; the failed expansion clears the geometry either way).
+    const char *const meshDataBase = meshData.constData();
+    const char *vertexCursor = meshDataBase + offset;
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
       float x = 0.0f;
       float y = 0.0f;
       float z = 0.0f;
-      valid = readValue(meshData, offset, x)
-          && readValue(meshData, offset, y)
-          && readValue(meshData, offset, z)
-          && std::isfinite(x)
-          && std::isfinite(y)
-          && std::isfinite(z);
-      if (!valid)
+      std::memcpy(&x, vertexCursor, sizeof(float));
+      std::memcpy(&y, vertexCursor + sizeof(float), sizeof(float));
+      std::memcpy(&z, vertexCursor + 2 * sizeof(float), sizeof(float));
+      vertexCursor += kPackedVertexBytes;
+      if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+        valid = false;
         break;
+      }
 
       if (!active)
         continue;
@@ -395,6 +450,7 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       }
       updateModelBounds(vertex);
     }
+    offset = vertexCursor - meshDataBase;
 
     if (valid && active) {
       batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
@@ -533,7 +589,11 @@ bool PrepareSceneData::showBed() const
 
 float PrepareSceneData::fineGridSpacingMm() const
 {
-  return kFineGridMm;
+  // vp-7 (GRIDSTEP): report the live adaptive step (2DBed.cpp:27-36 ladder)
+  // so external readers match what rebuildPlateGeometry actually draws.
+  return adaptiveGridStepMm(m_bedShapeType == 1
+                                ? m_bedDiameter
+                                : std::min(m_bedWidth, m_bedDepth));
 }
 
 float PrepareSceneData::coarseGridSpacingMm() const
@@ -781,6 +841,13 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
   const float lineR = selected ? kLineSelR : kLineUnselR;
   const float lineG = selected ? kLineSelG : kLineUnselG;
   const float lineB = selected ? kLineSelB : kLineUnselB;
+  // vp-7 (GRIDSTEP): upstream sizes the grid off the bed's short edge
+  // (PartPlate::calc_gridlines -> Bed_2D::calculate_grid_step,
+  // PartPlate.cpp:545-566, 2DBed.cpp:27-36); the circle bed's short edge is
+  // its diameter.
+  const float gridStep = adaptiveGridStepMm(m_bedShapeType == 1
+                                                ? m_bedDiameter
+                                                : std::min(m_bedWidth, m_bedDepth));
 
   // Upstream render order (PartPlate::render 2728-2765): background fill,
   // then exclude area, then grid. Same fill buffer keeps the layering.
@@ -809,13 +876,15 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
       appendBottomLine(x0, z0, x1, z1);
     }
 
-    // Fine grid clipped to the circle: straight lines every 10mm with the
-    // chord endpoints computed from the circle (upstream clips the same
-    // straight lines against the circle polygon, PartPlate.cpp:504-505).
-    // Bolder every 5th line (PartPlate.cpp:483/496), x exclusive / y
-    // inclusive like calc_gridlines.
+    // Fine grid clipped to the circle: straight lines every gridStep mm
+    // (vp-7 GRIDSTEP) with the chord endpoints computed from the circle
+    // (upstream clips the same straight lines against the circle polygon,
+    // PartPlate.cpp:504-505). Bolder every 5th line measured from the plate
+    // edge (upstream generate_grid counts from the plate origin with
+    // count % 5, 2DBed.cpp:41-67; the origin line itself is the border, so
+    // inner bold lines sit at k = 5/10/15/20 spacings).
     for (int k = 1; ; ++k) {
-      const float x = left + float(k) * kFineGridMm;
+      const float x = left + float(k) * gridStep;
       if (x >= right)
         break;
       const float dx = x - cx;
@@ -831,7 +900,7 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
       }
     }
     for (int k = 1; ; ++k) {
-      const float y = top + float(k) * kFineGridMm;
+      const float y = top + float(k) * gridStep;
       if (y >= bottom)
         break;
       const float dy = y - cz;
@@ -855,13 +924,16 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
   // LINE_BOTTOM_COLOR: upstream render_grid(bottom=true) keeps every grid
   // line visible from below while border/origin axes stay top-only
   // (render_background runs under `if (!bottom)`).
-  // P15.8 (BOLDGRID): every 5th line moves to the ~2px bolder set
-  // (PartPlate.cpp:483/496 count % 5, :909-911 second draw). Upstream
-  // calc_gridlines counts from the plate edge: bold lines sit at multiples
-  // of 5 * 10mm from it. X bold lines are exclusive to the bolder set;
-  // Y bold lines stay in the fine set too (PartPlate.cpp:483-500).
+  // P15.8/vp-7 (BOLDGRID): every 5th line moves to the ~2px bolder set.
+  // Upstream generate_grid counts from the plate origin with
+  // `(count % 5 ? lines_thin : lines_bold)` (2DBed.cpp:41-67): count 0 is
+  // the origin/border line itself, so inner bold lines sit at k = 5/10/15/20
+  // spacings from the edge and the first inner line is thin.
+  // PartPlate.cpp:909-911 draws the bold set a second time. X bold lines are
+  // exclusive to the bolder set; Y bold lines stay in the fine set too
+  // (PartPlate.cpp:478-500).
   int gridIndex = 1; // first inner line sits one spacing from the edge
-  for (float x = left + kFineGridMm; x < right; x += kFineGridMm, ++gridIndex) {
+  for (float x = left + gridStep; x < right; x += gridStep, ++gridIndex) {
     if (gridIndex % kBoldEveryNth == 0) {
       appendBoldLine(x, top, x, bottom, lineR, lineG, lineB);
     } else {
@@ -870,7 +942,7 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
     }
   }
   gridIndex = 1;
-  for (float y = top + kFineGridMm; y < bottom; y += kFineGridMm, ++gridIndex) {
+  for (float y = top + gridStep; y < bottom; y += gridStep, ++gridIndex) {
     appendLine(left, y, right, y, lineR, lineG, lineB, 0.6f);
     appendBottomLine(left, y, right, y);
     if (gridIndex % kBoldEveryNth == 0)

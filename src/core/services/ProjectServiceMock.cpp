@@ -12208,17 +12208,23 @@ QByteArray ProjectServiceMock::meshData() const
     //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
     // ──────────────────────────────────────────────────────────────────────────
 
-    struct ObjBatch
+    // PERF (meshdata): the pack pass writes each transformed triangle straight
+    // into the final buffer instead of staging it in a growable per-volume
+    // std::vector<float> and memcpying the (tens of MB) result a second time.
+    // Volume geometry is described up front in one cheap validation sweep
+    // (index bounds only), which also yields the exact triangle counts the
+    // buffer sizing needs.
+    struct VolumeJob
     {
       int32_t objectId;
-      std::vector<float> verts; // 9 floats per triangle (3 verts × xyz)
+      const ::indexed_triangle_set *its; // TriangleMesh::its (global-ns admesh type)
+      Slic3r::Transform3d combined;
+      bool leftHanded;
+      int32_t faceCount; // indices that pass the same bounds guard as before
     };
 
-    std::vector<ObjBatch> batches;
-    batches.reserve(8);
-
-    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
-    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+    std::vector<VolumeJob> jobs;
+    jobs.reserve(8);
 
     std::unordered_set<int32_t> usedObjectIds;
     usedObjectIds.reserve(model_->objects.size() * 2 + 1);
@@ -12285,54 +12291,29 @@ QByteArray ProjectServiceMock::meshData() const
           if (its.vertices.empty() || its.indices.empty())
             continue;
 
-          // One batch per volume — exposes this volume's center via its bounds.
-          ObjBatch batch;
-          batch.objectId = instanceObjectId;
-
+          // Validation sweep: exact face count for the buffer sizing. The
+          // guard is the same per-face bounds test the emit loop below (and
+          // the old push_back loop) applies, so the emitted triangle set is
+          // identical.
+          const int vcount = int(its.vertices.size());
+          int32_t validFaces = 0;
           for (const auto &face : its.indices)
           {
             const int idx0 = face(0);
             const int idx1 = face(1);
             const int idx2 = face(2);
-            const int vcount = int(its.vertices.size());
-            if (idx0 < 0 || idx0 >= vcount ||
-                idx1 < 0 || idx1 >= vcount ||
-                idx2 < 0 || idx2 >= vcount)
+            if (idx0 >= 0 && idx0 < vcount &&
+                idx1 >= 0 && idx1 < vcount &&
+                idx2 >= 0 && idx2 < vcount)
             {
-              continue;
-            }
-
-            // P15.10 (MIRROR): emit order (0, 2, 1) reverses the winding for
-            // left-handed batches; (0, 1, 2) otherwise.
-            const int emitOrder[3] = {0, leftHanded ? 2 : 1, leftHanded ? 1 : 2};
-            for (int k = 0; k < 3; ++k)
-            {
-              const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
-              // 应用实例+Volume 变换到世界坐标 (slic3r)
-              // Transform3d * Vec3d 直接应用仿射变换（含平移）
-              const Slic3r::Vec3d hw = combined * Slic3r::Vec3d(
-                                                      (double)lv.x(), (double)lv.y(), (double)lv.z());
-
-              // slic3r → GL 坐标系
-              const float gx = (float)hw.x();
-              const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
-              const float gz = (float)hw.y(); // slic3r Y → GL Z
-
-              batch.verts.push_back(gx);
-              batch.verts.push_back(gy);
-              batch.verts.push_back(gz);
-
-              bminX = std::min(bminX, gx);
-              bmaxX = std::max(bmaxX, gx);
-              bminY = std::min(bminY, gy);
-              bmaxY = std::max(bmaxY, gy);
-              bminZ = std::min(bminZ, gz);
-              bmaxZ = std::max(bmaxZ, gz);
+              ++validFaces;
             }
           }
+          if (validFaces == 0)
+            continue; // one batch per volume — empty volumes emit nothing
 
-          if (!batch.verts.empty())
-            batches.push_back(std::move(batch));
+          jobs.push_back(VolumeJob{instanceObjectId, &its, combined,
+                                   leftHanded, validFaces});
         }
       };
 
@@ -12351,50 +12332,22 @@ QByteArray ProjectServiceMock::meshData() const
       }
     }
 
-    if (batches.empty())
+    if (jobs.empty())
       return {};
-
-    // Auto-normalize model placement onto build plate:
-    // keep relative arrangement, move global center to (110, *, 110)
-    // and make lowest Y rest on the plate (Y=0).
-    const float centerX = (bminX + bmaxX) * 0.5f;
-    const float centerZ = (bminZ + bmaxZ) * 0.5f;
-    const float offsetX = 110.0f - centerX;
-    const float offsetZ = 110.0f - centerZ;
-    const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
-
-    if (offsetX != 0.0f || offsetY != 0.0f || offsetZ != 0.0f)
-    {
-      for (auto &batch : batches)
-      {
-        for (size_t vi = 0; vi + 2 < batch.verts.size(); vi += 3)
-        {
-          batch.verts[vi + 0] += offsetX;
-          batch.verts[vi + 1] += offsetY;
-          batch.verts[vi + 2] += offsetZ;
-        }
-      }
-
-      bminX += offsetX;
-      bmaxX += offsetX;
-      bminY += offsetY;
-      bmaxY += offsetY;
-      bminZ += offsetZ;
-      bmaxZ += offsetZ;
-    }
 
     // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
-    if (batches.size() > size_t(std::numeric_limits<int32_t>::max()))
+    if (jobs.size() > size_t(std::numeric_limits<int32_t>::max()))
     {
-      qWarning("[ProjectService] meshData aborted: too many batches (%zu)", batches.size());
+      qWarning("[ProjectService] meshData aborted: too many batches (%zu)", jobs.size());
       return {};
     }
 
-    int32_t objCount = static_cast<int32_t>(batches.size());
+    int32_t objCount = static_cast<int32_t>(jobs.size());
     qsizetype totalBytes = static_cast<qsizetype>(sizeof(int32_t)); // objectCount header
-    for (const auto &b : batches)
+    for (const auto &job : jobs)
     {
-      const qsizetype dataBytes = static_cast<qsizetype>(b.verts.size()) * static_cast<qsizetype>(sizeof(float));
+      const qsizetype dataBytes = static_cast<qsizetype>(job.faceCount) * 9
+          * static_cast<qsizetype>(sizeof(float));
       if (dataBytes < 0 || dataBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
       {
         qWarning("[ProjectService] meshData aborted: size overflow while packing vertices");
@@ -12430,15 +12383,112 @@ QByteArray ProjectServiceMock::meshData() const
     memcpy(p, &objCount, sizeof(int32_t));
     p += sizeof(int32_t);
 
-    for (const auto &b : batches)
+    // Reserve the per-batch vertex regions while writing the headers, so the
+    // transform pass can emit straight into their final byte positions.
+    struct VertexRegion
     {
-      int32_t triCount = static_cast<int32_t>(b.verts.size() / 9);
-      memcpy(p, &b.objectId, sizeof(int32_t));
+      float *first;
+      int32_t faceCount;
+    };
+    std::vector<VertexRegion> regions;
+    regions.reserve(jobs.size());
+    for (const auto &job : jobs)
+    {
+      const int32_t triCount = job.faceCount;
+      memcpy(p, &job.objectId, sizeof(int32_t));
       p += sizeof(int32_t);
       memcpy(p, &triCount, sizeof(int32_t));
       p += sizeof(int32_t);
-      memcpy(p, b.verts.data(), b.verts.size() * sizeof(float));
-      p += static_cast<ptrdiff_t>(b.verts.size() * sizeof(float));
+      regions.push_back(VertexRegion{
+          reinterpret_cast<float *>(p), triCount});
+      p += static_cast<ptrdiff_t>(triCount) * 9 * static_cast<ptrdiff_t>(sizeof(float));
+    }
+
+    // Transform pass: instance+volume matrix, slic3r → GL axis mapping,
+    // P15.10 winding swap, scene bbox union — the exact operations (and
+    // order) of the previous push_back loop.
+    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
+    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+    for (size_t jobIndex = 0; jobIndex < jobs.size(); ++jobIndex)
+    {
+      const VolumeJob &job = jobs[jobIndex];
+      const auto &its = *job.its;
+      const int vcount = int(its.vertices.size());
+      // P15.10 (MIRROR): emit order (0, 2, 1) reverses the winding for
+      // left-handed batches; (0, 1, 2) otherwise.
+      const int emitOrder[3] = {0, job.leftHanded ? 2 : 1, job.leftHanded ? 1 : 2};
+      float *out = regions[jobIndex].first;
+
+      for (const auto &face : its.indices)
+      {
+        const int idx0 = face(0);
+        const int idx1 = face(1);
+        const int idx2 = face(2);
+        if (idx0 < 0 || idx0 >= vcount ||
+            idx1 < 0 || idx1 >= vcount ||
+            idx2 < 0 || idx2 >= vcount)
+        {
+          continue;
+        }
+
+        for (int k = 0; k < 3; ++k)
+        {
+          const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
+          // 应用实例+Volume 变换到世界坐标 (slic3r)
+          // Transform3d * Vec3d 直接应用仿射变换（含平移）
+          const Slic3r::Vec3d hw = job.combined * Slic3r::Vec3d(
+                                                      (double)lv.x(), (double)lv.y(), (double)lv.z());
+
+          // slic3r → GL 坐标系
+          const float gx = (float)hw.x();
+          const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
+          const float gz = (float)hw.y(); // slic3r Y → GL Z
+
+          *out++ = gx;
+          *out++ = gy;
+          *out++ = gz;
+
+          bminX = std::min(bminX, gx);
+          bmaxX = std::max(bmaxX, gx);
+          bminY = std::min(bminY, gy);
+          bmaxY = std::max(bmaxY, gy);
+          bminZ = std::min(bminZ, gz);
+          bmaxZ = std::max(bmaxZ, gz);
+        }
+      }
+    }
+
+    // Auto-normalize model placement onto build plate:
+    // keep relative arrangement, move global center to (110, *, 110)
+    // and make lowest Y rest on the plate (Y=0). The shift lands in place on
+    // the already-packed vertex regions (same float adds as the old
+    // per-volume second pass).
+    const float centerX = (bminX + bmaxX) * 0.5f;
+    const float centerZ = (bminZ + bmaxZ) * 0.5f;
+    const float offsetX = 110.0f - centerX;
+    const float offsetZ = 110.0f - centerZ;
+    const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
+
+    if (offsetX != 0.0f || offsetY != 0.0f || offsetZ != 0.0f)
+    {
+      for (const VertexRegion &region : regions)
+      {
+        float *verts = region.first;
+        const size_t floatCount = size_t(region.faceCount) * 9;
+        for (size_t vi = 0; vi + 2 < floatCount; vi += 3)
+        {
+          verts[vi + 0] += offsetX;
+          verts[vi + 1] += offsetY;
+          verts[vi + 2] += offsetZ;
+        }
+      }
+
+      bminX += offsetX;
+      bmaxX += offsetX;
+      bminY += offsetY;
+      bmaxY += offsetY;
+      bminZ += offsetZ;
+      bmaxZ += offsetZ;
     }
 
     // bbox trailer

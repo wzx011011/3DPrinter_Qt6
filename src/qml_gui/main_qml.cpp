@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlAbstractUrlInterceptor>
 #include <QQmlContext>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -7,6 +8,8 @@
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QFile>
+#include <QFont>
+#include <QFontDatabase>
 #include <QTextStream>
 #include <QDateTime>
 #include <QDir>
@@ -364,6 +367,30 @@ int main(int argc, char *argv[])
   app.setOrganizationName(QStringLiteral("OWzx"));
   app.setApplicationName(QStringLiteral("OWzxSlicer"));
 
+  // ctl-4 (upstream Label.cpp:22,99-100): upstream privately installs
+  // "HarmonyOS Sans SC" via AddPrivateFont and builds every Head_/Body_
+  // system font on that family, so the whole UI renders in it. Load the
+  // bundled TTFs into QFontDatabase BEFORE the QML engine starts and install
+  // the family as the application font, so every QML Text item without an
+  // explicit font.family inherits it instead of falling back to Segoe UI.
+  // The family name must stay in sync with the Theme.fontFamily token.
+  // If the resources are missing (addApplicationFont returns -1) fall back
+  // to Microsoft YaHei, which is CJK-safe on Windows.
+  {
+    const int regularFontId = QFontDatabase::addApplicationFont(
+        QStringLiteral(":/qml/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf"));
+    const int boldFontId = QFontDatabase::addApplicationFont(
+        QStringLiteral(":/qml/assets/fonts/HarmonyOS_Sans_SC_Bold.ttf"));
+    QString uiFontFamily = QStringLiteral("HarmonyOS Sans SC");
+    if (regularFontId < 0 && boldFontId < 0)
+      uiFontFamily = QStringLiteral("Microsoft YaHei");
+    QFont uiFont(uiFontFamily);
+    uiFont.setStyleStrategy(QFont::PreferAntialias);
+    app.setFont(uiFont);
+    appendStartupLog(QStringLiteral("UI font family: %1 (regular id %2, bold id %3)")
+                         .arg(uiFontFamily).arg(regularFontId).arg(boldFontId));
+  }
+
 #ifdef Q_OS_WIN
   // WIN-AI-ORPHAN (crash-safe child containment): this process hosts the AI
   // sidecar tree (python agent.py -> claude.exe/node.exe) via QProcess. If
@@ -423,6 +450,38 @@ int main(int argc, char *argv[])
   // Intentionally leak the engine to skip late Qt teardown hazards seen in
   // VisualRegressionTests. The OS reclaims all memory on process exit.
   auto *engine = new QQmlApplicationEngine;
+
+  // Dev-only QML source override (docs/ui-reference/restoration-map.md §5
+  // loop): set OWZX_DEV_QML_DIR=<src/qml_gui absolute path> to redirect every
+  // qrc:/qml/... load to the source tree, so QML edits only need an app
+  // restart instead of the rcc+link rebuild cycle. Never set in production;
+  // pair with QML_DISABLE_DISK_CACHE=1 so the qrc-keyed qmlc cache cannot
+  // serve stale bytecode across qrc/file swaps. The interceptor instance is
+  // intentionally leaked, matching the engine's leak-on-purpose lifetime.
+  const QString devQmlDir = qEnvironmentVariable("OWZX_DEV_QML_DIR");
+  if (!devQmlDir.isEmpty())
+  {
+    class DevQmlSourceInterceptor : public QQmlAbstractUrlInterceptor
+    {
+    public:
+      explicit DevQmlSourceInterceptor(QString baseDir) : baseDir_(std::move(baseDir)) {}
+      QUrl intercept(const QUrl &url, DataType type) override
+      {
+        Q_UNUSED(type);
+        if (url.scheme() != QLatin1String("qrc"))
+          return url;
+        const QString path = url.path();
+        const QString prefix = QLatin1String("/qml/");
+        if (!path.startsWith(prefix))
+          return url;
+        return QUrl::fromLocalFile(baseDir_ + path.mid(prefix.size() - 1));
+      }
+    private:
+      QString baseDir_;
+    };
+    engine->addUrlInterceptor(new DevQmlSourceInterceptor(QDir::fromNativeSeparators(devQmlDir)));
+    appendStartupLog(QStringLiteral("dev QML source override active: %1").arg(devQmlDir));
+  }
   QObject::connect(engine, &QQmlEngine::warnings, engine,
                    [](const QList<QQmlError> &warnings)
                    {
@@ -440,6 +499,14 @@ int main(int argc, char *argv[])
   appendStartupLog(QStringLiteral("context property set, loading main.qml"));
   engine->rootContext()->setContextProperty(QStringLiteral("startupSkipFirstRun"),
                                             startupOpenRequest.skipFirstRun);
+  // layout-1: the removed StatusBar used to surface backend.latencyBrief
+  // unconditionally at the window bottom. That debug data is env-gated now:
+  // main.qml renders a tiny bottom-right latency overlay only when this
+  // context property is true (QML_DEBUG_LOG or OWZX_DEBUG_OVERLAY set).
+  engine->rootContext()->setContextProperty(
+      QStringLiteral("debugOverlayVisible"),
+      QVariant(qEnvironmentVariableIsSet("QML_DEBUG_LOG")
+               || qEnvironmentVariableIsSet("OWZX_DEBUG_OVERLAY")));
   // The main window is frameless + maximized by default (declared directly in
   // main.qml) for screenshot parity with OrcaSlicer. No context-property toggle
   // is exposed — the frameless shell is always on.

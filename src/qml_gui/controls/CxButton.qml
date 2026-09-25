@@ -22,7 +22,12 @@ Button {
     Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
 
     background: Rectangle {
-        radius: Theme.radiusSM
+        // ctl-6: upstream corner radius is per style tier (Button.cpp:191-221,
+        // FromDIP): Choice/Parameter/Icon/Expanded = 4, Compact = 8,
+        // Window = 12. The Qt6 style enum has no Window-tier equivalent;
+        // `compact` maps to the upstream Compact tier, all others use the
+        // standard 4px tier.
+        radius: root.compact ? 8 : 4
         color: {
             const d = !root.enabled
             const h = root.hovered
@@ -76,7 +81,10 @@ Button {
             if (root.cxStyle === CxButton.Style.Danger) return Theme.textOnAccent
             return Theme.textPrimary
         }
-        font.pixelSize: root.compact ? Theme.fontSizeSM : Theme.fontSizeMD
+        // ctl-5: upstream buttons default to Body_14 (Button.cpp:54, and the
+        // Choice/Parameter/Expanded tiers at :204/210/222); only the Compact
+        // tier steps down (Body_10). Align to the 14px tier, compact to 12px.
+        font.pixelSize: root.compact ? Theme.fontSizeMD : Theme.fontSizeLG
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }

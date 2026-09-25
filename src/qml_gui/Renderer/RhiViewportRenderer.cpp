@@ -12,6 +12,7 @@
 #include <QSvgRenderer>
 
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <cstddef>
 
@@ -448,7 +449,10 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   else if (m_prepareScene.anyVolumeOutside())
     m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
   else
-    m_clearColor = QColor(86, 87, 93);
+    // vp-5 (VIEWBG): design-reference clear color #363638 (prepare_ref.png
+    // background sampling rgb(54,54,56)); the former QColor(86,87,93) read
+    // ~32 gray levels too bright against the adjudicated target.
+    m_clearColor = QColor(54, 54, 56);
 
   // ── Phase 26: Preview segment pipeline — store preview data + control props ──
   if (m_previewData != viewport->m_previewData) {
@@ -3395,9 +3399,11 @@ void RhiViewportRenderer::renderAssemblyConnectors(QRhiCommandBuffer *cb)
 bool RhiViewportRenderer::uploadAssemblyMeasureBuffers(QRhiResourceUpdateBatch *updates,
                                                        quint32 dirtyFlags)
 {
-  // Phase 92 (ASMMEASURE-02): Assembly measurement overlay (white dashed
-  // dimension line + arrowheads + teal value box) between the two selected
-  // volumes. Matches shotScreen/装配页_测量.png. The overlay is meaningful only
+  // Phase 92 (ASMMEASURE-02) + ref restyle: Assembly measurement overlay — a
+  // solid white leader line between the two selected anchors, a camera-facing
+  // solid disc on each anchor (#009688 / #A437A4 per prepare_ref.png) and a
+  // white rounded label plate at the midpoint (the value text itself renders
+  // in the QML panel). The overlay is meaningful only
   // on AssembleView with the Assembly measure gizmo active (mode 19); on any
   // other canvas/gizmo the buffers are left empty (nothing drawn). Selection
   // deltas are handled by the dirty flags set in synchronize() (which clear
@@ -3457,71 +3463,89 @@ bool RhiViewportRenderer::uploadAssemblyMeasureBuffers(QRhiResourceUpdateBatch *
       {
         const QVector3D &p0 = result.centerA;
         const QVector3D &p1 = result.centerB;
-        // ── Dimension line: white dashed segments (reuse the Phase 91 dash
-        // technique — N alternating dash/gap GL_LINES segments, white RGBA).
+        // ── Dimension line: one solid white segment (ref shows a thin solid
+        // leader line between the two anchors; the old dashed line + arrowhead
+        // triangles are gone).
         const float wr = 1.0f, wg = 1.0f, wb = 1.0f, wa = 1.0f;
-        const int kDashCount = 8;
-        for (int d = 0; d < kDashCount; ++d)
-        {
-          const float t0 = float(d) / float(kDashCount);
-          const float t1 = float(d + 0.5f) / float(kDashCount);
-          const QVector3D a0 = p0 + (p1 - p0) * t0;
-          const QVector3D a1 = p0 + (p1 - p0) * t1;
-          lineVerts.append(Vertex{a0.x(), a0.y(), a0.z(), wr, wg, wb, wa});
-          lineVerts.append(Vertex{a1.x(), a1.y(), a1.z(), wr, wg, wb, wa});
-        }
+        lineVerts.append(Vertex{p0.x(), p0.y(), p0.z(), wr, wg, wb, wa});
+        lineVerts.append(Vertex{p1.x(), p1.y(), p1.z(), wr, wg, wb, wa});
 
-        // ── Arrowheads: a small white triangle at each endpoint pointing along
-        // the line. World-space approximation (a faithful screen-space arrow
-        // like upstream render_dimensioning needs the MVP; this approximation
-        // is documented in the plan and is acceptable for Phase 92). Build two
-        // side vertices perpendicular to the line in world space.
-        QVector3D dir = (p1 - p0);
-        const float len = dir.length();
-        if (len > 1e-5f)
-        {
-          dir /= len;
-          // Pick a vector not parallel to dir for the perpendicular basis.
-          QVector3D up = (std::abs(dir.y()) < 0.9f) ? QVector3D(0, 1, 0) : QVector3D(1, 0, 0);
-          QVector3D perp = QVector3D::crossProduct(dir, up).normalized();
-          const float head = std::clamp(len * 0.08f, 1.0f, 8.0f);  // arrow size (mm)
-          const float half = head * 0.5f;
-          // Tip at p0 - dir*head (points outward from A along the line toward B
-          // reversed), base two side vertices. Symmetric for B.
-          auto appendArrow = [&](const QVector3D &tip, const QVector3D &lineDir) {
-            const QVector3D base = tip + lineDir * head;
-            const QVector3D s1 = base + perp * half;
-            const QVector3D s2 = base - perp * half;
-            triVerts.append(Vertex{tip.x(), tip.y(), tip.z(), wr, wg, wb, wa});
-            triVerts.append(Vertex{s1.x(), s1.y(), s1.z(), wr, wg, wb, wa});
-            triVerts.append(Vertex{s2.x(), s2.y(), s2.z(), wr, wg, wb, wa});
-          };
-          appendArrow(p0, dir);    // arrow at A pointing toward B
-          appendArrow(p1, -dir);   // arrow at B pointing toward A
-        }
+        // ── Anchor discs + value label plate: camera-facing billboards built
+        // from m_cameraEye (Phase 68) so they always read flat to the viewer.
+        // Basis (right, up) is chosen so right x up points at the camera.
+        const float kPi = 3.14159265358979f;
+        auto billboardBasis = [&](const QVector3D &center, QVector3D &right,
+                                  QVector3D &up) {
+          QVector3D view = m_cameraEye - center;
+          if (view.length() < 1e-5f)
+            view = QVector3D(0, 0, 1);
+          view.normalize();
+          const QVector3D worldUp =
+              (std::abs(view.y()) < 0.95f) ? QVector3D(0, 1, 0) : QVector3D(1, 0, 0);
+          right = QVector3D::crossProduct(worldUp, view).normalized();
+          up = QVector3D::crossProduct(view, right).normalized();
+        };
 
-        // ── Teal value box: a small translucent teal quad at the midpoint,
-        // drawn behind the value text (the value text itself renders in the
-        // QML panel — the box is a visual anchor per the screenshot). Teal
-        // #0fb-family (0.0, 0.73, 0.73) with alpha 0.85.
+        const float len = (p1 - p0).length();
+        // Disc radius scales mildly with the anchor distance so the discs stay
+        // visible without swamping small parts.
+        const float discR = std::clamp(len * 0.06f, 2.5f, 10.0f);
+        const int kDiscSegments = 20;
+        auto appendDisc = [&](const QVector3D &center, float r,
+                              float cr, float cg, float cb) {
+          QVector3D right, up;
+          billboardBasis(center, right, up);
+          for (int s = 0; s < kDiscSegments; ++s) {
+            const float a0 = float(s) * 2.0f * kPi / float(kDiscSegments);
+            const float a1 = float(s + 1) * 2.0f * kPi / float(kDiscSegments);
+            const QVector3D r0 =
+                center + (right * std::cos(a0) + up * std::sin(a0)) * r;
+            const QVector3D r1 =
+                center + (right * std::cos(a1) + up * std::sin(a1)) * r;
+            valueVerts.append(Vertex{center.x(), center.y(), center.z(), cr, cg, cb, wa});
+            valueVerts.append(Vertex{r0.x(), r0.y(), r0.z(), cr, cg, cb, wa});
+            valueVerts.append(Vertex{r1.x(), r1.y(), r1.z(), cr, cg, cb, wa});
+          }
+        };
+        // Ref-measured anchor disc colors: teal #009688 for the first
+        // selection, purple #A437A4 for the second (solid fills).
+        appendDisc(p0, discR, 0.0f, 0.588f, 0.533f);
+        appendDisc(p1, discR, 0.643f, 0.216f, 0.643f);
+
+        // ── Value label plate: solid white rounded plate at the midpoint
+        // (ref shows a white chip with dark text; the text itself stays in the
+        // QML panel, the plate is the in-scene anchor). Corner rounding is
+        // approximated with short arcs in the billboard plane.
         const QVector3D mid = (p0 + p1) * 0.5f;
-        const float tr = 0.0f, tg = 0.73f, tb = 0.73f, ta = 0.85f;
-        // Size the box in world mm (a few mm each side). Orient facing the
-        // camera by building a billboard-ish quad in the plane spanned by `dir`
-        // and `up` — good enough for the screenshot visual.
-        const float boxHalf = 2.5f;
-        QVector3D boxUp = (std::abs(dir.y()) < 0.9f) ? QVector3D(0, 1, 0) : QVector3D(1, 0, 0);
-        QVector3D boxPerp = QVector3D::crossProduct(dir, boxUp).normalized();
-        const QVector3D c0 = mid - boxPerp * boxHalf - boxUp * boxHalf;
-        const QVector3D c1 = mid + boxPerp * boxHalf - boxUp * boxHalf;
-        const QVector3D c2 = mid + boxPerp * boxHalf + boxUp * boxHalf;
-        const QVector3D c3 = mid - boxPerp * boxHalf + boxUp * boxHalf;
-        valueVerts.append(Vertex{c0.x(), c0.y(), c0.z(), tr, tg, tb, ta});
-        valueVerts.append(Vertex{c1.x(), c1.y(), c1.z(), tr, tg, tb, ta});
-        valueVerts.append(Vertex{c2.x(), c2.y(), c2.z(), tr, tg, tb, ta});
-        valueVerts.append(Vertex{c0.x(), c0.y(), c0.z(), tr, tg, tb, ta});
-        valueVerts.append(Vertex{c2.x(), c2.y(), c2.z(), tr, tg, tb, ta});
-        valueVerts.append(Vertex{c3.x(), c3.y(), c3.z(), tr, tg, tb, ta});
+        QVector3D right, up;
+        billboardBasis(mid, right, up);
+        const float hx = std::clamp(len * 0.10f, 5.0f, 14.0f);
+        const float hy = hx * 0.45f;
+        const float rr = std::min(hy * 0.5f, 2.0f);
+        const int kArc = 4;
+        const QVector3D corners[4] = {
+            mid + right * (hx - rr) + up * (hy - rr),
+            mid - right * (hx - rr) + up * (hy - rr),
+            mid - right * (hx - rr) - up * (hy - rr),
+            mid + right * (hx - rr) - up * (hy - rr),
+        };
+        QVector<QVector3D> rim;
+        rim.reserve(4 * (kArc + 1));
+        for (int c = 0; c < 4; ++c) {
+          const float base = float(c) * kPi * 0.5f;
+          for (int s = 0; s <= kArc; ++s) {
+            const float ang = base + float(s) * (kPi * 0.5f) / float(kArc);
+            rim.append(corners[c] + right * (std::cos(ang) * rr)
+                       + up * (std::sin(ang) * rr));
+          }
+        }
+        for (int s = 0; s < rim.size(); ++s) {
+          const QVector3D &a = rim[s];
+          const QVector3D &b = rim[(s + 1) % rim.size()];
+          valueVerts.append(Vertex{mid.x(), mid.y(), mid.z(), 1.0f, 1.0f, 1.0f, wa});
+          valueVerts.append(Vertex{a.x(), a.y(), a.z(), 1.0f, 1.0f, 1.0f, wa});
+          valueVerts.append(Vertex{b.x(), b.y(), b.z(), 1.0f, 1.0f, 1.0f, wa});
+        }
       }
     }
   }
@@ -3561,11 +3585,10 @@ bool RhiViewportRenderer::uploadAssemblyMeasureBuffers(QRhiResourceUpdateBatch *
 void RhiViewportRenderer::renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb)
 {
   // Phase 92 (ASMMEASURE-02): draw the three overlay buffers. The dimension
-  // line uses the shared line pipeline (GL_LINES, white dashes); the arrowheads
-  // use the gizmo triangle pipeline (white, no depth write so they stay
-  // visible); the teal value box uses the translucent fill pipeline (source-
-  // alpha blend, no depth write). Drawn after the mesh + connectors so the
-  // overlay sits on top (matches 装配页_测量.png).
+  // line uses the shared line pipeline (GL_LINES, solid white); the anchor
+  // discs and the white label plate use the translucent fill pipeline
+  // (source-alpha blend, no depth write). Drawn after the mesh + connectors
+  // so the overlay sits on top (ref 装配页_测量.png restyle).
   if (cb == nullptr)
     return;
 

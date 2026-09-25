@@ -106,13 +106,16 @@ Item {
     // ── 拖拽 handle（调宽度）──
     // 放在 sidebar 朝向 viewportArea 的边缘（由 dockArea 决定左右，这里统一放右侧，
     //  PreparePage 在 dockArea=Right 时镜像翻转本组件）
+    // Upstream wxAUI sash is a static dark divider with no hover feedback
+    // (Plater.cpp:13249-13250 sets a fixed SASH_COLOUR), so the handle keeps
+    // one constant borderSubtle color in every state.
     Rectangle {
         id: dragHandle
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         anchors.right: parent.right
-        width: 6
-        color: dragArea.containsMouse || root._dragging ? Theme.accent : Theme.borderSubtle
+        width: 4
+        color: Theme.borderSubtle
         opacity: root.collapsed ? 0 : 0.6
         visible: !root.collapsed
 

@@ -99,6 +99,12 @@
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>
         <file>assets/monitor_ref.png</file>
+        <!-- MonitorPage: upstream empty-state illustration + HMS unread badge
+             (copied from third_party/OrcaSlicer/resources/images). -->
+        <file>assets/monitor_status_empty.svg</file>
+        <file>assets/icons/monitor_hms_new.svg</file>
+        <file>assets/icons/pencil-edit.svg</file>
+        <file>assets/icons/sort-arrows.svg</file>
         <file>assets/icons/bell.svg</file>
         <file>assets/icons/arrow-back-up.svg</file>
         <file>assets/icons/arrow-forward-up.svg</file>
@@ -132,6 +138,163 @@
         <file>assets/icons/trash.svg</file>
         <file>assets/icons/plus.svg</file>
         <file>assets/icons/layout-grid-plus.svg</file>
+        <!-- Upstream resource intake: icons copied from
+             OrcaSlicer/resources/images/ with brand recolor
+             (#009688 / #00675B / #26A69A / #008172 -> #18c75e); fonts
+             copied from OrcaSlicer/resources/fonts/ as-is. -->
+        <file>assets/icons/topbar_file.svg</file>
+        <file>assets/icons/calib_sf.svg</file>
+        <file>assets/icons/tab_home_active.svg</file>
+        <file>assets/icons/tab_3d_active.svg</file>
+        <file>assets/icons/tab_preview_active.svg</file>
+        <file>assets/icons/tab_monitor_active.svg</file>
+        <file>assets/icons/tab_multi_active.svg</file>
+        <file>assets/icons/tab_auxiliary_active.svg</file>
+        <file>assets/icons/tab_calibration_active.svg</file>
+        <file>assets/icons/sidebutton_dropdown.svg</file>
+        <file>assets/icons/check_on.svg</file>
+        <file>assets/icons/check_half.svg</file>
+        <file>assets/icons/check_off.svg</file>
+        <file>assets/icons/check_off_focused.svg</file>
+        <file>assets/icons/check_off_disabled.svg</file>
+        <file>assets/icons/monitor_arrow.svg</file>
+        <file>assets/icons/toolbar_double_directional_arrow.svg</file>
+        <file>assets/icons/go_last_plate.svg</file>
+        <file>assets/icons/go_next_plate.svg</file>
+        <file>assets/icons/spin_inc.svg</file>
+        <file>assets/icons/spin_dec.svg</file>
+        <file>assets/icons/param_3dhoneycomb.svg</file>
+        <file>assets/icons/param_acceleration.svg</file>
+        <file>assets/icons/param_accessory.svg</file>
+        <file>assets/icons/param_adaptive_mesh.svg</file>
+        <file>assets/icons/param_adaptivecubic.svg</file>
+        <file>assets/icons/param_add.svg</file>
+        <file>assets/icons/param_adhension.svg</file>
+        <file>assets/icons/param_advanced.svg</file>
+        <file>assets/icons/param_alignedrectilinear.svg</file>
+        <file>assets/icons/param_archimedeanchords.svg</file>
+        <file>assets/icons/param_bed_temp.svg</file>
+        <file>assets/icons/param_bridge.svg</file>
+        <file>assets/icons/param_chamber_temp.svg</file>
+        <file>assets/icons/param_concentric.svg</file>
+        <file>assets/icons/param_cooling.svg</file>
+        <file>assets/icons/param_cooling_aux_fan.svg</file>
+        <file>assets/icons/param_cooling_exhaust.svg</file>
+        <file>assets/icons/param_cooling_fan.svg</file>
+        <file>assets/icons/param_cooling_part_fan.svg</file>
+        <file>assets/icons/param_cooling_specific_layer.svg</file>
+        <file>assets/icons/param_crosshatch.svg</file>
+        <file>assets/icons/param_crosszag.svg</file>
+        <file>assets/icons/param_cubic.svg</file>
+        <file>assets/icons/param_dependencies_presets.svg</file>
+        <file>assets/icons/param_dependencies_printers.svg</file>
+        <file>assets/icons/param_extruder_clearance.svg</file>
+        <file>assets/icons/param_extruder_lift_enforcement.svg</file>
+        <file>assets/icons/param_extruder_size.svg</file>
+        <file>assets/icons/param_extruder_temp.svg</file>
+        <file>assets/icons/param_filament_for_features.svg</file>
+        <file>assets/icons/param_flow_ratio_and_pressure_advance.svg</file>
+        <file>assets/icons/param_flush.svg</file>
+        <file>assets/icons/param_gcode.svg</file>
+        <file>assets/icons/param_grid.svg</file>
+        <file>assets/icons/param_gyroid.svg</file>
+        <file>assets/icons/param_hilbertcurve.svg</file>
+        <file>assets/icons/param_hollow.svg</file>
+        <file>assets/icons/param_honeycomb.svg</file>
+        <file>assets/icons/param_infill.svg</file>
+        <file>assets/icons/param_information.svg</file>
+        <file>assets/icons/param_ironing.svg</file>
+        <file>assets/icons/param_jerk.svg</file>
+        <file>assets/icons/param_junction_deviation.svg</file>
+        <file>assets/icons/param_lateral-honeycomb.svg</file>
+        <file>assets/icons/param_lateral-lattice.svg</file>
+        <file>assets/icons/param_layer_height.svg</file>
+        <file>assets/icons/param_lightning.svg</file>
+        <file>assets/icons/param_line.svg</file>
+        <file>assets/icons/param_line_width.svg</file>
+        <file>assets/icons/param_lockedzag.svg</file>
+        <file>assets/icons/param_monotonic.svg</file>
+        <file>assets/icons/param_monotonicline.svg</file>
+        <file>assets/icons/param_multi_material.svg</file>
+        <file>assets/icons/param_octagramspiral.svg</file>
+        <file>assets/icons/param_ooze_prevention.svg</file>
+        <file>assets/icons/param_overhang.svg</file>
+        <file>assets/icons/param_overhang_speed.svg</file>
+        <file>assets/icons/param_position.svg</file>
+        <file>assets/icons/param_precision.svg</file>
+        <file>assets/icons/param_printable_space.svg</file>
+        <file>assets/icons/param_quartercubic.svg</file>
+        <file>assets/icons/param_raft.svg</file>
+        <file>assets/icons/param_rectilinear-grid.svg</file>
+        <file>assets/icons/param_rectilinear.svg</file>
+        <file>assets/icons/param_rectilinear_interlaced.svg</file>
+        <file>assets/icons/param_resonance_avoidance.svg</file>
+        <file>assets/icons/param_retraction.svg</file>
+        <file>assets/icons/param_retraction_material_change.svg</file>
+        <file>assets/icons/param_seam.svg</file>
+        <file>assets/icons/param_settings.svg</file>
+        <file>assets/icons/param_shell.svg</file>
+        <file>assets/icons/param_skirt.svg</file>
+        <file>assets/icons/param_special.svg</file>
+        <file>assets/icons/param_speed.svg</file>
+        <file>assets/icons/param_speed_first.svg</file>
+        <file>assets/icons/param_spiralinset.svg</file>
+        <file>assets/icons/param_support.svg</file>
+        <file>assets/icons/param_support_filament.svg</file>
+        <file>assets/icons/param_support_tree.svg</file>
+        <file>assets/icons/param_supportcubic.svg</file>
+        <file>assets/icons/param_temperature.svg</file>
+        <file>assets/icons/param_toolchange.svg</file>
+        <file>assets/icons/param_toolchange_multi_extruder.svg</file>
+        <file>assets/icons/param_tower.svg</file>
+        <file>assets/icons/param_tpmsd.svg</file>
+        <file>assets/icons/param_tpmsfk.svg</file>
+        <file>assets/icons/param_travel_speed.svg</file>
+        <file>assets/icons/param_tri-hexagon.svg</file>
+        <file>assets/icons/param_triangles.svg</file>
+        <file>assets/icons/param_volumetric_speed.svg</file>
+        <file>assets/icons/param_wall.svg</file>
+        <file>assets/icons/param_wall_generator.svg</file>
+        <file>assets/icons/param_wall_surface.svg</file>
+        <file>assets/icons/param_z_contouring.svg</file>
+        <file>assets/icons/param_zigzag.svg</file>
+        <!-- vp-3 (TOOLICONS): dedicated viewport toolbar/gizmo icons from
+             OrcaSlicer/resources/images/ (GLCanvas3D.cpp:6862-6990 main
+             toolbar set, GLGizmosManager.cpp:206-224 gizmo toolbar icons). -->
+        <file>assets/icons/toolbar_open.svg</file>
+        <file>assets/icons/toolbar_add_plate.svg</file>
+        <file>assets/icons/toolbar_orient.svg</file>
+        <file>assets/icons/toolbar_arrange.svg</file>
+        <file>assets/icons/toolbar_variable_layer_height.svg</file>
+        <file>assets/icons/toolbar_move.svg</file>
+        <file>assets/icons/toolbar_rotate.svg</file>
+        <file>assets/icons/toolbar_scale.svg</file>
+        <file>assets/icons/toolbar_flatten.svg</file>
+        <file>assets/icons/toolbar_cut.svg</file>
+        <file>assets/icons/toolbar_support.svg</file>
+        <file>assets/icons/toolbar_seam.svg</file>
+        <file>assets/icons/toolbar_measure.svg</file>
+        <file>assets/icons/toolbar_meshboolean.svg</file>
+        <file>assets/icons/toolbar_text.svg</file>
+        <file>assets/icons/instance_add.svg</file>
+        <file>assets/icons/instance_remove.svg</file>
+        <file>assets/icons/split_objects.svg</file>
+        <file>assets/icons/split_parts.svg</file>
+        <file>assets/icons/reduce_triangles.svg</file>
+        <file>assets/icons/mmu_segmentation.svg</file>
+        <!-- vp-2 (PLATEICONS): per-plate ground icon column + rename pencil
+             from OrcaSlicer/resources/images/ (PartPlate.cpp:1126-1230
+             render_icons, calc_vertex_for_plate_name_edit_icon). -->
+        <file>assets/icons/plate_close.svg</file>
+        <file>assets/icons/plate_orient.svg</file>
+        <file>assets/icons/plate_arrange.svg</file>
+        <file>assets/icons/plate_locked.svg</file>
+        <file>assets/icons/plate_unlocked.svg</file>
+        <file>assets/icons/plate_settings.svg</file>
+        <file>assets/icons/plate_move_front.svg</file>
+        <file>assets/icons/plate_name_edit.svg</file>
+        <file>assets/fonts/HarmonyOS_Sans_SC_Regular.ttf</file>
+        <file>assets/fonts/HarmonyOS_Sans_SC_Bold.ttf</file>
         <!-- Phase 197: dedicated calibration tower models bundled from
              OrcaSlicer/resources/calib/. Consumed by
              CalibrationServiceMock::towerModelQrcPathForMode via the

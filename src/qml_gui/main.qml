@@ -35,7 +35,10 @@ ApplicationWindow {
     // Frame margin is 0 by default: the shell fills the whole window so the
     // app content goes edge-to-edge (matching the OrcaSlicer screenshot).
     readonly property int frameMargin: 0
-    readonly property int frameRadius: (backend.visualCompareMode) ? 0 : 18
+    // topbar-4 (upstream MainFrame.cpp:524): a standard square-corner system
+    // frame -- upstream draws no rounded shell, so the radius is a constant 0
+    // (was 18 outside visualCompareMode, which rounded the topbar arc).
+    readonly property int frameRadius: 0
     readonly property int prepareChromeHeight: 70
 
     // R-P0.6: force-close is set ONLY after the dirty-project guard is
@@ -944,16 +947,38 @@ ApplicationWindow {
                 }
             }
 
-            // Status bar — report the semantic page index, including the reserved slot.
-            StatusBar {
-                Layout.fillWidth: true
-                statusText: "就绪  |  Qt 6.10  |  页面 " + (backend.currentPage + 1) + " / "
-                            + (backend.tpPreferences + 1) + "  |  " + backend.latencyBrief
-            }
+            // layout-1: no permanent status bar. Upstream MainFrame's sizer
+            // holds only the topbar + the tab panel (MainFrame.cpp:524,1025;
+            // no CreateStatusBar), and the reference screenshot shows the
+            // viewport running to the window's bottom edge. The old 24px
+            // StatusBar (with its latencyBrief debug text) is removed; that
+            // debug data is env-gated instead (debugOverlayVisible below,
+            // driven by QML_DEBUG_LOG / OWZX_DEBUG_OVERLAY in main_qml.cpp).
         }
 
         // Floating Info toast (severity=0), z-stacked over shell content
         ErrorToast { }
+
+        // Debug-only latency overlay (layout-1): replaces the latency text the
+        // removed StatusBar used to carry. Visible only when the process was
+        // started with QML_DEBUG_LOG or OWZX_DEBUG_OVERLAY (context property
+        // set in main_qml.cpp), never in normal user runs.
+        // BUILDGATE restore (2026-09-24): also carries the removed StatusBar's
+        // semantic page index (current page / reserved-slot count ending at
+        // tpPreferences) that WAVE-4 still locks, without resurrecting the
+        // permanent bar upstream MainFrame never had.
+        Text {
+            visible: debugOverlayVisible
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            anchors.margins: 6
+            z: 250
+            text: (backend.currentPage + 1) + " / " + (backend.tpPreferences + 1)
+                  + (backend.latencyBrief !== "" ? "  |  " + backend.latencyBrief : "")
+            color: Theme.textTertiary
+            font.pixelSize: Theme.fontSizeXS
+            font.family: Theme.fontMono
+        }
 
         // ── AI 助手聊天侧栏（OWzx-only，docs/ai-control.md）──────────────────
         // 右缘常驻窄条（仅 AI 启用时可见）+ 360px 覆盖式面板；状态与动作全部

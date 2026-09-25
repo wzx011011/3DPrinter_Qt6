@@ -1094,14 +1094,19 @@ QVariantList RhiViewport::navigatorLabels() const
       NavigatorCube::cameraBasis(m_camera.viewMatrix());
   const NavigatorCube::RectF rect = navigatorRect();
   const QVector3D origin(-0.5f, -0.5f, -0.5f);
+  // vp-6 (AXISLABELS): uppercase slic3r axis names matching the transform
+  // widgets (upstream strcpy AxisLabels "Y"/"Z"/"X", GLCanvas3D.cpp:6144-6146).
+  // The vectors are Qt scene axes: Qt X = slic3r X, Qt +Y (height) = slic3r Z,
+  // Qt +Z (depth) = slic3r Y -- same mapping PrepareSceneData documents for
+  // the world axes.
   const struct
   {
     const char *text;
     QVector3D axis;
   } axes[3] = {
-      {"x", QVector3D(1, 0, 0)},
-      {"y", QVector3D(0, 1, 0)},
-      {"z", QVector3D(0, 0, 1)},
+      {"X", QVector3D(1, 0, 0)},
+      {"Z", QVector3D(0, 1, 0)},
+      {"Y", QVector3D(0, 0, 1)},
   };
   for (const auto &axis : axes) {
     // Axis label at 1.3x the axis direction (ImGuizmo.cpp:3037).
@@ -1160,20 +1165,34 @@ QVariantList RhiViewport::plateAnchors() const
     // X = bed X, Y = height (ground), Z = bed Y.
     const float worldX = m_bedOriginX + offsetX + m_bedWidth;
     const float worldZ = m_bedOriginY + offsetY;
+    // vp-2 (PLATEICONS): second anchor at the plate's top-LEFT corner for
+    // the plate name + pencil rename cluster (upstream calc_vertex_for_
+    // plate_name_edit_icon pins the edit icon next to the name at the bed
+    // extents min corner, PartPlate.cpp:646-676).
+    const float nameWorldX = m_bedOriginX + offsetX;
     const QVector4D clip = mvp * QVector4D(worldX, 0.0f, worldZ, 1.0f);
+    const QVector4D nameClip = mvp * QVector4D(nameWorldX, 0.0f, worldZ, 1.0f);
     // Behind the camera (or degenerate w) -> QML hides the cluster.
-    const bool visible = clip.w() > 0.0f && !qFuzzyIsNull(clip.w());
+    const bool visible = clip.w() > 0.0f && !qFuzzyIsNull(clip.w())
+        && nameClip.w() > 0.0f && !qFuzzyIsNull(nameClip.w());
     double px = 0.0;
     double py = 0.0;
+    double namePx = 0.0;
+    double namePy = 0.0;
     if (visible) {
       const QVector3D ndc = clip.toVector3D() / clip.w();
       px = double((ndc.x() * 0.5f + 0.5f) * float(viewSize.width()));
       py = double((1.f - (ndc.y() * 0.5f + 0.5f)) * float(viewSize.height()));
+      const QVector3D nameNdc = nameClip.toVector3D() / nameClip.w();
+      namePx = double((nameNdc.x() * 0.5f + 0.5f) * float(viewSize.width()));
+      namePy = double((1.f - (nameNdc.y() * 0.5f + 0.5f)) * float(viewSize.height()));
     }
     anchors.append(QVariantMap{
         {"plateIndex", i},
         {"x", px},
         {"y", py},
+        {"nameX", namePx},
+        {"nameY", namePy},
         {"visible", visible}});
   }
   return anchors;

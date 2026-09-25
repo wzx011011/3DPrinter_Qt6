@@ -675,13 +675,14 @@ private:
   // Phase 164 (SW-01, v5.2): bumped version + unbroken the 7-layer 392px lock —
   // min/max are now real bounds (was min==max==392, which made the
   // DockableSidebar drag handle a visible no-op per Panels-UI-REVIEW). Default
-  // stays 392 to preserve the current visual; users can now resize within
-  // [300, 520]. The previous "screenshot Prepare sidebar width" comment was
-  // misleading — Phase 74 UI-SPEC mandates "compact" not 392px specifically.
-  static constexpr int kSidebarSettingsVersion = 4; ///< Width persistence contract version.
+  // [300, 520]. R8 (docs/ui-reference/restoration-map.md): the default is
+  // restored to 392 -- the upstream-measured sidebar width (392px incl. the
+  // 18px scrollbar gutter, sampled from upstream_prepare.png). Version 5
+  // migrates persisted pre-R8 widths to the new default once.
+  static constexpr int kSidebarSettingsVersion = 5; ///< Width persistence contract version.
   static constexpr int kSidebarMinWidth = 300;
   static constexpr int kSidebarMaxWidth = 520;
-  static constexpr int kSidebarDefaultWidth = 320;
+  static constexpr int kSidebarDefaultWidth = 392;
   bool sidebarCollapsed_ = false;
   int m_lastSelectedObjectsInfoCount = 0;  ///< GAP-7 multi-select notification dedupe.
   int sidebarWidth_ = kSidebarDefaultWidth;

@@ -56,7 +56,10 @@ Item {
                         entry.hasProgress ? 320 : (entry.hasExtraButtons ? (entry.hasDocLink ? 410 : 360) : 160))
         height: {
             var h = 40
-            if (entry.hasProgress) h = 60
+            // slice-6: 76 -- the percentage text moved below the bar
+            // (upstream render_bar), so the progress entry needs one extra
+            // text line over the old 60.
+            if (entry.hasProgress) h = 76
             if (entry.hasExtraButtons) h += 30
             return h
         }
@@ -175,30 +178,33 @@ Item {
                     }
                 }
 
-                // Progress bar (aligns with upstream notification_manager progress notification)
+                // Progress bar (slice-6, upstream SlicingProgressNotification.cpp:
+                // 366-390 render_bar -- 4px bar, light-gray #d9d9d9 track,
+                // teal-fill semantics carried by the brand green, percentage
+                // text with 2 decimals below the bar's left edge).
                 Rectangle {
                     visible: entry.hasProgress
                     Layout.fillWidth: true
-                    height: 6
-                    radius: 3
-                    color: Theme.chromePressed
+                    height: 4
+                    radius: 0
+                    color: "#d9d9d9"
 
                     Rectangle {
                         width: parent.width * (entry.progressValue / 100.0)
                         height: parent.height
-                        radius: 3
-                        color: iconColor
+                        radius: 0
+                        color: Theme.accent
                         Behavior on width { NumberAnimation { duration: 200 } }
                     }
 
                     Text {
-                        anchors.left: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: 6
-                        text: entry.progressValue + "%"
+                        anchors.top: parent.bottom
+                        anchors.topMargin: 3
+                        anchors.left: parent.left
+                        text: entry.progressValue.toFixed(2) + "%"
                         color: textColor
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                     }
                 }
 

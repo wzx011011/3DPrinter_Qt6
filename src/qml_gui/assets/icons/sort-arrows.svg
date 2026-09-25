@@ -1,0 +1,7 @@
+<!-- Dual sort arrows (up/down) for the device list column headers, per -->
+<!-- design ref monitor_ref.png (y151-163). Stroke #a3a3a3 sampled from -->
+<!-- Theme.textTertiary (neutral dark-theme token). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">
+  <path d="M3.5 4.5 6 2l2.5 2.5" fill="none" stroke="#a3a3a3" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M3.5 7.5 6 10l2.5-2.5" fill="none" stroke="#a3a3a3" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

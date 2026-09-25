@@ -20,15 +20,33 @@ ComboBox {
 
     background: Rectangle {
         radius: Theme.radiusSM
+        // ctl-12: flat base, same color as the hosting panel. Upstream reacts
+        // to hover via the BORDER only (ComboBox.cpp:54-59), not the fill.
         color: {
             if (!root.enabled) return Theme.bgPanel
-            if (root.pressed) return Theme.bgPressed
-            if (root.hovered) return Theme.bgHover
-            return Theme.bgElevated
+            if (root.activeFocus) {
+                // ctl-10: focused combo picks up a ~10% accent tint over the
+                // panel base (upstream readonly combo focused bg #E5F0EE,
+                // dark #283232 -- adapted to the OWzx accent).
+                const a = Theme.accent
+                const b = Theme.bgPanel
+                return Qt.rgba(b.r + (a.r - b.r) * 0.1,
+                               b.g + (a.g - b.g) * 0.1,
+                               b.b + (a.b - b.b) * 0.1, 1)
+            }
+            return Theme.bgPanel
         }
-        border.color: root.activeFocus ? Theme.borderFocus : Theme.borderStrong
+        border.color: {
+            if (!root.enabled) return Theme.borderSubtle
+            // ctl-10: hover/focus border turns accent (upstream
+            // ComboBox.cpp:56-58 Normal #DBDBDB -> Hovered teal); OWzx accent
+            // dark tier per the adjudicated value.
+            if (root.hovered || root.activeFocus) return "#0e8c46"
+            return Theme.borderDefault
+        }
         border.width: 1
         Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
         opacity: root.enabled ? 1.0 : 0.45
     }
 
@@ -57,7 +75,9 @@ ComboBox {
         padding: 0
 
         background: Rectangle {
-            color: Theme.bgElevated
+            // ctl-11: popup base follows the (ctl-1) flat panel gray instead
+            // of the raised bgElevated step.
+            color: Theme.bgPanel
             border.color: Theme.borderDefault
             border.width: 1
             radius: Theme.radiusSM
@@ -91,7 +111,13 @@ ComboBox {
         highlighted: root.highlightedIndex === index
         opacity: enabled ? 1.0 : (isSection ? 0.9 : 0.45)
         background: Rectangle {
-            color: highlighted && comboItem.enabled ? Theme.accentSubtle : "transparent"
+            // ctl-11: upstream dropdown highlight is translucent accent, not a
+            // solid fill (StateColor.cpp:50-51: checked item #BFE1DE = 25%
+            // accent, hovered item #E5F0EE = 10%).
+            color: !comboItem.enabled ? "transparent"
+                 : highlighted ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
+                 : comboItem.hovered ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.1)
+                 : "transparent"
         }
         contentItem: Text {
             leftPadding: Theme.spacingLG
