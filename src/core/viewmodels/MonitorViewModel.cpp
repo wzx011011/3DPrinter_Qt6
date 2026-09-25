@@ -253,6 +253,14 @@ void MonitorViewModel::scanDevices()
   if (deviceService_) deviceService_->scanDevices();
 }
 
+bool MonitorViewModel::addManualDevice(const QString &name, const QString &ip,
+                                       const QString &accessCode, int port)
+{
+  return deviceService_ != nullptr
+             ? deviceService_->addManualDevice(name, ip, accessCode, port)
+             : false;
+}
+
 void MonitorViewModel::connectDevice(int filteredIndex)
 {
   // v2.7 P2-A: 真实 MQTT 连接（当设备有 access code + IP）+ mock fallback。

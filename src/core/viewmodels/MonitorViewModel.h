@@ -110,6 +110,10 @@ public:
 
   /// Device interaction (对齐上游 DeviceManager / MachineObject)
   Q_INVOKABLE void scanDevices();
+  /// monitor-6: manual add passthrough (ref "+ 手动添加" form); returns false
+  /// when the name is empty.
+  Q_INVOKABLE bool addManualDevice(const QString &name, const QString &ip,
+                                   const QString &accessCode, int port = 8883);
   Q_INVOKABLE void connectDevice(int filteredIndex);
   Q_INVOKABLE void disconnectDevice(int filteredIndex);
   Q_INVOKABLE void startPrint(int filteredIndex, const QString &gcodePath);

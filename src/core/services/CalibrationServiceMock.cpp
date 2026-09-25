@@ -95,7 +95,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType flowDynamics;
     flowDynamics.id = "flow_dynamics";
     flowDynamics.name = tr("Flow Dynamics");
-    flowDynamics.icon = "\u{1F4A8}";  // wind
+    flowDynamics.icon = "";
     flowDynamics.category = "slice";
     flowDynamics.description = tr("Pressure Advance line calibration");
     flowDynamics.longDesc = tr(
@@ -131,7 +131,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType paPattern;
     paPattern.id = "pa_pattern";
     paPattern.name = tr("PA Pattern");
-    paPattern.icon = "\u{1F4CF}";
+    paPattern.icon = "";
     paPattern.category = "slice";
     paPattern.description = tr("Pressure Advance pattern calibration");
     paPattern.longDesc = tr(
@@ -161,7 +161,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType paTower;
     paTower.id = "pa_tower";
     paTower.name = tr("PA Tower");
-    paTower.icon = "\u{1F5FC}";
+    paTower.icon = "";
     paTower.category = "slice";
     paTower.description = tr("Pressure Advance tower calibration");
     paTower.longDesc = tr(
@@ -187,7 +187,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType flowRate;
     flowRate.id = "flow_rate";
     flowRate.name = tr("Flow Rate");
-    flowRate.icon = "\u{1F4CF}";  // chart
+    flowRate.icon = "";
     flowRate.category = "slice";
     flowRate.description = tr("Extrusion flow rate calibration");
     flowRate.longDesc = tr(
@@ -217,7 +217,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType tempTower;
     tempTower.id = "temp_tower";
     tempTower.name = tr("Temp Tower");
-    tempTower.icon = "T";
+    tempTower.icon = "";
     tempTower.category = "slice";
     tempTower.description = tr("Temperature tower calibration");
     tempTower.longDesc = tr(
@@ -241,7 +241,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType bedLeveling;
     bedLeveling.id = "bed_leveling";
     bedLeveling.name = tr("Bed Leveling");
-    bedLeveling.icon = "\u{1F3E0}";  // house
+    bedLeveling.icon = "";
     bedLeveling.category = "hardware";
     bedLeveling.description = tr("Auto bed leveling calibration");
     bedLeveling.longDesc = tr(
@@ -261,7 +261,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType vibration;
     vibration.id = "vibration";
     vibration.name = tr("Vibration Compensation");
-    vibration.icon = "\u{1F4E2}";  // megaphone
+    vibration.icon = "";
     vibration.category = "hardware";
     vibration.description = tr("Input shaping / resonance test");
     vibration.longDesc = tr(
@@ -285,7 +285,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType maxVolSpeed;
     maxVolSpeed.id = "max_volumetric_speed";
     maxVolSpeed.name = tr("Max Volumetric Speed");
-    maxVolSpeed.icon = "\u{26A1}";  // lightning
+    maxVolSpeed.icon = "";
     maxVolSpeed.category = "slice";
     maxVolSpeed.description = tr("Maximum volumetric speed test");
     maxVolSpeed.longDesc = tr(
@@ -317,7 +317,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType vfaTower;
     vfaTower.id = "vfa_tower";
     vfaTower.name = tr("VFA Tower");
-    vfaTower.icon = "\u{1F4CA}";  // bar chart
+    vfaTower.icon = "";
     vfaTower.category = "slice";
     vfaTower.description = tr("Volumetric flow artifact (VFA) test");
     vfaTower.longDesc = tr(
@@ -349,7 +349,7 @@ void CalibrationServiceMock::buildMockData()
     CalibrationType retractionTune;
     retractionTune.id = "retraction_tune";
     retractionTune.name = tr("Retraction Tune");
-    retractionTune.icon = "\u{21BA}";  // anticlockwise arrow
+    retractionTune.icon = "";
     retractionTune.category = "slice";
     retractionTune.description = tr("Retraction length tower test");
     retractionTune.longDesc = tr(

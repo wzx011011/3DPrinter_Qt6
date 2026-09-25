@@ -191,6 +191,12 @@ public:
   /// 模拟设备扫描（对齐上游 SSDP discovery）
   Q_INVOKABLE void scanDevices();
 
+  /// monitor-6: manual add (ref "+ 手动添加" form). Appends a connecting-state
+  /// mock device; the next scan flips it to idle/online like the seeded peers.
+  /// Returns false when the name is empty (caller shows a failure notice).
+  Q_INVOKABLE bool addManualDevice(const QString &name, const QString &ip,
+                                   const QString &accessCode, int port = 8883);
+
   /// 连接/断开设备（对齐上游 DeviceManager connect / disconnect）
   Q_INVOKABLE void connectDevice(int filteredIndex);
   Q_INVOKABLE void disconnectDevice(int filteredIndex);

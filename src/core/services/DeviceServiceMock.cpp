@@ -448,6 +448,39 @@ void DeviceServiceMock::scanDevices()
   emit selectedDeviceChanged();
 }
 
+bool DeviceServiceMock::addManualDevice(const QString &name, const QString &ip,
+                                        const QString &accessCode, int port)
+{
+  if (name.trimmed().isEmpty())
+    return false;
+  MockDevice d;
+  d.name = name.trimmed();
+  d.model = QStringLiteral("Custom");
+  // Deterministic pseudo-SN so repeat adds stay unique without RNG.
+  d.sn = QStringLiteral("CP%1").arg(700000 + devices_.size());
+  // Starts in the seeded "connecting" state; the next scanDevices() flips it
+  // to idle/online, mirroring the discovery lifecycle of the seeded peers.
+  d.status = "connecting";
+  d.online = false;
+  d.progress = 0;
+  d.taskName = "";
+  d.ip = ip.trimmed();
+  d.temperature = 0;
+  d.signalStrength = 2;
+  d.accessCode = accessCode.trimmed();
+  d.mqttPort = port > 0 ? port : 8883;
+  d.amsSlots = {
+    {"", "", 0.0f, false},
+    {"", "", 0.0f, false},
+    {"", "", 0.0f, false},
+    {"", "", 0.0f, false},
+  };
+  devices_.append(d);
+  rebuildFilteredIndices();
+  emit devicesChanged();
+  return true;
+}
+
 void DeviceServiceMock::connectDevice(int filteredIndex)
 {
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
