@@ -18,6 +18,164 @@ Item {
     id: root
     required property var monitorVm
 
+    // monitor-2 (ref): page-top grid/list view toggle; grid is the default
+    // selected mode per monitor_ref.png (first toggle carries the light bg).
+    property bool deviceGridView: true
+    // monitor-7 (ref): local sort over the filtered device list
+    // (column 0 = name, column 1 = online/status).
+    property int deviceSortColumn: 0
+    property bool deviceSortAscending: true
+    // monitor-5 (ref): single placeholder group holding all devices
+    // ("New Group1" per the ref); a real group model arrives later.
+    property bool groupExpanded: true
+
+    // monitor-7: filtered indices reordered locally by the column headers.
+    // Re-evaluates when the filtered count changes; per-device refreshes do
+    // not re-sort, so rows do not jump while a print progresses.
+    readonly property var sortedDeviceIndices: {
+        var vm = root.monitorVm
+        var n = vm ? vm.filteredDeviceCount : 0
+        var arr = new Array(n)
+        for (var i = 0; i < n; i++)
+            arr[i] = i
+        var col = root.deviceSortColumn
+        var asc = root.deviceSortAscending
+        arr.sort(function(a, b) {
+            var da = vm.deviceAt(a)
+            var db = vm.deviceAt(b)
+            var r = 0
+            if (col === 0) {
+                r = String(da.name || "").localeCompare(String(db.name || ""))
+            } else {
+                r = (da.online ? 0 : 1) - (db.online ? 0 : 1)
+                if (r === 0)
+                    r = String(da.status || "").localeCompare(String(db.status || ""))
+            }
+            return asc ? r : -r
+        })
+        return arr
+    }
+
+    // ── monitor-5 (ref y117-131): device group header row — fold chevron +
+    // group name + trailing edit pencil. Data is a single placeholder group
+    // holding all devices ("New Group1" per the ref) until a group model
+    // lands; rename is therefore an honestly disabled affordance.
+    component MonitorGroupBar: Rectangle {
+        color: "transparent"
+        implicitHeight: 32
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spacingLG
+            anchors.rightMargin: Theme.spacingLG
+            spacing: Theme.spacingSM
+
+            Item {
+                width: 20; height: 20
+                Layout.alignment: Qt.AlignVCenter
+                TapHandler { onTapped: root.groupExpanded = !root.groupExpanded }
+                Image {
+                    anchors.centerIn: parent
+                    width: 12; height: 12
+                    source: "qrc:/qml/assets/icons/sidebutton_dropdown.svg"
+                    rotation: root.groupExpanded ? 180 : 0
+                    Behavior on rotation { NumberAnimation { duration: 120 } }
+                }
+            }
+
+            Text {
+                text: qsTr("New Group1")
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeLG
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Item {
+                width: 20; height: 20
+                Layout.alignment: Qt.AlignVCenter
+                opacity: 0.45
+                Image {
+                    anchors.centerIn: parent
+                    width: 14; height: 14
+                    source: "qrc:/qml/assets/icons/pencil-edit.svg"
+                }
+                HoverHandler { id: groupPencilHover }
+                ToolTip.visible: groupPencilHover.hovered
+                ToolTip.text: qsTr("分组编辑暂未提供")
+                ToolTip.delay: 400
+            }
+        }
+    }
+
+    // ── monitor-7 (ref y151-163, name col x≈36 / status col x≈133): sortable
+    // "设备名称 ⇅" / "设备状态 ⇅" column headers; sorting is local.
+    component MonitorColumnHeader: Rectangle {
+        color: "transparent"
+        implicitHeight: 24
+        Row {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spacingLG
+            anchors.rightMargin: Theme.spacingLG
+
+            Item {
+                width: 110
+                height: parent.height
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("设备名称")
+                    color: root.deviceSortColumn === 0 ? Theme.textSecondary : Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeMD
+                }
+                Image {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 52
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 12; height: 12
+                    source: "qrc:/qml/assets/icons/sort-arrows.svg"
+                    opacity: root.deviceSortColumn === 0 ? 1.0 : 0.5
+                }
+                TapHandler {
+                    onTapped: {
+                        if (root.deviceSortColumn === 0)
+                            root.deviceSortAscending = !root.deviceSortAscending
+                        else
+                            root.deviceSortColumn = 0
+                    }
+                }
+            }
+
+            Item {
+                width: parent.width - 110
+                height: parent.height
+                Text {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("设备状态")
+                    color: root.deviceSortColumn === 1 ? Theme.textSecondary : Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeMD
+                }
+                Image {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 52
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 12; height: 12
+                    source: "qrc:/qml/assets/icons/sort-arrows.svg"
+                    opacity: root.deviceSortColumn === 1 ? 1.0 : 0.5
+                }
+                TapHandler {
+                    onTapped: {
+                        if (root.deviceSortColumn === 1)
+                            root.deviceSortAscending = !root.deviceSortAscending
+                        else
+                            root.deviceSortColumn = 1
+                    }
+                }
+            }
+        }
+    }
+
     // v2.7 P2-A: connect helper. Check access code; if missing, open input dialog.
     // After input, setSelectedDeviceAccessCode + re-trigger connectDevice (real MQTT path).
     function connectWithAccessCode() {
@@ -39,6 +197,28 @@ Item {
         onConnectRequested: function(ip, code, port) {
             root.monitorVm.setSelectedDeviceAccessCode(code, port);
             root.monitorVm.connectDevice(0);
+        }
+    }
+
+    // monitor-6 (ref): "+ 手动添加" opens a form dialog (name / IP / access
+    // code) and persists through the mock device service
+    // (DeviceServiceMock::addManualDevice via MonitorViewModel) so the form
+    // has a real effect; the added device starts in the "connecting" state
+    // like the seeded discovery flow and comes online at the next scan.
+    AccessCodeInputDialog {
+        id: manualAddDialog
+        anchors.centerIn: parent
+        manualAddMode: true
+        onManualAddRequested: function(name, ip, code, port) {
+            if (root.monitorVm.addManualDevice(name, ip, code, port)) {
+                backend.postNotification(
+                    qsTr("设备 %1 已添加（演示模式：设备数据为本地模拟，下次扫描后上线）。").arg(name),
+                    qsTr("手动添加"), 0)
+            } else {
+                backend.postNotification(
+                    qsTr("添加设备失败：设备名称不能为空。"),
+                    qsTr("手动添加"), 1)
+            }
         }
     }
 
@@ -69,21 +249,101 @@ Item {
         }
     }
 
-    // ── Main horizontal split: device list (left) + detail panel (right) ──
-    RowLayout {
+    // ── Page column: top action row + main horizontal split ──
+    ColumnLayout {
         anchors.fill: parent
         spacing: 0
+
+        // ── Page-top action row (monitor-2, ref monitor_ref.png y37-88): ──
+        // small home icon top-left; "manage group" / "view tasks" buttons
+        // below it; grid/list view toggles on the far right of the row.
+        // Actions without a backend stay honestly disabled (no empty handlers).
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: Theme.spacingXS
+            Layout.leftMargin: Theme.spacingLG
+            Layout.rightMargin: Theme.spacingLG
+            spacing: 2
+
+            CxIconButton {
+                buttonSize: 24
+                iconSize: 14
+                cxStyle: CxIconButton.Style.Ghost
+                iconSource: "qrc:/qml/assets/icons/tab_home_active.svg"
+                toolTipText: qsTr("返回主页")
+                onClicked: backend.setCurrentPage(backend.tpHome)
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSM
+
+                // Group management has no model yet (single placeholder group
+                // below), so both feature entries stay disabled on purpose.
+                CxButton {
+                    text: qsTr("管理分组")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    enabled: false
+                    Layout.preferredHeight: 32
+                    toolTipText: qsTr("分组管理暂未提供")
+                }
+
+                CxButton {
+                    text: qsTr("查看任务")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    enabled: false
+                    Layout.preferredHeight: 32
+                    toolTipText: qsTr("任务列表暂未提供")
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // Grid/list view toggles (grid selected by default per ref).
+                // Both modes are implemented locally over the device list, so
+                // both stay enabled; re-clicking the active mode is a no-op.
+                CxIconButton {
+                    buttonSize: 28
+                    iconSize: 16
+                    cxStyle: CxIconButton.Style.Ghost
+                    iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
+                    selected: root.deviceGridView
+                    toolTipText: qsTr("网格视图")
+                    onClicked: root.deviceGridView = true
+                }
+
+                CxIconButton {
+                    buttonSize: 28
+                    iconSize: 16
+                    cxStyle: CxIconButton.Style.Ghost
+                    iconSource: "qrc:/qml/assets/icons/list-details.svg"
+                    selected: !root.deviceGridView
+                    toolTipText: qsTr("列表视图")
+                    onClicked: root.deviceGridView = false
+                }
+            }
+        }
+
+        // ── Main horizontal split: device list (left) + detail panel (right) ──
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
 
         // ══════════════════════════════════════════════════════════
         // LEFT PANEL — Device list with search (aligns with upstream
         // MonitorBasePanel left panel: 182px sidebar with printer name,
         // signal icon, status, time-lapse, video, task list entries)
+        // monitor-1 (ref): hidden in the NoPrinter empty state, which swaps
+        // the page to a single full-width device panel below.
         // ══════════════════════════════════════════════════════════
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: 280
             color: Theme.bgSurface
             Layout.rightMargin: 1
+            visible: root.monitorVm.monitorState !== 0
 
             ColumnLayout {
                 anchors.fill: parent
@@ -132,12 +392,28 @@ Item {
                         // Phase 168 (VS-01): Scan/Add button migrated from
                         // Rectangle+Text+MouseArea pseudo-button to CxButton
                         // (gains press-scale, focus border, ToolTip).
+                        // monitor-6 (ref): the single "+ 添加" becomes the
+                        // side-by-side "+ 扫描添加" / "+ 手动添加" pair (ref
+                        // x1815-1962, y116-133). Kept on CxButton (Secondary
+                        // compact: radius 8, bg #4b4b4d == bgPanel, border
+                        // borderStrong) to honor the Cx* migration contract
+                        // locked by tests/QmlUiAuditTests.cpp:8951-8953.
                         CxButton {
-                            text: qsTr("+ 添加")
+                            text: qsTr("+ 扫描添加")
                             compact: true
                             cxStyle: CxButton.Style.Secondary
+                            Layout.preferredHeight: 32
                             toolTipText: qsTr("扫描并添加新设备")
                             onClicked: root.monitorVm.scanDevices()
+                        }
+
+                        CxButton {
+                            text: qsTr("+ 手动添加")
+                            compact: true
+                            cxStyle: CxButton.Style.Secondary
+                            Layout.preferredHeight: 32
+                            toolTipText: qsTr("手动输入名称 / IP / 访问码添加设备")
+                            onClicked: manualAddDialog.open()
                         }
                     }
                 }
@@ -238,29 +514,55 @@ Item {
                     }
                 }
 
+                // ── Group header row (monitor-5) + sortable column
+                // headers (monitor-7), shared with the empty-state panel.
+                MonitorGroupBar {
+                    Layout.fillWidth: true
+                }
+
+                MonitorColumnHeader {
+                    Layout.fillWidth: true
+                    visible: root.groupExpanded
+                }
+
+
                 // ── Device list (scrollable) ──
+                // monitor-5: hidden while the placeholder group is collapsed.
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.topMargin: Theme.spacingXS
+                    visible: root.groupExpanded
 
                     ScrollView {
+                        id: deviceListScroll
                         anchors.fill: parent
                         clip: true
                         ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
                         Column {
                             id: deviceListColumn
-                            width: parent.width - 4
+                            // Bind to availableWidth, NOT parent.width: the
+                            // ScrollView contentItem width tracks the content's
+                            // implicit width, and the delegates below bind their
+                            // width back to this Column — a circular dependency
+                            // that collapsed every row to ~100px and stacked
+                            // name/badge/progress on top of each other.
+                            width: deviceListScroll.availableWidth - 4
                             spacing: 2
 
+                            // monitor-7: Repeater walks the locally sorted
+                            // filtered indices; modelData stays the filtered
+                            // index used by deviceAt/selectDevice.
                             Repeater {
-                                model: root.monitorVm.filteredDeviceCount
+                                model: root.sortedDeviceIndices
 
                                 delegate: Rectangle {
                                     id: deviceDelegate
                                     width: deviceListColumn.width
-                                    height: 78
+                                    // monitor-2: grid mode keeps the 78px card,
+                                    // list mode compacts to a 36px row.
+                                    height: root.deviceGridView ? 78 : 36
                                     radius: Theme.radiusLG
                                     color: {
                                         if (isSelected) return Theme.bgFloating
@@ -288,8 +590,8 @@ Item {
                                         Rectangle {
                                             width: 8; height: 8; radius: 4
                                             color: devData.online ? Theme.statusSuccess : Theme.textDisabled
-                                            Layout.alignment: Qt.AlignTop
-                                            Layout.topMargin: 12
+                                            Layout.alignment: root.deviceGridView ? Qt.AlignTop : Qt.AlignVCenter
+                                            Layout.topMargin: root.deviceGridView ? 12 : 0
                                         }
 
                                         // Device info column
@@ -314,12 +616,14 @@ Item {
                                                 font.pixelSize: Theme.fontSizeSM
                                                 elide: Text.ElideRight
                                                 width: parent.width
+                                                visible: root.deviceGridView
                                             }
 
                                             // Status line
                                             Row {
                                                 spacing: Theme.spacingSM
                                                 topPadding: 2
+                                                visible: root.deviceGridView
 
                                                 // Status badge
                                                 Rectangle {
@@ -376,9 +680,24 @@ Item {
                                             }
                                         }
 
+                                        // monitor-2: compact right-aligned status
+                                        // shown only in list view mode.
+                                        Text {
+                                            visible: !root.deviceGridView
+                                            text: {
+                                                if (devData.status === "printing")   return qsTr("打印中")
+                                                if (devData.status === "idle")       return qsTr("空闲")
+                                                if (devData.status === "offline")    return qsTr("离线")
+                                                if (devData.status === "connecting") return qsTr("连接中")
+                                                return devData.status || ""
+                                            }
+                                            color: devData.online ? Theme.textSecondary : Theme.textDisabled
+                                            font.pixelSize: Theme.fontSizeSM
+                                        }
+
                                         // Progress indicator (for printing devices)
                                         Column {
-                                            visible: devData.status === "printing"
+                                            visible: root.deviceGridView && devData.status === "printing"
                                             Layout.alignment: Qt.AlignVCenter
                                             spacing: 2
 
@@ -418,11 +737,15 @@ Item {
                                     anchors.centerIn: parent
                                     spacing: 8
 
-                                    Text {
-                                        text: "\u{1F4E1}"
-                                        color: Theme.textDisabled
-                                        font.pixelSize: 36
-                                        horizontalAlignment: Text.AlignHCenter
+                                    // monitor-8: upstream empty illustration
+                                    // replaces the emoji placeholder.
+                                    Image {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: 96; height: 92
+                                        source: "qrc:/qml/assets/monitor_status_empty.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        smooth: true
+                                        opacity: 0.55
                                     }
                                     Text {
                                         text: qsTr("未找到匹配的设备")
@@ -499,54 +822,106 @@ Item {
             Layout.fillHeight: true
             color: Theme.bgBase
 
-            // ── NoPrinter state: 未检测到打印机（对齐上游 NoPrinterPanel） ──
-            Column {
-                anchors.centerIn: parent
-                spacing: 16
+            // ── NoPrinter state (monitorState === 0) — monitor-1 (ref
+            // x20-1979 / y105-430): the whole page becomes ONE full-width
+            // rounded device panel (group header + column headers + centered
+            // empty illustration); the 280px left sidebar is hidden and the
+            // page below the panel stays empty.
+            Rectangle {
+                id: noPrinterPanel
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.topMargin: 12
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                height: noPrinterCol.implicitHeight + 24
+                radius: Theme.radiusLG
+                color: Theme.bgSurface
                 visible: root.monitorVm.monitorState === 0
 
-                Text {
-                    text: "\u{1F5A5}"
-                    font.pixelSize: 64
-                    color: Theme.textDisabled
-                    horizontalAlignment: Text.AlignHCenter
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
+                ColumnLayout {
+                    id: noPrinterCol
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.margins: 12
+                    spacing: 0
 
-                Text {
-                    text: qsTr("未检测到打印机")
-                    color: Theme.textTertiary
-                    font.pixelSize: Theme.fontSizeXXL
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-
-                Text {
-                    text: qsTr("请添加打印机或确保打印机已连接到同一局域网")
-                    color: Theme.textDisabled
-                    font.pixelSize: Theme.fontSizeMD
-                    horizontalAlignment: Text.AlignHCenter
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-
-                // Scan button
-                Rectangle {
-                    width: scanPanelMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
-                    height: 36; radius: 8
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("\u{1F50D} 扫描设备")
-                        color: "white"
-                        font.pixelSize: Theme.fontSizeLG
+                    MonitorGroupBar {
+                        Layout.fillWidth: true
                     }
-                    MouseArea {
-                        id: scanPanelMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.monitorVm.scanDevices()
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Theme.borderSubtle
+                    }
+
+                    MonitorColumnHeader {
+                        Layout.fillWidth: true
+                        visible: root.groupExpanded
+                    }
+
+                    // monitor-8: upstream AddMachinePanel renders the
+                    // "monitor_status_empty" bitmap at 250px (Monitor.cpp:51-53)
+                    // with "No Data" beneath (ref y222-378).
+                    Column {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 12
+                        visible: root.groupExpanded
+                        spacing: 14
+
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 250; height: 240
+                            source: "qrc:/qml/assets/monitor_status_empty.svg"
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: qsTr("No Data")
+                            color: Theme.textTertiary
+                            font.pixelSize: Theme.fontSizeLG
+                        }
+
+                        // monitor-9: upstream AddMachinePanel button is
+                        // 96x39, corner radius 12, border #909090, face
+                        // following the panel (Monitor.cpp:60-74). Dark-theme
+                        // mapping: #909090 -> borderDefault, panel face ->
+                        // bgPanel, hover -> bgHover. Hint text sits below.
+                        Rectangle {
+                            width: 96; height: 39; radius: 12
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            color: noPrinterScanMA.containsMouse ? Theme.bgHover : Theme.bgPanel
+                            border.width: 1
+                            border.color: Theme.borderDefault
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: qsTr("扫描设备")
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeMD
+                            }
+                            MouseArea {
+                                id: noPrinterScanMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.monitorVm.scanDevices()
+                            }
+                        }
+
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: qsTr("点击扫描并添加打印机")
+                            color: Theme.textTertiary
+                            font.pixelSize: Theme.fontSizeMD
+                        }
+
+                        Item { width: 1; height: 8 }
                     }
                 }
             }
@@ -632,12 +1007,15 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 
-                // Retry button
+                // Retry button (monitor-9: width was mis-bound to a color
+                // token on both branches, collapsing the button; size from
+                // the label now).
                 Rectangle {
-                    width: retryPanelMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
+                    width: retryLabel.implicitWidth + 32
                     height: 36; radius: 8
                     anchors.horizontalCenter: parent.horizontalCenter
                     Text {
+                        id: retryLabel
                         anchors.centerIn: parent
                         text: qsTr("\u21BB 重新连接")
                         color: "white"
@@ -756,15 +1134,21 @@ Item {
                         spacing: 0
 
                         Repeater {
+                            // monitor-4: upstream tab set is Status / Storage /
+                            // Update(Firmware) / Assistant(HMS) (Monitor.cpp:188-199);
+                            // the camera tab stays until monitor-3 is adjudicated,
+                            // "更新" slots before HMS to preserve the upstream
+                            // Update-before-HMS order.
                             model: [
                                 qsTr("状态"),
                                 qsTr("SD 卡"),
                                 qsTr("视频"),
+                                qsTr("更新"),
                                 qsTr("HMS")
                             ]
 
                             delegate: Rectangle {
-                                width: tabText.implicitWidth + 24 + (index === 3 && root.monitorVm.selectedUnreadHmsCount > 0 ? 18 : 0)
+                                width: tabText.implicitWidth + 24 + (index === 4 && root.monitorVm.selectedUnreadHmsCount > 0 ? 12 : 0)
                                 height: parent.height
                                 color: tabBar.currentIndex === index ? Theme.bgBase : "transparent"
 
@@ -778,12 +1162,28 @@ Item {
                                 Text {
                                     id: tabText
                                     anchors.centerIn: parent
-                                    text: modelData + (index === 3 && root.monitorVm.selectedUnreadHmsCount > 0
-                                            ? " (" + root.monitorVm.selectedUnreadHmsCount + ")" : "")
+                                    // monitor-11: unread marker moved out of the
+                                    // label into the monitor_hms_new badge.
+                                    text: modelData
                                     color: tabBar.currentIndex === index
                                            ? Theme.textPrimary : Theme.textTertiary
                                     font.pixelSize: Theme.fontSizeMD
                                     font.bold: tabBar.currentIndex === index
+                                }
+
+                                // monitor-11: "monitor_hms_new" badge bitmap
+                                // overlaid on the HMS tab (upstream renders it
+                                // 7px, TabButton.cpp:46; visibility follows
+                                // Monitor.cpp:394-411 update_hms_tag).
+                                Image {
+                                    visible: index === 4 && root.monitorVm.selectedUnreadHmsCount > 0
+                                    anchors.left: tabText.right
+                                    anchors.leftMargin: 3
+                                    anchors.top: tabText.top
+                                    width: 7; height: 8
+                                    source: "qrc:/qml/assets/icons/monitor_hms_new.svg"
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
                                 }
 
                                 TapHandler {
@@ -818,17 +1218,20 @@ Item {
                         anchors.fill: parent
                         visible: tabBar.currentIndex === 0
 
-                        // No device selected state
+                        // No device selected state (monitor-8: upstream
+                        // empty illustration replaces the emoji placeholder)
                         Column {
                             anchors.centerIn: parent
                             spacing: 12
                             visible: root.monitorVm.selectedDeviceName === ""
 
-                            Text {
-                                text: "\u{1F5A5}"
-                                font.pixelSize: 48
-                                color: Theme.textDisabled
-                                horizontalAlignment: Text.AlignHCenter
+                            Image {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 120; height: 115
+                                source: "qrc:/qml/assets/monitor_status_empty.svg"
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                                opacity: 0.55
                             }
                             Text {
                                 text: qsTr("请从左侧选择一台设备")
@@ -1742,18 +2145,17 @@ Item {
                                             spacing: 12
                                             visible: liveVideo.visible === false
 
-                                            // Stream status icon
-                                            Text {
-                                                text: {
-                                                    var s = root.monitorVm.cameraStreamStatus
-                                                    if (s === 1) return "\u{1F50C}" // connecting
-                                                    if (s === 2) return "\u2705"     // connected
-                                                    if (s === 3) return "\u{1F3A5}" // streaming (但尚无帧)
-                                                    if (s === 4) return "\u274C"     // error
-                                                    return "\u{1F4F7}"              // disconnected
-                                                }
-                                                font.pixelSize: 48
-                                                horizontalAlignment: Text.AlignHCenter
+                                            // Stream status icon (monitor-8:
+                                            // emoji swapped for the upstream
+                                            // empty illustration; the state
+                                            // text below carries the meaning)
+                                            Image {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                width: 80; height: 77
+                                                source: "qrc:/qml/assets/monitor_status_empty.svg"
+                                                fillMode: Image.PreserveAspectFit
+                                                smooth: true
+                                                opacity: 0.5
                                             }
 
                                             // Status text
@@ -2015,12 +2417,48 @@ Item {
                         }
                     }
 
-                    // Tab 3: HMS（对齐上游 HMSPanel / DeviceManager hms_list）
+                    // Tab 3: Update / firmware (monitor-4, upstream
+                    // Monitor.cpp:188-199 adds the UpgradePanel page). The Qt6
+                    // side has no firmware channel yet, so the page is an
+                    // honestly disabled placeholder.
+                    Item {
+                        visible: tabBar.currentIndex === 3
+                        anchors.fill: parent
+
+                        Column {
+                            anchors.centerIn: parent
+                            spacing: 10
+
+                            Image {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 48; height: 48
+                                source: "qrc:/qml/assets/icons/box.svg"
+                                opacity: 0.5
+                            }
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: qsTr("固件更新暂不可用")
+                                color: Theme.textSecondary
+                                font.pixelSize: Theme.fontSizeLG
+                                font.bold: true
+                            }
+
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: qsTr("固件升级通道尚未迁移，当前设备不支持在线更新。")
+                                color: Theme.textTertiary
+                                font.pixelSize: Theme.fontSizeMD
+                            }
+                        }
+                    }
+
+                    // Tab 4: HMS（对齐上游 HMSPanel / DeviceManager hms_list）
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: Theme.spacingXL
                         spacing: Theme.spacingLG
-                        visible: tabBar.currentIndex === 3
+                        visible: tabBar.currentIndex === 4
 
                         // Header row
                         RowLayout {
@@ -2193,18 +2631,21 @@ Item {
                                     }
                                 }
 
-                                // Empty state
+                                // Empty state (monitor-8: emoji replaced by
+                                // the upstream empty illustration)
                                 Column {
                                     width: parent.width
                                     visible: root.monitorVm.selectedHmsCount === 0
                                     spacing: 8
                                     anchors.horizontalCenter: parent.horizontalCenter
 
-                                    Text {
-                                        text: "\u2705"
-                                        font.pixelSize: 36
-                                        color: Theme.textDisabled
-                                        horizontalAlignment: Text.AlignHCenter
+                                    Image {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: 72; height: 69
+                                        source: "qrc:/qml/assets/monitor_status_empty.svg"
+                                        fillMode: Image.PreserveAspectFit
+                                        smooth: true
+                                        opacity: 0.5
                                     }
                                     Text {
                                         text: qsTr("设备运行正常，暂无告警")
@@ -2244,5 +2685,6 @@ Item {
                 }
             }
         }
+    }
     }
 }

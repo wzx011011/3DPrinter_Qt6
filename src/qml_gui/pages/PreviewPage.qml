@@ -35,7 +35,7 @@ Item {
     property bool analysisExpanded: true
     // Phase 164 (SW-01): preview left panel now sources its width from the
     // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
-    readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 320
+    readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392
     readonly property int targetPreviewRightWidth: Theme.rightPanelWidth
     readonly property int targetPreviewLayerRailWidth: 38
     readonly property int targetPreviewMoveBarHeight: 50
@@ -50,6 +50,34 @@ Item {
         case 2: return qsTr("右")
         default: return qsTr("等轴")
         }
+    }
+
+    // preview-4: localized display names for the legend-header view-mode
+    // combo. The upstream English display strings stay verbatim in
+    // PreviewViewModel::viewModes() (locked by ViewModelSmokeTests
+    // ::viewModesExposeUpstreamTenModes); only this presentation layer
+    // localizes them, index-aligned with viewModes().
+    function viewModeDisplayName(index) {
+        switch (index) {
+        case 0: return qsTr("走线类型")     // Line Type
+        case 1: return qsTr("耗材")         // Filament
+        case 2: return qsTr("速度")         // Speed
+        case 3: return qsTr("层高")         // Layer Height
+        case 4: return qsTr("线宽")         // Line Width
+        case 5: return qsTr("流量")         // Flow
+        case 6: return qsTr("层耗时")       // Layer Time
+        case 7: return qsTr("层耗时(对数)") // Layer Time (log)
+        case 8: return qsTr("风扇转速")     // Fan Speed
+        case 9: return qsTr("温度")         // Temperature
+        default: return ""
+        }
+    }
+    readonly property var localizedViewModeNames: {
+        const modes = root.previewVm ? root.previewVm.viewModes : []
+        const names = []
+        for (let i = 0; i < modes.length; ++i)
+            names.push(root.viewModeDisplayName(i))
+        return names
     }
 
     // CANVAS-FOCUS: mirror of PreparePage.handleCanvasKey -- the preview
@@ -272,88 +300,9 @@ Item {
                 border.color: Theme.borderDefault
                 clip: true
 
-                // PREV-LEFT (v3.6 closure): the current-plate
-                // summary block above the sidebar -- upstream GUI_Preview's
-                // left bar shows the active plate thumbnail + name. The
-                // thumbnail re-reads on every EditorViewModel stateChanged
-                // (invokable accessors are not auto-reactive); with no
-                // thumbnail cached the plate color stands in (THUMBVERIFY-01:
-                // never fabricate a mock image).
-                property string plateThumbBase64: ""
-                property int plateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
-
-                function refreshPlateThumb() {
-                    if (!root.editorVm)
-                        return
-                    leftPanel.plateThumbBase64 =
-                        root.editorVm.plateThumbnailBase64(leftPanel.plateIndex)
-                }
-                Connections {
-                    target: root.editorVm
-                    function onStateChanged() { leftPanel.refreshPlateThumb() }
-                }
-                // Qt.callLater: the initial read must not run synchronously
-                // inside component finalization (engine->load window).
-                Component.onCompleted: Qt.callLater(leftPanel.refreshPlateThumb)
-
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 0
-
-                    Rectangle {
-                        id: plateSummaryCard
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 84
-                        color: Theme.bgPanel
-                        border.width: 1
-                        border.color: Theme.borderDefault
-
-                        Image {
-                            id: plateThumbImage
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            fillMode: Image.PreserveAspectFit
-                            source: leftPanel.plateThumbBase64.length > 0
-                                ? (leftPanel.plateThumbBase64.indexOf("data:image/") === 0
-                                   ? leftPanel.plateThumbBase64
-                                   : "data:image/png;base64," + leftPanel.plateThumbBase64)
-                                : ""
-                            visible: leftPanel.plateThumbBase64.length > 0
-                            asynchronous: true
-                        }
-
-                        // Thumbnail fallback: the plate color block (same
-                        // accessor the Prepare plate cards use as fallback).
-                        Rectangle {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            visible: leftPanel.plateThumbBase64.length === 0
-                            color: root.editorVm
-                                ? root.editorVm.plateThumbnailColor(leftPanel.plateIndex)
-                                : Theme.bgPanel
-                            radius: 3
-                        }
-
-                        Rectangle {
-                            id: plateBadge
-                            anchors.left: parent.left
-                            anchors.bottom: parent.bottom
-                            anchors.margins: 4
-                            width: plateBadgeLabel.implicitWidth + 10
-                            height: plateBadgeLabel.implicitHeight + 4
-                            radius: 3
-                            color: "#20242bd0"
-                            Label {
-                                id: plateBadgeLabel
-                                anchors.centerIn: parent
-                                text: root.editorVm
-                                    ? qsTr("盘 %1").arg(leftPanel.plateIndex + 1)
-                                    : qsTr("盘")
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                        }
-                    }
 
                     Item {
                         Layout.fillWidth: true
@@ -440,6 +389,134 @@ Item {
                     viewport: previewViewport
                 }
 
+                // preview-7 (ref shotScreen/预览页.png): the current-plate
+                // summary floats at the canvas TOP-LEFT as a ~125x125 rounded
+                // square card (teal border, plate badge embedded top-left,
+                // thumbnail centered) with a 26x26 "</>" G-code window toggle
+                // button above it -- upstream Preview only has the canvas with
+                // the plate thumbnail floating on it (GUI_Preview.cpp:285-289),
+                // not a sidebar strip. The thumbnail re-reads on every
+                // EditorViewModel stateChanged (invokable accessors are not
+                // auto-reactive); with no thumbnail cached the plate color
+                // stands in (THUMBVERIFY-01: never fabricate a mock image).
+                Column {
+                    id: plateCardCluster
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.margins: 8
+                    spacing: 8
+
+                    property string plateThumbBase64: ""
+                    property int plateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
+
+                    function refreshPlateThumb() {
+                        if (!root.editorVm)
+                            return
+                        plateCardCluster.plateThumbBase64 =
+                            root.editorVm.plateThumbnailBase64(plateCardCluster.plateIndex)
+                    }
+                    Connections {
+                        target: root.editorVm
+                        function onStateChanged() { plateCardCluster.refreshPlateThumb() }
+                    }
+                    // Qt.callLater: the initial read must not run synchronously
+                    // inside component finalization (engine->load window).
+                    Component.onCompleted: Qt.callLater(plateCardCluster.refreshPlateThumb)
+
+                    // 26x26 "</>" square button above the card (ref x~398-423,
+                    // y~69-92); the "</>" glyph toggles the G-code window
+                    // upstream (gCodeButtonIcon -> toggle_show_gcode_window,
+                    // GCodeViewer.cpp:3517-3521).
+                    Rectangle {
+                        id: canvasGcodeWindowButton
+                        width: 26
+                        height: 26
+                        radius: 4
+                        color: canvasGcodeWindowMouse.containsMouse ? Theme.bgHover : "#20242bd0"
+                        border.width: 1
+                        border.color: canvasGcodeWindowMouse.containsMouse ? Theme.accentDark : Theme.borderSubtle
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "</>"
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSizeXS
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: canvasGcodeWindowMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (root.previewVm) root.previewVm.setShowGcodeWindow(!root.previewVm.showGcodeWindow)
+                        }
+                    }
+
+                    Rectangle {
+                        id: plateSummaryCard
+                        width: 125
+                        height: 125
+                        radius: 8
+                        // Floating-card floor: dark translucent, sampled from
+                        // the same float-overlay family as the empty-state
+                        // pill (ref card interior over the canvas).
+                        color: "#20242bd0"
+                        // Teal card border, ref measured RGB(0,150,136).
+                        border.width: 1.5
+                        border.color: "#009688"
+                        clip: true
+
+                        Image {
+                            id: plateThumbImage
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            fillMode: Image.PreserveAspectFit
+                            source: plateCardCluster.plateThumbBase64.length > 0
+                                ? (plateCardCluster.plateThumbBase64.indexOf("data:image/") === 0
+                                   ? plateCardCluster.plateThumbBase64
+                                   : "data:image/png;base64," + plateCardCluster.plateThumbBase64)
+                                : ""
+                            visible: plateCardCluster.plateThumbBase64.length > 0
+                            asynchronous: true
+                        }
+
+                        // Thumbnail fallback: the plate color block (same
+                        // accessor the Prepare plate cards use as fallback).
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: 4
+                            visible: plateCardCluster.plateThumbBase64.length === 0
+                            color: root.editorVm
+                                ? root.editorVm.plateThumbnailColor(plateCardCluster.plateIndex)
+                                : Theme.bgPanel
+                            radius: 3
+                        }
+
+                        // Plate number badge embedded INSIDE the card's
+                        // top-left corner (ref "1" badge).
+                        Rectangle {
+                            id: plateBadge
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.margins: 4
+                            width: plateBadgeLabel.implicitWidth + 10
+                            height: plateBadgeLabel.implicitHeight + 4
+                            radius: 3
+                            color: "#20242bd0"
+                            Label {
+                                id: plateBadgeLabel
+                                anchors.centerIn: parent
+                                text: root.editorVm
+                                    ? qsTr("盘 %1").arg(plateCardCluster.plateIndex + 1)
+                                    : qsTr("盘")
+                                color: Theme.textPrimary
+                                font.pixelSize: Theme.fontSizeXS
+                            }
+                        }
+                    }
+                }
+
                 Rectangle {
                     visible: !root.hasPreviewData
                     anchors.centerIn: parent
@@ -462,10 +539,14 @@ Item {
                     }
                 }
 
+                // preview-10: the ToolPosition window anchors to the canvas
+                // bottom-CENTER (upstream set_next_window_pos(0.5*canvas_width,
+                // canvas_height, pivot 0.5, 1.0) -- GCodeViewer.cpp:335/:721),
+                // not the bottom-left corner.
                 Components.ToolPositionTooltip {
-                    anchors.left: parent.left
+                    anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    anchors.margins: 14
+                    anchors.bottomMargin: 14
                     previewVm: root.previewVm
                     visible: root.previewVm ? (root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData) : false
                 }
@@ -487,10 +568,20 @@ Item {
                     anchors.margins: 8
                     spacing: 6
 
+                    // preview-4: legend window header row matches the upstream
+                    // first row (GCodeViewer.cpp:3511-3521 fold + "</>"
+                    // toggle_show_gcode_window buttons, :3532-3557 view-type
+                    // combo) -- [fold][</>][view mode], no title text.
                     SidePanelHeader {
-                        title: qsTr("分析")
                         expanded: root.analysisExpanded
                         onToggleRequested: root.analysisExpanded = !root.analysisExpanded
+                        onGcodeWindowToggled: if (root.previewVm) root.previewVm.setShowGcodeWindow(!root.previewVm.showGcodeWindow)
+                        currentViewMode: root.previewVm ? root.previewVm.viewModeIndex : 0
+                        viewModeNames: root.localizedViewModeNames
+                        onViewModeSelected: function(index) {
+                            if (root.previewVm)
+                                root.previewVm.setViewModeIndex(index)
+                        }
                     }
 
                     ColumnLayout {
@@ -536,8 +627,13 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             Layout.minimumHeight: 150
-                            radius: 4
-                            color: Theme.bgPanel
+                            // preview-6: upstream G-code window is a borderless-
+                            // titled floating window with rounding 8 and 80%
+                            // background alpha (GCodeViewer.cpp:923-925
+                            // WindowRounding 8 + SetNextWindowBgAlpha 0.8);
+                            // ref-measured window floor #262627.
+                            radius: 8
+                            color: "#262627CC"
                             border.width: 1
                             border.color: Theme.borderSubtle
                             clip: true
@@ -546,26 +642,10 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
 
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: 30
-                                    Layout.leftMargin: 8
-                                    Layout.rightMargin: 8
-
-                                    Label {
-                                        text: qsTr("G-code")
-                                        color: Theme.textPrimary
-                                        font.bold: true
-                                        font.pixelSize: Theme.fontSizeSM
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    Label {
-                                        text: root.previewVm ? qsTr("行 %1 / %2").arg(root.previewVm.currentGcodeLine).arg(root.previewVm.gcodeLineCount) : qsTr("行 -- / --")
-                                        color: Theme.textTertiary
-                                        font.pixelSize: Theme.fontSizeXS
-                                    }
-                                }
-
+                                // preview-4: upstream G-code window is
+                                // NoDecoration — no title/header row
+                                // (GCodeViewer.cpp:923-925); the list starts
+                                // directly under the window edge.
                                 ListView {
                                     id: gcodeList
                                     Layout.fillWidth: true
@@ -578,7 +658,15 @@ Item {
                                         required property var modelData
                                         width: gcodeList.width
                                         height: 19
-                                        color: gcodeRow.modelData.current ? Theme.bgWarningSubtle : "transparent"
+                                        // preview-6: upstream highlights the
+                                        // current line with an orange RECT
+                                        // BORDER, not a row fill (GCodeViewer.cpp
+                                        // :945-947 AddRect over the selected
+                                        // line); the row background stays
+                                        // transparent for every line.
+                                        color: "transparent"
+                                        border.width: gcodeRow.modelData.current ? 1 : 0
+                                        border.color: "#C16737"
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -589,7 +677,13 @@ Item {
                                             Text {
                                                 Layout.preferredWidth: 44
                                                 text: gcodeRow.modelData.line
-                                                color: gcodeRow.modelData.current ? Theme.statusWarning : Theme.textTertiary
+                                                // preview-6: every line number is
+                                                // orange (LINE_NUMBER_COLOR =
+                                                // COL_ORANGE_LIGHT =
+                                                // ColorRGBA::ORANGE 0.923,0.504,
+                                                // 0.264 -- GCodeViewer.cpp:846 +
+                                                // :949-955, ImGuiWrapper.cpp:165).
+                                                color: "#EB8043"
                                                 horizontalAlignment: Text.AlignRight
                                                 font.pixelSize: Theme.fontSizeXS
                                                 font.family: Theme.fontMono
@@ -709,23 +803,17 @@ Item {
 
     component SidePanelHeader: RowLayout {
         id: sidePanelHeaderRoot
-        property string title: ""
         property bool expanded: true
         signal toggleRequested()
+        signal gcodeWindowToggled()
+        property int currentViewMode: 0
+        property var viewModeNames: []
+        signal viewModeSelected(int index)
 
         Layout.fillWidth: true
         spacing: 6
 
-        Label {
-            visible: sidePanelHeaderRoot.expanded
-            Layout.fillWidth: true
-            text: sidePanelHeaderRoot.title
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeMD
-            font.bold: true
-            elide: Text.ElideRight
-        }
-
+        // [fold] glyph button (upstream GCodeViewer.cpp:3511-3514).
         Rectangle {
             Layout.preferredWidth: 26
             Layout.preferredHeight: 26
@@ -748,6 +836,43 @@ Item {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: sidePanelHeaderRoot.toggleRequested()
             }
+        }
+
+        // [</>] G-code window toggle (upstream GCodeViewer.cpp:3517-3521
+        // gCodeButtonIcon glyph button -> toggle_show_gcode_window).
+        Rectangle {
+            Layout.preferredWidth: 26
+            Layout.preferredHeight: 26
+            radius: 4
+            color: gcodeToggleMouse.containsMouse ? Theme.bgHover : Theme.bgElevated
+            border.width: 1
+            border.color: Theme.borderSubtle
+
+            Text {
+                anchors.centerIn: parent
+                text: "</>"
+                color: Theme.textPrimary
+                font.pixelSize: Theme.fontSizeXS
+                font.bold: true
+            }
+
+            MouseArea {
+                id: gcodeToggleMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: sidePanelHeaderRoot.gcodeWindowToggled()
+            }
+        }
+
+        // [view mode] combo (upstream GCodeViewer.cpp:3532-3557 BBLBeginCombo
+        // over the view_type_items table); row index still equals the
+        // upstream view type, display names localized at the QML layer.
+        CxComboBox {
+            Layout.fillWidth: true
+            model: sidePanelHeaderRoot.viewModeNames
+            currentIndex: sidePanelHeaderRoot.currentViewMode
+            onActivated: sidePanelHeaderRoot.viewModeSelected(currentIndex)
         }
     }
 }

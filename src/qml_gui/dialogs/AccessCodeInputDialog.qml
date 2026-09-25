@@ -12,7 +12,8 @@ Dialog {
     modal: true
     anchors.centerIn: parent
     width: 420
-    height: 360
+    // manual mode carries one extra field row
+    height: manualAddMode ? 420 : 360
     padding: 0
     background: Rectangle {
         color: Theme.bgPanel
@@ -26,8 +27,12 @@ Dialog {
     property string accessCode: ""      // 用户输入的 access code（结果）
     property int mqttPort: 8883         // MQTT 端口（默认 8883）
     property bool accepted_: false      // 是否确认连接
+    // monitor-6: manual-add form mode (name / IP / access code) opened from
+    // the MonitorPage "+ 手动添加" entry.
+    property bool manualAddMode: false
 
     signal connectRequested(string ip, string accessCode, int port)
+    signal manualAddRequested(string name, string ip, string accessCode, int port)
 
     ColumnLayout {
         anchors.fill: parent
@@ -45,18 +50,40 @@ Dialog {
                 Layout.fillWidth: true
                 spacing: Theme.spacingXS
                 Text {
-                    text: deviceName.length > 0
-                          ? qsTr("连接到 %1").arg(deviceName)
-                          : qsTr("连接 Bambu 打印机")
+                    text: {
+                        if (root.manualAddMode) return qsTr("手动添加设备")
+                        if (deviceName.length > 0) return qsTr("连接到 %1").arg(deviceName)
+                        return qsTr("连接 Bambu 打印机")
+                    }
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeXL
                     font.bold: true
                 }
                 Text {
-                    text: qsTr("输入局域网访问码以建立 MQTT 连接")
+                    text: root.manualAddMode
+                          ? qsTr("输入设备名称、IP 与局域网访问码以加入设备列表")
+                          : qsTr("输入局域网访问码以建立 MQTT 连接")
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                 }
+            }
+        }
+
+        // monitor-6: device name (manual add only)
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSM
+            visible: root.manualAddMode
+            Text {
+                text: qsTr("设备名称")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeSM
+            }
+            CxTextField {
+                id: nameField
+                Layout.fillWidth: true
+                placeholderText: qsTr("例如：工作室 X1C")
+                selectByMouse: true
             }
         }
 
@@ -140,15 +167,21 @@ Dialog {
                 }
             }
             CxButton {
-                text: qsTr("连接")
+                text: root.manualAddMode ? qsTr("添加") : qsTr("连接")
                 highlighted: true
                 enabled: ipField.text.trim().length > 0 &&
-                         accessCodeField.text.trim().length > 0
+                         accessCodeField.text.trim().length > 0 &&
+                         (!root.manualAddMode || nameField.text.trim().length > 0)
                 onClicked: {
                     root.accessCode = accessCodeField.text.trim();
                     root.mqttPort = parseInt(portField.text) || 8883;
                     root.accepted_ = true;
-                    root.connectRequested(ipField.text.trim(), root.accessCode, root.mqttPort);
+                    if (root.manualAddMode) {
+                        root.manualAddRequested(nameField.text.trim(), ipField.text.trim(),
+                                                root.accessCode, root.mqttPort);
+                    } else {
+                        root.connectRequested(ipField.text.trim(), root.accessCode, root.mqttPort);
+                    }
                     root.accept();
                 }
             }

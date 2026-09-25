@@ -28,10 +28,14 @@ Item {
     // DNS+HTTPS probe; TroubleshootDialog is the device diagnostics walkthrough.
     NetworkTestDialog {
         id: networkTestDialog
+        // Required properties must be wired or Qt 6 aborts the whole page
+        // creation (blank page); same wiring as main.qml:1219.
+        networkVm: backend.monitorViewModel
     }
 
     TroubleshootDialog {
         id: troubleshootDialog
+        monitorVm: backend.monitorViewModel
     }
 
     // Dead-control elimination: the update check drives the real
@@ -63,18 +67,20 @@ Item {
                 anchors.fill: parent; anchors.topMargin: 12; spacing: 2
 
                 Repeater {
+                    // Upstream TabCtrl entries are plain text, no icons
+                    // (Preferences.cpp:1487-1489 AppendItem(_L("General")) ...).
                     model: [
-                        { icon: "⚙",  name: qsTr("通用") },
-                        { icon: "🎨", name: qsTr("外观") },
-                        { icon: "🌍", name: qsTr("语言") },
-                        { icon: "⌨",  name: qsTr("快捷键") },
-                        { icon: "🖨", name: qsTr("打印机") },
-                        { icon: "🔒", name: qsTr("账号与隐私") },
-                        { icon: "📦", name: qsTr("更新") },
-                        { icon: "🛠", name: qsTr("高级") },
-                        { icon: "🐛", name: qsTr("开发者") },
-                        { icon: "🤖", name: qsTr("AI 助手") },
-                        { icon: "❓", name: qsTr("关于") }
+                        qsTr("通用"),
+                        qsTr("外观"),
+                        qsTr("语言"),
+                        qsTr("快捷键"),
+                        qsTr("打印机"),
+                        qsTr("账号与隐私"),
+                        qsTr("更新"),
+                        qsTr("高级"),
+                        qsTr("开发者"),
+                        qsTr("AI 助手"),
+                        qsTr("关于")
                     ]
                     delegate: Rectangle {
                         required property var modelData
@@ -85,18 +91,22 @@ Item {
                         // consumer (upstream hides debug surfaces the same
                         // way behind the debug build flag).
                         visible: index !== 8 || root.settingsVm.developerMode
-                        color: root.settingsVm.prefCategory === index ? Theme.chromePressed
-                             : (catHov.containsMouse ? Theme.bgPanel : "transparent")
-                        border.color: root.settingsVm.prefCategory === index ? Theme.accent : "transparent"
-                        border.width: 1
+                        // Upstream selection is text-only: SetItemBold plus
+                        // StateColor #6B6B6C (unselected) / #363636 (selected),
+                        // font Body_14 (Preferences.cpp:1477, 1487-1501). No row
+                        // fill or border. Theme mapping for the neutralized
+                        // palette: chromeTextMuted = dim unselected role,
+                        // textPrimary + bold = selected role; fontSizeLG = 14.
+                        color: "transparent"
 
-                        Row {
+                        Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: parent.left; anchors.leftMargin: 12; spacing: 10
-                            Text { text: modelData.icon; font.pixelSize: Theme.fontSizeLG }
-                            Text { text: modelData.name; color: Theme.chromeText; font.pixelSize: Theme.fontSizeMD }
+                            anchors.left: parent.left; anchors.leftMargin: 12
+                            text: modelData
+                            color: root.settingsVm.prefCategory === index ? Theme.textPrimary : Theme.chromeTextMuted
+                            font.pixelSize: Theme.fontSizeLG
+                            font.bold: root.settingsVm.prefCategory === index
                         }
-                        HoverHandler { id: catHov }
                         TapHandler { onTapped: root.settingsVm.setPrefCategory(index) }
                     }
                 }
@@ -110,12 +120,9 @@ Item {
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 24; spacing: 16
 
-                Text {
-                    text: root.settingsVm.prefCategoryTitle; color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeXL; font.bold: true
-                }
-
-                Rectangle { Layout.fillWidth: true; height: 1; color: Theme.scrollBarTrackColor }
+                // No page-level title or separator: upstream scrolls straight
+                // into the group title rows (create_item_title,
+                // Preferences.cpp:244-256).
 
                 // General settings (对齐上游 PreferencesDialog create_general_page, index=0)
                 ColumnLayout {
@@ -1034,46 +1041,6 @@ Item {
                 }
 
                 Item { Layout.fillHeight: true }
-
-                // Save/Restore buttons
-                RowLayout {
-                    spacing: 12
-                    Item { Layout.fillWidth: true }
-
-                    // 实时生效提示
-                    Text {
-                        id: appliedHint
-                        text: qsTr("✓ 已实时生效")
-                        color: Theme.accent
-                        font.pixelSize: Theme.fontSizeSM
-                        opacity: 0
-                        Behavior on opacity { NumberAnimation { duration: 300 } }
-                    }
-
-                    CxButton {
-                        text: qsTr("恢复默认")
-                        onClicked: root.settingsVm.resetPreferences()
-                    }
-                    CxButton {
-                        text: qsTr("取消")
-                        onClicked: root.settingsVm.cancelPreferences()
-                    }
-                    CxButton {
-                        text: qsTr("应用")
-                        cxStyle: CxButton.Style.Primary
-                        onClicked: {
-                            root.settingsVm.applyPreferences()
-                            appliedHint.opacity = 1
-                            appliedHintTimer.restart()
-                        }
-                    }
-
-                    Timer {
-                        id: appliedHintTimer
-                        interval: 2000
-                        onTriggered: appliedHint.opacity = 0
-                    }
-                }
             }
         }
     }

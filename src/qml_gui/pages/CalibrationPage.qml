@@ -102,6 +102,69 @@ Item {
         calibrationVm: root.calibrationVm
     }
 
+    // Pill button matching the upstream CaliPageButton geometry: 24DIP high,
+    // corner radius 12, Body_13 font (CalibrationWizardPage.cpp:257-259).
+    // kind 0 = green bg + white text (Start/Next/Calibrate/Finish,
+    // CalibrationWizardPage.cpp:154-157/:238-251), kind 1 = white bg + dark
+    // text (Prev/Recalibration, :159-162/:232-237), kind 2 = error bg (the
+    // existing Qt6 cancel action, kept in pill form).
+    component CaliPillButton: Rectangle {
+        id: pillRoot
+        signal activated()
+        property int kind: 0
+        property string label: ""
+        width: Math.max(64, pillLabel.implicitWidth + 24)
+        height: 24
+        radius: 12
+        opacity: enabled ? 1.0 : 0.45
+
+        color: {
+            const h = pillMA.containsMouse
+            const p = pillMA.pressed
+            if (kind === 1) {
+                // Upstream white pill: Normal #FFFFFF, Hovered #EEEEEE,
+                // Pressed #CECECE (CalibrationWizardPage.cpp:159-162)
+                if (p) return "#cecece"
+                if (h) return "#eeeeee"
+                return "#ffffff"
+            }
+            if (kind === 2) {
+                if (p) return Theme.statusErrorPressed
+                if (h) return Theme.statusErrorDark
+                return Theme.statusError
+            }
+            // Upstream green pill: Normal #009688, Hovered #26A69A,
+            // Pressed #00897B (CalibrationWizardPage.cpp:154-157) mapped to
+            // the Theme accent family
+            if (p) return Theme.accentDark
+            if (h) return Theme.accentLight
+            return Theme.accent
+        }
+
+        // Upstream white-pill border Enabled (38,46,48)
+        // (CalibrationWizardPage.cpp:167-168); green pill border equals its bg.
+        border.color: kind === 1 ? "#262e30" : "transparent"
+        border.width: kind === 1 ? 1 : 0
+
+        Text {
+            id: pillLabel
+            anchors.centerIn: parent
+            text: pillRoot.label
+            // Upstream white-pill text Enabled (38,46,48)
+            // (CalibrationWizardPage.cpp:173-174)
+            color: pillRoot.kind === 1 ? "#262e30" : Theme.textOnAccent
+            font.pixelSize: Theme.fontSize13
+        }
+
+        MouseArea {
+            id: pillMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: pillRoot.activated()
+        }
+    }
+
     // Background
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
@@ -492,65 +555,56 @@ Item {
                                 font.bold: true
                             }
 
-                            // Step indicator bar
+                            // Step guide bar - plain text labels joined by thin
+                            // lines, the upstream CaliPageStepGuide form
+                            // (CalibrationWizardPage.cpp:498-538): inactive label
+                            // #CECECE -> Theme.textTertiary (dark-theme map), the
+                            // current step label black -> textPrimary bold, 1px
+                            // line between steps, 90px whitespace at both ends
+                            // and a 15px gap around every label.
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 0
 
+                                // 90DIP end whitespace (CalibrationWizardPage.cpp:508)
+                                Item { Layout.preferredWidth: 90 }
+
                                 Repeater {
                                     model: root._stepsArr
 
-                                    RowLayout {
+                                    delegate: RowLayout {
+                                        id: stepItem
+                                        required property var modelData
+                                        required property int index
                                         spacing: 0
-                                        Layout.fillWidth: index < root._stepsArr.length - 1
+                                        Layout.fillWidth: stepItem.index < root._stepsArr.length - 1
 
-                                        // Step circle (对齐上游 StepCtrl: pending/active/completed)
-                                        Rectangle {
-                                            width: 28
-                                            height: 28
-                                            radius: 14
-                                            color: {
-                                                // state: 0=pending, 1=active, 2=completed
-                                                if (modelData.state === 2) return Theme.accent
-                                                if (modelData.state === 1) return Theme.accent
-                                                return Theme.borderDefault
-                                            }
-
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: modelData.state === 2 ? "\u2713" : (index + 1).toString()
-                                                color: {
-                                                    if (modelData.state === 2) return Theme.textOnAccent
-                                                    if (modelData.state === 1) return Theme.textOnAccent
-                                                    return Theme.textDisabled
-                                                }
-                                                font.pixelSize: modelData.state === 2 ? 14 : Theme.fontSizeSM
-                                                font.bold: true
-                                            }
-                                        }
-
-                                        // Step name
+                                        // Step label (state: 0=pending, 1=active,
+                                        // 2=completed; set_steps upstream highlights
+                                        // only the current index - the VM completed
+                                        // state stays highlighted as before)
                                         Text {
-                                            text: modelData.title
-                                            color: {
-                                                if (modelData.state === 2) return Theme.textPrimary
-                                                if (modelData.state === 1) return Theme.textPrimary
-                                                return Theme.textDisabled
-                                            }
+                                            text: stepItem.modelData.title
+                                            color: stepItem.modelData.state !== 0 ? Theme.textPrimary
+                                                                                  : Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeSM
-                                            Layout.leftMargin: Theme.spacingSM
-                                            Layout.fillWidth: true
+                                            font.bold: stepItem.modelData.state !== 0
+                                            Layout.leftMargin: 15
+                                            Layout.rightMargin: 15
                                         }
 
-                                        // Connector line
+                                        // 1px connector line
                                         Rectangle {
                                             Layout.fillWidth: true
-                                            Layout.preferredHeight: 2
-                                            color: modelData.state === 2 ? Theme.accent : Theme.borderDefault
-                                            visible: index < root._stepsArr.length - 1
+                                            Layout.preferredHeight: 1
+                                            color: Theme.borderDefault
+                                            visible: stepItem.index < root._stepsArr.length - 1
                                         }
                                     }
                                 }
+
+                                // 90DIP end whitespace (CalibrationWizardPage.cpp:520)
+                                Item { Layout.preferredWidth: 90 }
                             }
 
                             // Current step description
@@ -981,19 +1035,25 @@ Item {
                         }
                     }
 
-                    // Action buttons (aligned with upstream CaliPageActionPanel)
+                    // Action buttons (aligned with upstream CaliPageActionPanel:
+                    // the row is centered between two stretch spacers,
+                    // CalibrationWizardPage.cpp:738-752)
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: Theme.spacingMD
+                        // Upstream wraps each button with 5DIP on all sides
+                        // (CalibrationWizardPage.cpp:742), i.e. 10px between pills
+                        spacing: 10
 
-                        CxButton {
-                            text: {
+                        Item { Layout.fillWidth: true }
+
+                        CaliPillButton {
+                            label: {
                                 if (root.calibrationVm.isRunning)
                                     return qsTr("Cancel Calibration")
                                 if (root.calibrationVm.selectedIndex >= 0
                                         && !root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
                                     return qsTr("Unavailable")
-                                // Phase 241 (PAGE-03): Flow Rate two-stage flow —
+                                // Phase 241 (PAGE-03): Flow Rate two-stage flow --
                                 // after the coarse pass completes, the button starts
                                 // the fine pass (upstream CalibState::FineCalibration
                                 // loads flowrate-test-pass2.3mf).
@@ -1003,11 +1063,11 @@ Item {
                                            : qsTr("Recalibrate")
                                 return qsTr("Start Calibration")
                             }
-                            cxStyle: root.calibrationVm.isRunning ? CxButton.Style.Danger : CxButton.Style.Primary
+                            kind: root.calibrationVm.isRunning ? 2 : 0
                             enabled: root.calibrationVm.selectedIndex >= 0
                                      && (root.calibrationVm.isRunning
                                          || root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex))
-                            onClicked: {
+                            onActivated: {
                                 if (root.calibrationVm.isRunning)
                                     root.calibrationVm.cancelCalibration()
                                 else if (root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex)) {
@@ -1020,11 +1080,13 @@ Item {
                             }
                         }
 
-                        CxButton {
-                            text: qsTr("Reset Parameters")
-                            cxStyle: CxButton.Style.Secondary
+                        // White pill: Recalibration/ResetParameters family
+                        // (CalibrationWizardPage.cpp:232-237)
+                        CaliPillButton {
+                            label: qsTr("Reset Parameters")
+                            kind: 1
                             visible: root.calibrationVm.selectedStatus !== 0
-                            onClicked: root.calibrationVm.resetParameters()
+                            onActivated: root.calibrationVm.resetParameters()
                         }
 
                         Item { Layout.fillWidth: true }

@@ -419,178 +419,510 @@ Item {
         }
 
         // ── Bind device dialog (对齐上游 BindDialog / PingCodeBindDialog) ──
+        // Upstream PingCodeBindDialog (BindDialog.cpp:60-172) is a 460x240
+        // white two-page simplebook: page 1 = two-line guide text (Body_14,
+        // #262E30) + "Can't find Pin Code?" wiki hyperlink + "Pin Code" title
+        // + six 38x38 single-char green inputs + Confirm/Cancel; after submit
+        // page 2 = "Binding..." + "Please confirm on the printer screen" +
+        // Close. Dark-mode mapping: white panel -> Theme.bgPanel. The extra
+        // "device name" input is a mock-flow addition kept per the page brief.
         Dialog {
             id: bindDialog
             anchors.centerIn: parent
             modal: true
-            title: qsTr("绑定设备")
+            title: qsTr("通过 PIN 码绑定")
             padding: 20
 
             background: Rectangle {
                 radius: 12
-                color: Theme.bgElevated
+                color: Theme.bgPanel
                 border.color: Theme.borderSubtle
                 border.width: 1
             }
 
             header: Label {
-                text: qsTr("绑定设备")
+                text: qsTr("通过 PIN 码绑定")
                 color: Theme.textPrimary
                 font.bold: true
                 font.pixelSize: Theme.fontSizeXL
                 padding: 12
             }
 
-            ColumnLayout {
-                spacing: 12
-                width: 280
+            // Upstream simplebook page index (BindDialog.cpp:163/303):
+            // 0 = request page, 1 = binding page.
+            property int bindState: 0
+            property string bindError: ""
+            // PIN cells registry, PING_CODE_LENGTH = 6 (BindDialog.hpp:42).
+            property var pinCells: []
+            // Upstream Confirm stays disabled until all 6 cells are filled
+            // (BindDialog.cpp:226-245).
+            property bool pinComplete: false
 
-                Label {
-                    text: qsTr("设备名称")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeMD
+            function refreshPinComplete() {
+                if (pinCells.length < 6) {
+                    pinComplete = false
+                    return
                 }
-                CxTextField {
-                    id: bindDeviceName
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("例如：K1 Max")
+                var filled = true
+                for (var i = 0; i < 6; ++i) {
+                    if (pinCells[i].text === "")
+                        filled = false
                 }
-
-                Label {
-                    text: qsTr("PIN 码")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                CxTextField {
-                    id: bindPinCode
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("设备屏幕上显示的 PIN 码")
-                    Keys.onReturnPressed: doBind()
-                    Keys.onEnterPressed: doBind()
-                }
-
-                Text {
-                    text: bindDialog.bindError
-                    color: Theme.statusError
-                    font.pixelSize: Theme.fontSizeSM
-                    visible: bindDialog.bindError !== ""
-                }
-
-                RowLayout {
-                    Layout.alignment: Qt.AlignRight
-                    spacing: 8
-
-                    CxButton {
-                        text: qsTr("取消")
-                        onClicked: bindDialog.close()
-                    }
-                    CxButton {
-                        text: qsTr("绑定")
-                        highlighted: true
-                        onClicked: doBind()
-                    }
-                }
-
-                // R-P1.E: mock bind disclosure (dependency-audit registry).
-                Label {
-                    text: qsTr("演示模式：绑定为本地模拟，不会连接真实设备（依赖 bambu_networking，外部阻塞）。")
-                    color: Theme.textTertiary
-                    font.pixelSize: Theme.fontSizeXS
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
+                pinComplete = filled
             }
 
-            property string bindError: ""
+            function pinCode() {
+                var s = ""
+                for (var i = 0; i < pinCells.length; ++i)
+                    s += pinCells[i].text
+                return s
+            }
+
+            ColumnLayout {
+                spacing: 10
+                // Upstream simplebook is 460x240 (BindDialog.cpp:70-72); 460
+                // is the dialog width incl. 20 padding. Height flows with the
+                // content (the mock device-name row adds one row upstream
+                // does not have).
+                width: 460
+
+                // ── Page 1: request (upstream request_bind_panel, BindDialog.cpp:74-126) ──
+                ColumnLayout {
+                    visible: bindDialog.bindState === 0
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    // Guide text, upstream m_status_text (BindDialog.cpp:88-91):
+                    // Body_14, #262E30, two lines.
+                    Label {
+                        text: qsTr("请在打印机屏幕的『账号』页面找到 PIN 码，\n然后在下方输入。")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSize13
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+
+                    // Upstream "Can't find Pin Code?" wiki hyperlink
+                    // (BindDialog.cpp:94).
+                    Label {
+                        text: qsTr("<a href=\"https://wiki.bambulab.com/en/bambu-studio/manual/pin-code\">找不到 PIN 码？</a>")
+                        color: Theme.accent
+                        font.pixelSize: Theme.fontSize13
+                        Layout.fillWidth: true
+                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                    }
+
+                    // Mock-flow addition kept per page brief (upstream has no
+                    // device-name input on this dialog).
+                    Label {
+                        text: qsTr("设备名称")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeMD
+                    }
+                    CxTextField {
+                        id: bindDeviceName
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("例如：K1 Max")
+                        Keys.onReturnPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                        Keys.onEnterPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                    }
+
+                    // Upstream "Pin Code" input title (BindDialog.cpp:96).
+                    Label {
+                        text: qsTr("PIN 码")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeMD
+                    }
+
+                    // Six 38x38 single-char cells (BindDialog.cpp:111-123):
+                    // centered, green #228B22, Body_16, auto-advance.
+                    Row {
+                        spacing: 10
+
+                        Repeater {
+                            model: 6
+
+                            CxTextField {
+                                id: pinCell
+                                required property int index
+                                width: 38
+                                height: 38
+                                font.pixelSize: Theme.fontSizeXL
+                                // Upstream SetTextColour(wxColour(34,139,34))
+                                // (BindDialog.cpp:115).
+                                color: "#228b22"
+                                horizontalAlignment: TextInput.AlignHCenter
+                                verticalAlignment: TextInput.AlignVCenter
+                                leftPadding: 4
+                                rightPadding: 4
+                                maximumLength: 1
+                                // Upstream on_key_input whitelist: 0-9 a-z A-Z
+                                // (BindDialog.cpp:203-216).
+                                validator: RegularExpressionValidator { regularExpression: /[0-9a-zA-Z]/ }
+
+                                Component.onCompleted: bindDialog.pinCells.push(pinCell)
+                                onTextChanged: {
+                                    // Auto-advance once one char is entered
+                                    // (upstream on_text_changed,
+                                    // BindDialog.cpp:226-230).
+                                    if (text.length === 1 && pinCell.index < 5)
+                                        bindDialog.pinCells[pinCell.index + 1].forceActiveFocus()
+                                    bindDialog.refreshPinComplete()
+                                }
+                                // Qt 6.10 Keys has no backspacePressed signal;
+                                // match Key_Backspace manually (upstream
+                                // on_key_backspace, BindDialog.cpp:255-268).
+                                Keys.onPressed: function(event) {
+                                    if (event.key !== Qt.Key_Backspace)
+                                        return
+                                    event.accepted = true
+                                    // Move focus to the previous cell.
+                                    if (pinCell.index > 0)
+                                        bindDialog.pinCells[pinCell.index - 1].forceActiveFocus()
+                                }
+                                Keys.onReturnPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                                Keys.onEnterPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: bindDialog.bindError
+                        color: Theme.statusError
+                        font.pixelSize: Theme.fontSizeSM
+                        visible: bindDialog.bindError !== ""
+                        Layout.fillWidth: true
+                    }
+
+                    RowLayout {
+                        Layout.alignment: Qt.AlignRight
+                        spacing: 8
+
+                        CxButton {
+                            text: qsTr("取消")
+                            onClicked: bindDialog.close()
+                        }
+                        CxButton {
+                            text: qsTr("绑定")
+                            highlighted: true
+                            enabled: bindDialog.pinComplete
+                            onClicked: bindDialog.doBind()
+                        }
+                    }
+
+                    // R-P1.E: mock bind disclosure (dependency-audit registry).
+                    Label {
+                        text: qsTr("演示模式：绑定为本地模拟，不会连接真实设备（依赖 bambu_networking，外部阻塞）。")
+                        color: Theme.textTertiary
+                        font.pixelSize: Theme.fontSizeXS
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+
+                // ── Page 2: binding (upstream binding_panel, BindDialog.cpp:162-172) ──
+                ColumnLayout {
+                    visible: bindDialog.bindState === 1
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    Item { Layout.fillHeight: true }
+                    Label {
+                        text: qsTr("绑定中…")
+                        color: Theme.textPrimary
+                        font.bold: true
+                        font.pixelSize: Theme.fontSizeXL
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Label {
+                        text: qsTr("请在打印机屏幕上确认")
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeLG
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Item { Layout.fillHeight: true }
+                    CxButton {
+                        text: qsTr("关闭")
+                        Layout.alignment: Qt.AlignRight
+                        onClicked: bindDialog.close()
+                    }
+                }
+            }
 
             Connections {
                 target: root.homeVm
-                function onCloudLoginFailed(error) { bindDialog.bindError = error }
-                function onCloudStateChanged() { bindDialog.close(); bindDialog.bindError = "" }
+                function onCloudLoginFailed(error) {
+                    // Upstream surfaces the failure and stays on the request
+                    // page (BindDialog.cpp:288-293).
+                    bindDialog.bindError = error
+                    bindDialog.bindState = 0
+                }
+                function onCloudStateChanged() {
+                    bindDialog.close()
+                    bindDialog.bindError = ""
+                    bindDialog.bindState = 0
+                }
             }
 
             function doBind() {
-                root.homeVm.cloudBindDevice(bindDeviceName.text, bindPinCode.text)
+                // Upstream on_bind_printer (BindDialog.cpp:280-301): requires
+                // login + a full 6-char code; success flips the simplebook to
+                // the binding page, failure surfaces an error and stays put.
+                if (!pinComplete)
+                    return
+                bindError = ""
+                bindState = 1
+                root.homeVm.cloudBindDevice(bindDeviceName.text, pinCode())
             }
 
-            onOpened: { bindDeviceName.text = ""; bindPinCode.text = ""; bindError = ""; bindDeviceName.forceActiveFocus() }
+            onOpened: {
+                bindState = 0
+                bindError = ""
+                bindDeviceName.text = ""
+                for (var i = 0; i < pinCells.length; ++i)
+                    pinCells[i].text = ""
+                refreshPinComplete()
+                if (pinCells.length > 0)
+                    pinCells[0].forceActiveFocus()
+            }
         }
 
-        // PAGE-04: Daily Tips（对齐上游 MarkdownTip / DailyTips.cpp）。
+        // PAGE-04: Daily Tips（对齐上游 DailyTips.cpp DailyTipsPanel）。
+        // Upstream is a vertical collapsible card: a 16:9 image area renders
+        // above the text when the hint carries an image (DailyTips.cpp:100-108),
+        // below it the first text line is the highlighted title
+        // (HintNotification.cpp:893-896, COL_ORANGE_LIGHT) followed by the
+        // body (+ wiki hypertext line), and a 30px control bar
+        // (DailyTips.cpp:253) carries the collapse label, the n/m page
+        // counter and 38x38 prev/next icon buttons with hover accent
+        // (DailyTips.cpp:408/:478-488/:497-525). Collapsed = control bar only
+        // (DailyTips.cpp:293-299).
         // Phase 241 (PAGE-01): rotates the BackendContext hint database
         // (hints.json) with prev/next navigation and documentation-link
         // support where the hint carries one — no more static single string.
         Rectangle {
+            id: dailyTipsCard
             Layout.fillWidth: true
-            Layout.preferredHeight: 64
+            property bool expanded: true
+            // Bumped by dailyTipChanged so the Q_INVOKABLE-derived bindings
+            // below re-evaluate (BackendContext.h:567-568).
+            property int tipRevision: 0
+            // Upstream hint img_url (DailyTipsDataRenderer::has_image); the
+            // Qt hint database (hints.json) carries no image URLs and
+            // BackendContext exposes none yet, so the 16:9 slot stays hidden.
+            readonly property string tipImageUrl: ""
+            readonly property string tipFullText: {
+                var _rev = tipRevision
+                if (typeof backend === "undefined")
+                    return ""
+                return backend.currentHintText()
+            }
+            // First line (before \n) is the headline
+            // (DailyTips.cpp:169-173 / HintNotification.cpp:893-896).
+            readonly property string tipTitle: {
+                var i = tipFullText.indexOf("\n")
+                return i >= 0 ? tipFullText.substring(0, i) : tipFullText
+            }
+            readonly property string tipBody: {
+                var i = tipFullText.indexOf("\n")
+                var base = i >= 0 ? tipFullText.substring(i + 1) : ""
+                var follow = (typeof backend !== "undefined" && tipRevision >= 0)
+                             ? backend.currentHintFollowText() : ""
+                var parts = []
+                if (base !== "") parts.push(base)
+                if (follow !== "") parts.push(follow)
+                return parts.join(" ")
+            }
+            readonly property bool tipHasWiki: tipRevision >= 0
+                && typeof backend !== "undefined"
+                && backend.currentHintHasDocumentationLink()
+                && backend.currentHintHypertext() !== ""
+            readonly property string tipWikiUrl: tipRevision >= 0
+                && typeof backend !== "undefined"
+                ? backend.currentHintHypertext() : ""
+            // Page counter "n/m" (upstream DailyTips.cpp:478-488).
+            readonly property string tipPage: tipRevision >= 0
+                && typeof backend !== "undefined"
+                ? (backend.currentHintIndex() + 1) + "/" + backend.hintCount() : ""
+            // Expanded = content + 30px footer; collapsed = footer only
+            // (upstream DailyTips.cpp:293-299).
+            Layout.preferredHeight: expanded ? tipsColumn.height + 28 : 30
             radius: 10
             color: Theme.bgElevated
             border.width: 1
             border.color: Theme.borderSubtle
+            clip: true
 
-            RowLayout {
-                anchors.fill: parent
+            Connections {
+                target: typeof backend !== "undefined" ? backend : null
+                function onDailyTipChanged() { dailyTipsCard.tipRevision++ }
+            }
+
+            Column {
+                id: tipsColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 anchors.margins: 14
-                spacing: 10
+                spacing: 6
+
+                // 16:9 image area above the text when the hint carries an
+                // image (upstream DailyTips.cpp:100-108); hidden otherwise.
+                Rectangle {
+                    visible: dailyTipsCard.tipImageUrl !== ""
+                    width: parent.width
+                    height: visible ? width * 9 / 16 : 0
+                    radius: 6
+                    color: Theme.bgBase
+                    clip: true
+
+                    Image {
+                        anchors.fill: parent
+                        source: dailyTipsCard.tipImageUrl
+                        fillMode: Image.PreserveAspectCrop
+                    }
+                }
+
+                // Headline: first line, highlighted bold orange (upstream
+                // COL_ORANGE_LIGHT = ColorRGBA::ORANGE 0.923,0.504,0.264 ->
+                // #EB8043, Color.hpp:136 via ImGuiWrapper.cpp:165).
+                Text {
+                    id: dailyTipTitle
+                    width: parent.width
+                    text: dailyTipsCard.tipTitle !== "" ? dailyTipsCard.tipTitle : qsTr("每日提示")
+                    color: "#eb8043"
+                    font.pixelSize: Theme.fontSizeLG
+                    font.bold: true
+                    elide: Text.ElideRight
+                }
 
                 Text {
-                    text: "💡"
-                    font.pixelSize: Theme.fontSizeXXL
-                }
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 2
-                    Text {
-                        text: qsTr("每日提示")
-                        color: Theme.accent
-                        font.pixelSize: Theme.fontSizeSM
-                        font.bold: true
-                    }
-                    Text {
-                        id: dailyTipBody
-                        Layout.fillWidth: true
-                        text: {
-                            if (typeof backend === "undefined")
-                                return qsTr("暂无提示")
-                            var s = backend.currentHintText()
-                            if (s === "")
-                                return qsTr("暂无提示")
-                            var hypertext = backend.currentHintHypertext()
-                            if (backend.currentHintHasDocumentationLink() && hypertext !== "")
-                                s = s + "<a href=\"" + hypertext + "\">" + hypertext + "</a>"
-                            var followText = backend.currentHintFollowText()
-                            if (followText !== "")
-                                s = s + followText
-                            return s
-                        }
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeSM
-                        wrapMode: Text.WordWrap
-                        elide: Text.ElideRight
-                        textFormat: Text.RichText
-                        // Upstream HintNotification hypertext_type=documentation.
-                        onLinkActivated: function(link) { backend.openHintDocumentation() }
-                    }
+                    id: dailyTipBody
+                    width: parent.width
+                    text: dailyTipsCard.tipBody !== "" ? dailyTipsCard.tipBody : qsTr("暂无提示")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
+                    wrapMode: Text.WordWrap
                 }
 
-                // Prev/next navigation (upstream HintNotification arrows)
-                Rectangle {
-                    width: 26; height: 26; radius: 13
-                    color: tipPrevMA.containsMouse ? Theme.bgHover : "transparent"
-                    Text { anchors.centerIn: parent; text: "‹"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXL }
+                // Wiki hypertext line (upstream hint documentation link).
+                Text {
+                    id: dailyTipWiki
+                    width: parent.width
+                    visible: dailyTipsCard.tipHasWiki
+                    text: dailyTipsCard.tipWikiUrl
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSizeSM
+                    font.underline: dailyTipWikiMA.containsMouse
+                    elide: Text.ElideRight
+                    // Upstream HintNotification hypertext_type=documentation.
                     MouseArea {
-                        id: tipPrevMA
-                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        id: dailyTipWikiMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: backend.openHintDocumentation()
+                    }
+                }
+            }
+
+            // 30px control bar (upstream m_footer_height = 30*scale,
+            // DailyTips.cpp:253).
+            Rectangle {
+                id: tipsFooter
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 30
+                color: "transparent"
+
+                // Collapse / expand control (upstream DailyTips.cpp:412-455):
+                // expanded = "Collapse" + arrow; collapsed = bold "Daily Tips"
+                // + arrow; hover draws an underline.
+                Row {
+                    id: tipsCollapseControl
+                    anchors.left: parent.left
+                    anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 4
+
+                    Text {
+                        text: dailyTipsCard.expanded ? qsTr("折叠") : qsTr("每日提示")
+                        color: dailyTipsCard.expanded ? Theme.textTertiary : Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.bold: !dailyTipsCard.expanded
+                        font.underline: tipsCollapseMA.containsMouse
+                    }
+                    Text {
+                        text: dailyTipsCard.expanded ? "\u25be" : "\u25b8"
+                        color: dailyTipsCard.expanded ? Theme.textTertiary : Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        font.underline: tipsCollapseMA.containsMouse
+                    }
+                }
+                MouseArea {
+                    id: tipsCollapseMA
+                    anchors.fill: tipsCollapseControl
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: dailyTipsCard.expanded = !dailyTipsCard.expanded
+                }
+
+                // Page counter "n/m" (upstream DailyTips.cpp:478-488).
+                Text {
+                    text: dailyTipsCard.tipPage
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeSM
+                    anchors.right: tipsPrevBtn.left
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // Prev/next 38x38 transparent-background icon buttons; hover
+                // recolors to Theme.accent (upstream 38x38*scale buttons with
+                // hover ImColor(0,150,136), DailyTips.cpp:408/:497-525; the
+                // upstream glyphs are icon-font arrows, rendered here as
+                // chevron glyphs).
+                Rectangle {
+                    id: tipsPrevBtn
+                    width: 38; height: 38
+                    color: "transparent"
+                    anchors.right: tipsNextBtn.left
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u2039"
+                        color: tipsPrevMA.containsMouse ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeXXL
+                    }
+                    MouseArea {
+                        id: tipsPrevMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: backend.prevHint()
                     }
                 }
                 Rectangle {
-                    width: 26; height: 26; radius: 13
-                    color: tipNextMA.containsMouse ? Theme.bgHover : "transparent"
-                    Text { anchors.centerIn: parent; text: "›"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXL }
+                    id: tipsNextBtn
+                    width: 38; height: 38
+                    color: "transparent"
+                    anchors.right: parent.right
+                    anchors.rightMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u203a"
+                        color: tipsNextMA.containsMouse ? Theme.accent : Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeXXL
+                    }
                     MouseArea {
-                        id: tipNextMA
-                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        id: tipsNextMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
                         onClicked: backend.showDailyTip()
                     }
                 }

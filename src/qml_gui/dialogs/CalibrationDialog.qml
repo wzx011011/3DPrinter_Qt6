@@ -11,11 +11,16 @@ CxDialog {
     id: root
     required property var calibrationVm
 
-    // Hardware calibration options (aligns with upstream CalibrationDialog checkboxes)
-    property bool hardwareLidar: true
-    property bool hardwareBedLevel: true
-    property bool hardwareVibration: true
-    property bool hardwareMotor: false
+    // Hardware calibration options - the seven upstream checkboxes
+    // (Calibration.cpp:53-59). Every option defaults to checked except
+    // bed_cali, per STUDIO-10091 (Calibration.cpp:62-65).
+    property bool hardwareLidar: true          // Micro lidar calibration (xcam_cali)
+    property bool hardwareBedLevel: true       // Bed leveling (bed_leveling)
+    property bool hardwareVibration: true      // Vibration compensation (vibration)
+    property bool hardwareMotor: true          // Motor noise cancellation (motor_noise)
+    property bool hardwareNozzleOffset: true   // Nozzle offset calibration (nozzle_cali)
+    property bool hardwareHeatbed: false       // High-temperature Heatbed Calibration (bed_cali)
+    property bool hardwareClumpDetection: true // Nozzle clumping detection (clump_pos_cali)
 
     dialogTitle: root.calibrationVm ? root.calibrationVm.selectedTitle : qsTr("校准")
     titleIcon: "⚙"
@@ -79,11 +84,11 @@ CxDialog {
         // Divider
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.bgCard }
 
-        // Hardware calibration is unavailable until live printer support exists.
+        // Hardware calibration step selection - the seven upstream checkboxes
+        // (Calibration.cpp:53-59; create_check_option at :176-208).
         ColumnLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingMD
-            visible: false
 
             Text {
                 text: qsTr("硬件校准选项")
@@ -281,6 +286,136 @@ CxDialog {
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: hardwareMotor = !hardwareMotor
+                }
+            }
+
+            // Nozzle offset calibration (aligns with upstream nozzle_cali,
+            // Calibration.cpp:57)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: nozzleMA.containsMouse ? Theme.bgCard : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareNozzleOffset ? Theme.accent : "transparent"
+                        border.color: hardwareNozzleOffset ? Theme.accent : Theme.scrollBarHoverColor
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareNozzleOffset ? "✓" : ""
+                            color: "white"
+                            font.pixelSize: Theme.fontSizeXS
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("喷嘴偏移校准")
+                        color: Theme.chromeText
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                }
+
+                MouseArea {
+                    id: nozzleMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareNozzleOffset = !hardwareNozzleOffset
+                }
+            }
+
+            // High-temperature Heatbed Calibration (aligns with upstream
+            // bed_cali, Calibration.cpp:58; the only option that defaults
+            // to unchecked, STUDIO-10091)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: heatbedMA.containsMouse ? Theme.bgCard : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareHeatbed ? Theme.accent : "transparent"
+                        border.color: hardwareHeatbed ? Theme.accent : Theme.scrollBarHoverColor
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareHeatbed ? "✓" : ""
+                            color: "white"
+                            font.pixelSize: Theme.fontSizeXS
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("高温热床校准")
+                        color: Theme.chromeText
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                }
+
+                MouseArea {
+                    id: heatbedMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareHeatbed = !hardwareHeatbed
+                }
+            }
+
+            // Nozzle clumping detection Calibration (aligns with upstream
+            // clump_pos_cali, Calibration.cpp:59)
+            Rectangle {
+                Layout.fillWidth: true
+                height: 28
+                radius: 4
+                color: clumpMA.containsMouse ? Theme.bgCard : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingXS
+                    anchors.rightMargin: Theme.spacingXS
+                    spacing: Theme.spacingMD
+                    Rectangle {
+                        width: 16; height: 16; radius: 3
+                        color: hardwareClumpDetection ? Theme.accent : "transparent"
+                        border.color: hardwareClumpDetection ? Theme.accent : Theme.scrollBarHoverColor
+                        border.width: 1.5
+                        Text {
+                            anchors.centerIn: parent
+                            text: hardwareClumpDetection ? "✓" : ""
+                            color: "white"
+                            font.pixelSize: Theme.fontSizeXS
+                            font.bold: true
+                        }
+                    }
+
+                    Text {
+                        text: qsTr("喷嘴堵塞检测校准")
+                        color: Theme.chromeText
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                }
+
+                MouseArea {
+                    id: clumpMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: hardwareClumpDetection = !hardwareClumpDetection
                 }
             }
         }
