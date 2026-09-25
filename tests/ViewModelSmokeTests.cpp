@@ -3249,12 +3249,12 @@ void ViewModelSmokeTests::testSidebarCollapsedDefault()
 
   // Sidebar is visible by default, matching upstream Plater.
   // Phase 164 (SW-01): sidebar is now resizable within [300, 520] -- was
-  // min==max==392 making the drag handle a no-op. v5.14: default narrows to
-  // 320 to match the screenshot-truth compact density.
+  // min==max==392 making the drag handle a no-op. R8 (2026-09-24): default
+  // restored to 392, the upstream-measured sidebar width.
   QCOMPARE(ctx.sidebarCollapsed(), false);
   QCOMPARE(ctx.sidebarMinWidth(), 300);
   QCOMPARE(ctx.sidebarMaxWidth(), 520);
-  QCOMPARE(ctx.sidebarWidth(), 320);
+  QCOMPARE(ctx.sidebarWidth(), 392);
   QCOMPARE(ctx.sidebarDockArea(), static_cast<int>(BackendContext::SidebarDockArea::Left));
 }
 
@@ -3340,7 +3340,7 @@ void ViewModelSmokeTests::testSidebarWidthClamp()
     s.sync();
   }
   BackendContext legacyCtx;
-  QCOMPARE(legacyCtx.sidebarWidth(), 320);  // migrated to kSidebarDefaultWidth (v5.14: 320)
+  QCOMPARE(legacyCtx.sidebarWidth(), 392);  // migrated to kSidebarDefaultWidth (R8: 392)
 
   resetSidebarSettings();
 }
