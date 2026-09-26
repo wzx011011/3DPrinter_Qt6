@@ -557,7 +557,38 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
 
+                    // Prewarm: once the panel has painted, build the six
+                    // pages one per tick so the first click on any tab is a
+                    // flip instead of a ~350ms delegate build. A click racing
+                    // the prewarm still builds its own page on visit.
+                    property int prewarmIdx: 0
+                    Timer {
+                        id: prewarmDelay
+                        interval: 1200
+                        onTriggered: prewarmStep.restart()
+                    }
+                    Timer {
+                        id: prewarmStep
+                        // Step wider than one page build (~550ms with the
+                        // cacheBuffer rows) so a click landing mid-prewarm
+                        // queues behind at most one build.
+                        interval: 900
+                        repeat: true
+                        triggeredOnStart: true
+                        onTriggered: {
+                            if (paramsPagesHost.prewarmIdx >= paramsPagesRepeater.count) {
+                                stop()
+                                return
+                            }
+                            var page = paramsPagesRepeater.itemAt(paramsPagesHost.prewarmIdx)
+                            if (page) page.visited = true
+                            paramsPagesHost.prewarmIdx = paramsPagesHost.prewarmIdx + 1
+                        }
+                    }
+                    Component.onCompleted: prewarmDelay.restart()
+
                     Repeater {
+                        id: paramsPagesRepeater
                         model: root.paramsTabs
                         delegate: Item {
                             id: paramsPageHost
@@ -587,10 +618,13 @@ Rectangle {
                                     anchors.fill: parent
                                     clip: true
                                     spacing: 0
-                                    // Filter-input changes reset delegates;
-                                    // cacheBuffer 0 keeps that reset to the
-                                    // rows actually on screen.
-                                    cacheBuffer: 0
+                                    // cacheBuffer 0 was a stopgap from when a
+                                    // tab flip rebuilt every delegate; pages
+                                    // are persistent now, so pre-building rows
+                                    // past the viewport only costs prewarm
+                                    // time and keeps fast scrolling from
+                                    // building rows mid-flick.
+                                    cacheBuffer: 600
                                     // Per-page C++ filter proxy (replaces the
                                     // QML-side index-array filter
                                     // orchestration). LeftSidebar is always
