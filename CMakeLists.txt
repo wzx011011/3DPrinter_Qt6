@@ -295,6 +295,10 @@ if(OWZX_QML_GUI)
         src/core/viewmodels/AmsMaterialsViewModel.h
         src/qml_gui/Models/ConfigOptionModel.cpp
         src/qml_gui/Models/ConfigOptionModel.h
+        src/qml_gui/Models/ConfigOptionFilterProxy.cpp
+        src/qml_gui/Models/ConfigOptionFilterProxy.h
+        src/qml_gui/Models/OptionLabelTable.cpp
+        src/qml_gui/Models/OptionLabelTable.h
         src/qml_gui/Models/PresetListModel.cpp
         src/qml_gui/Models/PresetListModel.h
         src/qml_gui/Renderer/CameraController.cpp
@@ -796,6 +800,12 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         src/core/rendering/GizmoCenter.h
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
+        # PICK-BVH: PrepareSceneData.cpp references the lazy raycaster (same
+        # pattern as PrepareSceneDataTests above).
+        src/core/rendering/PickingRaycaster.cpp
+        src/core/rendering/PickingRaycaster.h
+        src/core/rendering/PickingPrimitives.h
+        src/qml_gui/Renderer/ViewportContextHit.h
     )
     target_include_directories(GizmoStateWiringTests PRIVATE src)
     target_link_libraries(GizmoStateWiringTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)

@@ -3322,12 +3322,14 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
            "LeftSidebar Setting button must call backend.forwardSettingsRequest(\"process\")");
 
-  // PREPSB-04: search box rebuilds the shared ParamsPanel filter on accept/change.
-  QVERIFY2(sidebar.contains(QStringLiteral("function rebuildParamsFilter()"))
-               && sidebar.contains(QStringLiteral("filterOptionIndices")),
-           "LeftSidebar must centralize ParamsPanel filtering through filterOptionIndices");
-  QVERIFY2(sidebar.count(QStringLiteral("root.rebuildParamsFilter()")) >= 3,
-           "LeftSidebar search/tab changes must call rebuildParamsFilter");
+  // PREPSB-04: ParamsPanel pages filter through the per-page C++ proxy.
+  QVERIFY2(sidebar.contains(QStringLiteral("ConfigOptionFilterProxy"))
+               && sidebar.contains(QStringLiteral("searchText: root.paramsSearchText"))
+               && sidebar.contains(QStringLiteral("advancedMode: true")),
+           "LeftSidebar pages must filter through the per-page C++ ConfigOptionFilterProxy");
+  QVERIFY2(!sidebar.contains(QStringLiteral("computePageIndices"))
+               && !sidebar.contains(QStringLiteral("rebuildParamsFilter")),
+           "LeftSidebar must not orchestrate params filtering in QML");
 
   // PREPSB-04: scope toggles complete (Global/Object/Plate).
   QVERIFY2(sidebar.contains(QStringLiteral("requestGlobalScope")),
@@ -4280,8 +4282,8 @@ void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
                && settingsDialog.contains(QStringLiteral("height: 593"))
                && settingsDialog.contains(QStringLiteral("Qt.NonModal")),
            "SettingsDialog must keep the screenshot-sized non-modal ApplicationWindow shell");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("filterIndicesByPage")),
-           "SettingsDialog rebuildFilter must narrow option indices by active tab/page");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("ConfigOptionFilterProxy")),
+           "SettingsDialog must filter option rows through the C++ per-page filter proxy");
   QVERIFY2(settingsDialog.contains(QStringLiteral("CxIconButton"))
                && settingsDialog.contains(QStringLiteral("searchExpanded"))
                && settingsDialog.contains(QStringLiteral("root.requestSaveAndMaybeClose(false)"))
@@ -4322,14 +4324,18 @@ void QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
       QStringLiteral("CxTextField"),
       QStringLiteral("CxTextArea"),
       QStringLiteral("optionModel.setValue(root.optIdx"),
-      QStringLiteral("readonly property string oSidetext"),
+      QStringLiteral("\n    property string oSidetext: \"\""),
       QStringLiteral("readonly property string displayUnit"),
-      QStringLiteral("optSidetext(root.optIdx)")
+      QStringLiteral("required property int optIdx")
   };
   for (const QString &token : typedControlTokens) {
     QVERIFY2(optionRow.contains(token),
              qPrintable(QStringLiteral("OptionRow missing Phase 86 typed-control token: %1").arg(token)));
   }
+  QVERIFY2(!optionRow.contains(QStringLiteral("readonly property string oSidetext")),
+           "oSidetext must be role-fed, not a self-fetching readonly");
+  QVERIFY2(!optionRow.contains(QStringLiteral("optionModel.opt")),
+           "OptionRow must read row data via model roles, not Q_INVOKABLE reachbacks");
 
   const QStringList rangeAndColorTokens = {
       QStringLiteral("readonly property bool isRangeLike"),
@@ -4432,8 +4438,8 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
            "LeftSidebar ParamsPanel must render real ConfigOptionModel rows");
   QVERIFY2(sidebar.contains(QStringLiteral("paramsOptionModel")),
            "LeftSidebar ParamsPanel must choose an option model for the active tab");
-  QVERIFY2(sidebar.contains(QStringLiteral("rebuildParamsFilter")),
-           "LeftSidebar search/tab changes must rebuild the params filter");
+  QVERIFY2(sidebar.contains(QStringLiteral("ConfigOptionFilterProxy")),
+           "LeftSidebar params pages must filter through the per-page C++ filter proxy");
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
            "LeftSidebar process edit button must open the process SettingsDialog");
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"printer\")"))
@@ -7963,8 +7969,8 @@ void QmlUiAuditTests::v50UnsavedChangesAndFilterWired()
   // the C++ filter.
   QVERIFY2(settingsDialog.contains(QStringLiteral("advancedMode")),
            "PSET-04: SettingsDialog must expose an advancedMode user toggle");
-  QVERIFY2(settingsDialog.contains(QStringLiteral("filterOptionIndices(presetTier, searchText, advancedMode)")),
-           "PSET-04: SettingsDialog must pass advancedMode to filterOptionIndices");
+  QVERIFY2(settingsDialog.contains(QStringLiteral("advancedMode: root.advancedMode")),
+           "PSET-04: SettingsDialog must pass advancedMode to the C++ filter proxy");
 }
 
 void QmlUiAuditTests::v50CompareDiffAndRoundTripWired()
@@ -9856,7 +9862,9 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
                && !processContract.contains(QStringLiteral("key: \"Other\"")),
            "Process tabs must not reintroduce legacy page identities");
   QVERIFY2(processList.contains(QStringLiteral("processGroupsForPage(root.activeTab)"))
-               && processList.contains(QStringLiteral("orderedProcessIndicesForGroup(root.filteredIndices, root.activeTab, groupName)"))
+               && processList.contains(QStringLiteral("ConfigOptionFilterProxy"))
+               && processList.contains(QStringLiteral("group: processGroupDelegate.groupName"))
+               && processList.contains(QStringLiteral("upstreamProcessOrder: true"))
                && processList.contains(QStringLiteral("processDisplayLabel(processGroupDelegate.groupName)"))
                && processList.contains(QStringLiteral("showGroupHeader: false")),
            "Process rows must consume C++ page-qualified group projections and presentation labels");

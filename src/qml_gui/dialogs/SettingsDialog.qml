@@ -11,6 +11,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import OWzx.Models 1.0
 import ".."
 import "../controls"
 import "../components"
@@ -47,7 +48,6 @@ ApplicationWindow {
     property bool advancedMode: false
     property bool closeAfterSaveAs: false
     property bool closeAfterUnsavedResolution: false
-    property var filteredIndices: []
 
     // Presentation-only labels; C++ remains the hierarchy and ordering authority.
     function processDisplayLabel(sourceKey) {
@@ -156,16 +156,6 @@ ApplicationWindow {
     // Set default tab on first load
     Component.onCompleted: {
         if (tabPages.length > 0) activeTab = tabPages[0].key
-        rebuildFilter()
-    }
-
-    // Rebuild filtered indices when search/tab/mode changes.
-    function rebuildFilter() {
-        if (!configVm || !optionModel) { filteredIndices = []; return }
-        var indices = configVm.filterOptionIndices(presetTier, searchText, advancedMode)
-        if (activeTab !== "" && presetTier !== "print")
-            indices = optionModel.filterIndicesByPage(indices, activeTab)
-        filteredIndices = indices
     }
 
     function requestSaveAndMaybeClose(closeOnSuccess) {
@@ -190,10 +180,6 @@ ApplicationWindow {
         closeAfterUnsavedResolution = closeOnResolve
         unsavedDialog.openDialog()
     }
-
-    onSearchTextChanged: rebuildFilter()
-    onAdvancedModeChanged: rebuildFilter()
-    onActiveTabChanged: rebuildFilter()
 
     // Tier to category index (0=print, 1=filament, 2=printer)
     readonly property int tierCategory: {
@@ -688,17 +674,14 @@ ApplicationWindow {
                         clip: true
                         model: root.optionModel && root.activeTab !== ""
                                ? root.optionModel.processGroupsForPage(root.activeTab) : []
-                        readonly property bool hasProjectedRows: {
-                            if (!root.optionModel || root.activeTab === "")
-                                return false
-                            const groups = root.optionModel.processGroupsForPage(root.activeTab)
-                            for (let groupIndex = 0; groupIndex < groups.length; ++groupIndex) {
-                                if (root.optionModel.orderedProcessIndicesForGroup(
-                                      root.filteredIndices, root.activeTab, groups[groupIndex]).length > 0)
-                                    return true
-                            }
-                            return false
-                        }
+                        // C++-side projection count: search + page filter plus
+                        // (page, group) process-manifest membership — exactly
+                        // the rows the per-group proxies below accept.
+                        readonly property bool hasProjectedRows:
+                            root.optionModel
+                            ? root.optionModel.processProjectedRowCount(
+                                  root.activeTab, root.searchText, root.advancedMode) > 0
+                            : false
                         spacing: Theme.spacingXS
                         ScrollBar.vertical: ScrollBar {
                             visible: processOptionListComponent.contentHeight > processOptionListComponent.height
@@ -717,11 +700,20 @@ ApplicationWindow {
                             required property var modelData
                             required property int index
                             readonly property string groupName: modelData
-                            readonly property var orderedIndices: root.optionModel
-                                ? root.optionModel.orderedProcessIndicesForGroup(root.filteredIndices, root.activeTab, groupName)
-                                : []
 
-                            visible: orderedIndices.length > 0
+                            // Per-group filtered + upstream-manifest-ordered
+                            // projection over the option model. count hides
+                            // empty groups and drives the inner Repeater.
+                            readonly property ConfigOptionFilterProxy groupRows: ConfigOptionFilterProxy {
+                                sourceModel: root.optionModel
+                                page: root.activeTab
+                                group: processGroupDelegate.groupName
+                                searchText: root.searchText
+                                advancedMode: root.advancedMode
+                                upstreamProcessOrder: true
+                            }
+
+                            visible: groupRows.count > 0
                             width: processOptionListComponent.width
                             height: visible ? processGroupColumn.implicitHeight : 0
 
@@ -758,7 +750,7 @@ ApplicationWindow {
                                 }
 
                                 Repeater {
-                                    model: processGroupDelegate.orderedIndices
+                                    model: processGroupDelegate.groupRows
 
                                     // Wrapper delegate (same pattern as
                                     // optDelegate below): OptionRow declares
@@ -772,8 +764,24 @@ ApplicationWindow {
                                     delegate: Item {
                                         id: processOptionDelegate
                                         required property int index
-                                        required property var modelData
-                                        readonly property int optIdx: modelData
+                                        required property int optIdx
+                                        required property string optPrevGroup
+                                        required property string optType
+                                        required property string optKey
+                                        required property string displayLabel
+                                        required property var optValue
+                                        required property double optMin
+                                        required property double optMax
+                                        required property double optStep
+                                        required property bool optReadonly
+                                        required property bool optDirty
+                                        required property string optTooltip
+                                        required property string optUnit
+                                        required property string optSidetext
+                                        required property bool optNullable
+                                        required property bool optIsVector
+                                        required property var optEnumLabels
+                                        required property string valueSource
 
                                         width: processGroupColumn.width
                                         height: processOptRow.totalHeight
@@ -792,11 +800,22 @@ ApplicationWindow {
                                             compactLabelWidth: 210
                                             compactFieldWidth: 96
                                             compactEnumWidth: 190
-                                            valueSource: {
-                                                if (!root.configVm || !root.optionModel) return ""
-                                                var key = root.optionModel.optKey(processOptionDelegate.optIdx)
-                                                return root.configVm.valueSourceForKey(key)
-                                            }
+                                            valueSource: processOptionDelegate.valueSource
+                                            oType: processOptionDelegate.optType
+                                            oKey: processOptionDelegate.optKey
+                                            oLabel: processOptionDelegate.displayLabel
+                                            oVal: processOptionDelegate.optValue
+                                            oMin: processOptionDelegate.optMin
+                                            oMax: processOptionDelegate.optMax
+                                            oStep: processOptionDelegate.optStep
+                                            oRO: processOptionDelegate.optReadonly
+                                            oDirty: processOptionDelegate.optDirty
+                                            oTip: processOptionDelegate.optTooltip
+                                            oUnit: processOptionDelegate.optUnit
+                                            oSidetext: processOptionDelegate.optSidetext
+                                            oNullable: processOptionDelegate.optNullable
+                                            oIsVector: processOptionDelegate.optIsVector
+                                            oEnumLabels: processOptionDelegate.optEnumLabels
                                         }
                                     }
                                 }
@@ -809,7 +828,16 @@ ApplicationWindow {
                         anchors.fill: parent
                         visible: root.presetTier !== "print"
                         clip: true
-                        model: root.filteredIndices
+                        // print tier skips the page filter (all pages shown in
+                        // one list), matching the legacy filterOptionIndices
+                        // page-skip; printer/filament narrow by active tab.
+                        model: ConfigOptionFilterProxy {
+                            id: genericListProxy
+                            sourceModel: root.optionModel
+                            page: root.presetTier !== "print" ? root.activeTab : ""
+                            searchText: root.searchText
+                            advancedMode: root.advancedMode
+                        }
                         spacing: Theme.spacingXS
                         ScrollBar.vertical: ScrollBar {
                             visible: genericOptionListComponent.contentHeight > genericOptionListComponent.height
@@ -818,7 +846,7 @@ ApplicationWindow {
                         // Empty state
                         Text {
                             anchors.centerIn: parent
-                            visible: root.filteredIndices.length === 0
+                            visible: genericListProxy.count === 0
                             text: root.searchText !== "" ? qsTr("No matching options")
                                                          : qsTr("No options")
                             color: Theme.textDisabled
@@ -828,18 +856,29 @@ ApplicationWindow {
                         delegate: Item {
                             id: optDelegate
                             required property int index
-                            required property var modelData
-
-                            readonly property int optIdx: modelData
-                            readonly property string optGroup: root.optionModel ? root.optionModel.optGroup(optIdx) : ""
+                            required property int optIdx
+                            required property string optGroup
+                            required property string optPrevGroup
+                            required property string optType
+                            required property string optKey
+                            required property string displayLabel
+                            required property var optValue
+                            required property double optMin
+                            required property double optMax
+                            required property double optStep
+                            required property bool optReadonly
+                            required property bool optDirty
+                            required property string optTooltip
+                            required property string optUnit
+                            required property string optSidetext
+                            required property bool optNullable
+                            required property bool optIsVector
+                            required property var optEnumLabels
+                            required property string valueSource
 
                             // Show group header when group changes
-                            readonly property bool showGroupHeader: {
-                                if (optDelegate.index === 0) return optGroup !== ""
-                                var prevGroup = root.optionModel
-                                    ? root.optionModel.optGroup(root.filteredIndices[optDelegate.index - 1]) : ""
-                                return optGroup !== "" && optGroup !== prevGroup
-                            }
+                            readonly property bool showGroupHeader:
+                                optGroup !== "" && (index === 0 || optGroup !== optPrevGroup)
 
                             width: genericOptionListComponent.width
                             height: optRow.totalHeight
@@ -860,11 +899,22 @@ ApplicationWindow {
                                 compactLabelWidth: 210
                                 compactFieldWidth: 96
                                 compactEnumWidth: 190
-                                valueSource: {
-                                    if (!root.configVm || !root.optionModel) return ""
-                                    var key = root.optionModel.optKey(optDelegate.optIdx)
-                                    return root.configVm.valueSourceForKey(key)
-                                }
+                                valueSource: optDelegate.valueSource
+                                oType: optDelegate.optType
+                                oKey: optDelegate.optKey
+                                oLabel: optDelegate.displayLabel
+                                oVal: optDelegate.optValue
+                                oMin: optDelegate.optMin
+                                oMax: optDelegate.optMax
+                                oStep: optDelegate.optStep
+                                oRO: optDelegate.optReadonly
+                                oDirty: optDelegate.optDirty
+                                oTip: optDelegate.optTooltip
+                                oUnit: optDelegate.optUnit
+                                oSidetext: optDelegate.optSidetext
+                                oNullable: optDelegate.optNullable
+                                oIsVector: optDelegate.optIsVector
+                                oEnumLabels: optDelegate.optEnumLabels
                             }
                         }
                     }

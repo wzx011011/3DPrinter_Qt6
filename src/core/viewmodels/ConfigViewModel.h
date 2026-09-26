@@ -75,6 +75,12 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(QStringList decoratedPrinterPresetNames READ decoratedPrinterPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList decoratedFilamentPresetNames READ decoratedFilamentPresetNames NOTIFY stateChanged)
   Q_PROPERTY(QStringList decoratedPrintPresetNames READ decoratedPrintPresetNames NOTIFY stateChanged)
+  // Per-extruder filament compatibility bitmap (item i = 1 when
+  // isFilamentCompatibleForSlot(i), else 0; length = 1 + slot count). NOTIFY
+  // property replacement for the former QML-side compatRefreshTick counter —
+  // consumers read list[i] with a binding-tracked dependency instead of
+  // re-evaluating Q_INVOKABLEs on every tick.
+  Q_PROPERTY(QList<int> filamentSlotCompatibility READ filamentSlotCompatibility NOTIFY filamentSlotCompatibilityChanged)
 
 public:
   explicit ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent = nullptr);
@@ -132,6 +138,8 @@ public:
   QStringList decoratedPrinterPresetNames() const;
   QStringList decoratedFilamentPresetNames() const;
   QStringList decoratedPrintPresetNames() const;
+  /// Per-extruder compatibility bitmap (see the Q_PROPERTY above).
+  QList<int> filamentSlotCompatibility() const { return filamentSlotCompatibility_; }
 
   Q_INVOKABLE void loadDefault();
   Q_INVOKABLE void setCurrentPreset(const QString &presetName);
@@ -329,6 +337,9 @@ signals:
   /// Phase 154 (CLOS-01): emitted by requestComparePresets; SettingsDialog
   /// binds it to open PresetDiffDialog.
   void comparePresetsRequired();
+  /// filamentSlotCompatibility content changed (only when the diff guard sees
+  /// a real change).
+  void filamentSlotCompatibilityChanged();
 
 private:
   PresetServiceMock *presetService_ = nullptr;
@@ -352,6 +363,14 @@ private:
   QString normalizedTier(const QString &tier) const;
   void refreshOptionModelReferences();
   void updateMergedPresetValues();
+  /// Push the valueSources_ mirror onto the three option models
+  /// (ConfigOptionModel::setValueSources) so delegates can read it as the
+  /// valueSource role. Call after every valueSources_ rebuild/patch.
+  void pushValueSourcesToModels();
+  /// Recompute filamentSlotCompatibility_ (length = 1 + filamentSlotPresets_
+  /// size, item i = isFilamentCompatible(filamentPresetForSlot(i))); emits
+  /// filamentSlotCompatibilityChanged only on a real diff.
+  void refreshFilamentSlotCompatibility();
   bool queuePendingAction(const QString &action, const QString &target);
   void clearPendingAction();
   bool applyPendingAction();
@@ -391,6 +410,9 @@ private:
   QString currentPrintPreset_;
   /// v5.16 (CIRC-04): slots 1..N; slot 0 is currentFilamentPreset_ itself.
   QStringList filamentSlotPresets_;
+  /// Compatibility bitmap mirror of filamentSlotPresets_ (+ slot 0), see
+  /// refreshFilamentSlotCompatibility().
+  QList<int> filamentSlotCompatibility_;
   QHash<QString, QVariant> printerPresetValues_;
   QHash<QString, QVariant> filamentPresetValues_;
   QHash<QString, QVariant> printPresetValues_;

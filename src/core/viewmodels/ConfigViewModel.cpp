@@ -105,7 +105,14 @@ ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServic
   connect(printOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   connect(machineOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
   connect(filamentOptions_, &ConfigOptionModel::optionValueChanged, this, &ConfigViewModel::handleOptionValueChanged);
+  // Self-connect BEFORE loadDefault(): loadDefault() emits stateChanged on
+  // both of its branches, which recomputes filamentSlotCompatibility_ so the
+  // property is non-empty from construction on. The explicit call at the end
+  // of the constructor is the second leg of the guarantee — either path
+  // alone suffices; the O(n) diff guard makes the duplicate harmless.
+  connect(this, &ConfigViewModel::stateChanged, this, &ConfigViewModel::refreshFilamentSlotCompatibility);
   loadDefault();
+  refreshFilamentSlotCompatibility();
 }
 
 QObject *ConfigViewModel::printOptions() const { return printOptions_; }
@@ -315,6 +322,39 @@ void ConfigViewModel::updateMergedPresetValues()
     if (!valueSources_.contains(it.key()))
       valueSources_.insert(it.key(), QStringLiteral("default"));
   }
+
+  pushValueSourcesToModels();
+}
+
+void ConfigViewModel::pushValueSourcesToModels()
+{
+  // Mirror valueSources_ into the three option models so delegates can read
+  // the per-key source as the valueSource role (replaces the per-row
+  // valueSourceForKey Q_INVOKABLE reachback). The model-side diff keeps this
+  // silent when nothing changed.
+  if (printOptions_)
+    printOptions_->setValueSources(valueSources_);
+  if (machineOptions_)
+    machineOptions_->setValueSources(valueSources_);
+  if (filamentOptions_)
+    filamentOptions_->setValueSources(valueSources_);
+}
+
+void ConfigViewModel::refreshFilamentSlotCompatibility()
+{
+  // Length = 1 + filamentSlotPresets_.size(); item i mirrors
+  // isFilamentCompatibleForSlot(i) exactly — including the fallback semantics
+  // of filamentPresetForSlot (slot 0 and out-of-range slots resolve to
+  // currentFilamentPreset_).
+  QList<int> next;
+  next.reserve(filamentSlotPresets_.size() + 1);
+  for (int slot = 0; slot <= filamentSlotPresets_.size(); ++slot)
+    next.append(isFilamentCompatible(filamentPresetForSlot(slot)) ? 1 : 0);
+
+  if (next == filamentSlotCompatibility_)
+    return;
+  filamentSlotCompatibility_ = next;
+  emit filamentSlotCompatibilityChanged();
 }
 
 void ConfigViewModel::refreshOptionModelReferences()
@@ -1790,76 +1830,10 @@ QSet<QString> ConfigViewModel::readonlyKeysForCurrentScope() const
   return {};
 }
 
-// Fuzzy matching helper based on upstream OptionsSearcher / fts_fuzzy_match.
-namespace {
-
-// Subsequence matching with scoring.
-static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScore)
-{
-  const int m = pattern.size(), n = text.size();
-  if (m == 0 || n == 0) { outScore = 0; return false; }
-
-  // Quick reject: if all pattern chars must appear in text
-  QVector<bool> charUsed(m, false);
-  for (int pi = 0; pi < m; ++pi)
-  {
-    QChar pc = pattern[pi].toLower();
-    bool found = false;
-    for (int ti = 0; ti < n && !found; ++ti)
-    {
-      if (text[ti].toLower() == pc) found = true;
-    }
-    if (!found) { outScore = 0; return false; }
-  }
-
-  // Dynamic programming: dp[i][j] = best score matching pattern[0..i-1] against text[0..j-1]
-  // dp[i][j].first = score, .second = position of last match in text
-  QVector<QPair<int,int>> prevRow(n + 1, {0, -1}), curRow(n + 1, {0, -1});
-
-  for (int pi = 1; pi <= m; ++pi)
-  {
-    curRow.fill({0, -1});
-    const QChar pc = pattern[pi - 1].toLower();
-
-    for (int ti = 1; ti <= n; ++ti)
-    {
-      // Match at current position
-      if (text[ti - 1].toLower() == pc)
-      {
-        int prevScore = prevRow[ti - 1].first;
-        int prevPos = prevRow[ti - 1].second;
-        int bonus = 15; // sequential bonus (瀵归綈涓婃父 sequential bonus)
-        if (ti > 1 && prevPos == ti - 2) bonus = 25; // consecutive chars
-        int score = prevScore + bonus;
-        if (score > curRow[ti].first)
-        {
-          curRow[ti] = {score, ti - 1};
-        }
-      }
-
-      // Skip (gap penalty = -1)
-      {
-        int score = prevRow[ti].first - 1;
-        if (score > curRow[ti].first)
-        {
-          curRow[ti] = {score, prevRow[ti].second};
-        }
-      }
-    }
-    // Copy (not move): a moved-from curRow would be empty, so the next
-    // iteration's curRow.fill() would be a no-op and the curRow[ti] accesses
-    // below would go out of bounds. Keep curRow sized n+1 every iteration.
-    prevRow = curRow;
-  }
-
-  int bestScore = prevRow[n].first;
-  int score = qMax(0, bestScore);
-  outScore = score;
-  return score >= 60; // minimum threshold (瀵归綈涓婃父 minimum score)
-}
-
-} // anonymous namespace
-
+// Fuzzy matching helper based on upstream OptionsSearcher / fts_fuzzy_match:
+// the scoring rule itself now lives in ConfigOptionModel.cpp (anonymous
+// namespace, shared with matchesFilter()) so the legacy VM filter and the
+// QML-side ConfigOptionFilterProxy cannot drift apart.
 QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const QString &searchText, bool advancedMode) const
 {
   // Dispatch to the correct option model via the category/tier parameter.
@@ -1873,38 +1847,16 @@ QList<int> ConfigViewModel::filterOptionIndices(const QString &category, const Q
   QList<int> result;
   result.reserve(n);
 
-  const bool matchAll = category.isEmpty() || category == QStringLiteral("all");
   const QString needle = searchText.toLower();
-  const bool useFuzzy = needle.length() >= 2;
 
   for (int i = 0; i < n; ++i)
   {
-    if (!needle.isEmpty())
-    {
-      bool matched = false;
-      if (useFuzzy)
-      {
-        int score = 0;
-        matched = fuzzyMatch(needle, model->optLabel(i).toLower(), score);
-        if (!matched)
-          matched = fuzzyMatch(needle, model->optKey(i).toLower(), score);
-      }
-      else
-      {
-        matched = model->optLabel(i).toLower().contains(needle) ||
-              model->optKey(i).toLower().contains(needle);
-      }
-      if (!matched)
-        continue;
-    }
-
-    // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop).
+    // Search + mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop).
     // Simple mode (advancedMode=false) shows only comSimple options; advanced mode
     // (advancedMode=true) is a SUPERSET and shows comSimple + comAdvanced + comDevelop.
     // Never exclude a simple-mode option from advanced mode.
-    const int optMode = model->optMode(i);
-    if (optMode >= 1 && !advancedMode)
-      continue; // Advanced/Develop-only options hidden in simple mode
+    if (!model->matchesFilter(i, needle, advancedMode))
+      continue;
 
     result.append(i);
   }
@@ -2247,6 +2199,7 @@ bool ConfigViewModel::resetOptionToLevel(const QString &key, int level)
   case 2: valueSources_[key] = QStringLiteral("filament"); break;
   case 3: valueSources_[key] = QStringLiteral("printer"); break;
   }
+  pushValueSourcesToModels();
 
   emit stateChanged();
   return true;

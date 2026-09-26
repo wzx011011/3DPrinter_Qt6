@@ -78,7 +78,14 @@ public:
     ModeRole,
     NullableRole,
     IsVectorRole,
-    SidetextRole
+    SidetextRole,
+    // Extended presentation roles (UserRole+19..+22). Consumed directly by
+    // delegates through the ConfigOptionFilterProxy (which forwards unknown
+    // roles to the source model).
+    DisplayLabelRole,   // zh_CN row label: OptionLabelTable::rowLabels(), falls back to label
+    UnitRole,           // optUnit(i) — sidetext-first + key-heuristic unit string
+    ValueSourceRole,    // "printer" | "filament" | "print" | "default" mirror (see setValueSources)
+    SourceRowRole       // source row index — survives proxy re-mapping (optIdx write path)
   };
   Q_ENUM(Roles)
 
@@ -154,6 +161,33 @@ public:
   /// Returns indices filtered by option group
   Q_INVOKABLE QList<int> filterIndicesByGroup(const QList<int> &indices, const QString &group) const;
 
+  // ── Row-wise filter predicates (shared with ConfigOptionFilterProxy) ────
+  // Same semantics as the matching arms of ConfigViewModel::filterOptionIndices
+  // / filterIndicesByPage / filterIndicesByGroup so the QML-side proxy and the
+  // legacy VM helpers cannot drift apart.
+  /// Search match: empty needle always matches; needles >= 2 chars use the
+  /// upstream-style fuzzy score (>= 60) over optLabel+optKey, shorter needles
+  /// use substring. optMode >= 1 rows are rejected when advancedMode is false.
+  bool matchesFilter(int row, const QString &needle, bool advancedMode) const;
+  /// Page match: empty page always matches; option page falls back to
+  /// pageForCategory when unset (same as filterIndicesByPage).
+  bool matchesPage(int row, const QString &page) const;
+  /// Group match: empty group always matches (same as filterIndicesByGroup).
+  bool matchesGroup(int row, const QString &group) const;
+  /// Number of rows that would survive the process-page projection:
+  /// matchesFilter && matchesPage(page) && (page,group) has a process
+  /// definition containing the option key. Equivalent to the per-group
+  /// orderedProcessIndicesForGroup non-empty check aggregated over groups.
+  Q_INVOKABLE int processProjectedRowCount(const QString &page, const QString &needle, bool advancedMode) const;
+  /// Position of the option key inside processGroupDefinition(page,group)
+  /// ->optionKeys (upstream manifest order); INT_MAX when absent.
+  int processOptionRank(const QString &page, const QString &group, int row) const;
+
+  /// Mirror of ConfigViewModel::valueSources_ ("printer"/"filament"/"print"/
+  /// "default" per key). Stores the map, diffs per row and emits dataChanged
+  /// with ValueSourceRole only for rows whose source actually changed.
+  void setValueSources(const QHash<QString, QString> &sources);
+
   QHash<QString, QVariant> valuesByKey() const;
   QHash<QString, QVariant> defaultValuesByKey() const;
   void resetToDefaults();
@@ -181,10 +215,15 @@ signals:
 private:
   int findIndex(const QString &key) const;
   void assignProcessHierarchyMetadata();
+  /// Real write path behind setData(ValueRole) and the setValue(row,value)
+  /// Q_INVOKABLE wrapper: value write → dirty bookkeeping → dataChanged →
+  /// optionValueChanged → dataVersion tick.
+  void writeValue(int row, const QVariant &value);
   QList<ConfigOption> m_options;
   QSet<QString> m_baseReadonlyKeys;
   QHash<QString, QVariant> m_defaultValues;
   QHash<QString, QVariant> m_referenceValues;
   QSet<QString> m_dirtyKeys; ///< 被修改过的选项 key
+  QHash<QString, QString> m_valueSourceByKey; ///< valueSource mirror (see setValueSources)
   int m_dataVersion = 0;
 };

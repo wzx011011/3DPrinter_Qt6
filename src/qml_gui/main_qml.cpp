@@ -20,6 +20,7 @@
 #include "qml_gui/Renderer/RhiBackendSelector.h"
 #include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
+#include "qml_gui/Models/ConfigOptionFilterProxy.h"
 #include "core/debug/CrashHandlerWin.h"
 
 #ifdef Q_OS_WIN
@@ -438,6 +439,10 @@ int main(int argc, char *argv[])
     qmlRegisterType<RhiViewport>("OWzxGL", 1, 0, "GLViewport");
   else
     qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
+
+  // Per-page C++ filter proxies for the params UIs (LeftSidebar pages and
+  // SettingsDialog lists) are declared in place from QML.
+  qmlRegisterType<ConfigOptionFilterProxy>("OWzx.Models", 1, 0, "ConfigOptionFilterProxy");
 
   BackendContext backend;
   // Phase 241 (PAGE-04): the persisted startup-page preference

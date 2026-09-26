@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import OWzx.Models 1.0
 import ".."
 import "../controls"
 import "../components"
@@ -10,14 +11,15 @@ Rectangle {
     id: root
     required property var editorVm
     required property var configVm
-    // G-07: filament compatibility comes from a Q_INVOKABLE (one-shot in
-    // bindings). Bump this tick on every configVm state change so the row
-    // decorations re-evaluate instead of keeping stale preset-compat state.
-    property int compatRefreshTick: 0
-    Connections {
-        target: root.configVm
-        function onStateChanged() { ++root.compatRefreshTick }
-    }
+    // G-07 (v5.17): filament compatibility now comes from the NOTIFY-ful
+    // configVm.filamentSlotCompatibility list property (item i =
+    // isFilamentCompatible(filamentPresetForSlot(i))), so the row
+    // decorations below re-evaluate through normal binding dependencies
+    // instead of a manual stateChanged tick. slotIncompatible() at the root
+    // maps the list, falling back to list[0] for out-of-range rows — the
+    // same currentFilamentPreset_ fallback filamentPresetForSlot applies,
+    // so the retired per-slot compatibility Q_INVOKABLE's semantics are
+    // preserved exactly.
     property string processCategory: ""
     signal exportRequested()
 
@@ -47,23 +49,21 @@ Rectangle {
         return root.configVm.printOptions
     }
     readonly property string paramsTier: "print"
-    property var paramsFilteredIndices: []
+    // Upstream six process pages incl. Speed
+    // (Tab.cpp:2637,2772,2842,2914,2981,3036). Shared by the tab strip and
+    // the one-persistent-page-per-tab host below.
+    readonly property var paramsTabs: [
+        { key: "Quality", label: qsTr("质量") },
+        { key: "Strength", label: qsTr("强度") },
+        { key: "Speed", label: qsTr("速度") },
+        { key: "Support", label: qsTr("支撑") },
+        { key: "Multimaterial", label: qsTr("材料") },
+        { key: "Others", label: qsTr("其他") }
+    ]
 
     color: panelSurface
     radius: 0
     border.width: 0
-
-    function rebuildParamsFilter() {
-        if (!root.configVm || !root.paramsOptionModel) {
-            root.paramsFilteredIndices = []
-            return
-        }
-        var indices = root.configVm.filterOptionIndices(
-                    root.paramsTier, root.paramsSearchText, true)
-        if (root.paramsCurrentTab !== "")
-            indices = root.paramsOptionModel.filterIndicesByPage(indices, root.paramsCurrentTab)
-        root.paramsFilteredIndices = indices
-    }
 
     // Sidebar layout contract (upstream Plater.cpp:2425-2429,3245,3257): the
     // sidebar itself does not scroll as one column. Printer/filament/process
@@ -313,9 +313,8 @@ Rectangle {
                 radius: 4
                 color: root.sectionSurface
                 border.width: 1
-                border.color: root.compatRefreshTick >= 0
-                    ? (root.configVm && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index) ? Theme.statusError : root.dividerColor)
-                    : root.dividerColor
+                border.color: root.slotIncompatible(filamentPixelRow.index)
+                    ? Theme.statusError : root.dividerColor
 
                 RowLayout {
                     anchors.fill: parent
@@ -376,8 +375,8 @@ Rectangle {
                     }
 
                     Rectangle {
-                        visible: root.compatRefreshTick >= 0 && !!root.configVm
-                                 && !root.configVm.isFilamentCompatibleForSlot(filamentPixelRow.index)
+                        visible: !!root.configVm
+                                 && root.slotIncompatible(filamentPixelRow.index)
                         Layout.preferredWidth: 8
                         Layout.preferredHeight: 8
                         radius: 4
@@ -502,16 +501,7 @@ Rectangle {
                     spacing: 14
 
                     Repeater {
-                        // Upstream six process pages incl. Speed
-                        // (Tab.cpp:2637,2772,2842,2914,2981,3036).
-                        model: [
-                            { key: "Quality", label: qsTr("质量") },
-                            { key: "Strength", label: qsTr("强度") },
-                            { key: "Speed", label: qsTr("速度") },
-                            { key: "Support", label: qsTr("支撑") },
-                            { key: "Multimaterial", label: qsTr("材料") },
-                            { key: "Others", label: qsTr("其他") }
-                        ]
+                        model: root.paramsTabs
                         delegate: Item {
                             id: paramsTabDelegate
                             required property var modelData
@@ -540,10 +530,10 @@ Rectangle {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.paramsCurrentTab = paramsTabDelegate.modelData.key
-                                    root.rebuildParamsFilter()
-                                }
+                                // Tab flips only change visibility — the
+                                // per-page proxy inputs (page/searchText) are
+                                // untouched, so no re-filtering happens.
+                                onClicked: root.paramsCurrentTab = paramsTabDelegate.modelData.key
                             }
                         }
                     }
@@ -557,61 +547,141 @@ Rectangle {
                     color: "#4c4c55"
                 }
 
-                ListView {
-                    id: paramsList
+                // One persistent page per process tab (upstream Tab.cpp keeps
+                // a widget tree per page and only shows/hides it — pages are
+                // built once, never rebuilt on a switch). Each page loads on
+                // its first visit; a flip to an already-built page is a
+                // visibility change only, so repeated switching stays free.
+                Item {
+                    id: paramsPagesHost
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    clip: true
-                    model: root.paramsFilteredIndices
-                    spacing: 0
 
-                    ScrollBar.vertical: ScrollBar {
-                        visible: paramsList.contentHeight > paramsList.height
-                    }
+                    Repeater {
+                        model: root.paramsTabs
+                        delegate: Item {
+                            id: paramsPageHost
+                            required property var modelData
+                            readonly property string pageKey: paramsPageHost.modelData.key
+                            readonly property bool isCurrent: root.paramsCurrentTab === paramsPageHost.pageKey
+                            property bool visited: paramsPageHost.isCurrent
+                            onIsCurrentChanged: if (paramsPageHost.isCurrent) paramsPageHost.visited = true
+                            width: parent.width
+                            height: parent.height
+                            // QQuickItemView releases every delegate when the
+                            // view's effective visibility drops, so a
+                            // visible=false flip silently destroyed and
+                            // rebuilt the incoming page's rows on every
+                            // switch. Keep pages effectively visible and
+                            // shift the non-current ones out of the window
+                            // instead: the ListView's own clip keeps them
+                            // culled and unhittable, so a flip is a pure
+                            // reposition and revisits reuse the live rows.
+                            x: paramsPageHost.isCurrent ? 0 : -100000
 
-                    delegate: Item {
-                        id: paramsDelegate
-                        required property int index
-                        required property var modelData
+                            Loader {
+                                anchors.fill: parent
+                                active: paramsPageHost.visited
+                                sourceComponent: ListView {
+                                    id: paramsPage
+                                    anchors.fill: parent
+                                    clip: true
+                                    spacing: 0
+                                    // Filter-input changes reset delegates;
+                                    // cacheBuffer 0 keeps that reset to the
+                                    // rows actually on screen.
+                                    cacheBuffer: 0
+                                    // Per-page C++ filter proxy (replaces the
+                                    // QML-side index-array filter
+                                    // orchestration). LeftSidebar is always
+                                    // advanced mode. Tab flips only toggle
+                                    // this page's visibility — no proxy input
+                                    // changes, so no re-filtering, and value
+                                    // dataChanged now refreshes visible rows
+                                    // in place.
+                                    model: ConfigOptionFilterProxy {
+                                        sourceModel: root.paramsOptionModel
+                                        page: paramsPageHost.pageKey
+                                        searchText: root.paramsSearchText
+                                        advancedMode: true
+                                    }
 
-                        readonly property int optIdx: modelData
-                        readonly property string optGroup: root.paramsOptionModel
-                            ? root.paramsOptionModel.optGroup(optIdx) : ""
-                        readonly property bool showGroupHeader: {
-                            if (paramsDelegate.index === 0) return optGroup !== ""
-                            var prevGroup = root.paramsOptionModel
-                                ? root.paramsOptionModel.optGroup(root.paramsFilteredIndices[paramsDelegate.index - 1]) : ""
-                            return optGroup !== "" && optGroup !== prevGroup
-                        }
+                                    ScrollBar.vertical: ScrollBar {
+                                        visible: paramsPage.contentHeight > paramsPage.height
+                                    }
 
-                        width: paramsList.width
-                        height: optRow.totalHeight
+                                    delegate: Item {
+                                        id: paramsDelegate
+                                        required property int index
+                                        required property int optIdx
+                                        required property string optGroup
+                                        required property string optPrevGroup
+                                        required property string optType
+                                        required property string optKey
+                                        required property string displayLabel
+                                        required property var optValue
+                                        required property double optMin
+                                        required property double optMax
+                                        required property double optStep
+                                        required property bool optReadonly
+                                        required property bool optDirty
+                                        required property string optTooltip
+                                        required property string optUnit
+                                        required property string optSidetext
+                                        required property bool optNullable
+                                        required property bool optIsVector
+                                        required property var optEnumLabels
+                                        required property string valueSource
 
-                        OptionRow {
-                            id: optRow
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            optionModel: root.paramsOptionModel
-                            optIdx: paramsDelegate.optIdx
-                            rowIndex: paramsDelegate.index
-                            searchText: root.paramsSearchText
-                            showGroupHeader: paramsDelegate.showGroupHeader
-                            oGroup: paramsDelegate.optGroup
-                            compact: true
-                            compactLabelWidth: 150
-                            compactFieldWidth: 86
-                            compactEnumWidth: 132
-                            valueSource: {
-                                if (!root.configVm || !root.paramsOptionModel) return ""
-                                var key = root.paramsOptionModel.optKey(paramsDelegate.optIdx)
-                                return root.configVm.valueSourceForKey(key)
+                                        // optPrevGroup is the proxy-fed
+                                        // GroupRole of the previous *accepted*
+                                        // row; indexing neighbors by source
+                                        // row is wrong under a filtered proxy.
+                                        readonly property bool showGroupHeader:
+                                            optGroup !== ""
+                                            && (index === 0 || optGroup !== optPrevGroup)
+
+                                        width: paramsPage.width
+                                        height: optRow.totalHeight
+
+                                        OptionRow {
+                                            id: optRow
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            optionModel: root.paramsOptionModel
+                                            optIdx: paramsDelegate.optIdx
+                                            rowIndex: paramsDelegate.index
+                                            searchText: root.paramsSearchText
+                                            showGroupHeader: paramsDelegate.showGroupHeader
+                                            oGroup: paramsDelegate.optGroup
+                                            compact: true
+                                            compactLabelWidth: 150
+                                            compactFieldWidth: 86
+                                            compactEnumWidth: 132
+                                            valueSource: paramsDelegate.valueSource
+                                            oType: paramsDelegate.optType
+                                            oKey: paramsDelegate.optKey
+                                            oLabel: paramsDelegate.displayLabel
+                                            oVal: paramsDelegate.optValue
+                                            oMin: paramsDelegate.optMin
+                                            oMax: paramsDelegate.optMax
+                                            oStep: paramsDelegate.optStep
+                                            oRO: paramsDelegate.optReadonly
+                                            oDirty: paramsDelegate.optDirty
+                                            oTip: paramsDelegate.optTooltip
+                                            oUnit: paramsDelegate.optUnit
+                                            oSidetext: paramsDelegate.optSidetext
+                                            oNullable: paramsDelegate.optNullable
+                                            oIsVector: paramsDelegate.optIsVector
+                                            oEnumLabels: paramsDelegate.optEnumLabels
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
-
-            Component.onCompleted: root.rebuildParamsFilter()
         }
     }
 
@@ -652,10 +722,8 @@ Rectangle {
                     font.pixelSize: Theme.fontSizeSM
                     placeholderText: qsTr("搜索设置...")
                     onTextChanged: {
-                        if (root.paramsSearchText !== text.trim()) {
+                        if (root.paramsSearchText !== text.trim())
                             root.paramsSearchText = text.trim()
-                            root.rebuildParamsFilter()
-                        }
                     }
                     onAccepted: paramsSearchDialog.accept()
                 }
@@ -678,7 +746,6 @@ Rectangle {
                         onClicked: {
                             searchDialogField.text = ""
                             root.paramsSearchText = ""
-                            root.rebuildParamsFilter()
                         }
                     }
                     CxButton {
@@ -915,6 +982,18 @@ Rectangle {
         if (index >= 0 && index < names.length)
             return names[index]
         return names[0]
+    }
+
+    // Filament slot compatibility (G-07): index into configVm
+    // .filamentSlotCompatibility; rows beyond the list fall back to list[0],
+    // mirroring filamentPresetForSlot's out-of-range fallback to
+    // currentFilamentPreset_ (an out-of-range slot judges identically to
+    // slot 0).
+    // Property reads inside the function are still tracked by the calling
+    // bindings, so filamentSlotCompatibilityChanged re-evaluates them.
+    function slotIncompatible(i) {
+        var list = root.configVm ? root.configVm.filamentSlotCompatibility : []
+        return list.length > i ? list[i] === 0 : (list.length > 0 ? list[0] === 0 : false)
     }
 
     function filamentColor(index) {

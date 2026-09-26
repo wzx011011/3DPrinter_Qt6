@@ -1,8 +1,12 @@
 #include "ConfigOptionModel.h"
 
+#include "qml_gui/Models/OptionLabelTable.h"
+
 #include <QByteArray>
 #include <QDebug>
+#include <QPair>
 #include <QVector>
+#include <climits>
 #include <initializer_list>
 
 #ifdef HAS_LIBSLIC3R
@@ -242,6 +246,16 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
     return o.isVector;
   case SidetextRole:
     return o.sidetext;
+  case DisplayLabelRole:
+    // zh_CN row label table (former OptionLabels.js ROW_LABELS); keys outside
+    // the table fall back to the model label.
+    return OptionLabelTable::rowLabels().value(o.key, o.label);
+  case UnitRole:
+    return optUnit(index.row());
+  case ValueSourceRole:
+    return m_valueSourceByKey.value(o.key, QStringLiteral("default"));
+  case SourceRowRole:
+    return index.row();
   default:
     return {};
   }
@@ -261,6 +275,9 @@ bool ConfigOptionModel::setData(const QModelIndex &index, const QVariant &value,
   case GroupRole:
     o.group = value.toString();
     emit dataChanged(index, index, {GroupRole});
+    return true;
+  case ValueRole:
+    writeValue(index.row(), value);
     return true;
   default:
     return false;
@@ -288,6 +305,10 @@ QHash<int, QByteArray> ConfigOptionModel::roleNames() const
       {NullableRole, "optNullable"},
       {IsVectorRole, "optIsVector"},
       {SidetextRole, "optSidetext"},
+      {DisplayLabelRole, "displayLabel"},
+      {UnitRole, "optUnit"},
+      {ValueSourceRole, "valueSource"},
+      {SourceRowRole, "optIdx"},
   };
 }
 
@@ -442,7 +463,7 @@ int ConfigOptionModel::dirtyCount() const
   return m_dirtyKeys.size();
 }
 
-void ConfigOptionModel::setValue(int row, const QVariant &value)
+void ConfigOptionModel::writeValue(int row, const QVariant &value)
 {
   if (row < 0 || row >= m_options.size())
     return;
@@ -452,21 +473,25 @@ void ConfigOptionModel::setValue(int row, const QVariant &value)
   const QVariant referenceValue = m_referenceValues.contains(key)
       ? m_referenceValues.value(key)
       : m_defaultValues.value(key);
-  const bool wasDirty = m_dirtyKeys.contains(key);
   const bool nowDirty = (referenceValue != value);
   if (nowDirty)
     m_dirtyKeys.insert(key);
   else
     m_dirtyKeys.remove(key);
+  // 恒发双角色（ValueRole + DirtyRole）：较原先的按翻转分支是良性超集，
+  // 保证经代理转发的 delegate 两种角色都会重估。
   const QModelIndex idx = index(row);
-  const QList<int> roles = {ValueRole};
-  if (wasDirty != nowDirty)
-    emit dataChanged(idx, idx, {ValueRole, DirtyRole});
-  else
-    emit dataChanged(idx, idx, roles);
+  emit dataChanged(idx, idx, {ValueRole, DirtyRole});
   emit optionValueChanged(key, value);
   ++m_dataVersion;
   emit dataVersionChanged();
+}
+
+void ConfigOptionModel::setValue(int row, const QVariant &value)
+{
+  // Thin wrapper over the setData(ValueRole) write path so QML invokers
+  // (OptionRow) and C++ callers keep the same behavior.
+  setData(index(row), value, ValueRole);
 }
 
 int ConfigOptionModel::indexOfKey(const QString &key) const
@@ -567,6 +592,158 @@ QList<int> ConfigOptionModel::filterIndicesByGroup(const QList<int> &indices, co
       result.append(idx);
   }
   return result;
+}
+
+// Fuzzy matching helper based on upstream OptionsSearcher / fts_fuzzy_match.
+// Migrated verbatim from the ConfigViewModel.cpp anonymous namespace so the
+// row-wise matchesFilter() below and ConfigOptionFilterProxy share the exact
+// scoring rule the legacy VM filter used.
+namespace {
+
+// Subsequence matching with scoring.
+static bool fuzzyMatch(const QString &pattern, const QString &text, int &outScore)
+{
+  const int m = pattern.size(), n = text.size();
+  if (m == 0 || n == 0) { outScore = 0; return false; }
+
+  // Quick reject: if all pattern chars must appear in text
+  QVector<bool> charUsed(m, false);
+  for (int pi = 0; pi < m; ++pi)
+  {
+    QChar pc = pattern[pi].toLower();
+    bool found = false;
+    for (int ti = 0; ti < n && !found; ++ti)
+    {
+      if (text[ti].toLower() == pc) found = true;
+    }
+    if (!found) { outScore = 0; return false; }
+  }
+
+  // Dynamic programming: dp[i][j] = best score matching pattern[0..i-1] against text[0..j-1]
+  // dp[i][j].first = score, .second = position of last match in text
+  QVector<QPair<int,int>> prevRow(n + 1, {0, -1}), curRow(n + 1, {0, -1});
+
+  for (int pi = 1; pi <= m; ++pi)
+  {
+    curRow.fill({0, -1});
+    const QChar pc = pattern[pi - 1].toLower();
+
+    for (int ti = 1; ti <= n; ++ti)
+    {
+      // Match at current position
+      if (text[ti - 1].toLower() == pc)
+      {
+        int prevScore = prevRow[ti - 1].first;
+        int prevPos = prevRow[ti - 1].second;
+        int bonus = 15; // sequential bonus (瀵归綈涓婃父 sequential bonus)
+        if (ti > 1 && prevPos == ti - 2) bonus = 25; // consecutive chars
+        int score = prevScore + bonus;
+        if (score > curRow[ti].first)
+        {
+          curRow[ti] = {score, ti - 1};
+        }
+      }
+
+      // Skip (gap penalty = -1)
+      {
+        int score = prevRow[ti].first - 1;
+        if (score > curRow[ti].first)
+        {
+          curRow[ti] = {score, prevRow[ti].second};
+        }
+      }
+    }
+    // Copy (not move): a moved-from curRow would be empty, so the next
+    // iteration's curRow.fill() would be a no-op and the curRow[ti] accesses
+    // below would go out of bounds. Keep curRow sized n+1 every iteration.
+    prevRow = curRow;
+  }
+
+  int bestScore = prevRow[n].first;
+  int score = qMax(0, bestScore);
+  outScore = score;
+  return score >= 60; // minimum threshold (瀵归綈涓婃父 minimum score)
+}
+
+} // anonymous namespace
+
+bool ConfigOptionModel::matchesFilter(int row, const QString &needle, bool advancedMode) const
+{
+  if (row < 0 || row >= m_options.size())
+    return false;
+  const ConfigOption &o = m_options[row];
+
+  // Same semantics as the search arm of ConfigViewModel::filterOptionIndices:
+  // needles >= 2 chars use the fuzzy score (>= 60), shorter needles substring;
+  // fields are optLabel + optKey, both lowered.
+  const QString loweredNeedle = needle.toLower();
+  if (!loweredNeedle.isEmpty())
+  {
+    const bool useFuzzy = loweredNeedle.length() >= 2;
+    bool matched = false;
+    if (useFuzzy)
+    {
+      int score = 0;
+      matched = fuzzyMatch(loweredNeedle, o.label.toLower(), score);
+      if (!matched)
+        matched = fuzzyMatch(loweredNeedle, o.key.toLower(), score);
+    }
+    else
+    {
+      matched = o.label.toLower().contains(loweredNeedle) ||
+                o.key.toLower().contains(loweredNeedle);
+    }
+    if (!matched)
+      return false;
+  }
+
+  // Mode filter (upstream ConfigOptionMode: 0=comSimple, 1=comAdvanced, 2=comDevelop).
+  // Simple mode (advancedMode=false) shows only comSimple options; advanced mode
+  // (advancedMode=true) is a SUPERSET and shows comSimple + comAdvanced + comDevelop.
+  // Never exclude a simple-mode option from advanced mode.
+  if (o.mode >= 1 && !advancedMode)
+    return false; // Advanced/Develop-only options hidden in simple mode
+
+  return true;
+}
+
+bool ConfigOptionModel::matchesPage(int row, const QString &page) const
+{
+  if (row < 0 || row >= m_options.size())
+    return false;
+  if (page.isEmpty())
+    return true;
+  // Same page resolution as filterIndicesByPage: explicit per-option page,
+  // otherwise the legacy category-derived fallback.
+  const ConfigOption &o = m_options[row];
+  const QString resolvedPage = o.page.isEmpty() ? pageForCategory(o.category) : o.page;
+  return resolvedPage == page;
+}
+
+bool ConfigOptionModel::matchesGroup(int row, const QString &group) const
+{
+  if (row < 0 || row >= m_options.size())
+    return false;
+  if (group.isEmpty())
+    return true;
+  return m_options[row].group == group;
+}
+
+void ConfigOptionModel::setValueSources(const QHash<QString, QString> &sources)
+{
+  // Mirror of ConfigViewModel::valueSources_. Diff per row and only emit for
+  // rows whose source actually changed (preset switches rarely change the
+  // per-key source, so this usually stays silent).
+  const QHash<QString, QString> previous = m_valueSourceByKey;
+  m_valueSourceByKey = sources;
+
+  for (int i = 0; i < m_options.size(); ++i)
+  {
+    const QString &key = m_options[i].key;
+    if (sources.value(key, QStringLiteral("default")) == previous.value(key, QStringLiteral("default")))
+      continue;
+    emit dataChanged(index(i), index(i), {ValueSourceRole});
+  }
 }
 
 QHash<QString, QVariant> ConfigOptionModel::valuesByKey() const
@@ -1351,6 +1528,41 @@ QList<int> ConfigOptionModel::orderedProcessIndicesForGroup(const QList<int> &ca
       result.append(candidate.value());
   }
   return result;
+}
+
+int ConfigOptionModel::processProjectedRowCount(const QString &page, const QString &needle, bool advancedMode) const
+{
+  // Count of rows surviving the same projection the per-group proxies apply:
+  // search filter -> page filter -> the (page, group) process definition must
+  // exist and contain the option key. Equivalent to aggregating the
+  // orderedProcessIndicesForGroup(...) non-empty check over all groups of the
+  // page, so an empty count means no group row would be visible.
+  int count = 0;
+  for (int i = 0; i < m_options.size(); ++i)
+  {
+    if (!matchesFilter(i, needle, advancedMode))
+      continue;
+    if (!matchesPage(i, page))
+      continue;
+    const ProcessGroupDefinition *definition = processGroupDefinition(page, m_options[i].group);
+    if (!definition || !definition->optionKeys.contains(m_options[i].key))
+      continue;
+    ++count;
+  }
+  return count;
+}
+
+int ConfigOptionModel::processOptionRank(const QString &page, const QString &group, int row) const
+{
+  // Upstream manifest order (processGroupDefinition ->optionKeys position);
+  // rows outside the manifest sort last.
+  if (row < 0 || row >= m_options.size())
+    return INT_MAX;
+  const ProcessGroupDefinition *definition = processGroupDefinition(page, group);
+  if (!definition)
+    return INT_MAX;
+  const int rank = definition->optionKeys.indexOf(m_options[row].key);
+  return rank >= 0 ? rank : INT_MAX;
 }
 
 QStringList ConfigOptionModel::processMappingErrors() const
