@@ -48,17 +48,24 @@ void rhiTrace(const char *milestone)
 //   offset 76:  float gizmoScale (4 bytes; packs into the vec3's std140 tail)
 //   offset 80:  mat4 view        (64 bytes; v5.15 MODELLIT eye-space lighting)
 //   offset 144: float printVolumeType       (P15.3 OUTOFBED; 0 rect, 1 circle,
-//                                           <0 disabled -- gouraud.fs:13)
+//                                           <0 ungated -- gouraud.fs:13)
 //   offset 160: vec4 printVolumeXyData     (rect: minX/minZ/maxX/maxZ Qt scene;
 //                                           circle: cx, cz, radius, 0)
 //   offset 176: vec2 printVolumeZData     (height bounds on the Qt Y axis)
+//   offset 184: float emissionFactor      (SHADER-PORT v6; gouraud_light.fs:4,
+//                                           additive; prepare passes = 0.0)
+//   offset 188: float mixTarget           (SHADER-PORT v6; 0.0 = outside mixes
+//                                           toward ZERO -- model volumes,
+//                                           gouraud.fs:263; 1.0 = toward WHITE --
+//                                           bed frame, hotbed.fs:43)
 // Total = 192 bytes. The first 80 bytes are bit-identical to the mesh/gizmo
 // std140 CameraBlock; the v5.15 lit/bed shaders extend the block with the
 // raw view matrix at offset 80 (declared as vec4 gizmoCenter + mat4 view,
-// which reads the same bytes at [64,80)); the P15.3 model_lit fragment stage
+// which reads the same bytes at [64,80)); the model_lit fragment stage
 // appends the print volume at [144,192). The 256-byte backing buffer is
 // allocated elsewhere (D3D12 cbuffer alignment); only the first 192 bytes
-// are written.
+// are written. uploadCameraUniform also writes two per-draw variants of this
+// pack (bed frame mixTarget=1, axes printVolumeType=-1) into their own UBOs.
 struct CameraBlockPacked {
   // P15.3 (OUTOFBED): explicit float arrays keep the std140 offsets stable
   // (QVector3D/QVector4D carry 16-byte ABI alignment that shifts the fields).
@@ -69,7 +76,9 @@ struct CameraBlockPacked {
   float printVolumeType;  // offset 144, 4 bytes (P15.3 OUTOFBED)
   float printVolumePad[3];
   float printVolumeXy[4]; // offset 160
-  float printVolumeZ[4];  // offset 176 (vec2 in GLSL reads xy)
+  float printVolumeZ[2];  // offset 176 (vec2 in GLSL reads xy)
+  float emissionFactor;   // offset 184 (SHADER-PORT v6)
+  float mixTarget;        // offset 188 (SHADER-PORT v6)
 };
 // QMatrix4x4 (float[16]) and QVector3D (float[3]) may carry ABI alignment
 // padding on some compilers, so the C++ struct can be larger than the std140
@@ -84,6 +93,10 @@ static_assert(offsetof(CameraBlockPacked, printVolumeXy) == 160,
               "printVolumeXyData must land at the std140 offset 160");
 static_assert(offsetof(CameraBlockPacked, printVolumeZ) == 176,
               "printVolumeZData must land at the std140 offset 176");
+static_assert(offsetof(CameraBlockPacked, emissionFactor) == 184,
+              "emissionFactor must land at the std140 offset 184");
+static_assert(offsetof(CameraBlockPacked, mixTarget) == 188,
+              "mixTarget must land at the std140 offset 188");
 
 RhiViewportRenderer::RhiViewportRenderer() = default;
 
@@ -1347,6 +1360,11 @@ void RhiViewportRenderer::releaseResources()
   m_assemblyMeasureValueBuffer.reset();
   m_srb.reset();
   m_cameraUniformBuffer.reset();
+  // SHADER-PORT v6: per-draw uniform variants ride the same lifecycle.
+  m_bedLitSrb.reset();
+  m_axesLitSrb.reset();
+  m_bedLitUniformBuffer.reset();
+  m_axesLitUniformBuffer.reset();
   m_highlightVertexBuffer.reset();
   m_modelVertexBuffer.reset();
   m_bedLineBuffer.reset();
@@ -1412,6 +1430,8 @@ void RhiViewportRenderer::releaseResources()
   m_modelVertexBufferBytes = 0;
   m_highlightVertexBufferBytes = 0;
   m_cameraUniformBufferBytes = 0;
+  m_bedLitUniformBufferBytes = 0;
+  m_axesLitUniformBufferBytes = 0;
   m_gizmoVertexBufferBytes = 0;              // Phase 68
   m_cutPlaneFillBufferBytes = 0;
   m_cutPlaneOutlineBufferBytes = 0;
@@ -1972,9 +1992,13 @@ bool RhiViewportRenderer::ensureBedTexturePipeline()
   m_bedTexturePipeline->setShaderResourceBindings(m_bedTextureSrb.get());
   m_bedTexturePipeline->setVertexInputLayout(inputLayout);
   m_bedTexturePipeline->setRenderPassDescriptor(renderTarget()->renderPassDescriptor());
-  // Upstream draws the logo texture with depth writes off and (effectively)
-  // no depth test, layered over the already-drawn background + grid.
-  m_bedTexturePipeline->setDepthTest(false);
+  // SHADER-PORT v6: upstream draws the bed/logo texture with depth test ON
+  // (GL_DEPTH_TEST stays enabled from the PartPlate::render entry,
+  // PartPlate.cpp:3504; the re-enable in render_logo_texture is commented
+  // out at :773) and depth write OFF (glDepthMask(GL_FALSE), :778). With the
+  // test enabled, objects already drawn in front of the texture plane
+  // occlude it instead of the texture painting over them.
+  m_bedTexturePipeline->setDepthTest(true);
   m_bedTexturePipeline->setDepthWrite(false);
   QRhiGraphicsPipeline::TargetBlend blend;
   blend.enable = true;
@@ -2070,7 +2094,10 @@ void RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
   }
 
   // 3. Rebuild the bed quad when the bed rect changed. The quad uses the
-  // same scene mapping as buildSceneVertices: (x, 0, z=y_mm).
+  // same scene mapping as buildSceneVertices, lifted to GROUND_Z + 0.02
+  // (upstream texture height, PartPlate.cpp:6765/:3394; the plate fill is at
+  // GROUND_Z): with the v6 depth-test-on texture pipeline the quad must sit
+  // strictly above the coplanar y=0 fill/grid to pass the depth test.
   struct BedTextureVertex { float x, y, z, u, v; };
   const float left = m_prepareScene.bedOriginX();
   const float top = m_prepareScene.bedOriginY();
@@ -2083,7 +2110,7 @@ void RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
     // QRhi texture uploads keep the image's top row at v=0, so v grows with
     // the bed's +depth axis (image top edge maps to the bed's top edge).
     const auto append = [&](float x, float z, float u, float v) {
-      quad.append(BedTextureVertex{x, 0.0f, z, u, v});
+      quad.append(BedTextureVertex{x, 0.02f, z, u, v});
     };
     append(left,  top,    0.f, 0.f);
     append(right, top,    1.f, 0.f);
@@ -2235,6 +2262,12 @@ void RhiViewportRenderer::renderBedModel(QRhiCommandBuffer *cb)
       QRhiCommandBuffer::VertexInput(m_bedModelNormalBuffer.get(), 1),
   };
   cb->setVertexInput(0, 2, bindings);
+  // SHADER-PORT v6: hotbed.fs:43 -- the frame mixes toward WHITE outside the
+  // print volume (upstream draws it with the hotbed shader), so it binds the
+  // mixTarget=1 UBO variant. Falls back to the shared UBO (ZERO mix) if the
+  // variant could not be created.
+  if (m_bedLitSrb)
+    cb->setShaderResources(m_bedLitSrb.get());
   cb->draw(m_bedModelVertexCount);
   cb->setShaderResources(m_srb.get());
 }
@@ -2268,8 +2301,18 @@ void RhiViewportRenderer::renderAxes(QRhiCommandBuffer *cb)
       QRhiCommandBuffer::VertexInput(m_bedAxesNormalBuffer.get(), 1),
   };
   cb->setVertexInput(0, 2, bindings);
-  cb->setShaderResources(m_srb.get());
+  // SHADER-PORT v6: upstream draws the axes with gouraud_light, which has no
+  // print-volume test (the ungated volume encoding is type = -1,
+  // 3DScene.cpp:260) -- bind the variant UBO so the arrows at GROUND_Z
+  // (-0.04, below the zMin=0 bed plane) are not darkened by the model
+  // volumes' outside mix. Falls back to the shared UBO if unavailable.
+  cb->setShaderResources(m_axesLitSrb ? m_axesLitSrb.get() : m_srb.get());
   cb->draw(m_bedAxesVertexCount);
+  // Restore the shared camera UBO: setShaderResources bindings persist across
+  // setGraphicsPipeline, and the next draws (model body in the View3D branch;
+  // ghost shells / preview segments / tool marker in the preview branch) bind
+  // no SRB of their own -- they must not inherit printVolumeType=-1.
+  cb->setShaderResources(m_srb.get());
 }
 
 // P15.5 (SINK): sinking-contour bands (upstream GLVolume::SinkingContours,
@@ -2409,7 +2452,10 @@ void RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
       gpu->pipeline->setShaderResourceBindings(gpu->srb.get());
       gpu->pipeline->setVertexInputLayout(inputLayout);
       gpu->pipeline->setRenderPassDescriptor(renderTarget()->renderPassDescriptor());
-      gpu->pipeline->setDepthTest(false);
+      // SHADER-PORT v6: same depth semantics as the bed texture pipeline
+      // (test on / write off, PartPlate.cpp:3504+778). The quads already sit
+      // at GROUND_Z + 0.02 above the plate fill, so the enabled test passes.
+      gpu->pipeline->setDepthTest(true);
       gpu->pipeline->setDepthWrite(false);
       QRhiGraphicsPipeline::TargetBlend blend;
       blend.enable = true;
@@ -3683,11 +3729,68 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   packed.printVolumeXy[3] = pv.xyData.w();
   packed.printVolumeZ[0] = pv.zMin;
   packed.printVolumeZ[1] = pv.zMax;
-  packed.printVolumeZ[2] = 0.0f;
-  packed.printVolumeZ[3] = 0.0f;
+  // SHADER-PORT v6 (gouraud_light.fs:4 / gouraud.fs:263): the prepare scene
+  // never emits (emission 0.0; upstream passes 0.0 for models and the bed
+  // model, 3DBed.cpp:694, GCodeViewer.cpp:257) and model volumes mix toward
+  // ZERO outside the print volume.
+  packed.emissionFactor = 0.0f;
+  packed.mixTarget = 0.0f;
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0,
                                192, &packed);
   rhiTrace("seamB-packed");
+
+  // SHADER-PORT v6: the lit pipeline is shared by model volumes, the bed
+  // frame STL and the origin axes, but upstream binds different shaders (and
+  // therefore different print-volume semantics) per draw:
+  //   bed frame -> hotbed shader: outside mixes toward WHITE, 0.3333
+  //                (hotbed.fs:43) -- the light outer rim, not a dark edge;
+  //   axes      -> gouraud_light shader: NO print-volume test at all. The
+  //                upstream ungated-volume encoding is type = -1
+  //                (3DScene.cpp:260), which skips the mix in model_lit.frag.
+  // Both variants are the same 192-byte pack in their own UBO + SRB; the
+  // model-volume path keeps the shared m_srb. Failure falls back to the
+  // shared UBO (previous behavior) instead of failing the scene.
+  if (ensureBuffer(m_bedLitUniformBuffer, 256, m_bedLitUniformBufferBytes,
+                   QRhiBuffer::UniformBuffer)
+      && m_bedLitUniformBuffer) {
+    packed.mixTarget = 1.0f; // hotbed.fs:43
+    // Upstream pins the hotbed print-volume z lower bound to -1 regardless of
+    // the real volume (3DBed.cpp:706-708: zs[0] = -1 before
+    // set_uniform("print_volume.z_data", zs)), so frame parts below the bed
+    // plane pass the z check -- only XY-outside parts lift toward WHITE. The
+    // shared pack's zMin=0 would flag the whole sub-bed skirt.
+    packed.printVolumeZ[0] = -1.0f;
+    updates->updateDynamicBuffer(m_bedLitUniformBuffer.get(), 0, 192, &packed);
+    packed.mixTarget = 0.0f;
+    packed.printVolumeZ[0] = pv.zMin;
+    if (!m_bedLitSrb) {
+      m_bedLitSrb.reset(rhi()->newShaderResourceBindings());
+      m_bedLitSrb->setBindings({
+          QRhiShaderResourceBinding::uniformBuffer(
+              0, QRhiShaderResourceBinding::VertexStage
+                     | QRhiShaderResourceBinding::FragmentStage,
+              m_bedLitUniformBuffer.get())});
+      if (!m_bedLitSrb->create())
+        m_bedLitSrb.reset();
+    }
+  }
+  if (ensureBuffer(m_axesLitUniformBuffer, 256, m_axesLitUniformBufferBytes,
+                   QRhiBuffer::UniformBuffer)
+      && m_axesLitUniformBuffer) {
+    packed.printVolumeType = -1.0f; // gouraud_light has no print-volume test
+    updates->updateDynamicBuffer(m_axesLitUniformBuffer.get(), 0, 192, &packed);
+    packed.printVolumeType = float(pv.type);
+    if (!m_axesLitSrb) {
+      m_axesLitSrb.reset(rhi()->newShaderResourceBindings());
+      m_axesLitSrb->setBindings({
+          QRhiShaderResourceBinding::uniformBuffer(
+              0, QRhiShaderResourceBinding::VertexStage
+                     | QRhiShaderResourceBinding::FragmentStage,
+              m_axesLitUniformBuffer.get())});
+      if (!m_axesLitSrb->create())
+        m_axesLitSrb.reset();
+    }
+  }
 
   m_cameraUniformBufferUploaded = true;
   return true;

@@ -240,6 +240,16 @@ private:
   std::unique_ptr<QRhiBuffer> m_sequentialHeightFillBuffer;
   std::unique_ptr<QRhiBuffer> m_cameraUniformBuffer;
   std::unique_ptr<QRhiShaderResourceBindings> m_srb;
+  // SHADER-PORT v6: per-draw variants of the shared camera UBO for the lit
+  // draws whose upstream shader differs from the model volumes (gouraud):
+  // the bed frame uses hotbed (outside mix toward WHITE, hotbed.fs:43) and
+  // the axes use gouraud_light (no print-volume test; ungated type=-1,
+  // 3DScene.cpp:260). Written by uploadCameraUniform, consumed by
+  // renderBedModel / renderAxes; null variants fall back to m_srb.
+  std::unique_ptr<QRhiBuffer> m_bedLitUniformBuffer;
+  std::unique_ptr<QRhiShaderResourceBindings> m_bedLitSrb;
+  std::unique_ptr<QRhiBuffer> m_axesLitUniformBuffer;
+  std::unique_ptr<QRhiShaderResourceBindings> m_axesLitSrb;
   std::unique_ptr<QRhiGraphicsPipeline> m_fillPipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_linePipeline;
   // Translucent cut/wipe/highlight pipelines test depth but do not write it,
@@ -432,6 +442,8 @@ private:
   quint32 m_sequentialClearanceFillBytes = 0;
   quint32 m_sequentialHeightFillBytes = 0;
   quint32 m_cameraUniformBufferBytes = 0;
+  quint32 m_bedLitUniformBufferBytes = 0;
+  quint32 m_axesLitUniformBufferBytes = 0;
   quint32 m_bedFillVertexCount = 0;
   quint32 m_bedLineVertexCount = 0;
   quint32 m_bedBottomLineVertexCount = 0;
