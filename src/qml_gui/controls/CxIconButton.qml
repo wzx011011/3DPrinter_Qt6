@@ -37,31 +37,44 @@ ToolButton {
 
         color: {
             if (!root.enabled)
-                return Theme.bgPanel
+                // U09 (G3): a disabled Ghost button must not render as a
+                // filled box -- only its icon dims (the old bgPanel fill was
+                // the inverted weighting: disabled looked heavier than
+                // enabled).
+                return root.cxStyle === CxIconButton.Style.Ghost ? "transparent" : Theme.bgPanel
+            // U09 (G5): the selected check must precede the style branches --
+            // the Ghost return below made the selected legs unreachable.
+            if (root.selected)
+                // Solid accent capsule (ref solid green #17cc5f family, R1
+                // accent #18c75e); pressed keeps the DS-02
+                // Theme.accentSubtlePressed token.
+                return root.down ? Theme.accentSubtlePressed : Theme.accent
             if (root.cxStyle === CxIconButton.Style.ChromeDanger)
                 return root.down ? Theme.chromeDangerPressed : (root.hovered ? Theme.chromeDangerHover : "transparent")
             if (root.cxStyle === CxIconButton.Style.Chrome)
                 return root.down ? Theme.chromePressed : (root.hovered ? Theme.chromeHover : "transparent")
             if (root.cxStyle === CxIconButton.Style.Ghost)
                 return root.down ? Theme.bgPressed : (root.hovered ? Theme.bgHover : "transparent")
-            if (root.selected)
-                // Phase 161 (DS-02): replaced the previous runtime color
-                // manipulation with the explicit Phase 160 token
-                // (accentSubtlePressed). No runtime darker/lighter calls — those
-                // bypass the Theme token system.
-                return root.down ? Theme.accentSubtlePressed : Theme.accentSubtle
             return root.down ? Theme.bgPressed : (root.hovered ? Theme.bgHover : Theme.bgPanel)
         }
         Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
         border.width: root.cxStyle === CxIconButton.Style.ChromeDanger ? 0 : 1
         border.color: {
+            if (!root.enabled)
+                // U09 (G3): disabled Ghost keeps no box at all.
+                return root.cxStyle === CxIconButton.Style.Ghost ? "transparent" : Theme.borderSubtle
+            if (root.selected)
+                // U09 (G5): selected border follows the accent capsule.
+                return Theme.accent
             if (root.cxStyle === CxIconButton.Style.Chrome)
                 return root.hovered ? Theme.chromeBorder : "transparent"
             if (root.cxStyle === CxIconButton.Style.Ghost)
-                return root.hovered ? Theme.borderDefault : "transparent"
-            if (root.selected)
-                return Theme.accent
+                // U09 (G3): enabled Ghost carries a persistent 1px rounded
+                // box (ref ≈#464749; borderSubtle is the nearest border
+                // token, Δ ≈ +11/channel -- converges with the R1 border
+                // batch), strengthening to borderDefault on hover.
+                return root.hovered ? Theme.borderDefault : Theme.borderSubtle
             return Theme.borderSubtle
         }
         Behavior on border.color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
@@ -69,15 +82,8 @@ ToolButton {
         opacity: root.enabled ? 1.0 : 0.45
         Behavior on opacity { NumberAnimation { duration: 150 } }
 
-        // Active/Selected state glow (对齐上游 GLToolbar highlight)
-        Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            visible: root.selected && root.enabled
-            color: Theme.accent
-            opacity: root.hovered ? 0.08 : 0.04
-            Behavior on opacity { NumberAnimation { duration: 200 } }
-        }
+        // U09 (G5): the former low-opacity accent glow overlay is gone --
+        // the selected state is now the solid accent capsule itself.
     }
 
     contentItem: Item {

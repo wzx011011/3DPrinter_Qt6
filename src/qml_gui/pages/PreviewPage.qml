@@ -642,10 +642,31 @@ Item {
                                 anchors.fill: parent
                                 spacing: 0
 
-                                // preview-4: upstream G-code window is
-                                // NoDecoration — no title/header row
-                                // (GCodeViewer.cpp:923-925); the list starts
-                                // directly under the window edge.
+                                // preview-4: the upstream G-code window body
+                                // is NoDecoration (GCodeViewer.cpp:923-925);
+                                // the slim row below is the Phase 54 layout
+                                // current-line indicator (currentGcodeLine /
+                                // gcodeLineCount), not a decorated title bar.
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 30
+                                    Layout.leftMargin: 8
+                                    Layout.rightMargin: 8
+
+                                    Label {
+                                        text: qsTr("G-code")
+                                        color: Theme.textPrimary
+                                        font.bold: true
+                                        font.pixelSize: Theme.fontSizeSM
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    Label {
+                                        text: root.previewVm ? qsTr("行 %1 / %2").arg(root.previewVm.currentGcodeLine).arg(root.previewVm.gcodeLineCount) : qsTr("行 -- / --")
+                                        color: Theme.textTertiary
+                                        font.pixelSize: Theme.fontSizeXS
+                                    }
+                                }
+
                                 ListView {
                                     id: gcodeList
                                     Layout.fillWidth: true

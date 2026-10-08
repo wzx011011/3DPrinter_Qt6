@@ -1041,6 +1041,46 @@ Item {
                 }
 
                 Item { Layout.fillHeight: true }
+
+                // Save/Restore buttons
+                RowLayout {
+                    spacing: 12
+                    Item { Layout.fillWidth: true }
+
+                    // 实时生效提示
+                    Text {
+                        id: appliedHint
+                        text: qsTr("✓ 已实时生效")
+                        color: Theme.accent
+                        font.pixelSize: Theme.fontSizeSM
+                        opacity: 0
+                        Behavior on opacity { NumberAnimation { duration: 300 } }
+                    }
+
+                    CxButton {
+                        text: qsTr("恢复默认")
+                        onClicked: root.settingsVm.resetPreferences()
+                    }
+                    CxButton {
+                        text: qsTr("取消")
+                        onClicked: root.settingsVm.cancelPreferences()
+                    }
+                    CxButton {
+                        text: qsTr("应用")
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: {
+                            root.settingsVm.applyPreferences()
+                            appliedHint.opacity = 1
+                            appliedHintTimer.restart()
+                        }
+                    }
+
+                    Timer {
+                        id: appliedHintTimer
+                        interval: 2000
+                        onTriggered: appliedHint.opacity = 0
+                    }
+                }
             }
         }
     }

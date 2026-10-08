@@ -936,7 +936,12 @@ Item {
                                                 spacing: 4
 
                                                 Repeater {
-                                                    model: root.calibrationVm.filamentPresetNames
+                                                    // The VM list currently carries the whole
+                                                    // vendor catalogue (Creality alone = 539
+                                                    // presets); bound here so the inline chip
+                                                    // row cannot scale with it. Machine-scoped
+                                                    // preset list is the real fix upstream of this.
+                                                    model: root.calibrationVm.filamentPresetNames.slice(0, 16)
                                                     delegate: Rectangle {
                                                         required property string modelData
                                                         required property int index

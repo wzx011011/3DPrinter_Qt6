@@ -33,7 +33,10 @@ Button {
             const h = root.hovered
             const p = root.pressed
             if (root.cxStyle === CxButton.Style.Primary) {
-                if (d) return Theme.accentSubtle
+                // R14 (restoration-map.md:44): disabled is a neutral capsule
+                // (controlDisabledBg), replacing the old accentSubtle +
+                // 0.45-opacity overlay (the overlay was removed with U01).
+                if (d) return Theme.controlDisabledBg
                 if (p) return Theme.accentDark
                 if (h) return Theme.accentLight
                 return Theme.accent
@@ -59,7 +62,6 @@ Button {
             return Theme.bgElevated
         }
         Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-        opacity: root.enabled ? 1.0 : 0.45
 
         border.color: {
             // Phase 161 (DS-02): focus border for accessibility (keyboard nav).
@@ -76,7 +78,13 @@ Button {
     contentItem: Text {
         text: root.text
         color: {
-            if (!root.enabled) return Theme.textDisabled
+            if (!root.enabled) {
+                // R14: Primary's neutral disabled capsule pairs with its own
+                // disabled text tone; other styles keep the generic disabled
+                // text token.
+                return root.cxStyle === CxButton.Style.Primary
+                        ? Theme.controlDisabledText : Theme.textDisabled
+            }
             if (root.cxStyle === CxButton.Style.Primary) return Theme.textOnAccent
             if (root.cxStyle === CxButton.Style.Danger) return Theme.textOnAccent
             return Theme.textPrimary

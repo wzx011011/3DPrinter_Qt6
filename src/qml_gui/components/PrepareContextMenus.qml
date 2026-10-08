@@ -7,6 +7,11 @@ Item {
     id: root
 
     required property var editorVm
+    // U08 (⑬): ConfigViewModel for per-slot filament preset labels in the
+    // Change Filament submenu (upstream reads preset_bundle->filament_presets,
+    // GUI_Factories.cpp:1073-1086). Optional: without it the submenu falls
+    // back to the "Filament %n" naming.
+    property var configVm: null
 
     // G-07: bumped whenever a context menu is about to show. Dynamic item
     // texts below reference this tick so their one-shot Q_INVOKABLE bindings
@@ -33,9 +38,11 @@ Item {
 
     // P16.4: Change Filament submenu family (upstream MenuFactory::
     // append_menu_item_change_filament, GUI_Factories.cpp:1879-1961).
-    // "Default" (extruder 0) + "Filament n"; preset labels are the upstream
-    // next step, the "Filament %n" fallback naming is used until preset
-    // labels are wired into this menu (upstream names.cpp fallback).
+    // U08 (⑬): items carry the slot's preset label with a "Filament %n"
+    // fallback, and the active extruder of a single selection gets a
+    // "(current)" suffix and is disabled — both mirror upstream
+    // GUI_Factories.cpp:1067-1086 (label lookup + initial_extruder, where an
+    // unconfigured extruder key reads as 1).
     component ChangeFilamentSubmenu: CxMenu {
         id: filamentMenu
         // Upstream labels the submenu "Change Filament" for a single
@@ -47,8 +54,35 @@ Item {
         Instantiator {
             model: root.editorVm ? root.editorVm.configFilamentCount() + 1 : 1
             delegate: CxMenuItem {
+                id: filItem
                 required property int index
-                text: index === 0 ? qsTr("Default") : qsTr("Filament %1").arg(index)
+                // G-07: re-evaluate per popup (Q_INVOKABLE reads are not
+                // tracked by the QML engine).
+                readonly property string _presetLabel: {
+                    void root.menuRefreshTick
+                    if (index === 0)
+                        return qsTr("Default")
+                    if (root.configVm) {
+                        var preset = root.configVm.filamentPresetForSlot(index)
+                        if (preset && preset.length > 0)
+                            return preset
+                    }
+                    return qsTr("Filament %1").arg(index)
+                }
+                readonly property bool _isCurrent: {
+                    void root.menuRefreshTick
+                    if (index === 0 || !root.editorVm
+                            || root.editorVm.selectedObjectCount !== 1)
+                        return false
+                    var current = root.editorVm.objectExtruderId(root.editorVm.selectedObjectIndex)
+                    if (current < 0)
+                        current = 1  // upstream: unconfigured key defaults to 1
+                    return current === index
+                }
+                text: _presetLabel + (_isCurrent ? " (" + qsTr("current") + ")" : "")
+                // Upstream keeps these as plain items and disables the active
+                // extruder (GUI_Factories.cpp:1088-1095 enable updater).
+                enabled: !_isCurrent
                 onTriggered: if (root.editorVm) root.editorVm.setExtruderForSelectedItems(index)
             }
             onObjectAdded: (index, object) => filamentMenu.insertItem(index, object)
@@ -57,38 +91,38 @@ Item {
     }
 
     // P16.9: Flush Options submenu (upstream append_menu_items_flush_options,
-    // GUI_Factories.cpp:937-1028). The check mark mirrors the object-config
-    // key state (kept in text because the backend stays the single source of
-    // truth for the check state).
+    // GUI_Factories.cpp:937-1028). U08 (③): real check items like upstream
+    // append_menu_check_item; the "[x]" text prefix is gone and the check
+    // state stays backend-owned (flushOptionValue per popup via G-07 tick).
     component FlushOptionsSubmenu: CxMenu {
         title: qsTr("Flush Options")
         enabled: root.editorVm && root.editorVm.contextActionAvailable("flushOptions")
         onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
-            // G-07: the text references menuRefreshTick (bumped in
-            // onAboutToShow) so the check mark re-reads flushOptionValue()
-            // at every popup instead of keeping the build-time value.
-            text: {
-                const tick = root.menuRefreshTick
-                return (root.editorVm && root.editorVm.flushOptionValue(0) ? "  [x] " : "  [  ] ")
-                       + qsTr("Flush into objects' infill")
+            checkable: true
+            checked: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return !!root.editorVm && root.editorVm.flushOptionValue(0)
             }
+            text: qsTr("Flush into objects' infill")
             onTriggered: if (root.editorVm) root.editorVm.toggleFlushOption(0)
         }
         CxMenuItem {
-            text: {
-                const tick = root.menuRefreshTick
-                return (root.editorVm && root.editorVm.flushOptionValue(1) ? "  [x] " : "  [  ] ")
-                       + qsTr("Flush into this object")
+            checkable: true
+            checked: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return !!root.editorVm && root.editorVm.flushOptionValue(1)
             }
+            text: qsTr("Flush into this object")
             onTriggered: if (root.editorVm) root.editorVm.toggleFlushOption(1)
         }
         CxMenuItem {
-            text: {
-                const tick = root.menuRefreshTick
-                return (root.editorVm && root.editorVm.flushOptionValue(2) ? "  [x] " : "  [  ] ")
-                       + qsTr("Flush into objects' support")
+            checkable: true
+            checked: {
+                const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
+                return !!root.editorVm && root.editorVm.flushOptionValue(2)
             }
+            text: qsTr("Flush into objects' support")
             onTriggered: if (root.editorVm) root.editorVm.toggleFlushOption(2)
         }
     }
@@ -178,9 +212,32 @@ Item {
             CxMenuItem { text: qsTr("Prism"); onTriggered: root.editorVm.addPrimitiveToContextPlate(4) }
             CxMenuItem { text: qsTr("Torus"); onTriggered: root.editorVm.addPrimitiveToContextPlate(5) }
             CxMenuItem { text: qsTr("Disk"); onTriggered: root.editorVm.addPrimitiveToContextPlate(6) }
+            // U08 (⑩): Add text/SVG also live on the default menu's Add
+            // Primitive submenu (upstream append_submenu_add_generic with
+            // ModelVolumeType::INVALID accepts the gizmo items,
+            // GUI_Factories.cpp:651-656); same gizmo-mask gating as the
+            // add-volume submenus above.
+            MenuSeparator { }
+            CxMenuItem {
+                visible: !!root.editorVm
+                         && (root.editorVm.availableGizmoMask & (1 << 16)) !== 0
+                text: qsTr("Add text")
+                onTriggered: root.requestActivateGizmo(16)
+            }
+            CxMenuItem {
+                visible: !!root.editorVm
+                         && (root.editorVm.availableGizmoMask & (1 << 17)) !== 0
+                text: qsTr("Add SVG")
+                onTriggered: root.requestActivateGizmo(17)
+            }
         }
+        // U08 (③): upstream "Show Labels" is a check item
+        // (append_menu_check_item, GUI_Factories.cpp:1415-1417), checked =
+        // labels shown.
         CxMenuItem {
-            text: root.editorVm && root.editorVm.showLabels ? qsTr("Hide labels") : qsTr("Show labels")
+            checkable: true
+            checked: !!root.editorVm && root.editorVm.showLabels
+            text: qsTr("Show Labels")
             onTriggered: root.editorVm.showLabels = !root.editorVm.showLabels
         }
     }
@@ -240,10 +297,22 @@ Item {
             onTriggered: root.editorVm.pasteObjects()
         }
         MenuSeparator { }
-        CxMenuItem {
-            text: qsTr("Split to objects")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("splitObjects")
-            onTriggered: root.editorVm.splitSelectedToObjects()
+        // U08 (⑥): upstream Split is a submenu with To Objects + To Parts
+        // (GUI_Factories.cpp:1446-1453).
+        CxMenu {
+            title: qsTr("Split")
+            enabled: root.editorVm && (root.editorVm.contextActionAvailable("splitObjects")
+                                       || root.editorVm.contextActionAvailable("splitParts"))
+            CxMenuItem {
+                text: qsTr("To objects")
+                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitObjects")
+                onTriggered: root.editorVm.splitSelectedToObjects()
+            }
+            CxMenuItem {
+                text: qsTr("To parts")
+                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitParts")
+                onTriggered: root.editorVm.splitSelectedToParts()
+            }
         }
         CxMenuItem {
             text: qsTr("Center")
@@ -260,24 +329,32 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
             onTriggered: root.requestObjectLayers()
         }
+        // U08 (⑫): upstream label is "Drop" (append_menu_item_drop,
+        // GUI_Factories.cpp:2136).
         CxMenuItem {
-            text: qsTr("Drop to build plate")
+            text: qsTr("Drop")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
+        // U08 (⑫): upstream labels are "Along X/Y/Z Axis"
+        // (append_menu_items_mirror, GUI_Factories.cpp:1282-1287).
         CxMenu {
             title: qsTr("Mirror")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
-            CxMenuItem { text: qsTr("Mirror X"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
-            CxMenuItem { text: qsTr("Mirror Y"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
-            CxMenuItem { text: qsTr("Mirror Z"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
+            CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
+            CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
+            CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
         }
+        // U08 (③): upstream "Printable" is a check item reflecting the
+        // printable state (append_menu_item_set_printable,
+        // GUI_Factories.cpp:2293-2319).
         CxMenuItem {
-            text: {
+            checkable: true
+            checked: {
                 const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
-                return (root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
-                       ? qsTr("Set unprintable") : qsTr("Set printable")
+                return !!root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
             }
+            text: qsTr("Printable")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("printable")
             onTriggered: root.editorVm.setSelectedObjectsPrintable(
                              !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
@@ -287,8 +364,10 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("visibility")
             onTriggered: root.editorVm.toggleSelectedObjectsVisibility()
         }
+        // U08 (⑫): upstream label is "Fix Model"
+        // (append_menu_item_fix_through_cgal, GUI_Factories.cpp:963).
         CxMenuItem {
-            text: qsTr("Repair model")
+            text: qsTr("Fix Model")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
@@ -303,13 +382,38 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("subdivide")
             onTriggered: root.editorVm.subdivideSelectedMesh()
         }
+        // U08 (⑥): Mesh boolean on the object menu (upstream
+        // append_menu_item_mesh_boolean, GUI_Factories.cpp:1271; API
+        // EditorViewModel.h:657).
+        CxMenuItem {
+            text: qsTr("Mesh boolean")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("meshBoolean")
+            onTriggered: root.editorVm.booleanExecute()
+        }
         CxMenu {
             title: qsTr("Convert units")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("convertUnits")
             CxMenuItem { text: qsTr("Convert from inches"); onTriggered: root.editorVm.convertSelectedObjectUnits(1) }
-            CxMenuItem { text: qsTr("Revert inches conversion"); onTriggered: root.editorVm.convertSelectedObjectUnits(0) }
+            // U08 (⑫): upstream labels "Restore to Inch"/"Restore to Meter"
+            // (SettingsFactory conversion map, GUI_Factories.cpp:1233-1235).
+            CxMenuItem { text: qsTr("Restore to Inch"); onTriggered: root.editorVm.convertSelectedObjectUnits(0) }
             CxMenuItem { text: qsTr("Convert from meters"); onTriggered: root.editorVm.convertSelectedObjectUnits(3) }
-            CxMenuItem { text: qsTr("Revert meters conversion"); onTriggered: root.editorVm.convertSelectedObjectUnits(2) }
+            CxMenuItem { text: qsTr("Restore to Meter"); onTriggered: root.editorVm.convertSelectedObjectUnits(2) }
+        }
+        // U08 (⑥): upstream object menu carries Replace 3D file... /
+        // Replace all with 3D files... (append_menu_item_replace_with_stl /
+        // _replace_all_with_stl, GUI_Factories.cpp:1020-1033). Gated on an
+        // object selection; "replaceWithStl" resolves through the generic
+        // has-object fallthrough of contextActionAvailable.
+        CxMenuItem {
+            text: qsTr("Replace 3D file...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            onTriggered: root.requestReplacePart()
+        }
+        CxMenuItem {
+            text: qsTr("Replace all with 3D files...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            onTriggered: root.requestReplaceAll()
         }
         // P16.5: five add-volume submenus (upstream append_menu_items_add_volume,
         // GUI_Factories.cpp:642-662, sits after Delete / before the process
@@ -331,7 +435,9 @@ Item {
             onTriggered: root.editorVm.pasteContextProcessSettings()
         }
         CxMenuItem {
-            text: qsTr("Edit settings")
+            // U08 (⑫): upstream label "Edit in Parameter Table"
+            // (append_menu_item_per_object_settings, GUI_Factories.cpp:2191).
+            text: qsTr("Edit in Parameter Table")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
@@ -350,27 +456,67 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("reload")
             onTriggered: root.editorVm.reloadSelectedFromDisk()
         }
+        // U08 (⑫⑦): upstream labels "Export as one STL"/"Export as one DRC"
+        // (append_menu_item_export_stl / _export_drc, GUI_Factories.cpp:972-994).
         CxMenuItem {
-            text: qsTr("Export STL...")
+            text: qsTr("Export as one STL...")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
             onTriggered: root.requestExport(false, false)
+        }
+        CxMenuItem {
+            text: qsTr("Export as one DRC...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            onTriggered: root.requestExport(false, true)
         }
     }
 
     CxMenu {
         id: partMenu
-        CxMenuItem {
-            text: qsTr("Split to parts")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("splitParts")
-            onTriggered: root.editorVm.splitSelectedToParts()
+        // U08 (⑧): upstream part menu Split is a submenu with To Objects +
+        // To Parts (create_bbl_part_menu, GUI_Factories.cpp:1626-1635).
+        CxMenu {
+            title: qsTr("Split")
+            enabled: root.editorVm && (root.editorVm.contextActionAvailable("splitObjects")
+                                       || root.editorVm.contextActionAvailable("splitParts"))
+            CxMenuItem {
+                text: qsTr("To objects")
+                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitObjects")
+                onTriggered: root.editorVm.splitSelectedToObjects()
+            }
+            CxMenuItem {
+                text: qsTr("To parts")
+                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitParts")
+                onTriggered: root.editorVm.splitSelectedToParts()
+            }
         }
         CxMenuItem {
             text: qsTr("Replace part...")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("replacePart")
             onTriggered: root.requestReplacePart()
         }
+        // U08 (⑧): upstream create_bbl_part_menu ends with
+        // reload_from_disk / replace_with_stl / replace_all_with_stl
+        // (GUI_Factories.cpp:1638-1641).
         CxMenuItem {
-            text: qsTr("Edit settings")
+            text: qsTr("Replace all with 3D files...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            onTriggered: root.requestReplaceAll()
+        }
+        CxMenuItem {
+            text: qsTr("Reload from disk")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("reload")
+            onTriggered: root.editorVm.reloadSelectedFromDisk()
+        }
+        // U08 (⑧): per_object_process entry (upstream
+        // append_menu_item_per_object_process, GUI_Factories.cpp:2151).
+        CxMenuItem {
+            text: qsTr("Edit Process Settings")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            onTriggered: root.editorVm.requestSelectionSettings()
+        }
+        CxMenuItem {
+            // U08 (⑫): "Edit settings" → upstream "Edit in Parameter Table".
+            text: qsTr("Edit in Parameter Table")
             enabled: root.editorVm && root.editorVm.canOpenSelectionSettings
             onTriggered: root.editorVm.requestSelectionSettings()
         }
@@ -397,17 +543,19 @@ Item {
             enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: root.editorVm.centerSelectedObjects()
         }
+        // U08 (⑫): upstream label is "Drop" (append_menu_item_drop).
         CxMenuItem {
-            text: qsTr("Drop to build plate")
+            text: qsTr("Drop")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
+        // U08 (⑫): upstream labels are "Along X/Y/Z Axis".
         CxMenu {
             title: qsTr("Mirror")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
-            CxMenuItem { text: qsTr("Mirror X"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
-            CxMenuItem { text: qsTr("Mirror Y"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
-            CxMenuItem { text: qsTr("Mirror Z"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
+            CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
+            CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
+            CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
         }
         // P16.2: merge(false) entry (upstream append_menu_item_merge_to_single_object)
         CxMenuItem {
@@ -437,6 +585,16 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("subdivide")
             onTriggered: root.editorVm.subdivideSelectedMesh()
         }
+        // U08 (⑧): Convert units also lives on the part menu (part_menu(),
+        // GUI_Factories.cpp:1874).
+        CxMenu {
+            title: qsTr("Convert units")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("convertUnits")
+            CxMenuItem { text: qsTr("Convert from inches"); onTriggered: root.editorVm.convertSelectedObjectUnits(1) }
+            CxMenuItem { text: qsTr("Restore to Inch"); onTriggered: root.editorVm.convertSelectedObjectUnits(0) }
+            CxMenuItem { text: qsTr("Convert from meters"); onTriggered: root.editorVm.convertSelectedObjectUnits(3) }
+            CxMenuItem { text: qsTr("Restore to Meter"); onTriggered: root.editorVm.convertSelectedObjectUnits(2) }
+        }
         CxMenuItem {
             text: qsTr("Copy process settings")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("copyProcessSettings")
@@ -452,10 +610,16 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
             onTriggered: root.requestConfirmDelete()
         }
+        // U08 (⑫⑦): upstream labels "Export as one STL"/"Export as one DRC".
         CxMenuItem {
-            text: qsTr("Export STL...")
+            text: qsTr("Export as one STL...")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
             onTriggered: root.requestExport(false, false)
+        }
+        CxMenuItem {
+            text: qsTr("Export as one DRC...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            onTriggered: root.requestExport(false, true)
         }
     }
 
@@ -468,19 +632,70 @@ Item {
             onTriggered: root.requestActivateGizmo(16)
         }
         CxMenuItem {
-            text: qsTr("Edit settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
-            onTriggered: root.editorVm.requestSelectionSettings()
-        }
-        CxMenuItem {
             text: qsTr("Delete text")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
             onTriggered: root.requestConfirmDelete()
         }
+        // U08 (⑤): the seven upstream text-part entries
+        // (create_text_part_menu + text_part_menu(), GUI_Factories.cpp:1578-1591
+        // and :1880-1884): Fix Model / Simplify / Center / Mirror /
+        // Edit Process Settings / Change Type / Change Filament.
         CxMenuItem {
-            text: qsTr("Export STL...")
+            text: qsTr("Fix Model")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            onTriggered: root.editorVm.fixMeshSelected()
+        }
+        CxMenuItem {
+            text: qsTr("Simplify model")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("simplify")
+                     && (root.editorVm.availableGizmoMask & (1 << 9)) !== 0
+            onTriggered: root.editorVm.simplifyMeshSelected()
+        }
+        CxMenuItem {
+            text: qsTr("Center")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
+            onTriggered: root.editorVm.centerSelectedObjects()
+        }
+        CxMenu {
+            title: qsTr("Mirror")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
+            CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
+            CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
+            CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
+        }
+        MenuSeparator { }
+        CxMenuItem {
+            text: qsTr("Edit Process Settings")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            onTriggered: root.editorVm.requestSelectionSettings()
+        }
+        CxMenuItem {
+            // U08 (⑫): upstream label "Edit in Parameter Table".
+            text: qsTr("Edit in Parameter Table")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            onTriggered: root.editorVm.requestSelectionSettings()
+        }
+        CxMenu {
+            title: qsTr("Change type")
+            enabled: root.editorVm && root.editorVm.hasSelectedVolume
+            CxMenuItem { text: qsTr("Part"); onTriggered: root.editorVm.changeVolumeType(0) }
+            CxMenuItem { text: qsTr("Negative volume"); onTriggered: root.editorVm.changeVolumeType(1) }
+            CxMenuItem { text: qsTr("Modifier"); onTriggered: root.editorVm.changeVolumeType(2) }
+            CxMenuItem { text: qsTr("Support blocker"); onTriggered: root.editorVm.changeVolumeType(3) }
+            CxMenuItem { text: qsTr("Support enforcer"); onTriggered: root.editorVm.changeVolumeType(4) }
+        }
+        ChangeFilamentSubmenu { }
+        // Export entries kept from the OWzx menu (upstream text-part menu has
+        // none; keep-register).
+        CxMenuItem {
+            text: qsTr("Export as one STL...")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
             onTriggered: root.requestExport(false, false)
+        }
+        CxMenuItem {
+            text: qsTr("Export as one DRC...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            onTriggered: root.requestExport(false, true)
         }
     }
 
@@ -493,27 +708,79 @@ Item {
             onTriggered: root.requestActivateGizmo(17)
         }
         CxMenuItem {
-            text: qsTr("Edit settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
-            onTriggered: root.editorVm.requestSelectionSettings()
-        }
-        CxMenuItem {
             text: qsTr("Delete SVG")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
             onTriggered: root.requestConfirmDelete()
         }
+        // U08 (⑤): the seven upstream svg-part entries
+        // (create_svg_part_menu + svg_part_menu(), GUI_Factories.cpp:1594-1606
+        // and :1886-1890).
         CxMenuItem {
-            text: qsTr("Export STL...")
+            text: qsTr("Fix Model")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            onTriggered: root.editorVm.fixMeshSelected()
+        }
+        CxMenuItem {
+            text: qsTr("Simplify model")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("simplify")
+                     && (root.editorVm.availableGizmoMask & (1 << 9)) !== 0
+            onTriggered: root.editorVm.simplifyMeshSelected()
+        }
+        CxMenuItem {
+            text: qsTr("Center")
+            enabled: root.editorVm && root.editorVm.canTransformSelection
+            onTriggered: root.editorVm.centerSelectedObjects()
+        }
+        CxMenu {
+            title: qsTr("Mirror")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
+            CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
+            CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
+            CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
+        }
+        MenuSeparator { }
+        CxMenuItem {
+            text: qsTr("Edit Process Settings")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            onTriggered: root.editorVm.requestSelectionSettings()
+        }
+        CxMenuItem {
+            // U08 (⑫): upstream label "Edit in Parameter Table".
+            text: qsTr("Edit in Parameter Table")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            onTriggered: root.editorVm.requestSelectionSettings()
+        }
+        CxMenu {
+            title: qsTr("Change type")
+            enabled: root.editorVm && root.editorVm.hasSelectedVolume
+            CxMenuItem { text: qsTr("Part"); onTriggered: root.editorVm.changeVolumeType(0) }
+            CxMenuItem { text: qsTr("Negative volume"); onTriggered: root.editorVm.changeVolumeType(1) }
+            CxMenuItem { text: qsTr("Modifier"); onTriggered: root.editorVm.changeVolumeType(2) }
+            CxMenuItem { text: qsTr("Support blocker"); onTriggered: root.editorVm.changeVolumeType(3) }
+            CxMenuItem { text: qsTr("Support enforcer"); onTriggered: root.editorVm.changeVolumeType(4) }
+        }
+        ChangeFilamentSubmenu { }
+        // Export entries kept from the OWzx menu (upstream svg-part menu has
+        // none; keep-register).
+        CxMenuItem {
+            text: qsTr("Export as one STL...")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
             onTriggered: root.requestExport(false, false)
+        }
+        CxMenuItem {
+            text: qsTr("Export as one DRC...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            onTriggered: root.requestExport(false, true)
         }
     }
 
     CxMenu {
         id: multiMenu
         onAboutToShow: ++root.menuRefreshTick
+        // U08 (⑫): upstream label is "Assemble"
+        // (append_menu_item_assemble, GUI_Factories.cpp:1263).
         CxMenuItem {
-            text: qsTr("Merge")
+            text: qsTr("Assemble")
             enabled: root.editorVm && root.editorVm.canDuplicateSelectedObjects
             onTriggered: root.editorVm.assembleSelectedObjects()
         }
@@ -534,13 +801,15 @@ Item {
             enabled: root.editorVm && root.editorVm.canTransformSelection
             onTriggered: root.editorVm.centerSelectedObjects()
         }
+        // U08 (⑫): upstream label is "Fix Model" (append_menu_item_fix_through_cgal).
         CxMenuItem {
-            text: qsTr("Repair models")
+            text: qsTr("Fix Model")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
+        // U08 (⑫): upstream label is "Drop" (append_menu_item_drop).
         CxMenuItem {
-            text: qsTr("Drop to build plate")
+            text: qsTr("Drop")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
@@ -574,14 +843,15 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("paste")
             onTriggered: root.editorVm.pasteObjects()
         }
-        // P16.6: printable toggle follows the first selected object's state
-        // (upstream append_menu_item_set_printable, GUI_Factories.cpp:1963)
+        // U08 (③): upstream "Printable" check item in the multi menu
+        // (append_menu_item_set_printable, GUI_Factories.cpp:1950).
         CxMenuItem {
-            text: {
+            checkable: true
+            checked: {
                 const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
-                return (root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
-                       ? qsTr("Set unprintable") : qsTr("Set printable")
+                return !!root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
             }
+            text: qsTr("Printable")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("printable")
             onTriggered: root.editorVm.setSelectedObjectsPrintable(
                              !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
@@ -593,20 +863,42 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
+        // U08 (⑨): Change type in the multi-volume branch (upstream
+        // multi_selection_menu else-branch, GUI_Factories.cpp:1989).
+        CxMenu {
+            title: qsTr("Change type")
+            enabled: root.editorVm && root.editorVm.hasSelectedVolume
+            CxMenuItem { text: qsTr("Part"); onTriggered: root.editorVm.changeVolumeType(0) }
+            CxMenuItem { text: qsTr("Negative volume"); onTriggered: root.editorVm.changeVolumeType(1) }
+            CxMenuItem { text: qsTr("Modifier"); onTriggered: root.editorVm.changeVolumeType(2) }
+            CxMenuItem { text: qsTr("Support blocker"); onTriggered: root.editorVm.changeVolumeType(3) }
+            CxMenuItem { text: qsTr("Support enforcer"); onTriggered: root.editorVm.changeVolumeType(4) }
+        }
         // P16.6: Convert units submenu (upstream multi menu appends
         // append_menu_items_convert_unit, GUI_Factories.cpp:1688)
         CxMenu {
             title: qsTr("Convert units")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("convertUnits")
             CxMenuItem { text: qsTr("Convert from inches"); onTriggered: root.editorVm.convertSelectedObjectUnits(1) }
-            CxMenuItem { text: qsTr("Revert inches conversion"); onTriggered: root.editorVm.convertSelectedObjectUnits(0) }
+            // U08 (⑫): upstream labels "Restore to Inch"/"Restore to Meter".
+            CxMenuItem { text: qsTr("Restore to Inch"); onTriggered: root.editorVm.convertSelectedObjectUnits(0) }
             CxMenuItem { text: qsTr("Convert from meters"); onTriggered: root.editorVm.convertSelectedObjectUnits(3) }
-            CxMenuItem { text: qsTr("Revert meters conversion"); onTriggered: root.editorVm.convertSelectedObjectUnits(2) }
+            CxMenuItem { text: qsTr("Restore to Meter"); onTriggered: root.editorVm.convertSelectedObjectUnits(2) }
+        }
+        // U08 (⑨): Replace all with 3D files also lives on the multi menu
+        // (upstream append_menu_item_replace_all_with_stl, GUI_Factories.cpp:1961).
+        CxMenuItem {
+            text: qsTr("Replace all with 3D files...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            onTriggered: root.requestReplaceAll()
         }
         // P16.4: Change Filament (upstream multi menu, GUI_Factories.cpp:1692)
         ChangeFilamentSubmenu { }
+        // U08 (⑫⑦): upstream multi labels "Export as one STL"/"Export as
+        // STLs" + the DRC pair (append_menu_item_export_stl(true) /
+        // append_menu_item_export_drc(true), GUI_Factories.cpp:971-1009).
         CxMenuItem {
-            text: qsTr("Export selected STL...")
+            text: qsTr("Export as one STL...")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
             onTriggered: root.requestExport(false, false)
         }
@@ -618,6 +910,18 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
             onTriggered: root.requestExport(true, false)
         }
+        // U08 (⑦): DRC pair on the multi menu
+        // (append_menu_item_export_drc(true), GUI_Factories.cpp:989-1009).
+        CxMenuItem {
+            text: qsTr("Export as one DRC...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            onTriggered: root.requestExport(false, true)
+        }
+        CxMenuItem {
+            text: qsTr("Export as DRCs...")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            onTriggered: root.requestExport(true, true)
+        }
     }
 
     CxMenu {
@@ -628,8 +932,16 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateSelect")
             onTriggered: root.editorVm.selectAllOnPlate(root.editorVm.contextPlateIndex)
         }
+        // U08 (⑪): upstream "Select All Plates" (GUI_Factories.cpp:1721-1727);
+        // reuses the existing cross-plate VM entry (EditorViewModel.h:836).
         CxMenuItem {
-            text: qsTr("Clear plate")
+            text: qsTr("Select All Plates")
+            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateSelect")
+            onTriggered: root.editorVm.selectAllVisibleObjects()
+        }
+        // U08 (⑫): upstream label is "Delete All" (GUI_Factories.cpp:1729).
+        CxMenuItem {
+            text: qsTr("Delete All")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateClear")
             onTriggered: root.requestConfirmClearPlate()
         }
@@ -638,8 +950,9 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateArrange")
             onTriggered: root.editorVm.arrangePlate(root.editorVm.contextPlateIndex)
         }
+        // U08 (⑫): upstream label is "Auto Rotate" (GUI_Factories.cpp:1763).
         CxMenuItem {
-            text: qsTr("Auto orient objects")
+            text: qsTr("Auto Rotate")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateOrient")
             onTriggered: root.editorVm.autoOrientContextPlate()
         }
@@ -678,8 +991,9 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("paste")
             onTriggered: root.editorVm.pasteToContextPlate()
         }
+        // U08 (⑫): upstream label is "Reload All" (GUI_Factories.cpp:1753).
         CxMenuItem {
-            text: qsTr("Reload objects")
+            text: qsTr("Reload All")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateReload")
             onTriggered: root.editorVm.reloadAllOnPlate(root.editorVm.contextPlateIndex)
         }
@@ -688,8 +1002,10 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateReplaceAll")
             onTriggered: root.requestReplaceAll()
         }
+        // U08 (⑫): upstream label is "Edit Plate Name"
+        // (append_menu_item_plate_name, GUI_Factories.cpp:2377).
         CxMenuItem {
-            text: qsTr("Rename plate")
+            text: qsTr("Edit Plate Name")
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateRename")
             onTriggered: root.requestRenamePlate()
         }
@@ -698,11 +1014,13 @@ Item {
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateSettings")
             onTriggered: root.requestPlateSettings()
         }
+        // U08 (⑫): upstream labels are "Unlock"/"Lock"
+        // (append_menu_item_locked, GUI_Factories.cpp:2346-2352).
         CxMenuItem {
             text: {
                 const tick = root.menuRefreshTick  // G-07: re-evaluate per popup
                 return (root.editorVm && root.editorVm.isPlateLocked(root.editorVm.contextPlateIndex))
-                       ? qsTr("Unlock plate") : qsTr("Lock plate")
+                       ? qsTr("Unlock") : qsTr("Lock")
             }
             enabled: root.editorVm && root.editorVm.contextActionAvailable("plateLock")
             onTriggered: root.editorVm.togglePlateLocked(root.editorVm.contextPlateIndex)

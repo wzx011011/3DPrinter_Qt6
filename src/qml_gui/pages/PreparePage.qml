@@ -109,6 +109,9 @@ Item {
     PrepareContextMenus {
         id: prepareContextMenus
         editorVm: root.editorVm
+        // U08 (⑬): per-slot filament preset labels for the Change Filament
+        // submenu (upstream preset_bundle->filament_presets lookup).
+        configVm: root.configVm
         onRequestAddModels: addModelsToContextPlateDlg.open()
         onRequestReplacePart: replaceWithStlDlg.open()
         onRequestReplaceAll: replaceAllOnPlateDlg.open()
@@ -1681,11 +1684,17 @@ Item {
                                 }
                                 ToolTip.visible: idxHover.hovered
                                 ToolTip.text: qsTr("Switch plate")
-                                Menu {
+                                // U08 (①): CxMenu/CxMenuItem instead of the bare
+                                // native Menu — Popup.Native (the Qt 6.8+
+                                // Windows default) rendered this as a native
+                                // semi-transparent popup that let the bed show
+                                // through (openResolved capture (1080,641));
+                                // CxMenu forces popupType=Popup.Item.
+                                CxMenu {
                                     id: idxMenu
                                     Repeater {
                                         model: root.editorVm ? root.editorVm.plateCount : 0
-                                        delegate: MenuItem {
+                                        delegate: CxMenuItem {
                                             text: {
                                                 var name = root.editorVm ? root.editorVm.plateName(index) : ""
                                                 return qsTr("Plate %1").arg(index + 1)
@@ -1700,7 +1709,7 @@ Item {
                                         }
                                     }
                                     MenuSeparator {}
-                                    MenuItem {
+                                    CxMenuItem {
                                         text: qsTr("Rename plate")
                                         onTriggered: plateCluster.openRenameDialog()
                                     }

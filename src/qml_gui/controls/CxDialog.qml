@@ -14,7 +14,13 @@ Dialog {
     title: ""
 
     modal: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // U01: upstream modal dialogs close via Esc / ✕ / their buttons, not by
+    // clicking outside (CenterOnParent family). Instances that need different
+    // behavior override closePolicy explicitly.
+    closePolicy: Popup.CloseOnEscape
+    // U01: upstream centers dialogs on the parent overlay (CenterOnParent,
+    // ObjColorDialog.cpp:175) -- fixes instances opening stuck at (0,0).
+    anchors.centerIn: Overlay.overlay
 
     background: Rectangle {
         color: Theme.bgElevated
@@ -34,6 +40,18 @@ Dialog {
             width: parent.width
             height: parent.radius
             color: parent.color
+        }
+
+        // U01: 1px full-width separator under the header -- upstream dialog
+        // chrome uses a 1px line between title area and body
+        // (KBShortcutsDialog.cpp:33-36 / RecenterDialog.cpp:28-29,
+        // wxSize(-1, 1)).
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 1
+            color: Theme.separator
         }
 
         Text {

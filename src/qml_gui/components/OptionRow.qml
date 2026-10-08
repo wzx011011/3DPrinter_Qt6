@@ -206,8 +206,9 @@ Item {
     readonly property bool hasBounds: root.isNumeric && root.oMax > root.oMin
 
     readonly property int headerHeight: root.showGroupHeader ? (root.compact ? 28 : 32) : 0
+    // G3: R11 compact row rhythm is 30px (was 34).
     readonly property int rowHeight:
-        root.compact ? (root.oType === "string" ? 48 : 34)
+        root.compact ? (root.oType === "string" ? 48 : 30)
         : root.oType === "string" ? 70
         : 44
     readonly property int contentHeight: root.rowHeight
@@ -445,7 +446,8 @@ Item {
                             CxSpinBox {
                                 visible: root.oType === "int" || root.oType === "percent"
                                 Layout.preferredWidth: root.compact ? root.compactFieldWidth : 90
-                                Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
+                                // G2: R11 compact field is 25px tall (was 24).
+                                Layout.preferredHeight: root.compact ? 25 : Theme.controlHeightSM
                                 value: root.clampNumber(root.oVal)
                                 from: Math.round(root.oMin)
                                 to: Math.round(root.oMax)
@@ -459,7 +461,8 @@ Item {
                             CxNumericEdit {
                                 visible: root.oType === "double"
                                 Layout.preferredWidth: root.compact ? root.compactFieldWidth : 120
-                                Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
+                                // G2: R11 compact field is 25px tall (was 24).
+                                Layout.preferredHeight: root.compact ? 25 : Theme.controlHeightSM
                                 decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
                                 text: root.formattedNumber(root.oVal)
                                 // Unit lives inside the field, right-aligned
@@ -594,7 +597,8 @@ Item {
 
                             CxTextField {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: root.compact ? 24 : Theme.controlHeightSM
+                                // G2: R11 compact field is 25px tall (was 24).
+                                Layout.preferredHeight: root.compact ? 25 : Theme.controlHeightSM
                                 text: typeof root.oVal === "string" ? root.oVal : ""
                                 enabled: !root.oRO
                                 onEditingFinished: root.optionModel.setValue(root.optIdx, text)

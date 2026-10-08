@@ -32,7 +32,20 @@ QtObject {
     readonly property color bgBase:      "#2f3034"
     readonly property color bgSurface:   "#3a3a3c"
     readonly property color bgPanel:     "#4b4b4d"
-    readonly property color bgCard:      "#3a3a3c00"
+    // U01 fix: was "#3a3a3c00" -- 9-digit hex parses as #AARRGGBB, i.e.
+    // alpha 0x3a (~22.7%) over an olive RGB (58,60,0). That tint is what
+    // pixel-blended to the measured #47483b separator/border values in
+    // config-wizard (separator y=496), notification-center (#47483b stroke /
+    // #2a2b1f separator), cali-history and about-dialog.
+    readonly property color bgCard:      "#3a3a3c"
+
+    // ── Overlay / popup surfaces (U01: §2 & upstream-anchored literals).
+    // These values are also the R1 global surface-convergence targets: the
+    // deferred bgElevated/bgSurface stack must fold onto them without drift.
+    readonly property color surfaceDeep:   "#2d2d31"  // §2 body base = upstream notification window dark bg (NotificationManager.cpp:239)
+    readonly property color bannerSurface: "#36363b"  // §2 banner band token
+    readonly property color overlayBorder: "#3e3e45"  // upstream notification window dark border (NotificationManager.cpp:247)
+    readonly property color separator:     "#000000"  // §2 dialog 1px separator line
     readonly property color bgElevated:  "#4b4b4d"
     readonly property color bgInset:     "#262628"
     readonly property color bgFloating:  "#4f4f51d9"
@@ -97,10 +110,10 @@ QtObject {
     readonly property color statusErrorPressed: "#8a2828"
 
     // ── Scrollbar (Phase 160 DS-01: was hardcoded across CxScrollView)
-    // ctl-1: neutralized (was blue-tinted).
-    readonly property color scrollBarColor:       "#6a6a6c"
+    // R13 (restoration-map.md:43): slot #171717 / thumb #959595.
+    readonly property color scrollBarColor:       "#959595"
     readonly property color scrollBarHoverColor:  "#7e7e80"
-    readonly property color scrollBarTrackColor:  "#3f3f41"
+    readonly property color scrollBarTrackColor:  "#171717"
 
     // ── Typography
     readonly property int fontSizeXS:   10
@@ -144,9 +157,20 @@ QtObject {
     readonly property color progressTrack:    borderSubtle
     readonly property color progressFill:     accent
     readonly property color overlayDim:       "#80000000"    // black at 50%
-    readonly property color menuBackground:   "#3a3a3c"
+    // U01 (prepare-context-menus gap12): popup-layer surface anchored to the
+    // §2 body base = upstream notification window dark bg
+    // (NotificationManager.cpp:239). Popup-layer only -- not part of the
+    // deferred bgElevated/bgSurface global stack.
+    readonly property color menuBackground:   "#2d2d31"
     readonly property color selectionColor:   accent
     readonly property color selectionText:    bgBase
+
+    // R14 (restoration-map.md:44) disabled control capsule, measured from the
+    // prepare-page export capsule at (1200,58). U01 applies it to CxButton's
+    // Primary disabled state, replacing the old accentSubtle + 0.45 opacity
+    // overlay.
+    readonly property color controlDisabledBg:   "#8e8e83"
+    readonly property color controlDisabledText: "#56564f"
 
     // ── Control sizing
     readonly property int controlHeightSM:  28

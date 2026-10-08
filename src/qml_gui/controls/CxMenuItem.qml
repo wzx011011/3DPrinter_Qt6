@@ -5,6 +5,28 @@ import ".."
 MenuItem {
     id: root
 
+    // U08: checkable indicator. The Basic style puts its indicator at
+    // x=leftPadding(6) while this control's contentItem uses a fixed
+    // leftPadding, so a stock check mark would be drawn under the text.
+    // Custom indicator + reserved check column; rendered only for checkable
+    // items (upstream native check items, GUI_Factories.cpp
+    // append_menu_check_item), so non-checkable menus keep their layout.
+    indicator: Item {
+        x: Theme.spacingSM
+        y: (parent.height - height) / 2
+        implicitWidth: 16
+        implicitHeight: 16
+        visible: root.checkable
+        Text {
+            anchors.centerIn: parent
+            visible: root.checked
+            text: "✓"
+            color: Theme.accent
+            font.pixelSize: 12
+            font.bold: true
+        }
+    }
+
     background: Rectangle {
         color: {
             if (!root.enabled) return "transparent"
@@ -18,7 +40,12 @@ MenuItem {
         text: root.text
         color: root.enabled ? Theme.textPrimary : Theme.textDisabled
         font.pixelSize: Theme.fontSizeMD
-        leftPadding: Theme.spacingLG
+        // Reserve the check column only when the item is checkable; plain
+        // items keep the original leftPadding (zero change for existing
+        // menus, U08 incremental requirement).
+        leftPadding: root.checkable
+                     ? root.indicator.x + root.indicator.width + root.spacing
+                     : Theme.spacingLG
         verticalAlignment: Text.AlignVCenter
     }
 
