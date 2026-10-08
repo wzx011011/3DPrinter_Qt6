@@ -2,13 +2,20 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import ".."
-import "../controls"
 
 // KBShortcutsDialog.qml - keyboard shortcut overview dialog.
 //
-// Extracted from the inline Dialog in main.qml (Phase 195, UI-02) and
-// reorganized as a 5-group view aligned with upstream OrcaSlicer
-// KBShortcutsDialog.cpp (Global / Prepare / Toolbar / Objects List / Preview).
+// 1:1 skeleton with upstream OrcaSlicer KBShortcutsDialog.cpp: a 1px top
+// separator line (cpp:33-36), a full-height left selector panel of 150x28
+// square tab buttons (cpp:39-43, 116-126) and a scrolling shortcuts page on
+// the right (cpp:58-64, 338-365). Content area is 1032x501 = 150 + 12 + 870
+// wide and 1 + 500 high, centered on the parent (cpp:77-78).
+//
+// The 5 selector tabs mirror the upstream page order (cpp:45-49 bound via
+// cpp:67-71): "Global" -> Global shortcuts, "Prepare" -> Plater, "Toolbar" ->
+// Gizmo, "Objects list" -> Objects List, "Preview" -> Preview. The camera
+// preset rows therefore live in the Prepare tab (upstream Plater page,
+// cpp:242-248) and the Toolbar tab shows the gizmo keys (cpp:276-282).
 //
 // Presentation only: this dialog documents the user-visible shortcuts. Some
 // shortcuts (F/W/E/R/Space/arrows/PgUp/PgDn) are handled in C++ keyPressEvent
@@ -20,30 +27,31 @@ Dialog {
     title: qsTr("Keyboard Shortcuts")
     modal: true
     anchors.centerIn: parent
-    width: 560
-    height: 480
+    // Upstream content geometry (KBShortcutsDialog.cpp:53-64, Fit() +
+    // CenterOnParent() at :77-78).
+    width: 1032
+    height: 501
     padding: 0
 
-    // Group selector model aligned with upstream KBShortcutsDialog.cpp groups.
+    // Group selector model aligned with the upstream tab labels
+    // (KBShortcutsDialog.cpp:45-49); the ids keep the historical names.
     readonly property var groups: [
         { id: "global", name: qsTr("Global") },
         { id: "prepare", name: qsTr("Prepare") },
         { id: "toolbar", name: qsTr("Toolbar") },
-        { id: "objects", name: qsTr("Objects List") },
+        { id: "objects", name: qsTr("Objects list") },
         { id: "preview", name: qsTr("Preview") }
     ]
 
-    // Shortcut entries mapped to the upstream 5-group structure.
-    // Global: app-wide actions bound via QML Shortcut{} in main.qml
-    // (upstream global list, KBShortcutsDialog.cpp:173-215).
+    // Shortcut entries mapped to the upstream pages.
+    // Global: app-wide actions (upstream Global page, cpp:173-208); Undo/Redo
+    // live on the Plater page upstream and are listed under Prepare below.
     readonly property var globalShortcuts: [
-        { key: "Ctrl+Z", desc: qsTr("Undo") },
-        { key: "Ctrl+Y", desc: qsTr("Redo") },
-        { key: "Ctrl+Shift+Z", desc: qsTr("Redo (alternate)") },
         { key: "Ctrl+N", desc: qsTr("New Project") },
         { key: "Ctrl+O", desc: qsTr("Open Project") },
         { key: "Ctrl+S", desc: qsTr("Save Project") },
         { key: "Ctrl+Shift+S", desc: qsTr("Save Project as") },
+        { key: "Ctrl+Shift+E", desc: qsTr("Publish 3MF") },
         { key: "Ctrl+I", desc: qsTr("Import geometry data from STL/STEP/3MF/OBJ/AMF files") },
         { key: "Ctrl+G", desc: qsTr("Export plate sliced file") },
         { key: "Ctrl+R", desc: qsTr("Slice plate") },
@@ -52,71 +60,109 @@ Dialog {
         { key: "Ctrl+C", desc: qsTr("Copy to clipboard") },
         { key: "Ctrl+V", desc: qsTr("Paste from clipboard") },
         { key: "Ctrl+P", desc: qsTr("Preferences") },
-        { key: "Del", desc: qsTr("Delete selected") }
+        { key: "Ctrl+M", desc: qsTr("Show/Hide 3Dconnexion devices settings dialog") },
+        { key: "Ctrl+Tab", desc: qsTr("Switch table page") },
+        { key: "Del", desc: qsTr("Delete selected") },
+        { key: "?", desc: qsTr("Show keyboard shortcuts list") }
     ]
-    // GAP-4 (HOTKEYS-UPSTREAM-ALIGN): the plater canvas keys now mirror the
-    // upstream table (KBShortcutsDialog.cpp:222-274) implemented in
-    // PreparePage.qml Keys; OWzx extensions are listed explicitly.
+    // Prepare: the upstream Plater page (KBShortcutsDialog.cpp:219-273) as
+    // implemented in PreparePage.qml Keys / RhiViewport mouse handling. The
+    // mouse-action mapping reflects the default navigation style
+    // (RhiViewport.cpp:1755-1763: left drag orbits, middle drag pans, wheel
+    // zooms); Shift+R and the 2-digit filament form are OWzx extensions.
     readonly property var prepareShortcuts: [
-        { key: "M", desc: qsTr("Gizmo move") },
-        { key: "S", desc: qsTr("Gizmo scale") },
-        { key: "R", desc: qsTr("Gizmo rotate") },
-        { key: "C", desc: qsTr("Gizmo cut") },
-        { key: "B", desc: qsTr("Gizmo mesh boolean") },
-        { key: "L", desc: qsTr("Gizmo SLA support points") },
-        { key: "F", desc: qsTr("Gizmo Place face on bed") },
-        { key: "P", desc: qsTr("Gizmo FDM paint-on seam") },
-        { key: "T", desc: qsTr("Gizmo Text emboss / engrave") },
-        { key: "U", desc: qsTr("Gizmo measure") },
-        { key: "Y", desc: qsTr("Gizmo assemble") },
+        { key: "Left mouse button", desc: qsTr("Rotate View") },
+        { key: "Middle mouse button", desc: qsTr("Pan View") },
+        { key: "Right mouse button", desc: qsTr("None") },
+        { key: "Mouse wheel", desc: qsTr("Zoom View") },
         { key: "A", desc: qsTr("Arrange all objects") },
         { key: "Shift+A", desc: qsTr("Arrange objects on selected plates") },
         { key: "Q", desc: qsTr("Auto orientate selected objects (or all)") },
         { key: "Shift+Q", desc: qsTr("Auto orientate objects on the active plate") },
         { key: "Shift+R", desc: qsTr("Auto orientate selected objects") },
-        { key: "V", desc: qsTr("Toggle printable for selected object/part") },
-        { key: "I", desc: qsTr("Zoom in") },
-        { key: "O", desc: qsTr("Zoom out") },
-        { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
         { key: "Shift+Tab", desc: qsTr("Collapse/Expand the sidebar") },
-        { key: "1-9", desc: qsTr("Set filament for object/part (0 as second digit for 10..16)") },
-        { key: "Shift+Left mouse", desc: qsTr("Select objects by rectangle") },
+        { key: "Ctrl+Any arrow", desc: qsTr("Movement in camera space") },
         { key: "Alt+Left mouse", desc: qsTr("Select a part") },
         { key: "Ctrl+Left mouse", desc: qsTr("Select multiple objects") },
-        { key: "Arrow keys", desc: qsTr("Move selection 10 mm (Shift: 1 mm)") },
-        { key: "Ctrl+U", desc: qsTr("Measure gizmo (OWzx extension)") }
-    ]
-    // Toolbar: preset camera views (Phase 237 VIEW-01, bound via QML
-    // Shortcut{} in main.qml; upstream list at KBShortcutsDialog.cpp:247-253).
-    readonly property var toolbarShortcuts: [
+        { key: "Shift+Left mouse", desc: qsTr("Select objects by rectangle") },
+        { key: "Arrow Up", desc: qsTr("Move selection 10mm in positive Y direction") },
+        { key: "Arrow Down", desc: qsTr("Move selection 10mm in negative Y direction") },
+        { key: "Arrow Left", desc: qsTr("Move selection 10mm in negative X direction") },
+        { key: "Arrow Right", desc: qsTr("Move selection 10mm in positive X direction") },
+        { key: "Shift+Any arrow", desc: qsTr("Movement step set to 1mm") },
+        { key: "Esc", desc: qsTr("Deselect All") },
+        { key: "1-9", desc: qsTr("Set filament for object/part (0 as second digit for 10..16)") },
         { key: "Ctrl+0", desc: qsTr("Camera view - Default") },
         { key: "Ctrl+1", desc: qsTr("Camera view - Top") },
         { key: "Ctrl+2", desc: qsTr("Camera view - Bottom") },
         { key: "Ctrl+3", desc: qsTr("Camera view - Front") },
         { key: "Ctrl+4", desc: qsTr("Camera view - Behind") },
         { key: "Ctrl+5", desc: qsTr("Camera Angle - Left side") },
-        { key: "Ctrl+6", desc: qsTr("Camera Angle - Right side") }
-    ]
-    // Objects List: selection/edit actions bound via QML Shortcut{} in main.qml.
-    readonly property var objectsShortcuts: [
+        { key: "Ctrl+6", desc: qsTr("Camera Angle - Right side") },
         { key: "Ctrl+A", desc: qsTr("Select all objects") },
-        { key: "Ctrl+X", desc: qsTr("Cut selection") },
+        { key: "Ctrl+D", desc: qsTr("Delete all") },
+        { key: "Ctrl+Z", desc: qsTr("Undo") },
+        { key: "Ctrl+Y", desc: qsTr("Redo") },
+        { key: "M", desc: qsTr("Gizmo move") },
+        { key: "R", desc: qsTr("Gizmo rotate") },
+        { key: "S", desc: qsTr("Gizmo scale") },
+        { key: "F", desc: qsTr("Gizmo Place face on bed") },
+        { key: "C", desc: qsTr("Gizmo cut") },
+        { key: "B", desc: qsTr("Gizmo mesh boolean") },
+        { key: "H", desc: qsTr("Gizmo FDM paint-on fuzzy skin") },
+        { key: "L", desc: qsTr("Gizmo SLA support points") },
+        { key: "P", desc: qsTr("Gizmo FDM paint-on seam") },
+        { key: "T", desc: qsTr("Gizmo Text emboss / engrave") },
+        { key: "U", desc: qsTr("Gizmo measure") },
+        { key: "Y", desc: qsTr("Gizmo assemble") },
+        { key: "E", desc: qsTr("Gizmo brim ears") },
+        { key: "I", desc: qsTr("Zoom in") },
+        { key: "O", desc: qsTr("Zoom out") },
+        { key: "V", desc: qsTr("Toggle printable for selected object/part") },
+        { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
+        { key: "Space", desc: qsTr("Open actions speed dial") }
+    ]
+    // Toolbar: the upstream Gizmo page (KBShortcutsDialog.cpp:276-282); the
+    // third "Toolbar" tab shows the gizmo keys per the page binding order
+    // (cpp:45-49 + cpp:67-71).
+    readonly property var toolbarShortcuts: [
+        { key: "Esc", desc: qsTr("Deselect All") },
+        { key: "Shift+", desc: qsTr("Move: press to snap by 1mm") },
+        { key: "Ctrl+Mouse wheel", desc: qsTr("Support/Color Painting: adjust pen radius") },
+        { key: "Alt+Mouse wheel", desc: qsTr("Support/Color Painting: adjust section position") }
+    ]
+    // Objects List: selection/edit actions bound via QML Shortcut{} in
+    // main.qml (upstream Objects List page, cpp:284-297).
+    readonly property var objectsShortcuts: [
+        { key: "1-9", desc: qsTr("Set extruder number for the objects and parts") },
+        { key: "Delete", desc: qsTr("Delete selection") },
+        { key: "Escape", desc: qsTr("Deselect all") },
         { key: "Ctrl+C", desc: qsTr("Copy selection") },
         { key: "Ctrl+V", desc: qsTr("Paste") },
-        { key: "Ctrl+D", desc: qsTr("Delete all") },
+        { key: "Ctrl+X", desc: qsTr("Cut selection") },
+        { key: "Ctrl+A", desc: qsTr("Select all objects") },
         { key: "Ctrl+K", desc: qsTr("Clone selected") },
-        { key: "Delete", desc: qsTr("Delete selection") },
-        { key: "Escape", desc: qsTr("Deselect all") }
+        { key: "Ctrl+Z", desc: qsTr("Undo") },
+        { key: "Ctrl+Y", desc: qsTr("Redo") },
+        { key: "Space", desc: qsTr("Select the object/part and press space to change the name") },
+        { key: "Mouse click", desc: qsTr("Select the object/part and mouse click to change the name") }
     ]
-    // Preview: playback and layer navigation (handled in C++ keyPressEvent).
+    // Preview: slider navigation keys mirroring the upstream Preview page
+    // (cpp:301-315); L/C are handled in the C++ keyPressEvent.
     readonly property var previewShortcuts: [
-        { key: "Space", desc: qsTr("Play / pause preview animation") },
-        { key: "Left / Right", desc: qsTr("Step move +/-100") },
-        { key: "Home / End", desc: qsTr("Jump to start / end") },
-        { key: "PgUp / PgDn", desc: qsTr("Layer range +/-1") },
-        { key: "Shift+PgUp/Dn", desc: qsTr("Layer range +/-10") },
+        { key: "Arrow Up", desc: qsTr("Vertical slider - Move active thumb Up") },
+        { key: "Arrow Down", desc: qsTr("Vertical slider - Move active thumb Down") },
+        { key: "Arrow Left", desc: qsTr("Horizontal slider - Move active thumb Left") },
+        { key: "Arrow Right", desc: qsTr("Horizontal slider - Move active thumb Right") },
         { key: "L", desc: qsTr("Toggle single-layer mode") },
-        { key: "C", desc: qsTr("Toggle G-code window") }
+        { key: "C", desc: qsTr("Toggle G-code window") },
+        { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
+        { key: "Shift+Any arrow", desc: qsTr("Move slider 5x faster") },
+        { key: "Shift+Mouse wheel", desc: qsTr("Move slider 5x faster") },
+        { key: "Ctrl+Any arrow", desc: qsTr("Move slider 5x faster") },
+        { key: "Ctrl+Mouse wheel", desc: qsTr("Move slider 5x faster") },
+        { key: "Home", desc: qsTr("Horizontal slider - Move to start position") },
+        { key: "End", desc: qsTr("Horizontal slider - Move to last position") }
     ]
 
     property string currentGroup: "global"
@@ -132,57 +178,60 @@ Dialog {
 
     background: Rectangle {
         color: Theme.bgPanel
-        border.width: 1
-        border.color: Theme.borderDefault
-        radius: Theme.radiusMD
+
+        // Full-width 1px top separator line (upstream m_top_line, cpp:33-36);
+        // the neutral border token stands in for upstream RGB(166,169,170).
+        Rectangle {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 1
+            color: Theme.borderDefault
+        }
     }
 
     contentItem: Item {
-        implicitWidth: 560
-        implicitHeight: 480
+        implicitWidth: 1032
+        implicitHeight: 501
 
-        // Header
-        Text {
-            id: header
+        // Full-height left selector panel (upstream m_panel_selects, full
+        // height via wxEXPAND, cpp:39-40 + :54); the neutral elevated surface
+        // token stands in for upstream RGB(248,248,248).
+        Rectangle {
+            id: leftPanel
             anchors.top: parent.top
+            anchors.topMargin: 1
+            anchors.bottom: parent.bottom
             anchors.left: parent.left
-            anchors.margins: 20
-            text: root.title
-            color: Theme.textPrimary
-            font.pixelSize: Theme.fontSizeLG
-            font.bold: true
-        }
+            width: 150
+            color: Theme.bgElevated
 
-        RowLayout {
-            anchors.top: header.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: footerRow.top
-            anchors.margins: 16
-            spacing: 12
-
-            // Left group selector
-            ColumnLayout {
-                Layout.preferredWidth: 140
-                Layout.fillHeight: true
-                spacing: 4
+            // 20 DIP above the first button (upstream cpp:43), then flush
+            // 150x28 square buttons (cpp:116).
+            Column {
+                anchors.top: parent.top
+                anchors.topMargin: 20
+                width: parent.width
+                spacing: 0
 
                 Repeater {
                     model: root.groups
                     delegate: Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 34
-                        radius: Theme.radiusSM
-                        color: root.currentGroup === modelData.id ? Theme.accent : Theme.bgElevated
+                        width: 150
+                        height: 28
+                        radius: 0
+                        color: root.currentGroup === modelData.id ? Theme.accent : "transparent"
                         opacity: groupMouse.containsMouse && root.currentGroup !== modelData.id ? 0.8 : 1.0
-                        border.width: root.currentGroup === modelData.id ? 0 : 1
-                        border.color: Theme.borderSubtle
 
                         Text {
-                            anchors.centerIn: parent
+                            // 22px left indent, vertically centered
+                            // (upstream cpp:120-126); 13px label switching
+                            // between body and bold weights on selection.
+                            x: 22
+                            anchors.verticalCenter: parent.verticalCenter
                             text: modelData.name
                             color: root.currentGroup === modelData.id ? Theme.textOnAccent : Theme.textSecondary
-                            font.pixelSize: Theme.fontSizeSM
+                            font.pixelSize: Theme.fontSize13
                             font.bold: root.currentGroup === modelData.id
                         }
 
@@ -195,71 +244,58 @@ Dialog {
                         }
                     }
                 }
-
-                Item { Layout.fillHeight: true }
-            }
-
-            // Right content: shortcut list for the selected group
-            ScrollView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                contentWidth: availableWidth
-
-                Column {
-                    width: parent.width
-                    spacing: 4
-
-                    Repeater {
-                        model: root.shortcutsForGroup(root.currentGroup)
-                        delegate: RowLayout {
-                            width: parent.width
-                            spacing: 14
-
-                            Rectangle {
-                                Layout.preferredWidth: 96
-                                Layout.preferredHeight: 24
-                                radius: 4
-                                color: Theme.bgTooltip
-                                border.width: 1
-                                border.color: Theme.borderSubtle
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: modelData.key
-                                    color: Theme.accent
-                                    font.pixelSize: Theme.fontSizeSM
-                                    font.bold: true
-                                    font.family: Theme.fontMono
-                                }
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: modelData.desc
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSizeMD
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                        }
-                    }
-                }
             }
         }
 
-        // Footer close button
-        RowLayout {
-            id: footerRow
-            anchors.bottom: parent.bottom
+        // Right content page: 12 DIP left of the selector panel, scrolling
+        // shortcuts grid (upstream simplebook + scrolled page, cpp:58-64,
+        // 338-365).
+        ScrollView {
+            anchors.top: parent.top
+            anchors.topMargin: 1
+            anchors.left: leftPanel.right
+            anchors.leftMargin: 12
             anchors.right: parent.right
-            anchors.margins: 16
-            spacing: 8
+            anchors.bottom: parent.bottom
+            clip: true
+            contentWidth: availableWidth
 
-            CxButton {
-                text: qsTr("Close")
-                compact: true
-                implicitWidth: 80
-                onClicked: root.close()
+            // 20 DIP margin around the grid (upstream cpp:360); rows 10 DIP
+            // apart with a 20 DIP column gap (upstream wxFlexGridSizer,
+            // cpp:341). Keys are plain bold text (cpp:349-351) and the
+            // description wraps (upstream Wrap(600), cpp:356).
+            Column {
+                x: 20
+                y: 20
+                width: parent.width - 40
+                spacing: 10
+
+                Repeater {
+                    model: root.shortcutsForGroup(root.currentGroup)
+                    delegate: RowLayout {
+                        width: parent.width
+                        spacing: 20
+
+                        Text {
+                            Layout.preferredWidth: 150
+                            text: modelData.key
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSize13
+                            font.bold: true
+                            verticalAlignment: Text.AlignVCenter
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.maximumWidth: 600
+                            text: modelData.desc
+                            wrapMode: Text.Wrap
+                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSize13
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                }
             }
         }
     }

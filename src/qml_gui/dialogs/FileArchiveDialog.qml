@@ -9,8 +9,11 @@ import "../controls"
 //
 // Upstream: OrcaSlicer/Creality Print open a file-tree dialog with checkboxes
 // when a zip archive is imported (FileArchiveDialog) — the user picks which
-// models inside the archive to import. OWzx enumerates the importable model
-// entries (*.stl/*.obj/*.3mf/*.amf) via
+// models inside the archive to import. Paths are grouped into folder nodes
+// (upstream builds the tree by walking each entry's parent path,
+// FileArchiveDialog.cpp:204-252) with every folder expanded by default
+// (AddFile → Expand, :43). OWzx enumerates the importable model entries
+// (*.stl/*.obj/*.3mf/*.amf/*.step/*.stp) via
 // EditorViewModel::listArchiveEntries (miniz central directory, no
 // extraction) and imports the checked entries through
 // EditorViewModel::importArchiveEntries (extract to temp + normal loadFile).
@@ -20,22 +23,31 @@ import "../controls"
 //       editorVm: backend.editorViewModel
 //       // openFor(path) lists entries; onImportRequested carries the archive path.
 //   }
+//
+// Registered deviation: upstream is resizable/maximizable
+// (wxRESIZE_BORDER|wxMAXIMIZE_BOX, min 400×300 — FileArchiveDialog.cpp:173-175/:263);
+// QML Popup has no native resize affordance, so the dialog keeps a fixed 450×400.
 // ─────────────────────────────────────────────────────────────────────────────
 
 CxDialog {
     id: root
     modal: true
-    closePolicy: Popup.NoAutoClose
+    // Upstream runs as a modal wx dialog — Esc cancels, outside presses are
+    // blocked by modality (FileArchiveDialog.cpp:173-175 wxDEFAULT_DIALOG_STYLE).
+    closePolicy: Popup.CloseOnEscape
     dialogTitle: qsTr("压缩包导入")
-    width: 460
+    width: 450   // upstream 45 * em_unit() (FileArchiveDialog.cpp:174)
     height: 400
     padding: 0
 
     required property var editorVm
 
     property string archivePath: ""
-    property var entries: []          // string list from listArchiveEntries
-    property var checkedEntries: ({}) // entry name -> true
+    property var entries: []           // flat importable file list from listArchiveEntries (full archive paths)
+    property var checkedEntries: ({})  // file path -> true
+    property var folderChecked: ({})   // folder path -> bool (upstream keeps a toggle on folder nodes too)
+    property var folderExpanded: ({})  // folder path -> bool (default true, upstream AddFile expands)
+    property var treeNodes: []         // flattened display model: {name, path, depth, isFolder}
 
     signal importRequested(string archivePath, var selectedEntries)
 
@@ -47,15 +59,129 @@ CxDialog {
         return count
     }
 
+    function isFolderExpanded(path) {
+        return folderExpanded[path] !== undefined ? folderExpanded[path] : true
+    }
+
+    // Collect every folder prefix of the archive entries that sits below
+    // (and including) the given folder path.
+    function collectFoldersUnder(path, list) {
+        for (var i = 0; i < entries.length; ++i) {
+            var parts = entries[i].split("/")
+            for (var d = 0; d < parts.length - 1; ++d) {
+                var folderPath = parts.slice(0, d + 1).join("/")
+                if ((path === "" || folderPath.indexOf(path + "/") === 0) && list.indexOf(folderPath) < 0)
+                    list.push(folderPath)
+            }
+        }
+    }
+
+    // Upstream ArchiveViewModel::SetValue (FileArchiveDialog.cpp:116-133):
+    // toggling a folder applies the same value to every descendant; unchecking
+    // any node untoggles its whole ancestor folder chain (untoggle_folders, :107-114).
+    function setEntryChecked(path, isFolder, checked) {
+        var nextFiles = {}
+        for (var key in checkedEntries)
+            nextFiles[key] = checkedEntries[key]
+        var nextFolders = {}
+        for (var folderKey in folderChecked)
+            nextFolders[folderKey] = folderChecked[folderKey]
+
+        if (isFolder) {
+            nextFolders[path] = checked
+            var prefix = path + "/"
+            for (var i = 0; i < entries.length; ++i)
+                if (entries[i].indexOf(prefix) === 0)
+                    nextFiles[entries[i]] = checked
+            var descendants = []
+            collectFoldersUnder(path, descendants)
+            for (var j = 0; j < descendants.length; ++j)
+                nextFolders[descendants[j]] = checked
+        } else {
+            nextFiles[path] = checked
+        }
+
+        if (!checked) {
+            var parts = path.split("/")
+            for (var d = 0; d < parts.length - 1; ++d)
+                nextFolders[parts.slice(0, d + 1).join("/")] = false
+        }
+
+        checkedEntries = nextFiles
+        folderChecked = nextFolders
+    }
+
+    // Upstream on_all_button / on_none_button (FileArchiveDialog.cpp:312-365)
+    // deep-toggle every node in the tree.
+    function setAllChecked(checked) {
+        var nextFiles = {}
+        var nextFolders = {}
+        for (var i = 0; i < entries.length; ++i) {
+            nextFiles[entries[i]] = checked
+            var parts = entries[i].split("/")
+            for (var d = 0; d < parts.length - 1; ++d)
+                nextFolders[parts.slice(0, d + 1).join("/")] = checked
+        }
+        checkedEntries = nextFiles
+        folderChecked = nextFolders
+    }
+
+    function toggleFolderExpanded(path) {
+        var next = {}
+        for (var key in folderExpanded)
+            next[key] = folderExpanded[key]
+        next[path] = !root.isFolderExpanded(path)
+        folderExpanded = next
+        rebuildTree()
+    }
+
+    // Build folder hierarchy from the sorted paths (upstream sorts entries and
+    // walks the common-parent stack, FileArchiveDialog.cpp:234-252), then
+    // flatten with expanded folders interleaved in tree order.
+    function rebuildTree() {
+        var folderIndex = {}
+        var roots = []
+        var sorted = entries.slice().sort()
+        for (var i = 0; i < sorted.length; ++i) {
+            var parts = sorted[i].split("/")
+            var siblings = roots
+            for (var d = 0; d < parts.length - 1; ++d) {
+                var folderPath = parts.slice(0, d + 1).join("/")
+                var folder = folderIndex[folderPath]
+                if (!folder) {
+                    folder = { name: parts[d], path: folderPath, depth: d, isFolder: true, children: [] }
+                    folderIndex[folderPath] = folder
+                    siblings.push(folder)
+                }
+                siblings = folder.children
+            }
+            siblings.push({ name: parts[parts.length - 1], path: sorted[i], depth: parts.length - 1, isFolder: false })
+        }
+        var flat = []
+        var walk = function (list) {
+            for (var j = 0; j < list.length; ++j) {
+                flat.push(list[j])
+                if (list[j].isFolder && root.isFolderExpanded(list[j].path))
+                    walk(list[j].children)
+            }
+        }
+        walk(roots)
+        treeNodes = flat
+    }
+
     function openFor(path) {
         archivePath = path
         entries = editorVm ? editorVm.listArchiveEntries(path) : []
-        // All entries checked by default (upstream default). Build a fresh
-        // object so the var-property change signal fires.
-        var initial = {}
-        for (var i = 0; i < entries.length; ++i)
-            initial[entries[i]] = true
-        checkedEntries = initial
+        // Upstream default: nothing checked (ArchiveViewNode toggle defaults to
+        // false); a single importable entry is all-checked via on_all_button
+        // (FileArchiveDialog.cpp:253-254). Fresh objects so the var-property
+        // change signals fire.
+        checkedEntries = {}
+        folderChecked = {}
+        folderExpanded = {}
+        rebuildTree()
+        if (entries.length === 1)
+            setAllChecked(true)
         open()
     }
 
@@ -69,13 +195,16 @@ CxDialog {
 
     contentItem: ColumnLayout {
         spacing: Theme.spacingMD
-        anchors.margins: Theme.spacingXL
+        anchors.fill: parent
+        // Upstream places the tree and the button row with wxALL 10
+        // (FileArchiveDialog.cpp:260-261).
+        anchors.margins: 10
 
         Text {
             Layout.fillWidth: true
             text: root.entries.length > 0
                 ? qsTr("压缩包内发现 %1 个可导入的模型文件：").arg(root.entries.length)
-                : qsTr("压缩包内没有可导入的模型文件（支持 STL/OBJ/3MF/AMF）。")
+                : qsTr("压缩包内没有可导入的模型文件（支持 STL/OBJ/3MF/AMF/STEP）。")
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeMD
             wrapMode: Text.WordWrap
@@ -95,62 +224,93 @@ CxDialog {
                 anchors.fill: parent
                 anchors.margins: Theme.spacingXS
                 clip: true
-                model: root.entries
+                model: root.treeNodes
                 spacing: 2
 
                 delegate: Rectangle {
-                    required property string modelData
+                    id: entryRow
+                    required property var modelData
                     required property int index
                     width: entryList.width
                     height: 30
                     radius: 3
-                    color: entryHover.containsMouse ? Theme.bgHover : "transparent"
+                    color: rowHover.containsMouse ? Theme.bgHover : "transparent"
+
+                    readonly property bool isChecked: modelData.isFolder
+                        ? root.folderChecked[modelData.path] === true
+                        : root.checkedEntries[modelData.path] === true
+
+                    MouseArea {
+                        id: rowArea
+                        anchors.fill: parent
+                        onClicked: {
+                            if (entryRow.modelData.isFolder)
+                                root.toggleFolderExpanded(entryRow.modelData.path)
+                            else
+                                root.setEntryChecked(entryRow.modelData.path, false, !entryRow.isChecked)
+                        }
+                    }
 
                     Row {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
-                        anchors.leftMargin: Theme.spacingSM
+                        // Depth indentation mirrors the upstream tree hierarchy.
+                        anchors.leftMargin: Theme.spacingSM + entryRow.modelData.depth * 16
                         spacing: Theme.spacingSM
-                        width: parent.width - Theme.spacingSM * 2
+                        width: parent.width - (Theme.spacingSM + entryRow.modelData.depth * 16) - Theme.spacingSM
 
-                        Rectangle {
+                        Item {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 14
+                            width: 18
                             height: 14
-                            radius: 2
-                            color: root.checkedEntries[modelData] ? Theme.accent : Theme.bgCard
-                            border.color: root.checkedEntries[modelData] ? Theme.accent : Theme.borderInput
-                            border.width: 1
 
-                            Text {
+                            Rectangle {
                                 anchors.centerIn: parent
-                                visible: root.checkedEntries[modelData]
-                                text: "✓"
-                                color: Theme.textOnAccent
-                                font.pixelSize: 10
+                                width: 14
+                                height: 14
+                                radius: 2
+                                color: entryRow.isChecked ? Theme.accent : Theme.bgCard
+                                border.color: entryRow.isChecked ? Theme.accent : Theme.borderInput
+                                border.width: 1
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: entryRow.isChecked
+                                    text: "✓"
+                                    color: Theme.textOnAccent
+                                    font.pixelSize: 10
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -3
+                                onClicked: root.setEntryChecked(entryRow.modelData.path,
+                                                                entryRow.modelData.isFolder,
+                                                                !entryRow.isChecked)
                             }
                         }
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            width: parent.width - 20
-                            text: modelData
-                            color: Theme.textSecondary
+                            visible: entryRow.modelData.isFolder
+                            width: visible ? implicitWidth : 0
+                            text: root.isFolderExpanded(entryRow.modelData.path) ? "▾" : "▸"
+                            color: Theme.textTertiary
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.max(0, parent.width - x - Theme.spacingSM)
+                            text: entryRow.modelData.name
+                            color: entryRow.modelData.isFolder ? Theme.textPrimary : Theme.textSecondary
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideMiddle
                         }
                     }
 
-                    HoverHandler { id: entryHover }
-                    TapHandler {
-                        onTapped: {
-                            var next = {}
-                            for (var key in root.checkedEntries)
-                                next[key] = root.checkedEntries[key]
-                            next[modelData] = !root.checkedEntries[modelData]
-                            root.checkedEntries = next
-                        }
-                    }
+                    HoverHandler { id: rowHover }
                 }
 
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
@@ -160,6 +320,18 @@ CxDialog {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingMD
+
+            // Upstream footer starts with All/None (FileArchiveDialog.cpp:368-401).
+            CxButton {
+                text: qsTr("全部")
+                cxStyle: CxButton.Style.Secondary
+                onClicked: root.setAllChecked(true)
+            }
+            CxButton {
+                text: qsTr("无")
+                cxStyle: CxButton.Style.Secondary
+                onClicked: root.setAllChecked(false)
+            }
 
             Text {
                 Layout.fillWidth: true

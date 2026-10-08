@@ -11,6 +11,12 @@ import "../controls"
 // routes through this dialog instead of firing immediately. Mirrors upstream
 // OrcaSlicer's MessageDialog-based confirmation flow (GUI_Msg.cpp MessageCN).
 //
+// U17 (confirm-dialog): upstream focuses the default (Yes/OK) button so
+// Enter confirms it (MsgDialog.cpp:186-187 add_button set_focus, driven by
+// wxYES_DEFAULT; Plater.cpp:17725-17727) and sizes the dialog to its content
+// (MsgDialog.cpp:35 wxSize(360, -1) + finalize() Fit, MsgDialog.cpp:227-233).
+// Defer (registered): 64px icon column (brand logo/question asset, no asset
+// in src/qml_gui/assets/), post-confirm Home jump (main.qml is held by U35).
 // Usage:
 //   ConfirmDialog {
 //       id: deleteConfirm

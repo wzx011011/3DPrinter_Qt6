@@ -12,8 +12,10 @@ Dialog {
     modal: true
     anchors.centerIn: parent
     width: 420
-    // manual mode carries one extra field row
-    height: manualAddMode ? 420 : 360
+    // manual mode carries one extra field row; +20 over the old 420/360 to fit
+    // the persistent two-line hint below the access code field (upstream
+    // ConnectPrinter.cpp:53-59)
+    height: manualAddMode ? 440 : 380
     padding: 0
     background: Rectangle {
         color: Theme.bgPanel
@@ -117,12 +119,24 @@ Dialog {
             CxTextField {
                 id: accessCodeField
                 Layout.fillWidth: true
-                placeholderText: qsTr("在打印机屏幕：设置 > 网络 > 局域网访问码")
+                // 占位符不含「>」：zh_CN.ts:175 对旧占位符的翻译把 XML 实体
+                // 双重转义成字面 “&gt;”（qsTr 返回译文即带出），且 .ts 不归本
+                // 单元所有——改写源串避开该字符后旧条目失配失效。
+                placeholderText: qsTr("请输入访问码")
                 selectByMouse: true
-                // access code 通常是 8 位数字（带空格），允许字母数字空格
+                // 上游 ConnectPrinter.cpp:36 SetMaxLength(10)
                 validator: RegularExpressionValidator {
-                    regularExpression: /[A-Za-z0-9 ]{0,12}/
+                    regularExpression: /[A-Za-z0-9 ]{0,10}/
                 }
+            }
+            // 上游常驻两行提示（ConnectPrinter.cpp:53-59 “Settings > Network >
+            // Access code” 两行 StaticText）；路径分隔用「→」规避 &gt; 转义链
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("可在打印机屏幕上找到访问码：\n设置 → 网络 → 局域网访问码")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeSM
+                wrapMode: Text.WordWrap
             }
         }
 
@@ -152,7 +166,7 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             spacing: Theme.spacingLG
-            CheckBox {
+            CxCheckBox {
                 id: advancedToggle
                 text: qsTr("高级")
                 checked: false
@@ -161,6 +175,9 @@ Dialog {
 
             CxButton {
                 text: qsTr("取消")
+                // 上游 Cancel 为非主色次级（MsgDialog 家族仅 OK/Confirm 主样式）；
+                // 绿仅主/激活，双绿失层级
+                cxStyle: CxButton.Style.Secondary
                 onClicked: {
                     root.accepted_ = false;
                     root.reject();

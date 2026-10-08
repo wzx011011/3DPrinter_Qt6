@@ -326,6 +326,30 @@ ApplicationWindow {
         }
     }
 
+    // G7: overflow actions for the compact preset/action bar. The upstream top
+    // bar keeps undo/undo-to-sys/save/search/mode (Tab.cpp:406-441) and comments
+    // the compare button out (Tab.cpp:278); Save-As and Compare stay reachable
+    // here without compressing the row.
+    CxMenu {
+        id: presetOverflowMenu
+
+        CxMenuItem {
+            text: qsTr("另存为")
+            onTriggered: saveAsDialog.open()
+        }
+        CxMenuItem {
+            // Phase 154 (CLOS-01): compare presets entry. Opens
+            // PresetDiffDialog via ConfigViewModel.requestComparePresets
+            // (emits comparePresetsRequired → Connections handler).
+            text: qsTr("比较预设")
+            enabled: root.configVm && root.presetNames && root.presetNames.length > 1
+            onTriggered: {
+                if (root.configVm)
+                    root.configVm.requestComparePresets()
+            }
+        }
+    }
+
     // Removed dead deleteConfirmDialog/resetAllConfirmDialog: their openers
     // (Preset bar Delete/Reset All buttons) were removed in the compact-layout
     // refactor. Preset deletion goes through the sidebar's per-row "⋮" edit
@@ -356,6 +380,10 @@ ApplicationWindow {
                     // Preset selector
                     CxComboBox {
                         Layout.fillWidth: true
+                        // G7: upstream preset combo min width 35em (Tab.cpp:821-823
+                        // explicit-resize block, em≈10 → 350px) so the fixed action
+                        // set can no longer compress the selector (754px > 720px).
+                        Layout.minimumWidth: 350
                         model: root.presetNames
                         currentIndex: {
                             var idx = root.presetIndexForName(root.currentPreset)
@@ -444,29 +472,17 @@ ApplicationWindow {
                         onClicked: root.requestSaveAndMaybeClose(false)
                     }
 
+                    // G7: Save-As and Compare move into the overflow menu
+                    // (presetOverflowMenu below). Upstream keeps the tab top bar to
+                    // undo/undo-to-sys/save/search/mode (Tab.cpp:406-441) and has
+                    // the compare button commented out (Tab.cpp:278).
                     CxIconButton {
                         buttonSize: 28
                         iconSize: 15
                         cxStyle: CxIconButton.Style.Ghost
-                        iconSource: "qrc:/qml/assets/icons/copy.svg"
-                        toolTipText: qsTr("另存为")
-                        onClicked: saveAsDialog.open()
-                    }
-
-                    // Phase 154 (CLOS-01): Compare presets button. Opens
-                    // PresetDiffDialog via ConfigViewModel.requestComparePresets
-                    // (emits comparePresetsRequired → Connections handler).
-                    CxIconButton {
-                        buttonSize: 28
-                        iconSize: 15
-                        cxStyle: CxIconButton.Style.Ghost
-                        iconSource: "qrc:/qml/assets/icons/list-details.svg"
-                        toolTipText: qsTr("比较预设")
-                        enabled: root.configVm && root.presetNames && root.presetNames.length > 1
-                        onClicked: {
-                            if (root.configVm)
-                                root.configVm.requestComparePresets()
-                        }
+                        iconSource: "qrc:/qml/assets/icons/dots.svg"
+                        toolTipText: qsTr("更多操作")
+                        onClicked: presetOverflowMenu.popup(this, 0, this.height)
                     }
 
                     CxIconButton {
@@ -486,7 +502,10 @@ ApplicationWindow {
                     CxTextField {
                         id: compactSearchField
                         visible: root.searchExpanded || root.searchText.length > 0
-                        Layout.preferredWidth: visible ? 132 : 0
+                        // G7: upstream search box is a proportion-1 flexible
+                        // StaticBox with no fixed width (Tab.cpp:321); 124 keeps
+                        // the expanded row ≤720px next to the 35em combo floor.
+                        Layout.preferredWidth: visible ? 124 : 0
                         Layout.preferredHeight: 28
                         opacity: visible ? 1 : 0
                         placeholderText: qsTr("搜索")
@@ -558,7 +577,9 @@ ApplicationWindow {
 
                             contentItem: Text {
                                 text: processTab.text
-                                color: root.activeTab === processTab.pageKey ? Theme.accent : Theme.textSecondary
+                                // G4: active tab label is white (R12); the accent
+                                // stays on the 2px underline below.
+                                color: root.activeTab === processTab.pageKey ? Theme.textPrimary : Theme.textSecondary
                                 font.pixelSize: root.activeTab === processTab.pageKey ? Theme.fontSizeMD : Theme.fontSizeSM
                                 font.weight: root.activeTab === processTab.pageKey ? Font.DemiBold : Font.Normal
                                 elide: Text.ElideRight
@@ -640,7 +661,9 @@ ApplicationWindow {
                             Text {
                                 anchors.centerIn: parent
                                 text: modelData.label
-                                color: root.activeTab === modelData.key ? Theme.accent : Theme.textSecondary
+                                // G4: active tab label is white (R12); the accent
+                                // stays on the 2px underline below.
+                                color: root.activeTab === modelData.key ? Theme.textPrimary : Theme.textSecondary
                                 font.pixelSize: Theme.fontSizeSM
                                 font.bold: root.activeTab === modelData.key
                                 elide: Text.ElideRight
@@ -667,155 +690,162 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     color: Theme.bgBase
 
-                    ListView {
-                        id: processOptionListComponent
+                    // G6: styled scroll chrome comes from CxScrollView (U01 token
+                    // values); the bare ScrollBar.vertical overrides are gone.
+                    CxScrollView {
                         anchors.fill: parent
-                        visible: root.presetTier === "print"
-                        clip: true
-                        model: root.optionModel && root.activeTab !== ""
-                               ? root.optionModel.processGroupsForPage(root.activeTab) : []
-                        // C++-side projection count: search + page filter plus
-                        // (page, group) process-manifest membership — exactly
-                        // the rows the per-group proxies below accept.
-                        readonly property bool hasProjectedRows:
-                            root.optionModel
-                            ? root.optionModel.processProjectedRowCount(
-                                  root.activeTab, root.searchText, root.advancedMode) > 0
-                            : false
-                        spacing: Theme.spacingXS
-                        ScrollBar.vertical: ScrollBar {
-                            visible: processOptionListComponent.contentHeight > processOptionListComponent.height
-                        }
 
-                        Text {
-                            anchors.centerIn: parent
-                            visible: !processOptionListComponent.hasProjectedRows
-                            text: qsTr("No options")
-                            color: Theme.textDisabled
-                            font.pixelSize: Theme.fontSizeMD
-                        }
+                        ListView {
+                            id: processOptionListComponent
+                            anchors.fill: parent
+                            visible: root.presetTier === "print"
+                            clip: true
+                            model: root.optionModel && root.activeTab !== ""
+                                   ? root.optionModel.processGroupsForPage(root.activeTab) : []
+                            // C++-side projection count: search + page filter plus
+                            // (page, group) process-manifest membership — exactly
+                            // the rows the per-group proxies below accept.
+                            readonly property bool hasProjectedRows:
+                                root.optionModel
+                                ? root.optionModel.processProjectedRowCount(
+                                      root.activeTab, root.searchText, root.advancedMode) > 0
+                                : false
+                            // G3: R11 row rhythm — 30px rows touch (pitch 30, was 34+4=38).
+                            spacing: 0
 
-                        delegate: Item {
-                            id: processGroupDelegate
-                            required property var modelData
-                            required property int index
-                            readonly property string groupName: modelData
-
-                            // Per-group filtered + upstream-manifest-ordered
-                            // projection over the option model. count hides
-                            // empty groups and drives the inner Repeater.
-                            readonly property ConfigOptionFilterProxy groupRows: ConfigOptionFilterProxy {
-                                sourceModel: root.optionModel
-                                page: root.activeTab
-                                group: processGroupDelegate.groupName
-                                searchText: root.searchText
-                                advancedMode: root.advancedMode
-                                upstreamProcessOrder: true
+                            Text {
+                                anchors.centerIn: parent
+                                visible: !processOptionListComponent.hasProjectedRows
+                                text: qsTr("No options")
+                                color: Theme.textDisabled
+                                font.pixelSize: Theme.fontSizeMD
                             }
 
-                            visible: groupRows.count > 0
-                            width: processOptionListComponent.width
-                            height: visible ? processGroupColumn.implicitHeight : 0
+                            delegate: Item {
+                                id: processGroupDelegate
+                                required property var modelData
+                                required property int index
+                                readonly property string groupName: modelData
 
-                            Column {
-                                id: processGroupColumn
-                                width: parent.width
-                                spacing: Theme.spacingXS
-
-                                Rectangle {
-                                    width: parent.width
-                                    height: 28
-                                    color: "transparent"
-
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.leftMargin: Theme.spacingMD
-                                        anchors.rightMargin: Theme.spacingMD
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: root.processDisplayLabel(processGroupDelegate.groupName)
-                                        color: Theme.textSecondary
-                                        font.pixelSize: Theme.fontSizeMD
-                                        font.weight: Font.DemiBold
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Rectangle {
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        height: 1
-                                        color: Theme.borderSubtle
-                                    }
+                                // Per-group filtered + upstream-manifest-ordered
+                                // projection over the option model. count hides
+                                // empty groups and drives the inner Repeater.
+                                readonly property ConfigOptionFilterProxy groupRows: ConfigOptionFilterProxy {
+                                    sourceModel: root.optionModel
+                                    page: root.activeTab
+                                    group: processGroupDelegate.groupName
+                                    searchText: root.searchText
+                                    advancedMode: root.advancedMode
+                                    upstreamProcessOrder: true
                                 }
 
-                                Repeater {
-                                    model: processGroupDelegate.groupRows
+                                visible: groupRows.count > 0
+                                width: processOptionListComponent.width
+                                height: visible ? processGroupColumn.implicitHeight : 0
 
-                                    // Wrapper delegate (same pattern as
-                                    // optDelegate below): OptionRow declares
-                                    // required properties, so the Repeater can
-                                    // no longer inject modelData/index as
-                                    // context roles -- unqualified references
-                                    // here resolved to the outer group
-                                    // delegate's scope instead (a QString for
-                                    // index -> "Unable to assign QString to
-                                    // int" on every row).
-                                    delegate: Item {
-                                        id: processOptionDelegate
-                                        required property int index
-                                        required property int optIdx
-                                        required property string optPrevGroup
-                                        required property string optType
-                                        required property string optKey
-                                        required property string displayLabel
-                                        required property var optValue
-                                        required property double optMin
-                                        required property double optMax
-                                        required property double optStep
-                                        required property bool optReadonly
-                                        required property bool optDirty
-                                        required property string optTooltip
-                                        required property string optUnit
-                                        required property string optSidetext
-                                        required property bool optNullable
-                                        required property bool optIsVector
-                                        required property var optEnumLabels
-                                        required property string valueSource
+                                Column {
+                                    id: processGroupColumn
+                                    width: parent.width
+                                    // G3: R11 — keep the 30px row pitch inside process
+                                    // groups too (the 28px header block carries the
+                                    // group separation).
+                                    spacing: 0
 
-                                        width: processGroupColumn.width
-                                        height: processOptRow.totalHeight
+                                    Rectangle {
+                                        width: parent.width
+                                        height: 28
+                                        color: "transparent"
 
-                                        OptionRow {
-                                            id: processOptRow
+                                        Text {
                                             anchors.left: parent.left
                                             anchors.right: parent.right
-                                            optionModel: root.optionModel
-                                            optIdx: processOptionDelegate.optIdx
-                                            rowIndex: processOptionDelegate.index
-                                            searchText: root.searchText
-                                            showGroupHeader: false
-                                            oGroup: processGroupDelegate.groupName
-                                            compact: true
-                                            compactLabelWidth: 210
-                                            compactFieldWidth: 96
-                                            compactEnumWidth: 190
-                                            valueSource: processOptionDelegate.valueSource
-                                            oType: processOptionDelegate.optType
-                                            oKey: processOptionDelegate.optKey
-                                            oLabel: processOptionDelegate.displayLabel
-                                            oVal: processOptionDelegate.optValue
-                                            oMin: processOptionDelegate.optMin
-                                            oMax: processOptionDelegate.optMax
-                                            oStep: processOptionDelegate.optStep
-                                            oRO: processOptionDelegate.optReadonly
-                                            oDirty: processOptionDelegate.optDirty
-                                            oTip: processOptionDelegate.optTooltip
-                                            oUnit: processOptionDelegate.optUnit
-                                            oSidetext: processOptionDelegate.optSidetext
-                                            oNullable: processOptionDelegate.optNullable
-                                            oIsVector: processOptionDelegate.optIsVector
-                                            oEnumLabels: processOptionDelegate.optEnumLabels
+                                            anchors.leftMargin: Theme.spacingMD
+                                            anchors.rightMargin: Theme.spacingMD
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.processDisplayLabel(processGroupDelegate.groupName)
+                                            color: Theme.textSecondary
+                                            font.pixelSize: Theme.fontSizeMD
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Rectangle {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.bottom: parent.bottom
+                                            height: 1
+                                            color: Theme.borderSubtle
+                                        }
+                                    }
+
+                                    Repeater {
+                                        model: processGroupDelegate.groupRows
+
+                                        // Wrapper delegate (same pattern as
+                                        // optDelegate below): OptionRow declares
+                                        // required properties, so the Repeater can
+                                        // no longer inject modelData/index as
+                                        // context roles -- unqualified references
+                                        // here resolved to the outer group
+                                        // delegate's scope instead (a QString for
+                                        // index -> "Unable to assign QString to
+                                        // int" on every row).
+                                        delegate: Item {
+                                            id: processOptionDelegate
+                                            required property int index
+                                            required property int optIdx
+                                            required property string optPrevGroup
+                                            required property string optType
+                                            required property string optKey
+                                            required property string displayLabel
+                                            required property var optValue
+                                            required property double optMin
+                                            required property double optMax
+                                            required property double optStep
+                                            required property bool optReadonly
+                                            required property bool optDirty
+                                            required property string optTooltip
+                                            required property string optUnit
+                                            required property string optSidetext
+                                            required property bool optNullable
+                                            required property bool optIsVector
+                                            required property var optEnumLabels
+                                            required property string valueSource
+
+                                            width: processGroupColumn.width
+                                            height: processOptRow.totalHeight
+
+                                            OptionRow {
+                                                id: processOptRow
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                optionModel: root.optionModel
+                                                optIdx: processOptionDelegate.optIdx
+                                                rowIndex: processOptionDelegate.index
+                                                searchText: root.searchText
+                                                showGroupHeader: false
+                                                oGroup: processGroupDelegate.groupName
+                                                compact: true
+                                                compactLabelWidth: 210
+                                                compactFieldWidth: 119
+                                                compactEnumWidth: 190
+                                                valueSource: processOptionDelegate.valueSource
+                                                oType: processOptionDelegate.optType
+                                                oKey: processOptionDelegate.optKey
+                                                oLabel: processOptionDelegate.displayLabel
+                                                oVal: processOptionDelegate.optValue
+                                                oMin: processOptionDelegate.optMin
+                                                oMax: processOptionDelegate.optMax
+                                                oStep: processOptionDelegate.optStep
+                                                oRO: processOptionDelegate.optReadonly
+                                                oDirty: processOptionDelegate.optDirty
+                                                oTip: processOptionDelegate.optTooltip
+                                                oUnit: processOptionDelegate.optUnit
+                                                oSidetext: processOptionDelegate.optSidetext
+                                                oNullable: processOptionDelegate.optNullable
+                                                oIsVector: processOptionDelegate.optIsVector
+                                                oEnumLabels: processOptionDelegate.optEnumLabels
+                                            }
                                         }
                                     }
                                 }
@@ -823,135 +853,143 @@ ApplicationWindow {
                         }
                     }
 
-                    ListView {
-                        id: genericOptionListComponent
+                    // G6: styled scroll chrome comes from CxScrollView (U01 token
+                    // values); the bare ScrollBar.vertical overrides are gone.
+                    CxScrollView {
                         anchors.fill: parent
-                        visible: root.presetTier !== "print"
-                        clip: true
-                        // print tier skips the page filter (all pages shown in
-                        // one list), matching the legacy filterOptionIndices
-                        // page-skip; printer/filament narrow by active tab.
-                        model: ConfigOptionFilterProxy {
-                            id: genericListProxy
-                            sourceModel: root.optionModel
-                            page: root.presetTier !== "print" ? root.activeTab : ""
-                            searchText: root.searchText
-                            advancedMode: root.advancedMode
-                        }
-                        spacing: Theme.spacingXS
-                        ScrollBar.vertical: ScrollBar {
-                            visible: genericOptionListComponent.contentHeight > genericOptionListComponent.height
-                        }
 
-                        // Empty state
-                        Text {
-                            anchors.centerIn: parent
-                            visible: genericListProxy.count === 0
-                            text: root.searchText !== "" ? qsTr("No matching options")
-                                                         : qsTr("No options")
-                            color: Theme.textDisabled
-                            font.pixelSize: Theme.fontSizeMD
-                        }
-
-                        delegate: Item {
-                            id: optDelegate
-                            required property int index
-                            required property int optIdx
-                            required property string optGroup
-                            required property string optPrevGroup
-                            required property string optType
-                            required property string optKey
-                            required property string displayLabel
-                            required property var optValue
-                            required property double optMin
-                            required property double optMax
-                            required property double optStep
-                            required property bool optReadonly
-                            required property bool optDirty
-                            required property string optTooltip
-                            required property string optUnit
-                            required property string optSidetext
-                            required property bool optNullable
-                            required property bool optIsVector
-                            required property var optEnumLabels
-                            required property string valueSource
-
-                            // Show group header when group changes
-                            readonly property bool showGroupHeader:
-                                optGroup !== "" && (index === 0 || optGroup !== optPrevGroup)
-
-                            width: genericOptionListComponent.width
-                            height: optRow.totalHeight
-
-                            // OptionRow inlined in the delegate (not via Loader/Component)
-                            // so its bindings resolve the delegate's scope (optDelegate).
-                            OptionRow {
-                                id: optRow
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                optionModel: root.optionModel
-                                optIdx: optDelegate.optIdx
-                                rowIndex: optDelegate.index
+                        ListView {
+                            id: genericOptionListComponent
+                            anchors.fill: parent
+                            visible: root.presetTier !== "print"
+                            clip: true
+                            // print tier skips the page filter (all pages shown in
+                            // one list), matching the legacy filterOptionIndices
+                            // page-skip; printer/filament narrow by active tab.
+                            model: ConfigOptionFilterProxy {
+                                id: genericListProxy
+                                sourceModel: root.optionModel
+                                page: root.presetTier !== "print" ? root.activeTab : ""
                                 searchText: root.searchText
-                                showGroupHeader: optDelegate.showGroupHeader
-                                oGroup: optDelegate.optGroup
-                                compact: true
-                                compactLabelWidth: 210
-                                compactFieldWidth: 96
-                                compactEnumWidth: 190
-                                valueSource: optDelegate.valueSource
-                                oType: optDelegate.optType
-                                oKey: optDelegate.optKey
-                                oLabel: optDelegate.displayLabel
-                                oVal: optDelegate.optValue
-                                oMin: optDelegate.optMin
-                                oMax: optDelegate.optMax
-                                oStep: optDelegate.optStep
-                                oRO: optDelegate.optReadonly
-                                oDirty: optDelegate.optDirty
-                                oTip: optDelegate.optTooltip
-                                oUnit: optDelegate.optUnit
-                                oSidetext: optDelegate.optSidetext
-                                oNullable: optDelegate.optNullable
-                                oIsVector: optDelegate.optIsVector
-                                oEnumLabels: optDelegate.optEnumLabels
+                                advancedMode: root.advancedMode
+                            }
+                            // G3: R11 row rhythm — 30px rows touch (pitch 30, was 34+4=38).
+                            spacing: 0
+
+                            // Empty state
+                            Text {
+                                anchors.centerIn: parent
+                                visible: genericListProxy.count === 0
+                                text: root.searchText !== "" ? qsTr("No matching options")
+                                                             : qsTr("No options")
+                                color: Theme.textDisabled
+                                font.pixelSize: Theme.fontSizeMD
+                            }
+
+                            delegate: Item {
+                                id: optDelegate
+                                required property int index
+                                required property int optIdx
+                                required property string optGroup
+                                required property string optPrevGroup
+                                required property string optType
+                                required property string optKey
+                                required property string displayLabel
+                                required property var optValue
+                                required property double optMin
+                                required property double optMax
+                                required property double optStep
+                                required property bool optReadonly
+                                required property bool optDirty
+                                required property string optTooltip
+                                required property string optUnit
+                                required property string optSidetext
+                                required property bool optNullable
+                                required property bool optIsVector
+                                required property var optEnumLabels
+                                required property string valueSource
+
+                                // Show group header when group changes
+                                readonly property bool showGroupHeader:
+                                    optGroup !== "" && (index === 0 || optGroup !== optPrevGroup)
+
+                                width: genericOptionListComponent.width
+                                height: optRow.totalHeight
+
+                                // OptionRow inlined in the delegate (not via Loader/Component)
+                                // so its bindings resolve the delegate's scope (optDelegate).
+                                OptionRow {
+                                    id: optRow
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    optionModel: root.optionModel
+                                    optIdx: optDelegate.optIdx
+                                    rowIndex: optDelegate.index
+                                    searchText: root.searchText
+                                    showGroupHeader: optDelegate.showGroupHeader
+                                    oGroup: optDelegate.optGroup
+                                    compact: true
+                                    compactLabelWidth: 210
+                                    compactFieldWidth: 119
+                                    compactEnumWidth: 190
+                                    valueSource: optDelegate.valueSource
+                                    oType: optDelegate.optType
+                                    oKey: optDelegate.optKey
+                                    oLabel: optDelegate.displayLabel
+                                    oVal: optDelegate.optValue
+                                    oMin: optDelegate.optMin
+                                    oMax: optDelegate.optMax
+                                    oStep: optDelegate.optStep
+                                    oRO: optDelegate.optReadonly
+                                    oDirty: optDelegate.optDirty
+                                    oTip: optDelegate.optTooltip
+                                    oUnit: optDelegate.optUnit
+                                    oSidetext: optDelegate.optSidetext
+                                    oNullable: optDelegate.optNullable
+                                    oIsVector: optDelegate.optIsVector
+                                    oEnumLabels: optDelegate.optEnumLabels
+                                }
                             }
                         }
                     }
                 }
+            }
 
-                // SETPRINT-FOOTER (upstream Tab.cpp dialog bottom button row):
-                // Save / Discard / Close. Save and Discard act on the pending
-                // preset edits (gated on the dirty flag like the preset-bar
-                // save icon); Close runs the same UnsavedChangesDialog guard
-                // as the window close (openUnsavedChangesGuard(true)).
-                Rectangle {
-                    Layout.fillWidth: true
-                    height: 44
-                    color: Theme.chromeSurface
+            // SETPRINT-FOOTER (upstream Tab.cpp dialog bottom button row):
+            // Save / Discard / Close. Save and Discard act on the pending
+            // preset edits (gated on the dirty flag like the preset-bar
+            // save icon); Close runs the same UnsavedChangesDialog guard
+            // as the window close (openUnsavedChangesGuard(true)).
+            // G1: the footer is the outer ColumnLayout's full-width 44px
+            // bottom bar (upstream ParamsPanel.cpp:402-495 single vertical
+            // stack); the option area above is the RowLayout's only
+            // fillWidth/fillHeight child.
+            Rectangle {
+                Layout.fillWidth: true
+                height: 44
+                color: Theme.chromeSurface
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: Theme.spacingMD
-                        anchors.rightMargin: Theme.spacingMD
-                        spacing: Theme.spacingSM
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingMD
+                    anchors.rightMargin: Theme.spacingMD
+                    spacing: Theme.spacingSM
 
-                        Item { Layout.fillWidth: true }
+                    Item { Layout.fillWidth: true }
 
-                        CxButton {
-                            text: qsTr("保存")
-                            enabled: root.configVm && root.configVm.isPresetDirty
-                            onClicked: root.requestSaveAndMaybeClose(false)
-                        }
-                        CxButton {
-                            text: qsTr("放弃")
-                            enabled: root.configVm && root.configVm.isPresetDirty
-                            onClicked: if (root.configVm) root.configVm.requestDiscardPendingChanges()
-                        }
-                        CxButton {
-                            text: qsTr("关闭")
-                            onClicked: root.openUnsavedChangesGuard(true)
-                        }
+                    CxButton {
+                        text: qsTr("保存")
+                        enabled: root.configVm && root.configVm.isPresetDirty
+                        onClicked: root.requestSaveAndMaybeClose(false)
+                    }
+                    CxButton {
+                        text: qsTr("放弃")
+                        enabled: root.configVm && root.configVm.isPresetDirty
+                        onClicked: if (root.configVm) root.configVm.requestDiscardPendingChanges()
+                    }
+                    CxButton {
+                        text: qsTr("关闭")
+                        onClicked: root.openUnsavedChangesGuard(true)
                     }
                 }
             }

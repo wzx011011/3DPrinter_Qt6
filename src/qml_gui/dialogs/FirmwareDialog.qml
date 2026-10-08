@@ -8,7 +8,7 @@ import "../controls"
 CxDialog {
     id: root
 
-    closePolicy: Popup.NoAutoClose
+    closePolicy: Popup.CloseOnEscape
     dialogTitle: qsTr("固件升级")
 
     anchors.centerIn: parent
@@ -16,9 +16,9 @@ CxDialog {
     height: 250
 
     contentItem: ColumnLayout {
-        width: root.width
-        spacing: Theme.spacingLG
+        anchors.fill: parent
         anchors.margins: Theme.spacingXXL
+        spacing: Theme.spacingLG
 
         Text {
             Layout.fillWidth: true
@@ -43,7 +43,7 @@ CxDialog {
 
     footer: Rectangle {
         width: parent.width
-        height: 48
+        height: Theme.dialogFooterHeight
         color: Theme.bgSurface
         radius: 8
 
