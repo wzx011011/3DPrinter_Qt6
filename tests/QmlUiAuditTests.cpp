@@ -3523,8 +3523,10 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
 {
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString contextMenus = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!contextMenus.isEmpty(), "Unable to read PrepareContextMenus.qml");
 
   QVERIFY2(!preparePage.contains(QStringLiteral("plateCount < 10"))
                && !preparePage.contains(QStringLiteral("plateCount < 36"))
@@ -3550,15 +3552,27 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
   // v5.16 (G-08): canRenameSelectedObject/canSetSelectionPrintable only ever
   // had a QML consumer in the deleted object-list panel; the surviving
   // gates stay anchored on the live PreparePage/GLToolbars carriers.
+  // U09 (G4): the main toolbar is trimmed back to the upstream nine-button
+  // set (GLCanvas3D.cpp:6862-6990), so the Duplicate/Transform gates also
+  // live on the object context menus (PrepareContextMenus.qml:784/:796) --
+  // the menus are accepted as an equal carrier here.
   const QStringList requiredObjectGates = {
     QStringLiteral("canDuplicateSelectedObjects"),
-    QStringLiteral("canDeleteSelection"),
     QStringLiteral("canTransformSelection")
   };
   for (const QString &gate : requiredObjectGates) {
-    QVERIFY2(preparePage.contains(gate) || glToolbars.contains(gate),
+    QVERIFY2(preparePage.contains(gate) || glToolbars.contains(gate) || contextMenus.contains(gate),
              qPrintable(QStringLiteral("Prepare object actions must bind to %1").arg(gate)));
   }
+  // U09 (G4): the toolbar-trimmed Delete action routes through the context
+  // menus' per-action availability check instead of a gate property
+  // (PrepareContextMenus.qml:281/:610, enabled: contextActionAvailable("delete"))
+  // -- accepted as the canDeleteSelection equivalent carrier.
+  QVERIFY2(preparePage.contains(QStringLiteral("canDeleteSelection"))
+               || glToolbars.contains(QStringLiteral("canDeleteSelection"))
+               || contextMenus.contains(QStringLiteral("contextActionAvailable(\"delete\")")),
+           "Prepare object actions must bind to canDeleteSelection (or the menus' "
+           "contextActionAvailable(\"delete\") equivalent carrier)");
 }
 
 // -- Phase 55-04 (GCODE-04/05): Preview renderer source-audit guards --
@@ -3606,9 +3620,12 @@ void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
 
   const QStringList toolbarTokens = {
-    QStringLiteral("readonly property int viewportToolbarHeight: 34"),
+    // U09 (G1/G3/G8): geometry re-sampled from prepare_ref.png -- action bar
+    // docks flush at 58px (ref rows 37..96) with upstream Default_Icons_Size
+    // (GLToolbar.cpp:236) 40px boxes; the gizmo rail narrows to 34.
+    QStringLiteral("readonly property int viewportToolbarHeight: 58"),
     QStringLiteral("readonly property int toolbarButtonSize: 30"),
-    QStringLiteral("readonly property int gizmoToolbarWidth: 36"),
+    QStringLiteral("readonly property int gizmoToolbarWidth: 34"),
     QStringLiteral("id: viewportActionToolbar"),
     QStringLiteral("id: viewportGizmoToolbar"),
     QStringLiteral("iconSource: iconForTool(toolId)")
@@ -3740,10 +3757,13 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
   }
 
   const QStringList toolbarTokens = {
-    QStringLiteral("readonly property int targetActionToolbarTop: 22"),
-    QStringLiteral("readonly property int targetActionToolbarLeft: 10"),
-    QStringLiteral("readonly property real gizmoRailTopRatio: 0.22"),
-    QStringLiteral("readonly property int targetActionToolbarTop: 22"),
+    // U09 (G1/G8): the action bar is a full-width flush dock (ref rows
+    // 37..96, no margins) and the rail hugs the right edge at ~12% height;
+    // the Phase 77 float offsets (targetActionToolbarTop 22 / Left 10,
+    // ratio 0.22) are retired with the prepare_ref re-alignment.
+    QStringLiteral("readonly property int viewportToolbarHeight: 58"),
+    QStringLiteral("readonly property real gizmoRailTopRatio: 0.12"),
+    QStringLiteral("readonly property int gizmoRailRightMargin: 2"),
     QStringLiteral("id: prepareTopActionToolbar"),
     QStringLiteral("id: prepareRightGizmoToolbar"),
     QStringLiteral("buttonSize: root.targetToolbarButtonSize")
@@ -3795,9 +3815,13 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
 void QmlUiAuditTests::prepareRestoredControlsAreActionable()
 {
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+  const QString contextMenus = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+  QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
+  QVERIFY2(!contextMenus.isEmpty(), "Unable to read PrepareContextMenus.qml");
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
 
@@ -3808,6 +3832,11 @@ void QmlUiAuditTests::prepareRestoredControlsAreActionable()
   QVERIFY2(!glToolbars.contains(QStringLiteral("opacity: root.targetDisabledToolOpacity")),
            "Prepare GL toolbar must not dim fake controls instead of wiring real actions");
 
+  // U09 (G4): the main toolbar is trimmed back to the fixed upstream
+  // nine-button set (GLCanvas3D.cpp:6862-6990), so the selection actions are
+  // asserted on their surviving carriers -- the object context menus
+  // (PrepareContextMenus.qml) and the PreparePage list entry
+  // (PreparePage.qml Delete).
   const QStringList requiredToolbarActions = {
     QStringLiteral("root.editorVm.deleteSelection()"),
     QStringLiteral("root.editorVm.copySelectedObjects()"),
@@ -3817,8 +3846,8 @@ void QmlUiAuditTests::prepareRestoredControlsAreActionable()
     QStringLiteral("root.editorVm.requestSelectionSettings()")
   };
   for (const QString &token : requiredToolbarActions) {
-    QVERIFY2(glToolbars.contains(token),
-             qPrintable(QStringLiteral("Prepare GL toolbar restored action missing: %1").arg(token)));
+    QVERIFY2(contextMenus.contains(token) || preparePage.contains(token),
+             qPrintable(QStringLiteral("Prepare restored action missing after U09 toolbar trim: %1").arg(token)));
   }
   QVERIFY2(glToolbars.contains(QStringLiteral("root.editorVm.gizmoStatusText(mode)")),
            "Prepare right gizmo toolbar must surface backend capability reasons in tooltips");
@@ -9222,9 +9251,13 @@ void QmlUiAuditTests::v53PerObjectSettingsDialog()
            "FEAT-01: SelectionSettingsDialog must call setScopedOptionValue");
   QVERIFY2(dialog.contains(QStringLiteral("resetScopedOptionValue")),
            "FEAT-01: SelectionSettingsDialog must call resetScopedOptionValue");
+  // Keys aligned to the upstream FFF object-override set
+  // (FREQ_SETTINGS_BUNDLE_FFF, GUI_Factories.cpp:56-69); the legacy
+  // fill_density/support_material names and the nozzle/bed temperature keys
+  // are not consumed by the slicer as object overrides.
   QVERIFY2(dialog.contains(QStringLiteral("layer_height"))
-               && dialog.contains(QStringLiteral("fill_density"))
-               && dialog.contains(QStringLiteral("support_material")),
+               && dialog.contains(QStringLiteral("sparse_infill_density"))
+               && dialog.contains(QStringLiteral("enable_support")),
            "FEAT-01: SelectionSettingsDialog must surface the common FDM override keys");
 
   // (4) PreparePage instantiates the dialog + binds onSelectionSettingsRequested.
@@ -10182,8 +10215,11 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
            "BEDTEX: SVG rasterization must keep the upstream 2048px cap");
   QVERIFY2(renderer.contains(QStringLiteral("renderBedTexture(cb)")),
            "BEDTEX: render() must layer the texture over background + grid");
-  QVERIFY2(renderer.contains(QStringLiteral("m_bedTexturePipeline->setDepthTest(false)")),
-           "BEDTEX: texture quad draws with depth test off (upstream render_logo_texture)");
+  QVERIFY2(renderer.contains(QStringLiteral("m_bedTexturePipeline->setDepthTest(true)"))
+               && renderer.contains(QStringLiteral("m_bedTexturePipeline->setDepthWrite(false)")),
+           "BEDTEX: texture quad keeps depth test on + depth write off (upstream render_logo_texture: "
+           "GL_DEPTH_TEST stays enabled from PartPlate::render :3504, re-enable commented :773, "
+           "glDepthMask(GL_FALSE) :778; SHADER-PORT v6 2.4)");
 
   // Renderer: lit model pipeline with the upstream gouraud shader pair and a
   // parallel per-face normal buffer.
@@ -10195,14 +10231,15 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
   QVERIFY2(renderer.contains(QStringLiteral("m_modelNormalBuffer")),
            "MODELLIT: per-face normal upload must exist");
 
-  // Shader: upstream gouraud.vs lighting constants.
+  // Shader: upstream gouraud_light.vs lighting constants (0.8/0.125/0.3 scaled
+  // by INTENSITY_CORRECTION 0.6; ambient 0.3 unscaled).
   const QString litVert = readSource(QStringLiteral("src/qml_gui/Renderer/shaders/model_lit.vert"));
   QVERIFY2(!litVert.isEmpty(), "Unable to read model_lit.vert");
-  QVERIFY2(litVert.contains(QStringLiteral("LIGHT_TOP_DIFFUSE = 0.8"))
+  QVERIFY2(litVert.contains(QStringLiteral("LIGHT_TOP_DIFFUSE = 0.48"))
                && litVert.contains(QStringLiteral("INTENSITY_AMBIENT = 0.3"))
-               && litVert.contains(QStringLiteral("LIGHT_FRONT_DIFFUSE = 0.3"))
-               && litVert.contains(QStringLiteral("LIGHT_TOP_SPECULAR = 0.125")),
-           "MODELLIT: lighting constants must mirror upstream gouraud.vs");
+               && litVert.contains(QStringLiteral("LIGHT_FRONT_DIFFUSE = 0.18"))
+               && litVert.contains(QStringLiteral("LIGHT_TOP_SPECULAR = 0.075")),
+           "MODELLIT: lighting constants must mirror upstream gouraud_light.vs");
 
   // Data chain: preset -> config VM -> editor VM -> viewport -> QML.
   QVERIFY2(presetSvc.contains(QStringLiteral("bedTextureFileForPreset")),
