@@ -56,6 +56,18 @@
 #include <QtQuick/QSGRendererInterface>
 #include <QSysInfo>
 #include <QDir>
+#ifdef Q_OS_WINDOWS
+// U04 (systemInfo totalRamMb): upstream SysInfoDialog samples the total
+// physical RAM (SysInfoDialog.cpp:59 "Total RAM size [MB]" via
+// total_physical_memory()) — the Qt6 build reads it through GlobalMemoryStatusEx.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif /* Q_OS_WINDOWS */
 
 // 主题颜色预设
 struct ThemeColors
@@ -394,6 +406,11 @@ BackendContext::BackendContext(QObject *parent)
   // Load config wizard state from QSettings (对齐上游 ConfigWizard 首次运行检测)
   QSettings settings;
   m_configWizardCompleted = settings.value(QStringLiteral("wizard/completed"), false).toBool();
+
+  // U04 (EnableLiteModeDialog): persisted G-code preview lite-mode flag
+  // (fork-only QSettings key "gcode_preview_lite_mode" — no upstream counterpart).
+  m_gcodePreviewLiteMode =
+      settings.value(QStringLiteral("gcode_preview_lite_mode"), false).toBool();
 
   // Phase 4: Load sidebar dockable state from QSettings
   // 对齐上游 app_config collapsed_sidebar；width/dockArea 为增强（上游无）
@@ -816,6 +833,27 @@ void BackendContext::setConfigWizardCompleted(bool completed)
   emit configWizardCompletedChanged();
 }
 
+// ── U04 (EnableLiteModeDialog): persisted G-code preview lite-mode flag ──
+
+bool BackendContext::gcodePreviewLiteMode() const
+{
+  return m_gcodePreviewLiteMode;
+}
+
+void BackendContext::setGcodePreviewLiteMode(bool enabled)
+{
+  if (m_gcodePreviewLiteMode == enabled)
+    return; // 去重（同 requestSetSidebarCollapsed 模式）
+  m_gcodePreviewLiteMode = enabled;
+
+  // Persist to QSettings (fork-only key "gcode_preview_lite_mode").
+  QSettings settings;
+  settings.setValue(QStringLiteral("gcode_preview_lite_mode"), enabled);
+  settings.sync();
+
+  emit gcodePreviewLiteModeChanged();
+}
+
 void BackendContext::showConfigWizard()
 {
   emit showConfigWizardRequested();
@@ -903,6 +941,26 @@ QVariantMap BackendContext::systemInfo() const
   info.insert(QStringLiteral("platform"),
               QSysInfo::prettyProductName() + QStringLiteral(" [") + QSysInfo::buildCpuArchitecture() +
                   QStringLiteral("]"));
+  // U04: total physical RAM in MB — upstream SysInfoDialog "Total RAM size
+  // [MB]" (SysInfoDialog.cpp:59 via total_physical_memory()); the Qt6 build
+  // samples it with GlobalMemoryStatusEx on Windows.
+#ifdef Q_OS_WINDOWS
+  {
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&memInfo))
+      info.insert(QStringLiteral("totalRamMb"),
+                  static_cast<qint64>(memInfo.ullTotalPhys / (1024 * 1024)));
+  }
+#endif
+  // U04: build commit injected by the build system (consumed by the
+  // AboutDialog "Build" line, upstream SysInfoDialog.cpp:47 SLIC3R_BUILD_ID);
+  // degrades to an empty string when the macro is absent.
+#ifdef OWZX_BUILD_COMMIT
+  info.insert(QStringLiteral("buildCommit"), QString::fromLatin1(OWZX_BUILD_COMMIT));
+#else
+  info.insert(QStringLiteral("buildCommit"), QString());
+#endif
   // Graphics API selected by the QML runtime (OpenGL is forced at startup).
   // Qt6: QSGRendererInterface::GraphicsApi is not a Q_ENUM, so QMetaEnum
   // cannot stringify it — map manually (main_qml.cpp forces OpenGL).
@@ -931,6 +989,7 @@ QVariantMap BackendContext::systemInfo() const
   QString glVendor = QStringLiteral("n/a");
   QString glRenderer = QStringLiteral("n/a");
   QString glVersion = QStringLiteral("n/a");
+  QString glslVersion = QStringLiteral("n/a");
   if (QOpenGLContext *context = QOpenGLContext::currentContext())
   {
     QOpenGLFunctions functions(context);
@@ -938,16 +997,22 @@ QVariantMap BackendContext::systemInfo() const
     const unsigned char *vendor = functions.glGetString(GL_VENDOR);
     const unsigned char *renderer = functions.glGetString(GL_RENDERER);
     const unsigned char *version = functions.glGetString(GL_VERSION);
+    const unsigned char *glsl = functions.glGetString(GL_SHADING_LANGUAGE_VERSION);
     if (vendor)
       glVendor = QString::fromLatin1(reinterpret_cast<const char *>(vendor));
     if (renderer)
       glRenderer = QString::fromLatin1(reinterpret_cast<const char *>(renderer));
     if (version)
       glVersion = QString::fromLatin1(reinterpret_cast<const char *>(version));
+    if (glsl)
+      glslVersion = QString::fromLatin1(reinterpret_cast<const char *>(glsl));
   }
   info.insert(QStringLiteral("glVendor"), glVendor);
   info.insert(QStringLiteral("glRenderer"), glRenderer);
   info.insert(QStringLiteral("glVersion"), glVersion);
+  // U04: GLSL version (upstream get_gl_info reports it in the OpenGL info
+  // block, SysInfoDialog.cpp:186).
+  info.insert(QStringLiteral("glslVersion"), glslVersion);
   // Key configuration paths.
   info.insert(QStringLiteral("appDataLocation"),
               QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
@@ -1402,6 +1467,18 @@ int BackendContext::notificationImportanceRank(const NotificationEntry &e)
 void BackendContext::archiveNotification(const NotificationEntry &entry)
 {
   m_notificationHistory.prepend(entry);
+  // NOTI-02: upstream sorts the live notification vector by importance before
+  // rendering (sort_notifications, NotificationManager.cpp:3136 + 3232-3242;
+  // stable, so equal levels keep insertion order; the level ladder in
+  // NotificationManager.hpp:199-221 puts ErrorNotificationLevel at the
+  // "Top most position"). The Qt6 history list renders top-down, so the same
+  // stable sort with the same comparator as the live stack
+  // (notificationImportanceRank, most important first) puts the most severe
+  // entry on top while equal-importance entries stay newest first (prepend
+  // order).
+  std::stable_sort(m_notificationHistory.begin(), m_notificationHistory.end(),
+                   [](const NotificationEntry &a, const NotificationEntry &b)
+                   { return notificationImportanceRank(a) > notificationImportanceRank(b); });
   ++m_unreadHistoryCount;
   if (m_notificationHistory.size() > 100)
     m_notificationHistory.removeLast();
@@ -1440,6 +1517,7 @@ void BackendContext::pushNotificationEntry(NotificationEntry entry, bool dedupBy
     live.requiresConfirm = entry.requiresConfirm;
     live.showExportButton = entry.showExportButton;
     live.showPreviewButton = entry.showPreviewButton;
+    live.hypertext = entry.hypertext;
     live.timestamp = entry.timestamp;
     syncCurrentNotificationFromStack();
     emit errorChanged();
@@ -1544,6 +1622,23 @@ void BackendContext::cancelNotificationById(int id)
   }
 }
 
+void BackendContext::activateNotificationHypertext(int id)
+{
+  // Upstream render_hypertext (NotificationManager.cpp:734-753): the click
+  // handler runs the notification callback and, when it returns true, calls
+  // close(). The mock backend carries no jump-to-object/option targets, so
+  // activation only acknowledges + closes the clicked entry (upstream
+  // ValidateError links also close, NotificationManager.cpp:1997).
+  for (const NotificationEntry &entry : std::as_const(m_activeNotifications))
+  {
+    if (entry.id == id && !entry.hypertext.isEmpty())
+    {
+      dismissNotificationById(id);
+      return;
+    }
+  }
+}
+
 void BackendContext::clearError()
 {
   dismissNotification();
@@ -1585,6 +1680,7 @@ QVariantList BackendContext::notificationStack() const
     m.insert(QStringLiteral("requiresConfirm"), e.requiresConfirm);
     m.insert(QStringLiteral("showExportButton"), e.showExportButton);
     m.insert(QStringLiteral("showPreviewButton"), e.showPreviewButton);
+    m.insert(QStringLiteral("hypertext"), e.hypertext);
     list.append(m);
   }
   return list;
@@ -2062,32 +2158,42 @@ int BackendContext::unreadHistoryCount() const
   return m_unreadHistoryCount;
 }
 
-QString BackendContext::historyMessage(int index) const
+QVariantList BackendContext::notificationHistory() const
 {
-  if (index < 0 || index >= m_notificationHistory.size())
-    return {};
-  return m_notificationHistory[index].message;
+  // NOTI-02: QVariantList (same pattern as notificationStack) so the
+  // NotificationCenter ListView resets on every historyChanged. The previous
+  // count + index-accessor model left stale rows whenever the list was
+  // reordered (importance sort) or trimmed at the cap without a count change.
+  QVariantList list;
+  list.reserve(m_notificationHistory.size());
+  for (const NotificationEntry &entry : std::as_const(m_notificationHistory))
+  {
+    QVariantMap map;
+    map.insert(QStringLiteral("id"), entry.id);
+    map.insert(QStringLiteral("message"), entry.message);
+    map.insert(QStringLiteral("title"), entry.title);
+    map.insert(QStringLiteral("severity"), entry.severity);
+    list.append(map);
+  }
+  return list;
 }
 
-QString BackendContext::historyTitle(int index) const
+void BackendContext::removeHistoryById(int id)
 {
-  if (index < 0 || index >= m_notificationHistory.size())
-    return {};
-  return m_notificationHistory[index].title;
-}
-
-int BackendContext::historySeverity(int index) const
-{
-  if (index < 0 || index >= m_notificationHistory.size())
-    return 0;
-  return m_notificationHistory[index].severity;
-}
-
-QString BackendContext::historyTime(int index) const
-{
-  if (index < 0 || index >= m_notificationHistory.size())
-    return {};
-  return m_notificationHistory[index].timestamp.toString(QStringLiteral("HH:mm:ss"));
+  // NOTI-02: per-entry removal (upstream every PopNotification owns a close
+  // button that calls PopNotification::close(), NotificationManager.cpp:861-864).
+  for (int i = 0; i < m_notificationHistory.size(); ++i)
+  {
+    if (m_notificationHistory[i].id != id)
+      continue;
+    m_notificationHistory.removeAt(i);
+    // The unread tally has no per-entry read flag; dropping a row consumes
+    // one tally so the header badge cannot outlive its rows.
+    if (m_unreadHistoryCount > 0)
+      --m_unreadHistoryCount;
+    emit historyChanged();
+    return;
+  }
 }
 
 void BackendContext::clearHistory()
@@ -2338,34 +2444,53 @@ void BackendContext::runNetworkTest()
   QHostInfo::lookupHost(QStringLiteral("api.github.com"), this,
                         [this](const QHostInfo &dns) {
     const bool dnsOk = dns.error() == QHostInfo::NoError && !dns.addresses().isEmpty();
+    // U04: the resolved address feeds the dialog log's ip event (upstream
+    // Http::on_ip_resolve, NetworkTestDialog.cpp:285-288).
+    const QString resolvedIp = dnsOk ? dns.addresses().first().toString() : QString();
     if (!dnsOk) {
       emit networkTestFinished(false, false, -1, tr("DNS 解析失败：%1").arg(dns.errorString()));
       return;
     }
     QNetworkRequest request(QUrl(QStringLiteral("https://api.github.com")));
     request.setRawHeader("User-Agent", "OWzxSlicer");
-    request.setTransferTimeout(8000);
+    // U04: 10 s to match upstream http.timeout_max(10)
+    // (NetworkTestDialog.cpp:270).
+    request.setTransferTimeout(10000);
     QElapsedTimer latencyTimer;
     latencyTimer.start();
     QNetworkReply *reply = probeNam()->get(request);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, latencyTimer] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, latencyTimer, resolvedIp] {
       reply->deleteLater();
-      const bool online = reply->error() == QNetworkReply::NoError
-          || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).isValid();
+      // U04: only HTTP 200 counts as online, matching upstream
+      // `if (status == 200) result = 0;` (NetworkTestDialog.cpp:275-277).
+      // The previous `status.isValid()` check treated HTTP 500 as online.
+      const QVariant httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+      const bool online = httpStatus.isValid() && httpStatus.toInt() == 200;
       const int latencyMs = static_cast<int>(latencyTimer.elapsed());
-      const QString detail = online
-          ? tr("HTTPS 连接正常")
-          : tr("HTTPS 连接失败：%1").arg(reply->errorString());
+      QString detail;
+      if (online)
+        detail = tr("HTTPS 连接正常（ip %1，HTTP 200）").arg(resolvedIp);
+      else if (httpStatus.isValid())
+        detail = tr("HTTPS 连接失败：HTTP %1").arg(httpStatus.toInt());
+      else
+        detail = tr("HTTPS 连接失败：%1").arg(reply->errorString());
       emit networkTestFinished(true, online, latencyMs, detail);
     });
   });
   Q_UNUSED(dnsTimer);
 }
 
-void BackendContext::testPrintHost(const QString &hostUrl)
+void BackendContext::testPrintHost(const QString &hostUrl, const QString &apiKey,
+                                   const QString &user, const QString &password)
 {
   // Upstream PrintHostDialog "test connection": reachability GET against the
-  // configured host. Any HTTP response counts as reachable.
+  // configured host (PhysicalPrinterDialog.cpp:210-265 -> PrintHost::test).
+  // Any HTTP response counts as reachable. The dialog's credential fields are
+  // carried along: apiKey goes out as the OctoPrint-style X-Api-Key header
+  // (upstream atKeyPassword auth), user/password as HTTP Basic credentials
+  // (upstream atUserPassword uses digest -- Http::set_auth; Qt's
+  // challenge-based QAuthenticator is not wired into this probe, so a
+  // digest-only server will still reject the request).
   QString url = hostUrl.trimmed();
   if (url.isEmpty()) {
     emit printHostTestFinished(false, tr("主机地址为空"));
@@ -2376,6 +2501,12 @@ void BackendContext::testPrintHost(const QString &hostUrl)
   const QUrl targetUrl(url);
   QNetworkRequest hostProbe(targetUrl);
   hostProbe.setRawHeader("User-Agent", "OWzxSlicer");
+  if (!apiKey.isEmpty())
+    hostProbe.setRawHeader("X-Api-Key", apiKey.toUtf8());
+  if (!user.isEmpty()) {
+    QByteArray credentials = (user + ":" + password).toUtf8().toBase64();
+    hostProbe.setRawHeader("Authorization", "Basic " + credentials);
+  }
   hostProbe.setTransferTimeout(8000);
   QNetworkReply *reply = probeNam()->get(hostProbe);
   connect(reply, &QNetworkReply::finished, this, [this, reply] {

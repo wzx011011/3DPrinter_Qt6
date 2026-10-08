@@ -1228,6 +1228,20 @@ public:
   // auto-recommended preview.
   Q_INVOKABLE bool setPlateFilamentMapMode(int plateIndex, int mode);
   Q_INVOKABLE int plateFilamentMapMode(int plateIndex) const;
+  // ── U02 (FGATE): FilamentGroupPopup behavior cluster ──
+  /// PartPlate::get_real_filament_map_mode (PartPlate.cpp:337-349): a concrete
+  /// per-plate mode returns as-is; the per-plate inherit sentinel (value 3)
+  /// resolves against the global filament_map_mode (merged preset config),
+  /// falling back to the upstream default AutoForFlush when the merged map
+  /// carries no key (PrintConfig.cpp:2509). The popup's radio seeding uses
+  /// this instead of the raw plate mode so the sentinel never leaks as "0".
+  Q_INVOKABLE int resolvedFilamentMapMode() const;
+  /// Upstream FilamentGroupPopup m_connected analog (see the Q_PROPERTY
+  /// comment); writable so the composition root can push real sync state.
+  bool machineSyncReady() const;
+  void setMachineSyncReady(bool on);
+  /// should_pop_up() analog (FilamentGroupPopup.cpp:16-23; see Q_PROPERTY).
+  bool multiNozzleConfigured() const;
   /// 查询指定平板是否有有效切片结果
   Q_INVOKABLE bool isPlateSliced(int plateIndex) const;
   /// 移动选中对象到指定平板（对齐上游 Plater::priv::on_arrange 跨平板拖拽）
@@ -1325,6 +1339,10 @@ public:
   /// m_logo_texture_filename). READ-only + NOTIFY: the path flows from the
   /// selected printer preset via ConfigViewModel/PresetServiceMock.
   Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl NOTIFY bedShapeChanged)
+  /// U02 (BEDSHAPE-DLG): the printer's bed_model STL path, parallel to
+  /// bedTextureUrl (upstream bed_custom_model / machine_model asset seeded
+  /// into the BedShapeDialog Model group).
+  Q_PROPERTY(QUrl bedModelUrl READ bedModelUrl NOTIFY bedShapeChanged)
   /// v5.16 (EXCLAREA): bed_exclude_area polygons parsed from the printer
   /// preset (upstream coPoints; Plater.cpp:8169 feeds them to PartPlate).
   /// Each entry is a flat [x1,y1,x2,y2,...] point list for one polygon.
@@ -1380,6 +1398,20 @@ public:
   Q_PROPERTY(bool hasAutoFilamentMap READ hasAutoFilamentMap NOTIFY filamentMapChanged)
   Q_PROPERTY(int autoFilamentMapMode READ autoFilamentMapMode NOTIFY filamentMapChanged)
   Q_PROPERTY(QVariantList autoFilamentMaps READ autoFilamentMaps NOTIFY filamentMapChanged)
+  // U02 (FGATE): FilamentGroupPopup machine-sync gate. Mirrors the upstream
+  // popup's m_connected (FilamentGroupPopup.cpp:244-257 — Convenience mode is
+  // grayed/disabled with a "(Sync with printer)" hint until a machine is
+  // connected, and picking it falls back to AutoForFlush, :335/:343-347).
+  // Source: Plater::get_machine_sync_status (FilamentGroupPopup.cpp:271). The
+  // Qt mock stack has no machine-connection channel wired into this VM yet,
+  // so it defaults to false (the upstream disconnected behavior) until that
+  // channel lands; BackendContext can push real state through the setter.
+  Q_PROPERTY(bool machineSyncReady READ machineSyncReady WRITE setMachineSyncReady NOTIFY machineSyncReadyChanged)
+  // U02 (FGATE): upstream should_pop_up (FilamentGroupPopup.cpp:16-23) — the
+  // popup only surfaces on printers whose nozzle_diameter config holds more
+  // than one entry. The merged preset config (ConfigViewModel::
+  // mergedConfigValues) is the fork's preset_bundle->full_config analog.
+  Q_PROPERTY(bool multiNozzleConfigured READ multiNozzleConfigured NOTIFY stateChanged)
   Q_PROPERTY(int extruderCount READ extruderCount NOTIFY stateChanged)
   Q_PROPERTY(bool hasSliceResult READ hasSliceResult NOTIFY stateChanged)
   /// Phase 52 PREPSB-05: staleness exposed to QML so Preview/Export can show a
@@ -1463,8 +1495,32 @@ public:
   void setBedShapeType(int v);
   float bedDiameter() const;
   void setBedDiameter(float v);
+  // ── U02 (BEDSHAPE-COMMIT): BedShapeDialog OK path ──
+  /// Single commit point mirroring upstream Tab.cpp:7856-7862 (OK ->
+  /// load_key_value("printable_area", shape) + update_changed_ui()): writes
+  /// the whole dialog state through the bed_* setters (viewport bed_shape
+  /// analog + QSettings persistence + refresh notifications) and the
+  /// rectangle footprint into the plate-list geometry — the fork's
+  /// printable_area analog (ProjectServiceMock embeds it as printable_area
+  /// on save, :11001-11013, and arrange reads the same bbox, :4790-4797).
+  Q_INVOKABLE void commitBedShape(double widthMm, double depthMm,
+                                  double originXMm, double originYMm,
+                                  double diameterMm, int shapeType,
+                                  double maxHeightMm);
+  /// U02 (BEDSHAPE-STL): horizontal-projection outline of an STL file
+  /// (upstream BedShapePanel::load_stl geometry half, BedShapeDialog.cpp:
+  /// 549-593). Returns the projected contour flattened as [x0,y0,x1,y1,...]
+  /// in millimeters, or an empty list when the file is missing/unreadable or
+  /// carries no geometry (the caller surfaces the upstream error text).
+  Q_INVOKABLE QVariantList bedShapeProjectionFromStl(const QString &stlPath) const;
+  /// U02 (BEDSHAPE-DLG): file-existence probe for the Texture/Model groups'
+  /// missing-file red state (upstream #E14747 label branch,
+  /// BedShapeDialog.cpp:334-341/:427-434). Accepts a local path or file URL.
+  Q_INVOKABLE bool fileExists(const QString &path) const;
   // v5.15 (BEDTEX): bed texture path from the selected printer preset.
   QUrl bedTextureUrl() const;
+  // U02 (BEDSHAPE-DLG): bed model STL path (see the Q_PROPERTY comment).
+  QUrl bedModelUrl() const;
   // v5.16 (BEDMODEL/BEDTYPE-TEX): bed model mesh + bed-type texture state
   // (accessors for the Q_PROPERTYs above; definitions live with the
   // syncBedFromPrinterPreset body).
@@ -1582,6 +1638,11 @@ public:
   /// volume of the pending object to the chosen extruder (upstream
   /// ObjImportColorDialog on_confirm sets the object extruder per color).
   Q_INVOKABLE bool applyPendingObjColors(int extruderId);
+  /// U02: ObjColorDialog cancel / ✕ path (upstream ObjImportColorDialog
+  /// closing without confirm discards the mapping). Clears the pending
+  /// payload without touching the model so a dismissed import cannot re-open
+  /// the dialog; applyPendingObjColors keeps the confirm path.
+  Q_INVOKABLE void dismissPendingObjColors();
   /// 清空当前场景与项目状态（用于顶部工具栏新建）
   Q_INVOKABLE void clearWorkspace();
   /// JSON 项目加载后刷新 UI 状态（供 BackendContext 调用）
@@ -1793,6 +1854,9 @@ signals:
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();
+  // U02 (FGATE): emitted when setMachineSyncReady flips the gate so the
+  // FilamentGroupPopup Convenience-mode bindings refresh.
+  void machineSyncReadyChanged();
   void sequentialClearanceChanged();
   /// Phase 236 (DLG-03): an .obj with a multi-color .mtl finished loading —
   /// pendingObjColors holds the colors, the ObjColorDialog should open.
@@ -2155,6 +2219,10 @@ private:
   // v5.15 (BEDTEX): bed texture path + last-synced printer preset (guards
   // the stateChanged-driven re-sync so only preset changes re-apply the bed).
   QUrl m_bedTextureUrl;
+  // U02 (BEDSHAPE-DLG): bed model STL path (parallel to m_bedTextureUrl).
+  QUrl m_bedModelUrl;
+  // U02 (FGATE): machine-sync gate (defaults false = upstream disconnected).
+  bool m_machineSyncReady = false;
   QString m_bedSyncedPreset;
   QByteArray m_bedModelMeshData;
   bool m_bedTypeTexturesActive = false;

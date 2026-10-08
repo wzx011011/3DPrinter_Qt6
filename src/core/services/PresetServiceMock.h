@@ -134,6 +134,20 @@ public:
   /// are not). Refuses when the name is unknown, builtin, or read-only.
   bool overwriteUserPreset(int category, const QString &name,
                            const QHash<QString, QVariant> &values);
+  /// Create-flow clone primitive behind the redesigned CreatePresetsDialog
+  /// (upstream clone_presets_for_filament / clone_presets_for_printer,
+  /// CreatePresetsDialog.cpp:1144-1199 + the Page2 create flow). The new
+  /// preset starts from `baseName`'s resolved chain -- recorded as its
+  /// inherits parent -- with `overrides` overlaid on top. With `overwrite`
+  /// an existing USER preset of the same name is deleted and recreated
+  /// (upstream rewritten=true path, CreatePresetsDialog.cpp:2778-2788);
+  /// builtin/read-only targets always refuse, and a preset that still has
+  /// local children keeps them ("...presets without the same preset name
+  /// will be reserved").
+  Q_INVOKABLE bool createPresetFromBase(int category, const QString &name,
+                                        const QString &baseName,
+                                        const QVariantMap &overrides,
+                                        bool overwrite);
   /// G-13: register an in-project embedded preset loaded from a saved 3MF
   /// (Metadata/*_settings_1.config). Memory-only: never written to the user
   /// library; skipped when a stored preset with the same name already exists

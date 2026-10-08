@@ -16,6 +16,31 @@ DeviceServiceMock::DeviceServiceMock(QObject *parent)
   buildMockDevices();
   rebuildFilteredIndices();
 
+  // SelectMachineDialog send-job defaults (upstream PrintOption keys,
+  // SelectMachine.cpp:565-614; ops_auto / ops_no_auto segment sets).
+  printOptions_[QStringLiteral("timelapse")] = QStringLiteral("on");
+  printOptions_[QStringLiteral("bed_leveling")] = QStringLiteral("auto");
+  printOptions_[QStringLiteral("flow_cali")] = QStringLiteral("auto");
+  printOptions_[QStringLiteral("nozzle_offset_cali")] = QStringLiteral("auto");
+  printOptions_[QStringLiteral("pa_value")] = QStringLiteral("off");
+
+  // Send-job simulation timer: ~2.5s upload, mirrors the upstream send worker
+  // progress reported through BBLStatusBarPrint (SelectMachine.cpp:676-678).
+  sendJobTimer_ = new QTimer(this);
+  sendJobTimer_->setInterval(100);
+  connect(sendJobTimer_, &QTimer::timeout, this, [this]() {
+    sendJobProgress_ = qMin(100, sendJobProgress_ + 4);
+    if (sendJobProgress_ >= 100) {
+      sendJobTimer_->stop();
+      sendJobState_ = 2; // finish ("Send complete")
+      // The mock device starts printing the uploaded file once the send
+      // finishes, keeping the monitor-page print simulation consistent.
+      if (sendJobDeviceIndex_ >= 0)
+        startPrint(sendJobDeviceIndex_, sendJobGcodePath_);
+    }
+    emit sendJobChanged();
+  });
+
   // 打印进度模拟定时器（对齐上游 PrintJob 1s 刷新间隔）
   printSimTimer_ = new QTimer(this);
   printSimTimer_->setInterval(1000);
@@ -739,8 +764,77 @@ bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodeP
     return ftpUploader_->uploadFile(host, 990, accessCode, gcodePath, remotePath);
 }
 
-void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath)
+// ── SelectMachineDialog send-job state machine ────────────────────────────
+// Mirrors the upstream bottom wxSimplebook (SelectMachine.cpp:651-705):
+// prepare (Send button) -> sending (progress bar) -> finish ("Send complete").
+
+void DeviceServiceMock::startSendJob(int filteredIndex, const QString &gcodePath)
 {
+  if (sendJobState_ == 1)
+    return; // already sending
+  if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
+    return;
+  if (gcodePath.isEmpty())
+    return;
+  // Guard mirrored from the QML side: only online devices accept a job.
+  const int realIdx = filteredIndices_[filteredIndex];
+  if (realIdx < 0 || realIdx >= devices_.size() || !devices_[realIdx].online)
+    return;
+
+  sendJobDeviceIndex_ = filteredIndex;
+  sendJobGcodePath_ = gcodePath;
+  sendJobErrorCode_.clear();
+  sendJobErrorDesc_.clear();
+  sendJobErrorExtra_.clear();
+  sendJobProgress_ = 0;
+  sendJobState_ = 1; // sending
+  emit sendJobChanged();
+  sendJobTimer_->start();
+}
+
+void DeviceServiceMock::cancelSendJob()
+{
+  const bool wasSending = sendJobState_ != 0;
+  sendJobTimer_->stop();
+  sendJobState_ = 0; // prepare
+  sendJobProgress_ = 0;
+  sendJobDeviceIndex_ = -1;
+  sendJobGcodePath_.clear();
+  if (wasSending)
+    emit sendJobChanged();
+}
+
+QVariantMap DeviceServiceMock::printOptions() const
+{
+  QVariantMap map;
+  for (auto it = printOptions_.constBegin(); it != printOptions_.constEnd(); ++it)
+    map.insert(it.key(), it.value());
+  return map;
+}
+
+QString DeviceServiceMock::printOptionValue(const QString &key) const
+{
+  return printOptions_.value(key);
+}
+
+void DeviceServiceMock::setPrintOptionValue(const QString &key, const QString &value)
+{
+  if (!printOptions_.contains(key) || printOptions_.value(key) == value)
+    return;
+  printOptions_[key] = value;
+  // NOTIFY so QML bindings reading the printOptions map re-evaluate.
+  emit printOptionsChanged();
+}
+
+bool DeviceServiceMock::printOptionSupported(const QString &key) const
+{
+  // Upstream creates all five options but initially shows only Timelapse
+  // (SelectMachine.cpp:646-649 Hide). The mock has no per-device capability
+  // table yet, so the upstream initial state is kept for every device.
+  return key == QStringLiteral("timelapse");
+}
+
+void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath){
   if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size())
     return;
   const int realIdx = filteredIndices_[filteredIndex];

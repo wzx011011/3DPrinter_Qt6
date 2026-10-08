@@ -5,8 +5,20 @@ import ".."
 import "../controls"
 
 // P8.3 -- EditGCodeDialog: G-code editor with placeholder insertion
-// Aligns with upstream EditGCodeDialog (wxDataViewCtrl + wxTextCtrl + search)
-// Layout: Left panel (parameter list) | Center panel (monospace TextArea)
+// Aligns 1:1 with upstream EditGCodeDialog (wxDataViewCtrl tree + wxTextCtrl
+// + wxSearchCtrl + DialogButtons):
+//   - 9 top-level placeholder groups built from the real ConfigDefs through
+//     ConfigViewModel::editGcodeParamGroups (upstream init_params_list,
+//     EditGCodeDialog.cpp:153-243);
+//   - bare-key placeholder insertion (no braces), vector keys as "key[]"
+//     (upstream ParamsNode :485-491 / add_selected_value_to_gcode :315-332);
+//   - full-width selection label "(type)" + real tooltip description below
+//     the grid (:96-108, selection_changed :334-400);
+//   - resizable frame (min 45em x 35em, cap 100em x 70em, :37/:116/:415-423)
+//     with a 1:2 parameter-column / editor split (:92-94);
+//   - icon-only add button (:75-76), search field with embedded search and
+//     cancel buttons (:54-59), node bitmap icons (:430-435, :161-309);
+//   - search hit highlighting + expansion-state restore (:444-545, :638-664).
 // Usage: EditGCodeDialog { id: dlg } -> dlg.open()
 
 CxDialog {
@@ -25,56 +37,464 @@ CxDialog {
     dialogTitle: qsTr("编辑自定义 G-code")
     signal gcodeAccepted(string gcode)
 
-    // Internal state
+    // Upstream is a wxRESIZE_BORDER dialog (EditGCodeDialog.cpp:37): clear the
+    // base centering anchor so a resize drag keeps the top-left corner fixed;
+    // centering is done manually in onAboutToShow.
+    anchors.centerIn: undefined
+
+    // Upstream on_dpi_changed SetMinSize(45em, 35em) (EditGCodeDialog.cpp:
+    // 415-423) and fit_in_display {100em, 70em} (:116); em = 10px at the
+    // reference DPI.
+    readonly property int minDialogWidth: 450
+    readonly property int minDialogHeight: 350
+    readonly property int maxDialogWidth: 1000
+    readonly property int maxDialogHeight: 700
+
+    // Grid geometry -- wxFlexGridSizer(1, 3, 5, 15) with border 10
+    // (EditGCodeDialog.cpp:44-49) and AddGrowableCol(0,1)/(2,2) weights
+    // (:92-94), i.e. the parameter column takes 1/3 and the editor 2/3 of the
+    // leftover width.
+    readonly property int dlgBorder: 10
+    readonly property int gridHGap: 15
+
+    // -- Tree data (loaded from ConfigViewModel on open) --
+    property var groupData: []
+    property var paramTree: []
+    // Flat rows currently displayed by the tree ListView.
+    property var displayRows: []
+
+    // -- Search state (upstream ParamsModel::RefreshSearch / FinishSearch) --
+    property string searchText: ""
+    property bool searching: false
+    property var expandedSnapshot: ({})
+
+    // -- Selection state --
+    property string selectedNodeId: ""
     property string selectedParamCode: ""
     property string selectedParamLabel: ""
     property string selectedParamDesc: ""
 
-    anchors.centerIn: parent
+    // Node icon tables -- upstream EditGCodeDialog.cpp:161-238 (groups and
+    // lock subgroups), :301-309 (presets subgroups) and :430-435 ParamsInfo
+    // (param type bitmaps; FilamentVector is part of ParamsInfo upstream but
+    // is never constructed in that dialog).
+    readonly property var kNodeIcons: ({
+        "global_slicing_state": "qrc:/qml/assets/icons/custom-gcode_slicing-state_global.svg",
+        "read_only": "qrc:/qml/assets/icons/lock_closed.svg",
+        "read_write": "qrc:/qml/assets/icons/lock_open.svg",
+        "slicing_state": "qrc:/qml/assets/icons/custom-gcode_slicing-state.svg",
+        "print_statistics": "qrc:/qml/assets/icons/custom-gcode_stats.svg",
+        "objects_info": "qrc:/qml/assets/icons/custom-gcode_object-info.svg",
+        "dimensions": "qrc:/qml/assets/icons/custom-gcode_measure.svg",
+        "temperatures": "qrc:/qml/assets/icons/custom-gcode_temperature.svg",
+        "timestamps": "qrc:/qml/assets/icons/custom-gcode_time.svg",
+        "specific": "qrc:/qml/assets/icons/custom-gcode_gcode.svg",
+        "presets": "qrc:/qml/assets/icons/cog.svg",
+        "print_settings": "qrc:/qml/assets/icons/process.svg",
+        "filament_settings": "qrc:/qml/assets/icons/filament.svg",
+        "printer_settings": "qrc:/qml/assets/icons/editgcode_printer.svg"
+    })
+    readonly property var kParamIcons: ({
+        0: "qrc:/qml/assets/icons/custom-gcode_single.svg",
+        1: "qrc:/qml/assets/icons/custom-gcode_vector.svg",
+        2: "qrc:/qml/assets/icons/custom-gcode_vector-index.svg"
+    })
+
     width: 620
     height: 400
 
+    function centerToOverlay() {
+        var ov = Overlay.overlay
+        if (!ov)
+            return
+        x = Math.max(0, Math.round((ov.width - width) / 2))
+        y = Math.max(0, Math.round((ov.height - height) / 2))
+    }
+
+    onAboutToShow: centerToOverlay()
+
+    // Localized display name for a group/subgroup id coming from
+    // ConfigViewModel (upstream group titles, EditGCodeDialog.cpp:160-238 and
+    // :303-309).
+    function groupDisplayName(id) {
+        switch (id) {
+        case "global_slicing_state": return qsTr("[Global] 切片状态")
+        case "read_only": return qsTr("只读")
+        case "read_write": return qsTr("读写")
+        case "slicing_state": return qsTr("切片状态")
+        case "print_statistics": return qsTr("打印统计")
+        case "objects_info": return qsTr("对象信息")
+        case "dimensions": return qsTr("尺寸")
+        case "temperatures": return qsTr("温度")
+        case "timestamps": return qsTr("时间戳")
+        case "specific": return qsTr("特定于 %1").arg(root.optionKey)
+        case "presets": return qsTr("预设参数")
+        case "print_settings": return qsTr("打印设置")
+        case "filament_settings": return qsTr("耗材设置")
+        case "printer_settings": return qsTr("打印机设置")
+        }
+        return id
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    }
+
+    // Rich text for a tree row -- upstream ParamsNode::GetFormattedText
+    // (:494-508): group/subgroup nodes render bold (m_bold, :456/:467) and a
+    // matching param's hit substring gets a colored background (highlight()
+    // :444-449, upstream teal replaced by the OWzx brand accent).
+    function rowRichText(node) {
+        var body = escapeHtml(node.text)
+        if (root.searching && node.kind === "param" && root.searchText !== "") {
+            var idx = node.text.toLowerCase().indexOf(root.searchText)
+            if (idx >= 0) {
+                body = escapeHtml(node.text.slice(0, idx))
+                    + '<span style="background-color: ' + Theme.accent + '">'
+                    + escapeHtml(node.text.slice(idx, idx + root.searchText.length))
+                    + '</span>'
+                    + escapeHtml(node.text.slice(idx + root.searchText.length))
+            }
+        }
+        return node.kind === "param" ? body : "<b>" + body + "</b>"
+    }
+
+    function makeParamNode(p, depth, parentPath, pi) {
+        // Upstream ParamsNode display text: bare key, vector keys get a "[]"
+        // suffix (EditGCodeDialog.cpp:485-491). No braces anywhere.
+        var code = p.key + (p.kind === 1 ? "[]" : "")
+        return {
+            nodeId: parentPath + "/p" + pi,
+            kind: "param",
+            depth: depth,
+            icon: root.kParamIcons[p.kind] || root.kParamIcons[0],
+            text: code,
+            code: code,
+            key: p.key,
+            typeStr: p.typeStr || "",
+            label: p.label || "",
+            fullLabel: p.fullLabel || "",
+            tooltip: p.tooltip || "",
+            children: []
+        }
+    }
+
+    // Build the JS tree from the ConfigViewModel payload. Top-level groups
+    // start expanded (upstream AppendGroup runs m_ctrl->Expand on the root
+    // parent for every group, EditGCodeDialog.cpp:573); subgroups start
+    // collapsed except the Specific group, which upstream expands explicitly
+    // (:233) and which carries its params directly (no subgroups).
+    function rebuildTree() {
+        var tree = []
+        for (var gi = 0; gi < root.groupData.length; ++gi) {
+            var g = root.groupData[gi]
+            var gNode = {
+                nodeId: "g" + gi,
+                kind: "group",
+                depth: 0,
+                icon: root.kNodeIcons[g.id] || "",
+                text: groupDisplayName(g.id),
+                expanded: true,
+                children: []
+            }
+            var params = g.params || []
+            for (var pi = 0; pi < params.length; ++pi)
+                gNode.children.push(makeParamNode(params[pi], 1, gNode.nodeId, pi))
+            var subs = g.subgroups || []
+            for (var si = 0; si < subs.length; ++si) {
+                var s = subs[si]
+                var sNode = {
+                    nodeId: gNode.nodeId + "/s" + si,
+                    kind: "subgroup",
+                    depth: 1,
+                    icon: root.kNodeIcons[s.id] || "",
+                    text: groupDisplayName(s.id),
+                    expanded: false,
+                    children: []
+                }
+                var sParams = s.params || []
+                for (var spi = 0; spi < sParams.length; ++spi)
+                    sNode.children.push(makeParamNode(sParams[spi], 2, sNode.nodeId, spi))
+                gNode.children.push(sNode)
+            }
+            tree.push(gNode)
+        }
+        root.paramTree = tree
+        root.selectedNodeId = ""
+        root.selectedParamCode = ""
+        root.selectedParamLabel = ""
+        root.selectedParamDesc = ""
+    }
+
+    function captureExpanded() {
+        var snap = {}
+        for (var gi = 0; gi < root.paramTree.length; ++gi) {
+            var g = root.paramTree[gi]
+            snap[g.nodeId] = g.expanded
+            for (var ci = 0; ci < g.children.length; ++ci)
+                snap[g.children[ci].nodeId] = g.children[ci].expanded
+        }
+        return snap
+    }
+
+    function applyExpandedSnapshot() {
+        // Upstream ParamsNode::FinishSearch (:536-545) restores the expansion
+        // each node had before the search started.
+        for (var gi = 0; gi < root.paramTree.length; ++gi) {
+            var g = root.paramTree[gi]
+            if (g.nodeId in root.expandedSnapshot)
+                g.expanded = root.expandedSnapshot[g.nodeId]
+            for (var ci = 0; ci < g.children.length; ++ci) {
+                var s = g.children[ci]
+                if (s.nodeId in root.expandedSnapshot)
+                    s.expanded = root.expandedSnapshot[s.nodeId]
+            }
+        }
+    }
+
+    function nodeMatches(node) {
+        return node.text.toLowerCase().indexOf(root.searchText) !== -1
+    }
+
+    // Rebuild the flat rows shown by the ListView.
+    //  - No search: honor each group/subgroup expanded flag.
+    //  - Searching (upstream ParamsModel::RefreshSearch :638-664): only nodes
+    //    with a matching param in their subtree stay enabled/visible, the
+    //    tree renders fully expanded, and matching params get their hit
+    //    substring highlighted.
+    function rebuildDisplayRows() {
+        var rows = []
+        for (var gi = 0; gi < root.paramTree.length; ++gi) {
+            var g = root.paramTree[gi]
+            var gRows = []
+            var groupHasMatch = false
+            for (var ci = 0; ci < g.children.length; ++ci) {
+                var child = g.children[ci]
+                if (child.kind === "subgroup") {
+                    var sRows = []
+                    var subHasMatch = false
+                    for (var pi = 0; pi < child.children.length; ++pi) {
+                        var p = child.children[pi]
+                        if (root.searching && !nodeMatches(p))
+                            continue
+                        if (root.searching)
+                            subHasMatch = true
+                        sRows.push(p)
+                    }
+                    if (root.searching && !subHasMatch)
+                        continue
+                    if (root.searching)
+                        groupHasMatch = true
+                    if (!root.searching && !child.expanded)
+                        continue
+                    gRows.push(child)
+                    for (var si = 0; si < sRows.length; ++si)
+                        gRows.push(sRows[si])
+                } else {
+                    if (root.searching && !nodeMatches(child))
+                        continue
+                    if (root.searching)
+                        groupHasMatch = true
+                    gRows.push(child)
+                }
+            }
+            if (root.searching && !groupHasMatch)
+                continue
+            rows.push(g)
+            for (var ri = 0; ri < gRows.length; ++ri)
+                rows.push(gRows[ri])
+        }
+
+        for (var fi = 0; fi < rows.length; ++fi)
+            rows[fi].richText = rowRichText(rows[fi])
+        root.displayRows = rows
+
+        // Keep the visual selection on the same node across rebuilds.
+        paramListView.currentIndex = -1
+        if (root.selectedNodeId !== "") {
+            for (var i = 0; i < rows.length; ++i) {
+                if (rows[i].nodeId === root.selectedNodeId) {
+                    paramListView.currentIndex = i
+                    break
+                }
+            }
+        }
+    }
+
+    // Upstream on_search_update (:141-146) -> RefreshSearch / FinishSearch.
+    function updateFilter(text) {
+        var q = text.toLowerCase()
+        if (q === "") {
+            if (root.searching) {
+                applyExpandedSnapshot()
+                root.searching = false
+                root.expandedSnapshot = {}
+            }
+        } else if (!root.searching) {
+            // Upstream ParamsModel::RefreshSearch saves the expansion state of
+            // every node the first time a search runs (:510-517, :643-646).
+            root.expandedSnapshot = captureExpanded()
+            root.searching = true
+        }
+        root.searchText = q
+        rebuildDisplayRows()
+    }
+
+    // Selection label panel -- upstream selection_changed (:384-391):
+    //   "key\n(type)" / "Full label > label\n(type)" / "label\n(type)".
+    function selectionLabelText(p) {
+        var fl = p.fullLabel
+        var l = p.label
+        if (fl === "" && l === "")
+            return p.key + "\n(" + p.typeStr + ")"
+        if (fl !== "" && l !== "")
+            return fl + " > " + l + "\n(" + p.typeStr + ")"
+        return (l === "" ? fl : l) + "\n(" + p.typeStr + ")"
+    }
+
+    function selectParam(node, index) {
+        root.selectedNodeId = node.nodeId
+        root.selectedParamCode = node.code
+        root.selectedParamLabel = selectionLabelText(node)
+        root.selectedParamDesc = node.tooltip
+        paramListView.currentIndex = index
+    }
+
+    // -- Insert the selected placeholder at the cursor; mirrors upstream
+    //    add_selected_value_to_gcode (EditGCodeDialog.cpp:315-332): a "\n"
+    //    prefix when writing at the very end, then for values ending in "]"
+    //    either the cursor moves into the (empty) brackets or -- the
+    //    upstream "[current_extruder]" branch, unreachable in that dialog
+    //    since FilamentVector is never constructed -- the 16-char default
+    //    suffix gets selected. Kept for parity. --
+    function insertSelectedParam() {
+        var val = root.selectedParamCode
+        if (val === "" || !gcodeEditor)
+            return
+
+        var cursorPos = gcodeEditor.cursorPosition
+        var atEnd = (cursorPos >= gcodeEditor.text.length)
+        var insertText = atEnd ? "\n" + val : val
+
+        gcodeEditor.insert(cursorPos, insertText)
+
+        if (val.charAt(val.length - 1) === "]") {
+            var newPos = gcodeEditor.cursorPosition
+            if (val.charAt(val.length - 2) === "[")
+                gcodeEditor.cursorPosition = newPos - 1          // into the brackets
+            else
+                gcodeEditor.select(newPos - 17, newPos - 1)      // "current_extruder"
+        }
+
+        gcodeEditor.forceActiveFocus()
+    }
+
+    function loadPlaceholderGroups() {
+        // Real ConfigDef-driven placeholder tree (upstream init_params_list).
+        var vm = backend && backend.configViewModel ? backend.configViewModel : null
+        root.groupData = vm ? vm.editGcodeParamGroups(root.optionKey) : []
+    }
+
     contentItem: ColumnLayout {
-        spacing: Theme.spacingXS
+        spacing: root.dlgBorder
         anchors.fill: parent
-        anchors.margins: Theme.spacingXS
-        // Top label (aligns with upstream "Built-in placeholders (Double click item to add to G-code)")
+        anchors.leftMargin: root.dlgBorder
+        anchors.rightMargin: root.dlgBorder
+        anchors.topMargin: root.dlgBorder
+
+        // Top label (aligns with upstream "Built-in placeholders (Double click item to add to G-code)",
+        // EditGCodeDialog.cpp:40 + :108)
         Text {
             Layout.fillWidth: true
-            Layout.leftMargin: Theme.spacingXL
-            Layout.topMargin: Theme.spacingMD
-            Layout.bottomMargin: Theme.spacingXS
             text: qsTr("内置占位符（双击项添加到 G-code）：")
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSizeSM
             wrapMode: Text.Wrap
         }
 
-        // Main 3-column area: param list | add btn | editor
-        RowLayout {
+        // Grid row: parameter column | add button | editor (1:2 weight split)
+        Item {
+            id: gridRow
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: Theme.spacingLG
-            Layout.rightMargin: Theme.spacingLG
-            Layout.bottomMargin: Theme.spacingMD
-            spacing: Theme.spacingXS
-            // -- Left panel: parameter list --
+
+            // -- Parameter column (grid col 0, growable weight 1) --
             ColumnLayout {
-                Layout.preferredWidth: 180
-                Layout.fillHeight: true
-                spacing: Theme.spacingSM
-                // Search bar
-                CxTextField {
-                    id: searchField
+                id: paramColumn
+                x: 0
+                y: 0
+                width: Math.floor((gridRow.width - addBtn.width - 2 * root.gridHGap) / 3)
+                height: parent.height
+                spacing: 0
+
+                // Search field -- upstream wxSearchCtrl with the search
+                // button, cancel button and descriptive text
+                // (EditGCodeDialog.cpp:54-59), framed by wxALL border 10
+                // (:68).
+                Item {
+                    id: searchBox
                     Layout.fillWidth: true
-                    placeholderText: qsTr("搜索 G-code 占位符...")
-                    onTextChanged: paramProxyModel.updateFilter(text)
+                    Layout.preferredHeight: Theme.controlHeightSM
+                    Layout.leftMargin: root.dlgBorder
+                    Layout.rightMargin: root.dlgBorder
+                    Layout.topMargin: root.dlgBorder
+                    Layout.bottomMargin: root.dlgBorder
+
+                    CxTextField {
+                        id: searchField
+                        anchors.fill: parent
+                        leftPadding: 28
+                        rightPadding: searchCancelBtn.visible ? 26 : Theme.spacingMD
+                        placeholderText: qsTr("搜索 G-code 占位符...")
+                        onTextChanged: root.updateFilter(text)
+                    }
+
+                    Image {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.spacingSM
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 14
+                        height: 14
+                        source: "qrc:/qml/assets/icons/editgcode_search.svg"
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                    }
+
+                    // Cancel (clear) button -- upstream ShowCancelButton(true)
+                    Item {
+                        id: searchCancelBtn
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spacingXS
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 16
+                        height: 16
+                        visible: searchField.text.length > 0
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 3
+                            source: "qrc:/qml/assets/icons/x.svg"
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: searchField.text = ""
+                        }
+                    }
                 }
 
-                // Parameter tree view (Listview with grouped expandable categories)
+                // Parameter tree (upstream ParamsViewCtrl single-column
+                // BitmapTextRenderer tree, EditGCodeDialog.cpp:816-841)
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    Layout.leftMargin: root.dlgBorder
+                    Layout.rightMargin: root.dlgBorder
+                    Layout.bottomMargin: root.dlgBorder
                     color: Theme.bgInset
                     radius: 4
                     border.color: Theme.borderSubtle
@@ -85,7 +505,7 @@ CxDialog {
                         id: paramListView
                         anchors.fill: parent
                         anchors.margins: Theme.spacingXS
-                        model: paramProxyModel
+                        model: root.displayRows
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
 
@@ -94,72 +514,50 @@ CxDialog {
                             required property int index
                             required property var modelData
                             width: paramListView.width
-                            height: modelData.isCategory ? 26 : 22
+                            height: delegateRoot.modelData.kind === "param" ? 22 : 26
                             color: {
-                                if (modelData.isCategory) return "transparent"
-                                if (paramListView.currentIndex === index) return Theme.accentSubtle
+                                if (delegateRoot.modelData.kind !== "param") return "transparent"
+                                if (paramListView.currentIndex === delegateRoot.index) return Theme.accentSubtle
                                 if (delegateMa.containsMouse) return Theme.bgHover
                                 return "transparent"
                             }
-                            visible: modelData.visible !== false
 
-                            // Category header row
-                            RowLayout {
+                            Row {
                                 anchors.fill: parent
-                                anchors.leftMargin: Theme.spacingSM
+                                anchors.leftMargin: delegateRoot.modelData.depth * 16 + Theme.spacingSM
                                 anchors.rightMargin: Theme.spacingSM
                                 spacing: Theme.spacingXS
-                                visible: modelData.isCategory
 
-                                // Expand/collapse arrow
+                                // Expander arrow (container rows only)
                                 Text {
-                                    text: modelData.expanded ? "▼" : "▶"
+                                    visible: delegateRoot.modelData.kind !== "param"
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: delegateRoot.modelData.kind !== "param" && delegateRoot.modelData.expanded ? "▼" : "▶"
                                     color: Theme.textTertiary
                                     font.pixelSize: 8
                                 }
 
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: modelData.label
-                                    color: Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeSM
-                                    font.bold: true
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            // Parameter item row
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: modelData.isCategory ? 0 : 18
-                                anchors.rightMargin: Theme.spacingSM
-                                spacing: Theme.spacingXS
-                                visible: !modelData.isCategory
-
-                                // Type indicator icon (scalar vs vector)
-                                Rectangle {
-                                    width: 14
-                                    height: 14
-                                    radius: 2
-                                    color: modelData.isVector ? Theme.borderInput : Theme.bgCard
-                                    border.color: modelData.isVector ? Theme.statusInfo : Theme.accent
-                                    border.width: 1
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData.isVector ? "[]" : "S"
-                                        color: modelData.isVector ? Theme.statusInfo : Theme.accent
-                                        font.pixelSize: 7
-                                        font.bold: true
-                                    }
+                                // Node bitmap (upstream icon_name per group /
+                                // lock subgroup / ParamsInfo param type)
+                                Image {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 16
+                                    height: 16
+                                    source: delegateRoot.modelData.icon
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
                                 }
 
                                 Text {
-                                    Layout.fillWidth: true
-                                    text: modelData.label
-                                    color: paramListView.currentIndex === index ? Theme.textPrimary : Theme.textSecondary
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - x - Theme.spacingXS
+                                    text: delegateRoot.modelData.richText
+                                    textFormat: Text.RichText
+                                    color: delegateRoot.modelData.kind === "param"
+                                           ? (paramListView.currentIndex === delegateRoot.index ? Theme.textPrimary : Theme.textSecondary)
+                                           : Theme.textPrimary
                                     font.pixelSize: Theme.fontSizeSM
-                                    font.family: "Consolas, Monaco, monospace"
+                                    font.family: Theme.fontMono
                                     elide: Text.ElideRight
                                 }
                             }
@@ -171,19 +569,23 @@ CxDialog {
                                 cursorShape: Qt.PointingHandCursor
 
                                 onClicked: {
-                                    if (modelData.isCategory) {
-                                        paramModel.toggleCategory(modelData.categoryId)
+                                    if (delegateRoot.modelData.kind !== "param") {
+                                        // During a search the tree is fully
+                                        // expanded by the search itself
+                                        // (upstream RefreshSearch ExpandChildren).
+                                        if (!root.searching) {
+                                            delegateRoot.modelData.expanded = !delegateRoot.modelData.expanded
+                                            root.rebuildDisplayRows()
+                                        }
                                     } else {
-                                        paramListView.currentIndex = index
-                                        root.selectedParamCode = modelData.code
-                                        root.selectedParamLabel = modelData.label
-                                        root.selectedParamDesc = modelData.desc || ""
+                                        root.selectParam(delegateRoot.modelData, delegateRoot.index)
                                     }
                                 }
 
                                 onDoubleClicked: {
-                                    if (!modelData.isCategory) {
-                                        insertSelectedParam()
+                                    if (delegateRoot.modelData.kind === "param") {
+                                        root.selectParam(delegateRoot.modelData, delegateRoot.index)
+                                        root.insertSelectedParam()
                                     }
                                 }
                             }
@@ -194,55 +596,29 @@ CxDialog {
                         }
                     }
                 }
-
-                // Parameter description area (aligns with upstream m_param_label + m_param_description)
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingXS
-                    Text {
-                        Layout.fillWidth: true
-                        id: paramLabelDisplay
-                        text: root.selectedParamLabel
-                            ? root.selectedParamLabel + qsTr("（双击添加）")
-                            : qsTr("选择占位符")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeSM
-                        font.bold: !!root.selectedParamLabel
-                        elide: Text.ElideRight
-                        wrapMode: Text.Wrap
-                        Layout.maximumHeight: 30
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.selectedParamDesc
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeXS
-                        wrapMode: Text.Wrap
-                        Layout.maximumHeight: 36
-                        visible: !!root.selectedParamDesc
-                    }
-                }
             }
 
-            // -- Add button (vertical, centered between list and editor) --
-            CxButton {
-                Layout.alignment: Qt.AlignVCenter
-                Layout.leftMargin: Theme.spacingMD
-                Layout.rightMargin: Theme.spacingMD
-                text: qsTr("添加")
-                compact: true
-                enabled: !!root.selectedParamCode
-                cxStyle: CxButton.Style.Primary
-                onClicked: insertSelectedParam()
-                ToolTip.visible: hovered
-                ToolTip.text: qsTr("将选中的占位符添加到 G-code")
+            // -- Add button (grid col 1): upstream ScalableButton "add_copies"
+            //    bitmap-only + tooltip (EditGCodeDialog.cpp:75-76). Always
+            //    enabled -- add_selected_value_to_gcode() returns early on an
+            //    empty selection (:317-319). --
+            CxIconButton {
+                id: addBtn
+                x: paramColumn.width + root.gridHGap
+                anchors.verticalCenter: parent.verticalCenter
+                iconSource: "qrc:/qml/assets/icons/add_copies.svg"
+                iconSize: 16
+                toolTipText: qsTr("将选中的占位符添加到 G-code")
+                onClicked: root.insertSelectedParam()
             }
 
-            // -- Center panel: G-code text editor --
+            // -- G-code editor (grid col 2, growable weight 2) --
             Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                id: editorFrame
+                x: paramColumn.width + addBtn.width + 2 * root.gridHGap
+                y: 0
+                width: gridRow.width - x
+                height: parent.height
                 color: Theme.bgBase
                 radius: 4
                 border.color: gcodeEditor.activeFocus ? Theme.borderFocus : Theme.borderSubtle
@@ -260,7 +636,7 @@ CxDialog {
                         placeholderText: qsTr("在此编辑自定义 G-code...")
                         text: root.initialGCode
                         wrapMode: TextArea.Wrap
-                        font.family: "Consolas, Monaco, 'Courier New', monospace"
+                        font.family: Theme.fontMono
                         font.pixelSize: Theme.fontSizeMD
                         color: Theme.textPrimary
                         selectionColor: Theme.accentSubtle
@@ -280,6 +656,28 @@ CxDialog {
                 }
             }
         }
+
+        // -- Selection label (full width below the grid; upstream
+        //    m_param_label, EditGCodeDialog.cpp:96-97/:107, bold font) --
+        Text {
+            Layout.fillWidth: true
+            text: root.selectedParamLabel !== "" ? root.selectedParamLabel : qsTr("选择占位符")
+            color: Theme.textPrimary
+            font.pixelSize: Theme.fontSizeSM
+            font.bold: root.selectedParamLabel !== ""
+            wrapMode: Text.Wrap
+        }
+
+        // -- Selection description (full width; upstream m_param_description,
+        //    :98/:108, real ConfigDef tooltip) --
+        Text {
+            Layout.fillWidth: true
+            text: root.selectedParamDesc
+            color: Theme.textTertiary
+            font.pixelSize: Theme.fontSizeXS
+            wrapMode: Text.Wrap
+            visible: root.selectedParamDesc !== ""
+        }
     }
 
     footer: Rectangle {
@@ -295,29 +693,16 @@ CxDialog {
             color: parent.color
         }
 
+        // Upstream DialogButtons(this, {"OK", "Cancel"}) (EditGCodeDialog.cpp:
+        // :101/:109): right-aligned row in list order -- OK (Confirm primary
+        // style, :104-105) then Cancel, separated by ChoiceButtonGap() = 10
+        // (DialogButtons.cpp:141-163, Button.hpp:12).
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: Theme.spacingXL
-            anchors.rightMargin: Theme.spacingXL
-            spacing: Theme.spacingMD
+            anchors.rightMargin: root.dlgBorder
+            spacing: root.dlgBorder
             Item { Layout.fillWidth: true }
-
-            CxButton {
-                text: qsTr("清除全部")
-                cxStyle: CxButton.Style.Ghost
-                onClicked: {
-                    gcodeEditor.text = ""
-                    gcodeEditor.forceActiveFocus()
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            CxButton {
-                text: qsTr("取消")
-                cxStyle: CxButton.Style.Secondary
-                onClicked: root.reject()
-            }
 
             CxButton {
                 text: qsTr("确定")
@@ -327,286 +712,118 @@ CxDialog {
                     root.accept()
                 }
             }
-        }
-    }
 
-    // -- Flat parameter data model (static, no backend needed) --
-    // Aligned with upstream categories:
-    //   [Global] Slicing State, Slicing State, Print Statistics,
-    //   Objects Info, Dimensions, Temperatures, Timestamps, Presets
-    ListModel {
-        id: paramModel
-
-        // categories map: categoryId -> { expanded, startIndex, endIndex }
-        property var categoryStates: ({})
-        property var allItems: []
-
-        function rebuildFlatList() {
-            clear()
-            var flat = []
-            categoryStates = {}
-
-            // -- Category definitions (aligns with upstream init_params_list) --
-            var categories = [
-                {
-                    id: "slicing_state", label: qsTr("切片状态"),
-                    items: [
-                        { label: "layer_num", code: "{layer_num}", desc: qsTr("当前层号 (从 1 开始)"), isVector: false },
-                        { label: "layer_z", code: "{layer_z}", desc: qsTr("当前层 Z 高度 (mm)"), isVector: false },
-                        { label: "max_layer_z", code: "{max_layer_z}", desc: qsTr("模型最大 Z 高度 (mm)"), isVector: false },
-                        { label: "print_z", code: "{print_z}", desc: qsTr("当前打印 Z 高度 (mm)"), isVector: false },
-                        { label: "extruder_id", code: "[extruder_id]", desc: qsTr("当前挤出机 ID"), isVector: false },
-                        { label: "extruder_temperature", code: "{temperature[extruder_id]}", desc: qsTr("当前挤出机温度"), isVector: true }
-                    ]
-                },
-                {
-                    id: "print_stats", label: qsTr("打印统计"),
-                    items: [
-                        { label: "filament_type", code: "{filament_type[extruder_id]}", desc: qsTr("耗材类型"), isVector: true },
-                        { label: "filament_used", code: "{filament_used[extruder_id]}", desc: qsTr("已用耗材长度 (mm)"), isVector: true },
-                        { label: "filament_weight", code: "{filament_weight[extruder_id]}", desc: qsTr("已用耗材重量 (g)"), isVector: true },
-                        { label: "retract_len", code: "{retract_length[extruder_id]}", desc: qsTr("回抽长度 (mm)"), isVector: true },
-                        { label: "print_time", code: "{print_time}", desc: qsTr("预估打印时间"), isVector: false },
-                        { label: "total_layer_count", code: "{total_layer_count}", desc: qsTr("总层数"), isVector: false }
-                    ]
-                },
-                {
-                    id: "objects_info", label: qsTr("对象信息"),
-                    items: [
-                        { label: "object_name", code: "{object_name}", desc: qsTr("当前对象名称"), isVector: false },
-                        { label: "object_id", code: "{object_id}", desc: qsTr("当前对象 ID"), isVector: false },
-                        { label: "num_objects", code: "{num_objects}", desc: qsTr("总对象数"), isVector: false },
-                        { label: "num_instances", code: "{num_instances}", desc: qsTr("总实例数"), isVector: false },
-                        { label: "has_wipe_tower", code: "{has_wipe_tower}", desc: qsTr("是否启用擦料塔"), isVector: false }
-                    ]
-                },
-                {
-                    id: "dimensions", label: qsTr("尺寸"),
-                    items: [
-                        { label: "first_layer_height", code: "{first_layer_height}", desc: qsTr("首层层高 (mm)"), isVector: false },
-                        { label: "layer_height", code: "{layer_height}", desc: qsTr("层高 (mm)"), isVector: false },
-                        { label: "max_print_height", code: "{max_print_height}", desc: qsTr("最大打印高度 (mm)"), isVector: false },
-                        { label: "object_height", code: "{current_object_height}", desc: qsTr("当前对象高度 (mm)"), isVector: false },
-                        { label: "first_layer_print_height", code: "{first_layer_print_height}", desc: qsTr("首层打印高度 (mm)"), isVector: false }
-                    ]
-                },
-                {
-                    id: "temperatures", label: qsTr("温度"),
-                    items: [
-                        { label: "nozzle_temp", code: "{temperature[extruder_id]}", desc: qsTr("喷嘴温度"), isVector: true },
-                        { label: "bed_temp", code: "{bed_temperature[extruder_id]}", desc: qsTr("热床温度"), isVector: true },
-                        { label: "first_layer_nozzle_temp", code: "{first_layer_temperature[extruder_id]}", desc: qsTr("首层喷嘴温度"), isVector: true },
-                        { label: "first_layer_bed_temp", code: "{first_layer_bed_temperature[extruder_id]}", desc: qsTr("首层热床温度"), isVector: true },
-                        { label: "chamber_temp", code: "{chamber_temperature}", desc: qsTr("封闭室温度"), isVector: false }
-                    ]
-                },
-                {
-                    id: "timestamps", label: qsTr("时间戳"),
-                    items: [
-                        { label: "timestamp", code: "{timestamp}", desc: qsTr("当前时间戳 (YYYYMMDD-HHmmss)"), isVector: false },
-                        { label: "date", code: "{date}", desc: qsTr("当前日期 (YYYYMMDD)"), isVector: false },
-                        { label: "time", code: "{time}", desc: qsTr("当前时间 (HHmmss)"), isVector: false },
-                        { label: "year", code: "{year}", desc: qsTr("年份 (YYYY)"), isVector: false },
-                        { label: "month", code: "{month}", desc: qsTr("月份 (MM)"), isVector: false },
-                        { label: "day", code: "{day}", desc: qsTr("日期 (DD)"), isVector: false },
-                        { label: "hour", code: "{hour}", desc: qsTr("小时 (HH)"), isVector: false },
-                        { label: "minute", code: "{minute}", desc: qsTr("分钟 (mm)"), isVector: false },
-                        { label: "second", code: "{second}", desc: qsTr("秒 (ss)"), isVector: false }
-                    ]
-                },
-                {
-                    id: "presets", label: qsTr("预设参数"),
-                    items: [
-                        { label: "infill_type", code: "{infill_type}", desc: qsTr("填充模式"), isVector: false },
-                        { label: "infill_density", code: "{infill_density}", desc: qsTr("填充密度 (%)"), isVector: false },
-                        { label: "wall_loops", code: "{wall_loops}", desc: qsTr("墙体层数"), isVector: false },
-                        { label: "top_shell_layers", code: "{top_shell_layers}", desc: qsTr("顶部层数"), isVector: false },
-                        { label: "bottom_shell_layers", code: "{bottom_shell_layers}", desc: qsTr("底部层数"), isVector: false },
-                        { label: "support_material", code: "{support_material}", desc: qsTr("是否生成支撑"), isVector: false },
-                        { label: "print_speed", code: "{print_speed}", desc: qsTr("打印速度 (mm/s)"), isVector: false },
-                        { label: "travel_speed", code: "{travel_speed}", desc: qsTr("空走速度 (mm/s)"), isVector: false },
-                        { label: "brim_width", code: "{brim_width}", desc: qsTr("裙边宽度 (mm)"), isVector: false },
-                        { label: "skirt_distance", code: "{skirt_distance}", desc: qsTr("裙边距离 (mm)"), isVector: false },
-                        { label: "nozzle_diameter", code: "{nozzle_diameter[extruder_id]}", desc: qsTr("喷嘴直径 (mm)"), isVector: true }
-                    ]
-                }
-            ]
-
-            // Build flat list with category headers interleaved
-            for (var c = 0; c < categories.length; ++c) {
-                var cat = categories[c]
-                var catStartIdx = flat.length
-
-                // Category header
-                flat.push({
-                    categoryId: cat.id,
-                    label: cat.label,
-                    isCategory: true,
-                    code: "",
-                    desc: "",
-                    isVector: false,
-                    expanded: categoryStates[cat.id] ? categoryStates[cat.id].expanded : (c < 2),
-                    visible: true
-                })
-
-                // Category items
-                for (var i = 0; i < cat.items.length; ++i) {
-                    var item = cat.items[i]
-                    flat.push({
-                        categoryId: cat.id,
-                        label: item.label,
-                        code: item.code,
-                        desc: item.desc,
-                        isCategory: false,
-                        isVector: item.isVector,
-                        expanded: false,
-                        visible: categoryStates[cat.id] ? categoryStates[cat.id].expanded : (c < 2)
-                    })
-                }
-
-                categoryStates[cat.id] = {
-                    expanded: categoryStates[cat.id] ? categoryStates[cat.id].expanded : (c < 2),
-                    headerIndex: catStartIdx
-                }
-            }
-
-            allItems = flat
-
-            // Populate the ListModel
-            for (var j = 0; j < flat.length; ++j) {
-                append(flat[j])
+            CxButton {
+                text: qsTr("取消")
+                cxStyle: CxButton.Style.Secondary
+                onClicked: root.reject()
             }
         }
 
-        function toggleCategory(categoryId) {
-            var state = categoryStates[categoryId]
-            if (!state) return
-
-            var newExpanded = !state.expanded
-            state.expanded = newExpanded
-
-            // Update visibility and rebuild
-            rebuildFlatList()
-        }
-    }
-
-    // Proxy model for search filtering (aligns with upstream on_search_update / RefreshSearch)
-    ListModel {
-        id: paramProxyModel
-
-        property string searchText: ""
-
-        function updateFilter(text) {
-            searchText = text.toLowerCase()
-            rebuild()
-        }
-
-        function rebuild() {
-            clear()
-            var filterText = searchText
-            var src = paramModel
-
-            if (!src.allItems || src.allItems.length === 0) {
-                src.rebuildFlatList()
+        // Height resize strip along the footer bottom edge (the upstream
+        // wxRESIZE_BORDER frame has no Qt Quick Popup equivalent).
+        MouseArea {
+            id: resizeHeightArea
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 6
+            cursorShape: Qt.SizeVerCursor
+            property real pressGlobalY
+            property real pressHeight
+            onPressed: (mouse) => {
+                pressGlobalY = mapToItem(Overlay.overlay, mouse.x, mouse.y).y
+                pressHeight = root.height
             }
-
-            var items = src.allItems
-            var catVisibleCount = {}
-
-            // First pass: count visible items per category
-            for (var i = 0; i < items.length; ++i) {
-                var item = items[i]
-                if (item.isCategory) continue
-
-                if (filterText === "" || item.label.toLowerCase().indexOf(filterText) !== -1
-                    || (item.desc && item.desc.toLowerCase().indexOf(filterText) !== -1)
-                    || item.code.toLowerCase().indexOf(filterText) !== -1) {
-                    if (!catVisibleCount[item.categoryId])
-                        catVisibleCount[item.categoryId] = 0
-                    catVisibleCount[item.categoryId]++
-                }
+            onPositionChanged: (mouse) => {
+                if (!pressed)
+                    return
+                const gy = mapToItem(Overlay.overlay, mouse.x, mouse.y).y
+                root.height = Math.min(root.maxDialogHeight,
+                                       Math.max(root.minDialogHeight,
+                                                Math.round(pressHeight + gy - pressGlobalY)))
             }
+        }
 
-            // Second pass: build filtered list
-            for (var j = 0; j < items.length; ++j) {
-                var it = items[j]
-                if (it.isCategory) {
-                    // Show category header if it has matching children
-                    if (catVisibleCount[it.categoryId] > 0) {
-                        append({
-                            categoryId: it.categoryId,
-                            label: it.label,
-                            isCategory: true,
-                            code: "",
-                            desc: "",
-                            isVector: false,
-                            expanded: true,
-                            visible: true
-                        })
-                    }
-                } else {
-                    // Show item if matches filter (or no filter)
-                    var match = filterText === ""
-                        || it.label.toLowerCase().indexOf(filterText) !== -1
-                        || (it.desc && it.desc.toLowerCase().indexOf(filterText) !== -1)
-                        || it.code.toLowerCase().indexOf(filterText) !== -1
-                    if (match) {
-                        append({
-                            categoryId: it.categoryId,
-                            label: it.label,
-                            isCategory: false,
-                            code: it.code,
-                            desc: it.desc,
-                            isVector: it.isVector,
-                            expanded: false,
-                            visible: true
-                        })
-                    }
-                }
+        // Bottom-right diagonal resize grip. 7px tall: flush with the button
+        // row's bottom gap (34px buttons in a 48px bar) so it never overlaps
+        // the Cancel button's clickable area.
+        MouseArea {
+            id: resizeCornerArea
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: 24
+            height: 7
+            cursorShape: Qt.SizeFDiagCursor
+            property real pressGlobalX
+            property real pressGlobalY
+            property real pressWidth
+            property real pressHeight
+            onPressed: (mouse) => {
+                const gp = mapToItem(Overlay.overlay, mouse.x, mouse.y)
+                pressGlobalX = gp.x
+                pressGlobalY = gp.y
+                pressWidth = root.width
+                pressHeight = root.height
+            }
+            onPositionChanged: (mouse) => {
+                if (!pressed)
+                    return
+                const gp = mapToItem(Overlay.overlay, mouse.x, mouse.y)
+                root.width = Math.min(root.maxDialogWidth,
+                                      Math.max(root.minDialogWidth,
+                                               Math.round(pressWidth + gp.x - pressGlobalX)))
+                root.height = Math.min(root.maxDialogHeight,
+                                       Math.max(root.minDialogHeight,
+                                                Math.round(pressHeight + gp.y - pressGlobalY)))
             }
         }
     }
 
-    // -- Insert selected param into editor at cursor --
-    function insertSelectedParam() {
-        if (!root.selectedParamCode || !gcodeEditor)
-            return
+    // Right-edge width resize strip. The base background styling is
+    // reproduced here because the resize handle must live in the popup's
+    // background layer to receive clicks along the frame edge.
+    background: Rectangle {
+        color: Theme.bgElevated
+        border.color: Theme.borderInput
+        border.width: 1
+        radius: Theme.radiusLG
 
-        var cursorPos = gcodeEditor.cursorPosition
-        var atEnd = (cursorPos >= gcodeEditor.text.length)
-        var insertText = atEnd ? "\n" + root.selectedParamCode : root.selectedParamCode
-
-        gcodeEditor.insert(cursorPos, insertText)
-
-        // If code has brackets, place cursor inside them (aligns with upstream add_selected_value_to_gcode)
-        if (root.selectedParamCode.indexOf("[") >= 0 && root.selectedParamCode.indexOf("]") >= 0) {
-            var openIdx = root.selectedParamCode.indexOf("[")
-            var closeIdx = root.selectedParamCode.indexOf("]")
-            if (closeIdx - openIdx === 1) {
-                // Empty brackets: place cursor inside
-                gcodeEditor.cursorPosition = cursorPos + openIdx + 1
-            } else {
-                // Named parameter: select the default name inside brackets
-                var selStart = cursorPos + openIdx + 1
-                var selEnd = cursorPos + closeIdx
-                gcodeEditor.select(selStart, selEnd)
+        MouseArea {
+            id: resizeWidthArea
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 6
+            cursorShape: Qt.SizeHorCursor
+            property real pressGlobalX
+            property real pressWidth
+            onPressed: (mouse) => {
+                pressGlobalX = mapToItem(Overlay.overlay, mouse.x, mouse.y).x
+                pressWidth = root.width
             }
-        } else {
-            gcodeEditor.cursorPosition = cursorPos + insertText.length
+            onPositionChanged: (mouse) => {
+                if (!pressed)
+                    return
+                const gx = mapToItem(Overlay.overlay, mouse.x, mouse.y).x
+                root.width = Math.min(root.maxDialogWidth,
+                                      Math.max(root.minDialogWidth,
+                                               Math.round(pressWidth + gx - pressGlobalX)))
+            }
         }
-
-        gcodeEditor.forceActiveFocus()
     }
 
     // Initialize on opened
     onOpened: {
         gcodeEditor.text = root.initialGCode
         gcodeEditor.cursorPosition = gcodeEditor.text.length
+        root.selectedNodeId = ""
         root.selectedParamCode = ""
         root.selectedParamLabel = ""
         root.selectedParamDesc = ""
         searchField.text = ""
-        paramModel.rebuildFlatList()
-        paramProxyModel.rebuild()
+        loadPlaceholderGroups()
+        rebuildTree()
+        rebuildDisplayRows()
     }
 }

@@ -50,6 +50,77 @@ namespace
     return 0.f;
   }
 
+  // Tooltip "Type" row: upstream to_string(EMoveType)
+  // (GCodeViewer.cpp:277-294), keyed by the Qt6 MoveKind classification.
+  QString moveTypeToString(int kind)
+  {
+    switch (kind)
+    {
+      case 0: return QStringLiteral("Extrude");     // KindExtrude
+      case 1: return QStringLiteral("Travel");      // KindTravel
+      case 2: return QStringLiteral("Retract");     // KindRetract
+      case 3: return QStringLiteral("Unretract");   // KindUnretract
+      case 4: return QStringLiteral("Wipe");        // KindWipe
+      case 5: return QStringLiteral("Seam");        // KindSeam
+      default: return QStringLiteral("Unknown");
+    }
+  }
+
+  // Tooltip "Line Type" row + FeatureType detail: upstream
+  // to_string(EGCodeExtrusionRole) (GCodeViewer.cpp:296-322). Kept separate
+  // from kRoleLabels so the legend labels stay untouched.
+  QString moveRoleToString(int role)
+  {
+    static const QList<QString> labels = [] {
+      QList<QString> l;
+      l.reserve(21);
+      l.push_back(QStringLiteral("Unknown"));               // 0  None
+      l.push_back(QStringLiteral("Inner wall"));            // 1  Perimeter
+      l.push_back(QStringLiteral("Outer wall"));            // 2  ExternalPerimeter
+      l.push_back(QStringLiteral("Overhang wall"));         // 3  OverhangPerimeter
+      l.push_back(QStringLiteral("Sparse infill"));         // 4  InternalInfill
+      l.push_back(QStringLiteral("Internal solid infill")); // 5  SolidInfill
+      l.push_back(QStringLiteral("Top surface"));           // 6  TopSolidInfill
+      l.push_back(QStringLiteral("Ironing"));               // 7  Ironing
+      l.push_back(QStringLiteral("Bridge"));                // 8  BridgeInfill
+      l.push_back(QStringLiteral("Gap infill"));            // 9  GapFill
+      l.push_back(QStringLiteral("Skirt"));                 // 10 Skirt
+      l.push_back(QStringLiteral("Support"));               // 11 SupportMaterial
+      l.push_back(QStringLiteral("Support interface"));     // 12 SupportMaterialInterface
+      l.push_back(QStringLiteral("Prime tower"));           // 13 WipeTower
+      l.push_back(QStringLiteral("Custom"));                // 14 Custom
+      l.push_back(QStringLiteral("Bottom surface"));        // 15 BottomSurface
+      l.push_back(QStringLiteral("Internal bridge"));       // 16 InternalBridgeInfill
+      l.push_back(QStringLiteral("Brim"));                  // 17 Brim
+      l.push_back(QStringLiteral("Support transition"));    // 18 SupportTransition
+      l.push_back(QStringLiteral("Mixed"));                 // 19 Mixed
+      return l;
+    }();
+    return (role >= 0 && role < labels.size()) ? labels[role] : labels[0];
+  }
+
+  // Upstream get_time_dhms (libslic3r/Utils.hpp:554-577): "DDd HHh MMm SSs".
+  QString formatTimeDhms(float secs)
+  {
+    if (secs < 0.f)
+      secs = 0.f;
+    int days = int(secs / 86400.f);
+    secs -= float(days) * 86400.f;
+    int hours = int(secs / 3600.f);
+    secs -= float(hours) * 3600.f;
+    int minutes = int(secs / 60.f);
+    secs -= float(minutes) * 60.f;
+    if (days > 0)
+      return QStringLiteral("%1d %2h %3m %4s").arg(days).arg(hours).arg(minutes).arg(int(secs));
+    if (hours > 0)
+      return QStringLiteral("%1h %2m %3s").arg(hours).arg(minutes).arg(int(secs));
+    if (minutes > 0)
+      return QStringLiteral("%1m %2s").arg(minutes).arg(int(secs));
+    if (secs > 1.f)
+      return QStringLiteral("%1s").arg(int(secs));
+    return QStringLiteral("%1s").arg(double(secs), 0, 'f', 6);
+  }
+
   struct PackedSegment
   {
     float x1;
@@ -620,6 +691,7 @@ PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceServ
   showUnretractMoves_ = settings.value(QStringLiteral("preview/showUnretractMoves"), showUnretractMoves_).toBool();
   showWipeMoves_ = settings.value(QStringLiteral("preview/showWipeMoves"), showWipeMoves_).toBool();
   showSeamMarks_ = settings.value(QStringLiteral("preview/showSeamMarks"), showSeamMarks_).toBool();
+  showToolChanges_ = settings.value(QStringLiteral("preview/showToolChanges"), showToolChanges_).toBool();
   playTimer_ = new QTimer(this);
   playTimer_->setInterval(24);
   connect(playTimer_, &QTimer::timeout, this, [this]()
@@ -801,7 +873,8 @@ bool PreviewViewModel::extruderVisibilityAvailable() const
 
 bool PreviewViewModel::moveVisibilityAvailable() const
 {
-  // Retract, unretract, wipe, and seam options are FeatureType-only.
+  // Retract, unretract, wipe, seam, and ToolChanges options are
+  // FeatureType-only (upstream m_options rows, GCodeViewer.cpp:3939-3957).
   return viewModeIndex_ == VT_LineType;
 }
 
@@ -1021,6 +1094,208 @@ void PreviewViewModel::updateToolPositionData()
   toolMoveIndex_ = seg.move;
   // Treat the current move as extrusion when the parser classified it as non-travel.
   toolIsExtrusion_ = !seg.isTravel;
+
+  // Upstream property-table fields (GCodeViewer.cpp:430-475). is_extrusion
+  // mirrors libvgcode PathVertex::is_extrusion (type == Extrude), which is
+  // stricter than toolIsExtrusion (non-travel) and gates the N/A cells.
+  toolKind_ = seg.kind;
+  toolTypeText_ = moveTypeToString(seg.kind);
+  const bool isExtrusion = seg.kind == KindExtrude;
+  const bool isTravel = seg.kind == KindTravel;
+  const bool isWipe = seg.kind == KindWipe;
+  toolLineTypeText_ = isExtrusion ? moveRoleToString(seg.role) : QStringLiteral("N/A");
+  toolHeight_ = seg.height;
+  toolFlowRate_ = seg.volumetric_rate;
+  toolJerk_ = seg.jerk;
+  toolPressureAdvance_ = seg.pressure_advance;
+
+  // Length of the move run ending at the current segment (upstream
+  // GCodeViewer.cpp:442-457): arc moves are discretized into several segments
+  // sharing the same gcode source line, so the whole run is summed. A
+  // negative sentinel marks the upstream N/A case (first vertex or a
+  // retract/unretract/seam move).
+  toolLength_ = -1.0;
+  int runFirst = idx;
+  int runLast = idx;
+  if (idx > 0 && (isExtrusion || isTravel || isWipe))
+  {
+    const int lineId = seg.gcodeLine;
+    if (lineId >= 0)
+    {
+      while (runFirst > 0 && segments_[runFirst - 1].gcodeLine == lineId)
+        --runFirst;
+      while (runLast + 1 < static_cast<int>(segments_.size()) && segments_[runLast + 1].gcodeLine == lineId)
+        ++runLast;
+    }
+    double length = 0.0;
+    for (int i = qMax(runFirst, 1); i <= runLast; ++i)
+    {
+      const auto &prev = segments_[i - 1];
+      const auto &curr = segments_[i];
+      const double dx = double(curr.x2) - double(prev.x2);
+      const double dy = double(curr.y2) - double(prev.y2);
+      const double dz = double(curr.z2) - double(prev.z2);
+      length += std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    toolLength_ = length;
+  }
+
+  // Time row (upstream GCodeViewer.cpp:474-475): cumulative estimated time at
+  // the vertex in get_time_dhms form + the move's own duration in %.3fs.
+  const int accSize = static_cast<int>(m_moveAccumulatedTime.size());
+  double cumulative = 0.0;
+  double moveDuration = 0.0;
+  if (accSize > 0)
+  {
+    const int accIdx = qMin(idx, accSize - 1);
+    cumulative = m_moveAccumulatedTime[accIdx];
+    moveDuration = (idx > 0 && idx - 1 < accSize) ? cumulative - m_moveAccumulatedTime[idx - 1]
+                                                 : cumulative;
+    if (moveDuration < 0.0)
+      moveDuration = 0.0;
+  }
+  toolEstimatedTime_ = formatTimeDhms(float(cumulative));
+  toolMoveTimeSecs_ = moveDuration;
+
+  // Per-view-type detail appended after "Speed: N" on the second info line
+  // (upstream detail switch, GCodeViewer.cpp:361-415). Empty string renders
+  // nothing, like upstream detail_buf[0] == '\0'.
+  const QString naText = QStringLiteral("N/A");
+  QString detail;
+  switch (viewModeIndex_)
+  {
+    case VT_LineType:
+      // Upstream: extrusion -> role string, non-Noop -> move type string.
+      detail = isExtrusion ? toolLineTypeText_ : toolTypeText_;
+      break;
+    case VT_Height:
+      detail = tr("Height: ") + (isExtrusion ? QString::number(seg.height, 'f', 2) : naText);
+      break;
+    case VT_Width:
+      detail = tr("Width: ") + (isExtrusion ? QString::number(seg.width, 'f', 2) : naText);
+      break;
+    case VT_Flow:
+      detail = tr("Flow: ") + (isExtrusion ? QString::number(seg.volumetric_rate, 'f', 2) : naText);
+      break;
+    case VT_FanSpeed:
+      detail = tr("Fan: ") + QString::number(seg.fan_speed, 'f', 0);
+      break;
+    case VT_Temperature:
+      detail = tr("Temperature: ") + QString::number(seg.temperature, 'f', 0);
+      break;
+    case VT_LayerTime:
+    case VT_LayerTimeLog:
+      detail = tr("Layer Time: ") + QString::number(seg.layer_time, 'f', 1);
+      break;
+    case VT_Tool:
+      detail = tr("Tool: ") + QString::number(seg.extruder_id + 1);
+      break;
+    case VT_Filament:
+      // Upstream ColorPrint uses vertex.color_id; the Qt6 Filament view is the
+      // per-extruder palette, so the extruder id stands in.
+      detail = tr("Color: ") + QString::number(seg.extruder_id + 1);
+      break;
+    case VT_Acceleration:
+      detail = tr("Acceleration: ") + QString::number(seg.acceleration, 'f', 0);
+      break;
+    case VT_Jerk:
+      detail = tr("Jerk: ") + QString::number(seg.jerk, 'f', 1);
+      break;
+    case VT_PressureAdvance:
+      detail = tr("PA: ") + QString::number(seg.pressure_advance, 'f', 4);
+      break;
+    default:
+      break;
+  }
+  toolDetailText_ = detail;
+
+  // ENABLE_ACTUAL_SPEED_DEBUG profile (upstream GCodeViewer.cpp:1735-1787):
+  // segments sharing the current gcode line, cumulative length (mm) vs actual
+  // feedrate, zero-delta points dropped, trailing seam dropped, consecutive
+  // duplicate speeds (0.1 precision) compressed.
+  toolActualSpeedExist_ = isExtrusion || isTravel || isWipe;
+  toolActualSpeedProfile_.clear();
+  // The parser feedrate is the mm/min F word; upstream actual_feedrate and
+  // the ActualSpeed color range are mm/s, so the tooltip contract converts.
+  toolActualSpeedYMin_ = m_actualSpeedMin <= m_actualSpeedMax ? m_actualSpeedMin / 60.0 : 0.0;
+  toolActualSpeedYMax_ = m_actualSpeedMax / 60.0;
+  if (toolActualSpeedExist_)
+  {
+    int endId = runLast;
+    if (endId > runFirst && segments_[endId - 1].kind == KindSeam)
+      --endId; // upstream drops a trailing seam vertex from the run
+    struct ProfilePoint
+    {
+      float pos;
+      float speed;
+      bool internal;
+    };
+    std::vector<ProfilePoint> data;
+    float totalLen = 0.f;
+    for (int i = runFirst; i <= endId; ++i)
+    {
+      const auto &v = segments_[i];
+      float len = 0.f;
+      if (i > runFirst)
+      {
+        const auto &prev = segments_[i - 1];
+        const float dx = v.x2 - prev.x2;
+        const float dy = v.y2 - prev.y2;
+        const float dz = v.z2 - prev.z2;
+        len = std::sqrt(dx * dx + dy * dy + dz * dz);
+      }
+      totalLen += len;
+      if (i == runFirst || len > 1e-6f)
+      {
+        // upstream "internal" flag = zero-duration vertex (v.times[0] == 0)
+        const int accSize2 = static_cast<int>(m_moveAccumulatedTime.size());
+        float duration = 0.f;
+        if (accSize2 > 0)
+        {
+          const int ai = qMin(i, accSize2 - 1);
+          duration = (i > 0 && i - 1 < accSize2) ? m_moveAccumulatedTime[ai] - m_moveAccumulatedTime[i - 1]
+                                                : m_moveAccumulatedTime[ai];
+        }
+        data.push_back({totalLen, v.actual_speed, duration <= 0.f});
+      }
+    }
+    // Upstream compression: drop middle points of runs of equal speeds.
+    auto sameSpeed = [](float a, float b) {
+      return int(std::round(a * 10.f)) == int(std::round(b * 10.f));
+    };
+    std::vector<ProfilePoint> compressed;
+    if (!data.empty())
+    {
+      compressed.push_back(data[0]);
+      for (int i = 1; i < static_cast<int>(data.size()); ++i)
+      {
+        const bool sameAsPrev = sameSpeed(data[i].speed, data[i - 1].speed);
+        const bool sameAsNext = (i + 1 < static_cast<int>(data.size())) &&
+                                sameSpeed(data[i].speed, data[i + 1].speed);
+        if (!sameAsPrev)
+        {
+          if (!sameSpeed(compressed.back().speed, data[i - 1].speed))
+            compressed.push_back(data[i - 1]);
+          compressed.push_back(data[i]);
+        }
+        else if (!sameAsNext)
+        {
+          compressed.push_back(data[i]);
+        }
+      }
+      if (compressed.back().pos != data.back().pos)
+        compressed.push_back(data.back());
+    }
+    toolActualSpeedProfile_.reserve(static_cast<qsizetype>(compressed.size()));
+    for (const ProfilePoint &p : compressed)
+    {
+      QVariantMap row;
+      row.insert(QStringLiteral("pos"), double(p.pos));
+      row.insert(QStringLiteral("speed"), double(p.speed / 60.f)); // mm/min -> mm/s
+      row.insert(QStringLiteral("internal"), p.internal);
+      toolActualSpeedProfile_.append(row);
+    }
+  }
 }
 
 void PreviewViewModel::rebuildGcodeLineWindow()
@@ -1238,6 +1513,21 @@ void PreviewViewModel::setShowSeamMarks(bool enabled)
   emit stateChanged();
 }
 
+void PreviewViewModel::setShowToolChanges(bool enabled)
+{
+  if (showToolChanges_ == enabled)
+    return;
+  showToolChanges_ = enabled;
+  // Persisted like the sibling option toggles (upstream
+  // toggle_option_visibility(ToolChanges), GCodeViewer.cpp:3876-3879).
+  // Render-side no-op today: the Qt6 line pipeline emits no tool-change
+  // geometry (documented delta at appendMarkerSegment) so no segment kind is
+  // gated -- recolorAndPackSegments() would be a wasted repack.
+  QSettings settings;
+  settings.setValue(QStringLiteral("preview/showToolChanges"), enabled);
+  emit stateChanged();
+}
+
 int PreviewViewModel::moveCountOfKind(int kind) const
 {
   if (kind < 0 || kind >= 6)
@@ -1361,8 +1651,20 @@ QVariantList PreviewViewModel::roleVisibilities() const
   // is deterministic and matches the color-swatch assignment. None(0) and
   // Custom(14) are hidden per the UI-SPEC copywriting table but remain in the
   // m_roleVisibility array for safe indexing.
+  //
+  // Upstream only renders roles the loaded gcode actually contains
+  // (ViewerImpl.cpp:1017-1018 collects Extrude vertices; get_roles returns the
+  // ordered std::map contents, ExtrusionRoles.cpp:20-29; the legend loop walks
+  // get_extrusion_roles(), GCodeViewer.cpp:3920-3921). With a parsed payload
+  // the row set therefore follows m_roleFilamentLength's presence set. Without
+  // a payload the full 18-row list is kept: the no-gcode UI shape is locked by
+  // ViewModelSmokeTests (roleVisibilities().size() == 18).
   QVariantList rows;
   static const int kExcludedRoles[] = {0, 14};  // None, Custom
+  const bool filterByContent = !segments_.empty();
+  double roleTimeTotal = 0.0;
+  for (auto it = m_roleTimeByIndex.cbegin(); it != m_roleTimeByIndex.cend(); ++it)
+    roleTimeTotal += it.value();
   for (int role = 1; role < 20; ++role)
   {
     bool excluded = false;
@@ -1372,6 +1674,8 @@ QVariantList PreviewViewModel::roleVisibilities() const
     }
     if (excluded)
       continue;
+    if (filterByContent && !m_roleFilamentLength.contains(role))
+      continue;  // role absent from the loaded gcode (upstream get_roles)
     const auto &c = kRoleColors[role];
     const QString color = QStringLiteral("#%1%2%3")
         .arg(qBound(0, int(c[0] * 255.f + 0.5f), 255), 2, 16, QLatin1Char('0'))
@@ -1382,6 +1686,27 @@ QVariantList PreviewViewModel::roleVisibilities() const
     row.insert(QStringLiteral("label"), QString::fromUtf8(kRoleLabels[role]));
     row.insert(QStringLiteral("color"), color);
     row.insert(QStringLiteral("visible"), m_roleVisibility[role]);
+    // FeatureType row columns (GCodeViewer.cpp:3926-3931): Time / % / Usage
+    // length / Usage weight. Percent keeps the role-time-sum denominator
+    // convention already used by m_legendRoleColumns (upstream divides by
+    // total_estimated_time). Weight converts the filament length with the
+    // same area/density math as filamentSplit(). Empty text where the value
+    // is 0, like upstream's "" cells (GCodeViewer.cpp:3852-3853).
+    const double secs = m_roleTimeByIndex.value(role, 0.0);
+    row.insert(QStringLiteral("time"),
+               secs > 0.0 ? formatTime(float(secs)) : QString());
+    row.insert(QStringLiteral("percent"),
+               roleTimeTotal > 0.0
+                   ? QString::number(secs / roleTimeTotal * 100.0, 'f', 1)
+                   : QStringLiteral("0.0"));
+    const double lengthMm = m_roleFilamentLength.value(role, 0.0);
+    row.insert(QStringLiteral("usageLength"),
+               lengthMm > 0.0 ? formatFilamentLength(lengthMm) : QString());
+    const double radius = m_filamentDiameter * 0.5;
+    const double area = 3.14159265 * radius * radius;
+    const double grams = lengthMm * area * m_filamentDensity * 0.001;
+    row.insert(QStringLiteral("usageWeight"),
+               grams > 0.0 ? formatFilamentWeight(grams) : QString());
     rows.append(row);
   }
   return rows;
@@ -1489,6 +1814,7 @@ void PreviewViewModel::resetPreviewState()
   m_extruderUsedWeight.clear();
   m_roleTimes.clear();
   m_roleFilamentLength.clear();
+  m_roleTimeByIndex.clear();
   m_moveAccumulatedTime.clear();
   prepareTimeSeconds_ = 0.f;
   prepareTimeCaptured_ = false;
@@ -1546,6 +1872,23 @@ void PreviewViewModel::resetPreviewState()
   toolLayer_ = 0;
   toolMoveIndex_ = 0;
   toolIsExtrusion_ = false;
+  toolKind_ = 0;
+  toolTypeText_.clear();
+  toolLineTypeText_.clear();
+  toolHeight_ = 0;
+  toolLength_ = 0;
+  toolFlowRate_ = 0;
+  toolJerk_ = 0;
+  toolPressureAdvance_ = 0;
+  toolEstimatedTime_.clear();
+  toolMoveTimeSecs_ = 0;
+  toolDetailText_.clear();
+  toolActualSpeedExist_ = false;
+  toolActualSpeedProfile_.clear();
+  toolActualSpeedYMin_ = 0;
+  toolActualSpeedYMax_ = 0;
+  m_actualSpeedMin = std::numeric_limits<float>::max();
+  m_actualSpeedMax = 0.f;
   if (hadTicks)
     emit tickMarksChanged();
 }
@@ -1633,7 +1976,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   // (GCodeViewer.cpp:718-727); the Qt6 line pipeline has no glPointSize
   // equivalent, so a kMarkerTickHeight tick stands in (documented delta).
   // The marker advances moveIndex so playback reveals it at the right time.
-  auto appendMarkerSegment = [&](int markerKind, float mx, float my, float mz) {
+  auto appendMarkerSegment = [&](int markerKind, float mx, float my, float mz, int lineNo) {
     StoredSegment seg;
     seg.x1 = mx;
     seg.y1 = my;
@@ -1658,6 +2001,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.isTravel = true;
     seg.role = 0;
     seg.kind = markerKind;
+    seg.gcodeLine = lineNo;
     segments_.push_back(seg);
     m_kindCounts[markerKind] += 1;
     featureCount_[kindFeatureLabel(markerKind)] += 1;
@@ -1998,12 +2342,12 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     // E delta or retraction time is attributed).
     if (upper == QStringLiteral("G10") || upper.startsWith(QStringLiteral("G10 ")))
     {
-      appendMarkerSegment(KindRetract, x, y, z);
+      appendMarkerSegment(KindRetract, x, y, z, sourceLineNumber);
       continue;
     }
     if (upper == QStringLiteral("G11") || upper.startsWith(QStringLiteral("G11 ")))
     {
-      appendMarkerSegment(KindUnretract, x, y, z);
+      appendMarkerSegment(KindUnretract, x, y, z, sourceLineNumber);
       continue;
     }
 
@@ -2096,7 +2440,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
             appendMarkerSegment(KindSeam,
                                 0.5f * (x + seamFirstX),
                                 0.5f * (y + seamFirstY),
-                                0.5f * (z + seamFirstZ));
+                                0.5f * (z + seamFirstZ),
+                                sourceLineNumber);
           seamDetectorActive = false;
           seamHasFirstVertex = false;
         }
@@ -2137,7 +2482,16 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       accumulateRoleTime(currentType, dx, dy, dz, currentFeedrate);
       // P17.4: per-role filament length for the FeatureType legend column
       // (upstream legend shows Used filament per role).
-      m_roleFilamentLength[roleForTypeImpl(currentType)] += extrusionDelta;
+      const int parsedRole = roleForTypeImpl(currentType);
+      m_roleFilamentLength[parsedRole] += extrusionDelta;
+      // FeatureType legend Time/% columns (GCodeViewer.cpp:3728-3730 header
+      // row, :3926-3931 role row columns): the same seconds accumulateRoleTime()
+      // computes, keyed by canonical role so roleVisibilities() rows stay
+      // index-aligned with the presence set (upstream ViewerImpl.cpp:1017-1018
+      // collects only Extrude vertices).
+      if (currentFeedrate > 0.f)
+        m_roleTimeByIndex[parsedRole] +=
+            std::sqrt(dx * dx + dy * dy + dz * dz) / currentFeedrate * 60.0;
       // P17.10: upstream Prepare time = elapsed before the first extrusion
       // (heating/priming, GCodeProcessor prepare_time).
       if (!prepareTimeCaptured_)
@@ -2246,7 +2600,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     seg.isTravel = (kind == KindTravel || kind == KindWipe);
     seg.role = role;
     seg.kind = kind;
+    seg.gcodeLine = sourceLineNumber;
     segments_.push_back(seg);
+    // Global actual-speed range for the tooltip profile y axis (upstream
+    // ActualSpeed color_range interval, GCodeViewer.cpp:1740-1741).
+    if (seg.actual_speed < m_actualSpeedMin)
+      m_actualSpeedMin = seg.actual_speed;
+    if (seg.actual_speed > m_actualSpeedMax)
+      m_actualSpeedMax = seg.actual_speed;
 
     // Accumulate elapsed time for the move slider, aligned with upstream IMSlider m_layers_times.
     {

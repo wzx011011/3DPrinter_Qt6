@@ -433,14 +433,28 @@ Item {
                 // CxPopup-based 3-mode selector (AutoForFlush / AutoForMatch /
                 // Manual). fmmDefault is the per-plate inherit-sentinel and is
                 // NOT surfaced as a 4th radio (anti-feature per FEATURES.md).
+                // U02: gated on multiNozzleConfigured like the upstream
+                // should_pop_up() hover gate (FilamentGroupPopup.cpp:16-23 /
+                // :270 — single-nozzle printers never pop the group popup).
                 CxIconButton {
+                    id: filamentGroupButton
                     cxStyle: CxIconButton.Style.Chrome
                     buttonSize: 30
                     iconSize: 16
                     iconSource: "qrc:/qml/assets/icons/box.svg"
                     toolTipText: qsTr("Filament Group")
                     enabled: backend.editorViewModel != null
-                    onClicked: filamentGroupPopup.openForCurrentPlate()
+                             && backend.editorViewModel.multiNozzleConfigured
+                    onClicked: {
+                        // U02: anchor the popup to this trigger button
+                        // (upstream MainFrame.cpp:1969-1973 positions the
+                        // popup off the slice button): x ≈ button x - 228,
+                        // y = button bottom edge + 8.
+                        const p = filamentGroupButton.mapToItem(Overlay.overlay, 0, 0)
+                        filamentGroupPopup.x = Math.max(8, p.x - 228)
+                        filamentGroupPopup.y = p.y + filamentGroupButton.height + 8
+                        filamentGroupPopup.openForCurrentPlate()
+                    }
                 }
             }
 

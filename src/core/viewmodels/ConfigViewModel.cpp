@@ -3,11 +3,19 @@
 #include <algorithm>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
+#include <QRegularExpression>
+#include <QSettings>
 
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
 #include "qml_gui/Models/PresetListModel.h"
+
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/PrintConfig.hpp>
+#include <libslic3r/Preset.hpp>
+#endif
 
 ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent)
     : QObject(parent), presetService_(presetService), projectService_(projectService)
@@ -910,6 +918,153 @@ void ConfigViewModel::wizardSetSelectedPrinterModel(const QString &model)
     presetService_->setSelectedPrinterModel(model);
 }
 
+QVariantList ConfigViewModel::wizardPrinterPickerGroups(const QString &vendor) const
+{
+  // U-WIZ: group the vendor's flat printer preset names into PrinterPicker
+  // cells (upstream ConfigWizard.cpp:198-373 walks VendorProfile::PrinterModel
+  // and emits one grid cell per model with a checkbox per nozzle variant).
+  // Vendor-profile preset names end with "<variant> nozzle"; built-in
+  // fallback names do not, so they become single-variant cells whose label
+  // comes from the preset's nozzle_diameter (default 0.4, upstream
+  // PageDiameters fallback ConfigWizard.cpp:1328-1334).
+  QVariantList groups;
+  static const QRegularExpression nozzleTail(
+      QStringLiteral("^(.*)\\s+([0-9.]+)\\s+nozzle$"));
+  QMap<QString, QStringList> byModel;
+  QStringList modelOrder;
+  const QStringList names = wizardPrinterModelsForVendor(vendor);
+  for (const QString &name : names)
+  {
+    const auto match = nozzleTail.match(name);
+    QString model;
+    if (match.hasMatch())
+      model = match.captured(1);
+    else
+      model = name;
+    if (!byModel.contains(model))
+      modelOrder.append(model);
+    byModel[model].append(name);
+  }
+  for (const QString &model : modelOrder)
+  {
+    QVariantMap cell;
+    cell.insert(QStringLiteral("model"), model);
+    cell.insert(QStringLiteral("variants"), byModel.value(model));
+    groups.append(cell);
+  }
+  return groups;
+}
+
+QStringList ConfigViewModel::wizardGcodeFlavorLabels() const
+{
+  // U-WIZ: upstream print_config_def "gcode_flavor" enum_labels
+  // (PrintConfig.cpp:4289-4310). Order matches enum_values marlin / klipper /
+  // reprapfirmware / repetier / marlin2; the upstream default is index 0
+  // (gcfMarlinLegacy, PrintConfig.cpp:4321).
+  return {
+      QStringLiteral("Marlin(legacy)"),
+      QStringLiteral("Klipper"),
+      QStringLiteral("RepRapFirmware"),
+      QStringLiteral("Repetier"),
+      QStringLiteral("Marlin 2"),
+  };
+}
+
+bool ConfigViewModel::wizardPrinterVariantEnabled(const QString &vendor, const QString &model, const QString &variant) const
+{
+  // U-WIZ: AppConfig-lite mirror of upstream AppConfig::get_variant
+  // (ConfigWizard.cpp:567-569 reads it to seed the checkbox states).
+  QSettings settings;
+  return settings.value(QStringLiteral("wizard/variant/%1/%2/%3").arg(vendor, model, variant), false).toBool();
+}
+
+void ConfigViewModel::wizardSetPrinterVariantEnabled(const QString &vendor, const QString &model, const QString &variant, bool enabled)
+{
+  // U-WIZ: AppConfig-lite mirror of upstream AppConfig::set_variant.
+  QSettings settings;
+  settings.setValue(QStringLiteral("wizard/variant/%1/%2/%3").arg(vendor, model, variant), enabled);
+}
+
+QStringList ConfigViewModel::wizardFilamentTypes() const
+{
+  // U-WIZ: PageMaterials Type column. The Qt6 preset store carries no
+  // per-preset type metadata, so the type token is parsed from the preset
+  // name (upstream derives the same grouping from filament preset aliases).
+  static const char *tokens[] = {
+      "PLA", "ABS", "ASA", "PETG", "TPU", "TPE", "PVA", "HIPS",
+      "PA", "PC", "PP", "PET", "PEEK", "PEI", "POM", "PVB",
+  };
+  QStringList result;
+  if (!presetService_)
+    return result;
+  const QStringList loadedVendors = presetService_->vendors();
+  for (const QString &vendor : loadedVendors)
+  {
+    const QStringList materials = presetService_->materialsForVendor(vendor);
+    for (const QString &name : materials)
+    {
+      for (const char *token : tokens)
+      {
+        if (name.contains(QLatin1String(token), Qt::CaseInsensitive)
+            && !result.contains(QLatin1String(token)))
+        {
+          result.append(QLatin1String(token));
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}
+
+QStringList ConfigViewModel::wizardCompatiblePrinters(const QString &vendor, const QString &filamentName) const
+{
+  // U-WIZ: feeds the compatible-printers preview window (upstream
+  // PageMaterials::set_compatible_printers_html_window,
+  // ConfigWizard.cpp:758/884). A printer is listed when the filament preset
+  // has no compatible_printers restriction (universal) or names it.
+  QStringList result;
+  if (!presetService_)
+    return result;
+  const QStringList printers = presetService_->printerModelsForVendor(vendor);
+  for (const QString &printer : printers)
+  {
+    if (presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat, filamentName, printer))
+      result.append(printer);
+  }
+  return result;
+}
+
+bool ConfigViewModel::wizardCreateCustomPrinterPreset(const QString &name, const QVariantMap &values)
+{
+  // U-WIZ: the custom-printer path of the wizard (upstream PageCustom +
+  // PageFirmware/PageBedShape/PageDiameters write into custom_config and
+  // apply_config persists it, ConfigWizard.cpp:1365-1392/2773-2785). The
+  // Qt6 sink is a USER printer preset created from the collected values.
+  lastPresetError_.clear();
+  if (!presetService_)
+  {
+    lastPresetError_ = tr("Preset service is unavailable.");
+    emit stateChanged();
+    return false;
+  }
+  QHash<QString, QVariant> hash;
+  for (auto it = values.constBegin(); it != values.constEnd(); ++it)
+    hash.insert(it.key(), it.value());
+  const bool ok = presetService_->createCustomPreset(PresetServiceMock::PrinterCat, name, hash);
+  if (!ok)
+  {
+    lastPresetError_ = tr("Failed to create custom printer preset \"%1\".").arg(name);
+  }
+  else
+  {
+    // G-13: rebuild the preset list models so the new preset is selectable.
+    refreshPresetLists();
+  }
+  emit stateChanged();
+  return ok;
+}
+
 QVariant ConfigViewModel::wizardPresetValue(const QString &presetName, const QString &key) const
 {
   return presetService_ ? presetService_->presetValue(presetName, key) : QVariant();
@@ -923,6 +1078,30 @@ QVariantList ConfigViewModel::wizardFlushMatrix() const
 bool ConfigViewModel::wizardSaveFlushVolumes(const QVariantList &rows)
 {
   return presetService_ ? presetService_->saveFlushVolumes(rows) : false;
+}
+
+QStringList ConfigViewModel::wizardFilamentColours() const
+{
+  return presetService_ ? presetService_->activeFilamentColours() : QStringList();
+}
+
+double ConfigViewModel::flushMultiplier() const
+{
+  QSettings settings;
+  return settings.value(QStringLiteral("flush/multiplier"), 1.0).toDouble();
+}
+
+void ConfigViewModel::setFlushMultiplier(double multiplier)
+{
+  // Valid range [0, 3] (g_min/g_max_flush_multiplier,
+  // WipeTowerDialog.cpp:199-200; the web layer clamps the same window on
+  // input, WipingDialog.html:599-609).
+  multiplier = std::clamp(multiplier, 0.0, 3.0);
+  QSettings settings;
+  if (qFuzzyCompare(settings.value(QStringLiteral("flush/multiplier"), 1.0).toDouble(),
+                    multiplier))
+    return;
+  settings.setValue(QStringLiteral("flush/multiplier"), multiplier);
 }
 
 bool ConfigViewModel::createCustomPreset(int category, const QString &name, const QString &inherits)
@@ -998,6 +1177,45 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
   return true;
 }
 
+bool ConfigViewModel::presetExists(const QString &name) const
+{
+  return presetService_ ? presetService_->hasPreset(name.trimmed()) : false;
+}
+
+bool ConfigViewModel::createPresetFromBase(int category, const QString &name,
+                                           const QString &baseName,
+                                           const QVariantMap &overrides, bool overwrite)
+{
+  lastPresetError_.clear();
+  if (!presetService_) {
+    lastPresetError_ = tr("Preset service is unavailable.");
+    emit stateChanged();
+    return false;
+  }
+
+  if (!presetService_->createPresetFromBase(category, name, baseName, overrides, overwrite)) {
+    const QString trimmedName = name.trimmed();
+    if (!overwrite && presetService_->hasPreset(trimmedName))
+      lastPresetError_ = tr("A preset with this name already exists.");
+    else
+      lastPresetError_ = tr("Failed to save preset '%1' to disk.").arg(trimmedName);
+    emit stateChanged();
+    return false;
+  }
+
+  refreshPresetListModel();
+  mergePresetHierarchy();
+  emit stateChanged();
+  return true;
+}
+
+QStringList ConfigViewModel::compatiblePresetsForPrinter(int category, const QString &printerName) const
+{
+  return presetService_
+      ? presetService_->compatiblePresetNamesForCategory(category, printerName)
+      : QStringList{};
+}
+
 void ConfigViewModel::refreshPresetLists()
 {
   // G-13: re-read the service store (e.g. after in-project embedded presets
@@ -1011,6 +1229,184 @@ QString ConfigViewModel::presetInheritsParent(const QString &name) const
 {
   // G-13: parent preset name for the Detach flow (empty = standalone).
   return presetService_ ? presetService_->presetInherits(name.trimmed()) : QString();
+}
+
+// ── SavePresetDialog support (upstream SavePresetDialog.cpp) ──────────────
+
+QString ConfigViewModel::currentPresetNameForCategory(int category) const
+{
+  if (category == PresetServiceMock::PrinterCat)
+    return currentPrinterPreset_;
+  if (category == PresetServiceMock::FilamentCat)
+    return currentFilamentPreset_;
+  if (category == PresetServiceMock::PrintCat)
+    return currentPrintPreset_.isEmpty() ? currentPreset_ : currentPrintPreset_;
+  return QString();
+}
+
+void ConfigViewModel::setSaveToProjectSelection(bool saveToProject)
+{
+  // Upstream radio binding (SavePresetDialog.cpp:163-165): selecting a radio
+  // writes Item::m_save_to_project.
+  if (m_saveToProject == saveToProject)
+    return;
+  m_saveToProject = saveToProject;
+  emit stateChanged();
+}
+
+bool ConfigViewModel::editedPresetIsProjectEmbedded(int category) const
+{
+  // Upstream Item ctor (SavePresetDialog.cpp:167-168): the initial radio
+  // selection comes from get_edited_preset().is_project_embedded.
+  return presetIsProjectEmbedded(currentPresetNameForCategory(category));
+}
+
+bool ConfigViewModel::presetIsProjectEmbedded(const QString &name) const
+{
+  return m_projectEmbeddedPresetNames.contains(name.trimmed());
+}
+
+void ConfigViewModel::markPresetProjectEmbedded(const QString &name)
+{
+  const QString trimmed = name.trimmed();
+  if (trimmed.isEmpty())
+    return;
+  m_projectEmbeddedPresetNames.insert(trimmed);
+  emit stateChanged();
+}
+
+QString ConfigViewModel::suggestedSavePresetName(int category, const QString &suffix) const
+{
+  // Upstream Item ctor (SavePresetDialog.cpp:39): is_default -> "Untitled";
+  // is_system -> "<name> - <suffix>"; bundle alias -> alias; else the plain
+  // name. This backend has no default-only preset object and no alias
+  // metadata, so the first and third branches never apply here.
+  QString presetName = currentPresetNameForCategory(category);
+  if (presetName.isEmpty())
+    return QString();
+  if (presetService_ && presetService_->isBuiltinPreset(presetName)) {
+    const QString effectiveSuffix = suffix.isEmpty() ? QStringLiteral("Copy") : suffix;
+    presetName = presetName + QStringLiteral(" - ") + effectiveSuffix;
+  }
+  // cpp:41-45: a trailing ".ini" (any case) is stripped.
+  if (presetName.endsWith(QStringLiteral(".ini"), Qt::CaseInsensitive))
+    presetName.chop(4);
+  return presetName;
+}
+
+QString ConfigViewModel::presetAliasFor(const QString &name) const
+{
+  // Upstream cpp:234-237 rejects a name equal to a preset alias
+  // (PresetCollection::get_preset_name_by_alias). The Qt6 preset backend
+  // carries no alias metadata yet, so this always returns empty and the
+  // check stays dormant until the backend exposes aliases.
+  Q_UNUSED(name);
+  return QString();
+}
+
+int ConfigViewModel::savePresetNameErrorCode(int category, const QString &name) const
+{
+  // Upstream Item::update() (SavePresetDialog.cpp:182-237), same check
+  // order. Upstream validates the raw input -- leading/trailing spaces have
+  // their own messages, so no trimming here.
+  const QString illegalChars = QStringLiteral("<>[]:/\\|?*\"");  // cpp:182
+  for (const QChar &ch : illegalChars) {
+    if (name.contains(ch))
+      return SavePresetNameIllegalChars;
+  }
+  if (name.contains(QStringLiteral(" (modified)")))  // Preset.cpp:439 g_suffix_modified
+    return SavePresetNameIllegalSuffix;
+  if (name == QStringLiteral("Default Setting")
+      || name == QStringLiteral("Default Filament")  // PresetBundle.cpp:115 ORCA_DEFAULT_FILAMENT_PLACEHOLDER
+      || name == QStringLiteral("Default Printer"))
+    return SavePresetNameReserved;
+  if (presetService_) {
+    // cpp:204-208: presets whose can_overwrite() is false (system/builtin)
+    // must not be overwritten.
+    const QString trimmed = name.trimmed();
+    if (presetService_->presetNamesForCategory(category).contains(trimmed)
+        && !presetService_->isUserPreset(trimmed))
+      return SavePresetNameSystemOverwrite;
+  }
+  if (name.isEmpty())
+    return SavePresetNameEmpty;
+  if (name.startsWith(QLatin1Char(' ')))
+    return SavePresetNameLeadingSpace;
+  if (name.endsWith(QLatin1Char(' ')))
+    return SavePresetNameTrailingSpace;
+  if (!presetAliasFor(name).isEmpty())
+    return SavePresetNameAliasConflict;
+  return SavePresetNameValid;
+}
+
+int ConfigViewModel::savePresetNameWarningCode(int category, const QString &name) const
+{
+  // Upstream cpp:210-217: an existing preset other than the current
+  // selection produces the overwrite warning; its compatibility decides the
+  // wording and the save stays allowed (Warning, not NoValid).
+  if (!presetService_)
+    return SavePresetNameNoWarning;
+  const QString trimmed = name.trimmed();
+  if (trimmed.isEmpty() || !presetService_->presetNamesForCategory(category).contains(trimmed))
+    return SavePresetNameNoWarning;
+  if (trimmed == currentPresetNameForCategory(category))
+    return SavePresetNameNoWarning;
+  return presetService_->isPresetCompatibleWithPrinter(category, trimmed, currentPrinterPreset_)
+             ? SavePresetNameExists
+             : SavePresetNameExistsIncompatible;
+}
+
+QString ConfigViewModel::savePresetParentName(int category) const
+{
+  // Upstream cpp:114-117: a system preset is its own parent; a user preset
+  // uses its inherits() link. Empty = "Unique preset".
+  const QString name = currentPresetNameForCategory(category);
+  if (name.isEmpty())
+    return QString();
+  if (presetService_ && presetService_->isBuiltinPreset(name))
+    return name;
+  return presetInheritsParent(name);
+}
+
+bool ConfigViewModel::physicalPrinterHasSelection() const
+{
+  return !m_physicalPrinterName.isEmpty();
+}
+
+QString ConfigViewModel::physicalPrinterSelectedName() const
+{
+  return m_physicalPrinterName;
+}
+
+QString ConfigViewModel::physicalPrinterSelectedPresetName() const
+{
+  return m_physicalPrinterPresetName;
+}
+
+void ConfigViewModel::setPhysicalPrinterSelection(const QString &printerName, const QString &presetName)
+{
+  if (m_physicalPrinterName == printerName && m_physicalPrinterPresetName == presetName)
+    return;
+  m_physicalPrinterName = printerName;
+  m_physicalPrinterPresetName = presetName;
+  emit stateChanged();
+}
+
+void ConfigViewModel::applyPhysicalPrinterAction(int action, const QString &presetName)
+{
+  // Upstream update_physical_printers (SavePresetDialog.cpp:472-493). The
+  // Qt6 backend has no physical-printer store yet, so the selected printer's
+  // preset association is kept consistent on this viewmodel; a Switch
+  // unselects the printer, Change/Add re-select it with the new preset.
+  if (action == PhysicalPrinterUndefAction || !physicalPrinterHasSelection())
+    return;
+  if (action == PhysicalPrinterSwitch) {
+    m_physicalPrinterName.clear();
+    m_physicalPrinterPresetName.clear();
+  } else {
+    m_physicalPrinterPresetName = presetName;
+  }
+  emit stateChanged();
 }
 
 bool ConfigViewModel::overwriteUserPreset(int category, const QString &name)
@@ -1270,16 +1666,169 @@ QStringList ConfigViewModel::comparePresets(const QString &presetA, const QStrin
   return diffs;
 }
 
+namespace {
+// PresetDiffDialog short display string — upstream DiffViewCtrl::get_short_string
+// (UnsavedChangesDialog.cpp:660-675): empty and color-like ("#...") strings
+// pass through untouched; anything else is cut at 30 chars or at the first
+// newline (whichever is shorter) with a trailing ASCII "...".
+QString diffShortString(const QString &fullString)
+{
+  static const int kMaxLen = 30;
+  static const QString kDots = QStringLiteral("...");
+  if (fullString.isEmpty() || fullString.startsWith(QLatin1Char('#')) ||
+      (!fullString.contains(QLatin1Char('\n')) && fullString.length() < kMaxLen))
+    return fullString;
+  int cut = kMaxLen;
+  const int newlinePos = fullString.indexOf(QLatin1Char('\n'));
+  if (newlinePos != -1 && newlinePos < kMaxLen)
+    cut = newlinePos;
+  return fullString.left(cut) + kDots;
+}
+
+// PresetDiffDialog tree metadata for one option key (the Qt6 counterpart of
+// the upstream searcher lookup in DiffPresetDialog::update_tree,
+// UnsavedChangesDialog.cpp:2126-2138: category_local/group_local/label_local).
+// Resolved from the option model that owns the compared preset category.
+// Keys outside the model fall back to a generic bucket so every dirty option
+// stays visible: the Qt6 schemas only cover a subset of the preset store, and
+// the upstream searcher-less skip would hide most real diffs.
+struct DiffOptionMeta
+{
+  QString category;
+  QString group;
+  QString label;
+};
+
+DiffOptionMeta diffOptionMeta(ConfigOptionModel *model, const QString &key)
+{
+  DiffOptionMeta meta;
+  meta.category = QObject::tr("其他");
+  meta.group = QObject::tr("参数");
+  meta.label = key;
+
+  if (!model)
+    return meta;
+  const int index = model->indexOfKey(key);
+  if (index < 0)
+    return meta;
+
+  QString category = model->optCategory(index);
+  if (category.isEmpty())
+    category = model->optPage(index);
+  if (!category.isEmpty())
+    meta.category = category;
+
+  const QString group = model->optGroup(index);
+  if (!group.isEmpty())
+    meta.group = group;
+
+  const QVariant displayLabel = model->index(index, 0).data(ConfigOptionModel::DisplayLabelRole);
+  if (displayLabel.isValid() && !displayLabel.toString().isEmpty())
+    meta.label = displayLabel.toString();
+  return meta;
+}
+} // namespace
+
 // Phase 154 (CLOS-01): structured diff variant — proxies to
-// PresetServiceMock::comparePresets (the Phase 149 primitive) which returns
-// a QVariantList of {key, valueA, valueB, status} entries. The legacy
-// QStringList overload above stays for older callers; this variant is the one
-// consumed by PresetDiffDialog's 3-column visual diff.
+// PresetServiceMock::comparePresets (the Phase 149 primitive) and enriches
+// each {key, valueA, valueB, status} row with the presentation data the
+// PresetDiffDialog tree groups by (upstream DiffViewCtrl::Append input):
+//   category/group/label   — searcher-equivalent metadata (diffOptionMeta)
+//   valueA/valueB          — 30-char short display strings (diffShortString)
+//   fullValueA/fullValueB  — untruncated values for FullCompareDialog
+//   isLong                 — truncated/multiline row opens the full-compare
+//                            sub dialog (upstream ItemData::is_long)
+// The legacy QStringList overload above stays for older callers; this variant
+// is the one consumed by PresetDiffDialog.
 QVariantList ConfigViewModel::comparePresetsDetailed(const QString &presetA, const QString &presetB) const
 {
   if (!presetService_)
     return {};
-  return presetService_->comparePresets(presetA, presetB);
+
+  // Metadata source follows the compared preset category: a preset row always
+  // holds two presets of the same category (printer/filament/print).
+  ConfigOptionModel *metaModel = printOptions_;
+  switch (presetService_->presetCategory(presetA))
+  {
+  case PresetServiceMock::PrinterCat:
+    metaModel = machineOptions_;
+    break;
+  case PresetServiceMock::FilamentCat:
+    metaModel = filamentOptions_;
+    break;
+  default:
+    break;
+  }
+
+  QVariantList enriched;
+  const QVariantList rows = presetService_->comparePresets(presetA, presetB);
+  enriched.reserve(rows.size());
+  for (const QVariant &entry : rows)
+  {
+    QVariantMap row = entry.toMap();
+    const QString key = row.value(QStringLiteral("key")).toString();
+    const QString fullA = row.value(QStringLiteral("valueA")).toString();
+    const QString fullB = row.value(QStringLiteral("valueB")).toString();
+    const QString shortA = diffShortString(fullA);
+    const QString shortB = diffShortString(fullB);
+
+    row.insert(QStringLiteral("valueA"), shortA);
+    row.insert(QStringLiteral("valueB"), shortB);
+    row.insert(QStringLiteral("fullValueA"), fullA);
+    row.insert(QStringLiteral("fullValueB"), fullB);
+    row.insert(QStringLiteral("isLong"), shortA != fullA || shortB != fullB);
+
+    const DiffOptionMeta meta = diffOptionMeta(metaModel, key);
+    row.insert(QStringLiteral("category"), meta.category);
+    row.insert(QStringLiteral("group"), meta.group);
+    row.insert(QStringLiteral("label"), meta.label);
+    enriched.append(row);
+  }
+  return enriched;
+}
+
+// PresetDiffDialog transfer (upstream Tab::transfer_options via
+// UnsavedChangesDialog Action::Transfer): copy the selected option values
+// from the left preset onto the right preset. The source preset is never
+// written; read-only targets are refused by mergePresetValues.
+int ConfigViewModel::transferPresetValues(const QString &leftPreset, const QString &rightPreset,
+                                          const QStringList &keys)
+{
+  if (!presetService_ || leftPreset.isEmpty() || rightPreset.isEmpty() || keys.isEmpty())
+    return 0;
+
+  QHash<QString, QVariant> values;
+  for (const QString &key : keys)
+  {
+    const QVariant value = presetService_->presetValue(leftPreset, key);
+    if (!value.isValid())
+      continue;
+    values.insert(key, value);
+  }
+  if (values.isEmpty())
+    return 0;
+  if (!presetService_->mergePresetValues(rightPreset, values))
+    return 0;
+
+  // Upstream transfer_options applies into the live tab when the target is
+  // the currently edited preset (Tab.cpp:7331-7337 select_preset +
+  // load_current_preset); refresh the merged option values so the settings
+  // pages reflect the transfer immediately.
+  if (rightPreset == currentPrinterPreset_ || rightPreset == currentFilamentPreset_ ||
+      rightPreset == currentPrintPreset_)
+  {
+    updateMergedPresetValues();
+    applyScopeValues();
+    emit stateChanged();
+  }
+  return values.size();
+}
+
+// True when the preset is read-only (system/builtin); PresetDiffDialog
+// disables Transfer into such targets.
+bool ConfigViewModel::presetIsReadOnly(const QString &presetName) const
+{
+  return presetService_ && presetService_->isReadOnlyPreset(presetName);
 }
 
 void ConfigViewModel::autoMatchFilament()
@@ -2139,6 +2688,192 @@ bool ConfigViewModel::setValue(const QString &key, const QVariant &value)
   return false;
 }
 
+QVariantList ConfigViewModel::editGcodeParamGroups(const QString &customGcodeKey) const
+{
+  // EditGCodeDialog placeholder tree. 1:1 with upstream
+  // EditGCodeDialog::init_params_list (EditGCodeDialog.cpp:153-243): the
+  // [Global] Slicing State group with its Read Only / Read Write lock
+  // subgroups (:161-175), Slicing State (:176-182), Print Statistics
+  // (:187-192), Objects Info (:195-200), Dimensions (:203-208), Temperatures
+  // (:211-216), Timestamps (:219-224), the per-key "Specific for <key>" group
+  // (:228-236) and the Presets group with its three preset subgroups
+  // (:238, add_presets_placeholders :301-312). All content comes from the
+  // real libslic3r ConfigDefs, exactly like upstream -- no hardcoded key
+  // lists on the QML side.
+  QVariantList groups;
+#ifndef HAS_LIBSLIC3R
+  Q_UNUSED(customGcodeKey);
+  return groups;
+#else
+  using namespace Slic3r;
+
+  // Function-local statics for the placeholder defs upstream keeps as dialog
+  // members (EditGCodeDialog.hpp:36-45 + custom_gcode_specific_config_def).
+  // Lazy construction sidesteps the static-init-order hazards that keep
+  // libslic3r objects out of the global constructor phase.
+  static const ReadOnlySlicingStatesConfigDef cgpRoSlicingStates;
+  static const ReadWriteSlicingStatesConfigDef cgpRwSlicingStates;
+  static const OtherSlicingStatesConfigDef cgpOtherSlicingStates;
+  static const PrintStatisticsConfigDef cgpPrintStatistics;
+  static const ObjectsInfoConfigDef cgpObjectsInfo;
+  static const DimensionsConfigDef cgpDimensions;
+  static const TemperaturesConfigDef cgpTemperatures;
+  static const TimestampsConfigDef cgpTimestamps;
+  static const OtherPresetsConfigDef cgpOtherPresets;
+  static const CustomGcodeSpecificConfigDef cgpSpecific;
+
+  // Type string for the selection label panel (upstream
+  // EditGCodeDialog.cpp:372-387: float/integer/string/percent/"float or
+  // percent"/point/bool/enum, vectors get a "[]" suffix).
+  auto typeString = [](const ConfigOptionDef &def) {
+    const ConfigOptionType scalarType =
+        def.is_scalar() ? def.type : static_cast<ConfigOptionType>(def.type - coVectorType);
+    QString typeStr =
+        scalarType == coNone           ? QStringLiteral("none") :
+        scalarType == coFloat          ? QStringLiteral("float") :
+        scalarType == coInt            ? QStringLiteral("integer") :
+        scalarType == coString         ? QStringLiteral("string") :
+        scalarType == coPercent        ? QStringLiteral("percent") :
+        scalarType == coFloatOrPercent ? QStringLiteral("float or percent") :
+        scalarType == coPoint          ? QStringLiteral("point") :
+        scalarType == coBool           ? QStringLiteral("bool") :
+        scalarType == coEnum           ? QStringLiteral("enum") : QStringLiteral("undef");
+    if (!def.is_scalar())
+      typeStr += QStringLiteral("[]");
+    return typeStr;
+  };
+
+  // Param node payload. Upstream AppendParam (EditGCodeDialog.cpp:481-492)
+  // shows the bare key (vector keys rendered with a "[]" suffix); the def
+  // metadata here feeds the selection label / description panel in QML.
+  auto appendParam = [&typeString](QVariantList &out, const ConfigOptionDef *def,
+                                   const std::string &optKey) {
+    if (!def || def->type == coNone)
+      return;
+    QVariantMap node;
+    node.insert(QStringLiteral("key"), QString::fromStdString(optKey));
+    // kind: 0=Scalar, 1=Vector (upstream get_type, EditGCodeDialog.cpp:148-151;
+    // FilamentVector is never constructed in that dialog).
+    node.insert(QStringLiteral("kind"), def->is_scalar() ? 0 : 1);
+    node.insert(QStringLiteral("typeStr"), typeString(*def));
+    node.insert(QStringLiteral("label"), QString::fromStdString(def->label));
+    node.insert(QStringLiteral("fullLabel"), QString::fromStdString(def->full_label));
+    node.insert(QStringLiteral("tooltip"), QString::fromStdString(def->tooltip));
+    out.append(node);
+  };
+
+  auto appendDefParams = [&appendParam](QVariantList &out, const ConfigDef &def) {
+    for (const auto &entry : def.options)
+      appendParam(out, &entry.second, entry.first);
+  };
+
+  // -- [Global] Slicing State + Read Only / Read Write lock subgroups
+  //    (EditGCodeDialog.cpp:161-175) --
+  {
+    QVariantMap globalGroup;
+    globalGroup.insert(QStringLiteral("id"), QStringLiteral("global_slicing_state"));
+    QVariantList subgroups;
+    if (!cgpRoSlicingStates.options.empty()) {
+      QVariantMap ro;
+      ro.insert(QStringLiteral("id"), QStringLiteral("read_only"));
+      QVariantList roParams;
+      appendDefParams(roParams, cgpRoSlicingStates);
+      ro.insert(QStringLiteral("params"), roParams);
+      subgroups.append(ro);
+    }
+    if (!cgpRwSlicingStates.options.empty()) {
+      QVariantMap rw;
+      rw.insert(QStringLiteral("id"), QStringLiteral("read_write"));
+      QVariantList rwParams;
+      appendDefParams(rwParams, cgpRwSlicingStates);
+      rw.insert(QStringLiteral("params"), rwParams);
+      subgroups.append(rw);
+    }
+    globalGroup.insert(QStringLiteral("subgroups"), subgroups);
+    globalGroup.insert(QStringLiteral("params"), QVariantList());
+    groups.append(globalGroup);
+  }
+
+  // -- Slicing State / Print Statistics / Objects Info / Dimensions /
+  //    Temperatures / Timestamps (EditGCodeDialog.cpp:176-224) --
+  const std::pair<const char *, const ConfigDef *> simpleGroups[] = {
+      {"slicing_state", &cgpOtherSlicingStates}, {"print_statistics", &cgpPrintStatistics},
+      {"objects_info", &cgpObjectsInfo},         {"dimensions", &cgpDimensions},
+      {"temperatures", &cgpTemperatures},        {"timestamps", &cgpTimestamps},
+  };
+  for (const auto &entry : simpleGroups) {
+    if (entry.second->options.empty())
+      continue;
+    QVariantMap group;
+    group.insert(QStringLiteral("id"), QString::fromLatin1(entry.first));
+    QVariantList params;
+    appendDefParams(params, *entry.second);
+    group.insert(QStringLiteral("params"), params);
+    group.insert(QStringLiteral("subgroups"), QVariantList());
+    groups.append(group);
+  }
+
+  // -- Specific for <key> (EditGCodeDialog.cpp:228-236): the placeholder list
+  //    from custom_gcode_specific_placeholders(), each key resolved through
+  //    CustomGcodeSpecificConfigDef and coNone defs skipped (:231). --
+  {
+    const auto &placeholders = custom_gcode_specific_placeholders();
+    const auto it = placeholders.find(customGcodeKey.toStdString());
+    if (it != placeholders.end() && !it->second.empty()) {
+      QVariantList params;
+      for (const auto &optKey : it->second)
+        appendParam(params, cgpSpecific.get(optKey), optKey);
+      if (!params.isEmpty()) {
+        QVariantMap group;
+        group.insert(QStringLiteral("id"), QStringLiteral("specific"));
+        group.insert(QStringLiteral("params"), params);
+        group.insert(QStringLiteral("subgroups"), QVariantList());
+        groups.append(group);
+      }
+    }
+  }
+
+  // -- Presets (EditGCodeDialog.cpp:238 + add_presets_placeholders :301-312):
+  //    three subgroups fed by the FFF preset option key sets, every key
+  //    resolved through the full print_config_def (upstream full_config.optptr
+  //    gate, :281). Keys are sorted alphabetically to mirror the upstream
+  //    per-page std::map / std::set iteration order (init_from_tab :262-292);
+  //    the per-tab-page breakdown is not reproduced here, matching the
+  //    verified gap scope (three subgroups only). --
+  {
+    QVariantMap presetsGroup;
+    presetsGroup.insert(QStringLiteral("id"), QStringLiteral("presets"));
+    auto presetSubgroup = [&appendParam](const char *id,
+                                         const std::vector<std::string> &keys) {
+      QVariantMap sub;
+      sub.insert(QStringLiteral("id"), QString::fromLatin1(id));
+      std::vector<std::string> sorted(keys.cbegin(), keys.cend());
+      std::sort(sorted.begin(), sorted.end());
+      QVariantList params;
+      for (const auto &optKey : sorted)
+        appendParam(params, print_config_def.get(optKey), optKey);
+      sub.insert(QStringLiteral("params"), params);
+      return sub;
+    };
+    // Qt6 app is FFF-only; upstream picks the option sets by
+    // plater()->printer_technology() (EditGCodeDialog.cpp:253-255).
+    QVariantList subgroups;
+    subgroups.append(presetSubgroup("print_settings", Preset::print_options()));
+    subgroups.append(presetSubgroup("filament_settings", Preset::filament_options()));
+    subgroups.append(presetSubgroup("printer_settings", Preset::printer_options()));
+    presetsGroup.insert(QStringLiteral("subgroups"), subgroups);
+    // Other preset-related params appended directly under Presets, after the
+    // subgroups (EditGCodeDialog.cpp:239-242).
+    QVariantList presetParams;
+    appendDefParams(presetParams, cgpOtherPresets);
+    presetsGroup.insert(QStringLiteral("params"), presetParams);
+    groups.append(presetsGroup);
+  }
+
+  return groups;
+#endif
+}
+
 QString ConfigViewModel::valueChainForKey(const QString &key) const
 {
   // Return a JSON value chain for default/printer/filament/print levels.
@@ -2477,6 +3212,41 @@ QString ConfigViewModel::globalModifiedCurrentValue(const QString &key) const
 QString ConfigViewModel::globalModifiedDefaultValue(const QString &key) const
 {
   return referenceValuesForTier(activePresetTier_).value(key).toString();
+}
+
+// Upstream UnsavedChangesDialog renders a category -> group -> option tree
+// (update_list, UnsavedChangesDialog.cpp:1329-1460) built from the
+// PresetItem metadata (category_name / group_name / option_name,
+// :1396-1448). Resolve the same three fields from the active tier's option
+// model so the QML diff guard can rebuild the hierarchy. Keys that have no
+// option-model entry (e.g. raw keys applied from a loaded project) resolve
+// to empty metadata; globalModifiedLabel falls back to the raw key so the
+// row never renders blank.
+QString ConfigViewModel::globalModifiedCategory(const QString &key) const
+{
+  ConfigOptionModel *model = optionModelForTier(normalizedTier(activePresetTier_));
+  if (!model)
+    return {};
+  const int idx = model->indexOfKey(key);
+  return idx < 0 ? QString() : model->optCategory(idx);
+}
+
+QString ConfigViewModel::globalModifiedGroup(const QString &key) const
+{
+  ConfigOptionModel *model = optionModelForTier(normalizedTier(activePresetTier_));
+  if (!model)
+    return {};
+  const int idx = model->indexOfKey(key);
+  return idx < 0 ? QString() : model->optGroup(idx);
+}
+
+QString ConfigViewModel::globalModifiedLabel(const QString &key) const
+{
+  ConfigOptionModel *model = optionModelForTier(normalizedTier(activePresetTier_));
+  if (!model)
+    return key;
+  const int idx = model->indexOfKey(key);
+  return idx < 0 ? key : model->optLabel(idx);
 }
 
 bool ConfigViewModel::resetGlobalOption(const QString &key)

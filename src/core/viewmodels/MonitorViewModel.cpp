@@ -1,6 +1,20 @@
 ﻿#include "MonitorViewModel.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTimer>
+#include <QCoreApplication>
+#include <QDataStream>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QSysInfo>
+#include <QUrl>
+#include <QVariant>
 
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
@@ -30,6 +44,12 @@ MonitorViewModel::MonitorViewModel(DeviceServiceMock *deviceService, NetworkServ
             this, &MonitorViewModel::searchTextChanged);
     connect(deviceService_, &DeviceServiceMock::hmsChanged,
             this, &MonitorViewModel::hmsChanged);
+    // SelectMachineDialog send-job state machine forward（三态条 prepare/sending/finish）
+    connect(deviceService_, &DeviceServiceMock::sendJobChanged,
+            this, &MonitorViewModel::sendJobChanged);
+    // SelectMachineDialog print option values forward（分段选择器 NOTIFY）
+    connect(deviceService_, &DeviceServiceMock::printOptionsChanged,
+            this, &MonitorViewModel::printOptionsChanged);
   }
   if (networkService_) {
     connect(networkService_, &NetworkServiceMock::networkChanged,
@@ -216,6 +236,28 @@ QVariantMap MonitorViewModel::deviceAt(int filteredIndex) const
   return deviceService_ ? deviceService_->deviceAt(filteredIndex) : QVariantMap();
 }
 
+QVariantList MonitorViewModel::discoveredPrinters() const
+{
+  // PhysicalPrinterDialog "Browse ..." discovery mock: the full unfiltered
+  // device roster (upstream BonjourDialog lists every announced printer,
+  // unaffected by any UI filter). DeviceServiceMock exposes the roster as
+  // JSON; parse it into light {name, ip, online} entries for the QML picker.
+  QVariantList result;
+  if (!deviceService_)
+    return result;
+  const QJsonDocument doc = QJsonDocument::fromJson(deviceService_->deviceListJson().toUtf8());
+  const QJsonArray arr = doc.array();
+  for (const QJsonValue &value : arr) {
+    const QJsonObject obj = value.toObject();
+    QVariantMap entry;
+    entry.insert(QStringLiteral("name"), obj.value(QStringLiteral("name")).toString());
+    entry.insert(QStringLiteral("ip"), obj.value(QStringLiteral("ip")).toString());
+    entry.insert(QStringLiteral("online"), obj.value(QStringLiteral("online")).toBool());
+    result.append(entry);
+  }
+  return result;
+}
+
 void MonitorViewModel::selectDevice(int filteredIndex)
 {
   if (deviceService_)
@@ -319,6 +361,25 @@ void MonitorViewModel::disconnectDevice(int filteredIndex)
 void MonitorViewModel::startPrint(int filteredIndex, const QString &gcodePath)
 {
   if (deviceService_) deviceService_->startPrint(filteredIndex, gcodePath);
+}
+
+QVariantList MonitorViewModel::selectedDeviceStorages() const
+{
+  // Upstream renders one radio per device-reported storage and disables
+  // non-emmc entries when no SD card is present (SendToPrinter.cpp:630-635).
+  // The mock service exposes the equivalent state through
+  // selectedDeviceFilesystemSupported() (SD-card listing is not implemented
+  // yet), so the external entry is reported but stays disabled.
+  QVariantList storages;
+  QVariantMap internalStorage;
+  internalStorage.insert(QStringLiteral("key"), QStringLiteral("emmc"));
+  internalStorage.insert(QStringLiteral("enabled"), true);
+  storages.append(internalStorage);
+  QVariantMap externalStorage;
+  externalStorage.insert(QStringLiteral("key"), QStringLiteral("sdcard"));
+  externalStorage.insert(QStringLiteral("enabled"), selectedDeviceFilesystemSupported());
+  storages.append(externalStorage);
+  return storages;
 }
 
 void MonitorViewModel::pausePrint(int filteredIndex)
@@ -507,6 +568,63 @@ void MonitorViewModel::setActiveAmsSlot(int slotIndex)
   if (deviceService_) deviceService_->setSelectedDeviceAmsSlot(slotIndex);
 }
 
+// ── SelectMachineDialog send flow（对齐上游 SelectMachine 三态条） ──────
+
+int MonitorViewModel::sendJobState() const
+{
+  return deviceService_ ? deviceService_->sendJobState() : 0;
+}
+
+int MonitorViewModel::sendJobProgress() const
+{
+  return deviceService_ ? deviceService_->sendJobProgress() : 0;
+}
+
+QString MonitorViewModel::sendJobErrorCode() const
+{
+  return deviceService_ ? deviceService_->sendJobErrorCode() : QString();
+}
+
+QString MonitorViewModel::sendJobErrorDesc() const
+{
+  return deviceService_ ? deviceService_->sendJobErrorDesc() : QString();
+}
+
+QString MonitorViewModel::sendJobErrorExtra() const
+{
+  return deviceService_ ? deviceService_->sendJobErrorExtra() : QString();
+}
+
+void MonitorViewModel::startSendJob(int filteredIndex, const QString &gcodePath)
+{
+  if (deviceService_) deviceService_->startSendJob(filteredIndex, gcodePath);
+}
+
+void MonitorViewModel::cancelSendJob()
+{
+  if (deviceService_) deviceService_->cancelSendJob();
+}
+
+QVariantMap MonitorViewModel::printOptions() const
+{
+  return deviceService_ ? deviceService_->printOptions() : QVariantMap();
+}
+
+QString MonitorViewModel::printOptionValue(const QString &key) const
+{
+  return deviceService_ ? deviceService_->printOptionValue(key) : QString();
+}
+
+void MonitorViewModel::setPrintOptionValue(const QString &key, const QString &value)
+{
+  if (deviceService_) deviceService_->setPrintOptionValue(key, value);
+}
+
+bool MonitorViewModel::printOptionSupported(const QString &key) const
+{
+  return deviceService_ ? deviceService_->printOptionSupported(key) : false;
+}
+
 // ── Monitor state machine（对齐上游 StatusPanel / MonitorBasePanel 状态切换） ──
 
 void MonitorViewModel::updateMonitorState()
@@ -524,4 +642,276 @@ void MonitorViewModel::setMonitorStateValue(int newState)
     return;
   monitorState_ = newState;
   emit monitorStateChanged();
+}
+
+// ── Troubleshoot Center diagnostics (upstream TroubleshootDialog) ──────────
+
+QVariantMap MonitorViewModel::diagnosticSystemInfo() const
+{
+  // Upstream composes the left-column system-info panel from GetOSinfo /
+  // GetPackageType / GetCPUinfo (TroubleshootDialog.cpp:150-161); the RAM,
+  // GPU and monitor lines are derived QML-side from backend.systemInfo()
+  // (BackendContext::systemInfo) and the QML screen list.
+  QVariantMap info;
+#if defined(Q_OS_WINDOWS)
+  info.insert(QStringLiteral("osType"), QStringLiteral("Windows"));
+#elif defined(Q_OS_LINUX)
+  info.insert(QStringLiteral("osType"), QStringLiteral("Linux"));
+#elif defined(Q_OS_MACOS)
+  info.insert(QStringLiteral("osType"), QStringLiteral("macOS"));
+#else
+  info.insert(QStringLiteral("osType"), QSysInfo::productType());
+#endif
+
+#if defined(Q_OS_WINDOWS)
+  // Upstream GetWinVersion (TroubleshootDialog.cpp:615-642) maps the build
+  // number from RtlGetVersion to the marketing major; QSysInfo::kernelVersion()
+  // already reports "10.0.26200" on Windows. DisplayVersion registry value
+  // with ReleaseId fallback replaces GetWinDisplayVersion (:596-614).
+  const int build = QSysInfo::kernelVersion().section(QLatin1Char('.'), -1).toInt();
+  const QString win = build >= 22000 ? QStringLiteral("11")
+                        : build >= 10240 ? QStringLiteral("10")
+                        : build >= 9200  ? QStringLiteral("8")
+                        : build >= 7601  ? QStringLiteral("7")
+                                         : QStringLiteral("?");
+  const QSettings reg(
+      QStringLiteral("HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"),
+      QSettings::NativeFormat);
+  QString display = reg.value(QStringLiteral("DisplayVersion")).toString();
+  if (display.isEmpty())
+    display = reg.value(QStringLiteral("ReleaseId")).toString();
+  info.insert(QStringLiteral("osInfo"),
+              display.isEmpty()
+                  ? QStringLiteral("Windows %1 %2").arg(win).arg(build)
+                  : QStringLiteral("Windows %1 %2 %3").arg(win, display).arg(build));
+#else
+  info.insert(QStringLiteral("osInfo"), QSysInfo::prettyProductName());
+#endif
+
+  // Upstream GetPackageType (:692-705): dev build path -> "Local Build",
+  // Uninstall.exe next to the executable -> "Installed", else "Portable".
+  const QString exePath = QCoreApplication::applicationFilePath();
+  if (exePath.contains(QStringLiteral("build"), Qt::CaseInsensitive)) {
+    info.insert(QStringLiteral("packageType"), QStringLiteral("Local Build"));
+  } else if (QFileInfo::exists(QFileInfo(exePath).absolutePath()
+                               + QStringLiteral("/Uninstall.exe"))) {
+    info.insert(QStringLiteral("packageType"), QStringLiteral("Installed"));
+  } else {
+    info.insert(QStringLiteral("packageType"), QStringLiteral("Portable"));
+  }
+
+#if defined(Q_OS_WINDOWS)
+  // Upstream get_cpu_info_from_registry (:762-773): ProcessorNameString.
+  const QSettings cpuReg(
+      QStringLiteral("HKEY_LOCAL_MACHINE\\HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"),
+      QSettings::NativeFormat);
+  const QString cpu = cpuReg.value(QStringLiteral("ProcessorNameString")).toString();
+  info.insert(QStringLiteral("cpuInfo"),
+              cpu.isEmpty() ? QStringLiteral("Unknown") : cpu.trimmed());
+#else
+  info.insert(QStringLiteral("cpuInfo"), QSysInfo::currentCpuArchitecture());
+#endif
+  return info;
+}
+
+QString MonitorViewModel::diagnosticLogDir() const
+{
+  // startup_diagnostics.log lives next to the executable (main_qml.cpp
+  // appendStartupLog) -- the OWzx stand-in for upstream data_dir/log.
+  return QCoreApplication::applicationDirPath();
+}
+
+QVariantList MonitorViewModel::diagnosticLogFiles() const
+{
+  // Newest first (upstream ClearLogs sorts by last_write_time descending,
+  // TroubleshootDialog.cpp:1087-1090).
+  QVariantList out;
+  const QFileInfoList logs = QDir(diagnosticLogDir())
+                                 .entryInfoList({QStringLiteral("*.log")}, QDir::Files,
+                                                QDir::Time);
+  for (const QFileInfo &fi : logs) {
+    QVariantMap entry;
+    entry.insert(QStringLiteral("name"), fi.fileName());
+    entry.insert(QStringLiteral("path"), QDir::toNativeSeparators(fi.absoluteFilePath()));
+    entry.insert(QStringLiteral("bytes"), static_cast<double>(fi.size()));
+    out.append(entry);
+  }
+  return out;
+}
+
+int MonitorViewModel::diagnosticClearLogs()
+{
+  // Upstream ClearLogs (:1070-1105) deletes every log but the newest one.
+  const QFileInfoList logs = QDir(diagnosticLogDir())
+                                 .entryInfoList({QStringLiteral("*.log")}, QDir::Files,
+                                                QDir::Time);
+  int removed = 0;
+  for (int i = 1; i < logs.size(); ++i) {
+    if (QFile::remove(logs.at(i).absoluteFilePath()))
+      ++removed;
+  }
+  return removed;
+}
+
+quint32 MonitorViewModel::zipCrc32(const QByteArray &data)
+{
+  static quint32 table[256];
+  static bool initialized = false;
+  if (!initialized) {
+    for (quint32 i = 0; i < 256; ++i) {
+      quint32 c = i;
+      for (int k = 0; k < 8; ++k)
+        c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
+      table[i] = c;
+    }
+    initialized = true;
+  }
+  quint32 crc = 0xFFFFFFFFu;
+  for (char raw : data) {
+    const auto byte = static_cast<quint8>(raw);
+    crc = table[(crc ^ byte) & 0xFFu] ^ (crc >> 8);
+  }
+  return crc ^ 0xFFFFFFFFu;
+}
+
+quint16 MonitorViewModel::zipDosTime(const QDateTime &dt)
+{
+  const QTime t = dt.time();
+  return static_cast<quint16>((t.hour() << 11) | (t.minute() << 5) | (t.second() / 2));
+}
+
+quint16 MonitorViewModel::zipDosDate(const QDateTime &dt)
+{
+  const QDate d = dt.date();
+  return static_cast<quint16>(((d.year() - 1980) << 9) | (d.month() << 5) | d.day());
+}
+
+QString MonitorViewModel::diagnosticPackZip(const QStringList &paths, const QString &destDir,
+                                            const QString &baseName)
+{
+  // Minimal ZIP (stored entries, no compression) standing in for upstream
+  // SaveAsZip (TroubleshootDialog.cpp:1333-1370): OWzx only packs flat
+  // diagnostic log files plus the project file, so directory recursion is
+  // not required.
+  QDir().mkpath(destDir);
+  const QString zipPath = destDir + QStringLiteral("/%1.zip").arg(baseName);
+  if (QFileInfo::exists(zipPath))
+    QFile::remove(zipPath);
+
+  QFile zip(zipPath);
+  if (!zip.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    return {};
+
+  QList<ZipEntry> entries;
+  QDataStream out(&zip);
+  out.setByteOrder(QDataStream::LittleEndian);
+
+  for (const QString &path : paths) {
+    const QFileInfo fi(path);
+    QFile source(path);
+    if (!fi.exists() || !source.open(QIODevice::ReadOnly))
+      continue;
+    const QByteArray payload = source.readAll();
+    ZipEntry entry;
+    entry.name = fi.fileName();
+    entry.crc = zipCrc32(payload);
+    entry.size = static_cast<quint32>(payload.size());
+    const QDateTime modified = fi.lastModified();
+    entry.time = zipDosTime(modified);
+    entry.date = zipDosDate(modified);
+    entry.offset = static_cast<quint32>(zip.pos());
+
+    out << quint32(0x04034b50)  // local file header signature
+        << quint16(20)          // version needed to extract
+        << quint16(0)           // flags: sizes known up front
+        << quint16(0)           // method: stored
+        << entry.time << entry.date
+        << entry.crc << entry.size << entry.size
+        << quint16(entry.name.toUtf8().size()) << quint16(0);
+    zip.write(entry.name.toUtf8());
+    zip.write(payload);
+    entries.append(entry);
+  }
+
+  const quint32 centralOffset = static_cast<quint32>(zip.pos());
+  for (const ZipEntry &entry : entries) {
+    const QByteArray nameUtf8 = entry.name.toUtf8();
+    out << quint32(0x02014b50)  // central directory header signature
+        << quint16(20) << quint16(20)
+        << quint16(0) << quint16(0)
+        << entry.time << entry.date
+        << entry.crc << entry.size << entry.size
+        << quint16(nameUtf8.size()) << quint16(0) << quint16(0)
+        << quint16(0) << quint16(0) << quint32(0)
+        << entry.offset;
+    zip.write(nameUtf8);
+  }
+  const quint32 centralSize = static_cast<quint32>(zip.pos()) - centralOffset;
+  out << quint32(0x06054b50)    // end of central directory signature
+      << quint16(0) << quint16(0)
+      << quint16(entries.size()) << quint16(entries.size())
+      << centralSize << centralOffset << quint16(0);
+  zip.close();
+  return zipPath;
+}
+
+QVariantMap MonitorViewModel::diagnosticCleanSystemProfilesCache()
+{
+  // Upstream deletes data_dir/system after the restart confirmation
+  // (TroubleshootDialog.cpp:1004). OWzx system presets are read-only
+  // resources loaded from the profiles directory, so the cache directory
+  // normally does not exist; the QML layer reports that honestly instead of
+  // restarting the app for nothing.
+  QVariantMap result;
+  result.insert(QStringLiteral("existed"), false);
+  result.insert(QStringLiteral("removed"), false);
+  const QString sysDir = appDataDir() + QStringLiteral("/system");
+  if (!QFileInfo::exists(sysDir))
+    return result;
+  result.insert(QStringLiteral("existed"), true);
+  result.insert(QStringLiteral("removed"), QDir(sysDir).removeRecursively());
+  return result;
+}
+
+bool MonitorViewModel::diagnosticOpenFolder(const QString &path) const
+{
+  // Upstream BrowseFolder (TroubleshootDialog.cpp:1127-1191) opens the
+  // directory with the platform default application.
+  return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
+
+QString MonitorViewModel::appDataDir() const
+{
+  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+}
+
+QString MonitorViewModel::logSeverityLevel() const
+{
+  // Upstream reads app_config "log_severity_level" (:104-105); the OWzx
+  // AppConfig-lite sink is QSettings under the same key. The Qt logger
+  // category rules consume the persisted value on the next launch.
+  return QSettings()
+      .value(QStringLiteral("log_severity_level"), QStringLiteral("info"))
+      .toString();
+}
+
+void MonitorViewModel::setLogSeverityLevel(const QString &level)
+{
+  QSettings().setValue(QStringLiteral("log_severity_level"), level);
+  QSettings().sync();
+}
+
+bool MonitorViewModel::writeTextFile(const QString &filePath, const QString &content)
+{
+  // Failure removes the partial file (upstream ExportAsJson
+  // TroubleshootDialog.cpp:1212-1229).
+  QFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    return false;
+  const QByteArray payload = content.toUtf8();
+  const bool ok = file.write(payload) == payload.size();
+  file.close();
+  if (!ok)
+    QFile::remove(filePath);
+  return ok;
 }

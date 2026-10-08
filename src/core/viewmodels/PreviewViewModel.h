@@ -8,6 +8,7 @@
 #include <QColor>
 #include <QVector>
 #include <array>
+#include <limits>
 #include <vector>
 #include "core/rendering/TickCodeTypes.h"
 
@@ -108,6 +109,14 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(bool showUnretractMoves READ showUnretractMoves WRITE setShowUnretractMoves NOTIFY stateChanged)
   Q_PROPERTY(bool showWipeMoves READ showWipeMoves WRITE setShowWipeMoves NOTIFY stateChanged)
   Q_PROPERTY(bool showSeamMarks READ showSeamMarks WRITE setShowSeamMarks NOTIFY stateChanged)
+  /// ToolChanges ("Filament changes") legend row toggle aligned with the
+  /// upstream m_options ToolChanges branch (GCodeViewer.cpp:3901-3904 calls
+  /// toggle_option_visibility). Upstream renders tool-change points; the Qt6
+  /// line pipeline emits no tool-change geometry (documented delta at
+  /// appendMarkerSegment, PreviewViewModel.cpp appendMarkerSegment comment),
+  /// so the flag currently has no render-side segment kind to gate -- the row
+  /// exists so the FeatureType legend structure matches upstream 1:1.
+  Q_PROPERTY(bool showToolChanges READ showToolChanges WRITE setShowToolChanges NOTIFY stateChanged)
   /// Phase 238 (PREV-05): filament usage split aligned with the upstream
   /// statistics columns Model/Support/Flushed/Tower
   /// (GCodeViewer.cpp:5161-5277 append_headers/columns; volume accounting in
@@ -146,6 +155,33 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int toolLayer READ toolLayer NOTIFY stateChanged)
   Q_PROPERTY(int toolMoveIndex READ toolMoveIndex NOTIFY stateChanged)
   Q_PROPERTY(bool toolIsExtrusion READ toolIsExtrusion NOTIFY stateChanged)
+  /// Expanded tooltip table fields aligned with the upstream 14-row property
+  /// table (GCodeViewer.cpp:430-475): move kind (upstream EMoveType), role
+  /// string (upstream EGCodeExtrusionRole "Line Type" row), move height /
+  /// length / volumetric flow / jerk / pressure advance, and the Time row
+  /// (cumulative get_time_dhms + per-move seconds, GCodeViewer.cpp:474-475).
+  Q_PROPERTY(int toolKind READ toolKind NOTIFY stateChanged)
+  Q_PROPERTY(QString toolTypeText READ toolTypeText NOTIFY stateChanged)
+  Q_PROPERTY(QString toolLineTypeText READ toolLineTypeText NOTIFY stateChanged)
+  Q_PROPERTY(double toolHeight READ toolHeight NOTIFY stateChanged)
+  Q_PROPERTY(double toolLength READ toolLength NOTIFY stateChanged)
+  Q_PROPERTY(double toolFlowRate READ toolFlowRate NOTIFY stateChanged)
+  Q_PROPERTY(double toolJerk READ toolJerk NOTIFY stateChanged)
+  Q_PROPERTY(double toolPressureAdvance READ toolPressureAdvance NOTIFY stateChanged)
+  Q_PROPERTY(QString toolEstimatedTime READ toolEstimatedTime NOTIFY stateChanged)
+  Q_PROPERTY(double toolMoveTimeSecs READ toolMoveTimeSecs NOTIFY stateChanged)
+  /// Per-view-type detail rendered after "Speed: N" on the second info line
+  /// (upstream detail switch, GCodeViewer.cpp:361-415); empty when the view
+  /// mode has no detail (Feedrate etc.), like upstream detail_buf[0]=='\0'.
+  Q_PROPERTY(QString toolDetailText READ toolDetailText NOTIFY stateChanged)
+  /// ENABLE_ACTUAL_SPEED_DEBUG profile rows (GCodeViewer.cpp:1735-1787):
+  /// {pos,speed,internal} for the segments sharing the current gcode line,
+  /// zero-delta points dropped, consecutive duplicate speeds (0.1 precision)
+  /// compressed. Rows feed the "Actual speed profile" plot + table.
+  Q_PROPERTY(bool toolActualSpeedExist READ toolActualSpeedExist NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList toolActualSpeedProfile READ toolActualSpeedProfile NOTIFY stateChanged)
+  Q_PROPERTY(double toolActualSpeedYMin READ toolActualSpeedYMin NOTIFY stateChanged)
+  Q_PROPERTY(double toolActualSpeedYMax READ toolActualSpeedYMax NOTIFY stateChanged)
   Q_PROPERTY(QVariantList tickMarks READ tickMarks NOTIFY tickMarksChanged)
   Q_PROPERTY(int tickMarkCount READ tickMarkCount NOTIFY tickMarksChanged)
   /// Per-role extrusion visibility (render-side filter, no repack).
@@ -330,6 +366,9 @@ public:
   Q_INVOKABLE void setShowWipeMoves(bool enabled);
   bool showSeamMarks() const { return showSeamMarks_; }
   Q_INVOKABLE void setShowSeamMarks(bool enabled);
+  // ToolChanges legend toggle (see the Q_PROPERTY block).
+  bool showToolChanges() const { return showToolChanges_; }
+  Q_INVOKABLE void setShowToolChanges(bool enabled);
   /// Phase 238 (PREV-03): canonical move kinds aligned with the upstream
   /// GCodeProcessor::EMoveType classification relevant to preview
   /// (GCodeProcessor.cpp:2954-2968): 0=Extrude, 1=Travel, 2=Retract,
@@ -368,6 +407,21 @@ public:
   int toolLayer() const { return toolLayer_; }
   int toolMoveIndex() const { return toolMoveIndex_; }
   bool toolIsExtrusion() const { return toolIsExtrusion_; }
+  int toolKind() const { return toolKind_; }
+  const QString &toolTypeText() const { return toolTypeText_; }
+  const QString &toolLineTypeText() const { return toolLineTypeText_; }
+  double toolHeight() const { return toolHeight_; }
+  double toolLength() const { return toolLength_; }
+  double toolFlowRate() const { return toolFlowRate_; }
+  double toolJerk() const { return toolJerk_; }
+  double toolPressureAdvance() const { return toolPressureAdvance_; }
+  const QString &toolEstimatedTime() const { return toolEstimatedTime_; }
+  double toolMoveTimeSecs() const { return toolMoveTimeSecs_; }
+  const QString &toolDetailText() const { return toolDetailText_; }
+  bool toolActualSpeedExist() const { return toolActualSpeedExist_; }
+  QVariantList toolActualSpeedProfile() const { return toolActualSpeedProfile_; }
+  double toolActualSpeedYMin() const { return toolActualSpeedYMin_; }
+  double toolActualSpeedYMax() const { return toolActualSpeedYMax_; }
 
   Q_INVOKABLE void setLayerRange(int minLayer, int maxLayer);
   /// Toggle one-layer mode, aligned with upstream IMSlider::switch_one_layer_mode.
@@ -479,6 +533,11 @@ private:
   // P17.4/P17.10: per-role filament length (mm) and the prepare time
   // (elapsed before the first extrusion move).
   QHash<int, double> m_roleFilamentLength;
+  // FeatureType legend Time/% source keyed by canonical role index (seconds,
+  // same accumulation as the label-keyed m_roleTimes) so roleVisibilities()
+  // rows stay index-aligned with the presence set (upstream ViewerImpl.cpp
+  // collects Extrude vertices per role, :1017-1018).
+  QHash<int, double> m_roleTimeByIndex;
   // Upstream seq_top_layer_only defaults to "1" (AppConfig.cpp:202-203) and
   // drives top_layer_only_view_range (GCodeViewer.cpp:1132-1135); the
   // dim-lower-layers pref defaults false (AppConfig.cpp:206-207).
@@ -531,6 +590,9 @@ private:
   bool showUnretractMoves_ = false;
   bool showWipeMoves_ = false;
   bool showSeamMarks_ = true;
+  // ToolChanges legend toggle (see the Q_PROPERTY block). Defaults visible so
+  // the new legend row starts in the revealed state like the seam toggles.
+  bool showToolChanges_ = true;
   QTimer *playTimer_ = nullptr;
 
   // Stored parsed segments for view-mode recoloring
@@ -556,6 +618,11 @@ private:
     bool isTravel;
     int role = 0;  ///< Canonical libvgcode EGCodeExtrusionRole index (0=None..19=Mixed).
     int kind = 0;  ///< Phase 238 (PREV-03): MoveKind (upstream GCodeProcessor::EMoveType classification).
+    /// Source gcode line number the segment was parsed from (upstream
+    /// PathVertex::gcode_id). Groups consecutive segments of one gcode line
+    /// into a "run" for the tooltip Length row and the actual-speed profile
+    /// (GCodeViewer.cpp:442-457, :1743-1755).
+    int gcodeLine = -1;
   };
   std::vector<StoredSegment> segments_;
   /// Per-role extrusion visibility mask, indexed by canonical libvgcode
@@ -608,4 +675,26 @@ private:
   int toolLayer_ = 0;
   int toolMoveIndex_ = 0;
   bool toolIsExtrusion_ = false;
+  // Expanded tooltip table + detail fields (see the Q_PROPERTY block).
+  int toolKind_ = 0;
+  QString toolTypeText_;
+  QString toolLineTypeText_;
+  double toolHeight_ = 0;
+  double toolLength_ = 0;
+  double toolFlowRate_ = 0;
+  double toolJerk_ = 0;
+  double toolPressureAdvance_ = 0;
+  QString toolEstimatedTime_;
+  double toolMoveTimeSecs_ = 0;
+  QString toolDetailText_;
+  bool toolActualSpeedExist_ = false;
+  QVariantList toolActualSpeedProfile_;
+  double toolActualSpeedYMin_ = 0;
+  double toolActualSpeedYMax_ = 0;
+  /// Global actual-speed range (upstream ActualSpeed color_range interval,
+  /// GCodeViewer.cpp:1740-1741), accumulated during parsing. Min starts at
+  /// +max so the first parsed value seeds it; unset (no values) falls back
+  /// to a 0..0 range in updateToolPositionData().
+  float m_actualSpeedMin = std::numeric_limits<float>::max();
+  float m_actualSpeedMax = 0.f;
 };

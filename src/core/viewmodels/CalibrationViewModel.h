@@ -47,6 +47,28 @@ class CalibrationViewModel : public QObject
     Q_PROPERTY(double calibStart READ calibStart WRITE setCalibStart NOTIFY selectionChanged)
     Q_PROPERTY(double calibEnd READ calibEnd WRITE setCalibEnd NOTIFY selectionChanged)
     Q_PROPERTY(double calibStep READ calibStep WRITE setCalibStep NOTIFY selectionChanged)
+    /// U03: hardware-calibration capability bits, one per gated option of the
+    /// upstream CalibrationDialog (update_cali, Calibration.cpp:210-254):
+    /// lidar = SupportAIMonitor() && SupportCalibrationLidar(), bed leveling =
+    /// is_support_bed_leveling, motor noise = is_support_motor_noise_cali,
+    /// nozzle offset = SupportCalibrationNozzleOffset(), high-temp bed =
+    /// SupportCalibrationHighTempBed(), clump = SupportCaliClumpPos().
+    /// Vibration compensation is never gated upstream. The mock device stack
+    /// is a full-capability stance (all true) until a real device channel
+    /// feeds these bits -- registered gap, mirrors the runtime-stage gap below.
+    Q_PROPERTY(bool supportLidarCali READ supportLidarCali CONSTANT)
+    Q_PROPERTY(bool supportBedLeveling READ supportBedLeveling CONSTANT)
+    Q_PROPERTY(bool supportMotorNoiseCali READ supportMotorNoiseCali CONSTANT)
+    Q_PROPERTY(bool supportNozzleOffsetCali READ supportNozzleOffsetCali CONSTANT)
+    Q_PROPERTY(bool supportHighTempBedCali READ supportHighTempBedCali CONSTANT)
+    Q_PROPERTY(bool supportClumpPosCali READ supportClumpPosCali CONSTANT)
+    /// U03: nozzle-diameter filter for the calibration history list (upstream
+    /// HistoryWindow requests per-nozzle records through the device,
+    /// CaliHistoryDialog.cpp:144-159/:247-255 -- the combo lists
+    /// 0.2/0.4/0.6/0.8 mm and defaults to the machine's current nozzle). The
+    /// OWzx history is local, so the VM holds the selected filter value and
+    /// the dialog filters entries against it.
+    Q_PROPERTY(float historyNozzleFilter READ historyNozzleFilter WRITE setHistoryNozzleFilter NOTIFY historyFilterChanged)
 
 public:
     explicit CalibrationViewModel(CalibrationServiceMock *service, QObject *parent = nullptr);
@@ -117,6 +139,55 @@ public:
     void setCalibEnd(double v);
     void setCalibStep(double v);
 
+    // U03: capability bits (see Q_PROPERTY docs above).
+    bool supportLidarCali() const { return m_supportLidarCali; }
+    bool supportBedLeveling() const { return m_supportBedLeveling; }
+    bool supportMotorNoiseCali() const { return m_supportMotorNoiseCali; }
+    bool supportNozzleOffsetCali() const { return m_supportNozzleOffsetCali; }
+    bool supportHighTempBedCali() const { return m_supportHighTempBedCali; }
+    bool supportClumpPosCali() const { return m_supportClumpPosCali; }
+
+    // U03: history nozzle-diameter filter.
+    float historyNozzleFilter() const { return m_historyNozzleFilter; }
+    void setHistoryNozzleFilter(float v);
+
+    /// U03: record the seven hardware-calibration checkboxes on the shared VM
+    /// before startCalibration (upstream on_start_calibration ->
+    /// command_start_calibration passes the 7 live checkbox values,
+    /// Calibration.cpp:324-341). The dialog previously kept these selections
+    /// as dead dialog-local state that never reached the VM. Defaults: all
+    /// checked except bed_cali (high-temp heatbed), per STUDIO-10091
+    /// (Calibration.cpp:62-65).
+    Q_INVOKABLE void setHardwareOptions(bool lidar, bool bedLevel, bool vibration,
+                                        bool motor, bool nozzleOffset, bool heatbed,
+                                        bool clump);
+
+    /// U03: delete one history entry (upstream row Delete button ->
+    /// CalibUtils::delete_PA_calib_result, CaliHistoryDialog.cpp:418-442).
+    /// CalibrationServiceMock exposes no per-entry removal, so the deletion
+    /// rebuilds the list through the existing clearHistory + addHistoryEntry
+    /// channel (all eight fields round-trip), preserving newest-first order.
+    Q_INVOKABLE void deleteHistoryEntry(int index);
+    /// U03: rewrite the name + K value of one history entry (upstream
+    /// EditCalibrationHistoryDialog on_save -> set_PA_calib_result,
+    /// CaliHistoryDialog.cpp:649-689). K range/empty-name validation stays in
+    /// the dialog (mirrors upstream CalibUtils::validate_input_*).
+    /// Returns false when the index is out of range or the write failed.
+    Q_INVOKABLE bool updateHistoryEntry(int index, const QString &name, float kValue);
+    /// U03: append a manual history record (upstream
+    /// NewCalibrationHistoryDialog on_ok, CaliHistoryDialog.cpp:909-998).
+    /// A manual record has no machine readback by definition, so
+    /// hasRealReadback stays false (honest bookkeeping).
+    Q_INVOKABLE void addManualHistoryEntry(const QString &name, const QString &filamentName,
+                                           float nozzleDiameter, float kValue);
+    /// U03: filament preset display name for a history entry (upstream
+    /// get_preset_name_by_filament_id, CaliHistoryDialog.cpp:72-107). The
+    /// OWzx history stores filament preset names (the writer passes
+    /// m_selectedFilamentPreset); the literal "default" resolves to the
+    /// service's default filament preset name. Read-only reuse of
+    /// PresetServiceMock queries.
+    Q_INVOKABLE QString historyFilamentName(int index) const;
+
     /// 保存校准结果到历史（对齐上游 CalibrationWizardSavePage save）
     Q_INVOKABLE void saveCalibrationResult();
     /// Phase 241 (PAGE-03): write the measured value into the selected
@@ -152,6 +223,7 @@ signals:
     void stateChanged();
     void historyChanged();
     void calibrationParamsChanged();
+    void historyFilterChanged();
 
 public slots:
     void startCalibration();
@@ -169,4 +241,24 @@ private:
     float m_currentNValue = 0.4f;
     bool m_hasResult = false;
     int m_resultMode = -1;
+    // U03: hardware option bits (defaults mirror Calibration.cpp:53-65 --
+    // every option checked except bed_cali).
+    bool m_hwLidar = true;
+    bool m_hwBedLevel = true;
+    bool m_hwVibration = true;
+    bool m_hwMotor = true;
+    bool m_hwNozzleOffset = true;
+    bool m_hwHeatbed = false;
+    bool m_hwClump = true;
+    // U03: capability bits (mock full-capability device until a real device
+    // channel exists; see Q_PROPERTY docs).
+    bool m_supportLidarCali = true;
+    bool m_supportBedLeveling = true;
+    bool m_supportMotorNoiseCali = true;
+    bool m_supportNozzleOffsetCali = true;
+    bool m_supportHighTempBedCali = true;
+    bool m_supportClumpPosCali = true;
+    // U03: history nozzle-diameter filter (upstream combo defaults to the
+    // machine's current nozzle; the mock stance is the 0.4 default).
+    float m_historyNozzleFilter = 0.4f;
 };

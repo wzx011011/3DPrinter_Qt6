@@ -3660,6 +3660,14 @@ void EditorViewModel::syncBedFromPrinterPreset()
   // v5.16 (BEDMODEL): bed_model STL triangle stream (upstream Bed3D::
   // render_model). Rebuilt whenever the printer preset changes.
   m_bedModelMeshData = loadBedModelMesh(configViewModel_->bedModelFile());
+  // U02 (BEDSHAPE-DLG): mirror the model path so the BedShapeDialog Model
+  // group seeds from the same source as the viewport mesh.
+  {
+    const QString modelFile = configViewModel_->bedModelFile();
+    const QUrl modelUrl = modelFile.isEmpty() ? QUrl() : QUrl::fromLocalFile(modelFile);
+    if (modelUrl != m_bedModelUrl)
+      m_bedModelUrl = modelUrl;
+  }
 
   // v5.16 (BEDTYPE-TEX): BBL gates + shared asset dir.
   m_bedTypeTexturesActive = configViewModel_->bedTypeTexturesActive();
@@ -3671,6 +3679,7 @@ void EditorViewModel::syncBedFromPrinterPreset()
 }
 
 QUrl EditorViewModel::bedTextureUrl() const { return m_bedTextureUrl; }
+QUrl EditorViewModel::bedModelUrl() const { return m_bedModelUrl; }
 
 int EditorViewModel::currentPlateBedType() const
 {
@@ -9164,6 +9173,59 @@ int EditorViewModel::plateFilamentMapMode(int plateIndex) const
                          : int(OWzx::FilamentMapMode::fmmAutoForFlush);
 }
 
+// ── U02 (FGATE): FilamentGroupPopup behavior cluster ────────────────────────
+
+int EditorViewModel::resolvedFilamentMapMode() const
+{
+  // PartPlate::get_real_filament_map_mode (PartPlate.cpp:337-349): a concrete
+  // per-plate mode returns as-is; the per-plate inherit sentinel (value 3)
+  // resolves against the global filament_map_mode. The merged preset config
+  // (ConfigViewModel::mergedConfigValues) is the fork's preset_bundle
+  // full_config analog; when it carries no key the upstream default
+  // AutoForFlush is returned (PrintConfig.cpp:2509).
+  const int plateMode = plateFilamentMapMode(currentPlateIndex());
+  if (plateMode != int(OWzx::FilamentMapMode::fmmDefault))
+    return plateMode;
+  if (configViewModel_) {
+    const QVariant global = configViewModel_->mergedConfigValues()
+        .value(QStringLiteral("filament_map_mode"));
+    bool ok = false;
+    const int globalMode = global.toInt(&ok);
+    if (ok && globalMode >= int(OWzx::FilamentMapMode::fmmAutoForFlush)
+            && globalMode <= int(OWzx::FilamentMapMode::fmmManual))
+      return globalMode;
+  }
+  return int(OWzx::FilamentMapMode::fmmAutoForFlush);
+}
+
+bool EditorViewModel::machineSyncReady() const { return m_machineSyncReady; }
+void EditorViewModel::setMachineSyncReady(bool on)
+{
+  if (m_machineSyncReady == on)
+    return;
+  m_machineSyncReady = on;
+  emit machineSyncReadyChanged();
+}
+
+bool EditorViewModel::multiNozzleConfigured() const
+{
+  // should_pop_up (FilamentGroupPopup.cpp:16-23): true when the printer
+  // config's nozzle_diameter holds more than one entry. The merged preset
+  // config is the fork's full_config analog; the mock presets serialize a
+  // single "0.4" scalar, so the honest current answer is false (upstream
+  // single-nozzle printers never pop the group popup either).
+  if (!configViewModel_)
+    return false;
+  const QVariant raw = configViewModel_->mergedConfigValues()
+      .value(QStringLiteral("nozzle_diameter"));
+  if (!raw.isValid())
+    return false;
+  if (raw.typeId() == QMetaType::QVariantList)
+    return raw.toList().size() > 1;
+  const QStringList parts = raw.toString().split(QLatin1Char(','), Qt::SkipEmptyParts);
+  return parts.size() > 1;
+}
+
 bool EditorViewModel::isPlateSliced(int plateIndex) const
 {
   return m_slicedPlateIndices.contains(plateIndex);
@@ -10345,6 +10407,18 @@ bool EditorViewModel::applyPendingObjColors(int extruderId)
   return applied;
 }
 
+void EditorViewModel::dismissPendingObjColors()
+{
+  // U02: ObjColorDialog cancel / ✕ path (upstream ObjImportColorDialog
+  // closing without confirm discards the mapping — no extruder write).
+  // Guarded clear so a dismissed import cannot re-open the dialog.
+  if (m_pendingObjColors.isEmpty() && m_pendingObjObjectIndex < 0)
+    return;
+  m_pendingObjColors.clear();
+  m_pendingObjObjectIndex = -1;
+  emit stateChanged();
+}
+
 void EditorViewModel::clearWorkspace()
 {
   if (projectService_)
@@ -10828,6 +10902,116 @@ void EditorViewModel::setBedDiameter(float v)
   invalidateAllSliceResults();
   emit bedShapeChanged();
   emit stateChanged();
+}
+
+// ── U02 (BEDSHAPE-COMMIT): BedShapeDialog OK path ───────────────────────────
+
+void EditorViewModel::commitBedShape(double widthMm, double depthMm,
+                                     double originXMm, double originYMm,
+                                     double diameterMm, int shapeType,
+                                     double maxHeightMm)
+{
+  // Upstream Tab.cpp:7856-7862 (BedShapeDialog OK): load_key_value(
+  // "printable_area", shape) + update_changed_ui() + on_presets_changed().
+  // Fork routing: the bed_* setters are the bed_shape analog (viewport bed +
+  // QSettings persistence — the round-trip ViewModelSmokeTests::
+  // appSettingsAndEditorBedShapePersistDeterministically locks); each setter
+  // refreshes via bedShapeChanged + stateChanged and invalidates slice
+  // results, which is the fork's update_changed_ui equivalent.
+  setBedWidth(float(widthMm));
+  setBedDepth(float(depthMm));
+  setBedOriginX(float(originXMm));
+  setBedOriginY(float(originYMm));
+  setBedShapeType(shapeType);
+  setBedDiameter(float(diameterMm));
+  setBedMaxHeight(float(maxHeightMm));
+  // printable_area write-back analog: the rectangle footprint lands in the
+  // plate-list geometry, which ProjectServiceMock embeds as printable_area
+  // on project save (:11001-11013) and arrange reads as its bed bbox
+  // (:4790-4797). Circle/custom shapes keep the previous plate footprint
+  // (the viewport is driven by bedDiameter / the imported outline instead) —
+  // registered delta, the fork has no polygon plate mesh.
+  if (shapeType == 0 && projectService_)
+  {
+    projectService_->setPlateSize(int(std::lround(widthMm)),
+                                  int(std::lround(depthMm)), 0);
+  }
+  emit stateChanged();
+}
+
+QVariantList EditorViewModel::bedShapeProjectionFromStl(const QString &stlPath) const
+{
+  // U02 (BEDSHAPE-STL): geometry half of upstream BedShapePanel::load_stl
+  // (BedShapeDialog.cpp:549-593) — read the STL, project every vertex onto
+  // the XY plane, return one outline polygon in millimeters. Upstream unions
+  // the projected facets via ClipperUtils and takes the single expolygon's
+  // contour, rejecting files with several disjoint areas; this port takes
+  // the 2D convex hull of the projected vertices (always one CCW contour —
+  // the disjoint-area error branch is not reproduced, registered delta).
+  QVariantList out;
+#ifdef HAS_LIBSLIC3R
+  if (stlPath.isEmpty() || !QFileInfo::exists(stlPath))
+    return out;
+  Slic3r::TriangleMesh mesh;
+  if (!mesh.ReadSTLFile(stlPath.toStdString().c_str()))
+    return out;
+  const auto &its = mesh.its;
+  if (its.vertices.size() < 3)
+    return out;
+
+  std::vector<std::pair<double, double>> pts;
+  pts.reserve(its.vertices.size());
+  for (const auto &v : its.vertices)
+    pts.emplace_back(double(v.x()), double(v.y()));
+  std::sort(pts.begin(), pts.end());
+  pts.erase(std::unique(pts.begin(), pts.end()), pts.end());
+  if (pts.size() < 3)
+    return out;
+
+  const auto cross = [](const std::pair<double, double> &o,
+                        const std::pair<double, double> &a,
+                        const std::pair<double, double> &b) {
+    return (a.first - o.first) * (b.second - o.second)
+         - (a.second - o.second) * (b.first - o.first);
+  };
+  // Andrew monotone chain, counterclockwise (upstream
+  // polygon.make_counter_clockwise, BedShapeDialog.cpp:585).
+  std::vector<std::pair<double, double>> hull(2 * pts.size());
+  size_t k = 0;
+  for (size_t i = 0; i < pts.size(); ++i)
+  {
+    while (k >= 2 && cross(hull[k - 2], hull[k - 1], pts[i]) <= 0) --k;
+    hull[k++] = pts[i];
+  }
+  for (size_t i = pts.size() - 1, t = k + 1; i > 0; --i)
+  {
+    while (k >= t && cross(hull[k - 2], hull[k - 1], pts[i - 1]) <= 0) --k;
+    hull[k++] = pts[i - 1];
+  }
+  hull.resize(k - 1); // last point repeats the first
+
+  out.reserve(int(hull.size() * 2));
+  for (const auto &p : hull)
+  {
+    out.append(p.first);
+    out.append(p.second);
+  }
+#else
+  Q_UNUSED(stlPath);
+#endif
+  return out;
+}
+
+bool EditorViewModel::fileExists(const QString &path) const
+{
+  // U02 (BEDSHAPE-DLG): existence probe for the Texture/Model groups'
+  // missing-file red state (upstream #E14747 branch, BedShapeDialog.cpp:
+  // 334-341/:427-434). Accepts a local path or a file URL.
+  if (path.isEmpty())
+    return false;
+  const QUrl url(path);
+  const QString local = url.isLocalFile() ? url.toLocalFile() : path;
+  return QFileInfo::exists(local);
 }
 
 // ── Phase 100 (WTREAD-01): wipe-tower geometry readback from SliceService ──

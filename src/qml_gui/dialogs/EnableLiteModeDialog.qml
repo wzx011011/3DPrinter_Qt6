@@ -4,28 +4,45 @@ import QtQuick.Layouts
 import ".."
 import "../controls"
 
-// P10.2 -- EnableLiteModeDialog (aligns with upstream EnableLiteModeDialog)
+// P10.2 -- EnableLiteModeDialog (fork-only dialog; no upstream counterpart)
 // G-code preview lite mode toggle for low-memory systems
 // Usage: EnableLiteModeDialog { id: dlg }  ->  dlg.open()
 
 CxDialog {
     id: root
 
-    closePolicy: Popup.NoAutoClose
+    // U04: follows the CxDialog family default (Popup.CloseOnEscape) — the
+    // previous Popup.NoAutoClose override even blocked Esc on this fork-only
+    // dialog (no upstream EnableLiteModeDialog exists to contradict).
 
     dialogTitle: qsTr("预览模式设置")
 
     anchors.centerIn: parent
     width: 400
-    height: 280
+    // U04 (revised in review): static heights clip this content — the former
+    // 280px viewport showed only 188px of ≈249px content, and even 320px
+    // leaves 224px (320 - header 44 - footer 52). Size from the body column
+    // like WipeTowerDialog.qml:60-65 so the toggle row can never clip behind
+    // the footer.
+    height: bodyColumn.implicitHeight + 2 * Theme.spacingXXL
+            + Theme.dialogHeaderHeight + Theme.dialogFooterHeight
 
-    // Lite mode state (aligns with upstream gcode_preview_lite_mode config)
+    // Lite mode state (fork-only dialog: the pinned upstream has no
+    // EnableLiteModeDialog and no gcode_preview_lite_mode config key — the
+    // flag persists under that key name in this fork's QSettings).
+    // Read back from the persisted BackendContext flag on completion; written
+    // through the same flag on confirm.
     property bool liteModeEnabled: false
 
+    Component.onCompleted: {
+        liteModeEnabled = backend.gcodePreviewLiteMode
+    }
+
     contentItem: ColumnLayout {
-        width: root.width
-        spacing: Theme.spacingLG
+        id: bodyColumn
+        anchors.fill: parent
         anchors.margins: Theme.spacingXXL
+        spacing: Theme.spacingLG
         // Info icon + description
         RowLayout {
             Layout.fillWidth: true
@@ -69,7 +86,9 @@ CxDialog {
             Layout.fillWidth: true
             implicitHeight: featureCol.implicitHeight + 16
             radius: 6
-            color: Theme.scrollBarTrackColor
+            // U04: scrollBarTrackColor was a scrollbar-token misuse for a card
+            // surface — the inset surface token is the semantic fit.
+            color: Theme.bgInset
             border.color: Theme.borderInput
             border.width: 1
 
@@ -142,7 +161,8 @@ CxDialog {
 
     footer: Rectangle {
         width: parent.width
-        height: 48
+        // U04: dialog footer height token (52px; Theme.qml:196).
+        height: Theme.dialogFooterHeight
         color: Theme.bgSurface
         radius: 8
         Rectangle {
@@ -162,7 +182,14 @@ CxDialog {
             CxButton {
                 text: qsTr("确定")
                 cxStyle: CxButton.Style.Primary
-                onClicked: root.accept()
+                // U04: persist the toggle through the BackendContext flag
+                // (QSettings "gcode_preview_lite_mode") BEFORE accepting — the
+                // previous accept() dropped the choice on the floor. Cancel
+                // rejects without writing.
+                onClicked: {
+                    backend.setGcodePreviewLiteMode(root.liteModeEnabled)
+                    root.accept()
+                }
             }
 
             CxButton {

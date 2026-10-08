@@ -160,6 +160,13 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   /// Notification state exposed to QML.
   Q_PROPERTY(int historyCount READ historyCount NOTIFY historyChanged)
   Q_PROPERTY(int unreadHistoryCount READ unreadHistoryCount NOTIFY historyChanged)
+  /// NOTI-02: the full history list for the NotificationCenter ListView, most
+  /// important first (importance stable sort, see archiveNotification). A
+  /// QVariantList (same pattern as notificationStack) re-creates the delegates
+  /// on every historyChanged so reordered/edited rows rebind; the previous
+  /// count + index-accessor model went stale when the cap-100 list reordered
+  /// or trimmed without a count change.
+  Q_PROPERTY(QVariantList notificationHistory READ notificationHistory NOTIFY historyChanged)
   Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled WRITE setNotificationsEnabled NOTIFY settingsChanged)
   Q_PROPERTY(bool hintsEnabled READ hintsEnabled WRITE setHintsEnabled NOTIFY settingsChanged)
   Q_PROPERTY(int autoDismissSec READ autoDismissSec WRITE setAutoDismissSec NOTIFY settingsChanged)
@@ -177,6 +184,12 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QString displayProjectTitle READ displayProjectTitle NOTIFY displayProjectTitleChanged)
   /// Whether the first-run configuration wizard has completed.
   Q_PROPERTY(bool configWizardCompleted READ configWizardCompleted WRITE setConfigWizardCompleted NOTIFY configWizardCompletedChanged)
+  // U04 (EnableLiteModeDialog): persisted G-code preview lite-mode flag
+  // (fork-only QSettings key "gcode_preview_lite_mode" — the pinned upstream
+  // has no EnableLiteModeDialog). The dialog reads it
+  // back on completion and writes it through the setter before accepting.
+  // Preview-side application is deferred (PreviewPage is a protected zone).
+  Q_PROPERTY(bool gcodePreviewLiteMode READ gcodePreviewLiteMode WRITE setGcodePreviewLiteMode NOTIFY gcodePreviewLiteModeChanged)
   // TabPosition enum values are mirrored as integer properties for QML.
   // Q_ENUM can be fragile through context-property access in Qt 6.10.
   // Keep integer aliases so QML can compare page ids without enum lookup issues.
@@ -400,6 +413,11 @@ public:
   Q_INVOKABLE void dismissNotificationById(int id);
   Q_INVOKABLE void confirmNotificationById(int id);
   Q_INVOKABLE void cancelNotificationById(int id);
+  /// Upstream render_hypertext (NotificationManager.cpp:734-753): clicking a
+  /// notification's trailing hypertext runs its callback and closes the pop.
+  /// The Qt mock has no navigation targets, so activation acknowledges and
+  /// closes exactly the clicked entry.
+  Q_INVOKABLE void activateNotificationHypertext(int id);
 
   /// Convenience notification helpers aligned with upstream NotificationManager.
   Q_INVOKABLE void postSlicingProgress(int percent, const QString &stage = {});
@@ -480,6 +498,10 @@ public:
   Q_INVOKABLE QVariantMap systemInfo() const;
   bool configWizardCompleted() const;
   void setConfigWizardCompleted(bool completed);
+  /// U04: persisted G-code preview lite-mode flag (QSettings key
+  /// "gcode_preview_lite_mode"; consumed by EnableLiteModeDialog).
+  bool gcodePreviewLiteMode() const;
+  void setGcodePreviewLiteMode(bool enabled);
   Q_INVOKABLE void topbarNewProject();
   Q_INVOKABLE bool topbarOpenProject(const QString &filePath);
   Q_INVOKABLE bool topbarImportModel(const QString &filePath);
@@ -516,8 +538,11 @@ public:
   /// latency. Emits networkTestFinished.
   Q_INVOKABLE void runNetworkTest();
   /// Upstream PrintHostDialog "test connection": HTTP GET against the
-  /// configured host. Emits printHostTestFinished.
-  Q_INVOKABLE void testPrintHost(const QString &hostUrl);
+  /// configured host. Emits printHostTestFinished. Optional apiKey goes out
+  /// as an X-Api-Key header (upstream atKeyPassword auth); user/password go
+  /// out as HTTP Basic credentials (upstream atUserPassword).
+  Q_INVOKABLE void testPrintHost(const QString &hostUrl, const QString &apiKey = {},
+                                 const QString &user = {}, const QString &password = {});
 
   QString lastErrorMessage() const;
   int lastErrorSeverity() const;
@@ -532,16 +557,16 @@ public:
   /// Notification state changed.
   Q_INVOKABLE int historyCount() const;
   Q_INVOKABLE int unreadHistoryCount() const;
-  Q_INVOKABLE QString historyMessage(int index) const;
-  Q_INVOKABLE QString historyTitle(int index) const;
-  Q_INVOKABLE int historySeverity(int index) const;
-  Q_INVOKABLE QString historyTime(int index) const;
+  /// NOTI-02: drop one history row (upstream every notification owns a close
+  /// button, NotificationManager.cpp:861-864 PopNotification::close()).
+  Q_INVOKABLE void removeHistoryById(int id);
+  QVariantList notificationHistory() const;
   Q_INVOKABLE void clearHistory();
   Q_INVOKABLE void markHistoryRead();
   /// Phase 240 (NOTI-01): the visible notification stack, most important
   /// first (see the notificationStack Q_PROPERTY). Each element is a
   /// QVariantMap: id/message/title/severity/type/persistent/hasProgress/
-  /// progressValue/repeatCount/showExportButton/showPreviewButton.
+  /// progressValue/repeatCount/showExportButton/showPreviewButton/hypertext.
   QVariantList notificationStack() const;
   /// Phase 240 (NOTI-01): number of simultaneously visible notifications.
   int visibleNotificationCount() const { return m_activeNotifications.size(); }
@@ -587,6 +612,8 @@ signals:
   void historyChanged();
   void settingsChanged();
   void configWizardCompletedChanged();
+  /// U04: the persisted lite-mode flag flipped (EnableLiteModeDialog).
+  void gcodePreviewLiteModeChanged();
   void showConfigWizardRequested();
   /// Phase 52 PREPSB-02 + Phase 56: request to open an independent
   /// settings dialog for a category ("printer" / "filament" / "process").
@@ -719,6 +746,10 @@ private:
     /// Upstream-aligned QML API.
     bool showExportButton = false;
     bool showPreviewButton = false;
+    /// Trailing clickable link text (upstream NotificationData.hypertext,
+    /// rendered by render_hypertext, NotificationManager.cpp:734-753; e.g.
+    /// the ValidateError "Jump to [object]/(option)" link pushed at :1997).
+    QString hypertext;
     /// Upstream-aligned QML API.
     bool hintHasNext = false;
     bool hintHasPrev = false;
@@ -779,6 +810,8 @@ private:
 
   /// First-run configuration wizard completion flag.
   bool m_configWizardCompleted = false;
+  /// U04: persisted G-code preview lite-mode flag ("gcode_preview_lite_mode").
+  bool m_gcodePreviewLiteMode = false;
 
   /// Hint data exposed to QML notification surfaces.
   QVector<HintData> m_hints;

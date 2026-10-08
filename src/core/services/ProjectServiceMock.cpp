@@ -638,12 +638,14 @@ QString ProjectServiceMock::sourceFilePath() const
 namespace
 {
   // Extensions considered importable models inside an archive (upstream
-  // FileArchiveDialog filters). Compared lower-case, dot included.
+  // FileArchiveDialog.cpp:218 regex ".*[.](stl|obj|amf|3mf|step|stp)",
+  // std::regex::icase). Compared lower-case, dot included.
   bool isArchiveModelEntry(const QString &name)
   {
     const QString lowered = name.toLower();
     return lowered.endsWith(QStringLiteral(".stl")) || lowered.endsWith(QStringLiteral(".obj")) ||
-           lowered.endsWith(QStringLiteral(".3mf")) || lowered.endsWith(QStringLiteral(".amf"));
+           lowered.endsWith(QStringLiteral(".3mf")) || lowered.endsWith(QStringLiteral(".amf")) ||
+           lowered.endsWith(QStringLiteral(".step")) || lowered.endsWith(QStringLiteral(".stp"));
   }
 
   QByteArray extractZipEntry(const QString &archivePath, const QString &entryName, qint64 maxSize)
@@ -710,6 +712,10 @@ QStringList ProjectServiceMock::listArchiveEntries(const QString &archivePath)
     if (stat.m_is_directory)
       continue;
     const QString name = QString::fromUtf8(stat.m_filename);
+    // Filter out macOS resource-fork entries (upstream FileArchiveDialog.cpp:228-230
+    // skips every path starting with "__MACOSX").
+    if (name.startsWith(QStringLiteral("__MACOSX")))
+      continue;
     if (isArchiveModelEntry(name))
       entries.append(name);
   }

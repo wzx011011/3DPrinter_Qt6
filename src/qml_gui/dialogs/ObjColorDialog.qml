@@ -21,7 +21,10 @@ import "../controls"
 CxDialog {
     id: root
     modal: true
-    closePolicy: Popup.NoAutoClose
+    // U02: upstream runs ObjImportColorDialog modally (CenterOnParent,
+    // ObjColorDialog.cpp:175) — Esc = cancel, which now also dismisses the
+    // pending payload like the Cancel button.
+    closePolicy: Popup.CloseOnEscape
     dialogTitle: qsTr("OBJ 颜色分配")
     width: 420
     height: 360
@@ -41,8 +44,19 @@ CxDialog {
         return qsTr("挤出机 %1").arg(i + 1)
     }
 
+    // U02: cancel / ✕ discard the pending mapping without touching the model
+    // (upstream close-without-confirm). reject() routes through onRejected.
+    onRejected: {
+        if (root.editorVm && root.editorVm.dismissPendingObjColors)
+            root.editorVm.dismissPendingObjColors()
+    }
+
     contentItem: ColumnLayout {
         spacing: Theme.spacingMD
+        // U02: real anchors so the margins take effect (previously dead
+        // margins left the content flush to the dialog edge; upstream body
+        // margins run 15~25 DIP, ObjColorDialog.cpp:270/:347/:363).
+        anchors.fill: parent
         anchors.margins: Theme.spacingXL
 
         Text {
@@ -67,8 +81,9 @@ CxDialog {
 
                 Rectangle {
                     required property int index
-                    width: 28
-                    height: 28
+                    // U02: 24x24 swatch (R10 control size).
+                    width: 24
+                    height: 24
                     radius: 4
                     color: root.colors[index] !== undefined ? root.colors[index] : Theme.bgCard
                     border.color: Theme.borderDefault

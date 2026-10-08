@@ -14,6 +14,20 @@ import "../controls"
 // button (anti-feature per FEATURES.md). This file deliberately avoids the
 // sentinel's symbolic name so a source audit can assert no 4th-radio leak.
 //
+// U02 alignment (upstream FilamentGroupPopup.cpp):
+//   - Geometry: width 372 (upstream 33*em ≈ 528 was measured to the fork
+//     chrome; the ask locks 372), padding top/bottom 15 / horizontal 16 /
+//     mode-row gap 12 / radio->text 4 (:105-108).
+//   - Mode rows: title 14px / description 12px, selected title bold
+//     (Body_14 :133, Head_14 :401); self-drawn 18px radio indicator with the
+//     R1 accent when selected (in-file implementation, no CxRadioButton).
+//   - Convenience gate: disabled + grayed with a "(Sync with printer)" hint
+//     until editorVm.machineSyncReady (:238-257); picking is rejected
+//     (:335) and a stale AutoForMatch falls back to AutoForFlush on open
+//     (:343-347). Radio seeding uses editorVm.resolvedFilamentMapMode()
+//     (PartPlate.cpp:337-349) so the inherit-sentinel resolves to the real
+//     global mode instead of always seeding AutoForFlush.
+//
 // Usage: FilamentGroupPopup { id: filamentGroupPopup; editorVm: backend.editorViewModel }
 // Trigger: filamentGroupPopup.open()
 CxPopup {
@@ -32,10 +46,22 @@ CxPopup {
     readonly property int fmmAutoForMatch: 1  // "Convenience Mode"
     readonly property int fmmManual: 2        // "Custom Mode"
 
+    // U02: upstream m_connected (FilamentGroupPopup.cpp:271 tryPopup <->
+    // Plater::get_machine_sync_status). Drives the Convenience-mode gate.
+    readonly property bool syncReady: root.editorVm ? root.editorVm.machineSyncReady : false
+
+    // U02: explicit instance radius 16 (upstream DrawRoundedCorner(16),
+    // FilamentGroupPopup.cpp:296).
+    popupRadius: 16
+
+    // U02: modeless popup (modal: false) -- drop CxPopup's dim overlay so the
+    // plater stays live while the popup is open (upstream PopupWindow).
+    Overlay.modeless: Item {}
+
     x: 0
     y: 0
-    width: 280
-    height: contentCol.implicitHeight + 24
+    width: 372
+    height: contentCol.implicitHeight + 30  // 15 top + 15 bottom (:106)
     modal: false
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
@@ -47,25 +73,31 @@ CxPopup {
     readonly property var autoMaps: root.editorVm ? root.editorVm.autoFilamentMaps : []
 
     // Selected mode is driven by the radio group. Bound to the current plate's
-    // stored mode on open, then written back through setPlateFilamentMapMode when
-    // the user picks a mode. The inherit-sentinel is never offered, so the
+    // resolved mode on open, then written back through setPlateFilamentMapMode
+    // when the user picks a mode. The inherit-sentinel is never offered, so the
     // selected value is always one of the 3 concrete modes.
     property int selectedMode: root.fmmAutoForFlush
 
     function openForCurrentPlate() {
         if (!root.editorVm) return
-        const svc = root.editorVm.projectService ? root.editorVm.projectService
-                                                  : null
-        const plateIdx = root.editorVm.currentPlateIndex
-        // Seed selectedMode from the plate's stored mode. The inherit-sentinel
-        // (value 3) resolves to AutoForFlush in the UI since the popup only
-        // offers the 3 concrete modes (anti-feature: no 4th radio).
+        // U02: seed from the RESOLVED mode (PartPlate.cpp:337-349) instead of
+        // the raw plate value, so the inherit-sentinel (value 3) surfaces as
+        // the real global filament_map_mode rather than collapsing to 0.
         let stored = root.fmmAutoForFlush
-        if (svc && svc.plateFilamentMapMode) {
-            const raw = svc.plateFilamentMapMode(plateIdx)
-            stored = (raw === 3 /* inherit-sentinel */) ? root.fmmAutoForFlush : raw
+        if (root.editorVm.resolvedFilamentMapMode) {
+            const resolved = root.editorVm.resolvedFilamentMapMode()
+            stored = (resolved >= root.fmmAutoForFlush && resolved <= root.fmmManual)
+                ? resolved : root.fmmAutoForFlush
         }
-        root.selectedMode = stored
+        // U02: upstream update_dialog (:343-347) — a stale Convenience mode
+        // with no machine connection falls back to AutoForFlush (persisted
+        // through the same write path as a radio pick, :344).
+        if (stored === root.fmmAutoForMatch && !root.syncReady) {
+            root.selectedMode = root.fmmAutoForFlush
+            root.applySelectedMode()
+        } else {
+            root.selectedMode = stored
+        }
         root.open()
     }
 
@@ -73,8 +105,14 @@ CxPopup {
 
     contentItem: ColumnLayout {
         id: contentCol
-        width: root.width - 24
-        anchors.margins: Theme.spacingLG
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 16   // upstream horizontal_margin, .cpp:105
+        anchors.rightMargin: 16
+        anchors.topMargin: 15    // upstream vertical_margin, .cpp:106
+        anchors.bottomMargin: 15
         spacing: Theme.spacingSM
 
         Text {
@@ -93,11 +131,12 @@ CxPopup {
             wrapMode: Text.WordWrap
         }
 
-        // 3 selectable mode radios (fmmAutoForFlush / fmmAutoForMatch / fmmManual).
-        // The ButtonGroup enforces single-selection; the checked binding is
-        // two-way so picking a radio updates selectedMode and vice-versa.
-        ButtonGroup { id: modeGroup }
-
+        // 3 selectable mode rows (fmmAutoForFlush / fmmAutoForMatch /
+        // fmmManual). U02: self-drawn radio rows (18px indicator + 4px gap +
+        // 14px title + 12px description; selected title bold) replacing the
+        // stock RadioButton -- upstream draws bitmap radios beside
+        // Body_14/Head_14 labels (:133/:401). Convenience is disabled and
+        // grayed without a machine sync (:238-257) and rejects picks (:335).
         Repeater {
             model: [
                 { mode: root.fmmAutoForFlush, title: qsTr("省耗材"),
@@ -107,31 +146,88 @@ CxPopup {
                 { mode: root.fmmManual,       title: qsTr("自定义"),
                   hint: qsTr("使用显式的每喷嘴耗材映射。") }
             ]
-            delegate: RadioButton {
+            delegate: Item {
+                id: modeRow
+                required property int index
                 required property var modelData
+
+                readonly property bool checked: root.selectedMode === modelData.mode
+                // U02: Convenience requires the machine-sync gate (:335).
+                readonly property bool enabledMode:
+                    modelData.mode !== root.fmmAutoForMatch || root.syncReady
+                readonly property color titleColor:
+                    enabledMode ? Theme.textPrimary : Theme.textDisabled
+                readonly property color hintColor:
+                    enabledMode ? Theme.textMuted : Theme.textDisabled
+
                 Layout.fillWidth: true
-                ButtonGroup.group: modeGroup
-                checked: root.selectedMode === modelData.mode
-                text: modelData.title
-                onToggled: {
-                    root.selectedMode = modelData.mode
-                    root.applySelectedMode()
-                }
-                contentItem: ColumnLayout {
-                    spacing: Theme.spacingXS
-                    Text {
-                        text: parent.parent.text
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeMD
-                        Layout.leftMargin: parent.parent.indicator.width + 6
+                Layout.topMargin: index > 0 ? 12 : 0  // upstream vertical_padding, .cpp:107
+                implicitHeight: rowLayout.implicitHeight
+
+                ColumnLayout {
+                    id: rowLayout
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    spacing: 2
+
+                    Row {
+                        spacing: 4  // upstream ratio_spacing, .cpp:108
+
+                        // Self-drawn radio indicator: 18px ring, R1 accent
+                        // when selected (upstream radio_on/off bitmaps).
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 18
+                            height: 18
+                            radius: 9
+                            color: "transparent"
+                            border.width: modeRow.checked ? 2 : 1.5
+                            border.color: modeRow.checked
+                                ? Theme.accent
+                                : (modeRow.enabledMode ? Theme.borderDefault : Theme.borderSubtle)
+
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 10
+                                height: 10
+                                radius: 5
+                                visible: modeRow.checked
+                                color: Theme.accent
+                            }
+                        }
+
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modeRow.modelData.title
+                            color: modeRow.titleColor
+                            font.pixelSize: Theme.fontSizeLG  // 14px, Body_14/Head_14
+                            font.bold: modeRow.checked        // selected -> Head_14 bold
+                        }
                     }
+
                     Text {
-                        text: modelData.hint
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSizeSM
-                        Layout.leftMargin: parent.parent.indicator.width + 6
+                        Layout.leftMargin: 22  // indicator 18 + gap 4
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
+                        text: modeRow.enabledMode
+                            ? modeRow.modelData.hint
+                            : qsTr("（与打印机同步）")  // upstream MachineSyncTip
+                        color: modeRow.hintColor
+                        font.pixelSize: Theme.fontSizeMD   // 12px description
+                    }
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: modeRow.enabledMode
+                        ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: {
+                        if (!modeRow.enabledMode)
+                            return  // upstream OnRadioBtn early-return, :335
+                        if (root.selectedMode === modeRow.modelData.mode)
+                            return
+                        root.selectedMode = modeRow.modelData.mode
+                        root.applySelectedMode()
                     }
                 }
             }

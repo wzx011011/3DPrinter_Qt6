@@ -129,6 +129,19 @@ class DeviceServiceMock final : public QObject
   /// Overall network online status
   Q_PROPERTY(bool networkOnline READ networkOnline NOTIFY devicesChanged)
 
+  // ── SelectMachineDialog send-job state machine ─────────────────────────
+  // Mirrors the upstream SelectMachine.cpp bottom wxSimplebook pages:
+  // 0 = prepare (Send button), 1 = sending (status bar progress), 2 = finish
+  // ("Send complete"). Upstream SelectMachine.cpp:651-705.
+  Q_PROPERTY(int sendJobState READ sendJobState NOTIFY sendJobChanged)
+  /// Send/upload progress percent (0-100) while sendJobState == 1
+  Q_PROPERTY(int sendJobProgress READ sendJobProgress NOTIFY sendJobChanged)
+  /// Failure detail for the failed-info area (empty while no failure).
+  /// Upstream SelectMachine.cpp:707-783 (Error code / Error desc / Extra info).
+  Q_PROPERTY(QString sendJobErrorCode READ sendJobErrorCode NOTIFY sendJobChanged)
+  Q_PROPERTY(QString sendJobErrorDesc READ sendJobErrorDesc NOTIFY sendJobChanged)
+  Q_PROPERTY(QString sendJobErrorExtra READ sendJobErrorExtra NOTIFY sendJobChanged)
+
 public:
   explicit DeviceServiceMock(QObject *parent = nullptr);
 
@@ -175,6 +188,35 @@ public:
 
   int filteredDeviceCount() const;
   bool networkOnline() const;
+
+  // ── SelectMachineDialog send-job state machine ─────────────────────────
+  int sendJobState() const { return sendJobState_; }
+  int sendJobProgress() const { return sendJobProgress_; }
+  QString sendJobErrorCode() const { return sendJobErrorCode_; }
+  QString sendJobErrorDesc() const { return sendJobErrorDesc_; }
+  QString sendJobErrorExtra() const { return sendJobErrorExtra_; }
+  /// Begin the mock send flow for SelectMachineDialog (prepare -> sending).
+  /// The progress ticks asynchronously; on completion the mock device starts
+  /// printing the file (startPrint), mirroring the upstream send-then-print
+  /// sequence (Plater.cpp:12921-12928 open_machine_select_dialog flow).
+  Q_INVOKABLE void startSendJob(int filteredIndex, const QString &gcodePath);
+  /// Abort an in-flight mock send and return to the prepare page
+  /// (upstream on_cancel stops the send worker, SelectMachine.cpp:139).
+  Q_INVOKABLE void cancelSendJob();
+
+  // ── SelectMachineDialog advanced print options ─────────────────────────
+  // Upstream PrintOption segmented values (SelectMachine.cpp:565-614):
+  // "timelapse" (On/Off), "bed_leveling", "flow_cali", "nozzle_offset_cali"
+  // (Auto/On/Off), "pa_value" (On/Off).
+  /// Current option values keyed by option key (NOTIFY drives QML bindings).
+  Q_PROPERTY(QVariantMap printOptions READ printOptions NOTIFY printOptionsChanged)
+  QVariantMap printOptions() const;
+  Q_INVOKABLE QString printOptionValue(const QString &key) const;
+  Q_INVOKABLE void setPrintOptionValue(const QString &key, const QString &value);
+  /// Feature visibility per device capability. Upstream creates all five
+  /// options but initially hides four of them (SelectMachine.cpp:646-649);
+  /// the mock exposes only timelapse until per-device capability lands.
+  Q_INVOKABLE bool printOptionSupported(const QString &key) const;
 
   /// Retrieve a device by filtered index (used by QML Repeater delegate)
   Q_INVOKABLE QVariantMap deviceAt(int filteredIndex) const;
@@ -254,6 +296,8 @@ signals:
   void selectedDeviceChanged();
   void searchTextChanged();
   void hmsChanged();
+  void sendJobChanged();
+  void printOptionsChanged();
 
 private:
   void buildMockDevices();
@@ -296,4 +340,17 @@ private:
   /// HMS 通知列表（对齐上游 DeviceManager hms_list）
   /// key = device realIndex, value = list of HMS items
   QMap<int, QList<MockHmsItem>> hmsLists_;
+
+  // ── SelectMachineDialog send-job state machine ─────────────────────────
+  QTimer *sendJobTimer_ = nullptr;
+  int sendJobState_ = 0;      // 0=prepare, 1=sending, 2=finish
+  int sendJobProgress_ = 0;   // 0-100
+  int sendJobDeviceIndex_ = -1;
+  QString sendJobGcodePath_;
+  QString sendJobErrorCode_;
+  QString sendJobErrorDesc_;
+  QString sendJobErrorExtra_;
+
+  // Advanced print option segmented values (upstream PrintOption keys)
+  QMap<QString, QString> printOptions_;
 };

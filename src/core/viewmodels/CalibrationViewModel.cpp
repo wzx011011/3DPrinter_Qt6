@@ -220,9 +220,32 @@ void CalibrationViewModel::setSelectedFilamentPreset(const QString &name)
 
 // --- Actions ---
 
+void CalibrationViewModel::setHardwareOptions(bool lidar, bool bedLevel, bool vibration,
+                                              bool motor, bool nozzleOffset, bool heatbed,
+                                              bool clump)
+{
+    // U03: the dialog flushes its seven checkbox values here right before
+    // startCalibration, mirroring upstream on_start_calibration ->
+    // command_start_calibration(vibration, bed_leveling, xcam_cali,
+    // motor_noise, nozzle_cali, bed_cali, clump_pos_cali)
+    // (Calibration.cpp:324-341). The mock service has no device command
+    // channel, so the bits are recorded on the shared VM state (previously
+    // the dialog-local checkboxes were dead state that nothing consumed).
+    m_hwLidar = lidar;
+    m_hwBedLevel = bedLevel;
+    m_hwVibration = vibration;
+    m_hwMotor = motor;
+    m_hwNozzleOffset = nozzleOffset;
+    m_hwHeatbed = heatbed;
+    m_hwClump = clump;
+}
+
 void CalibrationViewModel::startCalibration()
 {
     if (m_selectedIndex < 0) return;
+    // U03: the hardware bits flushed by setHardwareOptions() travel with the
+    // start request upstream (Calibration.cpp:333-341); the mock dispatches
+    // by mode only, so they remain recorded VM state here.
     // Phase 241 (PAGE-03): plain start = Flow Rate coarse pass 1 (upstream
     // flowrate-test-pass1.3mf); the fine pass is started explicitly through
     // startFineCalibration().
@@ -503,4 +526,128 @@ void CalibrationViewModel::clearHistory()
 {
     if (m_service)
         m_service->clearHistory();
+}
+
+// --- U03: history CRUD + filter (对齐上游 CaliHistoryDialog) ---
+
+void CalibrationViewModel::setHistoryNozzleFilter(float v)
+{
+    if (qFuzzyCompare(m_historyNozzleFilter, v)) return;
+    m_historyNozzleFilter = v;
+    emit historyFilterChanged();
+}
+
+void CalibrationViewModel::deleteHistoryEntry(int index)
+{
+    // Upstream row Delete -> CalibUtils::delete_PA_calib_result
+    // (CaliHistoryDialog.cpp:418-442). CalibrationServiceMock exposes no
+    // per-entry removal, so the deletion rebuilds the list through the
+    // existing clearHistory + addHistoryEntry channel: all eight entry
+    // fields round-trip through the service getters, and iterating from the
+    // oldest entry to the newest keeps the newest-first order (addHistoryEntry
+    // prepends).
+    if (!m_service || index < 0 || index >= m_service->historyCount()) return;
+
+    struct EntrySnapshot
+    {
+        QString name, filamentId, timestamp, notes;
+        float kValue, flowRate, nozzleDiameter;
+        bool hasRealReadback;
+    };
+    const int count = m_service->historyCount();
+    EntrySnapshot *snap = new EntrySnapshot[static_cast<size_t>(count - 1)];
+    int out = 0;
+    for (int i = 0; i < count; ++i) {
+        if (i == index) continue;
+        snap[out++] = { m_service->historyName(i), m_service->historyFilamentId(i),
+                        m_service->historyTimestamp(i), m_service->historyNotes(i),
+                        m_service->historyKValue(i), m_service->historyFlowRate(i),
+                        m_service->historyNozzleDiameter(i),
+                        m_service->historyHasRealReadback(i) };
+    }
+    m_service->clearHistory();
+    for (int i = count - 2; i >= 0; --i) {
+        m_service->addHistoryEntry(snap[i].name, snap[i].filamentId, snap[i].kValue,
+                                   snap[i].nozzleDiameter, snap[i].timestamp,
+                                   snap[i].hasRealReadback, snap[i].notes,
+                                   snap[i].flowRate);
+    }
+    delete[] snap;
+    emit historyChanged();
+}
+
+bool CalibrationViewModel::updateHistoryEntry(int index, const QString &name, float kValue)
+{
+    // Upstream EditCalibrationHistoryDialog::on_save ->
+    // set_PA_calib_result (CaliHistoryDialog.cpp:649-689): rewrite the
+    // name + K value of one record in place.
+    if (!m_service || index < 0 || index >= m_service->historyCount())
+        return false;
+    if (name.trimmed().isEmpty())
+        return false;
+
+    struct EntrySnapshot
+    {
+        QString name, filamentId, timestamp, notes;
+        float kValue, flowRate, nozzleDiameter;
+        bool hasRealReadback;
+    };
+    const int count = m_service->historyCount();
+    EntrySnapshot *snap = new EntrySnapshot[static_cast<size_t>(count)];
+    for (int i = 0; i < count; ++i) {
+        snap[i] = { m_service->historyName(i), m_service->historyFilamentId(i),
+                    m_service->historyTimestamp(i), m_service->historyNotes(i),
+                    m_service->historyKValue(i), m_service->historyFlowRate(i),
+                    m_service->historyNozzleDiameter(i),
+                    m_service->historyHasRealReadback(i) };
+    }
+    snap[index].name = name;
+    snap[index].kValue = kValue;
+
+    m_service->clearHistory();
+    for (int i = count - 1; i >= 0; --i) {
+        m_service->addHistoryEntry(snap[i].name, snap[i].filamentId, snap[i].kValue,
+                                   snap[i].nozzleDiameter, snap[i].timestamp,
+                                   snap[i].hasRealReadback, snap[i].notes,
+                                   snap[i].flowRate);
+    }
+    delete[] snap;
+    emit historyChanged();
+    return true;
+}
+
+void CalibrationViewModel::addManualHistoryEntry(const QString &name, const QString &filamentName,
+                                                 float nozzleDiameter, float kValue)
+{
+    // Upstream NewCalibrationHistoryDialog::on_ok (CaliHistoryDialog.cpp:909-998)
+    // writes the manually entered record via set_PA_calib_result. A manual
+    // record has no machine readback, so hasRealReadback stays false.
+    if (name.trimmed().isEmpty()) return;
+    if (!m_service) return;
+    m_service->addHistoryEntry(name,
+                               filamentName.isEmpty() ? QStringLiteral("default") : filamentName,
+                               kValue,
+                               nozzleDiameter > 0.0f ? nozzleDiameter : 0.4f,
+                               QDateTime::currentDateTime().toString(Qt::ISODate),
+                               false,
+                               QStringLiteral("manual entry"),
+                               0.0f);
+}
+
+QString CalibrationViewModel::historyFilamentName(int index) const
+{
+    // Upstream resolves a filament id to its preset display name
+    // (get_preset_name_by_filament_id, CaliHistoryDialog.cpp:72-107). The
+    // OWzx history writers store the filament preset name itself; the
+    // literal "default" (written when no preset was selected) resolves to
+    // the service's current default filament preset. Read-only reuse of the
+    // existing PresetServiceMock queries.
+    if (!m_service || index < 0 || index >= m_service->historyCount())
+        return QString{};
+    const QString id = m_service->historyFilamentId(index);
+    if (id.isEmpty())
+        return QString{};
+    if (id == QStringLiteral("default") && m_presetService)
+        return m_presetService->defaultPresetForCategory(PresetServiceMock::FilamentCat);
+    return id;
 }

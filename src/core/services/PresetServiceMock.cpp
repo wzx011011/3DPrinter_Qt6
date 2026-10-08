@@ -130,6 +130,27 @@ QVariant variantFromJsonValue(const QJsonValue &value)
   }
   return value.toVariant();
 }
+
+// Upstream ExportPresetBundleDialog.cpp:190-204 — printer presets entering an
+// export bundle are fresh copies with the sensitive host credentials erased
+// ("make new and erase sensitive information"). Applied only on the export
+// path (exportBundleIni): the live/local preset keeps the keys so host
+// printing keeps working after the export.
+constexpr const char *kExportSensitivePrinterKeys[] = {
+    "print_host",       "print_host_webui", "printhost_apikey",
+    "printhost_cafile", "printhost_user",   "printhost_password",
+    "printhost_port",
+};
+
+QHash<QString, QVariant> valuesForExportBundle(int category, const QHash<QString, QVariant> &values)
+{
+  if (category != PresetServiceMock::PrinterCat)
+    return values;
+  QHash<QString, QVariant> scrubbed = values;
+  for (const char *key : kExportSensitivePrinterKeys)
+    scrubbed.remove(QLatin1String(key));
+  return scrubbed;
+}
 }
 
 PresetServiceMock::PresetServiceMock(QObject *parent)
@@ -952,7 +973,13 @@ void PresetServiceMock::loadUpstreamSchemaDefaults()
       const auto *enumMap = optDef.enum_keys_map;
       if (enumMap)
       {
-        int enumValue = static_cast<const Slic3r::ConfigOptionEnumGeneric *>(optDef.default_value.get())->value;
+        // Read the default through the virtual getInt(). The default may be a
+        // ConfigOptionEnumGeneric (int value) or a ConfigOptionEnum<T>; for
+        // 1-byte enums like GCodeFlavor (PrintConfig.hpp:29, `unsigned char`)
+        // a blind ConfigOptionEnumGeneric cast reads 3 uninitialized padding
+        // bytes above the value, so the name lookup silently missed and the
+        // key was dropped from __upstream_defaults__.
+        int enumValue = optDef.default_value.get()->getInt();
         for (const auto &kv : *enumMap)
         {
           if (kv.second == enumValue)
@@ -1349,6 +1376,14 @@ QVariantList PresetServiceMock::calculateFlushMatrix() const
   const int n = colours.size();
   QVariantList matrix;
   if (n == 0)
+    return matrix;
+  // The vendor catalogue lists every shipped colour variant (Creality alone
+  // carries 500+), so an unbounded N×N here is not a flush matrix — it is a
+  // 290k-cell grid that the dialog instantiates one QML item per cell of.
+  // Upstream scopes this matrix to the current machine's filament slots;
+  // until the list is machine-scoped, refuse absurd sizes outright.
+  constexpr int kMaxFlushMatrixN = 16;
+  if (n > kMaxFlushMatrixN)
     return matrix;
   matrix.reserve(n * n);
   const OWzx::FlushVolCalculator calc(/*min*/ 0, /*max*/ 800, /*multiplier*/ 1.0f);
@@ -1876,7 +1911,8 @@ int PresetServiceMock::exportBundleIni(const QString &dirPath, const QStringList
       continue;
 
     const QString categoryDir = userPresetCategoryDir(metaIt->category);
-    if (!writePresetJsonFile(dirPath, metaIt->category, name, it.value(),
+    if (!writePresetJsonFile(dirPath, metaIt->category, name,
+                             valuesForExportBundle(metaIt->category, it.value()),
                              m_presetInherits.value(name)))
     {
       qWarning("[Preset] exportBundleIni: cannot write preset %s", name.toUtf8().constData());
@@ -2247,6 +2283,36 @@ bool PresetServiceMock::overwriteUserPreset(int category, const QString &name,
 
   m_presetStore[trimmedName] = resolved;
   return true;
+}
+
+bool PresetServiceMock::createPresetFromBase(int category, const QString &name,
+                                             const QString &baseName,
+                                             const QVariantMap &overrides,
+                                             bool overwrite)
+{
+  const QString trimmedName = name.trimmed();
+  if (!isValidCategory(category) || trimmedName.isEmpty())
+    return false;
+
+  // Overwrite path (upstream "Do you want to overwrite it?" rewritten flow,
+  // CreatePresetsDialog.cpp:2778-2788): only USER presets are replaceable --
+  // builtin/read-only presets refuse so vendor content is never clobbered.
+  // A preset with local children keeps them (deletePreset refuses), matching
+  // the upstream "...presets without the same preset name will be reserved"
+  // clause.
+  if (m_presetStore.contains(trimmedName)) {
+    if (!overwrite || !isUserPreset(trimmedName) || !deletePreset(trimmedName))
+      return false;
+  }
+
+  QHash<QString, QVariant> values;
+  for (auto it = overrides.constBegin(); it != overrides.constEnd(); ++it)
+    values.insert(it.key(), it.value());
+
+  // createCustomPreset validates the base preset (existence, category match,
+  // acyclic inherits chain), records it as the inherits parent, overlays
+  // `values`, and persists to the user preset tree.
+  return createCustomPreset(category, trimmedName, values, baseName.trimmed());
 }
 
 bool PresetServiceMock::detachPresetFromParent(int category, const QString &name,
