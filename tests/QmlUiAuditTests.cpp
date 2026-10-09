@@ -906,11 +906,11 @@ void QmlUiAuditTests::phase170ControlsStayOnDesignTokens()
 
   const QStringList controlFiles = {
     "CxButton.qml", "CxCheckBox.qml", "CxComboBox.qml", "CxIconButton.qml",
-    "CxNumericEdit.qml", "CxProgressBar.qml",
+    "CxMenu.qml", "CxMenuItem.qml", "CxNumericEdit.qml", "CxProgressBar.qml",
     "CxScrollView.qml", "CxSlider.qml", "CxSpinBox.qml", "CxStepButton.qml",
     "CxSwitch.qml", "CxTextArea.qml", "CxTextField.qml"
-    // CxMenu/CxMenuItem are excluded while uncommitted user WIP is in the
-    // tree; sweep them onto Theme.motion*/fontMono once that lands.
+    // CxMenu/CxMenuItem joined the strict gate once their WIP landed
+    // (9daa0cb/317536d) token-clean; keep them locked like the rest.
   };
   static const QRegularExpression bareDuration(
       QStringLiteral("duration:\\s*(?:100|120|150|180|200|220)\\b"));

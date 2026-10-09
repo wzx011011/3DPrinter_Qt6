@@ -28,7 +28,7 @@ MenuItem {
             visible: root.checked
             text: "✓"
             color: Theme.accent
-            font.pixelSize: 12
+            font.pixelSize: Theme.fontSizeMD
             font.bold: true
         }
     }
@@ -39,7 +39,7 @@ MenuItem {
             if (root.highlighted) return root.pressed ? Theme.bgPressed : Theme.bgHover
             return "transparent"
         }
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
     }
 
     contentItem: Text {
