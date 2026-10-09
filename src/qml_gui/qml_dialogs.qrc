@@ -1,0 +1,38 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>dialogs/PrintDialog.qml</file>
+        <file>dialogs/CalibrationDialog.qml</file>
+        <file>dialogs/CaliHistoryDialog.qml</file>
+        <file>dialogs/AboutDialog.qml</file>
+        <file>dialogs/ConfigWizardDialog.qml</file>
+        <file>dialogs/BedShapeDialog.qml</file>
+        <file>dialogs/EditGCodeDialog.qml</file>
+        <file>dialogs/AccessCodeInputDialog.qml</file>
+        <file>dialogs/AMSSettingsDialog.qml</file>
+        <file>dialogs/FirmwareDialog.qml</file>
+        <file>dialogs/SpeedLimitDialog.qml</file>
+        <file>dialogs/WipeTowerDialog.qml</file>
+        <file>dialogs/PrintHostDialog.qml</file>
+        <file>dialogs/PluginManagerDialog.qml</file>
+        <file>dialogs/EnableLiteModeDialog.qml</file>
+        <file>dialogs/KBShortcutsDialog.qml</file>
+        <file>dialogs/SavePresetDialog.qml</file>
+        <file>dialogs/CreatePresetsDialog.qml</file>
+        <file>dialogs/UnsavedChangesDialog.qml</file>
+        <file>dialogs/PresetDiffDialog.qml</file>
+        <file>dialogs/ConfirmDialog.qml</file>
+        <file>dialogs/SelectionSettingsDialog.qml</file>
+        <file>dialogs/ObjectLayersDialog.qml</file>
+        <file>dialogs/ExportPresetBundleDialog.qml</file>
+        <file>dialogs/FilamentGroupPopup.qml</file>
+        <file>dialogs/SettingsDialog.qml</file>
+        <file>dialogs/NetworkTestDialog.qml</file>
+        <file>dialogs/TroubleshootDialog.qml</file>
+        <file>dialogs/SelectMachineDialog.qml</file>
+        <file>dialogs/SingleChoiceDialog.qml</file>
+        <file>dialogs/RecenterDialog.qml</file>
+        <file>dialogs/FileArchiveDialog.qml</file>
+        <file>dialogs/ObjColorDialog.qml</file>
+        <file>dialogs/SysInfoDialog.qml</file>
+    </qresource>
+</RCC>

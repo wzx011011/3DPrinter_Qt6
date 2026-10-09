@@ -447,9 +447,16 @@ if(OWZX_QML_GUI)
     endif()
 
     # ── 主程序 ────────────────────────────────────────────────────────────
+    # QML resources are split per area so a QML edit only re-embeds (and
+    # recompiles) its own TU instead of one monolithic 20 MB qrc_qml.cpp.
+    # Prefixes are unchanged ("/qml", "/web/chat", "/") — same resource tree.
     qt_add_executable(OWzxSlicer
         src/qml_gui/main_qml.cpp
-        src/qml_gui/qml.qrc
+        src/qml_gui/qml_pages.qrc
+        src/qml_gui/qml_dialogs.qrc
+        src/qml_gui/qml_components.qrc
+        src/qml_gui/qml_assets.qrc
+        src/qml_gui/qml_web.qrc
     )
     target_link_libraries(OWzxSlicer PRIVATE owzx_app_core)
     target_link_libraries(OWzxSlicer PRIVATE

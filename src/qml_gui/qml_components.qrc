@@ -1,0 +1,44 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>panels/LeftSidebar.qml</file>
+        <file>panels/DockableSidebar.qml</file>
+        <file>panels/ChatSidebar.qml</file>
+        <file>components/StatusBar.qml</file>
+        <file>components/NavigatorLabels.qml</file>
+        <file>components/ErrorToast.qml</file>
+        <file>components/CommandPalette.qml</file>
+        <file>components/ErrorBanner.qml</file>
+        <file>components/CustomGcodeDialog.qml</file>
+        <file>components/MoveSlider.qml</file>
+        <file>components/PreviewLayerRail.qml</file>
+        <file>components/Legend.qml</file>
+        <file>components/VisibilityFilter.qml</file>
+        <file>components/StatsPanel.qml</file>
+        <file>components/ToolPositionTooltip.qml</file>
+        <file>components/NotificationCenter.qml</file>
+        <file>components/CollapsibleSection.qml</file>
+        <file>components/OptionRow.qml</file>
+        <file>components/GLToolbars.qml</file>
+        <file>components/PrepareContextMenus.qml</file>
+        <file>controls/CxBadge.qml</file>
+        <file>controls/CxButton.qml</file>
+        <file>controls/CxBusyIndicator.qml</file>
+        <file>controls/CxComboBox.qml</file>
+        <file>controls/CxEmptyState.qml</file>
+        <file>controls/CxTextField.qml</file>
+        <file>controls/CxSlider.qml</file>
+        <file>controls/CxCheckBox.qml</file>
+        <file>controls/CxSpinBox.qml</file>
+        <file>controls/CxIconButton.qml</file>
+        <file>controls/CxNumericEdit.qml</file>
+        <file>controls/CxStepButton.qml</file>
+        <file>controls/CxSwitch.qml</file>
+        <file>controls/CxDialog.qml</file>
+        <file>controls/CxPopup.qml</file>
+        <file>controls/CxMenu.qml</file>
+        <file>controls/CxMenuItem.qml</file>
+        <file>controls/CxScrollView.qml</file>
+        <file>controls/CxProgressBar.qml</file>
+        <file>controls/CxTextArea.qml</file>
+    </qresource>
+</RCC>

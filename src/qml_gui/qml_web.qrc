@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/web/chat">
+        <file alias="index.html">web/chat/index.html</file>
+        <file alias="chat.css">web/chat/chat.css</file>
+        <file alias="chat.js">web/chat/chat.js</file>
+        <file alias="vendor/marked.min.js">web/chat/vendor/marked.min.js</file>
+        <file alias="vendor/purify.min.js">web/chat/vendor/purify.min.js</file>
+    </qresource>
+    <qresource prefix="/">
+        <file alias="qtquickcontrols2.conf">qtquickcontrols2.conf</file>
+    </qresource>
+</RCC>

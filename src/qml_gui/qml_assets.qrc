@@ -1,139 +1,19 @@
 <RCC>
     <qresource prefix="/qml">
-        <file>qmldir</file>
-        <file>main.qml</file>
-        <file>BBLTopbar.qml</file>
-        <file>Theme.qml</file>
-        <!-- Pages -->
-        <file>pages/HomePage.qml</file>
-        <file>pages/PreparePage.qml</file>
-        <file>pages/PreviewPage.qml</file>
-        <file>pages/AssemblePage.qml</file>
-        <file>pages/Plater.qml</file>
-        <file>pages/MonitorPage.qml</file>
-        <file>pages/ProjectPage.qml</file>
-        <file>pages/CalibrationPage.qml</file>
-        <file>pages/PreferencesPage.qml</file>
-        <file>pages/MultiMachinePage.qml</file>
-        <!-- Dialogs -->
-        <file>dialogs/PrintDialog.qml</file>
-        <file>dialogs/CalibrationDialog.qml</file>
-        <file>dialogs/CaliHistoryDialog.qml</file>
-        <file>dialogs/AboutDialog.qml</file>
-        <file>dialogs/ConfigWizardDialog.qml</file>
-        <file>dialogs/BedShapeDialog.qml</file>
-        <file>dialogs/EditGCodeDialog.qml</file>
-        <file>dialogs/AccessCodeInputDialog.qml</file>
-        <file>dialogs/AMSSettingsDialog.qml</file>
-        <file>dialogs/FirmwareDialog.qml</file>
-        <file>dialogs/SpeedLimitDialog.qml</file>
-        <file>dialogs/WipeTowerDialog.qml</file>
-        <file>dialogs/PrintHostDialog.qml</file>
-        <file>dialogs/PluginManagerDialog.qml</file>
-        <file>dialogs/EnableLiteModeDialog.qml</file>
-        <file>dialogs/KBShortcutsDialog.qml</file>
-        <file>dialogs/SavePresetDialog.qml</file>
-        <file>dialogs/CreatePresetsDialog.qml</file>
-        <file>dialogs/UnsavedChangesDialog.qml</file>
-        <file>dialogs/PresetDiffDialog.qml</file>
-        <file>dialogs/ConfirmDialog.qml</file>
-        <file>dialogs/SelectionSettingsDialog.qml</file>
-        <file>dialogs/ObjectLayersDialog.qml</file>
-        <file>dialogs/ExportPresetBundleDialog.qml</file>
-        <file>dialogs/FilamentGroupPopup.qml</file>
-        <file>dialogs/SettingsDialog.qml</file>
-        <file>dialogs/NetworkTestDialog.qml</file>
-        <file>dialogs/TroubleshootDialog.qml</file>
-        <file>dialogs/SelectMachineDialog.qml</file>
-        <file>dialogs/SingleChoiceDialog.qml</file>
-        <file>dialogs/RecenterDialog.qml</file>
-        <file>dialogs/FileArchiveDialog.qml</file>
-        <file>dialogs/ObjColorDialog.qml</file>
-        <file>dialogs/SysInfoDialog.qml</file>
-        <!-- Panels -->
-        <file>panels/LeftSidebar.qml</file>
-        <file>panels/DockableSidebar.qml</file>
-        <file>panels/ChatSidebar.qml</file>
-        <!-- Components -->
-        <file>components/StatusBar.qml</file>
-        <file>components/NavigatorLabels.qml</file>
-        <file>components/ErrorToast.qml</file>
-        <file>components/CommandPalette.qml</file>
-        <file>components/ErrorBanner.qml</file>
-        <file>components/CustomGcodeDialog.qml</file>
-        <file>components/MoveSlider.qml</file>
-        <file>components/PreviewLayerRail.qml</file>
-        <file>components/Legend.qml</file>
-        <file>components/VisibilityFilter.qml</file>
-        <file>components/StatsPanel.qml</file>
-        <file>components/ToolPositionTooltip.qml</file>
-        <file>components/NotificationCenter.qml</file>
-        <!-- Phase 167 (Cmp-02): 4 orphan components removed from the qrc bundle
-             (CxPanel, CxSectionHeader, FilamentSlot, GroupNavSidebar) — they
-             had zero QML consumers per Components-UI-REVIEW. Source files kept
-             on disk for potential future use; just no longer compiled in. -->
-        <file>components/CollapsibleSection.qml</file>
-        <file>components/OptionRow.qml</file>
-        <file>components/GLToolbars.qml</file>
-        <file>components/PrepareContextMenus.qml</file>
-        <!-- Controls -->
-        <file>controls/CxBadge.qml</file>
-        <file>controls/CxButton.qml</file>
-        <file>controls/CxBusyIndicator.qml</file>
-        <file>controls/CxComboBox.qml</file>
-        <file>controls/CxEmptyState.qml</file>
-        <file>controls/CxTextField.qml</file>
-        <file>controls/CxSlider.qml</file>
-        <file>controls/CxCheckBox.qml</file>
-        <file>controls/CxSpinBox.qml</file>
-        <file>controls/CxIconButton.qml</file>
-        <file>controls/CxNumericEdit.qml</file>
-        <file>controls/CxStepButton.qml</file>
-        <file>controls/CxSwitch.qml</file>
-        <file>controls/CxDialog.qml</file>
-        <file>controls/CxPopup.qml</file>
-        <file>controls/CxMenu.qml</file>
-        <file>controls/CxMenuItem.qml</file>
-        <file>controls/CxScrollView.qml</file>
-        <file>controls/CxProgressBar.qml</file>
-        <file>controls/CxTextArea.qml</file>
-        <!-- Reference assets -->
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>
         <file>assets/monitor_ref.png</file>
-        <!-- MonitorPage: upstream empty-state illustration + HMS unread badge
-             (copied from third_party/OrcaSlicer/resources/images). -->
         <file>assets/monitor_status_empty.svg</file>
         <file>assets/icons/monitor_hms_new.svg</file>
-        <!-- RecenterDialog: upstream inline 24px hint bitmap
-             (RecenterDialog.cpp:57 ScalableBitmap "monitor_axis_home_icon"),
-             teal #009688 recolored to the brand green #18c75e. -->
         <file>assets/icons/monitor_axis_home_icon.svg</file>
-        <!-- VisibilityFilter legend eye toggles: upstream im_visible/im_hidden
-             (GCodeViewer.cpp:3317 VisibleIcon/HiddenIcon, glyphs registered in
-             ImGuiWrapper.cpp:76-77), source
-             third_party/OrcaSlicer/resources/images/,
-             teal #009688 recolored to the brand green #18c75e. -->
         <file>assets/icons/im_visible.svg</file>
         <file>assets/icons/im_hidden.svg</file>
-        <!-- TroubleshootDialog: upstream header logo
-             (TroubleshootDialog.cpp:131 ScalableBitmap
-             "OrcaSlicer_horizontal_dark", 64px),
-             teal #009789 recolored to the brand green #18c75e. -->
         <file>assets/icons/owzx_horizontal_logo.svg</file>
-        <!-- PrintHostDialog: upstream PhysicalPrinterDialog parameter-button
-             icons ("printer_host_browser" Browse, "printer_host_test" Test,
-             "monitor_signal_strong" Refresh/CA Browse,
-             PhysicalPrinterDialog.cpp:153/211/268/291/351),
-             teal #009688 recolored to the brand green #18c75e. -->
         <file>assets/icons/printer_host_browser.svg</file>
         <file>assets/icons/printer_host_test.svg</file>
         <file>assets/icons/monitor_signal_strong.svg</file>
         <file>assets/icons/pencil-edit.svg</file>
         <file>assets/icons/sort-arrows.svg</file>
-        <!-- CreatePresetsDialog upstream bitmaps (teal values rebranded
-             #18c75e per OWzx accent, source
-             third_party/OrcaSlicer/resources/images/) -->
         <file>assets/icons/step_1.svg</file>
         <file>assets/icons/step_2_ready.svg</file>
         <file>assets/icons/create_success.svg</file>
@@ -159,7 +39,6 @@
         <file>assets/icons/minus.svg</file>
         <file>assets/icons/minus-circle.svg</file>
         <file>assets/icons/printer.svg</file>
-        <!-- PresetDiffDialog (upstream UnsavedChangesDialog diff view) -->
         <file>assets/icons/preset_cog.svg</file>
         <file>assets/icons/preset_equal.svg</file>
         <file>assets/icons/preset_node_dot.svg</file>
@@ -167,9 +46,6 @@
         <file>assets/icons/preset_printer.svg</file>
         <file>assets/icons/preset_question.svg</file>
         <file>assets/icons/preset_spool.svg</file>
-        <!-- ConfigWizardDialog: upstream ConfigWizardIndex bullets + brand logo
-             (copied from third_party/OrcaSlicer/resources/images), bullet_blue
-             and the logo's teal recolored to the brand green #18c75e. -->
         <file>assets/icons/bullet_black.png</file>
         <file>assets/icons/bullet_blue.png</file>
         <file>assets/icons/bullet_white.png</file>
@@ -186,10 +62,6 @@
         <file>assets/icons/trash.svg</file>
         <file>assets/icons/plus.svg</file>
         <file>assets/icons/layout-grid-plus.svg</file>
-        <!-- Upstream resource intake: icons copied from
-             OrcaSlicer/resources/images/ with brand recolor
-             (#009688 / #00675B / #26A69A / #008172 -> #18c75e); fonts
-             copied from OrcaSlicer/resources/fonts/ as-is. -->
         <file>assets/icons/topbar_file.svg</file>
         <file>assets/icons/calib_sf.svg</file>
         <file>assets/icons/tab_home_active.svg</file>
@@ -306,9 +178,6 @@
         <file>assets/icons/param_wall_surface.svg</file>
         <file>assets/icons/param_z_contouring.svg</file>
         <file>assets/icons/param_zigzag.svg</file>
-        <!-- vp-3 (TOOLICONS): dedicated viewport toolbar/gizmo icons from
-             OrcaSlicer/resources/images/ (GLCanvas3D.cpp:6862-6990 main
-             toolbar set, GLGizmosManager.cpp:206-224 gizmo toolbar icons). -->
         <file>assets/icons/toolbar_open.svg</file>
         <file>assets/icons/toolbar_add_plate.svg</file>
         <file>assets/icons/toolbar_orient.svg</file>
@@ -330,10 +199,6 @@
         <file>assets/icons/split_parts.svg</file>
         <file>assets/icons/reduce_triangles.svg</file>
         <file>assets/icons/mmu_segmentation.svg</file>
-        <!-- EditGCodeDialog: upstream placeholder-tree node icons from
-             OrcaSlicer/resources/images/ (EditGCodeDialog.cpp:161-309 group /
-             :430-435 ParamsInfo / :75 add_copies / :54 wxSearchCtrl),
-             teal #009688 recolored to the brand green #18c75e. -->
         <file>assets/icons/custom-gcode_slicing-state_global.svg</file>
         <file>assets/icons/lock_closed.svg</file>
         <file>assets/icons/lock_open.svg</file>
@@ -353,9 +218,6 @@
         <file>assets/icons/custom-gcode_vector-index.svg</file>
         <file>assets/icons/add_copies.svg</file>
         <file>assets/icons/editgcode_search.svg</file>
-        <!-- vp-2 (PLATEICONS): per-plate ground icon column + rename pencil
-             from OrcaSlicer/resources/images/ (PartPlate.cpp:1126-1230
-             render_icons, calc_vertex_for_plate_name_edit_icon). -->
         <file>assets/icons/plate_close.svg</file>
         <file>assets/icons/plate_orient.svg</file>
         <file>assets/icons/plate_arrange.svg</file>
@@ -364,11 +226,6 @@
         <file>assets/icons/plate_settings.svg</file>
         <file>assets/icons/plate_move_front.svg</file>
         <file>assets/icons/plate_name_edit.svg</file>
-        <!-- PrintDialog (send-to-printer, upstream SendToPrinter.cpp):
-             print-time/print-weight/completed/refresh_printer copied from
-             OrcaSlicer/resources/images/ with teal #009688 recolored to the
-             brand green #18c75e; rename_edit + ams_rfid_1..4 (AnimaIcon
-             frames) copied as-is (no teal). -->
         <file>assets/icons/print-time.svg</file>
         <file>assets/icons/print-weight.svg</file>
         <file>assets/icons/completed.svg</file>
@@ -378,31 +235,14 @@
         <file>assets/icons/ams_rfid_2.svg</file>
         <file>assets/icons/ams_rfid_3.svg</file>
         <file>assets/icons/ams_rfid_4.svg</file>
-        <!-- SelectMachineDialog (device select, upstream SelectMachine.cpp):
-             question tip, Auto Refill mark, bed-state preview and the combo
-             fallback printer preview from OrcaSlicer/resources/images/
-             (teal #009688 recolored to the brand green #18c75e; the two PNGs
-             carry no teal and are copied as-is). -->
         <file>assets/icons/icon_qusetion.svg</file>
         <file>assets/icons/automatic_material_renewal.svg</file>
         <file>assets/icons/bed_cool.png</file>
         <file>assets/icons/printer_preview_BL-P001.png</file>
-        <!-- Notification banner glyphs copied from upstream
-             OrcaSlicer/resources/images/ (notification_close_dark.svg,
-             notification_close_hover_dark.svg, notification_minimalize_dark.svg,
-             notification_minimalize_hover_dark.svg). The upstream teal #009688
-             on the hover variants is rebranded to the OWzx accent #18c75e.
-             Consumed by ErrorBanner.qml (close + minimize glyph buttons). -->
         <file>assets/icons/notification_close_dark.svg</file>
         <file>assets/icons/notification_close_hover_dark.svg</file>
         <file>assets/icons/notification_minimalize_dark.svg</file>
         <file>assets/icons/notification_minimalize_hover_dark.svg</file>
-        <!-- Light-variant notification glyphs copied from upstream
-             OrcaSlicer/resources/images/ for the stacked toast surface
-             (ErrorToast.qml regular close/minimize buttons + the block
-             notification error icon / close of bbl_render_block_notification).
-             The upstream teal #009688 is rebranded to the OWzx accent
-             #18c75e; the other files carry no teal and are copied as-is. -->
         <file>assets/icons/notification_close.svg</file>
         <file>assets/icons/notification_close_hover.svg</file>
         <file>assets/icons/notification_minimalize.svg</file>
@@ -412,12 +252,6 @@
         <file>assets/icons/block_notification_close_hover.svg</file>
         <file>assets/fonts/HarmonyOS_Sans_SC_Regular.ttf</file>
         <file>assets/fonts/HarmonyOS_Sans_SC_Bold.ttf</file>
-        <!-- Phase 197: dedicated calibration tower models bundled from
-             OrcaSlicer/resources/calib/. Consumed by
-             CalibrationServiceMock::towerModelQrcPathForMode via the
-             qrc:/qml/assets/calib/... paths. Loaded onto the current plate
-             before slicing the four tower modes (TempTower/Vol_speed/VFA/
-             Retraction), mirroring upstream Plater::calib_* add_model(). -->
         <file>assets/calib/temperature_tower.stl</file>
         <file>assets/calib/VFA.stl</file>
         <file>assets/calib/retraction_tower.stl</file>
@@ -425,25 +259,6 @@
         <file>assets/calib/pressure_advance_test.stl</file>
         <file>assets/calib/flowrate-test-pass1.3mf</file>
         <file>assets/calib/flowrate-test-pass2.3mf</file>
-        <!-- Phase 241 (PAGE-03): PA Tower model (upstream
-             Plater::_calib_pa_tower adds
-             resources/calib/pressure_advance/tower_with_seam.stl,
-             Plater.cpp:9585). -->
         <file>assets/calib/tower_with_seam.stl</file>
-        <!-- Data files -->
-        <file>data/hints.json</file>
-    </qresource>
-    <!-- AI chat web page (WebEngine + QWebChannel bridge, docs/ai-control.md).
-         Local trusted content: marked (MIT) + DOMPurify (Apache-2.0) vendored. -->
-    <qresource prefix="/web/chat">
-        <file alias="index.html">web/chat/index.html</file>
-        <file alias="chat.css">web/chat/chat.css</file>
-        <file alias="chat.js">web/chat/chat.js</file>
-        <file alias="vendor/marked.min.js">web/chat/vendor/marked.min.js</file>
-        <file alias="vendor/purify.min.js">web/chat/vendor/purify.min.js</file>
-    </qresource>
-    <!-- Qt Quick Controls 2 style config must be at root prefix -->
-    <qresource prefix="/">
-        <file alias="qtquickcontrols2.conf">qtquickcontrols2.conf</file>
     </qresource>
 </RCC>
