@@ -130,12 +130,6 @@ Item {
         onRequestConfirmDeletePlate: {
             root.confirmDeletePlateAt(root.editorVm ? root.editorVm.contextPlateIndex : -1)
         }
-        onRequestRenameObject: {
-            if (!root.editorVm) return
-            renameDialog.currentObjIndex = root.editorVm.selectedObjectIndex
-            renameDialog.currentName = root.editorVm.objectName(root.editorVm.selectedObjectIndex)
-            renameDialog.open()
-        }
         onRequestActivateGizmo: function(mode) { root.setGizmoIfAvailable(mode) }
         onRequestObjectLayers: objectLayersDialog.open()
         onRequestRenamePlate: {
@@ -143,13 +137,6 @@ Item {
             var dialog = plateRenameDialog.createObject(root)
             dialog.plateIndex = root.editorVm.contextPlateIndex
             dialog.currentName = root.editorVm.plateName(root.editorVm.contextPlateIndex)
-            dialog.open()
-        }
-        onRequestPlateSettings: {
-            if (!root.editorVm || root.editorVm.contextPlateIndex < 0) return
-            var dialog = plateSettingsDialogComp.createObject(root)
-            dialog.plateIndex = root.editorVm.contextPlateIndex
-            dialog.plateName = root.editorVm.plateName(root.editorVm.contextPlateIndex)
             dialog.open()
         }
         onRequestExport: function(separateFiles, drcFormat) {
@@ -515,63 +502,9 @@ Item {
         }
     }
 
-    // Rename dialog (对齐上游 Plater::rename_object)
-    Dialog {
-        id: renameDialog
-        property int currentObjIndex: -1
-        property string currentName: ""
-        title: qsTr("重命名对象")
-        modal: true
-        anchors.centerIn: parent
-        width: 300
-        padding: 16
-
-        ColumnLayout {
-            anchors.fill: parent
-            spacing: 12
-
-            Label { text: qsTr("输入新名称:"); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD }
-
-            CxTextField {
-                id: renameInput
-                Layout.fillWidth: true
-                text: renameDialog.currentName
-                placeholderText: qsTr("对象名称")
-                onAccepted: {
-                    if (root.editorVm && renameDialog.currentObjIndex >= 0) {
-                        root.editorVm.renameObject(renameDialog.currentObjIndex, renameInput.text)
-                        renameDialog.close()
-                    }
-                }
-                Component.onCompleted: renameInput.forceActiveFocus()
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                Rectangle {
-                    Layout.fillWidth: true; height: 28; radius: 4
-                    color: Theme.bgPressed
-                    Label { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: renameDialog.close() }
-                }
-                Rectangle {
-                    Layout.fillWidth: true; height: 28; radius: 4
-                    color: Theme.accent
-                    Label { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (root.editorVm && renameDialog.currentObjIndex >= 0) {
-                                root.editorVm.renameObject(renameDialog.currentObjIndex, renameInput.text)
-                                renameDialog.close()
-                            }
-                        } }
-                }
-            }
-        }
-    }
+    // Rename dialog removed with the object-menu "Rename" entry: the upstream
+    // FFF viewport object menu carries no Rename item
+    // (GUI_Factories.cpp:1463-1524), so the dialog had no live trigger left.
 
     Component {
         id: plateRenameDialog

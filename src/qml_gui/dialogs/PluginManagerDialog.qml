@@ -374,30 +374,34 @@ CxDialog {
             pluginService.setPluginEnabled(row.idx, !row.isEnabled)
     }
 
-    // Context-menu action policy (PluginsDialog.cpp:302-314
-    // evaluate_action_policy).
+    // Context-menu action policy (PluginsDialog.cpp:295-316
+    // evaluate_action_policy). Upstream registers the six labels as raw
+    // English literals without _L(), so every locale renders them
+    // untranslated (PluginsDialog.cpp:302/304/307/311/313/314, verbatim in
+    // the web frontend index.js:1545 button.textContent). The labels here
+    // wrap the same upstream source strings.
     function contextActionsFor(row) {
         const acts = []
         const cloud = row.source === "mine" || row.source === "subscribed"
                 || row.source === "orphaned"
         if (row.source === "subscribed") {
-            acts.push({ id: "unsubscribe_plugin", label: qsTr("取消订阅"),
+            acts.push({ id: "unsubscribe_plugin", label: qsTr("Unsubscribe"),
                         danger: true, enabled: true })
         } else if (row.isInstalled) {
-            acts.push({ id: "delete_plugin", label: qsTr("删除插件包"),
+            acts.push({ id: "delete_plugin", label: qsTr("Delete"),
                         danger: true, enabled: true })
         }
-        acts.push({ id: "open_folder", label: qsTr("在文件夹中显示"),
+        acts.push({ id: "open_folder", label: qsTr("Show in folder"),
                     danger: false, enabled: row.isInstalled })
         if (row.source !== "orphaned") {
             if (cloud) {
-                acts.push({ id: "reinstall_plugin", label: qsTr("重新安装"),
+                acts.push({ id: "reinstall_plugin", label: qsTr("Reinstall"),
                             danger: false, enabled: true })
             } else {
-                acts.push({ id: "reload_plugin", label: qsTr("重新加载"),
+                acts.push({ id: "reload_plugin", label: qsTr("Reload"),
                             danger: false, enabled: true })
                 acts.push({ id: "clear_cache_reload_plugin",
-                            label: qsTr("清除缓存并重新加载"),
+                            label: qsTr("Delete cache and reload"),
                             danger: false, enabled: true })
             }
         }
@@ -421,9 +425,44 @@ CxDialog {
         ctxMenu.close()
         if (!pluginService || _ctxIdx < 0)
             return
-        // The service confirms through statusMessage, which drives the
-        // status bar (upstream plugin_menu_action + status_message).
+        // Destructive actions gate on a YES/NO confirm first (upstream
+        // delete_local_plugin / unsubscribe_cloud_plugin wxMessageBox
+        // wxYES_NO|wxNO_DEFAULT|wxICON_WARNING, PluginsDialog.cpp:1109-1118
+        // and 1146-1152); every other action runs straight through
+        // plugin_menu_action.
+        if (actionId === "delete_plugin" || actionId === "unsubscribe_plugin") {
+            openPluginActionConfirm(actionId)
+            return
+        }
         pluginService.runPluginAction(_ctxIdx, actionId)
+    }
+
+    // Delete / unsubscribe confirmation texts (upstream wxMessageBox
+    // message formats, PluginsDialog.cpp:1109-1115 and 1146-1152; owned
+    // cloud rows delete local files only and stay reinstallable in the
+    // cloud, PluginsDialog.cpp:1110-1112).
+    function openPluginActionConfirm(actionId) {
+        const row = pluginService.pluginAt(_ctxIdx)
+        const name = String(row.name || "")
+        if (actionId === "unsubscribe_plugin") {
+            pluginActionConfirm.dialogTitle = qsTr("Unsubscribe")
+            pluginActionConfirm.message =
+                qsTr("Unsubscribe plugin \"%1\"?\n\nThis will stop tracking the plugin and delete any local plugin files.").arg(name)
+        } else {
+            pluginActionConfirm.dialogTitle = qsTr("Delete Plugin")
+            if (row.source === "mine" || row.source === "subscribed"
+                    || row.source === "orphaned")
+                pluginActionConfirm.message =
+                    qsTr("Delete plugin \"%1\"?\n\nThis removes the local plugin files. The plugin stays in the cloud and can be reinstalled.").arg(name)
+            else
+                pluginActionConfirm.message =
+                    qsTr("Delete plugin \"%1\"?\n\nThis permanently removes the plugin folder.").arg(name)
+        }
+        pluginActionConfirm.confirmText = qsTr("Yes")
+        pluginActionConfirm.cancelText = qsTr("No")
+        pluginActionConfirm.openWithAction(function() {
+            pluginService.runPluginAction(_ctxIdx, actionId)
+        })
     }
 
     // ── Splitter (index.js InitPaneSplitter) ───────────────────────────
@@ -2591,6 +2630,11 @@ CxDialog {
     Popup {
         id: ctxMenu
         parent: root.contentItem
+        // focus makes the popup take keyboard focus while open so
+        // CloseOnEscape actually receives Esc (upstream hides the menu on
+        // a document-level Escape keydown, index.js:101-106); on close the
+        // focus returns to the dialog.
+        focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         width: Math.max(190, ctxCol.implicitWidth + 8)
         height: ctxCol.implicitHeight + 8
@@ -2642,6 +2686,18 @@ CxDialog {
                 }
             }
         }
+    }
+
+    // Destructive context-action confirm (upstream delete_local_plugin /
+    // unsubscribe_cloud_plugin wxMessageBox wxYES_NO|wxNO_DEFAULT|
+    // wxICON_WARNING, PluginsDialog.cpp:1106-1172). Title, message and the
+    // Yes/No button pair are set per invocation by
+    // openPluginActionConfirm().
+    ConfirmDialog {
+        id: pluginActionConfirm
+        destructive: true
+        width: 440
+        height: 240
     }
 
     // Install dropdown menu: main-color panel, white items

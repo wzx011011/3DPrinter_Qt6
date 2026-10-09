@@ -178,7 +178,7 @@ Column {
             Layout.preferredWidth: root.colUsageWeight
             Layout.preferredHeight: 1
         }
-        // ORCA hides the Display header: 16px dummy placeholder only.
+        // ORCA hides the Display header: 16px dummy spacer only.
         Item {
             Layout.preferredWidth: root.eyeCell
             Layout.preferredHeight: 1
