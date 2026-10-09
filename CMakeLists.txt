@@ -36,11 +36,12 @@ option(BUILD_CLI "Build headless CLI executable (owzx-cli)" OFF)
 option(OWZX_RENDER_BENCH "Build experimental Qt RHI render benchmark" OFF)
 
 # ── Build speed (2026-09-05) ─────────────────────────────────────────────
-# The prebuilt tbb12.lib carries /GL, which forces EVERY link (main exe and
-# all 16 test executables) to restart under /LTCG and run full-program code
-# generation SINGLE-THREADED by default. /CGTHREADS parallelizes that codegen
-# across the machine's cores — on 16 cores this is the single largest link
-# time win available without touching the prebuilt dependencies.
+# HISTORICAL NOTE (corrected 2026-10-08): the /GL premise below no longer
+# holds. A dumpbin sweep over all 122 deps libs (tbb12 included, deps tree
+# rebuilt 2026-02-28) and build.ninja itself found zero /GL and zero /LTCG —
+# no link runs LTCG today, so FASTLINK would be honored if a PDB were wanted.
+# /CGTHREADS stays: harmless without LTCG, and guards against a future /GL
+# regression silently serializing links again.
 if(MSVC)
     cmake_host_system_information(RESULT OWZX_CPU_COUNT QUERY NUMBER_OF_LOGICAL_CORES)
     if(NOT OWZX_CPU_COUNT GREATER 1)
@@ -49,10 +50,8 @@ if(MSVC)
     add_link_options("/CGTHREADS:${OWZX_CPU_COUNT}")
 endif()
 # Full PDBs cost ~1.1 GB per link AND a large slice of link time writing them
-# to a nearly-full disk; /DEBUG:FASTLINK is silently ignored under the /LTCG
-# restart, so the only effective knob is not emitting a PDB at all. Default
-# OFF — the QtTest gates don't symbolicate crash dumps; turn ON when a
-# symbolicated crash dump is actually needed.
+# to a nearly-full disk. Default OFF — the QtTest gates don't symbolicate
+# crash dumps; turn ON when a symbolicated crash dump is actually needed.
 option(OWZX_ENABLE_PDB "Emit a full PDB for OWzxSlicer.exe (slow link, ~1.1 GB disk)" OFF)
 # OWZX-ASAN (diagnostics): instrument owzx_app_core + OWzxSlicer with
 # AddressSanitizer so heap-corruption reports land at the culprit access
@@ -484,9 +483,11 @@ if(OWZX_QML_GUI)
             src/qml_gui/Renderer/shaders/model_lit.frag
     )
     if(MSVC)
-        # G-12 followup (2026-09-05): /DEBUG:FASTLINK is ignored under the
-        # /LTCG restart (tbb12.lib is /GL), so the full ~1.1 GB PDB was being
-        # written on every link. Gate the PDB behind OWZX_ENABLE_PDB instead.
+        # G-12 followup (2026-09-05), premise corrected 2026-10-08: the deps
+        # tree no longer carries /GL and no link runs /LTCG, so /DEBUG:FASTLINK
+        # WOULD be honored today. The PDB stays gated behind OWZX_ENABLE_PDB
+        # (disk + link time); flip it on, or use /DEBUG:FASTLINK here, when a
+        # symbolicated dump is needed.
         if(OWZX_ENABLE_PDB)
             target_compile_options(OWzxSlicer PRIVATE /Zi)
             target_link_options(OWzxSlicer PRIVATE /DEBUG:FULL)
