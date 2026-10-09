@@ -1,0 +1,27 @@
+diff --git a/src/libslic3r/Emboss.cpp b/src/libslic3r/Emboss.cpp
+index 34d9a93590..8458c4d838 100644
+--- a/src/libslic3r/Emboss.cpp
++++ b/src/libslic3r/Emboss.cpp
+@@ -875,7 +875,8 @@ std::optional<std::wstring> Emboss::get_font_path(const std::wstring &font_face_
+         // Found a match
+         if (_wcsnicmp(font_face_name.c_str(), wsValueName.c_str(), font_face_name.length()) == 0) {
+ 
+-            wsFontFile.assign((LPWSTR)valueData, valueDataSize);
++            // owzx-fix (SIDECAR-RACE): same byte-vs-wchar unit fix.
++            wsFontFile.assign((LPWSTR)valueData, valueDataSize / sizeof(wchar_t));
+             break;
+         }
+     }while (result != ERROR_NO_MORE_ITEMS);
+@@ -950,7 +951,11 @@ EmbossStyles Emboss::get_font_list_by_register() {
+         valueIndex++;
+         if (result != ERROR_SUCCESS || valueType != REG_SZ) continue;
+         std::wstring font_name_w(font_name, font_name_size);
+-        std::wstring file_name_w((LPWSTR) fileTTF_name, fileTTF_name_size);
++        // owzx-fix (SIDECAR-RACE): RegEnumValue returns the data size in
++        // BYTES; the wstring ctor counts wchar_t -- passing the byte count
++        // over-read the registry buffer by 2x (heap corruption AV in
++        // memcpy during font list build).
++        std::wstring file_name_w((LPWSTR) fileTTF_name, fileTTF_name_size / sizeof(wchar_t));
+         std::wstring path_w = font_path + file_name_w;
+ 
+         // filtrate .fon from lists
