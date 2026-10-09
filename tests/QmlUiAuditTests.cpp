@@ -8930,7 +8930,7 @@ void QmlUiAuditTests::v52DialogConsistencyRepaired()
 
   // SavePresetDialog was EN-source; Phase 166 also swept it to ZH.
   const QString savePreset = readSource(QStringLiteral("src/qml_gui/dialogs/SavePresetDialog.qml"));
-  QVERIFY2(savePreset.contains(QStringLiteral("qsTr(\"另存为预设\")")),
+  QVERIFY2(savePreset.contains(QStringLiteral("qsTr(\"保存预设\")")),
            "Dlg-02: SavePresetDialog title must be ZH source (was \"Save Preset\")");
 }
 
