@@ -3700,7 +3700,20 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   if (!ensureBuffer(m_cameraUniformBuffer, 256, m_cameraUniformBufferBytes, QRhiBuffer::UniformBuffer))
     return false;
 
-  const QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
+  // Empirical (runtime-verified 2026-10-09, D3D11 + QQuickRhiItem): the item
+  // compositor presents the offscreen color texture with a vertical flip
+  // relative to raw NDC. D3D11's clipSpaceCorrMatrix is a Z-only remap
+  // ("Y is already good", qrhid3d11.cpp:601-611 -- probe-confirmed on this
+  // Qt 6.10.2 build), yet a scene rendered through it alone came out upside
+  // down (origin axes at the near bed corner, Z arrow pointing down). Fold
+  // the compensating clip-Y flip in here so the presented image matches the
+  // GL-style camera convention the pick/anchor math already assumes.
+  QMatrix4x4 corrected = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
+  {
+    QMatrix4x4 flipY;
+    flipY.scale(1.0f, -1.0f, 1.0f);
+    corrected = flipY * corrected;
+  }
 
   // Phase 209 (MIT-02 / Seam B): pack MVP + gizmoCenter + gizmoScale into a
   // single 80-byte struct and issue ONE updateDynamicBuffer. Previously this
@@ -5049,13 +5062,19 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
   // through the inverse scene MVP and draw through the verified translucent
   // scene pipeline (m_srb camera uniform). This mirrors how upstream ImGui
   // feeds ImGuizmo positions through the same canvas the scene uses.
-  const QMatrix4x4 full = rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
+  // The matrix MUST match the render-side camera UBO pack exactly (including
+  // the QQuickRhiItem presentation flip folded into uploadCameraUniform), so
+  // the unproject -> re-render round trip lands the cube at the requested
+  // pixels with its world-anchored face orientation.
+  static const QMatrix4x4 kPresentationFlipY = QMatrix4x4(1.0f, 0.0f, 0.0f, 0.0f,
+                                                          0.0f, -1.0f, 0.0f, 0.0f,
+                                                          0.0f, 0.0f, 1.0f, 0.0f,
+                                                          0.0f, 0.0f, 0.0f, 1.0f);
+  const QMatrix4x4 full = kPresentationFlipY * rhi()->clipSpaceCorrMatrix() * m_cameraMvp;
   const QMatrix4x4 inv = full.inverted();
-  // NOTE: the clip Y here uses the D3D-style top-down convention (py=0 ->
-  // +1) WITHOUT a manual flip -- inv(full) already contains
-  // clipSpaceCorrMatrix, and the swapchain adds one more presentation flip
-  // that cancels it; flipping here as well mirrors the cube to the top edge
-  // (observed at runtime).
+  // Pixel -> clip: the unproject/re-render round trip is exactly
+  // self-consistent under whatever row convention this uses (the same `full`
+  // is bound for the draw), so the cube always lands on the requested rect.
   const auto toWorld = [&inv, &px](const QPointF &p) {
     QVector4D clip(float(p.x()) / float(std::max(1, px.width())) * 2.0f - 1.0f,
                    float(p.y()) / float(std::max(1, px.height())) * 2.0f - 1.0f,

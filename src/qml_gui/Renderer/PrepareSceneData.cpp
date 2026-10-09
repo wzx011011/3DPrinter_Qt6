@@ -1184,7 +1184,11 @@ void PrepareSceneData::appendArrow(const float origin[3], const float dir[3],
       qx = z; qy = y; qz = -x;
     } else {
       // upstream +Y arrow (rotX -90deg): (x,y,z) -> (x, z, -y) -> qt
-      qx = x; qy = -y; qz = -z;
+      // qt remap (a,b,c)->(a,c,b) puts the arrow length (upstream z) on
+      // +Z, away from the viewer (Bed3D.cpp:236 y axis lands on the bed
+      // depth axis). The qz sign previously inverted the arrow toward
+      // the camera -- runtime-verified 2026-10-09.
+      qx = x; qy = -y; qz = z;
     }
     m_bedAxesVertices.append(ModelVertex{origin[0] + qx, origin[1] + qy,
                                          origin[2] + qz, r, g, b, 1.0f});
