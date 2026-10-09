@@ -182,6 +182,17 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QVariantList toolActualSpeedProfile READ toolActualSpeedProfile NOTIFY stateChanged)
   Q_PROPERTY(double toolActualSpeedYMin READ toolActualSpeedYMin NOTIFY stateChanged)
   Q_PROPERTY(double toolActualSpeedYMax READ toolActualSpeedYMax NOTIFY stateChanged)
+  /// Sequential-print draw mode aligned with the upstream IMSlider
+  /// dmSequentialFffPrint: GUI_Preview.cpp:582-583 hands the current plate's
+  /// PrintSequence::ByObject state to IMSlider::SetDrawMode. Gates the rail
+  /// add-menu insertion items (IMSlider.cpp:1492) and the color-change chain.
+  Q_PROPERTY(bool sequentialPrint READ sequentialPrint NOTIFY stateChanged)
+  /// Upstream IMSlider m_can_change_color composite: true unless a
+  /// multi-filament profile's plate uses a second (non-support) extruder
+  /// (GUI_Preview.cpp:462-506), AND not spiral vase (IMSlider.cpp:340), AND
+  /// not the sequential draw mode (IMSlider.cpp:324). Gates the rail's
+  /// Change Filament submenu (IMSlider.cpp:1519-1523, :1571-1575).
+  Q_PROPERTY(bool canChangeColor READ canChangeColor NOTIFY stateChanged)
   Q_PROPERTY(QVariantList tickMarks READ tickMarks NOTIFY tickMarksChanged)
   Q_PROPERTY(int tickMarkCount READ tickMarkCount NOTIFY tickMarksChanged)
   /// Per-role extrusion visibility (render-side filter, no repack).
@@ -291,6 +302,10 @@ public:
   /// "Change Filament" submenu, upstream m_extruder_colors.size(),
   /// IMSlider.cpp:1374).
   Q_INVOKABLE int configuredExtruderCount() const;
+  /// Sequential-print draw mode (see the Q_PROPERTY block).
+  bool sequentialPrint() const;
+  /// Composite color-change permission (see the Q_PROPERTY block).
+  bool canChangeColor() const;
   /// Phase 238 (PREV-04): the default color-change palette shown in the
   /// ColorChange picker (upstream GCodeProcessor Default_Colors,
   /// GCodeProcessor.cpp:2305-2312).

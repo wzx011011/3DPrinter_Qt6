@@ -927,6 +927,16 @@ public:
   Q_INVOKABLE bool autoOrientContextPlate();
   /// 获取选中 volume 的类型枚举（对齐上游 ModelVolumeType）
   Q_INVOKABLE int getSelectedVolumeType() const;
+  /// True when exactly one object is selected. The Qt6 viewport selection is
+  /// object-level (always covers all instances), so this mirrors the upstream
+  /// Selection::is_single_full_object gate used for the dynamic "Set as
+  /// Individual Objects" label (GUI_Factories.cpp:891-892).
+  Q_INVOKABLE bool selectionIsSingleFullObject() const;
+  /// True when the selection context carries a PARAMETER_MODIFIER volume.
+  /// Drives the Change Filament "Default" row, which upstream only appends
+  /// when a modifier is among the selected items (GUI_Factories.cpp:2271-2278,
+  /// loop start :2280).
+  Q_INVOKABLE bool selectionHasModifierVolume() const;
   /// 添加原始几何体到当前平板（对齐上游 create_mesh + add_volume）
   Q_INVOKABLE bool addPrimitiveToPlate(int type);
   /// 删除指定耗材槽位（对齐上游 filament slot management）
@@ -1220,6 +1230,14 @@ public:
   Q_INVOKABLE bool movePlate(int oldIndex, int newIndex);
   Q_INVOKABLE bool setPlatePrintable(int plateIndex, bool printable);
   Q_INVOKABLE bool isPlatePrintable(int plateIndex) const;
+  /// Object count of the context plate. The upstream plate menu enables
+  /// Select All / Delete All / Arrange / Reload All / Auto Rotate only on a
+  /// non-empty plate (GUI_Factories.cpp:1714-1717, :1732-1735, :1746-1748,
+  /// :1760, :1771-1773).
+  Q_INVOKABLE int contextPlateObjectCount() const;
+  /// True when the project holds at least one object; gates the upstream
+  /// "Select All Plates" entry (GUI_Factories.cpp:1721-1727).
+  Q_INVOKABLE bool hasAnyModelObjects() const;
   // Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup.
   // Delegates to ProjectServiceMock::setPlateFilamentMapMode, which reuses the
   // existing plate-write plumbing and is guarded by the R-02 / FP-04 clamp at

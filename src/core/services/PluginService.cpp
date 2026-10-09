@@ -1,9 +1,12 @@
 #include "PluginService.h"
 
+#include <QDesktopServices>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QSettings>
+#include <QUrl>
 
 // Phase 202 (v5.6) -- PluginService implementation.
 //
@@ -609,24 +612,58 @@ QVariantMap PluginService::runPluginAction(int idx, const QString &action)
   // registry row this report describes.
   const QString pluginName = m_plugins[idx].name;
   if (action == QLatin1String("delete_plugin")) {
+    // The QML layer shows the wxMessageBox-equivalent YES/NO confirm
+    // before dispatching (upstream delete_local_plugin,
+    // PluginsDialog.cpp:1109-1118); uninstallPlugin() carries the
+    // statusMessage.
     uninstallPlugin(idx);
     return report(tr("已删除插件包 %1").arg(pluginName), QStringLiteral("success"));
   }
   if (action == QLatin1String("unsubscribe_plugin")) {
+    // Same confirm gating on the QML side (upstream
+    // unsubscribe_cloud_plugin, PluginsDialog.cpp:1146-1152).
     uninstallPlugin(idx);
     return report(tr("已取消订阅 %1").arg(pluginName), QStringLiteral("success"));
   }
   if (action == QLatin1String("open_folder")) {
-    // The reserved install path is never written by the mock (no archive
-    // extractor); surface the path the real build would open.
-    return report(tr("插件目录: %1").arg(m_plugins[idx].localPath),
-                  QStringLiteral("info"));
+    // Upstream open_plugin_folder warns when the plugin root cannot be
+    // determined and otherwise opens it through desktop_open_any_folder
+    // (PluginsDialog.cpp:1061-1071). The mock never writes the reserved
+    // install path (no archive extractor), so an absent folder reports the
+    // same warn instead of silently doing nothing.
+    const QFileInfo folderInfo(m_plugins[idx].localPath);
+    if (m_plugins[idx].localPath.isEmpty() || !folderInfo.isDir()) {
+      emit statusMessage(tr("无法确定插件目录"), QStringLiteral("warn"));
+      return report(tr("无法确定插件目录"), QStringLiteral("warn"));
+    }
+    QDesktopServices::openUrl(QUrl::fromLocalFile(folderInfo.absoluteFilePath()));
+    const QString opened =
+        tr("已打开插件目录 %1").arg(folderInfo.absoluteFilePath());
+    emit statusMessage(opened, QStringLiteral("info"));
+    return report(opened, QStringLiteral("info"));
   }
-  if (action == QLatin1String("reinstall_plugin")
-      || action == QLatin1String("reload_plugin")
+  if (action == QLatin1String("reinstall_plugin")) {
+    // Upstream dispatches reinstall only for cloud rows and silently
+    // ignores it on local rows (PluginsDialog.cpp:786-789; the policy
+    // layer never offers it there either, :309-315).
+    if (m_plugins[idx].source != QLatin1String("mine")
+        && m_plugins[idx].source != QLatin1String("subscribed")
+        && m_plugins[idx].source != QLatin1String("orphaned"))
+      return report(QString(), QString());
+    // Mock reinstall: re-seat the installed state (a real re-download is
+    // the same documented TODO as installPlugin, which carries the
+    // statusMessage).
+    installPlugin(idx);
+    return report(tr("已重新安装 %1").arg(pluginName), QStringLiteral("success"));
+  }
+  if (action == QLatin1String("reload_plugin")
       || action == QLatin1String("clear_cache_reload_plugin")) {
     // Mock reload: no loader to poke, the state round-trips unchanged.
-    return report(tr("已重新加载 %1").arg(pluginName), QStringLiteral("success"));
+    // Report through statusMessage so the dialog status bar actually
+    // receives it (the return value alone was never consumed).
+    const QString reloaded = tr("已重新加载 %1").arg(pluginName);
+    emit statusMessage(reloaded, QStringLiteral("success"));
+    return report(reloaded, QStringLiteral("success"));
   }
   return report(tr("未知操作: %1").arg(action), QStringLiteral("error"));
 }

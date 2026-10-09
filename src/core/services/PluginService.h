@@ -102,7 +102,15 @@ public:
   /// Run one context-menu action on one row. Action ids mirror
   /// PluginsDialog.cpp evaluate_action_policy: delete_plugin,
   /// unsubscribe_plugin, open_folder, reload_plugin, reinstall_plugin,
-  /// clear_cache_reload_plugin. Returns {message, level} for the status bar.
+  /// clear_cache_reload_plugin. Returns {message, level} for the status
+  /// bar; every user-visible branch also emits statusMessage() so the bar
+  /// is reachable without consuming the return value. The destructive
+  /// delete/unsubscribe YES/NO confirm lives in the QML layer (upstream
+  /// wxMessageBox in delete_local_plugin / unsubscribe_cloud_plugin) and
+  /// runs before this call. open_folder opens the real folder through the
+  /// desktop service when it exists and reports the upstream warn when
+  /// the plugin root cannot be determined. reinstall_plugin is a silent
+  /// no-op on non-cloud rows (upstream PluginsDialog.cpp:786-789).
   Q_INVOKABLE QVariantMap runPluginAction(int idx, const QString &action);
 
   // ── Install entry points (upstream hub / local package flows) ──────

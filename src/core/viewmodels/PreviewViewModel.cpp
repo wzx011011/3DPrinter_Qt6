@@ -14,6 +14,7 @@
 #include <QTimer>
 #include <QFileInfo>
 #include <QHash>
+#include <QSet>
 #include <QColor>
 #include <cstring>
 #include <cfloat>
@@ -3089,6 +3090,48 @@ int PreviewViewModel::configuredExtruderCount() const
   // IMSlider.cpp:1374). This counts configured filaments, not just the ones
   // used by the current slice.
   return projectService_ ? projectService_->filamentCount() : 1;
+}
+
+bool PreviewViewModel::sequentialPrint() const
+{
+  // Upstream GUI_Preview.cpp:582-583: the preview derives the slider draw
+  // mode from the current plate's real print sequence; ByObject becomes
+  // IMSlider dmSequentialFffPrint (IMSlider.cpp:320-325).
+  if (!projectService_ || !projectService_->plateListConst())
+    return false;
+  const OWzx::PartPlate *plate = projectService_->plateListConst()->currentPlate();
+  return plate
+      && plate->printSequence() == static_cast<int>(OWzx::PlatePrintSequence::ByObject);
+}
+
+bool PreviewViewModel::canChangeColor() const
+{
+  // Upstream m_can_change_color truth chain, composed in three steps:
+  // 1. GUI_Preview.cpp:462-506 (update_layers_slider_mode): true unless a
+  //    multi-filament profile's plate uses a second extruder (support
+  //    excluded -- get_extruders_without_support, PartPlate.cpp:1910).
+  // 2. IMSlider.cpp:340 (SetModeAndOnlyExtruder): && !spiral vase.
+  // 3. IMSlider.cpp:324 (SetDrawMode): && !dmSequentialFffPrint.
+  if (sequentialPrint())
+    return false;
+  if (!projectService_ || !projectService_->plateListConst())
+    return true;
+  const OWzx::PartPlate *plate = projectService_->plateListConst()->currentPlate();
+  if (plate && plate->spiralMode() == static_cast<int>(OWzx::PlateSpiralMode::On))
+    return false;
+  if (projectService_->filamentCount() <= 1)
+    return true;
+  // Non-support extruder ids seen by the preview parse (Qt6 equivalent of
+  // get_extruders_without_support: canonical libvgcode role indices 11/12/18
+  // are the support material / interface / transition roles). Any extruder
+  // beyond the first disables the per-layer filament change upstream.
+  QSet<int> plateExtruders;
+  for (const auto &s : segments_) {
+    if (s.role == 11 || s.role == 12 || s.role == 18)
+      continue;
+    plateExtruders.insert(s.extruder_id);
+  }
+  return plateExtruders.size() <= 1;
 }
 
 QStringList PreviewViewModel::defaultColorChangePalette() const

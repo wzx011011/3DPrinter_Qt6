@@ -6428,8 +6428,25 @@ bool EditorViewModel::contextActionAvailable(const QString &action) const
   // the upstream is_instance_or_object_selected (GUI_Factories.cpp:655).
   if (normalized == QStringLiteral("addVolume"))
     return hasObject;
-  if (normalized.startsWith(QStringLiteral("plate")))
-    return hasPlate;
+  if (normalized.startsWith(QStringLiteral("plate"))) {
+    if (!hasPlate)
+      return false;
+    // Upstream plate menu enables: Select All / Delete All / Arrange /
+    // Reload All / Auto Rotate need a non-empty current plate
+    // (GUI_Factories.cpp:1714-1717, :1732-1735, :1746-1748, :1760,
+    // :1771-1773); Select All Plates only needs any object in the model
+    // (:1721-1727). The remaining plate entries stay gated on the context
+    // plate alone (the add entries upstream are always enabled).
+    if (normalized == QStringLiteral("plateSelectAllPlates"))
+      return projectService_->modelCount() > 0;
+    if (normalized == QStringLiteral("plateSelect")
+        || normalized == QStringLiteral("plateClear")
+        || normalized == QStringLiteral("plateArrange")
+        || normalized == QStringLiteral("plateOrient")
+        || normalized == QStringLiteral("plateReload"))
+      return contextPlateObjectCount() > 0;
+    return true;
+  }
   if (normalized == QStringLiteral("export") || normalized == QStringLiteral("splitObjects"))
     return hasObject;
   return hasObject || m_contextMenuFamily == ContextMenuDefault;
@@ -8659,6 +8676,24 @@ int EditorViewModel::getSelectedVolumeType() const
   return projectService_->objectVolumeType(m_selectedVolumeObjectSourceIndex, m_selectedVolumeIndex);
 }
 
+bool EditorViewModel::selectionIsSingleFullObject() const
+{
+  // Qt6 selects whole objects (instances included), so a one-object
+  // selection is always an upstream full-object selection
+  // (Selection::is_single_full_object, GUI_Factories.cpp:891-892).
+  return m_selectedSourceIndices.size() == 1;
+}
+
+bool EditorViewModel::selectionHasModifierVolume() const
+{
+  if (!projectService_ || m_selectedVolumeObjectSourceIndex < 0
+      || m_selectedVolumeIndex < 0)
+    return false;
+  return projectService_->objectVolumeType(m_selectedVolumeObjectSourceIndex,
+                                           m_selectedVolumeIndex)
+      == int(MockVolumeType::ParameterModifier);
+}
+
 bool EditorViewModel::addPrimitiveToPlate(int type)
 {
   if (!projectService_)
@@ -9150,6 +9185,19 @@ bool EditorViewModel::setPlatePrintable(int plateIndex, bool printable)
 bool EditorViewModel::isPlatePrintable(int plateIndex) const
 {
   return projectService_ ? projectService_->isPlatePrintable(plateIndex) : false;
+}
+
+int EditorViewModel::contextPlateObjectCount() const
+{
+  if (!projectService_ || m_contextPlateIndex < 0
+      || m_contextPlateIndex >= projectService_->plateCount())
+    return 0;
+  return projectService_->plateObjectIndices(m_contextPlateIndex).size();
+}
+
+bool EditorViewModel::hasAnyModelObjects() const
+{
+  return projectService_ && projectService_->modelCount() > 0;
 }
 
 // Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup.
