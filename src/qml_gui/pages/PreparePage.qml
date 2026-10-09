@@ -1715,13 +1715,36 @@ Item {
                                 onClicked: root.editorVm.togglePlateLocked(plateCluster.plateIdx)
                             }
                             PlateActionButton {
-                                iconSource: "qrc:/qml/assets/icons/plate_settings.svg"
+                                // Upstream two-state settings icon
+                                // (PartPlate.cpp:1213-1223): the orange
+                                // "changed" texture shows when the plate's
+                                // bed type / print sequence / filament
+                                // sequences / spiral mode left the defaults
+                                // (has_plate_settings). Tooltip stays
+                                // "Customize current plate" in both states.
+                                // plateHasCustomSettings is a Q_INVOKABLE,
+                                // so the binding leans on this tick, bumped
+                                // whenever the settings dialog closes, to
+                                // re-evaluate.
+                                id: plateSettingsButton
+                                property int settingsProbeTick: 0
+                                iconSource: plateSettingsButton.settingsProbeTick >= 0
+                                            && root.editorVm && plateCluster.plateIdx >= 0
+                                            && root.editorVm.plateHasCustomSettings(plateCluster.plateIdx)
+                                            ? "qrc:/qml/assets/icons/plate_settings_changed.svg"
+                                            : "qrc:/qml/assets/icons/plate_settings.svg"
                                 toolTipText: qsTr("Customize current plate")
                                 enabled: root.editorVm && plateCluster.plateIdx >= 0
                                 onClicked: {
                                     var dialog = plateSettingsDialogComp.createObject(root)
                                     dialog.plateIndex = plateCluster.plateIdx
                                     dialog.plateName = root.editorVm.plateName(plateCluster.plateIdx)
+                                    // Re-probe has_plate_settings when the
+                                    // dialog dismisses so the changed icon
+                                    // tracks edits made inside it.
+                                    dialog.closed.connect(function() {
+                                        plateSettingsButton.settingsProbeTick += 1
+                                    })
                                     dialog.open()
                                 }
                             }
@@ -1784,91 +1807,14 @@ Item {
                     }
                 }
 
-                // vp-4 (VIEWWIDGET): top-right view shortcut widget from the
-                // design reference (stacked top/front face tiles + a home
-                // button). Binds the existing viewport.selectView router
-                // (same route BBLTopbar.qml:112-115 uses). The bottom-left
-                // navigator cube stays put, matching the upstream
-                // ViewManipulate position (GLCanvas3D.cpp:6160-6181).
-                Column {
-                    id: viewNavigator
-                    anchors.top: parent.top
-                    anchors.right: parent.right
-                    anchors.topMargin: 12
-                    anchors.rightMargin: 12
-                    z: 96
-                    spacing: 6
-
-                    Rectangle {
-                        width: 36
-                        height: 36
-                        radius: Theme.radiusSM
-                        color: topFaceHover.containsMouse ? Theme.bgHover : Theme.bgFloating
-                        border.width: 1
-                        border.color: topFaceHover.containsMouse ? Theme.accent : Theme.borderSubtle
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("上")
-                            color: Theme.textPrimary
-                            font.pixelSize: 14
-                        }
-                        HoverHandler { id: topFaceHover }
-                        TapHandler {
-                            cursorShape: Qt.PointingHandCursor
-                            onTapped: viewport3d.selectView("top")
-                        }
-                        ToolTip.visible: topFaceHover.hovered
-                        ToolTip.text: qsTr("Top view")
-                        ToolTip.delay: 400
-                    }
-
-                    Rectangle {
-                        width: 36
-                        height: 36
-                        radius: Theme.radiusSM
-                        color: frontFaceHover.containsMouse ? Theme.bgHover : Theme.bgFloating
-                        border.width: 1
-                        border.color: frontFaceHover.containsMouse ? Theme.accent : Theme.borderSubtle
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("前")
-                            color: Theme.textPrimary
-                            font.pixelSize: 14
-                        }
-                        HoverHandler { id: frontFaceHover }
-                        TapHandler {
-                            cursorShape: Qt.PointingHandCursor
-                            onTapped: viewport3d.selectView("front")
-                        }
-                        ToolTip.visible: frontFaceHover.hovered
-                        ToolTip.text: qsTr("Front view")
-                        ToolTip.delay: 400
-                    }
-
-                    Rectangle {
-                        id: viewHomeButton
-                        width: 32
-                        height: 32
-                        radius: Theme.radiusSM
-                        color: homeViewHover.containsMouse ? Theme.bgHover : Theme.bgFloating
-                        border.width: 1
-                        border.color: homeViewHover.containsMouse ? Theme.accent : Theme.borderSubtle
-                        Text {
-                            anchors.centerIn: parent
-                            text: "\u2191"  // up-arrow glyph (U+2191), ref home button
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeXXL
-                        }
-                        HoverHandler { id: homeViewHover }
-                        TapHandler {
-                            cursorShape: Qt.PointingHandCursor
-                            onTapped: viewport3d.selectView("plate")
-                        }
-                        ToolTip.visible: homeViewHover.hovered
-                        ToolTip.text: qsTr("Home view")
-                        ToolTip.delay: 400
-                    }
-                }
+                // vp-4 (VIEWWIDGET) retired 2026-10-09: the top-right view
+                // shortcut tiles (top/front/home) were a design-reference
+                // addition with no upstream counterpart -- upstream Prepare
+                // keeps only the bottom-left navigator cube
+                // (GLCanvas3D.cpp:6160-6181), which this page still has.
+                // Removed under the 2026-10-07 "layout follows upstream"
+                // ruling; viewport3d.selectView stays for the cube and
+                // BBLTopbar routes.
 
                 GLToolbars {
                     id: glToolbars

@@ -224,6 +224,7 @@
         <file>assets/icons/plate_locked.svg</file>
         <file>assets/icons/plate_unlocked.svg</file>
         <file>assets/icons/plate_settings.svg</file>
+        <file>assets/icons/plate_settings_changed.svg</file>
         <file>assets/icons/plate_move_front.svg</file>
         <file>assets/icons/plate_name_edit.svg</file>
         <file>assets/icons/print-time.svg</file>

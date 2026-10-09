@@ -9438,6 +9438,22 @@ bool EditorViewModel::setPlateSpiralMode(int plateIndex, int mode)
   return ok;
 }
 
+bool EditorViewModel::plateHasCustomSettings(int plateIndex) const
+{
+  if (!projectService_)
+    return false;
+  // Upstream has_plate_settings (PartPlate.cpp:1216): the plate counts as
+  // customized when any of bed type, print sequence, first/other-layer
+  // filament sequences, or spiral mode left its default. Qt sentinels:
+  // bedType 0 = btDefault, printSequence 0 = ByDefault, seq choices
+  // 0 = Auto, spiralMode 0 = off.
+  return projectService_->plateBedType(plateIndex) != 0
+      || projectService_->platePrintSequence(plateIndex) != 0
+      || projectService_->plateFirstLayerSeqChoice(plateIndex) != 0
+      || projectService_->plateOtherLayersSeqChoice(plateIndex) != 0
+      || projectService_->plateSpiralMode(plateIndex) != 0;
+}
+
 // ── 首层耗材顺序（对齐上游 first_layer_print_sequence）──
 
 int EditorViewModel::plateFirstLayerSeqChoice(int plateIndex) const

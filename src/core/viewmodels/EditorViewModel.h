@@ -1288,6 +1288,11 @@ public:
   Q_INVOKABLE bool setPlatePrintSequence(int plateIndex, int seq);
   Q_INVOKABLE int plateSpiralMode(int plateIndex) const;
   Q_INVOKABLE bool setPlateSpiralMode(int plateIndex, int mode);
+  /// Plate-customization probe for the per-plate settings icon (upstream
+  /// has_plate_settings, PartPlate.cpp:1216): true when the bed type, print
+  /// sequence, first/other-layer filament sequences, or spiral mode have
+  /// diverged from the defaults.
+  Q_INVOKABLE bool plateHasCustomSettings(int plateIndex) const;
   /// 首层耗材顺序（对齐上游 first_layer_print_sequence）
   Q_INVOKABLE int plateFirstLayerSeqChoice(int plateIndex) const;
   Q_INVOKABLE bool setPlateFirstLayerSeqChoice(int plateIndex, int choice);

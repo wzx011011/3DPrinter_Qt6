@@ -557,11 +557,12 @@ private slots:
   // OWzxSlicer.exe links clean (no LNK2019 on mesh_to_grid/grid_to_mesh/
   // redistance_grid); this slot anchors the source-level evidence.
   void v50OpenVdbUnlockWired();
-  // Phase 143 (VDB-03/04/05): Hollow gizmo reachability + button + panel gate.
+  // Phase 143 (VDB-03/04/05): Hollow gizmo reachability + panel gate.
   // Locks the EditorViewModel gizmo-availability change (case 8 returns
   // hasSingleObject, not false), the removal of the "Blocked: OpenVDB unavailable"
-  // tooltip for case 8, the new Hollow button in GLToolbars.qml, and the Hollow
-  // panel in PreparePage.qml. The full SLA slice path (VDB-06) is a v5.1+
+  // tooltip for case 8, and the Hollow panel in PreparePage.qml. The former
+  // Hollow toolbar button was removed on 2026-10-09 (non-upstream toolbar
+  // entry; see VDB-04 inside). The full SLA slice path (VDB-06) is a v5.1+
   // follow-up -- it requires wiring SLAPrint from scratch.
   void v50HollowGizmoReachable();
   // Phase 144 (EMB-01/02): Emboss font + parameterization gate. The real Emboss
@@ -3758,14 +3759,18 @@ void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
   QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
 
   const QStringList toolbarTokens = {
-    // U09 (G1/G3/G8): geometry re-sampled from prepare_ref.png -- action bar
-    // docks flush at 58px (ref rows 37..96) with upstream Default_Icons_Size
-    // (GLToolbar.cpp:236) 40px boxes; the gizmo rail narrows to 34.
+    // 2026-10-09 upstream re-alignment (unlocks the U09 ref-era locks): the
+    // viewport carries ONE floating content-width strip pinned top-center,
+    // holding the main toolbar plus the gizmo row that continues after the
+    // separator (GLCanvas3D.cpp:6845-6847 Layout::Horizontal + VO_Top;
+    // GLGizmosManager.cpp do_render_overlay places the gizmo row at
+    // main_toolbar_offset + main_toolbar_width + separator_width). The
+    // full-width flush dock and the right-edge rail tokens (toolbarButtonSize
+    // 30 / gizmoToolbarWidth 34 / viewportGizmoToolbar) are retired with it.
     QStringLiteral("readonly property int viewportToolbarHeight: 58"),
-    QStringLiteral("readonly property int toolbarButtonSize: 30"),
-    QStringLiteral("readonly property int gizmoToolbarWidth: 34"),
+    QStringLiteral("anchors.horizontalCenter: parent.horizontalCenter"),
+    QStringLiteral("anchors.topMargin: 8"),
     QStringLiteral("id: viewportActionToolbar"),
-    QStringLiteral("id: viewportGizmoToolbar"),
     QStringLiteral("iconSource: iconForTool(toolId)")
   };
   for (const QString &token : toolbarTokens) {
@@ -3895,15 +3900,15 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
   }
 
   const QStringList toolbarTokens = {
-    // U09 (G1/G8): the action bar is a full-width flush dock (ref rows
-    // 37..96, no margins) and the rail hugs the right edge at ~12% height;
-    // the Phase 77 float offsets (targetActionToolbarTop 22 / Left 10,
-    // ratio 0.22) are retired with the prepare_ref re-alignment.
+    // 2026-10-09 upstream re-alignment (unlocks the U09 G1/G8 ref locks):
+    // the strip floats top-center at content width and the gizmo row lives
+    // on the same strip after the separator -- the right-edge rail
+    // (gizmoRailTopRatio/gizmoRailRightMargin/prepareRightGizmoToolbar) is
+    // gone, matching GLCanvas3D.cpp:6845-6847 + GLGizmosManager.cpp
+    // do_render_overlay.
     QStringLiteral("readonly property int viewportToolbarHeight: 58"),
-    QStringLiteral("readonly property real gizmoRailTopRatio: 0.12"),
-    QStringLiteral("readonly property int gizmoRailRightMargin: 2"),
-    QStringLiteral("id: prepareTopActionToolbar"),
-    QStringLiteral("id: prepareRightGizmoToolbar"),
+    QStringLiteral("anchors.horizontalCenter: parent.horizontalCenter"),
+    QStringLiteral("id: viewportActionToolbar"),
     QStringLiteral("buttonSize: root.targetToolbarButtonSize")
   };
   for (const QString &token : toolbarTokens) {
@@ -4068,9 +4073,13 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   QVERIFY2(dockableSidebar.contains(QStringLiteral("onExportRequested: root.exportRequested()"))
               && preparePage.contains(QStringLiteral("onExportRequested: root.openExportDialog()")),
            "Sidebar export must propagate to PreparePage.openExportDialog instead of exporting directly");
+  // 2026-10-09 upstream re-alignment: the "top and right toolbar groups"
+  // lock is unlocked -- upstream carries ONE top strip (main toolbar +
+  // gizmo row after the separator, GLCanvas3D.cpp:6826 + GLGizmosManager
+  // do_render_overlay); the right-edge rail group no longer exists.
   QVERIFY2(glToolbars.contains(QStringLiteral("id: viewportActionToolbar"))
-              && glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar")),
-           "GLToolbars must keep the restored top and right toolbar groups");
+              && !glToolbars.contains(QStringLiteral("id: viewportGizmoToolbar")),
+           "GLToolbars must keep the single upstream top toolbar strip");
   // v5.16 (NAVIGATOR): the lower-left group is the 3D navigator cube now;
   // the flat viewportViewControls row was removed with it.
 
@@ -7829,13 +7838,16 @@ void QmlUiAuditTests::v50HollowGizmoReachable()
   QVERIFY2(evm.contains(QStringLiteral("Phase 143 (VDB-03): Hollow gizmo is now reachable")),
            "VDB-03: case 8 must document the Phase 143 reachability change");
 
-  // VDB-04: GLToolbars must have a GizmoHollow entry + an iconForTool mapping.
-  // v5.14: the long-tail gizmos (Hollow included) render through the overflow
-  // Repeater as { tool: GLViewport.GizmoHollow, ... } model entries.
-  QVERIFY2(glToolbars.contains(QStringLiteral("GLViewport.GizmoHollow")),
-           "VDB-04: GLToolbars.qml must keep the GizmoHollow entry (overflow Repeater model)");
-  QVERIFY2(glToolbars.contains(QStringLiteral("case GLViewport.GizmoHollow:")),
-           "VDB-04: GLToolbars iconForTool must handle GizmoHollow");
+  // VDB-04 (updated 2026-10-09, unlocks the Phase 143 toolbar-button lock):
+  // the upstream alignment removed the Qt6-only Hollow toolbar button (the
+  // upstream toolbar carries only the selectable gizmo set, and Hollow is
+  // commented out upstream at GLGizmosManager.hpp:96). The gizmo MODE stays
+  // registered in RhiViewport and the EVM gate (VDB-03) + PreparePage panel
+  // (VDB-05) stay wired; re-entry onto the toolbar now requires an explicit
+  // OWzx-only product decision. Lock the button's absence so it cannot
+  // silently return.
+  QVERIFY2(!glToolbars.contains(QStringLiteral("GLViewport.GizmoHollow")),
+           "VDB-04: GLToolbars.qml must not carry a non-upstream Hollow toolbar button (2026-10-09 upstream alignment)");
 
   // VDB-05: PreparePage must have a Hollow panel that becomes visible when
   // gizmoMode === GizmoHollow. The panel must bind at least hollowEnabled.
@@ -7979,14 +7991,23 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
   QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
 
-  // EMB-05: GLToolbars Emboss + SVG buttons already existed (pre-v5.0); assert
-  // they are still present (no regression). Click behavior is wired through the
-  // standard toolId → gizmoMode plumbing. v5.14: rendered via the overflow
-  // Repeater model ({ tool: GLViewport.GizmoEmboss, ... } entries).
+  // EMB-05: the upstream Emboss gizmo keeps its toolbar button (T icon,
+  // toolbar_text.svg, GLGizmosManager.cpp:216); since 2026-10-09 it sits in
+  // the primary gizmo row of the single top strip. The former duplicate
+  // "Text emboss" button is gone -- it realized the same upstream
+  // GLGizmoEmboss.
   QVERIFY2(glToolbars.contains(QStringLiteral("GLViewport.GizmoEmboss")),
-           "EMB-05: GLToolbars must keep the GizmoEmboss entry (overflow Repeater model)");
-  QVERIFY2(glToolbars.contains(QStringLiteral("GLViewport.GizmoSVG")),
-           "EMB-07: GLToolbars must keep the GizmoSVG entry (overflow Repeater model)");
+           "EMB-05: GLToolbars must keep the GizmoEmboss entry (primary gizmo row)");
+  QVERIFY2(!glToolbars.contains(QStringLiteral("GLViewport.GizmoText")),
+           "EMB-05: the duplicate GizmoText toolbar button must stay removed (single upstream Emboss gizmo)");
+  // EMB-07 (updated 2026-10-09, unlocks the toolbar-button lock): upstream
+  // never shows SVG on the toolbar (GLGizmoSVG.hpp:89 on_is_selectable =
+  // false) -- it opens from the Add > SVG menu and emboss-volume
+  // double-click (GLCanvas3D.cpp:4845-4880). The Qt6 carrier is the
+  // PrepareContextMenus svgMenu; the toolbar must not carry a separate
+  // SVG button.
+  QVERIFY2(!glToolbars.contains(QStringLiteral("GLViewport.GizmoSVG")),
+           "EMB-07: GLToolbars must not carry a non-upstream SVG toolbar button (2026-10-09 upstream alignment)");
 
   // EMB-05: no-selection auto-attach fallback. addTextObject + embossSelected +
   // embossSelectedAsync must all fall back to the first current-plate object
