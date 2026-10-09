@@ -5,6 +5,12 @@ import ".."
 MenuItem {
     id: root
 
+    // Upstream dropdown row metrics (BBL Topbar file menu): compact ~28px
+    // rows, 13px text, 12px leading inset, room on the right for the arrow.
+    implicitHeight: 30
+    leftPadding: 12
+    rightPadding: 28
+
     // U08: checkable indicator. The Basic style puts its indicator at
     // x=leftPadding(6) while this control's contentItem uses a fixed
     // leftPadding, so a stock check mark would be drawn under the text.
@@ -39,7 +45,7 @@ MenuItem {
     contentItem: Text {
         text: root.text
         color: root.enabled ? Theme.textPrimary : Theme.textDisabled
-        font.pixelSize: Theme.fontSizeMD
+        font.pixelSize: Theme.fontSize13
         // Reserve the check column only when the item is checkable; plain
         // items keep the original leftPadding (zero change for existing
         // menus, U08 incremental requirement).

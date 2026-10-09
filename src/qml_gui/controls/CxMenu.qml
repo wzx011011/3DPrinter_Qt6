@@ -12,14 +12,34 @@ Menu {
 
     popupType: Popup.Item
 
-    // U08: separator color. The Basic MenuSeparator paints its 1px line with
-    // palette.mid, which resolves to a light gray on this dark theme (light
-    // line landing on the dark menu). Pin the mid role to the global
-    // separator token (1px, Theme.separator from U01) so every separator
-    // inside a CxMenu inherits the dark upstream look; item highlight/press
-    // colors use other palette roles and are unaffected.
-    palette.mid: Theme.separator
+    // Upstream dropdown metrics (BBL Topbar file menu): compact 28px-ish rows,
+    // thin visible separators, tight vertical padding.
+    topPadding: 4
+    bottomPadding: 4
+    // Separator line: palette.mid pinned to Theme.separator is near-invisible
+    // on the dark menu panel; use the subtle border tone so group separators
+    // read like upstream's thin gray lines.
+    palette.mid: Theme.borderSubtle
 
+    // Qt 6.10 Menu does not derive popup width from custom-delegate items on
+    // this shell (observed: menu opens with width 0 — invisible, eats the
+    // next click). Size it from the widest enabled item instead; upstream
+    // menus size the same way (widest entry rules the row width).
+    width: {
+        let maxW = 0
+        for (let i = 0; i < count; ++i) {
+            const it = itemAt(i)
+            if (it && it.visible && it.implicitWidth > maxW)
+                maxW = it.implicitWidth
+        }
+        return maxW + leftPadding + rightPadding
+    }
+
+
+    // U08: separator color. The Basic MenuSeparator paints its 1px line with
+    // palette.mid; pinned to the subtle border tone (was Theme.separator, a
+    // near-invisible near-black on the dark menu panel) so group separators
+    // read like upstream's thin gray lines.
     background: Rectangle {
         color: Theme.menuBackground
         border.color: Theme.borderDefault
