@@ -12,7 +12,7 @@ Slider {
         y: root.topPadding + root.availableHeight / 2 - height / 2
         width: root.availableWidth
         height: 4
-        radius: 2
+        radius: Theme.radiusXS
         color: Theme.borderSubtle
         opacity: root.enabled ? 1.0 : 0.45
 
@@ -20,7 +20,7 @@ Slider {
             width: root.visualPosition * parent.width
             height: parent.height
             color: root.enabled ? Theme.accent : Theme.textDisabled
-            radius: 2
+            radius: Theme.radiusXS
         }
     }
 
@@ -29,13 +29,14 @@ Slider {
         y: root.topPadding + root.availableHeight / 2 - height / 2
         width: 14
         height: 14
-        radius: 7
+        radius: Theme.radiusLG
         color: root.pressed ? Theme.accentLight : Theme.accent
-        border.color: Theme.accentDark
+        // Phase 170 (P0-2): keyboard focus ring on the handle.
+        border.color: root.activeFocus ? Theme.borderFocus : Theme.accentDark
         border.width: 2
         opacity: root.enabled ? 1.0 : 0.45
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         scale: root.pressed ? 0.95 : 1.0
-        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
     }
 }

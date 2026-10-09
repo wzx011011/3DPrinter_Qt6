@@ -212,7 +212,7 @@ CxDialog {
                 height: 7
                 radius: 3.5
                 color: radioCtl.checked ? Theme.accent : "transparent"
-                Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
             }
         }
         contentItem: Text {
@@ -265,7 +265,7 @@ CxDialog {
                 selectByMouse: true
                 background: Rectangle {
                     color: Theme.bgInset
-                    radius: 4
+                    radius: Theme.radiusSM
                     border.width: 1
                     border.color: nameInput.activeFocus ? Theme.accent : Theme.borderSubtle
                 }
@@ -354,7 +354,7 @@ CxDialog {
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.margins: Theme.spacingSM
-                        spacing: 5  // cpp:418 wxTOP 5
+                        spacing: Theme.spacingXS  // cpp:418 wxTOP 5
 
                         Text {
                             // cpp:439 box caption, refreshed with the input name
@@ -394,7 +394,7 @@ CxDialog {
             // RadioGroup; both items disabled together on an existing preset,
             // cpp:248/250).
             ColumnLayout {
-                spacing: 5
+                spacing: Theme.spacingXS
                 Layout.fillWidth: true
                 Layout.leftMargin: root.borderWidth  // cpp:112 wxLEFT
                 Layout.topMargin: root.borderWidth   // cpp:112 wxTOP
@@ -424,7 +424,7 @@ CxDialog {
             // block is always present).
             RowLayout {
                 id: detachRow
-                spacing: 5  // cpp:132 FromDIP(5)
+                spacing: Theme.spacingXS  // cpp:132 FromDIP(5)
                 Layout.fillWidth: true
                 Layout.leftMargin: root.borderWidth  // cpp:131 wxLEFT
                 Layout.topMargin: root.borderWidth   // cpp:133 wxTOP

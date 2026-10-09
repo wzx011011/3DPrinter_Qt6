@@ -37,10 +37,12 @@ CheckBox {
             height: 15
             radius: root.checked || root.partial ? 1.5 : 1
             color: root.checked || root.partial ? Theme.accent : "transparent"
-            border.color: Theme.borderDefault  // upstream off stroke #DBDBDB (dark #4A4A51)
-            border.width: 1
-            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-            Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            // Phase 170 (P0-2): keyboard focus ring replaces the default
+            // stroke while focused.
+            border.color: root.activeFocus ? Theme.borderFocus : Theme.borderDefault
+            border.width: root.activeFocus ? 2 : 1
+            Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+            Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         }
 
         // White round-cap strokes from check_on.svg / check_half.svg, drawn in
@@ -53,7 +55,7 @@ CheckBox {
             onPaint: {
                 const ctx = getContext("2d")
                 ctx.clearRect(0, 0, width, height)
-                ctx.strokeStyle = "#ffffff"
+                ctx.strokeStyle = Theme.textOnAccent
                 ctx.lineWidth = 1.5
                 ctx.lineCap = "round"
                 ctx.lineJoin = "round"

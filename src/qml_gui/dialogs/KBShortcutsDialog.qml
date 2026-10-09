@@ -142,6 +142,7 @@ Dialog {
         { key: "Ctrl+X", desc: qsTr("Cut selection") },
         { key: "Ctrl+A", desc: qsTr("Select all objects") },
         { key: "Ctrl+K", desc: qsTr("Clone selected") },
+        { key: "Ctrl+Shift+P", desc: qsTr("Command palette") },
         { key: "Ctrl+Z", desc: qsTr("Undo") },
         { key: "Ctrl+Y", desc: qsTr("Redo") },
         { key: "Space", desc: qsTr("Select the object/part and press space to change the name") },
@@ -268,13 +269,13 @@ Dialog {
                 x: 20
                 y: 20
                 width: parent.width - 40
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Repeater {
                     model: root.shortcutsForGroup(root.currentGroup)
                     delegate: RowLayout {
                         width: parent.width
-                        spacing: 20
+                        spacing: Theme.spacingXL
 
                         Text {
                             Layout.preferredWidth: 150

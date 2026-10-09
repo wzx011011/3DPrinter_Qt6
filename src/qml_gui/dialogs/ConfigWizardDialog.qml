@@ -419,7 +419,7 @@ CxDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.margins: root.dialogMargin
-            spacing: 40
+            spacing: 40  // upstream INDEX_MARGIN(40), ConfigWizard.cpp:2659-2661 -- layout truth, exempt from the spacing scale
 
             // ── ConfigWizardIndex (left navigation panel) ──
             Item {
@@ -597,7 +597,7 @@ CxDialog {
             ColumnLayout {
                 id: printerPageBody
                 width: printerPageScroll.availableWidth
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Text {
                     text: qsTr("选择打印机")
@@ -690,7 +690,7 @@ CxDialog {
                             readonly property string modelName: group.model
 
                             Layout.preferredWidth: 150
-                            spacing: 3
+                            spacing: Theme.spacingXS
 
                             // Model thumbnail. The Qt6 preset store carries no
                             // per-model bitmap, so the printer icon plays the
@@ -737,7 +737,7 @@ CxDialog {
                                         text: qsTr("备用喷嘴:")
                                         color: Theme.textTertiary
                                         font.pixelSize: Theme.fontSizeSM
-                                        bottomPadding: 3
+                                        bottomPadding: Theme.spacingXS
                                     }
 
                                     CxCheckBox {
@@ -779,7 +779,7 @@ CxDialog {
             ColumnLayout {
                 id: customPageBody
                 width: customPageScroll.availableWidth
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Text {
                     text: qsTr("自定义打印机设置")
@@ -836,7 +836,7 @@ CxDialog {
             ColumnLayout {
                 id: firmwarePageBody
                 width: firmwarePageScroll.availableWidth
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Text {
                     text: qsTr("固件类型")
@@ -888,7 +888,7 @@ CxDialog {
             ColumnLayout {
                 id: bedPageBody
                 width: bedPageScroll.availableWidth
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Text {
                     text: qsTr("热床形状和尺寸")
@@ -985,7 +985,7 @@ CxDialog {
             ColumnLayout {
                 id: diamsPageBody
                 width: diamsPageScroll.availableWidth
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Text {
                     text: qsTr("耗材与喷嘴直径")
@@ -1005,7 +1005,7 @@ CxDialog {
                 // "Nozzle Diameter:" [editable field] "mm" 3-column flex row with
                 // 5px gaps (ConfigWizard.cpp:1341-1349).
                 Row {
-                    spacing: 5
+                    spacing: Theme.spacingXS
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("喷嘴直径:")
@@ -1057,7 +1057,7 @@ CxDialog {
                 }
 
                 Row {
-                    spacing: 5
+                    spacing: Theme.spacingXS
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("耗材直径:")
@@ -1103,7 +1103,7 @@ CxDialog {
             ColumnLayout {
                 id: filamentsPageBody
                 width: filamentsPageScroll.availableWidth
-                spacing: 10
+                spacing: Theme.spacingMD
 
                 Text {
                     text: qsTr("耗材配置文件选择")

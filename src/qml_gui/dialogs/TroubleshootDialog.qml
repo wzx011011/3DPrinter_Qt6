@@ -305,7 +305,7 @@ CxDialog {
     component SectionTitle: RowLayout {
         id: sectionTitleRoot
         property string title: ""
-        spacing: 5
+        spacing: Theme.spacingXS
         Text {
             text: sectionTitleRoot.title
             color: Theme.textPrimary
@@ -326,7 +326,7 @@ CxDialog {
         default property alias rowContent: rowHost.data
         property string rowLabel: ""
         property string rowTip: ""
-        spacing: 15
+        spacing: Theme.spacingXL
         Text {
             Layout.preferredWidth: 275
             Layout.alignment: Qt.AlignVCenter
@@ -377,8 +377,8 @@ CxDialog {
 
         RowLayout {
             anchors.fill: parent
-            anchors.margins: 15
-            spacing: 20
+            anchors.margins: Theme.spacingXL
+            spacing: Theme.spacingXL
 
             // ── LEFT SIZER (TroubleshootDialog.cpp:314-329) ──────────────
             ColumnLayout {
@@ -428,7 +428,7 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: 15
-                    spacing: 7
+                    spacing: Theme.spacingMD
                     Repeater {
                         model: root.sysPanelLines
                         Text {
@@ -562,9 +562,9 @@ CxDialog {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: 5
-                    spacing: 3
+                    spacing: Theme.spacingXS
                     RowLayout {
-                        spacing: 15
+                        spacing: Theme.spacingXL
                         Item { Layout.preferredWidth: 100 }
                         GridText { cell: qsTr("使用中"); cellWidth: 60; font.pixelSize: Theme.fontSizeSM }
                         Item { Layout.preferredWidth: 20 }
@@ -581,7 +581,7 @@ CxDialog {
                         delegate: RowLayout {
                             id: countRow
                             required property var modelData
-                            spacing: 15
+                            spacing: Theme.spacingXL
                             readonly property var counts: (root.profileCounts && root.profileCounts[countRow.modelData.key])
                                                           ? root.profileCounts[countRow.modelData.key]
                                                           : { active: 0, system: 0, user: 0 }

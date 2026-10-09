@@ -38,15 +38,16 @@ ComboBox {
         }
         border.color: {
             if (!root.enabled) return Theme.borderSubtle
-            // ctl-10: hover/focus border turns accent (upstream
-            // ComboBox.cpp:56-58 Normal #DBDBDB -> Hovered teal); OWzx accent
-            // dark tier per the adjudicated value.
-            if (root.hovered || root.activeFocus) return "#0e8c46"
+            // ctl-10 + Phase 170 (P0-2): focus uses the shared borderFocus
+            // ring (same as CxTextField/CxButton); hover steps to the accent
+            // dark tier (was a merged hover||focus hard-coded darker green).
+            if (root.activeFocus) return Theme.borderFocus
+            if (root.hovered) return Theme.accentDark
             return Theme.borderDefault
         }
         border.width: 1
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         opacity: root.enabled ? 1.0 : 0.45
     }
 

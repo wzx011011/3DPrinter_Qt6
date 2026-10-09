@@ -55,21 +55,21 @@ Item {
     //   selectSecond    #A437A4  (selection row 2, adjudicated ref sample)
     //   revertOrange    #FF6F00  (revert buttons; upstream resources/images/
     //                             revert_btn.svg stroke color)
-    readonly property color overlaySurface: "#FAFAFA"
-    readonly property color pillSurface: "#FAFAFC"
-    readonly property color floatSurface: "#E7E7E7"
-    readonly property color lightBorder: "#C8C8C8"
-    readonly property color darkText: "#545859"
-    readonly property color badgeGreen: "#57DF3D"
-    readonly property color badgeText: "#004E00"
+    readonly property color overlaySurface: Theme.asmCardBg
+    readonly property color pillSurface: Theme.asmCardBgAlt
+    readonly property color floatSurface: Theme.asmCardBorder
+    readonly property color lightBorder: Theme.asmCardTextDim
+    readonly property color darkText: Theme.asmCardText
+    readonly property color badgeGreen: Theme.asmMeasureGreen
+    readonly property color badgeText: Theme.asmMeasureDark
     // Phase 92 (ASMMEASURE-02): teal accent for the measure panel value text.
     // Points at the ref-sampled measure teal (装配页_测量.png, 0,150,136 family)
     // instead of a gray Theme token so values match the upstream measure-panel
     // teal (#4ec9b0 family) and the on-canvas overlay.
-    readonly property color measureAccent: "#009688"
-    readonly property color selectFirst: "#009688"
-    readonly property color selectSecond: "#A437A4"
-    readonly property color revertOrange: "#FF6F00"
+    readonly property color measureAccent: Theme.asmSelectTeal
+    readonly property color selectFirst: Theme.asmSelectTeal
+    readonly property color selectSecond: Theme.asmPurple
+    readonly property color revertOrange: Theme.asmRevertOrange
 
     // Phase 138 (ASM-01): assembly-canvas transform-mode state. Tracks which
     // Move/Rotate gizmo is active when the Assembly Measure gizmo is off.
@@ -325,7 +325,7 @@ Item {
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            radius: 4
+            radius: Theme.radiusSM
             color: collapseToggle.hovered ? root.lightBorder : "transparent"
         }
         onClicked: root.sidebarCollapsed = !root.sidebarCollapsed
@@ -375,7 +375,7 @@ Item {
         anchors.horizontalCenter: assembleViewport.horizontalCenter
         width: 56
         height: 48
-        radius: 4
+        radius: Theme.radiusSM
         color: root.badgeGreen
         // Re-evaluates on stateChanged (objectCount carries the NOTIFY), so a
         // preset switch that changes the family refreshes the badge text.
@@ -417,7 +417,7 @@ Item {
         anchors.leftMargin: 24
         width: stripRow.implicitWidth + 20
         height: 48
-        radius: 4
+        radius: Theme.radiusSM
         color: root.overlaySurface
         border.width: 1
         border.color: root.lightBorder
@@ -640,7 +640,7 @@ Item {
                     text: root.editorVm ? root.editorVm.assemblyMeasureDistanceText : ""
                     color: root.measureAccent
                     font.pixelSize: Theme.fontSizeMD
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
@@ -683,7 +683,7 @@ Item {
                     text: root.editorVm ? root.editorVm.assemblyMeasureAngleText : ""
                     color: root.measureAccent
                     font.pixelSize: Theme.fontSizeMD
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.fillWidth: true
                     elide: Text.ElideRight
                 }
@@ -729,7 +729,7 @@ Item {
                     ToolTip.delay: 400
                     contentItem: Text {
                         text: "?"
-                        color: "#FFFFFF"
+                        color: Theme.textOnAccent
                         font.pixelSize: Theme.fontSizeMD
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
@@ -790,7 +790,7 @@ Item {
         anchors.horizontalCenter: assembleViewport.horizontalCenter
         width: controlRow.implicitWidth + 24
         height: 38
-        radius: 8
+        radius: Theme.radiusLG
         color: root.floatSurface
         border.width: 1
         border.color: root.lightBorder
@@ -813,7 +813,7 @@ Item {
                 ToolTip.delay: 400
                 contentItem: Text {
                     text: "?"
-                    color: "#FFFFFF"
+                    color: Theme.textOnAccent
                     font.pixelSize: Theme.fontSizeMD
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
@@ -854,7 +854,7 @@ Item {
                 text: root.editorVm ? root.editorVm.explosionRatio.toFixed(2) : "1.00"
                 color: root.darkText
                 font.pixelSize: Theme.fontSizeMD
-                font.family: "Consolas, monospace"
+                font.family: Theme.fontMono
                 Layout.preferredWidth: 36
             }
             CxButton {
@@ -881,7 +881,7 @@ Item {
         anchors.bottomMargin: 10
         width: infoColumn.implicitWidth + 24
         height: infoColumn.implicitHeight + 16
-        radius: 8
+        radius: Theme.radiusLG
         color: root.floatSurface
         border.width: 1
         border.color: root.lightBorder
@@ -915,7 +915,7 @@ Item {
                           ? root.editorVm.measureDimensions.w.toFixed(2) : ""
                     color: root.darkText
                     font.pixelSize: Theme.fontSizeMD
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                 }
             }
             RowLayout {
@@ -933,7 +933,7 @@ Item {
                             + root.editorVm.measureDimensions.z.toFixed(2) : ""
                     color: root.darkText
                     font.pixelSize: Theme.fontSizeMD
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                 }
             }
         }

@@ -115,7 +115,7 @@ Item {
         property string label: ""
         width: Math.max(64, pillLabel.implicitWidth + 24)
         height: 24
-        radius: 12
+        radius: Theme.radiusXL
         opacity: enabled ? 1.0 : 0.45
 
         color: {
@@ -124,9 +124,9 @@ Item {
             if (kind === 1) {
                 // Upstream white pill: Normal #FFFFFF, Hovered #EEEEEE,
                 // Pressed #CECECE (CalibrationWizardPage.cpp:159-162)
-                if (p) return "#cecece"
-                if (h) return "#eeeeee"
-                return "#ffffff"
+                if (p) return Theme.caliCardTextDim
+                if (h) return Theme.caliCardText
+                return Theme.asmCardBgAlt
             }
             if (kind === 2) {
                 if (p) return Theme.statusErrorPressed
@@ -143,7 +143,7 @@ Item {
 
         // Upstream white-pill border Enabled (38,46,48)
         // (CalibrationWizardPage.cpp:167-168); green pill border equals its bg.
-        border.color: kind === 1 ? "#262e30" : "transparent"
+        border.color: kind === 1 ? Theme.caliCardBg : "transparent"
         border.width: kind === 1 ? 1 : 0
 
         Text {
@@ -152,7 +152,7 @@ Item {
             text: pillRoot.label
             // Upstream white-pill text Enabled (38,46,48)
             // (CalibrationWizardPage.cpp:173-174)
-            color: pillRoot.kind === 1 ? "#262e30" : Theme.textOnAccent
+            color: pillRoot.kind === 1 ? Theme.caliCardBg : Theme.textOnAccent
             font.pixelSize: Theme.fontSize13
         }
 
@@ -197,7 +197,7 @@ Item {
                 Rectangle {
                     Layout.preferredHeight: 28
                     Layout.preferredWidth: historyBtnRow.implicitWidth + 20
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: historyBtnHov.containsMouse ? Theme.bgHover : "transparent"
                     border.color: Theme.borderSubtle
                     border.width: 1
@@ -245,7 +245,7 @@ Item {
                             Rectangle {
                                 height: 26
                                 width: catLbl.implicitWidth + 20
-                                radius: 13
+                                radius: Theme.radiusXL
                                 color: root.activeFilter === modelData.cat ? Theme.accent : "transparent"
                                 border.color: root.activeFilter === modelData.cat ? Theme.accent : Theme.borderSubtle
                                 border.width: 1
@@ -318,7 +318,7 @@ Item {
 
                         Column {
                             width: parent.width
-                            spacing: 1
+                            spacing: Theme.spacingXXS
 
                             Repeater {
                                 id: _sliceRepeater
@@ -358,7 +358,7 @@ Item {
                                         Rectangle {
                                             width: 6
                                             height: 6
-                                            radius: 3
+                                            radius: Theme.radiusSM
                                             anchors.verticalCenter: parent.verticalCenter
                                             color: parent.parent.parent.statusColor
                                             visible: modelData.status !== 0 || !modelData.startable
@@ -366,13 +366,13 @@ Item {
 
                                         Text {
                                             text: modelData.icon || "\u2699"
-                                            font.pixelSize: 18
+                                            font.pixelSize: Theme.fontSizeXXL
                                             color: modelData.startable ? Theme.textSecondary : Theme.textDisabled
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
 
                                         Column {
-                                            spacing: 1
+                                            spacing: Theme.spacingXXS
                                             anchors.verticalCenter: parent.verticalCenter
                                             Text {
                                                 text: modelData.name
@@ -423,25 +423,14 @@ Item {
                 color: Theme.bgBase
 
                 // Empty state
-                Column {
+                // Phase 172 (P2): shared empty-state component (also
+                // localizes the former hardcoded English copy).
+                CxEmptyState {
                     anchors.centerIn: parent
-                    spacing: Theme.spacingXL
                     visible: root.calibrationVm.selectedIndex < 0
-
-                    Text {
-                        text: "\u2699"
-                        font.pixelSize: 56
-                        color: Theme.bgHover
-                        horizontalAlignment: Text.AlignHCenter
-                        width: 300
-                    }
-                    Text {
-                        text: qsTr("Select a calibration type from the left panel")
-                        color: Theme.textDisabled
-                        font.pixelSize: Theme.fontSizeLG
-                        horizontalAlignment: Text.AlignHCenter
-                        width: 300
-                    }
+                    glyph: "\u2699"
+                    title: qsTr("从左侧选择一个校准类型")
+                    width: 300
                 }
 
                 // Selected calibration detail
@@ -468,7 +457,7 @@ Item {
                             visible: root.calibrationVm.selectedStatus > 0
                             Layout.preferredHeight: 22
                             Layout.preferredWidth: statusLbl.implicitWidth + 16
-                            radius: 11
+                            radius: Theme.radiusXL
                             color: {
                                 if (root.calibrationVm.selectedStatus === 1) return Qt.rgba(0x3b, 0x9e, 0xff, 0.15)
                                 if (root.calibrationVm.selectedStatus === 2) return Qt.rgba(0x18, 0xc7, 0x5e, 0.15)
@@ -703,7 +692,7 @@ Item {
                                             // Fine adjustment buttons
                                             Rectangle {
                                                 width: 24; height: 24
-                                                radius: 4
+                                                radius: Theme.radiusSM
                                                 color: kFineDec.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
@@ -713,7 +702,7 @@ Item {
                                             }
                                             Rectangle {
                                                 width: 24; height: 24
-                                                radius: 4
+                                                radius: Theme.radiusSM
                                                 color: kFineInc.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
@@ -759,7 +748,7 @@ Item {
                                             // Fine adjustment buttons
                                             Rectangle {
                                                 width: 24; height: 24
-                                                radius: 4
+                                                radius: Theme.radiusSM
                                                 color: nFineDec.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
@@ -769,7 +758,7 @@ Item {
                                             }
                                             Rectangle {
                                                 width: 24; height: 24
-                                                radius: 4
+                                                radius: Theme.radiusSM
                                                 color: nFineInc.containsMouse ? Theme.bgHover : Theme.bgPanel
                                                 border.color: Theme.borderSubtle
                                                 border.width: 1
@@ -887,7 +876,7 @@ Item {
                                                 Rectangle {
                                                     Layout.fillWidth: true
                                                     height: 30
-                                                    radius: 6
+                                                    radius: Theme.radiusMD
                                                     color: Theme.bgPanel
                                                     border.width: 1
                                                     border.color: Theme.borderDefault
@@ -907,7 +896,7 @@ Item {
                                                 Rectangle {
                                                     width: 24
                                                     height: 30
-                                                    radius: 6
+                                                    radius: Theme.radiusMD
                                                     color: Theme.bgHover
 
                                                     Text {
@@ -947,7 +936,7 @@ Item {
                                                         required property int index
                                                         width: filLabel.implicitWidth + 16
                                                         height: 26
-                                                        radius: 6
+                                                        radius: Theme.radiusMD
                                                         color: root.calibrationVm.selectedFilamentPreset === modelData
                                                                ? Theme.accent : (filHov.containsMouse ? Theme.bgHover : Theme.bgPanel)
                                                         border.width: 1
@@ -1047,7 +1036,7 @@ Item {
                         Layout.fillWidth: true
                         // Upstream wraps each button with 5DIP on all sides
                         // (CalibrationWizardPage.cpp:742), i.e. 10px between pills
-                        spacing: 10
+                        spacing: Theme.spacingMD
 
                         Item { Layout.fillWidth: true }
 

@@ -233,7 +233,7 @@ Item {
                 id: fileBtn
                 Layout.preferredHeight: 30
                 Layout.preferredWidth: Math.max(60, fileBtnRow.implicitWidth + 16)
-                radius: 3
+                radius: Theme.radiusSM
                 color: fileBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
 
                 Row {
@@ -267,7 +267,7 @@ Item {
                 id: dropBtn
                 Layout.preferredWidth: 24
                 Layout.preferredHeight: 30
-                radius: 3
+                radius: Theme.radiusSM
                 color: dropBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
 
                 Text {
@@ -333,7 +333,7 @@ Item {
                 id: calibBtn
                 Layout.preferredHeight: 28
                 Layout.preferredWidth: Math.max(72, calibBtnRow.implicitWidth + 20)
-                radius: 3
+                radius: Theme.radiusSM
                 color: calibBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
 
                 Row {
@@ -406,7 +406,7 @@ Item {
                 id: sideTools
                 Layout.alignment: Qt.AlignVCenter
                 visible: false
-                spacing: 2
+                spacing: Theme.spacingXXS
 
                 // Slice 下拉 (复用 main.qml sliceTopMenu 语义) — Phase 51 SHELL-03: canSlice gate
                 CxIconButton {
@@ -503,9 +503,24 @@ Item {
                     visible: backend.unreadHistoryCount > 0
                     anchors.top: bellButton.top; anchors.topMargin: 2
                     anchors.left: bellButton.left; anchors.leftMargin: 18
-                    width: 8; height: 8; radius: 4
+                    width: 8; height: 8; radius: Theme.radiusSM
                     color: Theme.statusError
                     z: 1
+                }
+            }
+
+            // Phase 171 (P1): dark/light theme toggle (OWzx extension --
+            // upstream has no chrome toggle; Orca 2.3 dark_color_mode parity).
+            CxIconButton {
+                cxStyle: CxIconButton.Style.Chrome
+                buttonSize: 30
+                iconSize: 14
+                iconSource: "qrc:/qml/assets/icons/theme-toggle.svg"
+                toolTipText: Theme.isDark ? qsTr("切换到浅色主题") : qsTr("切换到深色主题")
+                onClicked: {
+                    const next = Theme.isDark ? "light" : "dark"
+                    Theme.setTheme(next)
+                    appSettings.setValue("ui/theme", next)
                 }
             }
 
@@ -619,7 +634,7 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: sliceGroupRow.implicitWidth
                     implicitHeight: 24
-                    color: "#2D2D30"
+                    color: Theme.surfaceDeep
                     enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
                     ToolTip.visible: sliceMouse.containsMouse && prepareSliceButton.toolTipText.length > 0
                     ToolTip.text: prepareSliceButton.toolTipText
@@ -628,13 +643,13 @@ Item {
                     Row {
                         id: sliceGroupRow
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: 2
+                        spacing: Theme.spacingXXS
 
                         // Chevron block: upstream keeps the option button
                         // accent-colored and always enabled
                         // (MainFrame.cpp:1938, 2478-2482 -- 24x24, 14px icon).
                         Rectangle {
-                            width: 24; height: 24; radius: 12
+                            width: 24; height: 24; radius: Theme.radiusXL
                             color: Theme.accent
                             Image {
                                 anchors.centerIn: parent
@@ -646,9 +661,9 @@ Item {
 
                         Rectangle {
                             id: slicePill
-                            height: 24; radius: 12
+                            height: 24; radius: Theme.radiusXL
                             width: sliceLabel.implicitWidth + 40
-                            color: !prepareSliceButton.enabled ? "#818183"
+                            color: !prepareSliceButton.enabled ? Theme.controlDisabledBg
                                  : sliceMouse.pressed ? Theme.accentDark
                                  : sliceMouse.containsMouse ? Theme.accentLight
                                  : Theme.accent
@@ -657,7 +672,7 @@ Item {
                                 id: sliceLabel
                                 anchors.centerIn: parent
                                 text: qsTr("切片单盘")
-                                color: prepareSliceButton.enabled ? Theme.textOnAccent : "#E0E0E0"
+                                color: prepareSliceButton.enabled ? Theme.textOnAccent : Theme.controlDisabledText
                                 font.pixelSize: Theme.fontSizeLG
                             }
 
@@ -681,7 +696,7 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: exportGroupRow.implicitWidth
                     implicitHeight: 24
-                    color: "#2D2D30"
+                    color: Theme.surfaceDeep
                     enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
                     ToolTip.visible: exportMouse.containsMouse && prepareExportGcodeButton.toolTipText.length > 0
                     ToolTip.text: prepareExportGcodeButton.toolTipText
@@ -690,10 +705,10 @@ Item {
                     Row {
                         id: exportGroupRow
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: 2
+                        spacing: Theme.spacingXXS
 
                         Rectangle {
-                            width: 24; height: 24; radius: 12
+                            width: 24; height: 24; radius: Theme.radiusXL
                             color: Theme.accent
                             Image {
                                 anchors.centerIn: parent
@@ -705,9 +720,9 @@ Item {
 
                         Rectangle {
                             id: exportPill
-                            height: 24; radius: 12
+                            height: 24; radius: Theme.radiusXL
                             width: exportLabel.implicitWidth + 40
-                            color: !prepareExportGcodeButton.enabled ? "#818183"
+                            color: !prepareExportGcodeButton.enabled ? Theme.controlDisabledBg
                                  : exportMouse.pressed ? Theme.accentDark
                                  : exportMouse.containsMouse ? Theme.accentLight
                                  : Theme.accent
@@ -716,7 +731,7 @@ Item {
                                 id: exportLabel
                                 anchors.centerIn: parent
                                 text: qsTr("导出G-code文件")
-                                color: prepareExportGcodeButton.enabled ? Theme.textOnAccent : "#E0E0E0"
+                                color: prepareExportGcodeButton.enabled ? Theme.textOnAccent : Theme.controlDisabledText
                                 font.pixelSize: Theme.fontSizeLG
                             }
 
@@ -760,7 +775,7 @@ Item {
     component TitleBarDivider: Rectangle {
         implicitWidth: 1
         implicitHeight: 18
-        radius: 1
+        radius: Theme.radiusXS
         color: Theme.chromeBorder
     }
 

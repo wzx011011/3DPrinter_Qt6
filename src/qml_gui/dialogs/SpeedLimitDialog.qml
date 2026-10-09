@@ -112,7 +112,7 @@ CxDialog {
                 Rectangle {
                     width: 20
                     height: 20
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: "transparent"
 
                     Text {
@@ -142,7 +142,7 @@ CxDialog {
         width: parent.width
         height: 48
         color: Theme.bgSurface
-        radius: 8
+        radius: Theme.radiusLG
         Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left

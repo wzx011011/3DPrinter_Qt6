@@ -26,7 +26,7 @@ ProgressBar {
 
         Behavior on width {
             enabled: root.animateWidth
-            NumberAnimation { duration: 150; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard }
         }
     }
 }

@@ -59,7 +59,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: 12
+        radius: Theme.radiusXL
         color: Theme.bgInset
         border.color: Theme.bgCard
         border.width: 1
@@ -87,7 +87,7 @@ Item {
                     visible: backend.unreadHistoryCount > 0
                     width: unreadBadge.implicitWidth + 12
                     height: 20
-                    radius: 10
+                    radius: Theme.radiusXL
                     color: Theme.statusError
 
                     Text {
@@ -103,7 +103,7 @@ Item {
                 // Mark read button
                 Rectangle {
                     visible: backend.unreadHistoryCount > 0
-                    width: 24; height: 24; radius: 4
+                    width: 24; height: 24; radius: Theme.radiusSM
                     color: "transparent"
 
                     Text {
@@ -120,7 +120,7 @@ Item {
                 // Clear all button
                 Rectangle {
                     visible: backend.historyCount > 0
-                    width: 24; height: 24; radius: 4
+                    width: 24; height: 24; radius: Theme.radiusSM
                     color: "transparent"
 
                     Text {
@@ -136,7 +136,7 @@ Item {
 
                 // Close button
                 Rectangle {
-                    width: 24; height: 24; radius: 4
+                    width: 24; height: 24; radius: Theme.radiusSM
                     color: "transparent"
 
                     Text {
@@ -186,7 +186,7 @@ Item {
                     width: ListView.view.width
                     height: cardColumn.implicitHeight + 2 * 9
                     // Upstream WindowRounding = 4 x scale (cpp:185, cpp:221).
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: Theme.bgPanel
                     border.color: Theme.scrollBarTrackColor
                     // Upstream WindowBorderSize = WindowRadius / 4 (cpp:247).
@@ -204,7 +204,7 @@ Item {
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: 8  // 2 x WindowRadius (cpp:961)
-                        radius: 4 // = WindowRadius (cpp:968)
+                        radius: Theme.radiusSM // = WindowRadius (cpp:968)
                         color: card.sevColor
                     }
                     Rectangle {
@@ -240,7 +240,7 @@ Item {
                         anchors.right: parent.right
                         anchors.rightMargin: card.contentRight
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: 2
+                        spacing: Theme.spacingXXS
 
                         // Title
                         Text {
@@ -404,7 +404,7 @@ Item {
                     policy: ScrollBar.AsNeeded
                     width: 4
                     contentItem: Rectangle {
-                        radius: 2
+                        radius: Theme.radiusXS
                         color: Theme.borderDefault
                     }
                 }

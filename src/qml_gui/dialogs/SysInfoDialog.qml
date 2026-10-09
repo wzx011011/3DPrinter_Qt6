@@ -74,7 +74,7 @@ CxDialog {
             Text {
                 text: "OWzx Slicer"
                 color: Theme.textPrimary
-                font.pixelSize: 29
+                font.pixelSize: Theme.fontSizeDisplay
                 font.bold: true
             }
         }
@@ -84,7 +84,7 @@ CxDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: Theme.bgInset
-            radius: 4
+            radius: Theme.radiusSM
             border.color: Theme.borderSubtle
             border.width: 1
             clip: true
@@ -97,7 +97,7 @@ CxDialog {
 
                 ColumnLayout {
                     width: infoScroll.availableWidth
-                    spacing: 2
+                    spacing: Theme.spacingXXS
 
                     Repeater {
                         model: root.infoKeys
@@ -111,7 +111,7 @@ CxDialog {
                             // by the layout's preferred-height logic).
                             Layout.preferredHeight: 30
                             implicitHeight: 30
-                            radius: 3
+                            radius: Theme.radiusSM
                             color: index % 2 === 0 ? "transparent" : Theme.bgBase
 
                             RowLayout {

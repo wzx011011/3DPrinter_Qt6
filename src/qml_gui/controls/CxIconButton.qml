@@ -25,7 +25,7 @@ ToolButton {
     // Press scale animation (对齐上游 GLToolbar press feedback)
     scale: _pressScale
     property real _pressScale: 1.0
-    Behavior on _pressScale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+    Behavior on _pressScale { NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
     onPressedChanged: _pressScale = pressed ? 0.92 : 1.0
 
@@ -33,7 +33,7 @@ ToolButton {
         id: bgRect
         radius: Math.round(root.height / 4)
         scale: root.down ? 0.96 : 1.0
-        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+        Behavior on scale { NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
         color: {
             if (!root.enabled)
@@ -57,10 +57,14 @@ ToolButton {
                 return root.down ? Theme.bgPressed : (root.hovered ? Theme.bgHover : "transparent")
             return root.down ? Theme.bgPressed : (root.hovered ? Theme.bgHover : Theme.bgPanel)
         }
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
-        border.width: root.cxStyle === CxIconButton.Style.ChromeDanger ? 0 : 1
+        border.width: root.activeFocus ? 2
+                    : root.cxStyle === CxIconButton.Style.ChromeDanger ? 0 : 1
         border.color: {
+            // Phase 170 (P0-2): keyboard focus ring — shared borderFocus,
+            // same contract as CxButton/CxTextField.
+            if (root.activeFocus) return Theme.borderFocus
             if (!root.enabled)
                 // U09 (G3): disabled Ghost keeps no box at all.
                 return root.cxStyle === CxIconButton.Style.Ghost ? "transparent" : Theme.borderSubtle
@@ -77,10 +81,10 @@ ToolButton {
                 return root.hovered ? Theme.borderDefault : Theme.borderSubtle
             return Theme.borderSubtle
         }
-        Behavior on border.color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
         opacity: root.enabled ? 1.0 : 0.45
-        Behavior on opacity { NumberAnimation { duration: 150 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
 
         // U09 (G5): the former low-opacity accent glow overlay is gone --
         // the selected state is now the solid accent capsule itself.
@@ -95,7 +99,7 @@ ToolButton {
             fillMode: Image.PreserveAspectFit
             smooth: true
             opacity: root.enabled ? 1.0 : 0.65
-            Behavior on opacity { NumberAnimation { duration: 150 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
         }
     }
 

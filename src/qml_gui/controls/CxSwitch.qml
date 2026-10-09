@@ -16,14 +16,17 @@ Switch {
         y: (root.height - height) / 2
         width: 24
         height: 14
-        radius: 7
+        radius: Theme.radiusLG
 
         color: {
             if (!root.enabled) return Theme.bgPanel
             if (root.checked) return root.hovered ? Theme.accentLight : Theme.accent
-            return "#6b6b6d"
+            return Theme.textDisabled
         }
-        Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+        // Phase 170 (P0-2): keyboard focus ring, shared borderFocus contract.
+        border.width: root.activeFocus ? 2 : 0
+        border.color: Theme.borderFocus
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         opacity: root.enabled ? 1.0 : 0.45
 
         Rectangle {
@@ -31,12 +34,12 @@ Switch {
             y: (parent.height - height) / 2
             width: 10
             height: 10
-            radius: 5
+            radius: Theme.radiusMD
             color: root.enabled ? Theme.switchKnob : Theme.textDisabled
-            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on x { NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+            Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
             scale: root.pressed ? 0.9 : 1.0
-            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+            Behavior on scale { NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         }
     }
 

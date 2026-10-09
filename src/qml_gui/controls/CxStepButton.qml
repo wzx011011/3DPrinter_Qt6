@@ -26,11 +26,19 @@ Rectangle {
     Layout.preferredWidth: root.preferredWidth
     Layout.preferredHeight: root.preferredHeight
     Layout.alignment: Qt.AlignHCenter
-    radius: 4
+    radius: Theme.radiusSM
     color: stepMouse.containsMouse && root.controlEnabled ? Theme.bgHover : Theme.bgElevated
-    border.width: 1
-    border.color: stepMouse.containsMouse && root.controlEnabled ? Theme.accentDark : Theme.borderSubtle
+    // Phase 170 (P0-2): the step button is part of the Tab chain and is
+    // keyboard-activatable (Space/Enter), with the shared focus ring.
+    activeFocusOnTab: true
+    border.width: root.activeFocus ? 2 : 1
+    border.color: root.activeFocus ? Theme.borderFocus
+                 : stepMouse.containsMouse && root.controlEnabled ? Theme.accentDark : Theme.borderSubtle
     opacity: root.controlEnabled ? 1.0 : 0.45
+
+    Keys.onSpacePressed: if (root.controlEnabled) root.triggered()
+    Keys.onReturnPressed: if (root.controlEnabled) root.triggered()
+    Keys.onEnterPressed: if (root.controlEnabled) root.triggered()
 
     Text {
         anchors.centerIn: parent

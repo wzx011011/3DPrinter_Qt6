@@ -25,8 +25,8 @@ TextArea {
             return Theme.borderDefault
         }
         border.width: 1
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         opacity: root.enabled ? 1.0 : 0.45
     }
 }

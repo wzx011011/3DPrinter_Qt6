@@ -538,7 +538,7 @@ Item {
                     Rectangle {
                         height: 28
                         width: cancelText.implicitWidth + 20
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: cancelHov.containsMouse ? Theme.borderSubtle : Theme.bgHover
                         Text { id: cancelText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
                         HoverHandler { id: cancelHov }
@@ -547,7 +547,7 @@ Item {
                     Rectangle {
                         height: 28
                         width: okText.implicitWidth + 20
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: Theme.accent
                         Text { id: okText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD }
                         TapHandler {
@@ -580,7 +580,7 @@ Item {
             width: 420
 
             // 挤出机颜色数组（对齐上游 DragCanvas extruder colors）
-            property var extruderColors: [Theme.statusError, Theme.accentDark, "#4444FF", Theme.statusWarning]
+            property var extruderColors: [Theme.statusError, Theme.accentDark, Theme.extruderPalette[0], Theme.statusWarning]
 
             ColumnLayout {
                 anchors.fill: parent
@@ -589,7 +589,7 @@ Item {
                 // 平板名称
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: Theme.spacingMD
                     Text {
                         text: qsTr("平板名称")
                         color: Theme.textSecondary
@@ -608,7 +608,7 @@ Item {
                 // 热床类型（对齐上游 BedType: btDefault/btPC/btEP/btPEI/btPTE/btDEF/btER）
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: Theme.spacingMD
                     Text {
                         text: qsTr("热床类型")
                         color: Theme.textSecondary
@@ -638,7 +638,7 @@ Item {
                 // 打印顺序（对齐上游 PlateSettingsDialog print sequence: ByDefault/ByLayer/ByObject）
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: Theme.spacingMD
                     Text {
                         text: qsTr("打印顺序")
                         color: Theme.textSecondary
@@ -659,7 +659,7 @@ Item {
                 // 螺旋花瓶模式（对齐上游 PlateSettingsDialog spiral mode）
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: Theme.spacingMD
                     Text {
                         text: qsTr("螺旋花瓶")
                         color: Theme.textSecondary
@@ -681,7 +681,7 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: firstLayerCol.implicitHeight + 16
-                    radius: 8
+                    radius: Theme.radiusLG
                     color: Theme.bgSurface
                     border.color: Theme.borderSubtle
                     border.width: 1
@@ -701,7 +701,7 @@ Item {
 
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 10
+                            spacing: Theme.spacingMD
                             Text {
                                 text: qsTr("模式")
                                 color: Theme.textSecondary
@@ -730,7 +730,7 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: firstLayerCanvas.height + 8
-                            radius: 6
+                            radius: Theme.radiusMD
                             color: Theme.bgElevated
                             visible: firstLayerSeqChoiceCombo.currentIndex === 1
                             property var dragData: null
@@ -792,7 +792,7 @@ Item {
 
                                             // 挤出机颜色圆
                                             Rectangle {
-                                                width: 18; height: 18; radius: 9
+                                                width: 18; height: 18; radius: Theme.radiusLG
                                                 color: settingsDlg.extruderColors[(modelData - 1) % 4]
                                                 border.width: 1
                                                 border.color: parent.parent.pillDropArea.containsDrag ? "white" : "transparent"
@@ -816,7 +816,7 @@ Item {
                                         // 拖拽视觉反馈
                                         Rectangle {
                                             anchors.fill: parent
-                                            radius: 6
+                                            radius: Theme.radiusMD
                                             color: "transparent"
                                             border.width: 2
                                             border.color: pillDropArea.containsDrag ? Theme.accent : (pillDragMA.containsMouse ? Theme.borderActive : "transparent")
@@ -862,7 +862,7 @@ Item {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: otherLayerCol.implicitHeight + 16
-                    radius: 8
+                    radius: Theme.radiusLG
                     color: Theme.bgSurface
                     border.color: Theme.borderSubtle
                     border.width: 1
@@ -915,7 +915,7 @@ Item {
                                 delegate: Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: seqEntryCol.implicitHeight + 8
-                                    radius: 6
+                                    radius: Theme.radiusMD
                                     color: Theme.bgElevated
                                     border.color: Theme.borderSubtle
                                     property int entryIndex: index
@@ -977,7 +977,7 @@ Item {
 
                                             // 删除按钮
                                             Rectangle {
-                                                width: 20; height: 20; radius: 4
+                                                width: 20; height: 20; radius: Theme.radiusSM
                                                 color: removeBtnMA.containsMouse ? Theme.statusError : Theme.bgSurface
                                                 border.color: Theme.borderSubtle
                                                 Text { anchors.centerIn: parent; text: "✕"; color: removeBtnMA.containsMouse ? "white" : Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
@@ -991,7 +991,7 @@ Item {
                                         Rectangle {
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: otherLayerCanvas.height + 6
-                                            radius: 4
+                                            radius: Theme.radiusSM
                                             color: Theme.bgSurface
                                             property int entryIdx: delegateModel.entryIndex
 
@@ -1024,7 +1024,7 @@ Item {
                                                 anchors.left: parent.left
                                                 anchors.right: parent.right
                                                 anchors.top: parent.top
-                                                anchors.margins: 3
+                                                anchors.margins: Theme.spacingXS
                                                 spacing: 4
 
                                                 Repeater {
@@ -1043,10 +1043,10 @@ Item {
                                                         RowLayout {
                                                             id: pillOLRow
                                                             anchors.centerIn: parent
-                                                            spacing: 3
+                                                            spacing: Theme.spacingXS
 
                                                             Rectangle {
-                                                                width: 16; height: 16; radius: 8
+                                                                width: 16; height: 16; radius: Theme.radiusLG
                                                                 color: settingsDlg.extruderColors[(modelData - 1) % 4]
                                                                 border.width: 1
                                                                 border.color: parent.parent.pillOLDrop.containsDrag ? "white" : "transparent"
@@ -1054,7 +1054,7 @@ Item {
                                                             Text {
                                                                 text: qsTr("%1").arg(modelData)
                                                                 color: "white"
-                                                                font.pixelSize: 8
+                                                                font.pixelSize: Theme.fontSizeXS
                                                                 font.bold: true
                                                                 anchors.centerIn: parent
                                                             }
@@ -1068,7 +1068,7 @@ Item {
 
                                                         Rectangle {
                                                             anchors.fill: parent
-                                                            radius: 5
+                                                            radius: Theme.radiusMD
                                                             color: "transparent"
                                                             border.width: 1
                                                             border.color: pillOLDrop.containsDrag ? Theme.accent : (pillOLDragMA.containsMouse ? Theme.borderActive : "transparent")
@@ -1116,7 +1116,7 @@ Item {
                                 Rectangle {
                                     height: 24
                                     width: addSeqBtnText.implicitWidth + 16
-                                    radius: 5
+                                    radius: Theme.radiusMD
                                     color: addSeqBtnMA.containsMouse ? Theme.accent : Theme.bgElevated
                                     border.color: Theme.accent
                                     Text { id: addSeqBtnText; anchors.centerIn: parent; text: qsTr("+ 添加层范围"); color: addSeqBtnMA.containsMouse ? Theme.textOnAccent : Theme.accent; font.pixelSize: Theme.fontSizeXS }
@@ -1145,7 +1145,7 @@ Item {
                     Rectangle {
                         height: 30
                         width: psOkText.implicitWidth + 24
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: Theme.accent
                         Text { id: psOkText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                         TapHandler {
@@ -1188,13 +1188,13 @@ Item {
         id: arrangeSettingsPopup
         anchors.centerIn: parent
         width: 320
-        padding: 20
+        padding: Theme.spacingXL
         modal: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         ColumnLayout {
             anchors.fill: parent
-            spacing: 14
+            spacing: Theme.spacingXL
 
             // 标题行
             RowLayout {
@@ -1219,7 +1219,7 @@ Item {
             // 对象间距
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("对象间距")
                     color: Theme.textSecondary
@@ -1251,7 +1251,7 @@ Item {
             // 自动旋转
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("自动旋转")
                     color: Theme.textSecondary
@@ -1267,7 +1267,7 @@ Item {
             // 对齐 Y 轴
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("对齐 Y 轴")
                     color: Theme.textSecondary
@@ -1284,7 +1284,7 @@ Item {
             // 允许多耗材同板
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("允许多耗材")
                     color: Theme.textSecondary
@@ -1300,7 +1300,7 @@ Item {
             // 避免校准区域
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.spacingMD
                 Text {
                     text: qsTr("避免校准区域")
                     color: Theme.textSecondary
@@ -1318,7 +1318,7 @@ Item {
             // 按钮行
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 10
+                spacing: Theme.spacingMD
                 Item { Layout.fillWidth: true }
                 CxButton {
                     text: qsTr("重置默认")
@@ -1444,7 +1444,7 @@ Item {
 
         width: 36
         height: 36
-        radius: 18
+        radius: Theme.radiusHero  // clamps to width/2: full circle
         color: actionHover.containsMouse ? Theme.bgHover : Qt.rgba(0.10, 0.10, 0.12, 0.82)
         border.width: 1
         border.color: plateActionButton.checked || actionHover.containsMouse
@@ -1597,7 +1597,7 @@ Item {
                                 id: idxButton
                                 width: 36
                                 height: 36
-                                radius: 18
+                                radius: Theme.radiusHero  // clamps to width/2: full circle
                                 color: idxHover.containsMouse ? Theme.bgHover
                                                               : Qt.rgba(0.10, 0.10, 0.12, 0.82)
                                 border.width: 1
@@ -1606,7 +1606,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: plateCluster.idxText
-                                    color: "#00AE42"
+                                    color: Theme.extruderPalette[2]
                                     font.pixelSize: 14
                                     font.bold: true
                                 }
@@ -1749,7 +1749,7 @@ Item {
                             Rectangle {
                                 width: 22
                                 height: 22
-                                radius: 11
+                                radius: Theme.radiusXL
                                 anchors.verticalCenter: parent.verticalCenter
                                 color: nameEditHover.containsMouse ? Theme.bgHover
                                                                    : Qt.rgba(0.10, 0.10, 0.12, 0.82)
@@ -1778,7 +1778,7 @@ Item {
                                 color: Theme.textSecondary
                                 font.pixelSize: 12
                                 style: Text.Outline
-                                styleColor: "#101010"
+                                styleColor: Theme.chromeSurfaceAlt
                             }
                         }
                     }
@@ -1802,7 +1802,7 @@ Item {
                     Rectangle {
                         width: 36
                         height: 36
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: topFaceHover.containsMouse ? Theme.bgHover : Theme.bgFloating
                         border.width: 1
                         border.color: topFaceHover.containsMouse ? Theme.accent : Theme.borderSubtle
@@ -1825,7 +1825,7 @@ Item {
                     Rectangle {
                         width: 36
                         height: 36
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: frontFaceHover.containsMouse ? Theme.bgHover : Theme.bgFloating
                         border.width: 1
                         border.color: frontFaceHover.containsMouse ? Theme.accent : Theme.borderSubtle
@@ -1849,7 +1849,7 @@ Item {
                         id: viewHomeButton
                         width: 32
                         height: 32
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: homeViewHover.containsMouse ? Theme.bgHover : Theme.bgFloating
                         border.width: 1
                         border.color: homeViewHover.containsMouse ? Theme.accent : Theme.borderSubtle
@@ -1857,7 +1857,7 @@ Item {
                             anchors.centerIn: parent
                             text: "\u2191"  // up-arrow glyph (U+2191), ref home button
                             color: Theme.textPrimary
-                            font.pixelSize: 18
+                            font.pixelSize: Theme.fontSizeXXL
                         }
                         HoverHandler { id: homeViewHover }
                         TapHandler {
@@ -2393,13 +2393,13 @@ Item {
             anchors.bottomMargin: 10
             width: warningContent.implicitWidth + 28
             height: warningContent.implicitHeight + 16
-            radius: 8
+            radius: Theme.radiusLG
             color: root.editorVm && root.editorVm.viewportWarning === 2 ? Theme.bgErrorSubtle : Theme.bgWarningSubtle
             border.width: 1
             border.color: root.editorVm && root.editorVm.viewportWarning === 2 ? Theme.statusError : Theme.statusWarning
             visible: root.editorVm ? root.editorVm.hasViewportWarning : false
             opacity: visible ? 1.0 : 0.0
-            Behavior on opacity { NumberAnimation { duration: 200 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.motionNormal } }
 
             RowLayout {
                 id: warningContent
@@ -2432,7 +2432,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: transformMiniContent.implicitWidth + 24
             height: transformMiniContent.implicitHeight + 14
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.width: 1
             border.color: Theme.borderSubtle
@@ -2476,7 +2476,7 @@ Item {
                 TransformMetricField {
                     axisName: "X"
                     sidebarField: viewport3d.gizmoMode === GLViewport.GizmoMove ? "position_x" : viewport3d.gizmoMode === GLViewport.GizmoRotate ? "rotation_x" : "scale_x"
-                    accentColor: "#e066a0"
+                    accentColor: Theme.extruderPalette[1]
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
                     // Phase 241 (PAGE-04): Move positions display in the
                     // preferred unit (mm or inch, upstream use_inches);
@@ -2569,7 +2569,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: supportPaintContent.implicitWidth + 24
             height: supportPaintContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSupportPaint && root.editorVm
@@ -2613,7 +2613,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 72; height: 24; radius: 4
+                            width: 72; height: 24; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -2645,7 +2645,7 @@ Item {
                         model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}, {label: qsTr("缝隙填充"), val: 3}]
                         delegate: Rectangle {
                             required property var modelData
-                            width: 76; height: 24; radius: 4
+                            width: 76; height: 24; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -2681,7 +2681,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30).toFixed(0) + "°"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 32
                     }
                 }
@@ -2706,7 +2706,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.supportPaintGapArea : 1).toFixed(2) + "mm²"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 52
                     }
                 }
@@ -2730,7 +2730,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 32
                     }
                     CxButton {
@@ -2766,7 +2766,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0).toFixed(0) + "°"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 32
                     }
                 }
@@ -2785,7 +2785,7 @@ Item {
                         text: root.editorVm ? root.editorVm.supportPaintCursorRadius.toFixed(1) : "2.0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                 }
@@ -2799,7 +2799,7 @@ Item {
                         model: [{label: qsTr("球体"), val: 1}, {label: qsTr("圆形"), val: 0}]
                         delegate: Rectangle {
                             required property var modelData
-                            width: 56; height: 22; radius: 4
+                            width: 56; height: 22; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -2821,7 +2821,7 @@ Item {
                 // Clear button.
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 80; height: 24; radius: 4
+                    width: 80; height: 24; radius: Theme.radiusSM
                     color: Theme.bgElevated
                     border.color: Theme.borderDefault; border.width: 1
                     Text {
@@ -2870,7 +2870,7 @@ Item {
                 color: Theme.statusInfo
                 font.pixelSize: Theme.fontSizeXS
                 font.bold: true
-                font.family: "Consolas, monospace"
+                font.family: Theme.fontMono
                 style: Text.Outline
                 styleColor: Theme.bgPanel
                 z: 150
@@ -2884,7 +2884,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: measureContent.implicitWidth + 24
             height: measureContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMeasure && root.editorVm
@@ -2903,7 +2903,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 60; height: 22; radius: 4
+                            width: 60; height: 22; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -2927,12 +2927,12 @@ Item {
                     // Phase 241 (PAGE-04): measure dimensions convert mm ->
                     // inch for display when the units preference is Imperial
                     // (upstream use_inches); the stored value stays mm.
-                    Label { text: qsTr("X:"); color: "#e066a0"; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.x) : root.editorVm.measureDimensions.x).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
-                    Label { text: qsTr("Y:"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.y) : root.editorVm.measureDimensions.y).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
-                    Label { text: qsTr("Z:"); color: Theme.statusInfo; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: "Consolas, monospace" }
-                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.z) : root.editorVm.measureDimensions.z).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: "Consolas, monospace" }
+                    Label { text: qsTr("X:"); color: Theme.extruderPalette[1]; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: Theme.fontMono }
+                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.x) : root.editorVm.measureDimensions.x).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
+                    Label { text: qsTr("Y:"); color: Theme.textTertiary; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: Theme.fontMono }
+                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.y) : root.editorVm.measureDimensions.y).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
+                    Label { text: qsTr("Z:"); color: Theme.statusInfo; font.pixelSize: Theme.fontSizeSM; font.bold: true; font.family: Theme.fontMono }
+                    Label { text: root.editorVm ? (root.settingsVm ? root.settingsVm.displayLength(root.editorVm.measureDimensions.z) : root.editorVm.measureDimensions.z).toFixed(1) : "0.0"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM; font.family: Theme.fontMono }
                     // Unit suffix for the converted readout.
                     Label { text: root.settingsVm ? root.settingsVm.lengthUnitLabel() : "mm"; color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                 }
@@ -2942,7 +2942,7 @@ Item {
                         : ""
                     color: Theme.textMuted
                     font.pixelSize: Theme.fontSizeXS
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.alignment: Qt.AlignHCenter
                 }
                 // Phase 115 (MEASURE-04): the picked-feature readouts. Surfaces
@@ -2957,7 +2957,7 @@ Item {
                           : ""
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeSM
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Label {
@@ -2967,7 +2967,7 @@ Item {
                           : ""
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeSM
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Label {
@@ -2977,7 +2977,7 @@ Item {
                           : ""
                     color: Theme.textPrimary
                     font.pixelSize: Theme.fontSizeSM
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Label {
@@ -3026,7 +3026,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: flattenContent.implicitWidth + 32
             height: flattenContent.implicitHeight + 20
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoFlatten && root.editorVm
@@ -3053,7 +3053,7 @@ Item {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
                     Rectangle {
-                        width: 80; height: 28; radius: 4
+                        width: 80; height: 28; radius: Theme.radiusSM
                         color: Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -3090,7 +3090,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: cutContent.implicitWidth + 32
             height: cutContent.implicitHeight + 20
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoCut && root.editorVm
@@ -3117,7 +3117,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 58; height: 26; radius: 4
+                            width: 58; height: 26; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.cutAxis === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.cutAxis === index ? Theme.accent : Theme.bgHover
                             border.width: 1
@@ -3145,7 +3145,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 70; height: 24; radius: 4
+                            width: 70; height: 24; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.cutMode === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.cutMode === index ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -3175,7 +3175,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 52; height: 22; radius: 4
+                            width: 52; height: 22; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.connectorType === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.connectorType === index ? Theme.statusWarning : Theme.bgHover
                             border.width: 1
@@ -3207,7 +3207,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 56; height: 22; radius: 4
+                            width: 56; height: 22; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.statusWarning : Theme.bgHover
                             border.width: 1
@@ -3229,7 +3229,7 @@ Item {
 
                 // 连接器形状（对齐上游 GLGizmoCut connector shape: Triangle/Square/Hexagon/Circle）
                 Row {
-                    spacing: 3
+                    spacing: Theme.spacingXS
                     Layout.alignment: Qt.AlignHCenter
                     visible: root.editorVm ? root.editorVm.cutMode === 1 : false
                     enabled: root.editorVm ? root.editorVm.connectorType !== 2 : false
@@ -3240,7 +3240,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 28; height: 22; radius: 4
+                            width: 28; height: 22; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.connectorShape === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.connectorShape === index ? Theme.statusWarning : Theme.bgHover
                             border.width: 1
@@ -3276,7 +3276,7 @@ Item {
                         text: root.editorVm ? root.editorVm.connectorSize.toFixed(1) : "5.0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                     Text { text: qsTr("深度:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
@@ -3290,7 +3290,7 @@ Item {
                         text: root.editorVm ? (root.editorVm.connectorDepth * 100).toFixed(0) + "%" : "50%"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                 }
@@ -3311,7 +3311,7 @@ Item {
                         color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS
                     }
                     Rectangle {
-                        width: 44; height: 20; radius: 4
+                        width: 44; height: 20; radius: Theme.radiusSM
                         visible: root.editorVm && root.editorVm.advCutConnectors
                                  && root.editorVm.advancedCutConnectorCount > 0
                         color: Theme.bgElevated
@@ -3344,7 +3344,7 @@ Item {
                         text: root.editorVm ? root.editorVm.cutPosition.toFixed(1) + " mm" : "0.0 mm"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 50
                     }
                 }
@@ -3364,10 +3364,10 @@ Item {
                               : "0° / 0° / 0°"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                     }
                     Rectangle {
-                        width: 44; height: 20; radius: 4
+                        width: 44; height: 20; radius: Theme.radiusSM
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault; border.width: 1
                         Text {
@@ -3396,7 +3396,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 70; height: 26; radius: 4
+                            width: 70; height: 26; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.accent : Theme.bgHover
                             border.width: 1
@@ -3420,7 +3420,7 @@ Item {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
                     Rectangle {
-                        width: 60; height: 28; radius: 4
+                        width: 60; height: 28; radius: Theme.radiusSM
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault; border.width: 1
                         Text {
@@ -3436,7 +3436,7 @@ Item {
                         }
                     }
                     Rectangle {
-                        width: 70; height: 28; radius: 4
+                        width: 70; height: 28; radius: Theme.radiusSM
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault; border.width: 1
                         Text {
@@ -3452,7 +3452,7 @@ Item {
                         }
                     }
                     Rectangle {
-                        width: 80; height: 28; radius: 4
+                        width: 80; height: 28; radius: Theme.radiusSM
                         color: Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -3495,7 +3495,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: seamContent.implicitWidth + 24
             height: seamContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSeamPaint && root.editorVm
@@ -3522,7 +3522,7 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             required property int index
-                            width: 72; height: 24; radius: 4
+                            width: 72; height: 24; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -3556,7 +3556,7 @@ Item {
                         text: root.editorVm ? root.editorVm.seamPaintCursorRadius.toFixed(1) : "2.0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                 }
@@ -3580,7 +3580,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 32
                     }
                     CxButton {
@@ -3604,7 +3604,7 @@ Item {
                 // 清除按钮
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 80; height: 24; radius: 4
+                    width: 80; height: 24; radius: Theme.radiusSM
                     color: Theme.bgElevated
                     border.color: Theme.borderDefault; border.width: 1
                     Text {
@@ -3629,7 +3629,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: hollowContent.implicitWidth + 24
             height: hollowContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
@@ -3653,18 +3653,18 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("启用空洞化:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     Rectangle {
-                        width: 36; height: 18; radius: 9
+                        width: 36; height: 18; radius: Theme.radiusHero  // clamps to height/2: full capsule
                         color: root.editorVm && root.editorVm.hollowEnabled ? Theme.accent : Theme.borderDefault
                         Rectangle {
-                            width: 14; height: 14; radius: 7
+                            width: 14; height: 14; radius: Theme.radiusLG
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: root.editorVm && root.editorVm.hollowEnabled ? undefined : parent.left
                             anchors.right: root.editorVm && root.editorVm.hollowEnabled ? parent.right : undefined
                             anchors.leftMargin: root.editorVm && root.editorVm.hollowEnabled ? 0 : 2
                             anchors.rightMargin: root.editorVm && root.editorVm.hollowEnabled ? 2 : 0
                             color: "white"
-                            Behavior on anchors.left { PropertyAnimation { duration: 150 } }
-                            Behavior on anchors.right { PropertyAnimation { duration: 150 } }
+                            Behavior on anchors.left { PropertyAnimation { duration: Theme.motionFast } }
+                            Behavior on anchors.right { PropertyAnimation { duration: Theme.motionFast } }
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -3689,7 +3689,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowHoleRadius.toFixed(1) : "2.0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                 }
@@ -3709,7 +3709,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowHoleHeight.toFixed(1) : "6.0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                 }
@@ -3729,7 +3729,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowOffset.toFixed(1) : "3.0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 30
                     }
                 }
@@ -3737,7 +3737,7 @@ Item {
                 // 删除选中钻孔
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 100; height: 24; radius: 4
+                    width: 100; height: 24; radius: Theme.radiusSM
                     color: Theme.bgElevated
                     border.color: Theme.borderDefault; border.width: 1
                     Text {
@@ -3764,7 +3764,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: simplifyContent.implicitWidth + 24
             height: simplifyContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSimplify && root.editorVm
@@ -3791,7 +3791,7 @@ Item {
                         text: root.editorVm ? root.editorVm.selectedObjectTriangleCount.toLocaleString() : "0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                     }
                 }
 
@@ -3810,7 +3810,7 @@ Item {
                         text: root.editorVm ? root.editorVm.simplifyWantedCount.toLocaleString() : "0"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 50
                     }
                 }
@@ -3830,7 +3830,7 @@ Item {
                         text: root.editorVm ? root.editorVm.simplifyMaxError.toFixed(3) : "0.000"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 40
                     }
                 }
@@ -3844,7 +3844,7 @@ Item {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Rectangle {
-                        width: 76; height: 24; radius: 4
+                        width: 76; height: 24; radius: Theme.radiusSM
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault; border.width: 1
                         opacity: root.editorVm && root.editorVm.simplifyPreviewRunning ? 0.5 : 1
@@ -3864,7 +3864,7 @@ Item {
                     }
                     Rectangle {
                         visible: root.editorVm && root.editorVm.simplifyPreviewValid
-                        width: 76; height: 24; radius: 4
+                        width: 76; height: 24; radius: Theme.radiusSM
                         color: Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -3881,7 +3881,7 @@ Item {
                     }
                     Rectangle {
                         visible: root.editorVm && root.editorVm.simplifyPreviewValid
-                        width: 76; height: 24; radius: 4
+                        width: 76; height: 24; radius: Theme.radiusSM
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault; border.width: 1
                         Text {
@@ -3906,7 +3906,7 @@ Item {
                           : ""
                     color: Theme.statusInfo
                     font.pixelSize: Theme.fontSizeXS
-                    font.family: "Consolas, monospace"
+                    font.family: Theme.fontMono
                     Layout.alignment: Qt.AlignHCenter
                 }
             }
@@ -3924,7 +3924,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: hollowContent.implicitWidth + 24
             height: hollowSettingsContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoHollow && root.editorVm
@@ -3971,7 +3971,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowOffset.toFixed(1) + " mm" : "3.0 mm"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 50
                     }
                 }
@@ -3991,7 +3991,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowQuality.toFixed(2) : "0.50"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 40
                     }
                 }
@@ -4011,7 +4011,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowClosingDistance.toFixed(1) + " mm" : "2.0 mm"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 50
                     }
                 }
@@ -4031,7 +4031,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowHoleRadius.toFixed(1) + " mm" : "3.0 mm"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 50
                     }
                 }
@@ -4051,7 +4051,7 @@ Item {
                         text: root.editorVm ? root.editorVm.hollowHoleHeight.toFixed(1) + " mm" : "3.0 mm"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 50
                     }
                 }
@@ -4074,7 +4074,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: mmuContent.implicitWidth + 24
             height: mmuContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMmuSegmentation && root.editorVm
@@ -4103,7 +4103,7 @@ Item {
                     Repeater {
                         model: root.editorVm ? root.editorVm.mmuExtruderCount : 4
                         Rectangle {
-                            width: 28; height: 28; radius: 4
+                            width: 28; height: 28; radius: Theme.radiusSM
                             color: {
                                 // Bind to configured filament colours (对齐上游
                                 // m_extruders_colors) with a hard-coded fallback
@@ -4111,9 +4111,9 @@ Item {
                                 // than the extruder count (e.g. pre-load).
                                 var cfgColors = root.editorVm ? root.editorVm.mmuExtruderColors : [];
                                 var fallback = [Theme.statusInfo, Theme.statusError, Theme.accent, Theme.statusWarning,
-                                             "#8B5CF6", "#EC4899", Theme.statusInfo, Theme.statusWarning,
-                                             Theme.statusInfo, Theme.accentLight, Theme.statusError, "#84CC16", "#D946EF",
-                                             Theme.statusInfo, "#A855F7", Theme.statusWarning, Theme.accentLight];
+                                             Theme.extruderPalette[3], Theme.extruderPalette[4], Theme.statusInfo, Theme.statusWarning,
+                                             Theme.statusInfo, Theme.accentLight, Theme.statusError, Theme.extruderPalette[5], Theme.extruderPalette[6],
+                                             Theme.statusInfo, Theme.extruderPalette[7], Theme.statusWarning, Theme.accentLight];
                                 var c = index < cfgColors.length ? cfgColors[index]
                                      : (index < fallback.length ? fallback[index] : Theme.textMuted);
                                 root.editorVm && root.editorVm.mmuSelectedExtruder === index ? c : c + "66"
@@ -4171,7 +4171,7 @@ Item {
                         model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("桶填充"), val: 1}, {label: qsTr("高度范围"), val: 4}, {label: qsTr("缝隙填充"), val: 3}]
                         delegate: Rectangle {
                             required property var modelData
-                            width: 64; height: 24; radius: 4
+                            width: 64; height: 24; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -4204,7 +4204,7 @@ Item {
                         model: [{label: qsTr("圆"), val: 0}, {label: qsTr("球"), val: 1}, {label: qsTr("指针"), val: 2}]
                         delegate: Rectangle {
                             required property var modelData
-                            width: 48; height: 24; radius: 4
+                            width: 48; height: 24; radius: Theme.radiusSM
                             color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
                             border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
                             border.width: 1
@@ -4243,7 +4243,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.paintHeightRange : 0.2).toFixed(1) + "mm"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 44
                     }
                 }
@@ -4274,7 +4274,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.supportPaintSmartFillAngle : 30).toFixed(0) + "°"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 32
                     }
                 }
@@ -4299,7 +4299,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.supportPaintGapArea : 1).toFixed(2) + "mm²"
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 52
                     }
                 }
@@ -4341,7 +4341,7 @@ Item {
                         text: (root.editorVm ? root.editorVm.paintClippingPosition : 0).toFixed(2)
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSizeXS
-                        font.family: "Consolas, monospace"
+                        font.family: Theme.fontMono
                         Layout.preferredWidth: 32
                     }
                     CxButton {
@@ -4356,7 +4356,7 @@ Item {
                 // 清除分段按钮（对齐上游 reset triangle painting）
                 Rectangle {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 80; height: 24; radius: 4
+                    width: 80; height: 24; radius: Theme.radiusSM
                     color: Theme.borderDefault
                     border.color: Theme.borderStrong; border.width: 1
                     Text {
@@ -4381,7 +4381,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: drillContent.implicitWidth + 24
             height: drillContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoDrill && root.editorVm
@@ -4424,7 +4424,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: embossContent.implicitWidth + 24
             height: embossContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoEmboss && root.editorVm
@@ -4602,7 +4602,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: boolContent.implicitWidth + 24
             height: boolContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoMeshBoolean && root.editorVm
@@ -4638,7 +4638,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: cutContent.implicitWidth + 24
             height: cutContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoAdvancedCut && root.editorVm
@@ -4659,7 +4659,7 @@ Item {
                     Repeater {
                         model: [qsTr("平面"), qsTr("舌槽"), qsTr("连接销")]
                         Rectangle {
-                            width: 52; height: 22; radius: 4
+                            width: 52; height: 22; radius: Theme.radiusSM
                             readonly property bool activeMode: index === 2
                                 ? (root.editorVm && root.editorVm.advCutConnectors)
                                 : (root.editorVm && root.editorVm.cutMode === index && !root.editorVm.advCutConnectors)
@@ -4746,7 +4746,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: fdContent.implicitWidth + 24
             height: fdContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoFaceDetector && root.editorVm
@@ -4782,7 +4782,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: txtContent.implicitWidth + 24
             height: txtContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoText && root.editorVm
@@ -4819,7 +4819,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: svgContent.implicitWidth + 24
             height: svgContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSVG && root.editorVm
@@ -4856,7 +4856,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             width: slaContent.implicitWidth + 24
             height: slaContent.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             color: Theme.bgFloating
             border.color: Theme.borderSubtle
             visible: viewport3d.gizmoMode === GLViewport.GizmoSlaSupports && root.editorVm
@@ -4994,7 +4994,7 @@ Item {
                         readonly property int sliceResultStatus: root.editorVm ? root.editorVm.plateSliceResultStatus(index) : 0
                         width: 86
                         height: plateListView.height
-                        radius: 4
+                        radius: Theme.radiusSM
                         readonly property bool isCurrent: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
                         color: dragHover ? Theme.accentSubtle
                             : isCurrent ? Theme.accentSubtle
@@ -5014,7 +5014,7 @@ Item {
                             Rectangle {
                                 width: 28
                                 height: 28
-                                radius: 3
+                                radius: Theme.radiusSM
                                 color: Theme.bgElevated
                                 border.width: 1
                                 border.color: Theme.borderSubtle
@@ -5022,7 +5022,7 @@ Item {
 
                                 Image {
                                     anchors.fill: parent
-                                    anchors.margins: 1
+                                    anchors.margins: Theme.spacingXXS
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
                                     source: {
@@ -5053,7 +5053,7 @@ Item {
                                         ? qsTr("%1 对象").arg(root.editorVm.plateObjectCount(index))
                                         : ""
                                     color: Theme.textTertiary
-                                    font.pixelSize: 8
+                                    font.pixelSize: Theme.fontSizeXS
                                     elide: Text.ElideRight
                                 }
                                 Text {
@@ -5065,14 +5065,14 @@ Item {
                                     color: sliceResultStatus === 1 ? Theme.accent
                                         : sliceResultStatus === 2 ? Theme.statusWarning
                                         : Theme.textDisabled
-                                    font.pixelSize: 8
+                                    font.pixelSize: Theme.fontSizeXS
                                     elide: Text.ElideRight
                                 }
                             }
 
                             Rectangle {
                                 visible: sliceResultStatus !== 0
-                                width: 5; height: 5; radius: 3
+                                width: 5; height: 5; radius: Theme.radiusSM
                                 color: sliceResultStatus === 1 ? Theme.accent : Theme.statusWarning
                                 opacity: 0.8
                             }
@@ -5163,7 +5163,7 @@ Item {
                     visible: root.editorVm && root.editorVm.canAddPlate
                     width: 26
                     height: 26
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: addPlateMA.containsMouse ? Theme.bgHover : Theme.bgElevated
                     border.width: 1
                     border.color: Theme.borderSubtle
@@ -5200,7 +5200,7 @@ Item {
             anchors.leftMargin: 14
             height: infoRow.implicitHeight + 10
             width: infoRow.implicitWidth + 16
-            radius: 4
+            radius: Theme.radiusSM
             color: Theme.bgInset
 
             property bool hasErrors: root.editorVm
@@ -5217,7 +5217,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 14
                     height: 14
-                    radius: 7
+                    radius: Theme.radiusLG
                     color: objectInfoBar.hasErrors
                            ? (root.editorVm.selectedObjectOpenEdges > 0 ? Theme.statusErrorDark : Theme.statusWarning)
                            : Theme.accentDark
@@ -5226,9 +5226,9 @@ Item {
                         anchors.centerIn: parent
                         text: objectInfoBar.hasErrors
                               ? (root.editorVm.selectedObjectOpenEdges > 0 ? "!" : "~")
-                              : "OK"
+                              : "✓"
                         color: Theme.textOnAccent
-                        font.pixelSize: 7
+                        font.pixelSize: Theme.fontSizeXS
                         font.bold: true
                     }
                 }
@@ -5292,11 +5292,11 @@ Item {
             width: 52
             implicitHeight: 22
             font.pixelSize: Theme.fontSizeXS
-            font.family: "Consolas, monospace"
+            font.family: Theme.fontMono
             horizontalAlignment: TextInput.AlignHCenter
-            padding: 2
-            leftPadding: 2
-            rightPadding: 2
+            padding: Theme.spacingXXS
+            leftPadding: Theme.spacingXXS
+            rightPadding: Theme.spacingXXS
             // Display text follows the viewmodel value while NOT editing;
             // while editing the typed text wins (upstream ObjectManipulation
             // FieldsOnEnterMA behavior).

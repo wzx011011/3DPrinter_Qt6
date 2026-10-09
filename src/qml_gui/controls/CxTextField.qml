@@ -38,12 +38,12 @@ TextField {
             // ctl-10: hover border turns accent (upstream TextInput.cpp:33-35
             // Normal #DBDBDB -> Hovered teal); OWzx accent dark tier per the
             // adjudicated value.
-            if (root.hovered) return "#0e8c46"
+            if (root.hovered) return Theme.accentDark
             return Theme.borderDefault
         }
         border.width: 1
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
-        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         opacity: root.enabled ? 1.0 : 0.45
     }
 }

@@ -8,8 +8,10 @@
 #include <QQuickWindow>
 #include <QSGRendererInterface>
 #include <QFile>
+#include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
+#include <QSettings>
 #include <QTextStream>
 #include <QDateTime>
 #include <QDir>
@@ -92,6 +94,11 @@ struct StartupOpenRequest
   QStringList dialogs;
   QStringList modelPaths;
   bool skipFirstRun = false;
+  // --qml-dev: load the QML tree from the source checkout instead of the
+  // compiled-in resources. UI iterations then need no rcc/TU/link pass --
+  // edit a .qml, relaunch. Falls back to qrc when the source layout is not
+  // next to the exe (installed / CI builds).
+  bool qmlDev = false;
 };
 
 struct StartupPageRoute
@@ -203,11 +210,17 @@ static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
   QCommandLineOption skipFirstRunOption(
       QStringLiteral("skip-first-run"),
       QStringLiteral("Mark the first-run config wizard complete for this startup."));
+  QCommandLineOption qmlDevOption(
+      QStringLiteral("qml-dev"),
+      QStringLiteral("Load QML from the source tree instead of embedded resources "
+                     "(UI iteration without rebuild; falls back to qrc when the "
+                     "source layout is unavailable)."));
 
   parser.addOption(openPageOption);
   parser.addOption(openDialogOption);
   parser.addOption(loadModelOption);
   parser.addOption(skipFirstRunOption);
+  parser.addOption(qmlDevOption);
   parser.process(app);
 
   StartupOpenRequest request;
@@ -215,6 +228,7 @@ static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
   request.dialogs = parser.values(openDialogOption);
   request.modelPaths = parser.values(loadModelOption);
   request.skipFirstRun = parser.isSet(skipFirstRunOption);
+  request.qmlDev = parser.isSet(qmlDevOption);
   return request;
 }
 
@@ -270,6 +284,33 @@ static void applyStartupOpenRequests(const StartupOpenRequest &request,
       appendStartupLog(QStringLiteral("Startup open-dialog ignored: %1").arg(dialog));
   }
 }
+
+// Phase 171/173 (P1/P3): thin QSettings facade for QML. QSettings itself
+// does not expose value()/setValue() as Q_INVOKABLE, so a bare QSettings
+// context property is call-blind from QML; main.qml's Theme bridge and the
+// appearance actions call through this store instead. Backed by the
+// dedicated "OWzx/UI" store -- the same one main() reads ui/scaleFactor
+// from pre-app-creation, so registry seeding pre-launch is honored.
+class UiSettingsStore : public QObject
+{
+  Q_OBJECT
+
+public:
+  explicit UiSettingsStore(QObject *parent = nullptr) : QObject(parent) {}
+
+  Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = {}) const
+  {
+    return settings_.value(key, defaultValue);
+  }
+
+  Q_INVOKABLE void setValue(const QString &key, const QVariant &val)
+  {
+    settings_.setValue(key, val);
+  }
+
+private:
+  QSettings settings_{QStringLiteral("OWzx"), QStringLiteral("UI")};
+};
 
 int main(int argc, char *argv[])
 {
@@ -353,6 +394,23 @@ int main(int argc, char *argv[])
   // rules string replaces defaults, so it must be listed explicitly).
   qputenv("QT_LOGGING_RULES",
           "qt.qml.binding=true;qt.qml.connections=true;qml.debug=true");
+
+  // Phase 173 (P3): UI scale. QT_SCALE_FACTOR must be set before the
+  // QGuiApplication is constructed, so read it straight from the same
+  // "OWzx/UI" settings store the command palette writes to. Values outside
+  // [0.5, 3.0] are ignored (falls back to the system default 1.0).
+  {
+    QSettings uiScale(QSettings::NativeFormat, QSettings::UserScope,
+                      QStringLiteral("OWzx"), QStringLiteral("UI"));
+    bool scaleOk = false;
+    const double scaleValue =
+        uiScale.value(QStringLiteral("ui/scaleFactor")).toDouble(&scaleOk);
+    if (scaleOk && scaleValue >= 0.5 && scaleValue <= 3.0
+        && !qFuzzyCompare(scaleValue, 1.0)) {
+      qputenv("QT_SCALE_FACTOR", QString::number(scaleValue).toUtf8());
+      appendStartupLog(QStringLiteral("QT_SCALE_FACTOR=%1").arg(scaleValue));
+    }
+  }
 
   // Redirect all Qt messages to diagnostic log file
   if (qEnvironmentVariableIsSet("QML_DEBUG_LOG")) {
@@ -502,6 +560,13 @@ int main(int argc, char *argv[])
 
   engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
   appendStartupLog(QStringLiteral("context property set, loading main.qml"));
+  // Phase 171 (P1): appearance store. QSettings' value()/setValue() are not
+  // Q_INVOKABLE, so a bare QSettings context property is call-blind from
+  // QML; this thin store re-exposes the same API as invokables. Uses the
+  // dedicated "OWzx/UI" store (same one main() reads ui/scaleFactor from)
+  // so seeding the registry pre-launch works for screenshots/tests.
+  engine->rootContext()->setContextProperty(QStringLiteral("appSettings"),
+                                            new UiSettingsStore(&app));
   engine->rootContext()->setContextProperty(QStringLiteral("startupSkipFirstRun"),
                                             startupOpenRequest.skipFirstRun);
   // layout-1: the removed StatusBar used to surface backend.latencyBrief
@@ -522,7 +587,28 @@ int main(int argc, char *argv[])
                            new CameraImageProvider(backend.cameraService()));
 
   appendStartupLog(QStringLiteral("calling engine->load(main.qml)"));
-  engine->load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
+  // --qml-dev: load from the source checkout (dev UI iteration, no rebuild).
+  // The tree must sit one level up from the exe (build/ -> src/qml_gui),
+  // matching the qrc layout under /qml so relative imports resolve the same.
+  QUrl mainQmlUrl(QStringLiteral("qrc:/qml/main.qml"));
+  if (startupOpenRequest.qmlDev)
+  {
+    const QString devMainQml = QCoreApplication::applicationDirPath()
+                               + QStringLiteral("/../src/qml_gui/main.qml");
+    if (QFileInfo::exists(devMainQml))
+    {
+      mainQmlUrl = QUrl::fromLocalFile(QDir::cleanPath(devMainQml));
+      // Filesystem QML reads its own qmldir/components -- keep the resource
+      // import path too so OWzx-registered types and the conf stay available.
+      appendStartupLog(QStringLiteral("qml-dev: loading %1").arg(mainQmlUrl.toString()));
+    }
+    else
+    {
+      appendStartupLog(QStringLiteral("qml-dev: %1 not found, falling back to qrc")
+                           .arg(devMainQml));
+    }
+  }
+  engine->load(mainQmlUrl);
   appendStartupLog(QStringLiteral("engine->load returned"));
 
   // Retranslate all QML qsTr() after language switch
@@ -583,3 +669,5 @@ int main(int argc, char *argv[])
   appendStartupLog(QStringLiteral("entering app.exec() event loop"));
   return app.exec();
 }
+
+#include "main_qml.moc"

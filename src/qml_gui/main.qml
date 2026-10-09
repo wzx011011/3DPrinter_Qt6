@@ -367,7 +367,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         width: 360
         height: 180
-        padding: 20
+        padding: Theme.spacingXL
 
         Column {
             anchors.fill: parent
@@ -387,7 +387,7 @@ ApplicationWindow {
                 anchors.right: parent.right
                 spacing: 8
                 Rectangle {
-                    width: 80; height: 28; radius: 6
+                    width: 80; height: 28; radius: Theme.radiusMD
                     color: Theme.chromePressed
                     border.color: Theme.borderSubtle
                     Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
@@ -402,7 +402,7 @@ ApplicationWindow {
                     }
                 }
                 Rectangle {
-                    width: 80; height: 28; radius: 6
+                    width: 80; height: 28; radius: Theme.radiusMD
                     color: Theme.accent
                     Text { anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     MouseArea {
@@ -990,7 +990,7 @@ ApplicationWindow {
             anchors.verticalCenter: parent.verticalCenter
             width: 22
             height: 96
-            radius: 8
+            radius: Theme.radiusLG
             color: aiEdgeMa.containsMouse ? Theme.accent : Theme.bgPanel
             border.width: 1
             border.color: Theme.borderSubtle
@@ -998,7 +998,7 @@ ApplicationWindow {
             Text {
                 anchors.centerIn: parent
                 text: qsTr("AI")
-                color: aiEdgeMa.containsMouse ? "#FFFFFF" : Theme.textPrimary
+                color: aiEdgeMa.containsMouse ? Theme.textOnAccent : Theme.textPrimary
                 font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
@@ -1290,7 +1290,71 @@ ApplicationWindow {
         optionModel: backend.configViewModel ? backend.configViewModel.printOptions : null
     }
 
+    // Phase 173 (P3): command palette (Ctrl+Shift+P). Cross-industry
+    // baseline: one overlay to reach every page and appearance action. The
+    // palette owns presentation; main.qml owns the command table and side
+    // effects (backend page enums, Theme, appSettings persistence).
+    CommandPalette {
+        id: commandPalette
+        commands: [
+            { id: "page-home",        label: qsTr("转到：首页"),       hint: "" },
+            { id: "page-prepare",     label: qsTr("转到：准备"),       hint: "" },
+            { id: "page-preview",     label: qsTr("转到：预览"),       hint: "" },
+            { id: "page-device",      label: qsTr("转到：设备"),       hint: "" },
+            { id: "page-multi",       label: qsTr("转到：多设备"),     hint: "" },
+            { id: "page-project",     label: qsTr("转到：项目"),       hint: "" },
+            { id: "page-calibration", label: qsTr("转到：校准"),       hint: "" },
+            { id: "page-preferences", label: qsTr("转到：偏好设置"),   hint: "" },
+            { id: "theme-toggle",     label: Theme.isDark ? qsTr("切换到浅色主题") : qsTr("切换到深色主题"), hint: "" },
+            { id: "density-toggle",   label: Theme.compactMode ? qsTr("密度：舒适") : qsTr("密度：紧凑"), hint: "" },
+            { id: "scale-100",        label: qsTr("界面缩放：100%（重启后生效）"), hint: "" },
+            { id: "scale-125",        label: qsTr("界面缩放：125%（重启后生效）"), hint: "" },
+            { id: "scale-150",        label: qsTr("界面缩放：150%（重启后生效）"), hint: "" }
+        ]
+        onCommandTriggered: (id) => {
+            const pageMap = {}
+            pageMap["page-home"] = backend.tpHome
+            pageMap["page-prepare"] = backend.tpPrepare
+            pageMap["page-preview"] = backend.tpPreview
+            pageMap["page-device"] = backend.tpDevice
+            pageMap["page-multi"] = backend.tpMultiDevice
+            pageMap["page-project"] = backend.tpProject
+            pageMap["page-calibration"] = backend.tpCalibration
+            pageMap["page-preferences"] = backend.tpPreferences
+            if (pageMap[id] !== undefined) {
+                backend.requestSelectTab(pageMap[id])
+                return
+            }
+            if (id === "theme-toggle") {
+                const nextTheme = Theme.isDark ? "light" : "dark"
+                Theme.setTheme(nextTheme)
+                appSettings.setValue("ui/theme", nextTheme)
+                return
+            }
+            if (id === "density-toggle") {
+                const nextDensity = Theme.compactMode ? "comfortable" : "compact"
+                Theme.setDensity(nextDensity)
+                appSettings.setValue("ui/density", nextDensity)
+                return
+            }
+            if (id.indexOf("scale-") === 0) {
+                appSettings.setValue("ui/scaleFactor", Number(id.slice(6)) / 100)
+                backend.postNotification(qsTr("界面缩放已保存，重启应用后生效"))
+                return
+            }
+        }
+        Shortcut {
+            sequence: "Ctrl+Shift+P"
+            onActivated: commandPalette.open()
+        }
+    }
+
     Component.onCompleted: {
+        // Phase 171 (P1): bridge the persisted theme into the Theme singleton
+        // (QML singletons cannot see root-context properties directly).
+        Theme.setTheme(appSettings.value("ui/theme", "dark").toString())
+        // Phase 173 (P3): persisted density mode.
+        Theme.setDensity(appSettings.value("ui/density", "comfortable").toString())
         if (!startupSkipFirstRun && !backend.configWizardCompleted) {
             configWizardDialog.open()
         }

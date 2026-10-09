@@ -61,7 +61,7 @@ Item {
             // No Text.Outline: upstream draws these labels as single
             // solid-color AddText calls (face ImGuizmo.cpp:2965, axis 3054)
             // with no stroke or shadow.
-            color: "#E0E0E0"
+            color: Theme.textPrimary
             font.pixelSize: 13
         }
     }

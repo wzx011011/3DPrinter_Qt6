@@ -417,7 +417,7 @@ CxDialog {
 
                                 CxTextField {
                                     anchors.fill: parent
-                                    anchors.margins: 1
+                                    anchors.margins: Theme.spacingXXS
                                     font.pixelSize: Theme.fontSizeSM
                                     horizontalAlignment: Text.AlignHCenter
                                     text: root.flushMatrix[cellRect.rowIndex] !== undefined

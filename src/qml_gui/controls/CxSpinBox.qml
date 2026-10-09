@@ -24,17 +24,20 @@ SpinBox {
     readonly property int btnHeight: Math.max(6, Math.round((height - 4) / 2))
     // ctl-10: upstream hover border is teal (SpinInput.cpp:35); OWzx accent
     // dark tier per the adjudicated value (no matching Theme token yet).
-    readonly property color hoverBorder: "#0e8c46"
+    readonly property color hoverBorder: Theme.accentDark
 
     background: Rectangle {
         radius: 0  // SpinInput.cpp:33
         color: Theme.bgPanel  // ctl-12: flat, same base as the hosting panel
+        // Phase 170 (P0-2): keyboard focus ring uses the shared borderFocus;
+        // hover keeps the accentDark step.
         border.color: !root.enabled ? Theme.borderSubtle
-                     : (root.hovered || root.activeFocus || spinInput.activeFocus) ? root.hoverBorder
+                     : (root.activeFocus || spinInput.activeFocus) ? Theme.borderFocus
+                     : root.hovered ? root.hoverBorder
                      : Theme.borderDefault
         border.width: 1
         opacity: root.enabled ? 1.0 : 0.45
-        Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
         // SpinInput.cpp:198-201: 1px horizontal separator across the step
         // buttons at mid height, starting at the button x, button width - 2.

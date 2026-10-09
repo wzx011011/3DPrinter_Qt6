@@ -114,19 +114,19 @@ CxDialog {
         Layout.fillWidth: true
         Layout.leftMargin: 15
         height: 28
-        radius: 4
+        radius: Theme.radiusSM
         color: optMA.containsMouse ? Theme.bgHover : "transparent"
 
         RowLayout {
             anchors.fill: parent
-            spacing: 11
+            spacing: Theme.spacingLG
 
             Item {
                 Layout.preferredWidth: 18
                 Layout.preferredHeight: 28
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: 18; height: 18; radius: 3
+                    width: 18; height: 18; radius: Theme.radiusSM
                     color: optRow.checked ? Theme.accent : "transparent"
                     border.color: optRow.checked ? Theme.accent : Theme.borderInput
                     border.width: 1.5
@@ -177,7 +177,7 @@ CxDialog {
                 Layout.preferredWidth: 303
                 Layout.fillHeight: true
                 Layout.preferredHeight: leftCol.implicitHeight + 45
-                radius: 4
+                radius: Theme.radiusSM
                 color: Theme.bgSurface
 
                 ColumnLayout {
@@ -292,7 +292,7 @@ CxDialog {
                 Layout.fillHeight: true
                 Layout.minimumHeight: 200
                 Layout.preferredHeight: Math.max(200, rightCol.implicitHeight + 50)
-                radius: 4
+                radius: Theme.radiusSM
                 color: Theme.bgSurface
 
                 ColumnLayout {
@@ -349,7 +349,7 @@ CxDialog {
                                 spacing: 8
 
                                 Rectangle {
-                                    width: 8; height: 8; radius: 4
+                                    width: 8; height: 8; radius: Theme.radiusSM
                                     anchors.verticalCenter: parent.verticalCenter
                                     color: stepDelegate.modelData.state >= 1 ? Theme.accent : Theme.borderSubtle
                                 }

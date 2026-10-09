@@ -61,7 +61,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 5
+            radius: Theme.radiusMD
             color: Theme.bgCard
             border.width: 1
             border.color: Theme.borderSubtle
@@ -73,7 +73,7 @@ Item {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 8
-                spacing: 7
+                spacing: Theme.spacingMD
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -83,7 +83,7 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 16
-                        radius: 4
+                        radius: Theme.radiusSM
                         // P17.3: the 10 upstream Range_Color stops come from
                         // the ViewModel (legendGradientStops), replacing the
                         // earlier Theme-token approximation.
@@ -164,7 +164,7 @@ Item {
                         Rectangle {
                             Layout.preferredWidth: 10
                             Layout.preferredHeight: 10
-                            radius: 2
+                            radius: Theme.radiusXS
                             color: legendRow.modelData.color
                         }
                         Label {

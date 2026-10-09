@@ -98,7 +98,7 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 48
             color: Theme.bgPanel
-            radius: 16
+            radius: Theme.radiusXXL
             border.width: 1
             border.color: Theme.borderSubtle
 
@@ -161,7 +161,7 @@ Item {
                 Layout.preferredWidth: 220
                 Layout.fillHeight: true
                 color: Theme.bgPanel
-                radius: 16
+                radius: Theme.radiusXXL
                 border.width: 1
                 border.color: Theme.borderSubtle
 
@@ -171,7 +171,7 @@ Item {
                     spacing: 0
 
                     Rectangle {
-                        width: parent.width; height: 40; color: Theme.bgSurface; radius: 16
+                        width: parent.width; height: 40; color: Theme.bgSurface; radius: Theme.radiusXXL
                         Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
                                text: qsTr("项目资源"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     }
@@ -205,7 +205,7 @@ Item {
                                 delegate: Rectangle {
                                     required property var modelData
                                     width: parent.width; height: 32
-                                    radius: 8
+                                    radius: Theme.radiusLG
                                     color: itemHov.containsMouse ? Theme.bgHover : "transparent"
                                     Row {
                                         anchors.verticalCenter: parent.verticalCenter
@@ -227,16 +227,16 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 color: Theme.bgSurface
-                radius: 18
+                radius: Theme.radiusXXL
                 border.width: 1
                 border.color: Theme.borderSubtle
 
-                Column {
+                // Phase 172 (P2): shared empty-state component.
+                CxEmptyState {
                     anchors.centerIn: parent
-                    spacing: 12
                     visible: root.projectVm.selectedFile === ""
-                    Text { text: "📋"; font.pixelSize: 48; color: Theme.textDisabled; horizontalAlignment: Text.AlignHCenter; width: parent.width }
-                    Text { text: qsTr("选择文件查看详情"); color: Theme.textSecondary; font.pixelSize: Theme.fontSize13; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                    glyph: "📋"
+                    title: qsTr("选择文件查看详情")
                 }
             }
 
@@ -244,14 +244,14 @@ Item {
                 Layout.preferredWidth: 260
                 Layout.fillHeight: true
                 color: Theme.bgPanel
-                radius: 16
+                radius: Theme.radiusXXL
                 border.width: 1
                 border.color: Theme.borderSubtle
 
                 Column {
                     anchors.fill: parent; anchors.margins: 0
                     Rectangle {
-                        width: parent.width; height: 40; color: Theme.bgSurface; radius: 16
+                        width: parent.width; height: 40; color: Theme.bgSurface; radius: Theme.radiusXXL
                         Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
                                text: qsTr("属性"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                     }
@@ -280,14 +280,14 @@ Item {
                                 required property var modelData
                                 width: parent.width
                                 height: 52
-                                radius: 10
+                                radius: Theme.radiusXL
                                 color: Theme.bgElevated
                                 border.width: 1
                                 border.color: Theme.borderSubtle
 
                                 Column {
                                     anchors.fill: parent
-                                    anchors.margins: 10
+                                    anchors.margins: Theme.spacingMD
                                     spacing: 4
                                     Text { text: modelData[0]; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
                                     Text { text: modelData[1]; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM }
@@ -300,7 +300,7 @@ Item {
         }
 
         Rectangle {
-            Layout.fillWidth: true; height: 28; color: Theme.bgPanel; radius: 12; border.width: 1; border.color: Theme.borderSubtle
+            Layout.fillWidth: true; height: 28; color: Theme.bgPanel; radius: Theme.radiusXL; border.width: 1; border.color: Theme.borderSubtle
             Text { anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
                    text: root.projectVm.currentProjectPath !== "" ? root.projectVm.currentProjectPath : qsTr("无项目")
                    color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }

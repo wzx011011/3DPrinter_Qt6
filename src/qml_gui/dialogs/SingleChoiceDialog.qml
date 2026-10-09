@@ -59,7 +59,7 @@ CxDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: Theme.bgInset
-            radius: 4
+            radius: Theme.radiusSM
             border.color: Theme.borderSubtle
             border.width: 1
             clip: true
@@ -70,7 +70,7 @@ CxDialog {
                 anchors.margins: Theme.spacingXS
                 clip: true
                 model: root.choiceModel
-                spacing: 2
+                spacing: Theme.spacingXXS
                 currentIndex: 0
 
                 delegate: Rectangle {
@@ -78,7 +78,7 @@ CxDialog {
                     required property int index
                     width: choiceList.width
                     height: 30
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: choiceList.currentIndex === index ? Theme.accentSubtle
                            : (choiceHover.containsMouse ? Theme.bgHover : "transparent")
 

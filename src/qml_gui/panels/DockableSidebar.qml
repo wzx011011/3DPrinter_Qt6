@@ -41,7 +41,7 @@ Item {
 
     // 宽度：折叠时为 0（viewportArea 独占），展开时为 sidebarWidth
     implicitWidth: collapsed ? 0 : sidebarWidth
-    Behavior on implicitWidth { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+    Behavior on implicitWidth { NumberAnimation { duration: Theme.motionNormal; easing.type: Theme.easingStandard } }
 
     // 对外 alias（供外部访问内部 LeftSidebar）
     property alias contentSidebar: leftSidebar
@@ -82,14 +82,14 @@ Item {
         anchors.fill: parent
         visible: root.collapsed
         color: Theme.bgPanel
-        radius: 4
+        radius: Theme.radiusSM
 
         Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             anchors.horizontalCenter: parent.horizontalCenter
             width: 6
             height: 48
-            radius: 3
+            radius: Theme.radiusSM
             color: Theme.borderStrong
         }
 

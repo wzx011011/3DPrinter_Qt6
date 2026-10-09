@@ -168,7 +168,7 @@ CxPopup {
                     id: rowLayout
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    spacing: 2
+                    spacing: Theme.spacingXXS
 
                     Row {
                         spacing: 4  // upstream ratio_spacing, .cpp:108
@@ -179,7 +179,7 @@ CxPopup {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 18
                             height: 18
-                            radius: 9
+                            radius: Theme.radiusLG
                             color: "transparent"
                             border.width: modeRow.checked ? 2 : 1.5
                             border.color: modeRow.checked
@@ -190,7 +190,7 @@ CxPopup {
                                 anchors.centerIn: parent
                                 width: 10
                                 height: 10
-                                radius: 5
+                                radius: Theme.radiusMD
                                 visible: modeRow.checked
                                 color: Theme.accent
                             }

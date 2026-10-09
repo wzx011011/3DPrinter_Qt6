@@ -418,7 +418,7 @@ ApplicationWindow {
                         visible: root.configVm && root.configVm.isPresetDirty
                         Layout.preferredWidth: 8
                         Layout.preferredHeight: 8
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: Theme.statusWarning
                         ToolTip.visible: dirtyHover.containsMouse
                         ToolTip.text: qsTr("预设已修改")
@@ -435,7 +435,7 @@ ApplicationWindow {
                         visible: root.configVm && !root.configVm.currentPresetCombinationValid
                         Layout.preferredWidth: 8
                         Layout.preferredHeight: 8
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: Theme.statusError
                         ToolTip.visible: compatHover.containsMouse
                         ToolTip.text: root.configVm && root.configVm.currentPresetCompatibilityMessage

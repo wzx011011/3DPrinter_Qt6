@@ -45,7 +45,7 @@ CxDialog {
         width: parent.width
         height: Theme.dialogFooterHeight
         color: Theme.bgSurface
-        radius: 8
+        radius: Theme.radiusLG
 
         Rectangle {
             anchors.top: parent.top

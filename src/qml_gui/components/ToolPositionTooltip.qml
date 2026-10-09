@@ -40,12 +40,12 @@ Rectangle {
     visible: root.vm && root.vm.hasToolPosition
     width: contentColumn.implicitWidth + 20
     height: contentColumn.implicitHeight + 20
-    radius: 8                    // upstream WindowRounding 8.0f*m_scale (:341)
-    color: "#11151dcc"           // upstream SetNextWindowBgAlpha(0.8f) (:343)
+    radius: Theme.radiusLG                    // upstream WindowRounding 8.0f*m_scale (:341)
+    color: Theme.tipGlassBg           // upstream SetNextWindowBgAlpha(0.8f) (:343)
     border.width: 0              // upstream ImGuiCol_Border fully transparent (:339)
     opacity: visible ? 0.94 : 0
 
-    Behavior on opacity { NumberAnimation { duration: 120 } }
+    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
 
     // Upstream precision policy (GCodeViewer.cpp:677-678): round(max(x,y,z)),
     // "%.1f" beyond 9999, "%.2f" beyond 999, else "%.3f".
@@ -159,9 +159,9 @@ Rectangle {
         // two aligned columns, labels colored, values default text.
         Row {
             visible: root.expanded
-            spacing: 10
+            spacing: Theme.spacingMD
             Column {
-                spacing: 3
+                spacing: Theme.spacingXS
                 Repeater {
                     model: root.tableLabels
                     Label {
@@ -172,7 +172,7 @@ Rectangle {
                 }
             }
             Column {
-                spacing: 3
+                spacing: Theme.spacingXS
                 Repeater {
                     model: root.tableValues
                     Label {
@@ -194,7 +194,7 @@ Rectangle {
             Rectangle {
                 width: showHideLabel.implicitWidth + 16
                 height: showHideLabel.implicitHeight + 6
-                radius: 3
+                radius: Theme.radiusSM
                 color: !profileButtonRow.profileDataAvailable
                        ? Theme.textDisabled
                        : (showHideArea.containsMouse ? Theme.accentLight : Theme.accent)
@@ -228,7 +228,7 @@ Rectangle {
             visible: root.expanded
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: "#ffffff99"
+            color: Theme.tipGlassBorder
         }
 
         // Bottom row: fold glyph button + two-line info group
@@ -242,7 +242,7 @@ Rectangle {
                 height: 16
                 Rectangle {
                     anchors.fill: parent
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: Theme.bgHover
                     visible: foldArea.containsMouse
                 }
@@ -255,7 +255,7 @@ Rectangle {
                         if (!ctx)
                             return;
                         ctx.reset();
-                        ctx.strokeStyle = "#f5f5f5";
+                        ctx.strokeStyle = Theme.textPrimary;
                         ctx.lineWidth = 1.5;
                         ctx.lineCap = "round";
                         ctx.lineJoin = "round";
@@ -352,8 +352,8 @@ Rectangle {
         y: root.height - height
         width: root.plotWidth + 20
         height: profileColumn.implicitHeight + 20
-        radius: 8
-        color: "#11151dcc"
+        radius: Theme.radiusLG
+        color: Theme.tipGlassBg
         border.width: 0
 
         Column {
@@ -370,7 +370,7 @@ Rectangle {
                 height: 135
                 Rectangle {
                     anchors.fill: parent
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: Theme.bgInset
                 }
                 Canvas {
@@ -402,7 +402,7 @@ Rectangle {
                         // (upstream :183-192; upstream teal -> OWzx accent).
                         ctx.lineWidth = 1;
                         for (let n = 0; n < data.length; ++n) {
-                            ctx.strokeStyle = data[n].internal ? "#8018c75e" : "#80808080";
+                            ctx.strokeStyle = data[n].internal ? Qt.alpha(Theme.accent, 0.5) : Theme.tipGlassDim;
                             ctx.beginPath();
                             ctx.moveTo(toX(data[n].pos), 0);
                             ctx.lineTo(toX(data[n].pos), h);
@@ -412,7 +412,7 @@ Rectangle {
                         // segment in the brand accent.
                         ctx.lineWidth = 2;
                         for (let n = 0; n < data.length - 1; ++n) {
-                            ctx.strokeStyle = n === root.plotHoverId ? "#18c75e" : "#cccccc";
+                            ctx.strokeStyle = n === root.plotHoverId ? Theme.accent : Theme.textSecondary;
                             ctx.beginPath();
                             ctx.moveTo(toX(data[n].pos), toY(data[n].speed));
                             ctx.lineTo(toX(data[n + 1].pos), toY(data[n + 1].speed));
@@ -481,7 +481,7 @@ Rectangle {
                                 height: profilePosLabel.implicitHeight + 2
                                 // upstream TableSetBgColor: internal (0,150/255,136/255,0.15)
                                 // -> brand accent, else (0.2,0.2,0.2,0.25)
-                                color: rowInternal ? "#2618c75e" : "#40333333"
+                                color: rowInternal ? Qt.alpha(Theme.accent, 0.15) : Theme.tipGlassShadow
                                 Row {
                                     spacing: 9
                                     Label {

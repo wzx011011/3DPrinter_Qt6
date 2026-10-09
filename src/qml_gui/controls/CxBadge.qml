@@ -18,7 +18,7 @@ Rectangle {
     implicitHeight: 16
     Layout.preferredWidth: Math.max(18, badgeText.implicitWidth + 8)
     Layout.preferredHeight: 16
-    radius: 3
+    radius: Theme.radiusSM
     color: root.fillToken
     border.width: 1
     border.color: Theme.borderSubtle

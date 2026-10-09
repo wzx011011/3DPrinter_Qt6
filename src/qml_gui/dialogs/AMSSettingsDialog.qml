@@ -360,7 +360,7 @@ CxDialog {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    anchors.margins: 20 // upstream row margins FromDIP(20) (:278-287)
+                    anchors.margins: Theme.spacingXL // upstream row margins FromDIP(20) (:278-287)
 
                     Text {
                         text: qsTr("编辑槽位 %1").arg(root.editSlot + 1)
@@ -461,7 +461,7 @@ CxDialog {
 
                             // "max"/"min" labels above the inputs (:217-226)
                             RowLayout {
-                                spacing: 10 // upstream label gap FromDIP(10) (:213)
+                                spacing: Theme.spacingMD // upstream label gap FromDIP(10) (:213)
 
                                 Text {
                                     Layout.preferredWidth: 90
@@ -481,7 +481,7 @@ CxDialog {
                             }
 
                             RowLayout {
-                                spacing: 10
+                                spacing: Theme.spacingMD
 
                                 CxTextField {
                                     id: tempMaxInput
@@ -559,7 +559,7 @@ CxDialog {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 8 // 8 + 16 row spacing = upstream 24 above buttons (:83)
-                        spacing: 20 // upstream button spacing FromDIP(20) (:75-76)
+                        spacing: Theme.spacingXL // upstream button spacing FromDIP(20) (:75-76)
 
                         Item { Layout.fillWidth: true }
 
@@ -628,7 +628,7 @@ CxDialog {
                                 Rectangle {
                                     width: 16
                                     height: 16
-                                    radius: 8
+                                    radius: Theme.radiusLG
                                     color: root._slotColors[index] || Theme.borderDefault
                                     border.color: Theme.borderDefault
                                     border.width: 1
@@ -711,7 +711,7 @@ CxDialog {
                                             required property string modelData
                                             width: 16
                                             height: 16
-                                            radius: 3
+                                            radius: Theme.radiusSM
                                             color: modelData
                                             border.color: Theme.textDisabled
                                             border.width: 1
@@ -824,7 +824,7 @@ CxDialog {
                     Rectangle {
                         width: 12
                         height: 12
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: root._slotColors[index] || Theme.borderDefault
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -841,7 +841,7 @@ CxDialog {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: 10
-                        radius: 5
+                        radius: Theme.radiusMD
                         color: Theme.bgInset
                         border.color: Theme.borderInput
                         border.width: 1
@@ -849,7 +849,7 @@ CxDialog {
                         Rectangle {
                             width: parent.width * ((root._remainingPct[index] || 0) / 100)
                             height: parent.height
-                            radius: 5
+                            radius: Theme.radiusMD
                             color: {
                                 var pct = root._remainingPct[index] || 0
                                 if (pct <= 20) return Theme.statusError
@@ -921,7 +921,7 @@ CxDialog {
                                         required property int index
                                         width: 14
                                         height: 14
-                                        radius: 3
+                                        radius: Theme.radiusSM
                                         color: root._slotColors[index] || Theme.borderDefault
                                         border.color: Theme.borderDefault
                                         border.width: 1

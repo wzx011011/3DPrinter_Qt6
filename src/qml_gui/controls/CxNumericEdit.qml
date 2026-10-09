@@ -30,15 +30,15 @@ Rectangle {
     color: Theme.bgPanel
     border.width: 1
     border.color: edit.activeFocus ? Theme.borderFocus
-                 : enabled && editHover.hovered ? "#0e8c46"
+                 : enabled && editHover.hovered ? Theme.accentDark
                  : enabled ? Theme.borderInput
                  : Theme.borderSubtle
     opacity: enabled ? 1.0 : 0.55
-    Behavior on border.color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+    Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
-    // ctl-10: hover border turns accent (same adjudicated accent dark tier
-    // #0e8c46 as CxTextField.qml:41; upstream TextInput.cpp:33-35 Normal
-    // #DBDBDB -> Hovered teal).
+    // ctl-10: hover border turns the adjudicated accent dark tier
+    // (Theme.accentDark, shared with CxTextField; upstream
+    // TextInput.cpp:33-35 Normal #DBDBDB -> Hovered teal).
     HoverHandler { id: editHover }
 
     TextInput {

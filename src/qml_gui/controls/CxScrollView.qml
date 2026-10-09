@@ -13,16 +13,16 @@ ScrollView {
         policy: ScrollBar.AsNeeded
         background: Rectangle {
             implicitWidth: 8
-            radius: 4
+            radius: Theme.radiusSM
             color: Theme.scrollBarTrackColor
         }
         contentItem: Rectangle {
             implicitWidth: 8
             implicitHeight: 100
-            radius: 4
+            radius: Theme.radiusSM
             opacity: parent.active ? 1.0 : 0.5
             color: Theme.scrollBarColor
-            Behavior on opacity { NumberAnimation { duration: 150 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
         }
     }
 
@@ -30,16 +30,16 @@ ScrollView {
         policy: ScrollBar.AsNeeded
         background: Rectangle {
             implicitHeight: 8
-            radius: 4
+            radius: Theme.radiusSM
             color: Theme.scrollBarTrackColor
         }
         contentItem: Rectangle {
             implicitWidth: 100
             implicitHeight: 8
-            radius: 4
+            radius: Theme.radiusSM
             opacity: parent.active ? 1.0 : 0.5
             color: Theme.scrollBarColor
-            Behavior on opacity { NumberAnimation { duration: 150 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
         }
     }
 }

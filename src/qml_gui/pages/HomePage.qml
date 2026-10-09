@@ -68,7 +68,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 88
-            radius: 20
+            radius: Theme.radiusHero
             color: Theme.bgPanel
             border.width: 1
             border.color: Theme.borderSubtle
@@ -82,7 +82,7 @@ Item {
                 Rectangle {
                     width: 48
                     height: 48
-                    radius: 14
+                    radius: Theme.radiusXXL
                     color: Theme.accentSubtle
                     border.width: 1
                     border.color: Theme.accentDark
@@ -91,14 +91,14 @@ Item {
                         anchors.centerIn: parent
                         text: "△"
                         color: Theme.accentLight
-                        font.pixelSize: 22
+                        font.pixelSize: Theme.fontSizeDisplay
                         font.bold: true
                     }
                 }
 
                 Column {
                     spacing: 4
-                    Text { text: "OWzx Slicer"; color: Theme.textPrimary; font.pixelSize: 24; font.bold: true }
+                    Text { text: "OWzx Slicer"; color: Theme.textPrimary; font.pixelSize: Theme.fontSizeDisplay; font.bold: true }
                     Text { text: qsTr("专业级 3D 打印切片软件"); color: Theme.textSecondary; font.pixelSize: Theme.fontSize13 }
                 }
 
@@ -122,7 +122,7 @@ Item {
 
                     // User avatar placeholder
                     Rectangle {
-                        width: 32; height: 32; radius: 16
+                        width: 32; height: 32; radius: Theme.radiusXXL
                         color: Theme.accentSubtle
                         border.width: 1; border.color: Theme.accent
 
@@ -136,7 +136,7 @@ Item {
                     }
 
                     Column {
-                        spacing: 2
+                        spacing: Theme.spacingXXS
                         Text {
                             text: root.homeVm.cloudUserName
                             color: Theme.textPrimary
@@ -236,7 +236,7 @@ Item {
 
                             // Online indicator
                             Rectangle {
-                                width: 8; height: 8; radius: 4
+                                width: 8; height: 8; radius: Theme.radiusSM
                                 color: {
                                     var d = root.homeVm.cloudBoundDeviceAt(index)
                                     return d.online ? Theme.accent : Theme.borderActive
@@ -244,7 +244,7 @@ Item {
                             }
 
                             Column {
-                                spacing: 2
+                                spacing: Theme.spacingXXS
                                 Text {
                                     text: {
                                         var d = root.homeVm.cloudBoundDeviceAt(index)
@@ -316,10 +316,10 @@ Item {
             anchors.centerIn: parent
             modal: true
             title: qsTr("登录 OWzx 账号")
-            padding: 20
+            padding: Theme.spacingXL
 
             background: Rectangle {
-                radius: 12
+                radius: Theme.radiusXL
                 color: Theme.bgElevated
                 border.color: Theme.borderSubtle
                 border.width: 1
@@ -431,10 +431,10 @@ Item {
             anchors.centerIn: parent
             modal: true
             title: qsTr("通过 PIN 码绑定")
-            padding: 20
+            padding: Theme.spacingXL
 
             background: Rectangle {
-                radius: 12
+                radius: Theme.radiusXL
                 color: Theme.bgPanel
                 border.color: Theme.borderSubtle
                 border.width: 1
@@ -479,7 +479,7 @@ Item {
             }
 
             ColumnLayout {
-                spacing: 10
+                spacing: Theme.spacingMD
                 // Upstream simplebook is 460x240 (BindDialog.cpp:70-72); 460
                 // is the dialog width incl. 20 padding. Height flows with the
                 // content (the mock device-name row adds one row upstream
@@ -490,7 +490,7 @@ Item {
                 ColumnLayout {
                     visible: bindDialog.bindState === 0
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: Theme.spacingMD
 
                     // Guide text, upstream m_status_text (BindDialog.cpp:88-91):
                     // Body_14, #262E30, two lines.
@@ -537,7 +537,7 @@ Item {
                     // Six 38x38 single-char cells (BindDialog.cpp:111-123):
                     // centered, green #228B22, Body_16, auto-advance.
                     Row {
-                        spacing: 10
+                        spacing: Theme.spacingMD
 
                         Repeater {
                             model: 6
@@ -550,7 +550,7 @@ Item {
                                 font.pixelSize: Theme.fontSizeXL
                                 // Upstream SetTextColour(wxColour(34,139,34))
                                 // (BindDialog.cpp:115).
-                                color: "#228b22"
+                                color: Theme.statusSuccess
                                 horizontalAlignment: TextInput.AlignHCenter
                                 verticalAlignment: TextInput.AlignVCenter
                                 leftPadding: 4
@@ -624,7 +624,7 @@ Item {
                 ColumnLayout {
                     visible: bindDialog.bindState === 1
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: Theme.spacingMD
 
                     Item { Layout.fillHeight: true }
                     Label {
@@ -747,7 +747,7 @@ Item {
             // Expanded = content + 30px footer; collapsed = footer only
             // (upstream DailyTips.cpp:293-299).
             Layout.preferredHeight: expanded ? tipsColumn.height + 28 : 30
-            radius: 10
+            radius: Theme.radiusXL
             color: Theme.bgElevated
             border.width: 1
             border.color: Theme.borderSubtle
@@ -763,7 +763,7 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 14
+                anchors.margins: Theme.spacingXL
                 spacing: 6
 
                 // 16:9 image area above the text when the hint carries an
@@ -772,7 +772,7 @@ Item {
                     visible: dailyTipsCard.tipImageUrl !== ""
                     width: parent.width
                     height: visible ? width * 9 / 16 : 0
-                    radius: 6
+                    radius: Theme.radiusMD
                     color: Theme.bgBase
                     clip: true
 
@@ -790,7 +790,7 @@ Item {
                     id: dailyTipTitle
                     width: parent.width
                     text: dailyTipsCard.tipTitle !== "" ? dailyTipsCard.tipTitle : qsTr("每日提示")
-                    color: "#eb8043"
+                    color: Theme.statusWarning
                     font.pixelSize: Theme.fontSizeLG
                     font.bold: true
                     elide: Text.ElideRight
@@ -936,11 +936,12 @@ Item {
 
             // Phase 241 (PAGE-01): honest empty state — the persisted recent
             // list starts empty on a fresh install (no fabricated entries).
-            Text {
+            // Phase 172 (P2): shared empty-state component.
+            CxEmptyState {
                 visible: root._recentProjects.length === 0
-                text: qsTr("暂无最近项目，打开或保存一个项目后将显示在这里")
-                color: Theme.textDisabled
-                font.pixelSize: Theme.fontSizeSM
+                glyph: "🖨"
+                title: qsTr("暂无最近项目")
+                message: qsTr("打开或保存一个项目后将显示在这里")
                 anchors.centerIn: parent
             }
             Flow {
@@ -949,18 +950,18 @@ Item {
                 Repeater {
                     model: root._recentProjects
                     delegate: Rectangle {
-                        width: 196; height: 164; radius: 16; color: Theme.bgPanel; border.color: Theme.borderSubtle; border.width: 1
+                        width: 196; height: 164; radius: Theme.radiusXXL; color: Theme.bgPanel; border.color: Theme.borderSubtle; border.width: 1
                         Column {
                             anchors.fill: parent; anchors.margins: 12; spacing: 8
-                            Rectangle { width: parent.width; height: 102; radius: 12; color: Theme.bgElevated
-                                Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: 34; color: Theme.textDisabled }
+                            Rectangle { width: parent.width; height: 102; radius: Theme.radiusXL; color: Theme.bgElevated
+                                Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: Theme.fontSizeDisplayXL; color: Theme.textDisabled }
                             }
                             Text { text: modelData.name || (qsTr("项目 ") + (index + 1)); color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD; font.bold: true; elide: Text.ElideRight; width: parent.width }
                             Text { text: modelData.date || "—"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }
                             Text { text: modelData.path || ""; color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; elide: Text.ElideRight; width: parent.width }
                         }
                         HoverHandler { id: recentHover }
-                        Rectangle { anchors.fill: parent; radius: parent.radius; color: recentHover.hovered ? "#1018c75e" : "transparent" }
+                        Rectangle { anchors.fill: parent; radius: parent.radius; color: recentHover.hovered ? Qt.alpha(Theme.accent, 0.06) : "transparent" }
                         // Phase 241 (PAGE-01): cards are clickable — opens the
                         // project through the same path as the topbar Recent
                         // submenu (upstream recent-files menu).
@@ -994,16 +995,16 @@ Item {
                     required property var modelData
                     Layout.fillWidth: true
                     height: 112
-                    radius: 18
+                    radius: Theme.radiusXXL
                     color: qaHover.hovered ? Theme.bgHover : Theme.bgPanel
                     border.color: Theme.borderSubtle
                     border.width: 1
 
                     Column {
                         anchors.fill: parent
-                        anchors.margins: 14
+                        anchors.margins: Theme.spacingXL
                         spacing: 8
-                        Text { text: parent.parent.modelData.icon; font.pixelSize: 24; horizontalAlignment: Text.AlignHCenter; width: parent.width }
+                        Text { text: parent.parent.modelData.icon; font.pixelSize: Theme.fontSizeDisplay; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                         Text { text: parent.parent.modelData.title; color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true; horizontalAlignment: Text.AlignHCenter; width: parent.width }
                         Text { text: parent.parent.modelData.sub; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS; horizontalAlignment: Text.AlignHCenter; width: parent.width; wrapMode: Text.WordWrap }
                     }

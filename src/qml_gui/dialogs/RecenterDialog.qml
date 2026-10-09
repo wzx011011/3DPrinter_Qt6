@@ -96,7 +96,7 @@ CxDialog {
             anchors.rightMargin: 20
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 20
-            spacing: 10   // upstream ChoiceButtonGap() = 10 (Button.hpp:12)
+            spacing: Theme.spacingMD   // upstream ChoiceButtonGap() = 10 (Button.hpp:12)
 
             CxButton {
                 text: qsTr("Go Home")   // upstream OK relabel (:32)

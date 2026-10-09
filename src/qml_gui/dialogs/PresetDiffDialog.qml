@@ -581,7 +581,7 @@ CxDialog {
             anchors.verticalCenter: parent.verticalCenter
             width: 48
             height: 12
-            radius: 2
+            radius: Theme.radiusXS
             color: valueCell.cellValue
             border.color: Theme.borderSubtle
             border.width: 1
@@ -626,7 +626,7 @@ CxDialog {
             Layout.leftMargin: 10
             Layout.rightMargin: 10
             Layout.topMargin: 10
-            spacing: 5
+            spacing: Theme.spacingXS
 
             RowLayout {
                 Layout.fillWidth: true
@@ -659,7 +659,7 @@ CxDialog {
                     property alias leftCombo: leftCombo
                     property alias rightCombo: rightCombo
 
-                    spacing: 5
+                    spacing: Theme.spacingXS
                     Layout.fillWidth: true
 
                     CxComboBox {
@@ -730,7 +730,7 @@ CxDialog {
             id: showAllCheckBox
             visible: root.viewType !== 1
             Layout.fillWidth: true
-            Layout.margins: 10
+            Layout.margins: Theme.spacingMD
             text: qsTr("显示全部预设（含不兼容）")
             onToggled: {
                 // Combo models re-bind after this handler; sync the current
@@ -745,7 +745,7 @@ CxDialog {
             visible: root.treeShown
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 10
+            Layout.margins: Theme.spacingMD
             spacing: 0
 
             // Column header: hidden toggle "✔" + "" + Left/Right Preset Value
@@ -754,7 +754,7 @@ CxDialog {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 24
                 color: Theme.bgInset
-                radius: 3
+                radius: Theme.radiusSM
 
                 RowLayout {
                     anchors.fill: parent
@@ -933,7 +933,7 @@ CxDialog {
                             Layout.preferredHeight: 18
                             Layout.alignment: Qt.AlignVCenter
                             Layout.rightMargin: 4
-                            radius: 9
+                            radius: Theme.radiusLG
                             color: treeRow.modelData.status === "added"   ? Theme.accentDark
                                  : treeRow.modelData.status === "removed" ? Theme.statusErrorDark
                                  : treeRow.modelData.status === "changed" ? Theme.statusWarning

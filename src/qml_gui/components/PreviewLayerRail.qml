@@ -85,7 +85,7 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 5
+        spacing: Theme.spacingXS
 
         CxStepButton {
             label: "|^"
@@ -214,7 +214,7 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: 2
+                        radius: Theme.radiusXS
                         border.width: 1
                         border.color: Theme.bgBase
                         color: {
@@ -361,7 +361,7 @@ Item {
             color: filamentItem.enabled && filamentItem.highlighted
                    ? (filamentItem.pressed ? Theme.bgPressed : Theme.bgHover)
                    : "transparent"
-            Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+            Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
         }
         contentItem: Text {
             text: filamentItem.text
@@ -374,7 +374,7 @@ Item {
             y: (filamentItem.height - height) / 2
             width: 14
             height: 14
-            radius: 2
+            radius: Theme.radiusXS
             color: root.previewVm ? root.previewVm.extruderColor(filamentItem.index) : Theme.accent
             border.width: 1
             border.color: Theme.bgBase
@@ -611,7 +611,7 @@ Item {
                         Rectangle {
                             Layout.preferredWidth: 14
                             Layout.preferredHeight: 14
-                            radius: 3
+                            radius: Theme.radiusSM
                             color: root.previewVm ? root.previewVm.extruderColor(colorExtruderRow.index) : Theme.accent
                         }
                         Text {
@@ -650,7 +650,7 @@ Item {
                         required property string modelData
                         Layout.preferredWidth: 28
                         Layout.preferredHeight: 28
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: paletteSwatch.modelData
                         border.width: colorChangeDialog.selectedColor === paletteSwatch.modelData ? 2 : 1
                         border.color: colorChangeDialog.selectedColor === paletteSwatch.modelData

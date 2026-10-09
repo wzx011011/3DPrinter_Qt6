@@ -35,7 +35,7 @@ Item {
             y: 0
             width: 2
             height: root.size / 2
-            radius: 1
+            radius: Theme.radiusXS
             color: root.colorToken
             transformOrigin: Item.Bottom
             rotation: index * (360 / root.lineCount)

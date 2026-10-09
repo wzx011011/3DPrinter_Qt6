@@ -104,16 +104,16 @@ CxDialog {
             spacing: Theme.spacingSM
             Rectangle {
                 Layout.alignment: Qt.AlignHCenter
-                width: 64; height: 64; radius: 12
+                width: 64; height: 64; radius: Theme.radiusXL
                 color: Theme.chromeSurface
                 border.color: Theme.accent; border.width: 2
-                Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: 30 }
+                Text { anchors.centerIn: parent; text: "🖨"; font.pixelSize: Theme.fontSizeDisplay }
             }
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "OWzx Slicer"
-                color: Theme.textPrimary; font.pixelSize: 18; font.bold: true
+                color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXXL; font.bold: true
             }
 
             Text {
@@ -168,11 +168,11 @@ CxDialog {
         // "6.10.0"/"V4 / JavaScript"/"Debug"/"Windows x64 (MSVC)"/
         // "2026-03-03" were removed or rebound).
         Rectangle {
-            Layout.fillWidth: true; radius: 6; color: Theme.bgSurface; border.color: Theme.bgCard; height: infoCols.implicitHeight + 16
+            Layout.fillWidth: true; radius: Theme.radiusMD; color: Theme.bgSurface; border.color: Theme.bgCard; height: infoCols.implicitHeight + 16
 
             ColumnLayout {
                 id: infoCols
-                anchors.fill: parent; anchors.margins: 10; spacing: Theme.spacingSM
+                anchors.fill: parent; anchors.margins: Theme.spacingMD; spacing: Theme.spacingSM
                 component InfoRow: RowLayout {
                     required property string label
                     required property string value
@@ -191,7 +191,7 @@ CxDialog {
         // Open-source components — upstream m_entries, AboutDialog.cpp:86-122
         // (rendered inline; the standalone "License Info" popup is deferred).
         Rectangle {
-            Layout.fillWidth: true; radius: 5; color: Theme.bgInset; height: libsCol.implicitHeight + 16
+            Layout.fillWidth: true; radius: Theme.radiusMD; color: Theme.bgInset; height: libsCol.implicitHeight + 16
 
             ColumnLayout {
                 id: libsCol
@@ -222,7 +222,7 @@ CxDialog {
                         id: libsList
                         x: 0; y: 0
                         width: libsScroll.availableWidth
-                        spacing: 2
+                        spacing: Theme.spacingXXS
 
                         Repeater {
                             model: root.libEntries
@@ -286,7 +286,7 @@ CxDialog {
             // Confirm button
             Rectangle {
                 Layout.alignment: Qt.AlignVCenter
-                width: 100; height: 30; radius: 4
+                width: 100; height: 30; radius: Theme.radiusSM
                 color: okHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
                 Text { anchors.centerIn: parent; text: qsTr("确认"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                 MouseArea { id: okHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }

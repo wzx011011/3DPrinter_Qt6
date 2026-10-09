@@ -319,13 +319,13 @@ CxDialog {
             Item { Layout.preferredWidth: 5 }
             Image {
                 Layout.preferredWidth: 18; Layout.preferredHeight: 18
-                Layout.margins: 5
+                Layout.margins: Theme.spacingXS
                 source: "qrc:/qml/assets/icons/print-time.svg"
                 sourceSize.width: 18; sourceSize.height: 18
             }
             Text {
                 Layout.preferredWidth: 72
-                Layout.margins: 5
+                Layout.margins: Theme.spacingXS
                 horizontalAlignment: Text.AlignRight
                 text: root.editorVm && root.editorVm.hasSliceResult
                       ? root.editorVm.estimatedPrintTime : ""
@@ -336,13 +336,13 @@ CxDialog {
             Item { Layout.preferredWidth: 30 }
             Image {
                 Layout.preferredWidth: 18; Layout.preferredHeight: 18
-                Layout.margins: 5
+                Layout.margins: Theme.spacingXS
                 source: "qrc:/qml/assets/icons/print-weight.svg"
                 sourceSize.width: 18; sourceSize.height: 18
             }
             Text {
                 Layout.preferredWidth: 88
-                Layout.margins: 5
+                Layout.margins: Theme.spacingXS
                 horizontalAlignment: Text.AlignLeft
                 text: root.editorVm ? root.editorVm.sliceResultWeight : ""
                 color: Theme.textPrimary
@@ -397,7 +397,7 @@ CxDialog {
             Rectangle {
                 anchors.centerIn: parent
                 width: 380; height: 24
-                radius: 3
+                radius: Theme.radiusSM
                 color: Theme.bgInset
                 border.color: Theme.borderInput
                 visible: root.renaming
@@ -460,13 +460,13 @@ CxDialog {
                              ? root.printerNames[currentIndex] : ""
                 onActivated: (index) => root.onPrinterActivated(index)
                 background: Rectangle {
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: Theme.bgInset
                     border.color: printerCombo.enabled ? Theme.borderInput : Theme.bgPressed
                 }
                 contentItem: Text {
                     leftPadding: 8
-                    rightPadding: 20
+                    rightPadding: Theme.spacingXL
                     verticalAlignment: Text.AlignVCenter
                     text: printerCombo.displayText
                     color: Theme.textPrimary
@@ -501,11 +501,11 @@ CxDialog {
                 popup: Popup {
                     y: printerCombo.height + 2
                     width: printerCombo.width
-                    padding: 1
+                    padding: Theme.spacingXXS
                     background: Rectangle {
                         color: Theme.bgPanel
                         border.color: Theme.borderInput
-                        radius: 4
+                        radius: Theme.radiusSM
                     }
                     contentItem: ListView {
                         clip: true
@@ -521,7 +521,7 @@ CxDialog {
                 Layout.leftMargin: 5
                 Layout.preferredHeight: 26
                 Layout.preferredWidth: refreshLabel.implicitWidth + 20
-                radius: 4
+                radius: Theme.radiusSM
                 color: !enabled ? Theme.bgPressed
                       : refreshMa.containsMouse ? Theme.accentDark : Theme.accent
                 enabled: root.sendState === 0 && !root.connecting
@@ -567,7 +567,7 @@ CxDialog {
                     spacing: 6
                     Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 14; height: 14; radius: 7
+                        width: 14; height: 14; radius: Theme.radiusLG
                         color: storageOption.checked ? Theme.accent : "transparent"
                         border.color: storageOption.enabled_
                                       ? (storageOption.checked ? Theme.accent : Theme.textTertiary)
@@ -575,7 +575,7 @@ CxDialog {
                         border.width: storageOption.checked ? 0 : 1
                         Rectangle {
                             anchors.centerIn: parent
-                            width: 6; height: 6; radius: 3
+                            width: 6; height: 6; radius: Theme.radiusSM
                             color: Theme.textOnAccent
                             visible: storageOption.checked
                         }
@@ -619,7 +619,7 @@ CxDialog {
         // SendToPrinter.cpp:308-326,573; frames ams_rfid_1..4 at :318).
         Row {
             Layout.alignment: Qt.AlignHCenter
-            spacing: 5
+            spacing: Theme.spacingXS
             visible: root.connecting || root.connectFailed
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -686,7 +686,7 @@ CxDialog {
                         Layout.fillWidth: true
                         Layout.bottomMargin: 10
                         Layout.preferredHeight: 32
-                        radius: 4
+                        radius: Theme.radiusSM
                         readonly property bool active: root.canSend || (!root.hasSlicePath
                             && root.printerSelected && !root.slicingForPrint
                             && root.sendState === 0 && !root.connecting)
@@ -733,14 +733,14 @@ CxDialog {
                         Rectangle {
                             Layout.preferredWidth: 300
                             Layout.preferredHeight: 6
-                            radius: 3
+                            radius: Theme.radiusSM
                             color: Theme.progressTrack
                             Rectangle {
                                 anchors.left: parent.left
                                 anchors.top: parent.top
                                 anchors.bottom: parent.bottom
                                 width: parent.width * root.sendProgress / 100
-                                radius: 3
+                                radius: Theme.radiusSM
                                 color: Theme.progressFill
                             }
                         }
@@ -755,7 +755,7 @@ CxDialog {
                         Rectangle {
                             Layout.preferredHeight: 24
                             Layout.preferredWidth: cancelLabel.implicitWidth + 16
-                            radius: 4
+                            radius: Theme.radiusSM
                             color: cancelMa.containsMouse ? Theme.bgHover : Theme.bgSurface
                             border.color: Theme.borderSubtle
                             Text {
@@ -784,7 +784,7 @@ CxDialog {
             Item {
                 Row {
                     anchors.centerIn: parent
-                    spacing: 10
+                    spacing: Theme.spacingMD
                     Image {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 25; height: 25
@@ -808,13 +808,13 @@ CxDialog {
             Layout.preferredWidth: 380
             Layout.preferredHeight: 125
             visible: root.sendFailed
-            radius: 4
+            radius: Theme.radiusSM
             color: Theme.bgSurface
             clip: true
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 5
-                spacing: 3
+                anchors.margins: Theme.spacingXS
+                spacing: Theme.spacingXS
                 // HyperLink "Check the status of current system services"
                 // (SendToPrinter.cpp:450-453) -> surfaces the live network
                 // status from the monitor VM (mock stack has no external

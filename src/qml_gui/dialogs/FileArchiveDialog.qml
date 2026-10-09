@@ -198,7 +198,7 @@ CxDialog {
         anchors.fill: parent
         // Upstream places the tree and the button row with wxALL 10
         // (FileArchiveDialog.cpp:260-261).
-        anchors.margins: 10
+        anchors.margins: Theme.spacingMD
 
         Text {
             Layout.fillWidth: true
@@ -214,7 +214,7 @@ CxDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: Theme.bgInset
-            radius: 4
+            radius: Theme.radiusSM
             border.color: Theme.borderSubtle
             border.width: 1
             clip: true
@@ -225,7 +225,7 @@ CxDialog {
                 anchors.margins: Theme.spacingXS
                 clip: true
                 model: root.treeNodes
-                spacing: 2
+                spacing: Theme.spacingXXS
 
                 delegate: Rectangle {
                     id: entryRow
@@ -233,7 +233,7 @@ CxDialog {
                     required property int index
                     width: entryList.width
                     height: 30
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: rowHover.containsMouse ? Theme.bgHover : "transparent"
 
                     readonly property bool isChecked: modelData.isFolder
@@ -268,7 +268,7 @@ CxDialog {
                                 anchors.centerIn: parent
                                 width: 14
                                 height: 14
-                                radius: 2
+                                radius: Theme.radiusXS
                                 color: entryRow.isChecked ? Theme.accent : Theme.bgCard
                                 border.color: entryRow.isChecked ? Theme.accent : Theme.borderInput
                                 border.width: 1

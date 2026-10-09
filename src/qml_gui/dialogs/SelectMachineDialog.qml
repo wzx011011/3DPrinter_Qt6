@@ -154,7 +154,7 @@ CxDialog {
                             Image {
                                 id: thumbImage
                                 anchors.fill: parent
-                                anchors.margins: 1
+                                anchors.margins: Theme.spacingXXS
                                 visible: root.editorVm !== null
                                          && root.thumbnailSource(root.editorVm.plateThumbnailBase64(root.editorVm.currentPlateIndex)) !== ""
                                 source: visible ? root.thumbnailSource(
@@ -184,7 +184,7 @@ CxDialog {
                                 Layout.preferredHeight: 25
                                 RowLayout {
                                     anchors.fill: parent
-                                    spacing: 3  // :230 wxLEFT 3
+                                    spacing: Theme.spacingXS  // :230 wxLEFT 3
 
                                     Text {
                                         visible: !root.renameEditing
@@ -307,7 +307,7 @@ CxDialog {
                                 // 标题行: [Printer + 问号] + 分割线（:6996-7015）
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 5  // :7013
+                                    spacing: Theme.spacingXS  // :7013
                                     Text {
                                         text: qsTr("打印机")
                                         color: Theme.textTertiary  // :6999 0x909090
@@ -425,7 +425,7 @@ CxDialog {
                                                         Column {
                                                             id: comboCol
                                                             width: comboPopup.availableWidth
-                                                            spacing: 2
+                                                            spacing: Theme.spacingXXS
                                                             Repeater {
                                                                 model: root.deviceVm ? root.deviceVm.filteredDeviceCount : 0
                                                                 delegate: ItemDelegate {
@@ -545,7 +545,7 @@ CxDialog {
                         // Auto Refill（:377-389，构造隐藏，AMS 备料可用时显示）
                         Row {
                             visible: false
-                            spacing: 3  // :385 wxALL 3
+                            spacing: Theme.spacingXS  // :385 wxALL 3
                             Image {
                                 width: 16; height: 16
                                 anchors.verticalCenter: parent.verticalCenter
@@ -580,7 +580,7 @@ CxDialog {
                             id: mappingGrid
                             visible: root.deviceVm !== null
                             anchors.fill: parent
-                            anchors.margins: 10  // :414 wxALL FromDIP(10)
+                            anchors.margins: Theme.spacingMD  // :414 wxALL FromDIP(10)
                             columns: 10          // :413 wxGridSizer(0, 10, 7, 7)
                             columnSpacing: 7
                             rowSpacing: 7
@@ -605,11 +605,11 @@ CxDialog {
                                     ColumnLayout {
                                         anchors.fill: parent
                                         anchors.margins: 4
-                                        spacing: 2
+                                        spacing: Theme.spacingXXS
                                         Rectangle {
                                             Layout.preferredWidth: 17
                                             Layout.preferredHeight: 16
-                                            radius: 2
+                                            radius: Theme.radiusXS
                                             color: matCell.slot && matCell.slot.color && matCell.slot.color !== ""
                                                    ? matCell.slot.color : Theme.borderSubtle
                                             border.width: 1
@@ -675,7 +675,7 @@ CxDialog {
                         Layout.fillWidth: true
                         Layout.leftMargin: 15
                         Layout.rightMargin: 15
-                        spacing: 10
+                        spacing: Theme.spacingMD
                         Text {
                             text: qsTr("对耗材分组不满意？重新分组并切片 ->")  // :482
                             color: Theme.accent  // :478 #009688 → 品牌绿
@@ -746,7 +746,7 @@ CxDialog {
                                 visible: optSupported
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 28  // :6416-6417 PrintOption 高 28
-                                spacing: 2  // :6439 wxLEFT 2
+                                spacing: Theme.spacingXXS  // :6439 wxLEFT 2
 
                                 Text {
                                     text: optRow.modelData.title
@@ -891,7 +891,7 @@ CxDialog {
                     radius: Theme.radiusSM
                     RowLayout {
                         anchors.centerIn: parent
-                        spacing: 5  // :691 wxALL 5
+                        spacing: Theme.spacingXS  // :691 wxALL 5
                         Image {
                             Layout.preferredWidth: 25
                             Layout.preferredHeight: 25  // :690 completed 25x25
@@ -929,7 +929,7 @@ CxDialog {
                     ColumnLayout {
                         id: failCol
                         width: failInfo.width
-                        spacing: 3  // :780/:782 wxTOP 3
+                        spacing: Theme.spacingXS  // :780/:782 wxTOP 3
 
                         // m_link_network_state（:775-778, Body_12）
                         Text {

@@ -48,7 +48,7 @@ Column {
     component MoveKindRow: RowLayout {
         id: moveKindRow
         property string label: ""
-        property string swatch: "#FFFFFF"
+        property string swatch: Theme.textPrimary
         property bool checked: true
         property string timeText: ""
         property string percentText: ""
@@ -289,7 +289,7 @@ Column {
     // upstream DEFAULT_OPTIONS_COLORS values (ViewerImpl.cpp:307-319).
     MoveKindRow {
         label: qsTr("擦料 (Wipe)")
-        swatch: "#FFFF00"  // upstream Wipes (255,255,0)
+        swatch: Theme.visibilityTypeColors[0]  // upstream Wipes (255,255,0)
         checked: root.previewVm ? root.previewVm.showWipeMoves : false
         visible: root.previewVm && root.previewVm.moveVisibilityAvailable
                  && root.previewVm.moveCountOfKind(4) > 0
@@ -298,7 +298,7 @@ Column {
     }
     MoveKindRow {
         label: qsTr("回抽 (Retract)")
-        swatch: "#CD22D6"  // upstream Retractions (205,34,214)
+        swatch: Theme.visibilityTypeColors[1]  // upstream Retractions (205,34,214)
         checked: root.previewVm ? root.previewVm.showRetractMoves : true
         visible: root.previewVm && root.previewVm.moveVisibilityAvailable
                  && root.previewVm.moveCountOfKind(2) > 0
@@ -307,7 +307,7 @@ Column {
     }
     MoveKindRow {
         label: qsTr("取消回抽 (Unretract)")
-        swatch: "#49ADCE"  // upstream Unretractions (73,173,207)
+        swatch: Theme.visibilityTypeColors[2]  // upstream Unretractions (73,173,207)
         checked: root.previewVm ? root.previewVm.showUnretractMoves : true
         visible: root.previewVm && root.previewVm.moveVisibilityAvailable
                  && root.previewVm.moveCountOfKind(3) > 0
@@ -316,7 +316,7 @@ Column {
     }
     MoveKindRow {
         label: qsTr("接缝 (Seam)")
-        swatch: "#E6E6E6"  // upstream Seams (230,230,230)
+        swatch: Theme.visibilityTypeColors[3]  // upstream Seams (230,230,230)
         checked: root.previewVm ? root.previewVm.showSeamMarks : true
         visible: root.previewVm && root.previewVm.moveVisibilityAvailable
                  && root.previewVm.moveCountOfKind(5) > 0
@@ -328,7 +328,7 @@ Column {
     // m_options collects ToolChange vertices, ViewerImpl.cpp:1013-1015).
     MoveKindRow {
         label: qsTr("换料 (Filament changes)")
-        swatch: "#C1BE63"  // upstream ToolChanges (193,190,99)
+        swatch: Theme.visibilityTypeColors[4]  // upstream ToolChanges (193,190,99)
         checked: root.previewVm ? root.previewVm.showToolChanges : true
         visible: root.previewVm && root.previewVm.moveVisibilityAvailable
                  && root.previewVm.toolChangeCount > 0

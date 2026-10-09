@@ -30,7 +30,7 @@ Item {
         border.width: 1
         border.color: Theme.borderSubtle
 
-        Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        Behavior on height { NumberAnimation { duration: Theme.motionNormal; easing.type: Theme.easingStandard } }
     }
 
     // 标题栏（可点击切换折叠）— 透明背景，继承卡片背景
@@ -78,7 +78,7 @@ Item {
             // 标题栏操作按钮（由外部注入）
             Row {
                 id: actionsRow
-                spacing: 2
+                spacing: Theme.spacingXXS
             }
 
             // 展开/折叠箭头
@@ -87,7 +87,7 @@ Item {
                 color: Theme.textDisabled
                 font.pixelSize: Theme.fontSizeXS
                 rotation: root.expanded ? 0 : -90
-                Behavior on rotation { NumberAnimation { duration: 200 } }
+                Behavior on rotation { NumberAnimation { duration: Theme.motionNormal } }
             }
         }
     }
@@ -119,10 +119,10 @@ Item {
 
         Behavior on height {
             id: heightAnimation
-            NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+            NumberAnimation { duration: Theme.motionNormal; easing.type: Theme.easingStandard }
         }
         Behavior on opacity {
-            NumberAnimation { duration: 150 }
+            NumberAnimation { duration: Theme.motionFast }
         }
         opacity: root.expanded ? 1.0 : 0.0
     }

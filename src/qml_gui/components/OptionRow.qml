@@ -270,7 +270,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: root.compact ? 6 : 14
             anchors.rightMargin: root.compact ? 10 : 18
-            spacing: 5  // upstream StaticLine: icon + 5px + title + line
+            spacing: Theme.spacingXS  // upstream StaticLine: icon + 5px + title + line
 
             // Upstream OptionsGroup renders its title through StaticLine with
             // an 18px group icon (StaticLine.cpp:37,93-115). Still a static
@@ -285,7 +285,7 @@ Item {
 
             Text {
                 text: root.displayGroupLabel(root.oGroup)
-                color: "#f0f0f0"
+                color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeLG
                 font.bold: true
                 elide: Text.ElideRight
@@ -296,7 +296,7 @@ Item {
                 id: sectionDivider
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
-                color: "#4c4c55"
+                color: Theme.bgPanel
             }
         }
     }
@@ -329,7 +329,7 @@ Item {
                         visible: root.oDirty
                         Layout.preferredWidth: 6
                         Layout.preferredHeight: 6
-                        radius: 3
+                        radius: Theme.radiusSM
                         color: Theme.statusWarning
                     }
 
@@ -582,7 +582,7 @@ Item {
                                     anchors.centerIn: parent
                                     width: 14
                                     height: 14
-                                    radius: 2
+                                    radius: Theme.radiusXS
                                     color: (typeof root.oVal === "string" && root.oVal.length > 0)
                                            ? root.oVal : Theme.accent
                                     border.color: Theme.borderDefault

@@ -78,7 +78,7 @@ Item {
                     width: 12; height: 12
                     source: "qrc:/qml/assets/icons/sidebutton_dropdown.svg"
                     rotation: root.groupExpanded ? 180 : 0
-                    Behavior on rotation { NumberAnimation { duration: 120 } }
+                    Behavior on rotation { NumberAnimation { duration: Theme.motionFast } }
                 }
             }
 
@@ -263,7 +263,7 @@ Item {
             Layout.topMargin: Theme.spacingXS
             Layout.leftMargin: Theme.spacingLG
             Layout.rightMargin: Theme.spacingLG
-            spacing: 2
+            spacing: Theme.spacingXXS
 
             CxIconButton {
                 buttonSize: 24
@@ -549,7 +549,7 @@ Item {
                             // that collapsed every row to ~100px and stacked
                             // name/badge/progress on top of each other.
                             width: deviceListScroll.availableWidth - 4
-                            spacing: 2
+                            spacing: Theme.spacingXXS
 
                             // monitor-7: Repeater walks the locally sorted
                             // filtered indices; modelData stays the filtered
@@ -588,7 +588,7 @@ Item {
 
                                         // Online status indicator dot
                                         Rectangle {
-                                            width: 8; height: 8; radius: 4
+                                            width: 8; height: 8; radius: Theme.radiusSM
                                             color: devData.online ? Theme.statusSuccess : Theme.textDisabled
                                             Layout.alignment: root.deviceGridView ? Qt.AlignTop : Qt.AlignVCenter
                                             Layout.topMargin: root.deviceGridView ? 12 : 0
@@ -597,7 +597,7 @@ Item {
                                         // Device info column
                                         Column {
                                             Layout.fillWidth: true
-                                            spacing: 2
+                                            spacing: Theme.spacingXXS
 
                                             // Device name (bold)
                                             Text {
@@ -622,14 +622,14 @@ Item {
                                             // Status line
                                             Row {
                                                 spacing: Theme.spacingSM
-                                                topPadding: 2
+                                                topPadding: Theme.spacingXXS
                                                 visible: root.deviceGridView
 
                                                 // Status badge
                                                 Rectangle {
                                                     width: statusText.implicitWidth + 12
                                                     height: 18
-                                                    radius: 9
+                                                    radius: Theme.radiusLG
                                                     color: {
                                                         if (devData.status === "printing") return Theme.bgCard
                                                         if (devData.status === "idle")     return Theme.chromePressed
@@ -662,14 +662,14 @@ Item {
 
                                                 // Signal strength indicator
                                                 Row {
-                                                    spacing: 1
+                                                    spacing: Theme.spacingXXS
                                                     visible: devData.online
                                                     Repeater {
                                                         model: 4
                                                         Rectangle {
                                                             width: 3
                                                             height: 4 + index * 2
-                                                            radius: 1
+                                                            radius: Theme.radiusXS
                                                             color: index < (devData.signalStrength || 0)
                                                                    ? Theme.statusSuccess
                                                                    : Theme.borderSubtle
@@ -699,7 +699,7 @@ Item {
                                         Column {
                                             visible: root.deviceGridView && devData.status === "printing"
                                             Layout.alignment: Qt.AlignVCenter
-                                            spacing: 2
+                                            spacing: Theme.spacingXXS
 
                                             Text {
                                                 text: devData.progress + "%"
@@ -779,7 +779,7 @@ Item {
 
                         // Network status dot
                         Rectangle {
-                            width: 6; height: 6; radius: 3
+                            width: 6; height: 6; radius: Theme.radiusSM
                             color: root.monitorVm.networkOnline ? Theme.statusSuccess : Theme.statusError
                         }
 
@@ -870,7 +870,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.topMargin: 12
                         visible: root.groupExpanded
-                        spacing: 14
+                        spacing: Theme.spacingXL
 
                         Image {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -893,7 +893,7 @@ Item {
                         // mapping: #909090 -> borderDefault, panel face ->
                         // bgPanel, hover -> bgHover. Hint text sits below.
                         Rectangle {
-                            width: 96; height: 39; radius: 12
+                            width: 96; height: 39; radius: Theme.radiusXL
                             anchors.horizontalCenter: parent.horizontalCenter
                             color: noPrinterScanMA.containsMouse ? Theme.bgHover : Theme.bgPanel
                             border.width: 1
@@ -934,7 +934,7 @@ Item {
 
                 // Spinner animation
                 Rectangle {
-                    width: 48; height: 48; radius: 24
+                    width: 48; height: 48; radius: Theme.radiusHero
                     color: "transparent"
                     border.width: 3
                     border.color: Theme.accent
@@ -942,7 +942,7 @@ Item {
                     opacity: 0.3
 
                     Rectangle {
-                        width: 48; height: 24; radius: 24
+                        width: 48; height: 24; radius: Theme.radiusHero
                         color: "transparent"
                         border.width: 3
                         border.color: Theme.accent
@@ -984,7 +984,7 @@ Item {
                 // Warning icon
                 Text {
                     text: "\u26A0"
-                    font.pixelSize: 64
+                    font.pixelSize: Theme.fontSizeDisplayXL
                     color: Theme.statusWarning
                     horizontalAlignment: Text.AlignHCenter
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1012,7 +1012,7 @@ Item {
                 // the label now).
                 Rectangle {
                     width: retryLabel.implicitWidth + 32
-                    height: 36; radius: 8
+                    height: 36; radius: Theme.radiusLG
                     anchors.horizontalCenter: parent.horizontalCenter
                     Text {
                         id: retryLabel
@@ -1057,12 +1057,12 @@ Item {
                             Text {
                                 anchors.centerIn: parent
                                 text: "\u{1F5A5}"
-                                font.pixelSize: 18
+                                font.pixelSize: Theme.fontSizeXXL
                             }
                         }
 
                         Column {
-                            spacing: 2
+                            spacing: Theme.spacingXXS
                             Text {
                                 text: root.monitorVm.selectedDeviceName || qsTr("未选择设备")
                                 color: Theme.textPrimary
@@ -1080,14 +1080,14 @@ Item {
 
                         // Signal indicator
                         Row {
-                            spacing: 2
+                            spacing: Theme.spacingXXS
                             visible: root.monitorVm.selectedDeviceOnline
                             Repeater {
                                 model: 4
                                 Rectangle {
                                     width: 3
                                     height: 5 + index * 2.5
-                                    radius: 1
+                                    radius: Theme.radiusXS
                                     color: index < root.monitorVm.selectedDeviceSignalStrength
                                            ? Theme.statusSuccess
                                            : Theme.borderSubtle
@@ -1098,7 +1098,7 @@ Item {
 
                         // Online/Offline badge
                         Rectangle {
-                            width: onlineText.implicitWidth + 16; height: 22; radius: 11
+                            width: onlineText.implicitWidth + 16; height: 22; radius: Theme.radiusXL
                             color: root.monitorVm.selectedDeviceOnline ? Theme.bgCard : Theme.bgFloating
                             border.width: 1
                             border.color: root.monitorVm.selectedDeviceOnline
@@ -1262,7 +1262,7 @@ Item {
 
                                     // Status
                                     Column {
-                                        spacing: 2
+                                        spacing: Theme.spacingXXS
                                         Text {
                                             text: qsTr("状态")
                                             color: Theme.textTertiary
@@ -1299,7 +1299,7 @@ Item {
 
                                     // Temperature
                                     Column {
-                                        spacing: 2
+                                        spacing: Theme.spacingXXS
                                         Text {
                                             text: qsTr("喷头温度")
                                             color: Theme.textTertiary
@@ -1325,7 +1325,7 @@ Item {
 
                                     // IP address
                                     Column {
-                                        spacing: 2
+                                        spacing: Theme.spacingXXS
                                         Text {
                                             text: qsTr("IP 地址")
                                             color: Theme.textTertiary
@@ -1343,7 +1343,7 @@ Item {
                                     // Refresh button
                                     Rectangle {
                                         width: refreshBtn.implicitWidth + 16
-                                        height: 28; radius: 4
+                                        height: 28; radius: Theme.radiusSM
                                         color: refreshBtnHover.containsMouse ? Theme.bgHover : Theme.bgElevated
                                         border.width: 1; border.color: Theme.borderSubtle
                                         Text {
@@ -1404,13 +1404,13 @@ Item {
                                     Rectangle {
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 6
-                                        radius: 3
+                                        radius: Theme.radiusSM
                                         color: Theme.borderSubtle
 
                                         Rectangle {
                                             width: parent.width * (root.monitorVm.selectedDeviceProgress / 100)
                                             height: parent.height
-                                            radius: 3
+                                            radius: Theme.radiusSM
                                             color: Theme.accent
                                         }
                                     }
@@ -1441,17 +1441,17 @@ Item {
                                             font.pixelSize: Theme.fontSizeSM
                                         }
                                         Rectangle {
-                                            width: 56; height: 28; radius: 14
+                                            width: 56; height: 28; radius: Theme.radiusXXL
                                             color: root.monitorVm.selectedDeviceChamberLightOn ? Theme.accent : Theme.borderDefault
                                             border.width: 1
                                             border.color: root.monitorVm.selectedDeviceChamberLightOn ? Theme.accentDark : Theme.borderStrong
 
                                             Rectangle {
-                                                width: 22; height: 22; radius: 11
+                                                width: 22; height: 22; radius: Theme.radiusXL
                                                 color: "white"
                                                 x: root.monitorVm.selectedDeviceChamberLightOn ? parent.width - 25 : 3
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
                                             }
 
                                             MouseArea {
@@ -1478,17 +1478,17 @@ Item {
                                             font.pixelSize: Theme.fontSizeSM
                                         }
                                         Rectangle {
-                                            width: 56; height: 28; radius: 14
+                                            width: 56; height: 28; radius: Theme.radiusXXL
                                             color: root.monitorVm.selectedDeviceWorkLightOn ? Theme.accent : Theme.borderDefault
                                             border.width: 1
                                             border.color: root.monitorVm.selectedDeviceWorkLightOn ? Theme.accentDark : Theme.borderStrong
 
                                             Rectangle {
-                                                width: 22; height: 22; radius: 11
+                                                width: 22; height: 22; radius: Theme.radiusXL
                                                 color: "white"
                                                 x: root.monitorVm.selectedDeviceWorkLightOn ? parent.width - 25 : 3
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
                                             }
 
                                             MouseArea {
@@ -1515,7 +1515,7 @@ Item {
                                             font.pixelSize: Theme.fontSizeSM
                                         }
                                         Rectangle {
-                                            width: 56; height: 28; radius: 14
+                                            width: 56; height: 28; radius: Theme.radiusXXL
                                             color: root.monitorVm.selectedDeviceCameraRecording ? Theme.statusError : Theme.borderDefault
                                             border.width: 1
                                             border.color: root.monitorVm.selectedDeviceCameraRecording ? Theme.chromeDangerHover : Theme.borderStrong
@@ -1523,7 +1523,7 @@ Item {
                                             // Recording indicator dot
                                             Rectangle {
                                                 visible: root.monitorVm.selectedDeviceCameraRecording
-                                                width: 8; height: 8; radius: 4
+                                                width: 8; height: 8; radius: Theme.radiusSM
                                                 color: Theme.statusError
                                                 anchors.left: parent.left
                                                 anchors.leftMargin: 8
@@ -1531,11 +1531,11 @@ Item {
                                             }
 
                                             Rectangle {
-                                                width: 22; height: 22; radius: 11
+                                                width: 22; height: 22; radius: Theme.radiusXL
                                                 color: "white"
                                                 x: root.monitorVm.selectedDeviceCameraRecording ? parent.width - 25 : 3
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
                                             }
 
                                             MouseArea {
@@ -1562,17 +1562,17 @@ Item {
                                             font.pixelSize: Theme.fontSizeSM
                                         }
                                         Rectangle {
-                                            width: 56; height: 28; radius: 14
+                                            width: 56; height: 28; radius: Theme.radiusXXL
                                             color: root.monitorVm.selectedDeviceCameraTimelapse ? Theme.statusInfo : Theme.borderDefault
                                             border.width: 1
                                             border.color: root.monitorVm.selectedDeviceCameraTimelapse ? Theme.statusInfo : Theme.borderStrong
 
                                             Rectangle {
-                                                width: 22; height: 22; radius: 11
+                                                width: 22; height: 22; radius: Theme.radiusXL
                                                 color: "white"
                                                 x: root.monitorVm.selectedDeviceCameraTimelapse ? parent.width - 25 : 3
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: 150 } }
+                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
                                             }
 
                                             MouseArea {
@@ -1640,7 +1640,7 @@ Item {
 
                                     // Connect/Disconnect button
                                     Rectangle {
-                                        width: 70; height: 26; radius: 4
+                                        width: 70; height: 26; radius: Theme.radiusSM
                                         color: connectMA.containsMouse ? Theme.chromeDangerHover : Theme.statusError
                                         visible: root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus !== "printing"
                                         Text {
@@ -1663,7 +1663,7 @@ Item {
 
                                     // Start print button
                                     Rectangle {
-                                        width: 70; height: 26; radius: 4
+                                        width: 70; height: 26; radius: Theme.radiusSM
                                         color: startMA.containsMouse ? Theme.accentDark : Theme.accent
                                         visible: root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus === "idle"
                                         Text {
@@ -1683,7 +1683,7 @@ Item {
 
                                     // Pause button
                                     Rectangle {
-                                        width: 60; height: 26; radius: 4
+                                        width: 60; height: 26; radius: Theme.radiusSM
                                         color: pauseMA.containsMouse ? Theme.statusWarning : Theme.statusWarning
                                         visible: root.monitorVm.selectedDeviceStatus === "printing"
                                         Text {
@@ -1703,7 +1703,7 @@ Item {
 
                                     // Resume button
                                     Rectangle {
-                                        width: 60; height: 26; radius: 4
+                                        width: 60; height: 26; radius: Theme.radiusSM
                                         color: resumeMA.containsMouse ? Theme.accentDark : Theme.accent
                                         visible: root.monitorVm.selectedDeviceStatus === "paused"
                                         Text {
@@ -1723,7 +1723,7 @@ Item {
 
                                     // Stop button
                                     Rectangle {
-                                        width: 60; height: 26; radius: 4
+                                        width: 60; height: 26; radius: Theme.radiusSM
                                         color: stopMA.containsMouse ? Theme.chromeDangerHover : Theme.statusError
                                         visible: root.monitorVm.selectedDeviceStatus === "printing" || root.monitorVm.selectedDeviceStatus === "paused"
                                         Text {
@@ -1743,7 +1743,7 @@ Item {
 
                                     // Connect offline device button
                                     Rectangle {
-                                        width: 70; height: 26; radius: 4
+                                        width: 70; height: 26; radius: Theme.radiusSM
                                         color: connOnMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
                                         visible: !root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus === "offline"
                                         Text {
@@ -1839,7 +1839,7 @@ Item {
                                                 Rectangle {
                                                     width: 6
                                                     height: 8 + index * 4
-                                                    radius: 1
+                                                    radius: Theme.radiusXS
                                                     color: index < root.monitorVm.selectedDeviceSignalStrength
                                                            ? Theme.statusSuccess : Theme.borderSubtle
                                                     anchors.bottom: parent.bottom
@@ -1944,7 +1944,7 @@ Item {
                                                     Rectangle {
                                                         width: 36
                                                         height: 20
-                                                        radius: 4
+                                                        radius: Theme.radiusSM
                                                         color: slotData.color || Theme.borderSubtle
                                                         border.width: 1
                                                         border.color: Theme.borderSubtle
@@ -1972,7 +1972,7 @@ Item {
                                                     Text {
                                                         text: slotData.remainingWeight > 0 ? Math.round(slotData.remainingWeight) + "g" : ""
                                                         color: Theme.textTertiary
-                                                        font.pixelSize: 8
+                                                        font.pixelSize: Theme.fontSizeXS
                                                         anchors.horizontalCenter: parent.horizontalCenter
                                                     }
                                                 }
@@ -1982,7 +1982,7 @@ Item {
                                                     visible: slotData.active
                                                     width: 6
                                                     height: 6
-                                                    radius: 3
+                                                    radius: Theme.radiusSM
                                                     color: Theme.accent
                                                     anchors.top: parent.top
                                                     anchors.right: parent.right
@@ -2005,7 +2005,7 @@ Item {
                                     // Active slot info
                                     Column {
                                         visible: root.monitorVm.selectedAmsSlotCount > 0
-                                        spacing: 2
+                                        spacing: Theme.spacingXXS
                                         Text {
                                             text: qsTr("当前活动")
                                             color: Theme.textTertiary
@@ -2121,7 +2121,7 @@ Item {
                                             // 加载状态指示器（对齐上游 MediaPlayCtrl 加载动画）
                                             Rectangle {
                                                 anchors.centerIn: parent
-                                                width: 40; height: 40; radius: 20
+                                                width: 40; height: 40; radius: Theme.radiusHero
                                                 color: Theme.overlayDim
                                                 visible: liveVideo.status === Image.Loading
                                                 Text {
@@ -2190,7 +2190,7 @@ Item {
                                             anchors.margins: 8
                                             width: recordingLabel.implicitWidth + 16
                                             height: 24
-                                            radius: 12
+                                            radius: Theme.radiusXL
                                             color: root.monitorVm.cameraRecordingStatus >= 3
                                                     ? "rgba(239,68,68,0.85)" : "transparent"
                                             visible: root.monitorVm.cameraRecordingStatus >= 3
@@ -2198,7 +2198,7 @@ Item {
                                             RowLayout {
                                                 anchors.centerIn: parent
                                                 spacing: 4
-                                                Rectangle { width: 8; height: 8; radius: 4; color: Theme.statusError }
+                                                Rectangle { width: 8; height: 8; radius: Theme.radiusSM; color: Theme.statusError }
                                                 Text {
                                                     id: recordingLabel
                                                     text: qsTr("REC")
@@ -2216,7 +2216,7 @@ Item {
                                             anchors.margins: 8
                                             width: timelapseLabel.implicitWidth + 16
                                             height: 24
-                                            radius: 12
+                                            radius: Theme.radiusXL
                                             color: root.monitorVm.cameraTimelapseStatus >= 3
                                                     ? "rgba(59,130,246,0.85)" : "transparent"
                                             visible: root.monitorVm.cameraTimelapseStatus >= 3
@@ -2246,7 +2246,7 @@ Item {
 
                                         // Start/Stop stream
                                         Rectangle {
-                                            width: 70; height: 28; radius: 4
+                                            width: 70; height: 28; radius: Theme.radiusSM
                                             color: streamMA.containsMouse
                                                     ? (root.monitorVm.cameraStreamStatus <= 1 ? Theme.chromeDangerHover : Theme.borderActive)
                                                     : (root.monitorVm.cameraStreamStatus <= 1 ? Theme.statusError : Theme.borderStrong)
@@ -2273,7 +2273,7 @@ Item {
 
                                         // Toggle recording
                                         Rectangle {
-                                            width: 70; height: 28; radius: 4
+                                            width: 70; height: 28; radius: Theme.radiusSM
                                             color: recMA.containsMouse
                                                     ? (root.monitorVm.cameraRecordingStatus >= 3 ? Theme.chromeDangerHover : Theme.accentDark)
                                                     : (root.monitorVm.cameraRecordingStatus >= 3 ? Theme.statusError : Theme.accent)
@@ -2296,7 +2296,7 @@ Item {
 
                                         // Toggle timelapse
                                         Rectangle {
-                                            width: 80; height: 28; radius: 4
+                                            width: 80; height: 28; radius: Theme.radiusSM
                                             color: tlMA.containsMouse
                                                     ? (root.monitorVm.cameraTimelapseStatus >= 3 ? Theme.statusWarning : Theme.statusInfo)
                                                     : (root.monitorVm.cameraTimelapseStatus >= 3 ? Theme.statusWarning : Theme.statusInfo)
@@ -2321,7 +2321,7 @@ Item {
 
                                         // Switch camera
                                         Rectangle {
-                                            width: 60; height: 28; radius: 4
+                                            width: 60; height: 28; radius: Theme.radiusSM
                                             color: switchMA.containsMouse ? Theme.borderDefault : Theme.bgCard
                                             visible: root.monitorVm.cameraStreamStatus === 3
                                             Text {
@@ -2341,7 +2341,7 @@ Item {
 
                                         // Screenshot
                                         Rectangle {
-                                            width: 50; height: 28; radius: 4
+                                            width: 50; height: 28; radius: Theme.radiusSM
                                             color: shotMA.containsMouse ? Theme.borderDefault : Theme.bgCard
                                             visible: root.monitorVm.cameraStreamStatus === 3
                                             Text {
@@ -2374,7 +2374,7 @@ Item {
                                             Repeater {
                                                 model: ["720P", "1080P"]
                                                 Rectangle {
-                                                    width: 52; height: 22; radius: 4
+                                                    width: 52; height: 22; radius: Theme.radiusSM
                                                     color: index === root.monitorVm.cameraResolution
                                                            ? Theme.accent : Theme.bgCard
                                                     border.width: 1
@@ -2427,7 +2427,7 @@ Item {
 
                         Column {
                             anchors.centerIn: parent
-                            spacing: 10
+                            spacing: Theme.spacingMD
 
                             Image {
                                 anchors.horizontalCenter: parent.horizontalCenter
@@ -2550,12 +2550,12 @@ Item {
                                             // Message content
                                             Column {
                                                 Layout.fillWidth: true
-                                                spacing: 3
+                                                spacing: Theme.spacingXS
 
                                                 Row {
                                                     spacing: Theme.spacingSM
                                                     Rectangle {
-                                                        width: levelBadge.implicitWidth + 10; height: 16; radius: 8
+                                                        width: levelBadge.implicitWidth + 10; height: 16; radius: Theme.radiusLG
                                                         color: {
                                                             if (hmsData.msgLevel === 1) return Theme.bgPanel
                                                             if (hmsData.msgLevel === 2) return Theme.bgPanel
@@ -2583,7 +2583,7 @@ Item {
                                                     }
 
                                                     Rectangle {
-                                                        width: 6; height: 6; radius: 3
+                                                        width: 6; height: 6; radius: Theme.radiusSM
                                                         visible: !hmsData.alreadyRead
                                                         color: Theme.accent
                                                         anchors.verticalCenter: parent.verticalCenter
@@ -2662,7 +2662,7 @@ Item {
                             Layout.alignment: Qt.AlignRight
                             visible: root.monitorVm.selectedHmsCount > 0
                             width: clearHmsMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                            height: 28; radius: 6
+                            height: 28; radius: Theme.radiusMD
                             border.width: 1; border.color: Theme.borderSubtle
                             Text {
                                 anchors.centerIn: parent

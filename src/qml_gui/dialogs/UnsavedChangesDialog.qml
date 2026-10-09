@@ -402,7 +402,7 @@ CxDialog {
       RowLayout {
         Layout.fillWidth: true
         Layout.topMargin: 15
-        spacing: 10
+        spacing: Theme.spacingMD
 
         // Help hyperlink, shown exactly for preset switches
         // (dependent_presets != nullptr, :977-980); upstream teal link color

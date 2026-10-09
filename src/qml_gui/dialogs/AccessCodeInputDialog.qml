@@ -46,7 +46,7 @@ Dialog {
             spacing: Theme.spacingLG
             Text {
                 text: "\u{1F5A5}\u{FE0F}"  // 🖥️ 打印机
-                font.pixelSize: 28
+                font.pixelSize: Theme.fontSizeDisplay
             }
             ColumnLayout {
                 Layout.fillWidth: true

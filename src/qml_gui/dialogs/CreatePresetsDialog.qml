@@ -586,12 +586,12 @@ CxDialog {
         implicitHeight: 24
         Row {
             id: radioRow
-            spacing: 5  // upstream 5px indicator/text gap (@1278)
+            spacing: Theme.spacingXS  // upstream 5px indicator/text gap (@1278)
             Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 14
                 height: 14
-                radius: 7
+                radius: Theme.radiusLG
                 color: "transparent"
                 border.color: radioRoot.checked ? Theme.accent : Theme.borderDefault
                 border.width: 1
@@ -599,7 +599,7 @@ CxDialog {
                     anchors.centerIn: parent
                     width: 6
                     height: 6
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: Theme.accent
                     visible: radioRoot.checked
                 }
@@ -728,7 +728,7 @@ CxDialog {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 5
+                    spacing: Theme.spacingXS
                     Text {
                         text: successRoot.printerMode ? qsTr("打印机已创建") : qsTr("耗材已创建")
                         color: Theme.textPrimary
@@ -886,7 +886,7 @@ CxDialog {
             visible: root.selectedCategory === 1
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 5  // upstream 5px row gaps (@680-694)
+            spacing: Theme.spacingXS  // upstream 5px row gaps (@680-694)
 
             // "Basic Information" section header, Head_16 (@676-678)
             Text {
@@ -902,7 +902,7 @@ CxDialog {
                 Layout.fillWidth: true
                 Layout.leftMargin: 5
                 Layout.rightMargin: 5
-                spacing: 5
+                spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("厂商") }
                 PromptComboBox {
                     id: filVendorCombo
@@ -920,7 +920,7 @@ CxDialog {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 5
+                    spacing: Theme.spacingXS
                     CxCheckBox {
                         // "Can't find vendor I want" swap (@820-849)
                         text: qsTr("找不到想要的厂商")
@@ -936,7 +936,7 @@ CxDialog {
                 Layout.fillWidth: true
                 Layout.leftMargin: 5
                 Layout.rightMargin: 5
-                spacing: 5
+                spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("类型") }
                 PromptComboBox {
                     id: filTypeCombo
@@ -957,10 +957,10 @@ CxDialog {
                 Layout.fillWidth: true
                 Layout.leftMargin: 5
                 Layout.rightMargin: 5
-                spacing: 5
+                spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("系列") }
                 ColumnLayout {
-                    spacing: 5
+                    spacing: Theme.spacingXS
                     PresetNameField {
                         id: filSerialInput
                         Layout.preferredWidth: 200
@@ -998,11 +998,11 @@ CxDialog {
                 Layout.fillWidth: true
                 Layout.leftMargin: 10
                 Layout.rightMargin: 5
-                spacing: 5
+                spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("耗材预设") }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 10  // upstream 10px between the radio pair (@1018)
+                    spacing: Theme.spacingMD  // upstream 10px between the radio pair (@1018)
                     UpstreamRadio {
                         label: qsTr("基于当前耗材创建")
                         checked: root.filamentFromCurrent
@@ -1101,7 +1101,7 @@ CxDialog {
                 Layout.preferredHeight: 40
                 Row {
                     anchors.centerIn: parent
-                    spacing: 3
+                    spacing: Theme.spacingXS
                     Image {
                         anchors.verticalCenter: parent.verticalCenter
                         source: "qrc:/qml/assets/icons/step_1.svg"
@@ -1152,22 +1152,22 @@ CxDialog {
                     ColumnLayout {
                         id: printerPages
                         width: printerFlick.width
-                        spacing: 5
+                        spacing: Theme.spacingXS
 
                         // ── Page1 ──
                         ColumnLayout {
                             visible: root.printerPage === 1
                             Layout.fillWidth: true
-                            spacing: 5
+                            spacing: Theme.spacingXS
 
                             // Create Type row (@1702-1719)
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.margins: 10
-                                spacing: 10
+                                Layout.margins: Theme.spacingMD
+                                spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("创建类型") }
                                 ColumnLayout {
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     UpstreamRadio {
                                         label: qsTr("创建打印机")
                                         checked: !root.createNozzle
@@ -1190,13 +1190,13 @@ CxDialog {
                                 Layout.leftMargin: 10
                                 Layout.rightMargin: 10
                                 Layout.bottomMargin: 5
-                                spacing: 10
+                                spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("打印机") }
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 5
+                                    spacing: Theme.spacingXS
                                     RowLayout {
-                                        spacing: 5
+                                        spacing: Theme.spacingXS
                                         PromptComboBox {
                                             id: p1VendorCombo
                                             Layout.preferredWidth: 200
@@ -1262,12 +1262,12 @@ CxDialog {
                                 Layout.leftMargin: 10
                                 Layout.rightMargin: 10
                                 Layout.bottomMargin: 5
-                                spacing: 10
+                                spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("喷嘴直径") }
                                 ColumnLayout {
-                                    spacing: 5
+                                    spacing: Theme.spacingXS
                                     RowLayout {
-                                        spacing: 5
+                                        spacing: Theme.spacingXS
                                         PromptComboBox {
                                             id: p1NozzleCombo
                                             Layout.preferredWidth: 100  // OPTION_SIZE
@@ -1301,13 +1301,13 @@ CxDialog {
                             ColumnLayout {
                                 visible: !root.createNozzle
                                 Layout.fillWidth: true
-                                spacing: 5
+                                spacing: Theme.spacingXS
 
                                 // Bed Shape row (@1942-1958): static "Rectangle"
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.margins: 10
-                                    spacing: 10
+                                    Layout.margins: Theme.spacingMD
+                                    spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("热床形状") }
                                     Text {
                                         text: qsTr("矩形")
@@ -1322,7 +1322,7 @@ CxDialog {
                                     Layout.leftMargin: 10
                                     Layout.rightMargin: 10
                                     Layout.bottomMargin: 5
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("可打印空间") }
                                     DigitsField { id: p1SpaceX; Layout.leftMargin: 5 }
                                     DigitsField { id: p1SpaceY }
@@ -1334,7 +1334,7 @@ CxDialog {
                                     Layout.leftMargin: 10
                                     Layout.rightMargin: 10
                                     Layout.bottomMargin: 5
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("原点") }
                                     DigitsField { id: p1OriginX; Layout.leftMargin: 5 }
                                     DigitsField { id: p1OriginY }
@@ -1346,7 +1346,7 @@ CxDialog {
                                     Layout.leftMargin: 10
                                     Layout.rightMargin: 10
                                     Layout.bottomMargin: 5
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("热床 STL") }
                                     CxButton {
                                         text: qsTr("加载...")
@@ -1371,7 +1371,7 @@ CxDialog {
                                     Layout.leftMargin: 10
                                     Layout.rightMargin: 10
                                     Layout.bottomMargin: 5
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("热床 SVG") }
                                     CxButton {
                                         text: qsTr("加载...")
@@ -1393,8 +1393,8 @@ CxDialog {
                                 // Max Print Height row (@2077-2095)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.margins: 10
-                                    spacing: 10
+                                    Layout.margins: Theme.spacingMD
+                                    spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("最大打印高度") }
                                     DigitsField { id: p1Height; Layout.leftMargin: 5 }
                                 }
@@ -1405,16 +1405,16 @@ CxDialog {
                         ColumnLayout {
                             visible: root.printerPage === 2
                             Layout.fillWidth: true
-                            spacing: 5
+                            spacing: Theme.spacingXS
 
                             // Printer Preset row (@2584-2629)
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.margins: 10
-                                spacing: 10
+                                Layout.margins: Theme.spacingMD
+                                spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("打印机预设") }
                                 ColumnLayout {
-                                    spacing: 5
+                                    spacing: Theme.spacingXS
                                     // upstream combobox_title carries the
                                     // base_curr_printer string (@2595)
                                     Text {
@@ -1423,7 +1423,7 @@ CxDialog {
                                         font.pixelSize: Theme.fontSizeMD
                                     }
                                     RowLayout {
-                                        spacing: 10
+                                        spacing: Theme.spacingMD
                                         PromptComboBox {
                                             id: p2VendorCombo
                                             Layout.preferredWidth: 150  // PRINTER_PRESET_VENDOR_SIZE
@@ -1457,10 +1457,10 @@ CxDialog {
                                 Layout.leftMargin: 10
                                 Layout.rightMargin: 10
                                 Layout.bottomMargin: 5
-                                spacing: 10
+                                spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("预设") }
                                 ColumnLayout {
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     UpstreamRadio {
                                         label: qsTr("从模板创建")
                                         checked: root.fromTemplate
@@ -1498,10 +1498,10 @@ CxDialog {
                                         id: tplViewport
                                         anchors.centerIn: parent
                                         width: parent.width - 10
-                                        spacing: 5
+                                        spacing: Theme.spacingXS
 
                                         Text {
-                                            Layout.margins: 5
+                                            Layout.margins: Theme.spacingXS
                                             text: qsTr("耗材预设模板")
                                             color: Theme.textPrimary
                                             font.pixelSize: Theme.fontSizeMD
@@ -1568,7 +1568,7 @@ CxDialog {
                                         }
 
                                         Text {
-                                            Layout.margins: 5
+                                            Layout.margins: Theme.spacingXS
                                             text: qsTr("工艺预设模板")
                                             color: Theme.textPrimary
                                             font.pixelSize: Theme.fontSizeMD

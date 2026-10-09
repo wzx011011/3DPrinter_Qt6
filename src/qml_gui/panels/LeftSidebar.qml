@@ -117,7 +117,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 38
             visible: printerHeader.expanded
-            radius: 4
+            radius: Theme.radiusSM
             color: root.sectionSurface
             border.width: 1
             border.color: root.dividerColor
@@ -163,7 +163,7 @@ Rectangle {
                     visible: !!root.configVm && root.configVm.isPresetDirty
                     Layout.preferredWidth: 8
                     Layout.preferredHeight: 8
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: Theme.accent
                     ToolTip.text: qsTr("预设已修改（未保存）")
                     ToolTip.visible: printerDirtyMA.containsMouse
@@ -211,7 +211,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 38
             visible: printerHeader.expanded
-            radius: 4
+            radius: Theme.radiusSM
             color: root.sectionSurface
             border.width: 1
             border.color: root.dividerColor
@@ -310,7 +310,7 @@ Rectangle {
                 // Folded with the filament section (upstream
                 // m_filament_area_wrapper toggle, Plater.cpp:2906-2908).
                 visible: filamentHeader.expanded
-                radius: 4
+                radius: Theme.radiusSM
                 color: root.sectionSurface
                 border.width: 1
                 border.color: root.slotIncompatible(filamentPixelRow.index)
@@ -330,7 +330,7 @@ Rectangle {
                     Rectangle {
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
-                        radius: 3
+                        radius: Theme.radiusSM
                         color: root.filamentColor(filamentPixelRow.index)
                         border.width: 1
                         border.color: Qt.lighter(root.filamentColor(filamentPixelRow.index), 1.25)
@@ -379,7 +379,7 @@ Rectangle {
                                  && root.slotIncompatible(filamentPixelRow.index)
                         Layout.preferredWidth: 8
                         Layout.preferredHeight: 8
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: Theme.statusError
                         ToolTip.text: root.configVm ? root.configVm.currentPresetCompatibilityMessage : ""
                         ToolTip.visible: filamentCompatMA.containsMouse
@@ -417,7 +417,7 @@ Rectangle {
             id: processPresetRow
             Layout.fillWidth: true
             Layout.preferredHeight: 38
-            radius: 4
+            radius: Theme.radiusSM
             color: root.sectionSurface
             border.width: 1
             border.color: root.dividerColor
@@ -452,7 +452,7 @@ Rectangle {
                     visible: !!root.configVm && root.configVm.isPresetDirty
                     Layout.preferredWidth: 8
                     Layout.preferredHeight: 8
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: Theme.accent
                     ToolTip.text: qsTr("预设已修改（未保存）")
                     ToolTip.visible: processDirtyMA.containsMouse
@@ -493,12 +493,12 @@ Rectangle {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 5
+                anchors.margins: Theme.spacingXS
                 spacing: 4
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 14
+                    spacing: Theme.spacingXL
 
                     Repeater {
                         model: root.paramsTabs
@@ -513,7 +513,7 @@ Rectangle {
                                 id: paramsTabLabel
                                 anchors.centerIn: parent
                                 text: paramsTabDelegate.modelData.label
-                                color: paramsTabDelegate.selected ? Theme.accent : "#9e9e9e"
+                                color: paramsTabDelegate.selected ? Theme.accent : Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeLG
                                 font.bold: paramsTabDelegate.selected
                             }
@@ -544,7 +544,7 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
-                    color: "#4c4c55"
+                    color: Theme.bgPanel
                 }
 
                 // One persistent page per process tab (upstream Tab.cpp keeps
@@ -1036,7 +1036,7 @@ Rectangle {
         if (root.editorVm && root.editorVm.extrudersColors
             && index < root.editorVm.extrudersColors.length)
             return root.editorVm.extrudersColors[index]
-        var colors = [Theme.statusWarning, Theme.textSecondary, Theme.textSecondary, "#214bc2", Theme.chromeDangerHover]
+        var colors = [Theme.statusWarning, Theme.textSecondary, Theme.textSecondary, Theme.statusInfo, Theme.chromeDangerHover]
         return index < colors.length ? colors[index] : Theme.textSecondary
     }
 
@@ -1160,7 +1160,7 @@ Rectangle {
         Layout.preferredHeight: iconButtonRoot.buttonSize
         implicitWidth: iconButtonRoot.buttonSize
         implicitHeight: iconButtonRoot.buttonSize
-        radius: 4
+        radius: Theme.radiusSM
         color: !enabled ? root.fieldSurface
               : iconMA.containsMouse ? Theme.bgPressed
               : root.controlSurface
@@ -1172,7 +1172,7 @@ Rectangle {
         opacity: !enabled ? 0.45
               : hoverShow ? (hoverHandler.hovered ? 1.0 : 0.0)
               : 1.0
-        Behavior on opacity { NumberAnimation { duration: 120 } }
+        Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
 
         HoverHandler {
             id: hoverHandler
@@ -1212,7 +1212,7 @@ Rectangle {
 
         implicitWidth: segmentLabel.implicitWidth + 20
         implicitHeight: 22
-        radius: 11
+        radius: Theme.radiusXL
         color: segmentRoot.selected ? Theme.accent : root.sectionSurface
         border.width: 1
         border.color: segmentRoot.selected ? Theme.accent : root.dividerColor

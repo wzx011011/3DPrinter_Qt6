@@ -30,7 +30,7 @@ CxDialog {
         id: body
 
         // ItemSpacing(10, 7) (IMSlider.cpp:1308): 7px vertical rhythm.
-        spacing: 7
+        spacing: Theme.spacingMD
 
         // IMSlider.cpp:1319: one static prompt for both the add and the edit
         // path; it never mentions the layer number.
@@ -55,7 +55,7 @@ CxDialog {
             Layout.rightMargin: 20
             Layout.preferredHeight: 6 * gcodeArea.font.pixelSize
             font.pixelSize: Theme.fontSizeMD
-            font.family: "monospace"
+            font.family: Theme.fontMono
             // Hard cap of 1024 chars: char m_custom_gcode[1024] is passed as
             // sizeof to InputTextMultiline (IMSlider.hpp:231 +
             // IMSlider.cpp:1330), so strcpy truncates the prefilled buffer too.
@@ -79,7 +79,7 @@ CxDialog {
             Layout.bottomMargin: 10
             // ItemSpacing.x = 10 (IMSlider.cpp:1308): gap between OK and
             // Cancel.
-            spacing: 10
+            spacing: Theme.spacingMD
 
             CxButton {
                 text: qsTr("OK")

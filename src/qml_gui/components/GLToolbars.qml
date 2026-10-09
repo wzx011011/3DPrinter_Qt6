@@ -305,7 +305,7 @@ Item {
         Rectangle {
             id: viewportGizmoToolbar
             anchors.fill: parent
-            radius: 4
+            radius: Theme.radiusSM
             // U09 (G2): opaque bgPanel surface == ref rail sample #4b4b4d;
             // borderless. The translucent bgFloating fill previously blended
             // to #3d3e6a (blue-violet) over the bed mesh.

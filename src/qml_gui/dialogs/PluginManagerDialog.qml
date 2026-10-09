@@ -627,7 +627,7 @@ CxDialog {
             anchors.centerIn: parent
             width: 12
             height: 12
-            radius: 2
+            radius: Theme.radiusXS
             color: checkRoot.checked || checkRoot.mixed ? Theme.accent : Theme.bgBase
             border.width: 1
             border.color: Theme.borderDefault
@@ -645,7 +645,7 @@ CxDialog {
                 ctx.clearRect(0, 0, width, height)
                 if (!checkRoot.checked && !checkRoot.mixed)
                     return
-                ctx.strokeStyle = "#ffffff"
+                ctx.strokeStyle = Theme.textOnAccent
                 ctx.lineWidth = 1.5
                 ctx.lineCap = "round"
                 ctx.lineJoin = "round"
@@ -690,7 +690,7 @@ CxDialog {
                     Layout.preferredWidth: 300
                     Layout.preferredHeight: 26
                     Layout.alignment: Qt.AlignTop
-                    radius: 6
+                    radius: Theme.radiusMD
                     color: Theme.bgSurface
                     border.width: 1
                     border.color: searchInput.activeFocus ? Theme.borderFocus
@@ -754,7 +754,7 @@ CxDialog {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 10
                             height: 10
-                            radius: 5
+                            radius: Theme.radiusMD
                             color: clearMouse.containsMouse
                                    ? Qt.rgba(127 / 255, 127 / 255, 127 / 255, 0.45)
                                    : Qt.rgba(127 / 255, 127 / 255, 127 / 255, 0.20)
@@ -800,7 +800,7 @@ CxDialog {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 22
                         height: 22
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: root._matchCase ? Theme.accent
                               : (caseMouse.containsMouse ? Theme.bgHover : "transparent")
                         border.width: 1
@@ -830,7 +830,7 @@ CxDialog {
                         anchors.verticalCenter: parent.verticalCenter
                         width: 22
                         height: 22
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: root._wholeWord ? Theme.accent
                               : (wordMouse.containsMouse ? Theme.bgHover : "transparent")
                         border.width: 1
@@ -894,7 +894,7 @@ CxDialog {
                     Layout.preferredWidth: refreshLabel.implicitWidth + 20
                     Layout.preferredHeight: 26
                     Layout.alignment: Qt.AlignTop
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: refreshMouse.pressed ? Theme.bgPressed
                           : refreshMouse.containsMouse ? Theme.bgHover
                           : Theme.bgElevated
@@ -931,7 +931,7 @@ CxDialog {
                         id: arrowSegment
                         width: 22
                         height: 32
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: arrowMouse.pressed ? Theme.accentDark
                               : arrowMouse.containsMouse ? Theme.accentLight
                               : Theme.accent
@@ -992,7 +992,7 @@ CxDialog {
                         x: 22
                         width: 140
                         height: 32
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: mainMouse.pressed ? Theme.accentDark
                               : mainMouse.containsMouse ? Theme.accentLight
                               : Theme.accent
@@ -1050,7 +1050,7 @@ CxDialog {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: Math.round(root._splitRatio * parent.avail)
-                    radius: 8
+                    radius: Theme.radiusLG
                     color: Theme.bgSurface
                     border.width: 1
                     border.color: Theme.borderSubtle
@@ -1198,7 +1198,7 @@ CxDialog {
                                 policy: ScrollBar.AsNeeded
                                 contentItem: Rectangle {
                                     implicitWidth: 6
-                                    radius: 3
+                                    radius: Theme.radiusSM
                                     color: Theme.scrollBarColor
                                 }
                             }
@@ -1341,7 +1341,7 @@ CxDialog {
                                                                     18,
                                                                     capCount.implicitWidth + 10)
                                                         height: 16
-                                                        radius: 8
+                                                        radius: Theme.radiusLG
                                                         color: Qt.alpha(Theme.accent, 0.14)
                                                         Text {
                                                             id: capCount
@@ -1381,7 +1381,7 @@ CxDialog {
                                                              === "update_available"
                                                     width: 18
                                                     height: 18
-                                                    radius: 6
+                                                    radius: Theme.radiusMD
                                                     gradient: Gradient {
                                                         GradientStop {
                                                             position: 0.0
@@ -1402,7 +1402,7 @@ CxDialog {
                                                         onPaint: {
                                                             const ctx = getContext("2d")
                                                             ctx.clearRect(0, 0, width, height)
-                                                            ctx.fillStyle = "#ffffff"
+                                                            ctx.fillStyle = Theme.textOnAccent
                                                             ctx.beginPath()
                                                             ctx.moveTo(5, 11)
                                                             ctx.lineTo(5, 5)
@@ -1423,14 +1423,14 @@ CxDialog {
                                                              === "unauthorized"
                                                     width: 18
                                                     height: 18
-                                                    radius: 6
+                                                    radius: Theme.radiusMD
                                                     color: Theme.statusWarning
                                                     border.width: 1
                                                     border.color: Qt.rgba(0, 0, 0, 0.32)
                                                     Text {
                                                         anchors.centerIn: parent
                                                         text: "!"
-                                                        color: "#ffffff"
+                                                        color: Theme.textOnAccent
                                                         font.pixelSize: Theme.fontSizeMD
                                                         font.bold: true
                                                     }
@@ -1642,7 +1642,7 @@ CxDialog {
                                                                 anchors.centerIn: parent
                                                                 width: 22
                                                                 height: 22
-                                                                radius: 3
+                                                                radius: Theme.radiusSM
                                                                 visible: capRow.modelData.canRun
                                                                          && capRow.modelData.enabled
                                                                 color: runMouse.containsMouse
@@ -1717,7 +1717,7 @@ CxDialog {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         height: 2
-                        radius: 1
+                        radius: Theme.radiusXS
                         color: splitMouse.pressed ? Theme.accent
                               : splitMouse.containsMouse ? Theme.borderStrong
                               : "transparent"
@@ -1754,7 +1754,7 @@ CxDialog {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    radius: 8
+                    radius: Theme.radiusLG
                     color: Theme.bgSurface
                     border.width: 1
                     border.color: Theme.borderSubtle
@@ -1763,7 +1763,7 @@ CxDialog {
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 12
-                        spacing: 10
+                        spacing: Theme.spacingMD
 
                         // 5 equal tabs (styles.css:1037-1078)
                         Item {
@@ -1849,7 +1849,7 @@ CxDialog {
                             Item {
                                 Row {
                                     anchors.fill: parent
-                                    spacing: 20
+                                    spacing: Theme.spacingXL
 
                                     // thumbnail 140x140 framed box
                                     // (styles.css:1106-1115); the mock
@@ -1860,7 +1860,7 @@ CxDialog {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: 140
                                         height: 140
-                                        radius: 8
+                                        radius: Theme.radiusLG
                                         color: Theme.bgHover
                                         border.width: 1
                                         border.color: Theme.borderStrong
@@ -2016,14 +2016,14 @@ CxDialog {
                                                                      === "unauthorized"
                                                             width: 18
                                                             height: 18
-                                                            radius: 6
+                                                            radius: Theme.radiusMD
                                                             color: Theme.statusWarning
                                                             border.width: 1
                                                             border.color: Qt.rgba(0, 0, 0, 0.32)
                                                             Text {
                                                                 anchors.centerIn: parent
                                                                 text: "!"
-                                                                color: "#ffffff"
+                                                                color: Theme.textOnAccent
                                                                 font.pixelSize: Theme.fontSizeMD
                                                                 font.bold: true
                                                             }
@@ -2035,7 +2035,7 @@ CxDialog {
                                                                      === "update_available"
                                                             width: updateLabel.implicitWidth + 24
                                                             height: 23
-                                                            radius: 6
+                                                            radius: Theme.radiusMD
                                                             gradient: Gradient {
                                                                 GradientStop {
                                                                     position: 0.0
@@ -2052,7 +2052,7 @@ CxDialog {
                                                                 id: updateLabel
                                                                 anchors.centerIn: parent
                                                                 text: qsTr("更新")
-                                                                color: "#ffffff"
+                                                                color: Theme.textOnAccent
                                                                 font.pixelSize: Theme.fontSizeMD
                                                                 font.weight: Font.DemiBold
                                                             }
@@ -2084,7 +2084,7 @@ CxDialog {
                                         color: Theme.textPrimary
                                         font.pixelSize: Theme.fontSize13
                                         font.weight: Font.DemiBold
-                                        bottomPadding: 10
+                                        bottomPadding: Theme.spacingMD
                                     }
                                     Text {
                                         width: parent.width
@@ -2115,7 +2115,7 @@ CxDialog {
 
                                 Row {
                                     anchors.fill: parent
-                                    spacing: 10
+                                    spacing: Theme.spacingMD
                                     visible: root._cfgCaps.length > 0
 
                                     // capability sidebar 180px
@@ -2146,8 +2146,8 @@ CxDialog {
                                                 height: 44
                                                 Rectangle {
                                                     anchors.fill: parent
-                                                    anchors.margins: 1
-                                                    radius: 4
+                                                    anchors.margins: Theme.spacingXXS
+                                                    radius: Theme.radiusSM
                                                     color: cfgCapMouse.containsMouse
                                                            ? Theme.bgHover
                                                            : "transparent"
@@ -2160,7 +2160,7 @@ CxDialog {
                                                     // the hover tint
                                                     Rectangle {
                                                         anchors.fill: parent
-                                                        radius: 4
+                                                        radius: Theme.radiusSM
                                                         visible: root._cfgCapName
                                                                  === cfgCap.modelData.name
                                                         color: Qt.alpha(Theme.accent, 0.14)
@@ -2172,7 +2172,7 @@ CxDialog {
                                                     anchors.leftMargin: 8
                                                     anchors.right: parent.right
                                                     anchors.rightMargin: 8
-                                                    spacing: 2
+                                                    spacing: Theme.spacingXXS
                                                     Text {
                                                         width: parent.width
                                                         text: cfgCap.modelData.name
@@ -2215,7 +2215,7 @@ CxDialog {
                                             Layout.fillWidth: true
                                             visible: root._cfgError.length > 0
                                             implicitHeight: cfgErrorText.implicitHeight + 12
-                                            radius: 4
+                                            radius: Theme.radiusSM
                                             color: Qt.alpha(Theme.statusWarning, 0.14)
                                             Text {
                                                 id: cfgErrorText
@@ -2246,7 +2246,7 @@ CxDialog {
                                                 border.color: configEditor.activeFocus
                                                               ? Theme.borderFocus
                                                               : Theme.borderSubtle
-                                                radius: 4
+                                                radius: Theme.radiusSM
                                             }
                                             onTextChanged: {
                                                 root._cfgText = text
@@ -2408,7 +2408,7 @@ CxDialog {
                                     Rectangle {
                                         width: diagChipText.implicitWidth + 20
                                         height: 24
-                                        radius: 12
+                                        radius: Theme.radiusXL
                                         color: root._selected
                                                ? Qt.alpha(
                                                      root.statusColor(
@@ -2518,7 +2518,7 @@ CxDialog {
                     x: 14
                     width: 8
                     height: 8
-                    radius: 4
+                    radius: Theme.radiusSM
                     visible: root._statusText.length > 0
                     color: root.statusLevelColor(root._statusLevel)
                 }
@@ -2643,11 +2643,11 @@ CxDialog {
             color: Theme.bgSurface
             border.width: 1
             border.color: Theme.borderDefault
-            radius: 6
+            radius: Theme.radiusMD
         }
         contentItem: Column {
             id: ctxCol
-            spacing: 1
+            spacing: Theme.spacingXXS
             Repeater {
                 model: root._ctxActions
                 delegate: Item {
@@ -2658,7 +2658,7 @@ CxDialog {
                     height: 32
                     Rectangle {
                         anchors.fill: parent
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: ctxItemMouse.containsMouse
                                 ? Theme.bgHover : "transparent"
                         visible: ctxItem.modelData.enabled !== false
@@ -2735,7 +2735,7 @@ CxDialog {
                         anchors.left: parent.left
                         anchors.leftMargin: 10
                         text: exploreItem.modelData
-                        color: "#ffffff"
+                        color: Theme.textPrimary
                         font.pixelSize: Theme.fontSize13
                     }
                     MouseArea {

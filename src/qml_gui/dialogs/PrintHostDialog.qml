@@ -29,7 +29,7 @@ CxDialog {
     width: 450
     implicitHeight: bodyColumn.implicitHeight + 2 * 10
                     + Theme.dialogHeaderHeight + Theme.dialogFooterHeight
-    padding: 10  // BORDER_W = FromDIP(10) :52
+    padding: Theme.spacingMD  // BORDER_W = FromDIP(10) :52
 
     // Preset-service handle for the OK save (upstream OnOK writes the printer
     // preset, :792-797; OWzx routes through ConfigViewModel).
@@ -164,7 +164,7 @@ CxDialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 32
-            radius: 3
+            radius: Theme.radiusSM
             color: Theme.bgPanel
             border.width: 1
             border.color: Theme.borderDefault
@@ -531,7 +531,7 @@ CxDialog {
         signal clicked()
         implicitWidth: Math.max(120, paramContent.implicitWidth + 24)  // padding 12x8
         implicitHeight: 26
-        radius: 4
+        radius: Theme.radiusSM
         color: paramMouse.containsMouse ? Theme.bgHover : Theme.bgPanel
         border.width: 1
         border.color: paramMouse.containsMouse ? Theme.borderStrong : Theme.borderDefault
@@ -610,7 +610,7 @@ CxDialog {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.min(240, contentHeight)
                 clip: true
-                spacing: 2
+                spacing: Theme.spacingXXS
                 model: discoveryPopup.printers
                 delegate: ItemDelegate {
                     id: discoveryRow

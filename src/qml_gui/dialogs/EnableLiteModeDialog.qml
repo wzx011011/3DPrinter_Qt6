@@ -50,8 +50,8 @@ CxDialog {
             Rectangle {
                 width: 40
                 height: 40
-                radius: 8
-                color: "#1F18C75E"
+                radius: Theme.radiusLG
+                color: Qt.alpha(Theme.accent, 0.12)
 
                 Text {
                     anchors.centerIn: parent
@@ -85,7 +85,7 @@ CxDialog {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: featureCol.implicitHeight + 16
-            radius: 6
+            radius: Theme.radiusMD
             // U04: scrollBarTrackColor was a scrollbar-token misuse for a card
             // surface — the inset surface token is the semantic fit.
             color: Theme.bgInset
@@ -164,7 +164,7 @@ CxDialog {
         // U04: dialog footer height token (52px; Theme.qml:196).
         height: Theme.dialogFooterHeight
         color: Theme.bgSurface
-        radius: 8
+        radius: Theme.radiusLG
         Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left

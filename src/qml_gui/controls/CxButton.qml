@@ -19,7 +19,7 @@ Button {
 
     // Phase 161 (DS-02): press-scale for parity with CxIconButton's 0.92.
     scale: root.pressed ? 0.96 : 1.0
-    Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+    Behavior on scale { NumberAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
     background: Rectangle {
         // ctl-6: upstream corner radius is per style tier (Button.cpp:191-221,
@@ -27,7 +27,7 @@ Button {
         // Window = 12. The Qt6 style enum has no Window-tier equivalent;
         // `compact` maps to the upstream Compact tier, all others use the
         // standard 4px tier.
-        radius: root.compact ? 8 : 4
+        radius: root.compact ? Theme.radiusLG : Theme.radiusSM
         color: {
             const d = !root.enabled
             const h = root.hovered
@@ -61,7 +61,7 @@ Button {
             if (h) return Theme.bgHover
             return Theme.bgElevated
         }
-        Behavior on color { ColorAnimation { duration: 120; easing.type: Easing.OutCubic } }
+        Behavior on color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
 
         border.color: {
             // Phase 161 (DS-02): focus border for accessibility (keyboard nav).
@@ -72,7 +72,7 @@ Button {
             return Theme.borderStrong
         }
         border.width: root.activeFocus ? 2 : 1
-        Behavior on border.color { ColorAnimation { duration: 120 } }
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast } }
     }
 
     contentItem: Text {

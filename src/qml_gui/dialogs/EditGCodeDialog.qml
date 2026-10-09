@@ -443,7 +443,7 @@ CxDialog {
                     CxTextField {
                         id: searchField
                         anchors.fill: parent
-                        leftPadding: 28
+                        leftPadding: Theme.spacingXXL
                         rightPadding: searchCancelBtn.visible ? 26 : Theme.spacingMD
                         placeholderText: qsTr("搜索 G-code 占位符...")
                         onTextChanged: root.updateFilter(text)
@@ -472,7 +472,7 @@ CxDialog {
 
                         Image {
                             anchors.fill: parent
-                            anchors.margins: 3
+                            anchors.margins: Theme.spacingXS
                             source: "qrc:/qml/assets/icons/x.svg"
                             fillMode: Image.PreserveAspectFit
                             smooth: true
@@ -496,7 +496,7 @@ CxDialog {
                     Layout.rightMargin: root.dlgBorder
                     Layout.bottomMargin: root.dlgBorder
                     color: Theme.bgInset
-                    radius: 4
+                    radius: Theme.radiusSM
                     border.color: Theme.borderSubtle
                     border.width: 1
                     clip: true
@@ -534,7 +534,7 @@ CxDialog {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: delegateRoot.modelData.kind !== "param" && delegateRoot.modelData.expanded ? "▼" : "▶"
                                     color: Theme.textTertiary
-                                    font.pixelSize: 8
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
 
                                 // Node bitmap (upstream icon_name per group /
@@ -620,13 +620,13 @@ CxDialog {
                 width: gridRow.width - x
                 height: parent.height
                 color: Theme.bgBase
-                radius: 4
+                radius: Theme.radiusSM
                 border.color: gcodeEditor.activeFocus ? Theme.borderFocus : Theme.borderSubtle
                 border.width: 1
 
                 ScrollView {
                     anchors.fill: parent
-                    anchors.margins: 1
+                    anchors.margins: Theme.spacingXXS
                     clip: true
 
                     TextArea {
@@ -684,7 +684,7 @@ CxDialog {
         width: parent.width
         height: 48
         color: Theme.bgSurface
-        radius: 8
+        radius: Theme.radiusLG
         Rectangle {
             anchors.top: parent.top
             anchors.left: parent.left

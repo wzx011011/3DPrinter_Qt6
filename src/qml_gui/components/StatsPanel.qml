@@ -70,7 +70,7 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            radius: 5
+            radius: Theme.radiusMD
             color: Theme.bgCard
             border.width: 1
             border.color: Theme.borderSubtle
@@ -82,7 +82,7 @@ Item {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 8
-                spacing: 5
+                spacing: Theme.spacingXS
 
                 StatRow {
                     label: qsTr("总时间")
@@ -182,7 +182,7 @@ Item {
                         Rectangle {
                             Layout.preferredWidth: 10
                             Layout.preferredHeight: 10
-                            radius: 2
+                            radius: Theme.radiusXS
                             color: root.previewVm ? root.previewVm.extruderColor(extruderRow.index) : Theme.accent
                         }
                         Label {
@@ -322,14 +322,14 @@ Item {
 
         Layout.fillWidth: true
         height: 28
-        radius: 4
+        radius: Theme.radiusSM
         color: Theme.bgFloating
         border.width: 1
         border.color: Theme.borderSubtle
 
         Column {
             anchors.centerIn: parent
-            spacing: 1
+            spacing: Theme.spacingXXS
             Text {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: pillRoot.label

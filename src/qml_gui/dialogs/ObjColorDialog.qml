@@ -84,7 +84,7 @@ CxDialog {
                     // U02: 24x24 swatch (R10 control size).
                     width: 24
                     height: 24
-                    radius: 4
+                    radius: Theme.radiusSM
                     color: root.colors[index] !== undefined ? root.colors[index] : Theme.bgCard
                     border.color: Theme.borderDefault
                     border.width: 1
@@ -109,7 +109,7 @@ CxDialog {
             Layout.fillWidth: true
             Layout.fillHeight: true
             color: Theme.bgInset
-            radius: 4
+            radius: Theme.radiusSM
             border.color: Theme.borderSubtle
             border.width: 1
             clip: true
@@ -120,14 +120,14 @@ CxDialog {
                 anchors.margins: Theme.spacingXS
                 clip: true
                 model: root.extruderCount
-                spacing: 2
+                spacing: Theme.spacingXXS
                 currentIndex: root.selectedExtruder
 
                 delegate: Rectangle {
                     required property int index
                     width: parent.width
                     height: 32
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: extruderList.currentIndex === index ? Theme.accentSubtle
                            : (extruderHover.containsMouse ? Theme.bgHover : "transparent")
 
@@ -141,7 +141,7 @@ CxDialog {
                             anchors.verticalCenter: parent.verticalCenter
                             width: 16
                             height: 16
-                            radius: 8
+                            radius: Theme.radiusLG
                             color: extruderList.currentIndex === index ? Theme.accent : Theme.bgCard
                         }
 

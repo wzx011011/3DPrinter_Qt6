@@ -217,7 +217,7 @@ Item {
                     Rectangle {
                         width: 90
                         height: 36
-                        radius: 18
+                        radius: Theme.radiusXXL
                         color: editPrintersArea.hovered ? Theme.accentLight : Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -307,7 +307,7 @@ Item {
                     Column {
                         id: deviceList
                         width: parent.width
-                        spacing: 1
+                        spacing: Theme.spacingXXS
                         Repeater {
                             model: _vm.machineCount
                             delegate: deviceRowDelegate
@@ -341,7 +341,7 @@ Item {
                             Layout.alignment: Qt.AlignHCenter
                             width: 90
                             height: 36
-                            radius: 18
+                            radius: Theme.radiusXXL
                             color: addBtnArea.hovered ? Theme.accentLight : Theme.accent
                             Text {
                                 anchors.centerIn: parent
@@ -460,7 +460,7 @@ Item {
             // + transparent brush, DrawRoundedRectangle r3,
             // MultiMachineManagerPage.cpp:230-234); background stays row colour.
             color: Theme.bgSurface
-            radius: 3
+            radius: Theme.radiusSM
             border.width: _hovered ? 1 : 0
             border.color: Theme.accent
             property bool _hovered: false
@@ -487,7 +487,7 @@ Item {
                     Rectangle {
                         width: 8
                         height: 8
-                        radius: 4
+                        radius: Theme.radiusSM
                         color: _online ? Theme.statusSuccess : Theme.textDisabled
                     }
                     // Device name text (visible when not editing)
@@ -564,12 +564,12 @@ Item {
                         y: 30
                         width: 320
                         height: 10
-                        radius: 2
+                        radius: Theme.radiusXS
                         color: Theme.bgElevated  // dark-mapped track #E9E9E9
                         Rectangle {
                             width: parent.width * (_progress / 100.0)
                             height: parent.height
-                            radius: 2
+                            radius: Theme.radiusXS
                             color: Theme.accent  // fixed fill, no per-state tint
                         }
                     }
@@ -594,7 +594,7 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 90
                     Layout.preferredHeight: 38
-                    radius: 6
+                    radius: Theme.radiusMD
                     color: Theme.bgElevated
                     border.color: Theme.borderDefault
                     border.width: 1
@@ -618,7 +618,7 @@ Item {
                 anchors.margins: 4
                 width: 16
                 height: 16
-                radius: 8
+                radius: Theme.radiusLG
                 color: _hovered ? Theme.bgPressed : "transparent"
                 visible: _hovered
                 Text {
@@ -756,7 +756,7 @@ Item {
                     Column {
                         id: localTaskList
                         width: parent.width
-                        spacing: 1
+                        spacing: Theme.spacingXXS
                         Repeater {
                             model: _vm.localTaskCount
                             delegate: localTaskRowDelegate
@@ -779,7 +779,7 @@ Item {
                         Text {
                             text: qsTr("没有要发送的任务！")
                             color: Theme.textSecondary
-                            font.pixelSize: 24  // upstream Head_24
+                            font.pixelSize: Theme.fontSizeDisplay  // upstream Head_24
                             horizontalAlignment: Text.AlignHCenter
                         }
                     }
@@ -817,7 +817,7 @@ Item {
             // MultiTaskManagerPage.cpp:453-457); selected state shows on the
             // checkbox only, no whole-row tint (MultiTaskManagerPage.cpp:314-458).
             color: Theme.bgSurface
-            radius: 3
+            radius: Theme.radiusSM
             border.width: _hovered ? 1 : 0
             border.color: Theme.accent
             property bool _hovered: false
@@ -894,7 +894,7 @@ Item {
                     text: (_status === 1 || _status === 5) ? _remaining : "--"
                     color: (_status === 1 || _status === 5) ? Theme.textSecondary : Theme.textDisabled
                     font.pixelSize: Theme.fontSizeXS
-                    font.family: "monospace"
+                    font.family: Theme.fontMono
                 }
 
                 // Progress bar
@@ -907,13 +907,13 @@ Item {
                         Rectangle {
                             width: 60
                             height: 6
-                            radius: 3
+                            radius: Theme.radiusSM
                             color: Theme.bgElevated
                             Rectangle {
                                 width: parent.width * (_progress / 100.0)
                                 height: parent.height
-                                radius: 3
-                                color: Theme.accent
+                                radius: Theme.radiusSM
+                                color: Theme.accent  // fixed fill, no per-state tint
                             }
                         }
                         Text {
@@ -931,7 +931,7 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 70
                     Layout.preferredHeight: 35
-                    radius: 6
+                    radius: Theme.radiusMD
                     color: _hovered && _canCancel ? Theme.bgHover : Theme.bgElevated
                     border.color: Theme.borderDefault
                     border.width: 1
@@ -1013,7 +1013,7 @@ Item {
                     Column {
                         id: cloudTaskList
                         width: parent.width
-                        spacing: 1
+                        spacing: Theme.spacingXXS
                         Repeater {
                             model: _vm.pagedCloudTaskCount
                             delegate: cloudTaskRowDelegate
@@ -1036,7 +1036,7 @@ Item {
                         Text {
                             text: qsTr("没有历史任务！")
                             color: Theme.textSecondary
-                            font.pixelSize: 24  // upstream Head_24
+                            font.pixelSize: Theme.fontSizeDisplay  // upstream Head_24
                             horizontalAlignment: Text.AlignHCenter
                         }
                     }
@@ -1115,7 +1115,7 @@ Item {
                         Layout.leftMargin: Theme.spacingSM
                         width: 25
                         height: 25
-                        radius: 5
+                        radius: Theme.radiusMD
                         color: cloudGoArea.hovered ? Theme.bgHover : Theme.bgElevated
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -1152,7 +1152,7 @@ Item {
                         visible: _vm.cloudSelectedCount > 0
                         width: 58
                         height: 24
-                        radius: 5
+                        radius: Theme.radiusMD
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -1169,7 +1169,7 @@ Item {
                         visible: _vm.cloudSelectedCount > 0
                         width: 58
                         height: 24
-                        radius: 5
+                        radius: Theme.radiusMD
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -1186,7 +1186,7 @@ Item {
                         visible: _vm.cloudSelectedCount > 0
                         width: 58
                         height: 24
-                        radius: 5
+                        radius: Theme.radiusMD
                         color: Theme.bgElevated
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -1241,7 +1241,7 @@ Item {
             // MultiTaskManagerPage.cpp:453-457); selected state shows on the
             // checkbox only, no whole-row tint (MultiTaskManagerPage.cpp:314-458).
             color: Theme.bgSurface
-            radius: 3
+            radius: Theme.radiusSM
             border.width: _hovered ? 1 : 0
             border.color: Theme.accent
             property bool _hovered: false
@@ -1326,7 +1326,7 @@ Item {
                     text: _isPrinting ? _remaining : "--"
                     color: _isPrinting ? Theme.textSecondary : Theme.textDisabled
                     font.pixelSize: Theme.fontSizeXS
-                    font.family: "monospace"
+                    font.family: Theme.fontMono
                 }
 
                 // Progress bar
@@ -1339,12 +1339,12 @@ Item {
                         Rectangle {
                             width: 50
                             height: 6
-                            radius: 3
+                            radius: Theme.radiusSM
                             color: Theme.bgElevated
                             Rectangle {
                                 width: parent.width * (_progress / 100.0)
                                 height: parent.height
-                                radius: 3
+                                radius: Theme.radiusSM
                                 color: {
                                     if (_status === 1) return Theme.statusSuccess;
                                     if (_status === 2) return Theme.statusError;
@@ -1374,7 +1374,7 @@ Item {
                         visible: _canPause
                         width: 70
                         height: 35
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: _hovered ? Theme.bgHover : Theme.bgElevated
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -1392,7 +1392,7 @@ Item {
                         visible: _canResume
                         width: 70
                         height: 35
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: resumeBtnArea.hovered ? Theme.accentLight : Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -1408,7 +1408,7 @@ Item {
                         visible: _canStop
                         width: 70
                         height: 35
-                        radius: 6
+                        radius: Theme.radiusMD
                         color: _hovered ? Theme.bgHover : Theme.bgElevated
                         border.color: Theme.borderDefault
                         border.width: 1
@@ -1478,7 +1478,7 @@ Item {
                             required property int index
                             width: parent.width
                             height: 36
-                            radius: 4
+                            radius: Theme.radiusSM
                             color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accentSubtle : Theme.bgElevated
                             border.color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accent : Theme.borderDefault
                             border.width: 1
@@ -1489,7 +1489,7 @@ Item {
                                 anchors.leftMargin: 12
                                 spacing: 8
                                 // Online indicator
-                                Rectangle { width: 8; height: 8; radius: 4; color: Theme.statusSuccess }
+                                Rectangle { width: 8; height: 8; radius: Theme.radiusSM; color: Theme.statusSuccess }
                                 Text {
                                     text: root.multiMachineVm.onlineMachineName(index)
                                     color: sendToDeviceDialog.selectedDeviceIndex === index ? Theme.accent : Theme.textPrimary

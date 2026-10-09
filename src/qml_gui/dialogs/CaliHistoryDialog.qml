@@ -475,7 +475,7 @@ CxDialog {
             delegate: Rectangle {
                 width: historyListView.width
                 height: 68
-                radius: 6
+                radius: Theme.radiusMD
                 color: delegateHov.containsMouse ? Theme.bgCard : Theme.bgPanel
                 border.color: Theme.borderInput
                 border.width: 1
@@ -489,7 +489,7 @@ CxDialog {
                     // Type icon: tintable SVG glyph (replaces the coloured
                     // gear emoji)
                     Rectangle {
-                        width: 36; height: 36; radius: 6
+                        width: 36; height: 36; radius: Theme.radiusMD
                         color: Theme.chromePressed
                         Image {
                             anchors.centerIn: parent
@@ -629,7 +629,7 @@ CxDialog {
             // semantic error text token (was a dead error-subtle fill with
             // a hardcoded "#ff9090")
             Rectangle {
-                width: 72; height: 28; radius: 4
+                width: 72; height: 28; radius: Theme.radiusSM
                 color: clearHov.containsMouse ? Theme.bgHover : "transparent"
                 border.color: Theme.statusError
                 border.width: 1

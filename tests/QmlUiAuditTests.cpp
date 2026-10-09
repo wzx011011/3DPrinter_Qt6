@@ -7,6 +7,7 @@
 //   build/QmlUiAuditTests_autogen/timestamp
 // before rebuilding, otherwise the new slot silently does not execute.
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -22,6 +23,14 @@ private slots:
   void topLevelUiHasNoVisiblePlaceholdersOrNoopActions();
   void monitorSdCardPanelIsExplicitlyUnavailable();
   void mainChromeUsesThemeTokens();
+  // Phase 170 (DS-03/P0): design-token sweep gates -- no stray accent-green
+  // literals, controls/ fully on motion/radius/font tokens.
+  void phase170ControlsStayOnDesignTokens();
+  // Phase 170 (P0-2): every interactive control carries the shared
+  // borderFocus keyboard ring; custom-drawn controls join the Tab chain.
+  void controlsKeyboardFocusContract();
+  // Phase 172 (P2): empty surfaces render through the shared CxEmptyState.
+  void emptyStatesUseSharedComponent();
   // v5.16: a raw QtQuick.Controls CheckBox in main.qml (nonexistent `color:`
   // assignment) was a QML compile error that zeroed engine root objects and
   // exit(-1)-ed every launch; the shell document must use CxCheckBox.
@@ -742,6 +751,11 @@ private slots:
 
 private:
   QString readSource(const QString &relativePath) const;
+  // Phase 173: the resource manifest moved from the single qml.qrc to a
+  // split set (qml_pages/dialogs/components/assets/web.qrc) in a parallel
+  // refactor. Aggregate every src/qml_gui/*.qrc so resource-presence and
+  // resource-absence contracts hold against either packaging.
+  QString qmlQrcSources() const;
 };
 
 QString QmlUiAuditTests::readSource(const QString &relativePath) const
@@ -750,6 +764,19 @@ QString QmlUiAuditTests::readSource(const QString &relativePath) const
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     return {};
   return QString::fromUtf8(file.readAll());
+}
+
+QString QmlUiAuditTests::qmlQrcSources() const
+{
+  QDir qrcDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(QStringLiteral("src/qml_gui")));
+  QStringList parts;
+  QDirIterator it(qrcDir, QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    const QString p = it.next();
+    if (p.endsWith(QLatin1String(".qrc")))
+      parts << readSource(p);
+  }
+  return parts.join(QLatin1Char('\n'));
 }
 
 void QmlUiAuditTests::topLevelUiHasNoVisiblePlaceholdersOrNoopActions()
@@ -833,6 +860,94 @@ void QmlUiAuditTests::mainChromeUsesThemeTokens()
   for (const QString &color : forbiddenTopbarColors) {
     QVERIFY2(!topbar.contains(color),
              qPrintable(QStringLiteral("Topbar chrome should use Theme tokens instead of %1").arg(color)));
+  }
+}
+
+void QmlUiAuditTests::phase170ControlsStayOnDesignTokens()
+{
+  // Phase 170 (DS-03): the controls/ layer is the design-system core, so it
+  // is held to the strictest token discipline. The historical "#0e8c46"
+  // hover-green predates borderFocus/accentDark and split the accent into
+  // two different greens; it is banned tree-wide.
+  QDir guiDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(QStringLiteral("src/qml_gui")));
+  QStringList allQml;
+  QDirIterator it(guiDir, QDirIterator::Subdirectories);
+  while (it.hasNext()) {
+    const QString p = it.next();
+    if (p.endsWith(QLatin1String(".qml")))
+      allQml << readSource(p);
+  }
+  const QString treeSweep = allQml.join(QLatin1Char('\n'));
+  QVERIFY2(!treeSweep.contains(QStringLiteral("#0e8c46")),
+           "Phase 170: the stray hover green #0e8c46 must use Theme.accentDark / Theme.borderFocus");
+
+  const QStringList controlFiles = {
+    "CxButton.qml", "CxCheckBox.qml", "CxComboBox.qml", "CxIconButton.qml",
+    "CxNumericEdit.qml", "CxProgressBar.qml",
+    "CxScrollView.qml", "CxSlider.qml", "CxSpinBox.qml", "CxStepButton.qml",
+    "CxSwitch.qml", "CxTextArea.qml", "CxTextField.qml"
+    // CxMenu/CxMenuItem are excluded while uncommitted user WIP is in the
+    // tree; sweep them onto Theme.motion*/fontMono once that lands.
+  };
+  static const QRegularExpression bareDuration(
+      QStringLiteral("duration:\\s*(?:100|120|150|180|200|220)\\b"));
+  static const QRegularExpression bareEasing(
+      QStringLiteral("easing\\.type:\\s*Easing\\."));
+  static const QRegularExpression bareConsolas(
+      QStringLiteral("font\\.family:\\s*\"(?:Consolas|monospace)"));
+  for (const QString &f : controlFiles) {
+    const QString src = readSource(QStringLiteral("src/qml_gui/controls/") + f);
+    QVERIFY2(!src.isEmpty(), qPrintable(QStringLiteral("Unable to read %1").arg(f)));
+    QVERIFY2(!bareDuration.match(src).hasMatch(),
+             qPrintable(QStringLiteral("%1 must use Theme.motionFast/motionNormal, not bare transition durations").arg(f)));
+    QVERIFY2(!bareEasing.match(src).hasMatch(),
+             qPrintable(QStringLiteral("%1 must use Theme.easingStandard").arg(f)));
+    QVERIFY2(!bareConsolas.match(src).hasMatch(),
+             qPrintable(QStringLiteral("%1 must use Theme.fontMono").arg(f)));
+  }
+  // CxBusyIndicator's 900ms is a cycle period, not a transition speed, and
+  // stays a documented exemption.
+  const QString busy = readSource(QStringLiteral("src/qml_gui/controls/CxBusyIndicator.qml"));
+  QVERIFY2(busy.contains(QStringLiteral("duration: 900")),
+           "CxBusyIndicator keeps its 900ms spin cycle (documented motion exemption)");
+}
+
+void QmlUiAuditTests::controlsKeyboardFocusContract()
+{
+  // Phase 170 (P0-2): keyboard operability floor. Every interactive control
+  // draws the shared borderFocus ring when it owns active focus; the two
+  // Rectangle-based customs explicitly join the Tab chain.
+  const QStringList focusRingFiles = {
+    "CxButton.qml", "CxCheckBox.qml", "CxComboBox.qml", "CxIconButton.qml",
+    "CxNumericEdit.qml", "CxSlider.qml", "CxSpinBox.qml", "CxSwitch.qml",
+    "CxTextArea.qml", "CxTextField.qml"
+  };
+  for (const QString &f : focusRingFiles) {
+    const QString src = readSource(QStringLiteral("src/qml_gui/controls/") + f);
+    QVERIFY2(!src.isEmpty(), qPrintable(QStringLiteral("Unable to read %1").arg(f)));
+    QVERIFY2(src.contains(QStringLiteral("Theme.borderFocus")),
+             qPrintable(QStringLiteral("%1 must draw the Theme.borderFocus focus ring").arg(f)));
+  }
+  const QString step = readSource(QStringLiteral("src/qml_gui/controls/CxStepButton.qml"));
+  QVERIFY2(step.contains(QStringLiteral("activeFocusOnTab: true"))
+               && step.contains(QStringLiteral("Keys.onSpacePressed")),
+           "CxStepButton (Rectangle-based) must join the Tab chain and activate via keyboard");
+}
+
+void QmlUiAuditTests::emptyStatesUseSharedComponent()
+{
+  // Phase 172 (P2): glyph+title empty surfaces render through the shared
+  // CxEmptyState so spacing/type stay consistent across pages.
+  const QStringList pages = {
+    QStringLiteral("src/qml_gui/pages/ProjectPage.qml"),
+    QStringLiteral("src/qml_gui/pages/CalibrationPage.qml"),
+    QStringLiteral("src/qml_gui/pages/HomePage.qml")
+  };
+  for (const QString &p : pages) {
+    const QString src = readSource(p);
+    QVERIFY2(!src.isEmpty(), qPrintable(QStringLiteral("Unable to read %1").arg(p)));
+    QVERIFY2(src.contains(QStringLiteral("CxEmptyState {")),
+             qPrintable(QStringLiteral("%1 must use the shared CxEmptyState component").arg(p)));
   }
 }
 
@@ -2259,7 +2374,7 @@ void QmlUiAuditTests::previewRoleColorModesAreHonestAndPayloadSafe()
 void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
 {
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
-  const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qmlQrc = qmlQrcSources();
   const QString layerRail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
   const QString moveSlider = readSource(QStringLiteral("src/qml_gui/components/MoveSlider.qml"));
   const QString statsPanel = readSource(QStringLiteral("src/qml_gui/components/StatsPanel.qml"));
@@ -3868,7 +3983,7 @@ void QmlUiAuditTests::prepareRestoredControlsAreActionable()
 
 void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
 {
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
@@ -4489,7 +4604,7 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
 
 void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
 {
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString audits = readSource(QStringLiteral("tests/QmlUiAuditTests.cpp"));
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
@@ -4557,7 +4672,7 @@ void QmlUiAuditTests::deletedSettingsPathsStayAbsent()
   // qml.qrc must not reference any of the deleted files. readSource resolves
   // relative to QT_TESTCASE_SOURCEDIR (the repository root) the same way the
   // other Phase 55/56 audit tests do.
-  const QString qrcContent = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrcContent = qmlQrcSources();
   QVERIFY2(!qrcContent.isEmpty(),
            "Cannot read src/qml_gui/qml.qrc");
   for (const QString &p : deletedPaths) {
@@ -4618,7 +4733,7 @@ void QmlUiAuditTests::assembleViewShellReplacesPlaceholderAndRegistersCanvasHost
   const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
-  const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qmlQrc = qmlQrcSources();
   const QString backendContext = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
@@ -4840,7 +4955,7 @@ void QmlUiAuditTests::assembleViewRestorationMilestoneHasFinalVerificationCovera
   // removed; (2) AssemblePage present + registered; (3) CanvasAssembleView
   // enum; (4) explosion-ratio wiring; (5) Assembly gizmo anchors; (6) data
   // pool present; (7) Phase 90/91/92/93 audit anchors referenced.
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   const QString plater = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
   const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString rhiViewportRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
@@ -4934,7 +5049,7 @@ void QmlUiAuditTests::assembleViewPlaceholderArtifactsStayAbsent()
   // QVERIFY2(!content.contains(token), ...). Fails CI deterministically if any
   // reappear.
   const QString plater = readSource(QStringLiteral("src/qml_gui/pages/Plater.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   QVERIFY2(!plater.isEmpty(), "Unable to read Plater.qml");
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
 
@@ -5767,7 +5882,7 @@ void QmlUiAuditTests::filamentGroupPopupSurfacesThreeModesNotFour()
   const QString popup = readSource(QStringLiteral("src/qml_gui/dialogs/FilamentGroupPopup.qml"));
   QVERIFY2(!popup.isEmpty(),
            "FMAP-03: src/qml_gui/dialogs/FilamentGroupPopup.qml must exist and be readable");
-  const QString qmlQrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qmlQrc = qmlQrcSources();
   QVERIFY2(!qmlQrc.isEmpty(), "Unable to read qml.qrc");
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
@@ -6475,7 +6590,7 @@ void QmlUiAuditTests::tickMarksRenderedOnPreviewRail()
   // in this file (deterministic, build-dir-independent).
 
   const QString rail = readSource(QStringLiteral("src/qml_gui/components/PreviewLayerRail.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   QVERIFY2(!rail.isEmpty(), "Unable to read PreviewLayerRail.qml");
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
 
@@ -7140,7 +7255,7 @@ void QmlUiAuditTests::legacyDeadCodePagesRemoved()
   // on a Web host, remote service contract, and authentication flow that are
   // outside the approved scope. Do not substitute static models or simulated
   // downloads for the unavailable workflow.
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
@@ -7401,7 +7516,7 @@ void QmlUiAuditTests::v46CrossWorkstreamRegressionLocked()
            "REGRESS-01/WS3: CalibrationServiceMock must dispatch Retraction_tower ");
 
   // WS4 (Cleanup): no LayerSlider orphan.
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   QVERIFY2(!qrc.contains(QStringLiteral("LayerSlider.qml")),
            "REGRESS-01/WS4: qml.qrc must not list the deleted LayerSlider.qml");
   QVERIFY2(!qrc.contains(QStringLiteral("AuxiliaryPage.qml")),
@@ -7882,7 +7997,7 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
   const QString createDialog = readSource(QStringLiteral("src/qml_gui/dialogs/CreatePresetsDialog.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
   QVERIFY2(!createDialog.isEmpty(), "Unable to read CreatePresetsDialog.qml");
 
@@ -8233,7 +8348,7 @@ void QmlUiAuditTests::v51PresetDiffDialogWired()
   const QString configVmCpp = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"));
   const QString diffDialog = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
 
   QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
   QVERIFY2(!configVmCpp.isEmpty(), "Unable to read ConfigViewModel.cpp");
@@ -8942,7 +9057,7 @@ void QmlUiAuditTests::v52DialogConsistencyRepaired()
 void QmlUiAuditTests::v52ComponentCoherence()
 {
   const QString notifCenter = readSource(QStringLiteral("src/qml_gui/components/NotificationCenter.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
 
   QVERIFY2(!notifCenter.isEmpty(), "Unable to read NotificationCenter.qml");
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
@@ -9015,7 +9130,7 @@ void QmlUiAuditTests::v52ExperienceSafety()
 {
   const QString confirmDialog = readSource(QStringLiteral("src/qml_gui/dialogs/ConfirmDialog.qml"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
 
   QVERIFY2(!confirmDialog.isEmpty(), "Unable to read ConfirmDialog.qml");
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
@@ -9048,7 +9163,7 @@ void QmlUiAuditTests::v52RegressionLocked()
   const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString presetDiff = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   // v5.1/v5.0 anchors
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
   const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
@@ -9224,7 +9339,7 @@ void QmlUiAuditTests::v53PerObjectSettingsDialog()
   const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString dialog = readSource(QStringLiteral("src/qml_gui/dialogs/SelectionSettingsDialog.qml"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
 
   QVERIFY2(!vmH.isEmpty(), "Unable to read EditorViewModel.h");
 
@@ -9281,7 +9396,7 @@ void QmlUiAuditTests::v53LayerRangeEditor()
   const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString dialog = readSource(QStringLiteral("src/qml_gui/dialogs/ObjectLayersDialog.qml"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
 
   QVERIFY2(!vmH.isEmpty(), "Unable to read EditorViewModel.h");
 
@@ -9849,7 +9964,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
 void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
 {
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
 
@@ -10090,7 +10205,7 @@ void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   const QString labels = readSource(QStringLiteral("src/qml_gui/components/NavigatorLabels.qml"));
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   const QString verifyScript = readSource(QStringLiteral("scripts/auto_verify_with_vcvars.ps1"));
   QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
@@ -10367,7 +10482,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
   }
   QVERIFY2(!corpus.isEmpty(), "Unable to read the QML corpus under src/qml_gui");
 
-  const QString qrc = readSource(QStringLiteral("src/qml_gui/qml.qrc"));
+  const QString qrc = qmlQrcSources();
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
 
   // Reachability table: dialog file name -> trigger token that must appear

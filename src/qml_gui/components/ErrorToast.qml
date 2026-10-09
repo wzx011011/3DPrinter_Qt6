@@ -135,7 +135,7 @@ Item {
                                         : sev === 8 || sev === 9 ? Theme.bgTooltip
                                         : Theme.bgFloating
         // Block notifications force white text (push Text {1,1,1,1} :420).
-        readonly property color textColor: entry.isBlock ? "#ffffff" : Theme.chromeText
+        readonly property color textColor: entry.isBlock ? Theme.textOnAccent : Theme.chromeText
         // Auto-dismiss uses user preference (in seconds)
         readonly property int autoDismissMs: backend.autoDismissSec * 1000
 
@@ -166,7 +166,7 @@ Item {
             onTriggered: backend.dismissNotificationById(entry.entryId)
         }
 
-        NumberAnimation on opacity { id: slideAnim; to: 1; from: 0; duration: 220; easing.type: Easing.OutCubic }
+        NumberAnimation on opacity { id: slideAnim; to: 1; from: 0; duration: Theme.motionNormal; easing.type: Theme.easingStandard }
 
         // Offscreen measuring label: full wrapped line count at the upstream
         // text width (count_lines :501-592). The visible label truncates when
@@ -188,7 +188,7 @@ Item {
         Rectangle {
             id: body
             anchors.fill: parent
-            radius: 4
+            radius: Theme.radiusSM
             color: entry.bgColor
             border.color: entry.isBlock ? entry.bgColor : entry.currentColor
             border.width: 1
@@ -214,7 +214,7 @@ Item {
                 y: 1
                 width: 8
                 height: parent.height - 2
-                radius: 4
+                radius: Theme.radiusSM
                 color: entry.currentColor
             }
             Rectangle {
@@ -232,7 +232,7 @@ Item {
                 x: entry.leftIndentation
                 width: entry.textAreaWidth
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2
+                spacing: Theme.spacingXXS
 
                 // Optional title
                 Text {
@@ -328,7 +328,7 @@ Item {
                         anchors.right: parent.right
                         width: 24
                         height: entry.lineHeight
-                        radius: 9
+                        radius: Theme.radiusLG
                         color: entry.currentColor
 
                         Text {
@@ -350,14 +350,14 @@ Item {
                     width: parent.width
                     height: 4
                     radius: 0
-                    color: "#d9d9d9"
+                    color: Theme.textSecondary
 
                     Rectangle {
                         width: parent.width * (entry.progressValue / 100.0)
                         height: parent.height
                         radius: 0
                         color: Theme.accent
-                        Behavior on width { NumberAnimation { duration: 200 } }
+                        Behavior on width { NumberAnimation { duration: Theme.motionNormal } }
                     }
 
                     Text {
@@ -379,7 +379,7 @@ Item {
 
                     // Prev hint
                     Rectangle {
-                        width: 24; height: 22; radius: 4
+                        width: 24; height: 22; radius: Theme.radiusSM
                         color: prevMA.containsMouse ? Theme.borderInput : Theme.chromePressed
                         Text { anchors.centerIn: parent; text: "<"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSize13; font.bold: true }
                         MouseArea {
@@ -414,7 +414,7 @@ Item {
 
                     // Next hint
                     Rectangle {
-                        width: 24; height: 22; radius: 4
+                        width: 24; height: 22; radius: Theme.radiusSM
                         color: nextMA.containsMouse ? Theme.borderInput : Theme.chromePressed
                         Text { anchors.centerIn: parent; text: ">"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSize13; font.bold: true }
                         MouseArea {
@@ -429,7 +429,7 @@ Item {
                     // Documentation link button (aligns with upstream HintNotification documentation button)
                     Rectangle {
                         visible: backend.currentHintHasDocumentationLink()
-                        width: 40; height: 22; radius: 4
+                        width: 40; height: 22; radius: Theme.radiusSM
                         color: docMA.containsMouse ? Theme.bgWarningSubtle : Theme.bgCard
                         Text { anchors.centerIn: parent; text: qsTr("文档"); color: entry.isBlock ? entry.textColor : Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
                         MouseArea {
@@ -470,7 +470,7 @@ Item {
                     // Preview button
                     Rectangle {
                         visible: entry.showPreviewBtn
-                        width: 70; height: 24; radius: 4
+                        width: 70; height: 24; radius: Theme.radiusSM
                         color: previewMA.containsMouse ? Theme.scrollBarHoverColor : Theme.scrollBarHoverColor
                         Text { anchors.centerIn: parent; text: qsTr("预览"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                         MouseArea {
@@ -488,8 +488,8 @@ Item {
                     // Export button
                     Rectangle {
                         visible: entry.showExportBtn
-                        width: 70; height: 24; radius: 4
-                        color: exportMA.containsMouse ? Theme.statusInfo : "#1d4ed8"
+                        width: 70; height: 24; radius: Theme.radiusSM
+                        color: Theme.statusInfo
                         Text { anchors.centerIn: parent; text: qsTr("导出"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM; font.bold: true }
                         MouseArea {
                             id: exportMA
@@ -505,7 +505,7 @@ Item {
 
                     // Dismiss
                     Rectangle {
-                        width: 50; height: 24; radius: 4
+                        width: 50; height: 24; radius: Theme.radiusSM
                         color: Theme.chromePressed
                         border.color: Theme.borderDefault; border.width: 1
                         Text { anchors.centerIn: parent; text: qsTr("关闭"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeXS }
@@ -521,7 +521,7 @@ Item {
                     spacing: 8
 
                     Rectangle {
-                        width: 60; height: 24; radius: 4
+                        width: 60; height: 24; radius: Theme.radiusSM
                         color: Theme.chromePressed
                         border.color: Theme.borderDefault; border.width: 1
                         Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
@@ -529,7 +529,7 @@ Item {
                             onClicked: backend.cancelNotificationById(entry.entryId) }
                     }
                     Rectangle {
-                        width: 60; height: 24; radius: 4
+                        width: 60; height: 24; radius: Theme.radiusSM
                         color: entry.currentColor
                         Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -628,7 +628,7 @@ Item {
         anchors.right: parent.right
         // GAP_WIDTH = 10 between stacked notifications
         // (NotificationManager.cpp:33, :3145, :3152).
-        spacing: 10
+        spacing: Theme.spacingMD
 
         Repeater {
             model: root.stack

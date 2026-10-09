@@ -53,7 +53,7 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: 3
+                    radius: Theme.radiusSM
                     color: Theme.borderSubtle
                 }
 
@@ -73,7 +73,7 @@ Item {
                             return ((nextPos - root.previewVm.toolChangePositionAt(index)) / root.totalMoves) * toolBand.width
                         }
                         height: toolBand.height
-                        radius: 3
+                        radius: Theme.radiusSM
                         color: root.previewVm
                             ? root.previewVm.extruderColor(root.previewVm.toolChangeExtruderIdAt(index))
                             : Theme.accent
@@ -106,7 +106,7 @@ Item {
                 }
                 width: hoverTimeText.implicitWidth + 14
                 height: 22
-                radius: 4
+                radius: Theme.radiusSM
                 color: Theme.bgTooltip
                 border.width: 1
                 border.color: Theme.borderSubtle
