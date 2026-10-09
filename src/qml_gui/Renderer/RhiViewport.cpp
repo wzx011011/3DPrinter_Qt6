@@ -1745,7 +1745,12 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
     }
     if (leftIsOrbit) {
       if (m_pressPickedSourceObjectIndex < 0)
-        applyCameraOrbit(float(delta.x()), -float(delta.y()));
+        // Raw screen deltas, matching upstream (GLCanvas3D.cpp:4622: rot =
+        // pos - drag.start, y-DOWN positive; Camera's positive delta_zenit /
+        // dElevation raises the eye). Negating y inverted the vertical orbit
+        // so dragging "up" dived the camera under the bed, where the +-90
+        // zenit clamp parked it -- the bed top face was unreachable.
+        applyCameraOrbit(float(delta.x()), float(delta.y()));
     } else {
       // Touchpad: left drag = pan
       applyCameraPan();
@@ -1753,7 +1758,7 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   } else if (m_dragButton == Qt::MiddleButton) {
     if (touchpad) {
       // Touchpad: middle drag = orbit
-      applyCameraOrbit(float(delta.x()), -float(delta.y()));
+      applyCameraOrbit(float(delta.x()), float(delta.y()));
     } else {
       applyCameraPan();
     }
