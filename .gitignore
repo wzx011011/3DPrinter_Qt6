@@ -89,3 +89,8 @@ i18n/_backup_phase204/
 
 # === ZCode session plans (ephemeral) ===
 .zcode/plans/
+
+# local junk
+*.stackdump
+nul
+*.log
