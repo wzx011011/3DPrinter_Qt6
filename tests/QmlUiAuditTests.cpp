@@ -7487,9 +7487,13 @@ void QmlUiAuditTests::translationPipelineDocumented()
 {
   // Phase 127 (I18N-01): the lupdate->translate->lrelease workflow is
   // documented + zh_CN has finished translations for the v4.6-touched strings.
-  const QString workflow = readSource(QStringLiteral(".planning/i18n-workflow.md"));
+  // The doc lives in i18n/ (tracked) -- it originally sat in the untracked
+  // .planning/ scratch dir, so a local cleanup of that directory turned this
+  // gate permanently red (2026-10-09). Content restored verbatim from
+  // archive/gsd-planning/i18n-workflow.md.
+  const QString workflow = readSource(QStringLiteral("i18n/workflow.md"));
   const QString zhCn = readSource(QStringLiteral("i18n/zh_CN.ts"));
-  QVERIFY2(!workflow.isEmpty(), "I18N-01: unable to read .planning/i18n-workflow.md");
+  QVERIFY2(!workflow.isEmpty(), "I18N-01: unable to read i18n/workflow.md");
   QVERIFY2(!zhCn.isEmpty(), "I18N-01: unable to read i18n/zh_CN.ts");
 
   // I18N-01: workflow doc exists + documents lupdate/lrelease.
