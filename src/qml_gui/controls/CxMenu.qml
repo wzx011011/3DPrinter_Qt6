@@ -35,6 +35,12 @@ Menu {
         return maxW + leftPadding + rightPadding
     }
 
+    // Auto-created rows (submenu parents, addAction items) must use the same
+    // compact delegate as declared CxMenuItem children — without this the
+    // style's default MenuItem renders them with a different background,
+    // padding and row height (visibly inconsistent submenu rows).
+    delegate: CxMenuItem {}
+
 
     // U08: separator color. The Basic MenuSeparator paints its 1px line with
     // palette.mid; pinned to the subtle border tone (was Theme.separator, a
