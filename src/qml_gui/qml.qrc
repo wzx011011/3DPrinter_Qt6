@@ -58,6 +58,7 @@
         <file>components/StatusBar.qml</file>
         <file>components/NavigatorLabels.qml</file>
         <file>components/ErrorToast.qml</file>
+        <file>components/CommandPalette.qml</file>
         <file>components/ErrorBanner.qml</file>
         <file>components/CustomGcodeDialog.qml</file>
         <file>components/MoveSlider.qml</file>
@@ -80,6 +81,7 @@
         <file>controls/CxButton.qml</file>
         <file>controls/CxBusyIndicator.qml</file>
         <file>controls/CxComboBox.qml</file>
+        <file>controls/CxEmptyState.qml</file>
         <file>controls/CxTextField.qml</file>
         <file>controls/CxSlider.qml</file>
         <file>controls/CxCheckBox.qml</file>
@@ -136,6 +138,7 @@
         <file>assets/icons/step_2_ready.svg</file>
         <file>assets/icons/create_success.svg</file>
         <file>assets/icons/bell.svg</file>
+        <file>assets/icons/theme-toggle.svg</file>
         <file>assets/icons/arrow-back-up.svg</file>
         <file>assets/icons/arrow-forward-up.svg</file>
         <file>assets/icons/box.svg</file>
