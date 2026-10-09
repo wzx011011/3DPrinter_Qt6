@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QtTest>
@@ -768,13 +769,35 @@ QString QmlUiAuditTests::readSource(const QString &relativePath) const
 
 QString QmlUiAuditTests::qmlQrcSources() const
 {
-  QDir qrcDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(QStringLiteral("src/qml_gui")));
+  // Aggregate exactly the manifests the build embeds: the qrc set referenced
+  // by CMakeLists.txt. A parallel refactor split qml.qrc into per-domain
+  // manifests, and count-exactness contracts (e.g. "exactly one
+  // pages/AssemblePage.qml entry") must not see both worlds at once.
+  const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
   QStringList parts;
-  QDirIterator it(qrcDir, QDirIterator::Subdirectories);
+  static const QRegularExpression qrcRef(
+      QStringLiteral("src/qml_gui/[\\w/]+\\.qrc"));
+  QSet<QString> seen;
+  auto it = qrcRef.globalMatch(cmake);
   while (it.hasNext()) {
-    const QString p = it.next();
-    if (p.endsWith(QLatin1String(".qrc")))
-      parts << readSource(p);
+    const QString rel = it.next().captured(0);
+    if (!seen.contains(rel)) {
+      seen.insert(rel);
+      const QString body = readSource(rel);
+      if (!body.isEmpty())
+        parts << body;
+    }
+  }
+  if (parts.isEmpty()) {
+    // Fallback: no manifests parsed -- fall back to every qrc on disk so
+    // presence/absence contracts still hold against a restructured build.
+    QDir qrcDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(QStringLiteral("src/qml_gui")));
+    QDirIterator dirIt(qrcDir, QDirIterator::Subdirectories);
+    while (dirIt.hasNext()) {
+      const QString p = dirIt.next();
+      if (p.endsWith(QLatin1String(".qrc")))
+        parts << readSource(p);
+    }
   }
   return parts.join(QLatin1Char('\n'));
 }
