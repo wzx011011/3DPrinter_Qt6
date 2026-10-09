@@ -1463,11 +1463,11 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
             }
             const auto *inst = obj->instances.front();
             const auto off = inst->get_offset();
-            // slic3r(X,Y,Z) → GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z(高度), GL.z=slic3r.y
+            // slic3r(X,Y,Z) → GL(X,-Z-Y 旋转映射, AXES-ROT): GL.x=slic3r.x, GL.y=slic3r.z(高度), GL.z=-slic3r.y
             receiver->objectPositions_.append(QVector3D(
               static_cast<float>(off.x()),
               static_cast<float>(off.z()),
-              static_cast<float>(off.y())));
+              -static_cast<float>(off.y())));
             const auto rot = inst->get_rotation();
             // 旋转：弧度 → 角度，不做 Y/Z 互换（分量级操作）
             receiver->objectRotations_.append(QVector3D(
@@ -6764,9 +6764,11 @@ QVariantMap ProjectServiceMock::selectionWorldBoundingBox(const QList<int> &obje
       const Slic3r::BoundingBoxf3 instanceBox = obj->instance_bounding_box(instanceIdx);
       if (!instanceBox.defined)
         continue;
-      // slic3r Z-up -> GL Y-up swap: GL.x = sx, GL.y = sz, GL.z = sy.
-      const double glMin[3] = {instanceBox.min.x(), instanceBox.min.z(), instanceBox.min.y()};
-      const double glMax[3] = {instanceBox.max.x(), instanceBox.max.z(), instanceBox.max.y()};
+      // slic3r Z-up -> GL Y-up swap: GL.x = sx, GL.y = sz, GL.z = -sy
+      // (AXES-ROT rotation mapping). The negation swaps the Y extremes, so
+      // the GL z interval takes -max.y() as its minimum.
+      const double glMin[3] = {instanceBox.min.x(), instanceBox.min.z(), -instanceBox.max.y()};
+      const double glMax[3] = {instanceBox.max.x(), instanceBox.max.z(), -instanceBox.min.y()};
       if (!valid)
       {
         minX = glMin[0]; minY = glMin[1]; minZ = glMin[2];
@@ -10013,9 +10015,9 @@ QVector3D ProjectServiceMock::objectPosition(int index) const
     const auto *inst = model_->objects[size_t(index)]->instances.front();
     if (inst)
     {
-      const auto off = inst->get_offset();
-      // slic3r(X,Y,Z) → GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=slic3r.y
-      return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y()));
+    const auto off = inst->get_offset();
+    // slic3r(X,Y,Z) → GL(AXES-ROT 旋转映射): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=-slic3r.y
+    return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), -static_cast<float>(off.y()));
     }
   }
 #endif
@@ -10071,8 +10073,8 @@ bool ProjectServiceMock::setObjectPosition(int index, float x, float y, float z)
     auto *inst = model_->objects[size_t(index)]->instances.front();
     if (inst)
     {
-      // GL(X,Z,Y) → slic3r(X,Y,Z): slic3r.x=GL.x, slic3r.y=GL.z, slic3r.z=GL.y
-      inst->set_offset(Slic3r::Vec3d(x, z, y));
+      // GL(AXES-ROT 旋转映射) → slic3r(X,Y,Z): slic3r.x=GL.x, slic3r.y=-GL.z, slic3r.z=GL.y
+      inst->set_offset(Slic3r::Vec3d(x, -z, y));
     }
   }
 #endif
@@ -10205,8 +10207,8 @@ QVector3D ProjectServiceMock::assembleOffset(int index) const
     if (inst)
     {
       const auto off = inst->get_assemble_transformation().get_offset();
-      // slic3r(X,Y,Z) -> GL(X,Z,Y): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=slic3r.y
-      return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y()));
+      // slic3r(X,Y,Z) -> GL(AXES-ROT 旋转映射): GL.x=slic3r.x, GL.y=slic3r.z, GL.z=-slic3r.y
+      return QVector3D(static_cast<float>(off.x()), static_cast<float>(off.z()), -static_cast<float>(off.y()));
     }
   }
 #endif
@@ -10261,8 +10263,8 @@ bool ProjectServiceMock::setAssembleOffset(int index, float x, float y, float z)
     auto *inst = model_->objects[size_t(index)]->instances.front();
     if (inst)
     {
-      // GL(X,Z,Y) -> slic3r(X,Y,Z): slic3r.x=GL.x, slic3r.y=GL.z, slic3r.z=GL.y
-      inst->set_assemble_offset(Slic3r::Vec3d(x, z, y));  // Model.hpp:1290
+      // GL(AXES-ROT 旋转映射) -> slic3r(X,Y,Z): slic3r.x=GL.x, slic3r.y=-GL.z, slic3r.z=GL.y
+      inst->set_assemble_offset(Slic3r::Vec3d(x, -z, y));  // Model.hpp:1290
       // set_assemble_offset does NOT flip m_assemble_initialized; re-assign the
       // transformation through set_assemble_transformation (Model.hpp:1281) so the
       // 3MF <assemble> block write gate (bbs_3mf.cpp:8076 is_assemble_initialized())
@@ -12210,8 +12212,9 @@ QByteArray ProjectServiceMock::meshData() const
     // per object: [int32 objectId][int32 triangleCount][float * triangleCount*9]
     // trailer:    [float * 6] bbox (minGLx, minGLy, minGLz, maxGLx, maxGLy, maxGLz)
     //
-    // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=toward)
-    //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = slic3r.y
+    // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=away)
+    //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = -slic3r.y
+    // (AXES-ROT 2026-10-10: Z 取负 = 旋转而非镜像，见 transform pass 注释)
     // ──────────────────────────────────────────────────────────────────────────
 
     // PERF (meshdata): the pack pass writes each transformed triangle straight
@@ -12445,10 +12448,13 @@ QByteArray ProjectServiceMock::meshData() const
           const Slic3r::Vec3d hw = job.combined * Slic3r::Vec3d(
                                                       (double)lv.x(), (double)lv.y(), (double)lv.z());
 
-          // slic3r → GL 坐标系
+          // slic3r → GL 坐标系。2026-10-10 (AXES-ROT): GL.z 取负——旧映射
+          // GL.z=+slic3r.y 是一次镜像（det=-1），默认对角视角下原点角落在
+          // 屏幕远端、与上游参考（原点近角、X 朝右、Y 入屏）左右互映。
+          // GL.z=-slic3r.y 是真旋转（det=+1），旋转/叉积与上游一致。
           const float gx = (float)hw.x();
           const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
-          const float gz = (float)hw.y(); // slic3r Y → GL Z
+          const float gz = -(float)hw.y(); // slic3r Y → GL Z（取负=旋转而非镜像）
 
           *out++ = gx;
           *out++ = gy;
@@ -12465,14 +12471,16 @@ QByteArray ProjectServiceMock::meshData() const
     }
 
     // Auto-normalize model placement onto build plate:
-    // keep relative arrangement, move global center to (110, *, 110)
+    // keep relative arrangement, move global center to (110, *, -110)
     // and make lowest Y rest on the plate (Y=0). The shift lands in place on
     // the already-packed vertex regions (same float adds as the old
     // per-volume second pass).
     const float centerX = (bminX + bmaxX) * 0.5f;
     const float centerZ = (bminZ + bmaxZ) * 0.5f;
     const float offsetX = 110.0f - centerX;
-    const float offsetZ = 110.0f - centerZ;
+    // AXES-ROT: the 220mm bed center sits at scene Z = -110 (rotation
+    // mapping; slic3r bed center Y=110 negates).
+    const float offsetZ = -110.0f - centerZ;
     const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
 
     if (offsetX != 0.0f || offsetY != 0.0f || offsetZ != 0.0f)

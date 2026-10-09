@@ -354,7 +354,7 @@ private:
   // Phase 238 (PREV-07): parsed GCV1 preview segments (CPU staging for the
   // software-fallback preview pass).
   QVector<PreviewSegment> m_previewSegments;
-  QVector3D m_center = QVector3D(110.f, 0.f, 110.f);
+  QVector3D m_center = QVector3D(110.f, 0.f, -110.f);  // AXES-ROT: bed center
   float m_radius = 180.f;
   float m_yaw = -35.f;
   float m_pitch = 55.f;

@@ -609,8 +609,9 @@ GizmoGeometry::buildWipeTowerVertices(float x,
   const float xMax = x + hw;
   const float y0 = kGroundY;
   const float y1 = y0 + height;
-  const float zMin = z - hd;
-  const float zMax = z + hd;
+  // AXES-ROT: the tower position z is slic3r Y (depth); scene Z negates it.
+  const float zMin = -z - hd;
+  const float zMax = -z + hd;
 
   const float positions[36][3] = {
       // Bottom face
@@ -704,11 +705,12 @@ GizmoGeometry::buildWipeTowerMeshVertices(const std::vector<float> &meshVertices
     const float mx = meshVertices[i * 3 + 0];
     const float my = meshVertices[i * 3 + 1];
     const float mz = meshVertices[i * 3 + 2];
-    // libslic3r (X right, Y into bed, Z up) -> Qt (X right, Y up, Z into bed).
-    // Y in the captured mesh is "into the bed" (depth); the Qt renderer's Z
-    // axis is "into the bed"; the Qt renderer's Y is up. So the swap is
-    // (mx, mz, my). kGroundY anchors the bed plane the same as Option A.
-    const float p[3] = {mx, mz + kGroundY, my};
+    // libslic3r (X right, Y into bed, Z up) -> Qt (X right, Y up, Z away).
+    // Y in the captured mesh is "into the bed" (depth); AXES-ROT makes the
+    // Qt Z axis point AWAY from the viewer for slic3r +Y (rotation mapping,
+    // not the old mirror), so the swap is (mx, mz, -my). kGroundY anchors
+    // the bed plane the same as Option A.
+    const float p[3] = {mx, mz + kGroundY, -my};
     appendColoredVert(verts, p, kColor);
   }
   return verts;

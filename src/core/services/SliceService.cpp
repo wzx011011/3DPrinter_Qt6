@@ -39,12 +39,13 @@ namespace
     {
       const auto &a = polygon.points[i];
       const auto &b = polygon.points[(i + 1) % polygon.points.size()];
+      // AXES-ROT: scene Z negates the slic3r depth axis.
       out.push_back(float(Slic3r::unscaled<double>(a.x())));
       out.push_back(y);
-      out.push_back(float(Slic3r::unscaled<double>(a.y())));
+      out.push_back(-float(Slic3r::unscaled<double>(a.y())));
       out.push_back(float(Slic3r::unscaled<double>(b.x())));
       out.push_back(y);
-      out.push_back(float(Slic3r::unscaled<double>(b.y())));
+      out.push_back(-float(Slic3r::unscaled<double>(b.y())));
     }
   }
 
@@ -60,9 +61,10 @@ namespace
       const auto &b = polygon.points[i + 1];
       for (const auto *point : {&origin, &a, &b})
       {
+        // AXES-ROT: scene Z negates the slic3r depth axis.
         out.push_back(float(Slic3r::unscaled<double>(point->x())));
         out.push_back(y);
-        out.push_back(float(Slic3r::unscaled<double>(point->y())));
+        out.push_back(-float(Slic3r::unscaled<double>(point->y())));
       }
     }
   }

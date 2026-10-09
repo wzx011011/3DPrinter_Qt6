@@ -34,14 +34,18 @@ CameraController::CameraController()
   m_rotation = rotationFromAzElImpl(45.0f, 35.0f);
 }
 
-void CameraController::setSceneExtent(float width, float depth, float height)
+void CameraController::setSceneExtent(float width, float depth, float height,
+                                      float minZ)
 {
   m_sceneMinX = 0.0f;
   m_sceneMaxX = width;
   m_sceneMinY = 0.0f;
   m_sceneMaxY = std::max(100.0f, height);
-  m_sceneMinZ = 0.0f;
-  m_sceneMaxZ = depth;
+  // AXES-ROT: the bed occupies scene Z in [minZ, minZ + depth] — minZ is
+  // negative under the rotation mapping (slic3r minY, the front/origin
+  // edge, sits at scene max Z on the viewer side).
+  m_sceneMinZ = minZ;
+  m_sceneMaxZ = minZ + depth;
   m_sceneRadius = 0.5f * std::sqrt(width * width + depth * depth + m_sceneMaxY * m_sceneMaxY);
 }
 
@@ -197,7 +201,9 @@ void CameraController::fitView(float cx, float cy, float cz, float radius)
 
 void CameraController::resetToDefault()
 {
-  m_target    = QVector3D(110.f, 0.f, 110.f);
+  // AXES-ROT: the 220mm default bed center is scene (110, 0, -110) under the
+  // rotation mapping (slic3r bed center Y=110 negates into Z).
+  m_target    = QVector3D(110.f, 0.f, -110.f);
   m_distance  = 380.0f;
   setRotationAzEl(45.0f, 35.0f);
 }

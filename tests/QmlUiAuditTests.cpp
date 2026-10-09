@@ -1690,9 +1690,11 @@ void QmlUiAuditTests::previewRhiViewportFitsCameraToPreviewDataBeforeOrbit()
            "setPreviewData/setCanvasType must invoke Preview fit when G-code preview data enters the viewport");
   QVERIFY2(viewportSource.contains(QStringLiteral("std::memcmp(m_previewData.constData(), \"GCV1\", 4)")),
            "Preview camera fit must parse the same GCV1 packed data consumed by the RHI preview renderer");
-  QVERIFY2(viewportSource.contains(QStringLiteral("includePoint(seg[i].x1, seg[i].z1, seg[i].y1)"))
-               && viewportSource.contains(QStringLiteral("includePoint(seg[i].x2, seg[i].z2, seg[i].y2)")),
-           "Preview camera fit must use the renderer axis mapping: G-code Z is viewport Y and G-code Y is viewport Z");
+  // AXES-ROT: the fit consumes the renderer's rotation mapping — gcode Z is
+  // viewport Y and gcode Y negates into viewport Z.
+  QVERIFY2(viewportSource.contains(QStringLiteral("includePoint(seg[i].x1, seg[i].z1, -seg[i].y1)"))
+               && viewportSource.contains(QStringLiteral("includePoint(seg[i].x2, seg[i].z2, -seg[i].y2)")),
+           "Preview camera fit must use the renderer axis mapping: G-code Z is viewport Y and G-code Y negates into viewport Z");
   QVERIFY2(viewportSource.contains(QStringLiteral("m_camera.fitView(cx, cy, cz, radius)")),
            "Preview camera fit must update CameraController target/distance before orbit");
   QVERIFY2(viewportSource.contains(QStringLiteral("m_cameraDirty = true")),
@@ -4253,8 +4255,8 @@ void QmlUiAuditTests::rendererViewmodelSafetyRegressionAudit()
            "Paint brush picks must thread camera eye and transform world camera to mesh local");
   QVERIFY2(viewportCpp.contains(QStringLiteral("if (qFuzzyIsNull(dir.y()))"))
                && viewportCpp.contains(QStringLiteral("const float t = -orig.y() / dir.y()"))
-               && viewportCpp.contains(QStringLiteral("return QPointF(double(hit.x()), double(hit.z()))")),
-           "screenToBedPoint must intersect scene Y=0 and return bed (X,Z)");
+               && viewportCpp.contains(QStringLiteral("return QPointF(double(hit.x()), double(-hit.z()))")),
+           "screenToBedPoint must intersect scene Y=0 and return bed (X, -Z) with the AXES-ROT rotation mapping");
 
   QVERIFY2(vmCpp.contains(QStringLiteral("size_t(idx(corner)) >= its->vertices.size()"))
                && vmCpp.contains(QStringLiteral("size_t(idx[t]) >= worldVerts.size()")),

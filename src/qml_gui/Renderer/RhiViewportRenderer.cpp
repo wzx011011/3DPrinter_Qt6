@@ -5310,12 +5310,12 @@ void RhiViewportRenderer::parsePreviewSegments()
 
   for (int i = 0; i < count; ++i)
   {
-    // Axis swap: GCode (x, y, z) -> scene (x, z, y), matching the legacy
-    // preview renderer convention.
+    // Axis swap: GCode (x, y, z) -> scene (x, z, -y) -- AXES-ROT rotation
+    // mapping (scene Z negates the gcode depth axis).
     Vertex a;
     a.x = seg[i].x1;
     a.y = seg[i].z1;
-    a.z = seg[i].y1;
+    a.z = -seg[i].y1;
     a.r = seg[i].r;
     a.g = seg[i].g;
     a.b = seg[i].b;
@@ -5324,7 +5324,7 @@ void RhiViewportRenderer::parsePreviewSegments()
     Vertex b = a;
     b.x = seg[i].x2;
     b.y = seg[i].z2;
-    b.z = seg[i].y2;
+    b.z = -seg[i].y2;
 
     // P17.2: extrusion segments expand into the solid triangular prism
     // (upstream renders each extrusion move as an 8-vertex prism with the
@@ -5619,7 +5619,9 @@ bool RhiViewportRenderer::uploadToolMarkerBuffer(QRhiResourceUpdateBatch *update
 
   const QVector<GizmoVertex> marker =
       GizmoGeometry::buildToolMarkerVertices(
-          QVector3D(m_markerX, m_markerZ, m_markerY));
+          // marker props carry gcode (x, y=depth, z=up); scene = (x, z, -y)
+          // -- AXES-ROT rotation mapping.
+          QVector3D(m_markerX, m_markerZ, -m_markerY));
   if (marker.isEmpty())
     return false;
 

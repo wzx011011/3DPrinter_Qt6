@@ -64,13 +64,14 @@ private slots:
 
 void CameraParityTests::defaultOrientationMatchesLegacyAnalytic()
 {
-  // The v5.12 analytic default (azimuth 45, elevation 35, distance 380,
-  // target 110,0,110) must survive the quaternion rewrite unchanged so no
-  // view shifts on upgrade.
+  // The analytic default (azimuth 45, elevation 35, distance 380) must
+  // survive the quaternion rewrite unchanged so no view shifts on upgrade.
+  // AXES-ROT: the default target moved to the bed center in scene coords
+  // (110, 0, -110) — the 220mm slic3r bed center Y negates into Z.
   CameraController cam;
   QVERIFY(matNear(cam.viewMatrix(),
                   legacyViewMatrix(45.0f, 35.0f, 380.0f,
-                                   QVector3D(110, 0, 110)),
+                                   QVector3D(110, 0, -110)),
                   1e-3f));
   // And an arbitrary mid-range orientation.
   cam.setOrientation(213.0f, -57.0f);
@@ -85,7 +86,7 @@ void CameraParityTests::constrainedOrbitClampsAtExactlyPlus90()
   // Upstream rotate_on_sphere clamp (Camera.cpp:376-385): zenit stops at
   // exactly 90 degrees -- straight top-down is reachable.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.orbit(0.0f, 1000.0f);
   QCOMPARE(cam.elevation(), 90.0f);
   // Camera straight above the target looking straight down.
@@ -106,7 +107,7 @@ void CameraParityTests::constrainedOrbitClampsAtExactlyPlus90()
 void CameraParityTests::constrainedOrbitRecoversFromPole()
 {
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.orbit(0.0f, -1000.0f);
   QCOMPARE(cam.elevation(), -90.0f);
   // The azimuth bookkeeping keeps composing through the pole
@@ -121,7 +122,7 @@ void CameraParityTests::constrainedOrbitKeepsHorizonLevel()
   // Constrained orbit must keep the right vector parallel to the horizon
   // (upstream constrained camera never rolls).
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   for (int i = 0; i < 200; ++i) {
     cam.orbit(7.0f, 1.3f);
     QVERIFY(std::abs(cam.rightVector().y()) < 1e-3f);
@@ -133,7 +134,7 @@ void CameraParityTests::freeTrackballIsUnboundedAndRolls()
   // Upstream rotate_local_around_target (Camera.cpp:409-420): no limits,
   // roll is allowed, distance stays fixed.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   const float distance0 = cam.distance();
   bool rolled = false;
   for (int i = 0; i < 400; ++i) {
@@ -154,7 +155,7 @@ void CameraParityTests::recoverFromFreeCameraRestoresHorizon()
   // Upstream recover_from_free_camera (Camera.hpp:154-158): right vector
   // back on the horizon, eye/target/distance untouched.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   for (int i = 0; i < 120; ++i)
     cam.rotateLocalAroundTarget(0.06f, 0.04f);
   QVERIFY(std::abs(cam.rightVector().y()) > 1e-4f);
@@ -169,7 +170,7 @@ void CameraParityTests::orbitAroundPivotPreservesPivotDistance()
   // Upstream rotate_on_sphere_with_target (Camera.cpp:351-370): eye and
   // target rotate rigidly about the pivot; pivot distances are preserved.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   const QVector3D pivot(130.0f, 12.0f, 90.0f);
   const float eyePivot0 = (cam.eye() - pivot).length();
   const float targetPivot0 = (cam.target() - pivot).length();
@@ -189,7 +190,7 @@ void CameraParityTests::zoomIsMultiplicativePerNotch()
   // Upstream update_zoom (Camera.cpp:83): one notch (delta=1) scales zoom by
   // 1/(1-0.1); distance runs inverse, so distance multiplies by (1-0.1).
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   const float d0 = cam.distance();
   cam.zoom(1.0f);
   QVERIFY(std::abs(cam.distance() - d0 * 0.9f) < 1e-2f);
@@ -204,7 +205,7 @@ void CameraParityTests::zoomBoundsFollowSceneBox()
   // (floored at the 2mm near-plane margin documented in clampDistance),
   // farthest = radius / (0.2 * fit) ~= 5x radius for the mapped scene box.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   for (int i = 0; i < 500; ++i)
     cam.zoom(1.0f);
   const float radius = 0.5f * std::sqrt(220.0f * 220.0f + 220.0f * 220.0f
@@ -221,7 +222,7 @@ void CameraParityTests::translateWorldClampsTargetTo3xSceneBox()
   // Upstream validate_target (Camera.cpp:662-674): target clamped into the
   // scene box enlarged 3x around its center.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.translateWorld(QVector3D(10000.0f, -5000.0f, 10000.0f));
   const QVector3D t = cam.target();
   // 3x box: center (110,60,110), half extents (330,180,330).
@@ -252,7 +253,7 @@ void CameraParityTests::groundPointOnPlaneRoundTrip()
   // The pan/zoom-to-mouse pick (upstream _mouse_to_3d with z=0): a known
   // ground point, projected to the screen and picked back, must round-trip.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   const QSizeF viewport(800.0, 600.0);
   const QMatrix4x4 viewProj =
       cam.projMatrix(float(viewport.width() / viewport.height()))
@@ -288,7 +289,7 @@ void CameraParityTests::viewPlanePointRoundTrip()
   // point, projected to the screen and picked back at the reference depth,
   // must round-trip exactly.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.setOrientation(200.0f, -30.0f);
   const QSizeF viewport(800.0, 600.0);
   const QMatrix4x4 viewProj =
@@ -311,7 +312,7 @@ void CameraParityTests::viewPlanePointIsViewParallel()
   // (perpendicular to the view direction), like the upstream tight-frustum
   // z=0 pair -- so pan direction and scale do not depend on the bed plane.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.setOrientation(200.0f, -30.0f);
   const QSizeF viewport(800.0, 600.0);
   const QMatrix4x4 viewProj =
@@ -337,7 +338,7 @@ void CameraParityTests::viewPlanePointStaysSceneBoundedAtLowElevation()
   // plane (upstream tight-frustum z=0, GLCanvas3D.cpp:4011-4028/:4622-4638)
   // bounds the same full-viewport drag to scene scale.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.setOrientation(45.0f, 5.0f);
   const QSizeF viewport(800.0, 600.0);
   const QMatrix4x4 viewProj =
@@ -378,7 +379,7 @@ void CameraParityTests::orbitAroundFarPivotKeepsTargetInScene()
   // it. The rotated target is now validated like set_target
   // (Camera.cpp validate_target, 3x scene box).
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   const QVector3D farPivot(1.0e5f, 0.0f, 1.0e5f);
   for (int i = 0; i < 30; ++i)
     cam.orbitAround(4.0f, 1.0f, farPivot);
@@ -398,7 +399,7 @@ void CameraParityTests::zoomToMouseCompositionStaysBounded()
   // GLCanvas3D.cpp:4007-4028) keeps the target within a bounded
   // neighborhood at low elevation.
   CameraController cam;
-  cam.setSceneExtent(220.0f, 220.0f, 120.0f);
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
   cam.setOrientation(45.0f, 5.0f);
   const QSizeF viewport(800.0, 600.0);
   const QMatrix4x4 viewProj =

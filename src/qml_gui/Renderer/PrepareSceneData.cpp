@@ -158,10 +158,20 @@ void PrepareSceneData::setBed(float widthMm,
   const float depth = sanitizeExtent(depthMm, kDefaultBedSizeMm);
   const float diameter = sanitizeExtent(diameterMm, std::min(width, depth));
 
+  // AXES-ROT 2026-10-10: the scene keeps treating Z as the bed-depth axis
+  // ([origin', origin'+depth]), but the slic3r→scene mapping is now the
+  // ROTATION (scene z = -slic3r y, det=+1) instead of the old mirror (+y).
+  // Normalizing here means every downstream consumer of the stored rect
+  // (grid/border/fill/axes/texture quad/print volume/bed model centering)
+  // stays scene-correct with no per-site sign flips: slic3r minY (the
+  // origin/front edge) lands at scene max Z (screen-near), matching the
+  // upstream topfront view.
+  const float normalizedOriginY = -(originY + depth);
+
   if (nearlyEqual(m_bedWidth, width)
       && nearlyEqual(m_bedDepth, depth)
       && nearlyEqual(m_bedOriginX, originX)
-      && nearlyEqual(m_bedOriginY, originY)
+      && nearlyEqual(m_bedOriginY, normalizedOriginY)
       && m_bedShapeType == shapeType
       && nearlyEqual(m_bedDiameter, diameter)) {
     return;
@@ -170,7 +180,7 @@ void PrepareSceneData::setBed(float widthMm,
   m_bedWidth = width;
   m_bedDepth = depth;
   m_bedOriginX = originX;
-  m_bedOriginY = originY;
+  m_bedOriginY = normalizedOriginY;
   m_bedShapeType = shapeType;
   m_bedDiameter = diameter;
   rebuildBedGeometry();
@@ -785,7 +795,9 @@ void PrepareSceneData::plateGridOffset(int plateIndex, int plateCount,
   const float strideX = bedWidth * (1.0f + kPlateGapRatio);
   const float strideD = bedDepth * (1.0f + kPlateGapRatio);
   outOffsetX = float(index % cols) * strideX;
-  outOffsetY = float(index / cols) * strideD;
+  // AXES-ROT: the plate grid runs toward scene -Z (slic3r +Y = away from the
+  // viewer under the rotation mapping), so the depth offset negates.
+  outOffsetY = -float(index / cols) * strideD;
 }
 
 void PrepareSceneData::rebuildBedGeometry()
@@ -1099,13 +1111,15 @@ void PrepareSceneData::appendExcludeFills(float plateLeft, float plateTop, bool 
     if (!ok)
       continue;
     // Fan triangulation from point 0 (init_model_from_poly convex fan):
-    // triangles (p0,p1,p2) and (p0,p2,p3).
-    m_bedFillVertices.append(Vertex{px[0] + dx, py[0] + dy, r, g, b, 1.0f});
-    m_bedFillVertices.append(Vertex{px[1] + dx, py[1] + dy, r, g, b, 1.0f});
-    m_bedFillVertices.append(Vertex{px[2] + dx, py[2] + dy, r, g, b, 1.0f});
-    m_bedFillVertices.append(Vertex{px[0] + dx, py[0] + dy, r, g, b, 1.0f});
-    m_bedFillVertices.append(Vertex{px[2] + dx, py[2] + dy, r, g, b, 1.0f});
-    m_bedFillVertices.append(Vertex{px[3] + dx, py[3] + dy, r, g, b, 1.0f});
+    // triangles (p0,p1,p2) and (p0,p2,p3). AXES-ROT: the stream carries
+    // slic3r bed-absolute Y; scene Z negates it (dy already folds in the
+    // normalized rect origin + plate offset).
+    m_bedFillVertices.append(Vertex{px[0] + dx, -py[0] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[1] + dx, -py[1] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[2] + dx, -py[2] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[0] + dx, -py[0] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[2] + dx, -py[2] + dy, r, g, b, 1.0f});
+    m_bedFillVertices.append(Vertex{px[3] + dx, -py[3] + dy, r, g, b, 1.0f});
   }
 }
 
@@ -1136,13 +1150,18 @@ void PrepareSceneData::rebuildAxesGeometry()
   // (3DBed.cpp:326); printable height is not tracked here, so the max uses
   // the plate footprint.
   const float stemLength = 0.1f * std::max(m_bedWidth, m_bedDepth);
-  const float origin[3] = {left, kAxesGroundZ, top};
+  // AXES-ROT: the axes origin is slic3r (minX, minY) = the plate's scene
+  // NEAR corner (max Z) under the rotation mapping — the normalized
+  // m_bedOriginY is the plate's far (min-Z) edge, so the near edge adds the
+  // depth back.
+  const float origin[3] = {left, kAxesGroundZ, top + m_bedDepth};
 
   // x axis (upstream assemble_transform(origin, {0, 0.5*PI, 0}), 3DBed.cpp:232)
   const float dirX[3] = {1.0f, 0.0f, 0.0f};
   appendArrow(origin, dirX, stemLength, kAxisXR, 0.0f, 0.0f);
-  // y axis (upstream {-0.5*PI, 0, 0}, 3DBed.cpp:236); lands on Qt +Z.
-  const float dirZ[3] = {0.0f, 0.0f, 1.0f};
+  // y axis (upstream {-0.5*PI, 0, 0}, 3DBed.cpp:236); slic3r +Y = scene -Z
+  // under the AXES-ROT rotation mapping.
+  const float dirZ[3] = {0.0f, 0.0f, -1.0f};
   appendArrow(origin, dirZ, stemLength, 0.0f, kAxisYG, 0.0f);
   // z axis (upstream identity, 3DBed.cpp:240); = Qt +Y (height).
   const float dirY[3] = {0.0f, 1.0f, 0.0f};
@@ -1184,11 +1203,10 @@ void PrepareSceneData::appendArrow(const float origin[3], const float dir[3],
       qx = z; qy = y; qz = -x;
     } else {
       // upstream +Y arrow (rotX -90deg): (x,y,z) -> (x, z, -y) -> qt
-      // qt remap (a,b,c)->(a,c,b) puts the arrow length (upstream z) on
-      // +Z, away from the viewer (Bed3D.cpp:236 y axis lands on the bed
-      // depth axis). The qz sign previously inverted the arrow toward
-      // the camera -- runtime-verified 2026-10-09.
-      qx = x; qy = -y; qz = z;
+      // qt remap (a,b,c)->(a,c,b) puts the arrow length (upstream z) on the
+      // depth axis; AXES-ROT: slic3r +Y = scene -Z, so qz negates (the
+      // arrow points away from the viewer, Bed3D.cpp:236).
+      qx = x; qy = -y; qz = -z;
     }
     m_bedAxesVertices.append(ModelVertex{origin[0] + qx, origin[1] + qy,
                                          origin[2] + qz, r, g, b, 1.0f});

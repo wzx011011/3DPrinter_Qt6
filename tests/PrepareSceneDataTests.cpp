@@ -113,9 +113,10 @@ void PrepareSceneDataTests::bedExcludeAreasFillPerPlateWithUpstreamColors()
     return false;
   };
   // Plate 0 is selected: upstream render_exclude_area select gray.
-  QVERIFY(findVertex(10.0f, 10.0f, 0.765f, 0.7686f, 0.7686f));
+  // AXES-ROT: scene Z negates the exclude stream's slic3r Y.
+  QVERIFY(findVertex(10.0f, -10.0f, 0.765f, 0.7686f, 0.7686f));
   // Plate 1 sits at stride X and uses the unselect gray.
-  QVERIFY(findVertex(10.0f + strideX, 10.0f, 0.9f, 0.9f, 0.9f));
+  QVERIFY(findVertex(10.0f + strideX, -10.0f, 0.9f, 0.9f, 0.9f));
 
   // Malformed payloads are ignored: odd coordinate count and an incomplete
   // rectangle group (< 8 coords) never reach the fill buffer.
@@ -322,15 +323,17 @@ void PrepareSceneDataTests::currentPlateFootprintClassifiesRectangleAndCircle()
   PrepareSceneData scene;
   scene.setPlateContext(0, 1, QList<int>{});
   scene.setBed(200.0f, 100.0f, 10.0f, 20.0f, 0, 100.0f);
-  QVERIFY(scene.containsCurrentPlatePoint(10.0f, 20.0f));
-  QVERIFY(scene.containsCurrentPlatePoint(210.0f, 120.0f));
-  QVERIFY(!scene.containsCurrentPlatePoint(211.0f, 120.0f));
+  // AXES-ROT: containsCurrentPlatePoint takes SCENE (x, z); scene Z negates
+  // the slic3r Y argument of setBed (rect z in [-120, -20]).
+  QVERIFY(scene.containsCurrentPlatePoint(10.0f, -20.0f));
+  QVERIFY(scene.containsCurrentPlatePoint(210.0f, -120.0f));
+  QVERIFY(!scene.containsCurrentPlatePoint(211.0f, -120.0f));
 
   scene.setBed(100.0f, 100.0f, 0.0f, 0.0f, 1, 100.0f);
-  QVERIFY(scene.containsCurrentPlatePoint(50.0f, 50.0f));
+  QVERIFY(scene.containsCurrentPlatePoint(50.0f, -50.0f));
   QVERIFY(!scene.containsCurrentPlatePoint(0.0f, 0.0f));
   scene.setPlateContext(2, 1, QList<int>{});
-  QVERIFY(!scene.containsCurrentPlatePoint(50.0f, 50.0f));
+  QVERIFY(!scene.containsCurrentPlatePoint(50.0f, -50.0f));
 }
 
 void PrepareSceneDataTests::activePlateFilteringKeepsOnlyCurrentPlateSources()
@@ -607,7 +610,8 @@ void PrepareSceneDataTests::bolderGridQuadsFollowEveryFifthLine()
   };
   QVERIFY2(!fineHasX(50.0f), "x bold line must not duplicate in the fine set");
   QVERIFY2(fineHasX(10.0f), "x = 10 stays a fine line");
-  QVERIFY2(fineHasY(50.0f), "y bold line stays in the fine set (inclusive y rule)");
+  // AXES-ROT: y grid lines land on negated scene Z.
+  QVERIFY2(fineHasY(-50.0f), "y bold line stays in the fine set (inclusive y rule)");
 }
 
 // P15.6 (CIRCLEBED): circular plates fan-fill the boundary polygon and clip
@@ -624,7 +628,7 @@ void PrepareSceneDataTests::roundBedBuildsFanFillWithClippedGrid()
   QCOMPARE(fill.size(), qsizetype(48 * 3));
 
   const float cx = 100.0f;
-  const float cz = 100.0f;
+  const float cz = -100.0f;  // AXES-ROT: scene Z negates slic3r Y.
   const float radius = 100.0f;
   bool hasCenterVertex = false;
   for (const auto &v : fill) {
@@ -672,10 +676,11 @@ void PrepareSceneDataTests::printVolumeUniformAndErrorBackgroundState()
   const auto &pv = scene.printVolume();
   QCOMPARE(pv.type, 0);
   // Rectangle inflated by SceneEpsilon = 1e-4 (GLCanvas3D.cpp:7180).
+  // AXES-ROT: scene Z negates slic3r Y — the rect spans [-220-eps, +eps].
   QVERIFY(qFuzzyCompare(pv.xyData.x(), -1e-4f));
-  QVERIFY(qFuzzyCompare(pv.xyData.y(), -1e-4f));
+  QVERIFY(qFuzzyCompare(pv.xyData.y(), -220.0f - 1e-4f));
   QVERIFY(qFuzzyCompare(pv.xyData.z(), 220.0f + 1e-4f));
-  QVERIFY(qFuzzyCompare(pv.xyData.w(), 220.0f + 1e-4f));
+  QVERIFY(qFuzzyCompare(pv.xyData.w(), 1e-4f));
   QCOMPARE(pv.zMin, 0.0f);
   // Printable height is not yet plumbed from the viewmodel: unbounded top.
   QVERIFY(pv.zMax > 1e30f);
@@ -685,15 +690,17 @@ void PrepareSceneDataTests::printVolumeUniformAndErrorBackgroundState()
   };
 
   // Fully inside object -> no error background.
+  // AXES-ROT: the packed triangle vertices are SCENE coords; the bed rect
+  // spans z in [-220, 0], so the depth arguments negate.
   QByteArray inside = packedMeshWithBatches(
-      QList<int>{1}, QList<QList<float>>{triangleAt(10.0f, 10.0f, 30.0f, 40.0f)});
+      QList<int>{1}, QList<QList<float>>{triangleAt(10.0f, -10.0f, 30.0f, -40.0f)});
   scene.setModelMeshData(inside, QList<int>{0}, QList<int>{0},
                          QList<int>{0}, QList<int>{0});
   QVERIFY2(!scene.anyVolumeOutside(), "inside object must not turn the background red");
 
   // Object crossing the +X plate edge -> error background.
   QByteArray outside = packedMeshWithBatches(
-      QList<int>{1}, QList<QList<float>>{triangleAt(210.0f, 10.0f, 230.0f, 40.0f)});
+      QList<int>{1}, QList<QList<float>>{triangleAt(210.0f, -10.0f, 230.0f, -40.0f)});
   scene.setModelMeshData(outside, QList<int>{0}, QList<int>{0},
                          QList<int>{0}, QList<int>{0});
   QVERIFY2(scene.anyVolumeOutside(), "object over the plate edge must turn the background red");

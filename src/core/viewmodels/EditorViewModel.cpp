@@ -388,9 +388,12 @@ static Slic3r::Transform3d hollowWorldTransform(QVector3D translation,
 }
 #endif
 
+// AXES-ROT: the transform sidebar presents SLIC3R coordinates (upstream
+// transform panel: X right, Y depth, Z height). objectPosition() carries the
+// GL-convention tuple (x, height, -depth), so Y/ Z flip here.
 float EditorViewModel::objectPosX() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).x() : 0; }
-float EditorViewModel::objectPosY() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).y() : 0; }
-float EditorViewModel::objectPosZ() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).z() : 0; }
+float EditorViewModel::objectPosY() const { return projectService_ ? -projectService_->objectPosition(primarySelectedSourceIndex(this)).z() : 0; }
+float EditorViewModel::objectPosZ() const { return projectService_ ? projectService_->objectPosition(primarySelectedSourceIndex(this)).y() : 0; }
 float EditorViewModel::objectRotX() const { return projectService_ ? projectService_->objectRotation(primarySelectedSourceIndex(this)).x() : 0; }
 float EditorViewModel::objectRotY() const { return projectService_ ? projectService_->objectRotation(primarySelectedSourceIndex(this)).y() : 0; }
 float EditorViewModel::objectRotZ() const { return projectService_ ? projectService_->objectRotation(primarySelectedSourceIndex(this)).z() : 0; }
@@ -425,14 +428,16 @@ void EditorViewModel::setObjectPosY(float v)
   if (idx < 0 || !projectService_)
     return;
   const QVector3D oldPos = projectService_->objectPosition(idx);
-  if (qFuzzyCompare(oldPos.y(), v))
+  // AXES-ROT: sidebar Y is slic3r depth = -GL.z.
+  const float glZ = -v;
+  if (qFuzzyCompare(oldPos.z(), glZ))
     return;
-  projectService_->setObjectPosition(idx, oldPos.x(), v, oldPos.z());
+  projectService_->setObjectPosition(idx, oldPos.x(), oldPos.y(), glZ);
   if (m_undoManager)
   {
     auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
                                      projectService_->objectScale(idx), projectService_);
-    cmd->setNewTransform(QVector3D(oldPos.x(), v, oldPos.z()),
+    cmd->setNewTransform(QVector3D(oldPos.x(), oldPos.y(), glZ),
                          projectService_->objectRotation(idx),
                          projectService_->objectScale(idx));
     m_undoManager->push(cmd);
@@ -444,14 +449,15 @@ void EditorViewModel::setObjectPosZ(float v)
   if (idx < 0 || !projectService_)
     return;
   const QVector3D oldPos = projectService_->objectPosition(idx);
-  if (qFuzzyCompare(oldPos.z(), v))
+  // AXES-ROT: sidebar Z is slic3r height = GL.y.
+  if (qFuzzyCompare(oldPos.y(), v))
     return;
-  projectService_->setObjectPosition(idx, oldPos.x(), oldPos.y(), v);
+  projectService_->setObjectPosition(idx, oldPos.x(), v, oldPos.z());
   if (m_undoManager)
   {
     auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
                                      projectService_->objectScale(idx), projectService_);
-    cmd->setNewTransform(QVector3D(oldPos.x(), oldPos.y(), v),
+    cmd->setNewTransform(QVector3D(oldPos.x(), v, oldPos.z()),
                          projectService_->objectRotation(idx),
                          projectService_->objectScale(idx));
     m_undoManager->push(cmd);
@@ -476,7 +482,12 @@ void EditorViewModel::nudgeSelectedObjects(double dxMm, double dyMm)
   for (const int idx : std::as_const(targets))
   {
     const QVector3D oldPos = projectService_->objectPosition(idx);
-    const QVector3D newPos(float(oldPos.x() + dxMm), float(oldPos.y() + dyMm), oldPos.z());
+    // AXES-ROT: the nudge (dx, dy) is a bed-plane step in slic3r mm — X adds
+    // to GL.x, slic3r Y+ (arrow-up, away from the viewer) subtracts from
+    // GL.z. The old code added dy to the tuple's height slot, lifting the
+    // selection vertically instead.
+    const QVector3D newPos(float(oldPos.x() + dxMm), oldPos.y(),
+                           float(oldPos.z() - dyMm));
     projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
     moved = true;
     if (m_undoManager)
@@ -693,13 +704,14 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
   {
     const QVector3D oldRot = projectService_->assembleRotation(idx);
     QVector3D newRot = oldRot;
+    // AXES-ROT: same scene->slic3r axial mapping as the prepare path below.
     const float degrees = radians * kRadiansToDegrees;
     if (axis == 1)
       newRot.setX(newRot.x() + degrees);
     else if (axis == 2)
-      newRot.setY(newRot.y() + degrees);
-    else
       newRot.setZ(newRot.z() + degrees);
+    else
+      newRot.setY(newRot.y() - degrees);
     projectService_->setAssembleRotation(idx, newRot.x(), newRot.y(), newRot.z());
     // No slice invalidation on AssembleView (T-07).
     if (!m_gizmoRotateDragActive && m_undoManager)
@@ -720,13 +732,16 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
 
   const QVector3D oldRot = projectService_->objectRotation(idx);
   QVector3D newRot = oldRot;
+  // AXES-ROT: gizmo rings are scene-axis aligned (1=X, 2=up, 3=depth). Under
+  // the rotation mapping a scene-frame axial rotation maps to the slic3r
+  // Euler components as 1->X(+), 2->Z(+), 3->Y(-) — the depth ring negates.
   const float degrees = radians * kRadiansToDegrees;
   if (axis == 1)
     newRot.setX(newRot.x() + degrees);
   else if (axis == 2)
-    newRot.setY(newRot.y() + degrees);
-  else
     newRot.setZ(newRot.z() + degrees);
+  else
+    newRot.setY(newRot.y() - degrees);
 
   projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
   invalidateSliceResultsForCurrentPlate();
@@ -866,12 +881,13 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
   {
     const QVector3D oldScale = projectService_->assembleScale(idx);
     QVector3D newScale = oldScale;
+    // AXES-ROT: scene gizmo axes 1/2/3 = X/up/depth map to slic3r X/Z/Y.
     if (axis == 1)
       newScale.setX(newScale.x() * clampedFactor);
     else if (axis == 2)
-      newScale.setY(newScale.y() * clampedFactor);
-    else
       newScale.setZ(newScale.z() * clampedFactor);
+    else
+      newScale.setY(newScale.y() * clampedFactor);
     projectService_->setAssembleScale(idx, newScale.x(), newScale.y(), newScale.z());
     // No slice invalidation on AssembleView (T-07).
     if (!m_gizmoScaleDragActive && m_undoManager)
@@ -892,12 +908,13 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
 
   const QVector3D oldScale = projectService_->objectScale(idx);
   QVector3D newScale = oldScale;
+  // AXES-ROT: scene gizmo axes 1/2/3 = X/up/depth map to slic3r X/Z/Y.
   if (axis == 1)
     newScale.setX(newScale.x() * clampedFactor);
   else if (axis == 2)
-    newScale.setY(newScale.y() * clampedFactor);
-  else
     newScale.setZ(newScale.z() * clampedFactor);
+  else
+    newScale.setY(newScale.y() * clampedFactor);
 
   projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
   invalidateSliceResultsForCurrentPlate();
@@ -3712,7 +3729,8 @@ QByteArray EditorViewModel::loadBedModelMesh(const QString &stlPath) const
   for (const auto &face : its.indices) {
     for (int k = 0; k < 3; ++k) {
       const Slic3r::Vec3f &v = its.vertices[size_t(face(k))];
-      const float coords[3] = {v.x(), v.z(), v.y()};
+      // AXES-ROT 2026-10-10: GL.z = -stl.y（旋转而非镜像，与 meshData 一致）
+      const float coords[3] = {v.x(), v.z(), -v.y()};
       std::memcpy(out, coords, 12);
       out += 12;
     }
@@ -9616,9 +9634,10 @@ void EditorViewModel::centerSelectedObjects()
                              + box.value(QStringLiteral("maxZ")).toDouble());
   // Plate center origin = printable-area bbox center (upstream
   // PartPlate::get_center_origin, PartPlate.cpp:1881-1889), in GL coords
-  // X/Z — same convention as scaleSelectionToFitBed.
+  // X/Z — same convention as scaleSelectionToFitBed. AXES-ROT: scene Z
+  // negates the slic3r bed-center Y.
   const double dstX = double(bedOriginX() + bedWidth() * 0.5f);
-  const double dstZ = double(bedOriginY() + bedDepth() * 0.5f);
+  const double dstZ = -double(bedOriginY() + bedDepth() * 0.5f);
   const double dx = dstX - srcX;
   const double dz = dstZ - srcZ;
   if (std::abs(dx) < 1e-9 && std::abs(dz) < 1e-9)
@@ -10252,7 +10271,8 @@ double EditorViewModel::scaleSelectionToFitBed()
                                   + scaledBox.value(QStringLiteral("maxZ")).toDouble());
     const double minY = scaledBox.value(QStringLiteral("minY")).toDouble();
     const double targetX = double(bedOriginX() + bedWidth() * 0.5f);
-    const double targetZ = double(bedOriginY() + bedDepth() * 0.5f);
+    // AXES-ROT: scene Z negates the slic3r bed-center Y.
+    const double targetZ = -double(bedOriginY() + bedDepth() * 0.5f);
     for (const ObjectBefore &entry : before)
     {
       const QVector3D pos = projectService_->objectPosition(entry.index);

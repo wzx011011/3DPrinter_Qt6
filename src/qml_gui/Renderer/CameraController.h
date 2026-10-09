@@ -89,7 +89,7 @@ public:
 
   // Scene box for zoom bounds and target validation (upstream m_scene_box,
   // Camera::set_scene_box). Extents are GL-world bed footprint + height.
-  void setSceneExtent(float width, float depth, float height);
+  void setSceneExtent(float width, float depth, float height, float minZ = 0.0f);
 
   // Upstream validate_target (Camera.cpp:662-674): target clamped into the
   // scene box enlarged 3x around its center.
@@ -142,7 +142,7 @@ private:
   QQuaternion m_rotation;
   float m_distance = 380.0f;  // world units
   // 默认 target = K1C 打印平台中心 (GL: x=110, y=0, z=110)
-  QVector3D m_target{110.f, 0.f, 110.f};
+  QVector3D m_target{110.f, 0.f, -110.f};  // AXES-ROT: 220mm bed center
   bool m_freeCamera = false;  // upstream use_free_camera
   bool m_useOrtho = false;    // Phase 237 (VIEW-01): orthographic projection
   // Scene box (GL world). Defaults to the K1C 220x220 bed footprint with a

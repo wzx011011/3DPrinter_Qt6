@@ -539,8 +539,9 @@ void GizmoGeometryTests::testWipeTowerGeometry()
 
   QVERIFY2(approx(minX, 90.f), msgF("wipe tower min X should be 90, got %f", minX, 0, 0));
   QVERIFY2(approx(maxX, 110.f), msgF("wipe tower max X should be 110, got %f", maxX, 0, 0));
-  QVERIFY2(approx(minZ, 20.f), msgF("wipe tower min Z should be 20, got %f", minZ, 0, 0));
-  QVERIFY2(approx(maxZ, 30.f), msgF("wipe tower max Z should be 30, got %f", maxZ, 0, 0));
+  // AXES-ROT: scene Z negates the tower's slic3r depth position (25 -> [-30,-20]).
+  QVERIFY2(approx(minZ, -30.f), msgF("wipe tower min Z should be -30, got %f", minZ, 0, 0));
+  QVERIFY2(approx(maxZ, -20.f), msgF("wipe tower max Z should be -20, got %f", maxZ, 0, 0));
   QVERIFY2(approx(minY, -0.04f), msgF("wipe tower min Y should be -0.04, got %f", minY, 0, 0));
   QVERIFY2(approx(maxY, 49.96f), msgF("wipe tower max Y should be 49.96, got %f", maxY, 0, 0));
 }

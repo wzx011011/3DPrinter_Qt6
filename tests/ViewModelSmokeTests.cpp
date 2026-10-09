@@ -5493,8 +5493,13 @@ void ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
   editor.applyGizmoRotateDelta(3, float(M_PI) / 12.0f);
   editor.endGizmoRotateDrag();
 
-  const QVector3D expectedRot(dragStartRot.x(), dragStartRot.y(), dragStartRot.z() + 45.0f);
-  QCOMPARE(project.objectRotation(sourceObject), expectedRot);
+  // AXES-ROT: the depth ring (scene axis 3) drives slic3r rotation Y with a
+  // negation — 45 degrees of ring drag lands as -45 on the Y component.
+  const QVector3D expectedRot(dragStartRot.x(), dragStartRot.y() - 45.0f, dragStartRot.z());
+  const QVector3D actualRot = project.objectRotation(sourceObject);
+  QVERIFY(qAbs(actualRot.x() - expectedRot.x()) < 1e-4f);
+  QVERIFY(qAbs(actualRot.y() - expectedRot.y()) < 1e-4f);
+  QVERIFY(qAbs(actualRot.z() - expectedRot.z()) < 1e-4f);
   QCOMPARE(undoManager.stack()->count(), 2);
   QVERIFY(undoManager.canUndo());
 
@@ -5503,7 +5508,10 @@ void ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
   QVERIFY(undoManager.canRedo());
 
   undoManager.redo();
-  QCOMPARE(project.objectRotation(sourceObject), expectedRot);
+  const QVector3D redoRot = project.objectRotation(sourceObject);
+  QVERIFY(qAbs(redoRot.x() - expectedRot.x()) < 1e-4f);
+  QVERIFY(qAbs(redoRot.y() - expectedRot.y()) < 1e-4f);
+  QVERIFY(qAbs(redoRot.z() - expectedRot.z()) < 1e-4f);
   QCOMPARE(undoManager.stack()->count(), 2);
 }
 
@@ -5720,8 +5728,10 @@ void ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects()
                            + box.value(QStringLiteral("maxX")).toDouble());
   const double cz = 0.5 * (box.value(QStringLiteral("minZ")).toDouble()
                            + box.value(QStringLiteral("maxZ")).toDouble());
-  QVERIFY2(qAbs(cx - 110.0) < 0.5 && qAbs(cz - 110.0) < 0.5,
-           qPrintable(QStringLiteral("centered bbox center (%1,%2) must hit the plate center (110,110)")
+  // AXES-ROT: the selection bbox is scene-space; the slic3r bed center
+  // (110, 110) lands at scene (110, -110).
+  QVERIFY2(qAbs(cx - 110.0) < 0.5 && qAbs(cz + 110.0) < 0.5,
+           qPrintable(QStringLiteral("centered bbox center (%1,%2) must hit the plate center (110,-110)")
                           .arg(cx).arg(cz)));
   QCOMPARE(plate1Pos.y(), 22.0f); // height kept
 }
@@ -7501,7 +7511,10 @@ void ViewModelSmokeTests::arrowNudgeTranslatesSelectionWithCoalescedUndo()
   editor.nudgeSelectedObjects(10.0, 0.0);
   QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, 0.f, 0.f))).lengthSquared() < 1e-6);
   editor.nudgeSelectedObjects(0.0, -1.0);
-  QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, -1.f, 0.f))).lengthSquared() < 1e-6);
+  // AXES-ROT: nudge dy is a slic3r-Y bed-plane step; the GL tuple negates it
+  // into Z, so arrow-down (-1mm) raises the tuple Z by +1 instead of moving
+  // the old height slot.
+  QVERIFY((project.objectPosition(0) - (before + QVector3D(10.f, 0.f, 1.f))).lengthSquared() < 1e-6);
 
   const int undoCount = undoManager.stack()->count();
   QVERIFY(undoCount >= 1);
@@ -8643,7 +8656,9 @@ void ViewModelSmokeTests::editorScaleSelectionToFitBedShrinksOversizedObject()
   const double maxY = box.value(QStringLiteral("maxY")).toDouble();
   QVERIFY2(minX >= double(originX) - 0.5 && maxX <= double(originX + bedW) + 0.5,
            qPrintable(QStringLiteral("post-fit X span [%1,%2] must fit the bed").arg(minX).arg(maxX)));
-  QVERIFY2(minZ >= double(originY) - 0.5 && maxZ <= double(originY + bedD) + 0.5,
+  // AXES-ROT: the bbox Z span is scene-space — slic3r [originY, originY+bedD]
+  // maps to [-originY-bedD, -originY].
+  QVERIFY2(minZ >= double(-originY - bedD) - 0.5 && maxZ <= double(-originY) + 0.5,
            qPrintable(QStringLiteral("post-fit Z span [%1,%2] must fit the bed").arg(minZ).arg(maxZ)));
   QVERIFY2(minY >= -0.5,
            qPrintable(QStringLiteral("post-fit object must sit on the plate (min Y %1)").arg(minY)));
@@ -9518,7 +9533,8 @@ void ViewModelSmokeTests::centerAlignsSelectionToBedCenter()
   const double centerX = 0.5 * (box.value("minX").toDouble() + box.value("maxX").toDouble());
   const double centerZ = 0.5 * (box.value("minZ").toDouble() + box.value("maxZ").toDouble());
   QVERIFY(qAbs(centerX - 100.0) < 1e-3);
-  QVERIFY(qAbs(centerZ - 100.0) < 1e-3);
+  // AXES-ROT: the 200mm bed center lands at scene Z = -100.
+  QVERIFY(qAbs(centerZ + 100.0) < 1e-3);
   // Height is preserved (distance.z = 0 upstream).
   QVERIFY(qAbs(box.value("minY").toDouble() - before.value("minY").toDouble()) < 1e-3);
 

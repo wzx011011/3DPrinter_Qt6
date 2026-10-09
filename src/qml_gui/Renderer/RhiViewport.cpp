@@ -936,18 +936,19 @@ void RhiViewport::selectView(const QString &direction)
   if (dir == QLatin1String("plate"))
   {
     // zoom_to_bed equivalent: fit the camera to the bed rectangle. The bed
-    // lives in the GL XZ plane (Y up); bedOriginX/bedOriginY are slic3r X/Y
-    // which map to GL X/Z (same mapping as meshData's coordinate swap).
+    // lives in the GL XZ plane (Y up); bedOriginX/bedOriginY are raw slic3r
+    // X/Y, and scene Z negates slic3r Y (AXES-ROT rotation mapping).
     const float w = qMax(1.0f, m_bedWidth);
     const float d = qMax(1.0f, m_bedDepth);
     if (m_bedShapeType == 1)
     {
       const float radius = qMax(1.0f, m_bedDiameter);
-      m_camera.fitView(m_bedOriginX, 0.f, m_bedOriginY, radius * 0.5f);
+      m_camera.fitView(m_bedOriginX, 0.f, -m_bedOriginY, radius * 0.5f);
     }
     else
     {
-      m_camera.fitView(m_bedOriginX + w * 0.5f, 0.f, m_bedOriginY + d * 0.5f,
+      m_camera.fitView(m_bedOriginX + w * 0.5f, 0.f,
+                       -(m_bedOriginY + d * 0.5f),
                        0.5f * std::sqrt(w * w + d * d));
     }
   }
@@ -1097,8 +1098,8 @@ QVariantList RhiViewport::navigatorLabels() const
   // vp-6 (AXISLABELS): uppercase slic3r axis names matching the transform
   // widgets (upstream strcpy AxisLabels "Y"/"Z"/"X", GLCanvas3D.cpp:6144-6146).
   // The vectors are Qt scene axes: Qt X = slic3r X, Qt +Y (height) = slic3r Z,
-  // Qt +Z (depth) = slic3r Y -- same mapping PrepareSceneData documents for
-  // the world axes.
+  // Qt -Z = slic3r +Y (AXES-ROT rotation mapping) -- same mapping
+  // PrepareSceneData documents for the world axes.
   const struct
   {
     const char *text;
@@ -1106,7 +1107,8 @@ QVariantList RhiViewport::navigatorLabels() const
   } axes[3] = {
       {"X", QVector3D(1, 0, 0)},
       {"Z", QVector3D(0, 1, 0)},
-      {"Y", QVector3D(0, 0, 1)},
+      // AXES-ROT: slic3r +Y points along scene -Z (rotation mapping).
+      {"Y", QVector3D(0, 0, -1)},
   };
   for (const auto &axis : axes) {
     // Axis label at 1.3x the axis direction (ImGuizmo.cpp:3037).
@@ -1163,8 +1165,13 @@ QVariantList RhiViewport::plateAnchors() const
     // icon column sits at the bed extents max X just below the plate top
     // edge (calc_vertex_for_icons, PartPlate.cpp:633-641). Qt scene frame:
     // X = bed X, Y = height (ground), Z = bed Y.
+    // AXES-ROT: scene Z negates slic3r Y — the plate's slic3r-far (max-Y)
+    // edge is the scene min-Z edge, where both the icon column (bed extents
+    // max X, far edge) and the plate-name anchor (min X, far edge) live,
+    // matching upstream calc_vertex_for_icons / plate_name (PartPlate.cpp:
+    // 633-676). m_bedOriginY/m_bedDepth are raw slic3r here.
     const float worldX = m_bedOriginX + offsetX + m_bedWidth;
-    const float worldZ = m_bedOriginY + offsetY;
+    const float worldZ = -(m_bedOriginY + offsetY + m_bedDepth);
     // vp-2 (PLATEICONS): second anchor at the plate's top-LEFT corner for
     // the plate name + pencil rename cluster (upstream calc_vertex_for_
     // plate_name_edit_icon pins the edit icon next to the name at the bed
@@ -1847,7 +1854,9 @@ void RhiViewport::updateSceneExtent()
   const float width = roundBed ? m_bedDiameter : m_bedWidth;
   const float depth = roundBed ? m_bedDiameter : m_bedDepth;
   const float height = m_bedHeightToLid > 0.0f ? m_bedHeightToLid : 100.0f;
-  m_camera.setSceneExtent(width, depth, height);
+  // AXES-ROT: the bed rect occupies scene Z in [-(originY+depth), -originY]
+  // (raw slic3r originY negates into scene Z).
+  m_camera.setSceneExtent(width, depth, height, -(m_bedOriginY + depth));
   m_cameraDirty = true;
 }
 
@@ -2225,8 +2234,10 @@ void RhiViewport::fitPreviewCameraToData()
   };
 
   for (int i = 0; i < count; ++i) {
-    includePoint(seg[i].x1, seg[i].z1, seg[i].y1);
-    includePoint(seg[i].x2, seg[i].z2, seg[i].y2);
+    // Stored segments carry slic3r (x, y=depth, z=up); scene maps
+    // (x, z, -y) -- AXES-ROT rotation mapping.
+    includePoint(seg[i].x1, seg[i].z1, -seg[i].y1);
+    includePoint(seg[i].x2, seg[i].z2, -seg[i].y2);
   }
 
   if (!hasPoint)
@@ -2955,14 +2966,16 @@ QPointF RhiViewport::screenToBedPoint(qreal screenX, qreal screenY) const
       float(screenX), float(screenY), viewSize,
       m_camera.projMatrix(aspect), m_camera.viewMatrix());
   // Scene coordinates use Y as vertical, so the bed is the Y=0 plane and the
-  // 2D bed coordinates are (X,Z). Reject parallel and behind-camera hits.
+  // 2D bed coordinates are (X, Z). AXES-ROT: scene Z negates slic3r Y, so
+  // the returned slic3r bed point is (hit.x, -hit.z). Reject parallel and
+  // behind-camera hits.
   if (qFuzzyIsNull(dir.y()))
     return QPointF();
   const float t = -orig.y() / dir.y();
   if (t < 0.f)
     return QPointF();
   const QVector3D hit = orig + dir * t;
-  return QPointF(double(hit.x()), double(hit.z()));
+  return QPointF(double(hit.x()), double(-hit.z()));
 }
 
 // Phase 121 (PAINT-03/OV-05): track the mouse screen position + button state so
