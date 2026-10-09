@@ -2249,20 +2249,14 @@ Item {
                         onActivated: root.redoFromTopbar()
                     }
 
-                    Connections {
-                        target: root.editorVm
-                        function onStateChanged() {
-                            root.applyFitHintIfReady()
-                        }
-                    }
-
-                    onVisibleChanged: {
-                        if (visible)
-                            Qt.callLater(root.applyFitHintIfReady)
-                    }
-
-                    Component.onCompleted: Qt.callLater(root.applyFitHintIfReady)
-
+                    // Upstream Plater::load_model does NOT touch the camera on
+                    // import — the bed view stays as-is, and the camera only
+                    // moves on explicit user action (fit button / view select /
+                    // zoom keys; BBLTopbar wires the fit button to
+                    // applyFitHintIfReady). The former stateChanged/visible/
+                    // onCompleted auto-refits here were a self-invented
+                    // zoom-to-object that threw the bed out of frame after
+                    // every import and re-refit on every page switch.
                     DropArea {
                         anchors.fill: parent
                         keys: ["text/uri-list"]

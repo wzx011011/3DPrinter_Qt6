@@ -19,6 +19,7 @@
 #include <QVector>
 #include <QtQml/qqml.h>
 #include <functional>
+#include <memory>
 #include "qml_gui/Renderer/RhiBackendSelector.h"
 #include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
@@ -639,12 +640,26 @@ int main(int argc, char *argv[])
     auto *rootWindow = qobject_cast<QQuickWindow *>(engine->rootObjects().value(0));
     if (rootWindow)
     {
-      auto *frameGateConnection = new QMetaObject::Connection;
-      *frameGateConnection = QObject::connect(
+      // FIXTURE-02 one-shot gate. With QueuedConnection every frameSwapped
+      // that lands while an earlier handler copy still sits in the event
+      // queue posts ANOTHER copy, all capturing the same state. The previous
+      // pattern (disconnect + delete a heap-allocated Connection inside the
+      // first copy) was use-after-free + double-free whenever two copies got
+      // queued: the second copy ran right after the first one returned and
+      // dereferenced the freed Connection. The first copy runs the model
+      // import synchronously (~30ms), so --load-model made the window for
+      // that second queued copy near-certain — the long-standing
+      // "crash right after Startup load-model handled". A shared fired-flag
+      // makes every copy after the first a no-op and needs no
+      // connection-object lifetime management; the connection simply lives
+      // as long as the window, and later swaps cost one branch.
+      const auto gateFired = std::make_shared<bool>(false);
+      QObject::connect(
           rootWindow, &QQuickWindow::frameSwapped, rootWindow,
-          [&backend, startupOpenRequest, frameGateConnection]() {
-            QObject::disconnect(*frameGateConnection);
-            delete frameGateConnection;
+          [&backend, startupOpenRequest, gateFired]() {
+            if (*gateFired)
+              return;
+            *gateFired = true;
             applyStartupOpenRequests(startupOpenRequest, backend);
           },
           Qt::QueuedConnection);

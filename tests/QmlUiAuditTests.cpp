@@ -5512,12 +5512,21 @@ void QmlUiAuditTests::argvFixtureGateUsesFrameSwappedNotSingleShot()
   QVERIFY2(mainCpp.contains(QStringLiteral("applyStartupOpenRequests")),
            "FIXTURE-02: applyStartupOpenRequests must still exist (the apply routing logic is preserved; only the gate scheduling changed)");
 
-  // FIXTURE-02 (one-shot connection contract): the gate must disconnect itself
-  // in the handler so it fires exactly once on the first frameSwapped, not on
-  // every subsequent frame (the old singleShot also ran exactly once; the new
-  // gate must preserve that contract).
-  QVERIFY2(mainCpp.contains(QStringLiteral("QObject::disconnect")),
-           "FIXTURE-02: the frameSwapped gate must disconnect itself in the handler (one-shot connection; fires exactly once)");
+  // FIXTURE-02 (one-shot contract, crash-hardened 2026-10-09): the gate must
+  // fire exactly once on the first frameSwapped. The original
+  // disconnect-in-handler pattern (heap-allocated QMetaObject::Connection,
+  // deleted inside the first queued handler copy) was use-after-free +
+  // double-free whenever TWO handler copies got queued — frame swaps landing
+  // while the first copy sat in the event queue posted additional copies, and
+  // the synchronous model import inside the first copy made that window
+  // near-certain for --load-model (crash right after "Startup load-model
+  // handled"). The current gate uses a shared fired-flag: every copy after
+  // the first is a no-op, which preserves the exactly-once contract without
+  // connection-object lifetime management.
+  QVERIFY2(mainCpp.contains(QStringLiteral("gateFired")),
+           "FIXTURE-02: the frameSwapped gate must stay exactly-once via the shared fired-flag (the old disconnect+delete pattern was UAF/double-free when two queued copies raced)");
+  QVERIFY2(!mainCpp.contains(QStringLiteral("QObject::disconnect(*frameGateConnection)")),
+           "FIXTURE-02: the frameSwapped gate must NOT resurrect the disconnect+delete Connection pattern (UAF/double-free when a second queued handler copy races the first)");
 
   // FIXTURE-02 (defensive fallback): if the root object is not a QQuickWindow,
   // the gate must apply immediately (degraded mode) rather than hang forever.
