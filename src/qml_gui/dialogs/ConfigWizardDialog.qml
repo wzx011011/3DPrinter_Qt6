@@ -690,6 +690,11 @@ CxDialog {
                             readonly property string modelName: group.model
 
                             Layout.preferredWidth: 150
+                            // Top-align cells: GridLayout centers shorter
+                            // cells vertically by default, which staggered
+                            // the thumbnails across a row (upstream
+                            // wxFlexGridSizer top-aligns, ConfigWizard.cpp:301).
+                            Layout.alignment: Qt.AlignTop
                             spacing: Theme.spacingXS
 
                             // Model thumbnail. The Qt6 preset store carries no
