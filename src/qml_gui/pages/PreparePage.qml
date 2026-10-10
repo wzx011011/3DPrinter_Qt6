@@ -1781,10 +1781,6 @@ Item {
                     reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
                     zoomToMouse: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.zoomToMouse : true
                     freeCamera: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.freeCamera : false
-                    // P14 (CAM-PARITY): constrained orbit pivots on the
-                    // selection / model bbox center (upstream
-                    // GLCanvas3D.cpp:4309-4327 rotate_target).
-                    rotationCenterHint: root.editorVm ? root.editorVm.rotationCenter : null
                     // P15.11 (SIDEBAR-LOCAL-AXES): orient the sidebar transform
                     // hint arrows on the selected object's local axes
                     // (upstream Selection.cpp orient_matrix). Re-evaluates via

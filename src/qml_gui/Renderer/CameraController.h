@@ -100,6 +100,21 @@ public:
   QVector3D  eye() const;         // world-space camera position
   QVector3D  target() const;      // orbit target (look-at point)
   float      distance() const;    // camera distance from target
+  // Current plate center on the bed plane (scene box center, y=0). The
+  // USER-RULING pivot for the plain constrained orbit (2026-10-10): rotating
+  // always spins the plate in place instead of following the selection like
+  // upstream OrcaSlicer (GLCanvas3D.cpp:4661-4662 pivots on the selection
+  // bbox center) -- dragging a model aside and orbiting made the bed sweep
+  // around the moved model, which read as a broken rotation axis.
+  QVector3D  bedCenter() const;
+  // Scene-front reference point: eye + forward * (distance - sceneRadius),
+  // floored at 2mm. Stands in for the upstream tight-frustum near plane
+  // (Camera.cpp calc_tight_frustrum_zs_around, :505-527 — near sits at the
+  // scene bbox front); upstream pan and zoom-to-mouse unproject BOTH cursor
+  // samples at that plane via _mouse_to_3d(pos, &z) window z=0
+  // (GLCanvas3D.cpp:4019-4020), which damps the world delta and keeps it
+  // scene-bounded at any zoom.
+  QVector3D  viewFrontPoint() const;
   // Camera basis vectors in world space (upstream get_dir_right/up/forward,
   // Camera.hpp:99-101).
   QVector3D  rightVector() const;

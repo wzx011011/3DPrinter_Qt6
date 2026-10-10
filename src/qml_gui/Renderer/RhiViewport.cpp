@@ -1995,10 +1995,10 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
     m_contextDragExceeded = m_contextDragExceeded || std::hypot(delta.x(), delta.y()) > 4.0;
     // CAM-PARITY: right-drag pans (upstream is_camera_pan branch,
     // GLCanvas3D.cpp:4692-4721; right_mouse_drag_action defaults to Pan).
-    // The pick-based pan unprojects the press and the cursor at one shared
-    // view-plane depth, so it works for any armed press position.
+    // The pick-based pan unprojects the previous and current cursor at one
+    // shared view-plane depth, so it works for any armed press position.
     if (m_rightDragPan)
-      applyCameraPan();
+      applyCameraPan(event->position());
     m_lastMousePosition = event->position();
     event->accept();
     return;
@@ -2182,7 +2182,7 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
       if (touchpadRotate)
         applyCameraOrbit(float(delta.x()), float(delta.y()));
       else if (touchpadPan)
-        applyCameraPan();
+        applyCameraPan(event->position());
     } else if (m_pressPickedSourceObjectIndex >= 0) {
       // Modifier presses (Ctrl pivot / Alt part-pick) keep the camera drag:
       // hover tracks until the drag threshold, then the orbit takes over.
@@ -2210,9 +2210,9 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
       if (touchpadRotate)
         applyCameraOrbit(float(delta.x()), float(delta.y()));
       else if (touchpadPan)
-        applyCameraPan();
+        applyCameraPan(event->position());
     } else {
-      applyCameraPan();
+      applyCameraPan(event->position());
     }
   }
   m_lastMousePosition = event->position();
@@ -2237,22 +2237,19 @@ void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
     // constrained rotation so the horizon stays level.
     m_camera.recoverFromFreeCamera();
     QVector3D pivot;
-    bool hasPivot = false;
     if (m_ctrlRotationCenterActive) {
       // Upstream GLCanvas3D.cpp:4310-4317: Ctrl pivots on the cached
       // canvas-center ground pick.
       pivot = m_ctrlRotationCenter;
-      hasPivot = true;
-    } else if (m_rotationCenterHint.canConvert<QVector3D>()) {
-      // Upstream GLCanvas3D.cpp:4318-4327: pivot on the selection / volumes
-      // bbox center when one exists.
-      pivot = m_rotationCenterHint.value<QVector3D>();
-      hasPivot = true;
+    } else {
+      // USER-RULING (2026-10-10): the plain orbit always pivots on the
+      // CURRENT PLATE CENTER, replacing the upstream selection-pivot
+      // (GLCanvas3D.cpp:4661-4662 rotates on the selection bbox center).
+      // Selection-following made the bed sweep around a model dragged
+      // off-center, which read as a broken rotation axis.
+      pivot = m_camera.bedCenter();
     }
-    if (hasPivot)
-      m_camera.orbitAround(dxPx * 0.8f, dyPx * 0.8f, pivot);
-    else
-      m_camera.orbit(dxPx * 0.8f, dyPx * 0.8f);
+    m_camera.orbitAround(dxPx * 0.8f, dyPx * 0.8f, pivot);
   }
   m_cameraDirty = true;
   update();
@@ -2261,31 +2258,34 @@ void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
 }
 
 // P14 (CAM-PARITY): pick-based pan (upstream is_camera_pan block,
-// GLCanvas3D.cpp:4622-4638): unproject the press position and the cursor at
-// ONE shared depth plane and translate the target by the world delta so the
-// scene follows the cursor. Upstream unprojects both points at window z=0 --
-// the tight-frustum near plane (Camera.cpp calc_tight_frustrum_zs_around),
-// i.e. a plane PERPENDICULAR to the view direction at the scene front. The
-// plane choice sets the pan gain: a plane through the orbit target grabs 1:1
-// and walks the target far out of the scene (the follow-up orbit then pivots
-// on the selection center while the camera stares elsewhere -- the "axes
-// transformed" feel), while the scene-front plane keeps the delta damped and
-// scene-bounded exactly like upstream. The earlier bed-plane (y=0) pick
-// exploded at low elevation (cursor ray -> kilometers away) and made the
-// camera fly away.
-void RhiViewport::applyCameraPan()
+// GLCanvas3D.cpp:4692-4721): unproject the PREVIOUS and CURRENT cursor
+// positions at ONE shared depth plane and translate the target by the world
+// delta so the scene follows the cursor. Upstream unprojects both points at
+// window z=0 -- the tight-frustum near plane (Camera.cpp
+// calc_tight_frustrum_zs_around), i.e. a plane PERPENDICULAR to the view
+// direction at the scene front -- and, crucially, REPLACES
+// drag.start_position_2D with the cursor after every pan event
+// (GLCanvas3D.cpp:4721): the translation is a per-frame delta. The previous
+// Qt6 code anchored the "orig" pick at the press position and never advanced
+// it, re-applying the cumulative press->cursor displacement on EVERY move --
+// the total translation grew quadratically with the frame count, which read
+// as "one small drag sweeps the whole scene". The plane choice sets the pan
+// gain: the scene-front plane keeps the delta damped and scene-bounded
+// exactly like upstream (the earlier bed-plane y=0 pick exploded at low
+// elevation and flew the camera).
+void RhiViewport::applyCameraPan(const QPointF &currentPosition)
 {
   const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
   const QMatrix4x4 mvp = cameraMvp(aspect);
   const QSizeF vp(width(), height());
   const QVector3D referencePoint = m_camera.viewFrontPoint();
-  QVector3D pressPoint;
+  QVector3D previousPoint;
   QVector3D currentPoint;
-  if (CameraController::viewPlanePoint(mvp, vp, m_pressPosition,
-                                       referencePoint, &pressPoint)
-      && CameraController::viewPlanePoint(mvp, vp, m_lastMousePosition,
+  if (CameraController::viewPlanePoint(mvp, vp, m_lastMousePosition,
+                                       referencePoint, &previousPoint)
+      && CameraController::viewPlanePoint(mvp, vp, currentPosition,
                                           referencePoint, &currentPoint)) {
-    m_camera.translateWorld(pressPoint - currentPoint);
+    m_camera.translateWorld(previousPoint - currentPoint);
     m_cameraDirty = true;
     update();
     // P15.9 (PLATEANCHOR): pan translates the camera target, so the

@@ -6168,41 +6168,6 @@ QVariantList EditorViewModel::selectedSourceObjectIndices() const
 
 int EditorViewModel::selectedObjectCount() const { return m_selectedSourceIndices.size(); }
 
-QVariant EditorViewModel::rotationCenter() const
-{
-  // Upstream GLCanvas3D.cpp:4309-4327: the constrained camera orbit pivots
-  // on the selection bbox center, else the whole-model bbox center. The
-  // preview canvas pivots on the plate center, which equals the orbit
-  // target, so it needs no hint (upstream uses the plate bbox center only
-  // because its target may differ).
-  if (!projectService_)
-    return {};
-  QList<int> sources = m_selectedSourceIndices.values();
-  if (sources.isEmpty()) {
-    // CAM-PARITY: the no-selection fallback pivots on the CURRENT plate's
-    // objects only (upstream volumes_bounding_box(current_plate_only=true),
-    // GLCanvas3D.cpp:4667) -- a whole-scene union would park the pivot in
-    // the empty space between plates on multi-plate projects.
-    sources = projectService_->currentPlateObjectIndices();
-  }
-  if (sources.isEmpty())
-    return {};
-  const QVariantMap box = projectService_->selectionWorldBoundingBox(sources);
-  if (box.isEmpty() || !box.contains(QStringLiteral("minX")))
-    return {};
-  // selectionWorldBoundingBox already maps libslic3r Z-up into GL Y-up.
-  return QVariant::fromValue(QVector3D(
-      float((box.value(QStringLiteral("minX")).toDouble()
-             + box.value(QStringLiteral("maxX")).toDouble())
-            * 0.5),
-      float((box.value(QStringLiteral("minY")).toDouble()
-             + box.value(QStringLiteral("maxY")).toDouble())
-            * 0.5),
-      float((box.value(QStringLiteral("minZ")).toDouble()
-             + box.value(QStringLiteral("maxZ")).toDouble())
-            * 0.5)));
-}
-
 int EditorViewModel::contextMenuFamily() const
 {
   return int(m_contextMenuFamily);

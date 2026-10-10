@@ -1555,18 +1555,20 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
                && viewportSource.contains(QStringLiteral("applyCameraPan"))
                && viewportSource.contains(QStringLiteral("m_camera.zoom")),
            "RhiViewport input handling must route orbit, pan, and zoom through CameraController");
-  // P14 (CAM-PARITY): the drag routes must mirror the upstream branches
-  // (GLCanvas3D.cpp:4275-4359): free-camera trackball, horizon recovery
-  // before constrained orbit, selection pivot orbit, Ctrl canvas-center
-  // pivot, pick-based pan, and the zoom-to-mouse pick block.
+  // P14 (CAM-PARITY) + USER-RULING (2026-10-10): the drag routes must mirror
+  // the upstream branches (GLCanvas3D.cpp:4275-4359): free-camera trackball,
+  // horizon recovery before constrained orbit, Ctrl canvas-center pivot,
+  // pick-based pan, and the zoom-to-mouse pick block. The plain orbit pivots
+  // on the current plate center (m_camera.bedCenter) per the user ruling,
+  // replacing the upstream selection pivot (GLCanvas3D.cpp:4661-4662).
   QVERIFY2(viewportSource.contains(QStringLiteral("rotateLocalAroundTarget"))
                && viewportSource.contains(QStringLiteral("recoverFromFreeCamera"))
                && viewportSource.contains(QStringLiteral("m_camera.orbitAround"))
-               && viewportSource.contains(QStringLiteral("m_rotationCenterHint"))
+               && viewportSource.contains(QStringLiteral("m_camera.bedCenter"))
                && viewportSource.contains(QStringLiteral("m_ctrlRotationCenter"))
                && viewportSource.contains(QStringLiteral("groundPointOnPlane"))
                && viewportSource.contains(QStringLiteral("translateWorld")),
-           "RhiViewport drag routing must implement the upstream camera parity branches");
+           "RhiViewport drag routing must implement the camera parity branches");
   QVERIFY2(viewportSource.contains(QStringLiteral("if (!m_zoomToMouse)")),
            "wheelEvent must consume the zoomToMouse preference (upstream zoom_to_mouse)");
   QVERIFY2(viewportSource.contains(QStringLiteral("m_camera.fitView"))
@@ -10257,11 +10259,11 @@ void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
   QVERIFY2(qrc.contains(QStringLiteral("components/NavigatorLabels.qml")),
            "NavigatorLabels.qml must be registered in qml.qrc");
 
-  // P14 (CAM-PARITY): the prepare canvas must feed the orbit pivot hint
-  // (selection/model bbox center) into the viewport.
-  QVERIFY2(preparePage.contains(QStringLiteral("rotationCenterHint:"))
-               && preparePage.contains(QStringLiteral("editorVm.rotationCenter")),
-           "PreparePage must bind the upstream orbit pivot hint");
+  // USER-RULING (2026-10-10): the plain orbit pivots on the current plate
+  // center (RhiViewport feeds the pivot from the camera scene box itself),
+  // so the page must not re-introduce the retired selection-pivot hint.
+  QVERIFY2(!preparePage.contains(QStringLiteral("rotationCenterHint")),
+           "PreparePage must not bind the retired selection-pivot hint");
   QVERIFY2(verifyScript.contains(QStringLiteral("CameraParityTests")),
            "canonical verifier must build and run CameraParityTests");
 

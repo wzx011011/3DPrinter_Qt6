@@ -264,6 +264,21 @@ QVector3D CameraController::eye() const
 QVector3D CameraController::target() const   { return m_target; }
 float     CameraController::distance() const { return m_distance; }
 
+QVector3D CameraController::viewFrontPoint() const
+{
+  // Upstream tight-frustum near plane: the scene bbox front along the view
+  // axis (Camera.cpp:505-527), floored like FrustrumMinNearZ.
+  const float nearDist = std::max(2.0f, m_distance - m_sceneRadius);
+  return eye() + forwardVector() * nearDist;
+}
+
+QVector3D CameraController::bedCenter() const
+{
+  // Scene box footprint center on the bed plane (GL world, Y-up).
+  return QVector3D((m_sceneMinX + m_sceneMaxX) * 0.5f, 0.0f,
+                   (m_sceneMinZ + m_sceneMaxZ) * 0.5f);
+}
+
 QVector3D CameraController::rightVector() const
 {
   return m_rotation.rotatedVector(QVector3D(1, 0, 0));
