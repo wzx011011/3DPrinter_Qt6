@@ -85,6 +85,13 @@ private slots:
   // refreshes key on the TARGET (empty->empty is a no-op).
   void plateIconAtlasUploadGateSkipsUnchangedCacheKey();
   void plateIconHoverGateKeysOnTargetNotHitFlag();
+  // Q3 (CAP-GATE): permanent cap upload-latch case. synchronize() arms
+  // m_previewCapUploadPending only through the pure seam
+  // PrepareSceneData::previewCapUploadArmed, so the moveEnd change
+  // detection actually gates the rebuildPreviewCap span scan: an unchanged
+  // moveEnd never re-arms, a change arms exactly once, and the first-frame
+  // / resetPreviewGpuState paths (GPU-side cap dropped) still arm.
+  void previewCapUploadGateArmsOnRealChangeOnly();
 };
 
 // v5.16 (EXCLAREA): one rectangle polygon must fan-fill on every plate with
@@ -857,6 +864,52 @@ void PrepareSceneDataTests::plateIconHoverGateKeysOnTargetNotHitFlag()
   QVERIFY(PrepareSceneData::plateIconHoverTargetChanged(2, 4, true, 2, 5));
   // Moving to the same icon of another plate refreshes.
   QVERIFY(PrepareSceneData::plateIconHoverTargetChanged(2, 4, true, 3, 4));
+}
+
+// Q3 (CAP-GATE): the sequential-range cap upload latch is armed by the pure
+// seam PrepareSceneData::previewCapUploadArmed, consumed by
+// RhiViewportRenderer::synchronize. The old code set
+// m_previewCapUploadPending unconditionally, which neutered the moveEnd
+// change detection: every playback frame with moveEnd > 0 re-ran
+// rebuildPreviewCap's linear span scan (m_previewDrawSpans can hold millions
+// of spans) and re-uploaded the cap buffer even with the slider parked.
+// This walks the renderer's real state machine -- (viewport moveEnd,
+// mirrored m_moveEnd, m_previewCapMoveEnd as recorded by the last
+// rebuildPreviewCap attempt) -- through one playback session, GPU-free.
+void PrepareSceneDataTests::previewCapUploadGateArmsOnRealChangeOnly()
+{
+  // Boot state: nothing mirrored, nothing resident, moveEnd 0 is the full
+  // view -- no partial cap is drawn, so there is nothing to arm.
+  QVERIFY(!PrepareSceneData::previewCapUploadArmed(0, 0, -1));
+
+  // First frame with a partial view (fresh or recreated renderer): 0 -> 500
+  // is a REAL change even though nothing was resident yet -> arm.
+  QVERIFY(PrepareSceneData::previewCapUploadArmed(500, 0, -1));
+
+  // The renderer mirrors 500; the frame consumes the latch and the rebuild
+  // records 500. Slider parked: quiet frame after frame, no re-arm.
+  QVERIFY(!PrepareSceneData::previewCapUploadArmed(500, 500, 500));
+  QVERIFY(!PrepareSceneData::previewCapUploadArmed(500, 500, 500));
+
+  // A drag tick to 900 arms exactly once; after the mirror update and the
+  // rebuild's record, the same value is quiet again.
+  QVERIFY(PrepareSceneData::previewCapUploadArmed(900, 500, 500));
+  QVERIFY(!PrepareSceneData::previewCapUploadArmed(900, 900, 900));
+
+  // resetPreviewGpuState path (payload swap / device reset): the GPU-side
+  // cap drops (lastCapMoveEnd -> -1) while moveEnd holds still -> re-arm so
+  // the cap comes back, then settles once the re-upload recorded it.
+  QVERIFY(PrepareSceneData::previewCapUploadArmed(900, 900, -1));
+  QVERIFY(!PrepareSceneData::previewCapUploadArmed(900, 900, 900));
+
+  // Mid-flight state (latch armed, rebuild not yet run): the stale record
+  // keeps the seam armed -- this is what retries a failed buffer upload.
+  QVERIFY(PrepareSceneData::previewCapUploadArmed(900, 900, 500));
+
+  // Back to the full view: any change arms (harmless -- the render gate
+  // needs moveEnd > 0), and moveEnd 0 itself never arms.
+  QVERIFY(PrepareSceneData::previewCapUploadArmed(0, 900, 900));
+  QVERIFY(!PrepareSceneData::previewCapUploadArmed(0, 0, 900));
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

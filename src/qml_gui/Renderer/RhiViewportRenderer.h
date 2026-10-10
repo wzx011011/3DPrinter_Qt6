@@ -663,6 +663,17 @@ private:
   // P17.7: sequential-range cap (upstream SequentialRangeCap, GCodeViewer.hpp:
   // 509-520 / :3618-3690) — a quad capping the toolpath end at the current
   // move position while dragging. Rebuilt when moveEnd changes.
+  // Q3 (CAP-GATE) protocol, unit-locked via
+  // PrepareSceneData::previewCapUploadArmed in PrepareSceneDataTests:
+  // synchronize() arms m_previewCapUploadPending ONLY through that pure seam
+  // (a real moveEnd change, or a stale/missing GPU-side cap such as renderer
+  // boot or a resetPreviewGpuState after a payload swap); m_previewCapMoveEnd
+  // records the moveEnd the last rebuildPreviewCap() ATTEMPT reflects
+  // (-1 = nothing resident, set by resetPreviewGpuState); render() settles
+  // the latch once the attempt's outcome (uploaded cap, or "no cap
+  // buildable" with empty vertices) is final, and keeps it armed only to
+  // retry a failed buffer upload. Never write either flag unconditionally —
+  // that is exactly the bug this protocol replaced.
   QVector<Vertex> m_previewCapVertices;
   int m_previewCapMoveEnd = -1;
   std::unique_ptr<QRhiBuffer> m_previewCapBuffer;

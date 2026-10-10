@@ -928,6 +928,20 @@ bool PrepareSceneData::plateIconHoverTargetChanged(int oldPlate, int oldIcon,
   return targetPlate != oldPlate || targetIcon != oldIcon;
 }
 
+// ── Q3 (CAP-GATE): pure decision seam (see PrepareSceneData.h) ───────────────
+bool PrepareSceneData::previewCapUploadArmed(int newMoveEnd,
+                                             int mirroredMoveEnd,
+                                             int lastCapMoveEnd)
+{
+  // A real move-position change always re-caps. Otherwise the cap only
+  // comes back when the GPU-side state is known stale while a partial view
+  // is active (moveEnd > 0); moveEnd 0 is the full view -- no cap is drawn,
+  // so there is nothing to arm.
+  if (newMoveEnd != mirroredMoveEnd)
+    return true;
+  return newMoveEnd > 0 && lastCapMoveEnd != newMoveEnd;
+}
+
 void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();

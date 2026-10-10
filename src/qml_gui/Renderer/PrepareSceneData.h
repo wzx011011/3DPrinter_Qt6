@@ -210,6 +210,25 @@ public:
   // no-op instead of a full quad rebuild + sync-dirty latch.
   static bool plateIconHoverTargetChanged(int oldPlate, int oldIcon,
                                           bool hit, int newPlate, int newIcon);
+  // ── Q3 (CAP-GATE): pure decision seam for the preview sequential-range
+  // cap upload latch ──────────────────────────────────────────────────────
+  // RhiViewportRenderer::synchronize() must not hand-roll this condition:
+  // its former unconditional m_previewCapUploadPending = true neutered the
+  // moveEnd change detection, so every preview frame with moveEnd > 0
+  // re-ran rebuildPreviewCap's linear span scan (m_previewDrawSpans can hold
+  // millions of spans) and re-uploaded the cap buffer even with the move
+  // slider parked. The arm decision:
+  //  - newMoveEnd != mirroredMoveEnd: the viewport's move position actually
+  //    moved since the last synchronize() -> re-cap on the next frame;
+  //  - newMoveEnd > 0 && lastCapMoveEnd != newMoveEnd: the GPU-side cap is
+  //    missing or stale (renderer boot / first frame, resetPreviewGpuState
+  //    after a payload swap or device reset dropped it to -1) even though
+  //    moveEnd held still.
+  // Inputs are the renderer's mirrors: mirroredMoveEnd is the last value
+  // synchronize() stored (m_moveEnd); lastCapMoveEnd is the moveEnd the last
+  // rebuildPreviewCap() attempt reflects (-1 = nothing resident).
+  static bool previewCapUploadArmed(int newMoveEnd, int mirroredMoveEnd,
+                                    int lastCapMoveEnd);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
   // P15.1/15.2 (COLOR): full render-channel form. batchVolumeTypes values are

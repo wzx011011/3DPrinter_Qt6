@@ -32,6 +32,20 @@ void rhiTrace(const char *milestone)
   if (rhiTraceEnabled())
     qInfo("[RHI-TRACE] %s", milestone);
 }
+// Q3: the preview frame timings and the preview draw-range line are
+// diagnostics, not chatter. They used to print unconditionally during
+// playback ([RHI-PERF] every preview frame; [RHI] preview ranges on every
+// moveEnd tick), so a playback session cost a log line + string formatting
+// per frame. Default-off exactly like rhiTrace above -- deliberately an env
+// flag rather than a QLoggingCategory because main_qml.cpp REPLACES
+// QT_LOGGING_RULES at startup, which would cage a category shut with no
+// runtime escape; OWZX_RHI_PREVIEW_PERF=1 restores both lines. Callers gate
+// the qInfo itself, so a disabled run never formats the arguments.
+bool rhiPreviewPerfEnabled()
+{
+  static const bool enabled = qEnvironmentVariableIsSet("OWZX_RHI_PREVIEW_PERF");
+  return enabled;
+}
 } // namespace
 
 // Phase 209 (MIT-02 / Seam B): POD mirror of the GLSL std140 CameraBlock
@@ -496,9 +510,17 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   }
   m_layerMin = viewport->m_layerMin;
   m_layerMax = viewport->m_layerMax;
+  // Q3 (CAP-GATE): arm the sequential-range cap upload latch through the
+  // pure seam PrepareSceneData::previewCapUploadArmed -- only a REAL moveEnd
+  // change or a known-stale GPU-side cap (renderer boot, or the
+  // resetPreviewGpuState above that a payload swap just ran) arms it. The
+  // former unconditional arm neutered the change detection: every playback
+  // frame with moveEnd > 0 re-ran rebuildPreviewCap's linear span scan and
+  // re-uploaded the cap buffer even with the slider parked.
+  if (PrepareSceneData::previewCapUploadArmed(viewport->m_moveEnd, m_moveEnd,
+                                              m_previewCapMoveEnd))
+    m_previewCapUploadPending = true;
   m_moveEnd = viewport->m_moveEnd;
-  // P17.7: a moveEnd change re-caps the toolpath end on the next frame.
-  m_previewCapUploadPending = true;
   m_showTravelMoves = viewport->m_showTravelMoves;
   m_gcodeViewMode = viewport->m_gcodeViewMode;
 
@@ -917,8 +939,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   if (m_moveEnd > 0 && (m_previewCapMoveEnd != m_moveEnd
                         || m_previewCapUploadPending)) {
     rebuildPreviewCap();
-    if (!m_previewCapVertices.isEmpty()
-        && ensureBuffer(m_previewCapBuffer,
+    if (m_previewCapVertices.isEmpty()) {
+      // Q3: "no buildable cap at this moveEnd" (at/over the span count or a
+      // degenerate move) is a final decision until moveEnd moves again --
+      // rebuildPreviewCap recorded the attempt in m_previewCapMoveEnd, so
+      // settle the latch instead of re-scanning the spans every frame.
+      m_previewCapUploadPending = false;
+    } else if (ensureBuffer(m_previewCapBuffer,
                         quint32(m_previewCapVertices.size()) * sizeof(Vertex),
                         m_previewCapBufferBytes, QRhiBuffer::VertexBuffer)) {
       if (updates == nullptr)
@@ -929,6 +956,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       m_previewCapVertexCount = quint32(m_previewCapVertices.size());
       m_previewCapUploadPending = false;
     }
+    // An ensureBuffer failure (rhi not ready) deliberately keeps the latch
+    // armed: the next frame retries the upload.
   }
 
   // v5.16 (NAVIGATOR): overlay cube upload runs every frame (cached inside).
@@ -1247,9 +1276,12 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       m_previewFirstFrameMs = m_previewLastFrameMs;
       m_previewFirstFrameDone = true;
     }
-    qInfo("[RHI-PERF] preview frame=%lldms first=%lldms upload=%lldms segments=%u",
-          m_previewLastFrameMs, m_previewFirstFrameMs,
-          m_previewLastUploadMs, m_previewSegmentVertexCount / 2);
+    // Q3: default-off diagnostics (OWZX_RHI_PREVIEW_PERF=1); see
+    // rhiPreviewPerfEnabled.
+    if (rhiPreviewPerfEnabled())
+      qInfo("[RHI-PERF] preview frame=%lldms first=%lldms upload=%lldms segments=%u",
+            m_previewLastFrameMs, m_previewFirstFrameMs,
+            m_previewLastUploadMs, m_previewSegmentVertexCount / 2);
   }
 
   // v5.16 (NAVIGATOR): the bottom-left 3D navigator cube draws last, over
@@ -5668,6 +5700,11 @@ void RhiViewportRenderer::parsePreviewSegments()
 void RhiViewportRenderer::rebuildPreviewCap()
 {
   m_previewCapVertices.clear();
+  // Q3: record the attempted moveEnd up front. rebuildPreviewCap is only
+  // reached through the render gate, so "attempted" == "the GPU-side cap
+  // state now reflects this moveEnd" -- including the "no cap buildable"
+  // outcome, which must settle the gate instead of re-arming forever.
+  m_previewCapMoveEnd = m_moveEnd;
   if (m_moveEnd <= 0 || m_moveEnd >= m_previewDrawSpans.size())
     return;
   const PreviewDrawSpan *capSpan = nullptr;
@@ -5703,7 +5740,6 @@ void RhiViewportRenderer::rebuildPreviewCap()
   const Vertex c2{c1.x, c1.y, c1.z - 2.f * half, 0.18f, 0.18f, 0.18f, 1.0f};
   const Vertex c3{c0.x, c0.y, c0.z - 2.f * half, 0.18f, 0.18f, 0.18f, 1.0f};
   m_previewCapVertices = {c0, c1, c2, c0, c2, c3};
-  m_previewCapMoveEnd = m_moveEnd;
 }
 
 bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *updates)
@@ -5870,6 +5906,10 @@ QVector<RhiViewportRenderer::PreviewDrawRange> RhiViewportRenderer::computePrevi
   QVector<PreviewDrawRange> ranges;
 
   const auto logRangeIfChanged = [this](quint32 first, quint32 count, int layerLow, int layerHigh) {
+    // Q3: default-off diagnostics (OWZX_RHI_PREVIEW_PERF=1); the delta latch
+    // below keys on moveEnd, so during playback this fired once per frame.
+    if (!rhiPreviewPerfEnabled())
+      return;
     if (m_lastLoggedPreviewFirstVertex == first
         && m_lastLoggedPreviewVertexCount == count
         && m_lastLoggedPreviewLayerLow == layerLow
