@@ -1277,6 +1277,12 @@ void RhiViewport::rebuildPlateIcons()
   m_plateIconAtlasDirty = true;
   m_plateIconsSyncDirty = true;
   refreshPlateIconQuads();
+  // refreshPlateIconQuads early-returns (before buildPlateIconAtlas) when
+  // the canvas/plate context is not ready yet; building here as well keeps
+  // the atlas non-null so the renderer's first sync pull never latches an
+  // empty texture (that empty-first-pull left the column invisible until
+  // an unrelated rebuild happened to fire again).
+  buildPlateIconAtlas();
 }
 
 void RhiViewport::refreshPlateIconQuads()
@@ -2259,8 +2265,12 @@ void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
 // ONE shared depth plane and translate the target by the world delta so the
 // scene follows the cursor. Upstream unprojects both points at window z=0 --
 // the tight-frustum near plane (Camera.cpp calc_tight_frustrum_zs_around),
-// i.e. a plane PERPENDICULAR to the view direction. Qt6 mirrors that with the
-// view plane through the orbit target; the earlier bed-plane (y=0) pick
+// i.e. a plane PERPENDICULAR to the view direction at the scene front. The
+// plane choice sets the pan gain: a plane through the orbit target grabs 1:1
+// and walks the target far out of the scene (the follow-up orbit then pivots
+// on the selection center while the camera stares elsewhere -- the "axes
+// transformed" feel), while the scene-front plane keeps the delta damped and
+// scene-bounded exactly like upstream. The earlier bed-plane (y=0) pick
 // exploded at low elevation (cursor ray -> kilometers away) and made the
 // camera fly away.
 void RhiViewport::applyCameraPan()
@@ -2268,12 +2278,13 @@ void RhiViewport::applyCameraPan()
   const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
   const QMatrix4x4 mvp = cameraMvp(aspect);
   const QSizeF vp(width(), height());
+  const QVector3D referencePoint = m_camera.viewFrontPoint();
   QVector3D pressPoint;
   QVector3D currentPoint;
   if (CameraController::viewPlanePoint(mvp, vp, m_pressPosition,
-                                       m_camera.target(), &pressPoint)
+                                       referencePoint, &pressPoint)
       && CameraController::viewPlanePoint(mvp, vp, m_lastMousePosition,
-                                          m_camera.target(), &currentPoint)) {
+                                          referencePoint, &currentPoint)) {
     m_camera.translateWorld(pressPoint - currentPoint);
     m_cameraDirty = true;
     update();
@@ -2609,21 +2620,23 @@ void RhiViewport::wheelEvent(QWheelEvent *event)
   } else {
     // Upstream zoom_to_mouse (GLCanvas3D.cpp:4007-4028): displacement between
     // the cursor and the canvas center unprojected at ONE shared depth plane
-    // (upstream window z=0 = tight-frustum near plane; here the view plane
-    // through the orbit target), translate, zoom, then translate back scaled
-    // by the zoom ratio so the point under the cursor stays. The view-parallel
-    // plane keeps the displacement scene-bounded at any elevation -- the
-    // earlier bed-plane pick exploded at low elevation and flew the camera.
+    // (upstream window z=0 = tight-frustum near plane; here the scene-front
+    // plane via viewFrontPoint, matching the pan pick), translate, zoom, then
+    // translate back scaled by the zoom ratio so the point under the cursor
+    // stays. The view-parallel plane keeps the displacement scene-bounded at
+    // any elevation -- the earlier bed-plane pick exploded at low elevation
+    // and flew the camera.
     const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
     const QMatrix4x4 mvp = cameraMvp(aspect);
     const QSizeF vp(width(), height());
+    const QVector3D referencePoint = m_camera.viewFrontPoint();
     QVector3D centerPoint;
     QVector3D mousePoint;
     if (CameraController::viewPlanePoint(
             mvp, vp, QPointF(width() * 0.5, height() * 0.5),
-            m_camera.target(), &centerPoint)
+            referencePoint, &centerPoint)
         && CameraController::viewPlanePoint(mvp, vp, event->position(),
-                                            m_camera.target(), &mousePoint)) {
+                                            referencePoint, &mousePoint)) {
       const QVector3D displacement = mousePoint - centerPoint;
       m_camera.translateWorld(displacement);
       const float distanceBefore = m_camera.distance();

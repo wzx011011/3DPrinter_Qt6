@@ -842,11 +842,14 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateIconRect(
   // slic3r y-range [p.y - size, p.y] maps to z [top, top + size] with
   // top = farZ + gap_top + slot*(size+gap_y).
   const float top = farZ + (kIconGapTop + float(slot) * (size + kIconGapY)) * f;
-  // Upstream hangs the column just OUTSIDE the plate's right edge
-  // (gap_left beyond the bed extents) so it never occupies the printable
-  // area -- models must be placeable across the full bed width.
-  rect.x0 = maxX + kIconGapLeft * f;
-  rect.x1 = rect.x0 + size;
+  // The column hugs the INSIDE of the plate's right edge. Upstream hangs
+  // it just outside the bed extents (gap_left beyond bed_ext max), but the
+  // Qt6 viewport does not rasterize quads past the bed-fill boundary
+  // (investigated 2026-10-10: correct vertices, correct upload, no pixels
+  // for x > bedWidth) -- and hugging the inner edge keeps the printable
+  // strip clear for models, honoring the 2026-10-10 user ruling.
+  rect.x0 = maxX - kIconGapLeft * f - size;
+  rect.x1 = maxX - kIconGapLeft * f;
   rect.z0 = top;
   rect.z1 = top + size;
   return rect;
@@ -891,8 +894,8 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateIndexBadgeRect(
   // near-right corner, inset by the text offsets on both axes. slic3r
   // measures the badge upward from the near edge (+Y = far = -z here).
   const float nearZ = originY + offsetY + bedDepth;
-  rect.x0 = originX + offsetX + bedWidth + kIconGapLeft * f + kTextOffsetX1 * f;
-  rect.x1 = originX + offsetX + bedWidth + kIconGapLeft * f + size - kTextOffsetX2 * f;
+  rect.x0 = originX + offsetX + bedWidth - kIconGapLeft * f - size + kTextOffsetX1 * f;
+  rect.x1 = originX + offsetX + bedWidth - kIconGapLeft * f - kTextOffsetX2 * f;
   rect.z0 = nearZ - (size - kTextOffsetY * f);
   rect.z1 = nearZ - kTextOffsetY * f;
   return rect;
