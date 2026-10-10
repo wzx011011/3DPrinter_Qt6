@@ -184,20 +184,24 @@ configure_file(
 )
 
 # ─── 2. Glob source files ─────────────────────────────────────────────────────
+# CONFIGURE_DEPENDS (audit Q4): the globbed trees change out from under the
+# build whenever the patch series or the submodule pin moves — CMake re-checks
+# the globs at build time and regenerates instead of silently building a
+# stale source list until someone re-configures by hand.
 # Core libslic3r sources (from main directory)
-file(GLOB LIBSLIC3R_SOURCES
+file(GLOB LIBSLIC3R_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/*.hpp"
 )
 
 # Algorithm subdirectory
-file(GLOB LIBSLIC3R_ALGORITHM_SOURCES
+file(GLOB LIBSLIC3R_ALGORITHM_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Algorithm/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Algorithm/*.hpp"
 )
 
 # Arachne subdirectory (wall toolpaths)
-file(GLOB LIBSLIC3R_ARACHNE_SOURCES
+file(GLOB LIBSLIC3R_ARACHNE_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Arachne/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Arachne/*.hpp"
     "${LIBSLIC3R_SRC_DIR}/Arachne/BeadingStrategy/*.cpp"
@@ -207,17 +211,17 @@ file(GLOB LIBSLIC3R_ARACHNE_SOURCES
 )
 
 # CSGMesh subdirectory (header-only)
-file(GLOB LIBSLIC3R_CSGMESH_SOURCES
+file(GLOB LIBSLIC3R_CSGMESH_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/CSGMesh/*.hpp"
 )
 
 # Execution subdirectory (header-only)
-file(GLOB LIBSLIC3R_EXECUTION_SOURCES
+file(GLOB LIBSLIC3R_EXECUTION_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Execution/*.hpp"
 )
 
 # Fill subdirectory (infill patterns)
-file(GLOB LIBSLIC3R_FILL_SOURCES
+file(GLOB LIBSLIC3R_FILL_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Fill/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Fill/*.hpp"
     "${LIBSLIC3R_SRC_DIR}/Fill/Cross/*.cpp"
@@ -230,60 +234,61 @@ file(GLOB LIBSLIC3R_FILL_SOURCES
 )
 
 # Format subdirectory (file formats: 3mf, STL, OBJ, STEP, etc.)
-file(GLOB LIBSLIC3R_FORMAT_SOURCES
+file(GLOB LIBSLIC3R_FORMAT_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Format/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Format/*.hpp"
 )
 
 # GCode subdirectory (G-code generation and processing)
-file(GLOB LIBSLIC3R_GCODE_SOURCES
+file(GLOB LIBSLIC3R_GCODE_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/GCode/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/GCode/*.hpp"
 )
 
 # Geometry subdirectory (geometry utilities)
-file(GLOB LIBSLIC3R_GEOMETRY_SOURCES
+file(GLOB LIBSLIC3R_GEOMETRY_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Geometry/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Geometry/*.hpp"
 )
 
 # Interlocking subdirectory
-file(GLOB LIBSLIC3R_INTERLOCKING_SOURCES
+file(GLOB LIBSLIC3R_INTERLOCKING_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Interlocking/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Interlocking/*.hpp"
 )
 
 # Optimize subdirectory (header-only optimizers)
-file(GLOB LIBSLIC3R_OPTIMIZE_SOURCES
+file(GLOB LIBSLIC3R_OPTIMIZE_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Optimize/*.hpp"
 )
 
 # Shape subdirectory
-file(GLOB LIBSLIC3R_SHAPE_SOURCES
+file(GLOB LIBSLIC3R_SHAPE_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Shape/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Shape/*.hpp"
 )
 
 # SLA subdirectory (SLA printing support)
-file(GLOB LIBSLIC3R_SLA_SOURCES
+file(GLOB LIBSLIC3R_SLA_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/SLA/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/SLA/*.hpp"
 )
 
-# support_new subdirectory (tree supports)
-file(GLOB LIBSLIC3R_SUPPORT_SOURCES
+# Tree supports / support material. Upstream replaced the legacy support_new/
+# implementation with Support/ (the pinned baseline 0a3724ed2f has no
+# support_new/ at all). Glob both trees into ONE variable explicitly — the
+# previous double file(GLOB) onto the same variable silently discarded the
+# support_new/ result when Support/ overwrote it (audit Q4). Behavior on the
+# current pin is identical: support_new/ is empty, so only Support/ compiles.
+file(GLOB LIBSLIC3R_SUPPORT_SOURCES CONFIGURE_DEPENDS
+    "${LIBSLIC3R_SRC_DIR}/Support/*.cpp"
+    "${LIBSLIC3R_SRC_DIR}/Support/*.hpp"
     "${LIBSLIC3R_SRC_DIR}/support_new/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/support_new/*.hpp"
 )
 
-# Support subdirectory (OrcaSlicer tree/support material, replaces support_new/)
-file(GLOB LIBSLIC3R_SUPPORT_SOURCES
-    "${LIBSLIC3R_SRC_DIR}/Support/*.cpp"
-    "${LIBSLIC3R_SRC_DIR}/Support/*.hpp"
-)
-
 # Feature subdirectory (FuzzySkin, Interlocking)
-file(GLOB LIBSLIC3R_FEATURE_SOURCES
+file(GLOB LIBSLIC3R_FEATURE_SOURCES CONFIGURE_DEPENDS
     "${LIBSLIC3R_SRC_DIR}/Feature/*.cpp"
     "${LIBSLIC3R_SRC_DIR}/Feature/*.hpp"
     "${LIBSLIC3R_SRC_DIR}/Feature/FuzzySkin/*.cpp"
@@ -502,16 +507,40 @@ endif()
 
 # GMP/MPFR for CGAL
 set(GMP_INCLUDE_DIR "${DEPS_PREFIX}/include" CACHE PATH "")
-set(GMP_LIBRARIES "${DEPS_PREFIX}/lib/libgmp-10.lib" CACHE FILEPATH "")
 set(MPFR_INCLUDE_DIR "${DEPS_PREFIX}/include" CACHE PATH "")
-set(MPFR_LIBRARIES "${DEPS_PREFIX}/lib/libmpfr-4.lib" CACHE FILEPATH "")
+if(UNIX)
+    # The deps superbuild installs the static Linux names on UNIX
+    # (libgmp.a / libmpfr.a); the .lib suffixed names are the Windows
+    # import-library convention.
+    set(GMP_LIBRARIES "${DEPS_PREFIX}/lib/libgmp.a" CACHE FILEPATH "")
+    set(MPFR_LIBRARIES "${DEPS_PREFIX}/lib/libmpfr.a" CACHE FILEPATH "")
+else()
+    set(GMP_LIBRARIES "${DEPS_PREFIX}/lib/libgmp-10.lib" CACHE FILEPATH "")
+    set(MPFR_LIBRARIES "${DEPS_PREFIX}/lib/libmpfr-4.lib" CACHE FILEPATH "")
+endif()
 set(CGAL_DO_NOT_WARN_ABOUT_CMAKE_BUILD_TYPE ON CACHE BOOL "" FORCE)
 find_package(CGAL REQUIRED CONFIG)
 
 find_package(OpenCV QUIET COMPONENTS core)
+if(NOT OpenCV_FOUND AND UNIX)
+    # Ubuntu's opencv4 config lives under the multiarch lib dir; help CMake
+    # find it when CMAKE_PREFIX_PATH only points at the deps prefix.
+    find_package(OpenCV QUIET COMPONENTS core
+        PATHS /usr/lib/x86_64-linux-gnu/cmake/opencv4 /usr/local/lib/cmake/opencv4)
+endif()
 
 # ─── 4. Build embedded deps from source ─────────────────────────────────────
 include("${CMAKE_SOURCE_DIR}/cmake/BuildDepsFromSource.cmake")
+
+# OCCT install layout (used by the libslic3r targets defined below).
+# UNIX: lib/ + include/opencascade; Windows: lib/occt + include/occt.
+if(UNIX)
+    set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib")
+    set(OCCT_INC_DIR "${DEPS_PREFIX}/include/opencascade")
+else()
+    set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
+    set(OCCT_INC_DIR "${DEPS_PREFIX}/include/occt")
+endif()
 
 # Create aliases with _imported suffix for compatibility
 add_library(admesh_imported ALIAS admesh_from_source)
@@ -590,9 +619,11 @@ target_compile_definitions(libslic3r_cgal_from_source PRIVATE
     _USE_MATH_DEFINES
     NOMINMAX
     BOOST_ALL_NO_LIB
-    BOOST_USE_WINAPI_VERSION=0x602
     BOOST_SYSTEM_USE_UTF8
 )
+if(MSVC)
+    target_compile_definitions(libslic3r_cgal_from_source PRIVATE BOOST_USE_WINAPI_VERSION=0x602)
+endif()
 
 target_include_directories(libslic3r_cgal_from_source PRIVATE
     "${LIBSLIC3R_SRC_DIR}"
@@ -601,7 +632,8 @@ target_include_directories(libslic3r_cgal_from_source PRIVATE
     # TexturePainting.cpp (upstream 0a3724ed2f) includes Model.hpp, whose
     # Format/STEP.hpp chain pulls OCCT headers (XCAFDoc_DocumentTool.hxx).
     # The main target gets this path via its SYSTEM PUBLIC block below.
-    "${DEPS_PREFIX}/include/occt"
+    # Windows installs <inc>/occt, UNIX <inc>/opencascade.
+    "${OCCT_INC_DIR}"
 )
 
 # Get CGAL target for linking
@@ -641,6 +673,13 @@ target_include_directories(libslic3r_cgal_from_source SYSTEM PRIVATE
     ${_cgal_inc}
 )
 
+# TexturePainting/TextureToColor include opencv2 headers directly; the
+# deps-tree OpenCV is Windows-only, so on UNIX consume the system OpenCV.
+if(OpenCV_FOUND)
+    target_include_directories(libslic3r_cgal_from_source SYSTEM PRIVATE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(libslic3r_cgal_from_source PRIVATE ${OpenCV_LIBS})
+endif()
+
 target_link_libraries(libslic3r_cgal_from_source PRIVATE
     ${_cgal_tgt}
     Eigen3::Eigen
@@ -674,21 +713,28 @@ target_compile_definitions(libslic3r_from_source PUBLIC
     USE_TBB
     TBB_USE_CAPTURED_EXCEPTION=0
     _USE_MATH_DEFINES
-    _WIN32
-    _WIN32_WINNT=0x0601
     BOOST_ALL_NO_LIB
-    BOOST_USE_WINAPI_VERSION=0x602
     BOOST_SYSTEM_USE_UTF8
-    _CRT_SECURE_NO_WARNINGS
-    _SCL_SECURE_NO_WARNINGS
     NOMINMAX
-    # Mirrors upstream libslic3r defs (baseline 0a3724ed2f): the empty value
-    # matches sources that define WIN32_LEAN_AND_MEAN themselves
-    # (BlacklistedLibraryCheck.hpp includes windows.h).
-    WIN32_LEAN_AND_MEAN=
-    UNICODE
-    _UNICODE
 )
+# Windows-only definitions. _WIN32 on g++/oneTBB pulls intrin.h/ntverp.h
+# (MSVC-only headers) and breaks the build; UNICODE/_CRT_* are MSVC CRT
+# silencers with no meaning on gcc.
+if(MSVC)
+    target_compile_definitions(libslic3r_from_source PUBLIC
+        _WIN32
+        _WIN32_WINNT=0x0601
+        BOOST_USE_WINAPI_VERSION=0x602
+        _CRT_SECURE_NO_WARNINGS
+        _SCL_SECURE_NO_WARNINGS
+        # Mirrors upstream libslic3r defs (baseline 0a3724ed2f): the empty value
+        # matches sources that define WIN32_LEAN_AND_MEAN themselves
+        # (BlacklistedLibraryCheck.hpp includes windows.h).
+        WIN32_LEAN_AND_MEAN=
+        UNICODE
+        _UNICODE
+    )
+endif()
 
 # Include directories
 target_include_directories(libslic3r_from_source
@@ -709,11 +755,17 @@ target_include_directories(libslic3r_from_source SYSTEM PUBLIC
     ${Boost_INCLUDE_DIRS}
     ${_cgal_inc}
     ${EXPAT_INCLUDE_DIRS}
-    "${DEPS_PREFIX}/include/occt"
+    "${OCCT_INC_DIR}"
     # AssimpImport.cpp (upstream 0a3724ed2f) includes <assimp/*>; the
     # assimp_from_source imported target ships no interface include dir.
     "${DEPS_PREFIX}/include"
 )
+# UNIX: the deps tree carries no assimp; AssimpImport.cpp needs its headers
+# — consume the distro package (libassimp-dev) when present.
+if(UNIX AND EXISTS "/usr/include/assimp/Importer.hpp")
+    target_include_directories(libslic3r_from_source SYSTEM PUBLIC /usr/include)
+    target_link_libraries(libslic3r_from_source PUBLIC assimp)
+endif()
 
 # Link header-only INTERFACE targets — their SYSTEM INTERFACE include dirs
 # propagate automatically to libslic3r_from_source and all consumers.
@@ -739,7 +791,15 @@ set(OCCT_LIBS
     TKBRep       TKGeomBase   TKG3d        TKG2d        TKMath
     TKernel
 )
-set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
+if(UNIX)
+    # The deps superbuild installs OCCT into lib/ on UNIX (no occt/ subdir),
+    # and its headers into include/opencascade (Windows: lib/occt, inc/occt).
+    set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib")
+    set(OCCT_INC_DIR "${DEPS_PREFIX}/include/opencascade")
+else()
+    set(OCCT_LIB_DIR "${DEPS_PREFIX}/lib/occt")
+    set(OCCT_INC_DIR "${DEPS_PREFIX}/include/occt")
+endif()
 
 # OCCT DLLs: loaded normally like upstream (no delay-load).
 # Upstream links OCCT directly; DLLs are copied to the output directory.
@@ -821,17 +881,34 @@ if(TARGET cr_tpms_imported)
 endif()
 
 # ─── 7.5 OCCT (OpenCASCADE) libraries ────────────────────────────────────────
-# Link OCCT libraries with full paths for STEP/SVG import
+# Link OCCT libraries with full paths for STEP/SVG import. Linux installs
+# lib<name>.a, Windows <name>.lib.
 foreach(_occt_lib ${OCCT_LIBS})
-    target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/${_occt_lib}.lib")
+    if(UNIX)
+        target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/lib${_occt_lib}.a")
+    else()
+        target_link_libraries(libslic3r_from_source PUBLIC "${OCCT_LIB_DIR}/${_occt_lib}.lib")
+    endif()
 endforeach()
 
 # Platform-specific libraries
 if(WIN32)
     target_link_libraries(libslic3r_from_source PUBLIC Psapi.lib bcrypt.lib Crypt32.lib)
 endif()
+if(UNIX)
+    # OCCT's TKService (Font_FontMgr) references fontconfig. GNU ld resolves
+    # DSO symbols in a single left-to-right pass, so the DSO must appear
+    # AFTER the static archive that needs it — attach it here (this target
+    # precedes the OCCT archives on every consumer's link line).
+    target_link_libraries(libslic3r_from_source PUBLIC fontconfig freetype)
+endif()
 
 if(OpenCV_FOUND)
+    # ${OpenCV_LIBS} carries imported targets with their include dirs, but
+    # header resolution happens at compile time for TUs that include
+    # opencv2 headers directly (ObjColorUtils.hpp et al) — make the include
+    # dir explicit for the whole consumer chain.
+    target_include_directories(libslic3r_from_source SYSTEM PUBLIC ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(libslic3r_from_source PUBLIC ${OpenCV_LIBS})
 endif()
 
