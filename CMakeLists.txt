@@ -87,78 +87,12 @@ if(BUILD_LIBSLIC3R)
     endif()
 endif()
 
-# ── OpenVDB unlock (Phase 142 / VDB-01) ───────────────────────────────────
-# Corrects the v4.x "OpenVDB unavailable" premise. OpenVDB IS built and present
-# in DEPS_PREFIX (lib/libopenvdb.lib 55MB + include/openvdb/ + bundled
-# FindOpenVDB.cmake + lib/libblosc.lib). The v4.x fork dropped the upstream
-# find_package(OpenVDB) call and renamed the gating target to `openvdb_libs`,
-# but no file ever created that target — so the gating in
-# cmake/BuildLibslic3rFromSource.cmake:366,718 was always false. This block
-# wires OpenVDB and creates the `openvdb_libs` alias target so those existing
-# gates activate automatically (mirrors upstream OrcaSlicer/CMakeLists.txt:754-767).
-#
-# IMPORTANT: this block runs AFTER libslic3r-from-source so the libslic3r TBB
-# import has already happened (avoids the "Some targets already defined" export
-# conflict when OpenVDB's transitive TBB dependency re-imports TBB). The
-# libslic3r_from_source target must already exist; we append OpenVDB to its
-# link line via the existing `if(TARGET openvdb_libs)` gate in
-# BuildLibslic3rFromSource.cmake:718 (which now evaluates true).
-if(OWZX_ENABLE_OPENVDB)
-set(OPENVDB_USE_STATIC_LIBS ON)
-set(USE_BLOSC TRUE)
-# Make the upstream FindOpenVDB.cmake + OpenVDBUtils.cmake discoverable. The
-# bundled module lives at ${DEPS_PREFIX}/lib/cmake/OpenVDB/ (from the OrcaSlicer
-# deps superbuild) and is also vendored at the OrcaSlicer source tree.
-list(APPEND CMAKE_MODULE_PATH
-    "${DEPS_PREFIX}/lib/cmake/OpenVDB"
-    "${OWZX_UPSTREAM_ROOT}/cmake/modules")
-# The FindOpenVDB.cmake module uses OpenVDB_ROOT / OPENVDB_ROOT / OPENVDB_LIBRARYDIR
-# (not CMAKE_PREFIX_PATH) to locate the library binary. Set them explicitly so
-# libopenvdb.lib in DEPS_PREFIX/lib resolves. libblosc.lib is in the same dir.
-set(OpenVDB_ROOT "${DEPS_PREFIX}" CACHE PATH "OpenVDB install root" FORCE)
-set(OPENVDB_ROOT "${DEPS_PREFIX}" CACHE PATH "OpenVDB install root" FORCE)
-set(OPENVDB_LIBRARYDIR "${DEPS_PREFIX}/lib" CACHE PATH "OpenVDB library dir" FORCE)
-find_package(OpenVDB 5.0 COMPONENTS openvdb)
-if(OpenVDB_FOUND)
-    message(STATUS "OpenVDB found (Phase 142 unlock) — version ${OpenVDB_VERSION}")
-    # Map RelWithDebInfo → Release for the imported OpenVDB/Blosc/Half configs so
-    # a Release-built OpenVDB links cleanly into our Release app (no missing
-    # RelWithDebInfo import). Mirrors upstream slic3r_remap_configs behavior.
-    if(MSVC)
-        foreach(_ovdb_tgt OpenVDB::openvdb IlmBase::Half Blosc::blosc)
-            if(TARGET ${_ovdb_tgt})
-                set_target_properties(${_ovdb_tgt} PROPERTIES
-                    MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release
-                    MAP_IMPORTED_CONFIG_MINSIZEREL Release)
-            endif()
-        endforeach()
-    endif()
-    # Create the alias the existing BuildLibslic3rFromSource.cmake gates expect.
-    # ALIAS targets cannot point at another alias; use a thin INTERFACE imported
-    # shim that re-exports OpenVDB::openvdb's interface so the existing
-    # `if(TARGET openvdb_libs)` checks AND `target_link_libraries(... openvdb_libs)`
-    # both work. If libslic3r_from_source already exists, also append the link
-    # directly (the gate at BuildLibslic3rFromSource.cmake:718 ran before this
-    # block, so it evaluated false; we add the link here as a follow-up).
-    if(TARGET openvdb_libs)
-        message(STATUS "openvdb_libs target already exists — skipping alias creation")
-    elseif(TARGET OpenVDB::openvdb)
-        add_library(openvdb_libs INTERFACE IMPORTED)
-        set_target_properties(openvdb_libs PROPERTIES
-            INTERFACE_LINK_LIBRARIES "OpenVDB::openvdb")
-        message(STATUS "openvdb_libs INTERFACE shim created → OpenVDB::openvdb")
-        # Late-bind the link line: BuildLibslic3rFromSource.cmake:718 gate already
-        # evaluated to false (this block runs after include()). Add the link here.
-        if(TARGET libslic3r_from_source)
-            target_link_libraries(libslic3r_from_source PUBLIC openvdb_libs)
-            message(STATUS "Linked openvdb_libs → libslic3r_from_source (late bind)")
-        endif()
-    endif()
-else()
-    message(WARNING "OpenVDB NOT found — Hollow/SLA features stay gated off. "
-                    "Phase 142 could not locate OpenVDB in DEPS_PREFIX or the bundled find module.")
-endif()
-endif()
+# OpenVDB unlock (Phase 142 / VDB-01) removed 2026-10-11 (audit Q4): the
+# OWZX_ENABLE_OPENVDB gate had no option()/set() declaration anywhere in the
+# repo, so this 56-line block was unreachable dead code that could never
+# activate the `openvdb_libs` gates in BuildLibslic3rFromSource.cmake.
+# If OpenVDB support is ever actually wanted, re-introduce it behind a real
+# option(OWZX_ENABLE_OPENVDB OFF) next to the other project options.
 
 if(OWZX_QML_GUI)
     if(NOT BUILD_LIBSLIC3R)
@@ -444,6 +378,17 @@ if(OWZX_QML_GUI)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_link_libraries(owzx_app_core PUBLIC libslic3r)
     endif()
+    if(UNIX AND NOT APPLE)
+        # OCCT's TKService (Font_FontMgr) and Qt's xcb plugin both reference
+        # fontconfig; as a shared DSO it must appear on every link line that
+        # pulls those static archives. Qt6Gui's freetype is the same story.
+        find_package(Freetype QUIET)
+        if(TARGET Freetype::Freetype)
+            target_link_libraries(owzx_app_core PUBLIC fontconfig Freetype::Freetype)
+        else()
+            target_link_libraries(owzx_app_core PUBLIC fontconfig freetype)
+        endif()
+    endif()
 
     # ── 主程序 ────────────────────────────────────────────────────────────
     # QML resources are split per area so a QML edit only re-embeds (and
@@ -461,6 +406,14 @@ if(OWZX_QML_GUI)
     target_link_libraries(OWzxSlicer PRIVATE
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Svg
     )
+    if(UNIX AND NOT APPLE)
+        # Qt's xcb platform plugin drags fontconfig in as a DSO; the static
+        # qrc TU pulling Qt Gui symbols makes ld require it explicitly. The
+        # direct OCCT static archives in this link line also reference it
+        # (TKService Font_FontMgr) — PUBLIC propagation does not cross the
+        # INTERFACE libslic3r boundary, so link both here as well.
+        target_link_libraries(OWzxSlicer PRIVATE fontconfig freetype)
+    endif()
     # NOTE: Qt6::WebEngineQuick/Qt6::WebChannel are intentionally NOT linked
     # into the exe. The WebEngine DLLs load dynamically via the QtWebEngine
     # QML plugin (and QLibrary in main); statically importing them made the
@@ -494,7 +447,13 @@ if(OWZX_QML_GUI)
         endif()
     # v2.8 P2-C: libcurl(OpenSSL) 与 paho-mqtt 都带静态 SHA1 实现 → LNK2005。
     # /FORCE:MULTIPLE 让链接器取第一个定义（paho 的 SHA1 先链接），忽略后续重复。
-    target_link_options(OWzxSlicer PRIVATE /FORCE:MULTIPLE)
+    # MSVC-only flag — guarded so non-MSVC toolchains (gcc/clang) get the
+    # equivalent GNU ld duplicate-symbol tolerance instead (audit Q4).
+    if(MSVC)
+        target_link_options(OWzxSlicer PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(OWzxSlicer PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     endif()
     foreach(_runtime_dll freetype.dll libmpfr-4.dll libgmp-10.dll qhull.dll qhull_p.dll qhull_r.dll)
         if(EXISTS "${DEPS_PREFIX}/bin/${_runtime_dll}")
@@ -590,7 +549,12 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(E2EWorkflowTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
-    target_link_options(E2EWorkflowTests PRIVATE /FORCE:MULTIPLE)
+    # Same shared-SHA1 duplicate definitions as OWzxSlicer above (audit Q4).
+    if(MSVC)
+        target_link_options(E2EWorkflowTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(E2EWorkflowTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     add_test(NAME E2EWorkflowTests COMMAND E2EWorkflowTests)
     set_tests_properties(E2EWorkflowTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -609,7 +573,11 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
-    target_link_options(ViewModelSmokeTests PRIVATE /FORCE:MULTIPLE)
+    if(MSVC)
+        target_link_options(ViewModelSmokeTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(ViewModelSmokeTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     add_test(NAME ViewModelSmokeTests COMMAND ViewModelSmokeTests)
     set_tests_properties(ViewModelSmokeTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -624,7 +592,11 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_compile_definitions(AppToolTests PRIVATE
         QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
     )
-    target_link_options(AppToolTests PRIVATE /FORCE:MULTIPLE)
+    if(MSVC)
+        target_link_options(AppToolTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(AppToolTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     add_test(NAME AppToolTests COMMAND AppToolTests)
     set_tests_properties(AppToolTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -751,7 +723,11 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(ViewportContextMenuTests PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Test
     )
-    target_link_options(ViewportContextMenuTests PRIVATE /FORCE:MULTIPLE)
+    if(MSVC)
+        target_link_options(ViewportContextMenuTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(ViewportContextMenuTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     add_test(NAME ViewportContextMenuTests COMMAND ViewportContextMenuTests)
     set_tests_properties(ViewportContextMenuTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -789,7 +765,11 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_compile_definitions(PartPlateTests PRIVATE
         QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
     )
-    target_link_options(PartPlateTests PRIVATE /FORCE:MULTIPLE /SUBSYSTEM:CONSOLE)
+    if(MSVC)
+        target_link_options(PartPlateTests PRIVATE /FORCE:MULTIPLE /SUBSYSTEM:CONSOLE)
+    else()
+        target_link_options(PartPlateTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     add_test(NAME PartPlateTests COMMAND PartPlateTests)
     set_tests_properties(PartPlateTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -839,7 +819,11 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_compile_definitions(PreviewParserTests PRIVATE
         QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
     )
-    target_link_options(PreviewParserTests PRIVATE /FORCE:MULTIPLE)
+    if(MSVC)
+        target_link_options(PreviewParserTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(PreviewParserTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
     add_test(NAME PreviewParserTests COMMAND PreviewParserTests)
     set_tests_properties(PreviewParserTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
@@ -857,7 +841,11 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
     target_link_libraries(PerfBench PRIVATE owzx_app_core
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
-    target_link_options(PerfBench PRIVATE /FORCE:MULTIPLE)
+    if(MSVC)
+        target_link_options(PerfBench PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(PerfBench PRIVATE -Wl,--allow-multiple-definition)
+    endif()
 
 endif()
 
