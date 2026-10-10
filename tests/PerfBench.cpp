@@ -265,8 +265,15 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     qInfo("[BENCH] %-24s %8.1f ms | mem=%8.1f MiB", "slice_total",
           double(sliceMs), memAfterSlice);
 
-    // Preview parse stage: the GUI-thread gcode re-parse after each slice.
     const QString gcodePath = sliceService.outputPath();
+    if (!gcodePath.isEmpty() && QFileInfo::exists(gcodePath)) {
+      // Signals consumed by the slice regression gate (scripts/perf/run_slice_gate.ps1).
+      modelReport[QStringLiteral("slice_gcode_bytes")] =
+          double(QFileInfo(gcodePath).size());
+      modelReport[QStringLiteral("slice_output_path")] = gcodePath;
+    }
+
+    // Preview parse stage: the GUI-thread gcode re-parse after each slice.
     if (!gcodePath.isEmpty() && QFileInfo::exists(gcodePath)) {
       PreviewViewModel preview(&projectService, &sliceService);
       timer.start();

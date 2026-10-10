@@ -24,5 +24,6 @@ Screenshot-driven UI milestones use screenshots as visual/layout truth and OrcaS
 
 每次做了与下列测试相关的改动后，必须重新运行对应自测，且效果不得倒退：
 
-- **主流程自测**（canonical verify gate）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`。凡改动 C++/QML 源码、测试或构建脚本后都要跑；12 套件必须 0 failed。
+- **主流程自测**（canonical verify gate）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/auto_verify_with_vcvars.ps1`。凡改动 C++/QML 源码、测试或构建脚本后都要跑；12 套件必须 0 failed，且切片回归门禁（触发条件下自动加跑，见下）必须绿。
+- **切片回归门禁**（slice regression gate，内嵌于 canonical verify，自动触发）：当未提交改动或自上次绿门禁以来的提交触碰到切片链路面（SliceService / PreviewViewModel / EditorViewModel / `src/cli/*` / ProjectServiceMock / PresetServiceMock / OrcaSlicer 子模块指针 / PerfBench.cpp / 门禁自身文件）时，verify 末尾自动运行 `scripts/perf/run_slice_gate.ps1`。正确性层 = `owzx-cli` 钉死配置切基准模型后经 `tools/gcode_compare.py` 归一化，与 `tests/data/slice_gate_baseline.json` 黄金基线逐字段硬比对（退化即 verify 失败）；效率层 = PerfBench 切片档 min-of-N 对比基线阈值（slice_ms +25% / preview_parse_ms +10%，超阈自动复测一轮）。`OWZX_SLICE_GATE=0` 跳过，`=force` 强跑；有意变更切片输出后用 `-UpdateBaseline` 重新建金并连同改动一起提交。详见 `.codex/rules/build-rules.md`。
 - **效率自测**（stage benchmark）：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf/run_stage_bench.ps1`。凡改动模型加载、meshData、场景展开、拾取、切片、预览解析或渲染提交路径后都要跑；各阶段耗时与基线（docs/perf-baseline.md）相比不得出现超出噪声（~10%）的回退，基线由 `build/perf_out/stage_report.json` 更新。

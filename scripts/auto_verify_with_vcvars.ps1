@@ -185,7 +185,7 @@ Stop-Process -Name 'E2EWorkflowTests', 'ViewModelSmokeTests', 'PrepareSceneDataT
     'ObjectPickingTests', 'NavigatorCubeTests', 'CameraParityTests',
     'ViewportContextMenuTests', 'QmlUiAuditTests', 'PartPlateTests', 'AppToolTests',
     'PreviewParserTests', 'GizmoGeometryTests', 'CliTests', 'owzx-cli',
-    'owzx-render-bench' -Force -ErrorAction SilentlyContinue
+    'owzx-render-bench', 'PerfBench' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
 $defaultUpstreamRoot = Join-Path $repoRoot 'third_party\OrcaSlicer'
@@ -692,6 +692,84 @@ if (Test-Path $e2eExe) {
   }
 } else {
   Write-Host "[E2E] E2EPipelineTests.exe not found, skipping" -ForegroundColor DarkGray
+}
+
+# ── Slice regression gate (conditional: fires only when slicing code changed) ──
+# Runs scripts/perf/run_slice_gate.ps1 when uncommitted changes or the commits
+# since the last green gate run touch the slicing surface (list below).
+# Correctness = normalized golden-gcode compare (hard fail, exit 1); efficiency
+# = PerfBench slice min-of-N vs baseline thresholds (hard fail, exit 2).
+# OWZX_SLICE_GATE=0 skips; OWZX_SLICE_GATE=force runs regardless of the diff.
+$sliceGateSurface = @(
+  'src/core/services/SliceService.*',
+  'src/core/services/ProjectServiceMock.*',
+  'src/core/services/PresetServiceMock.*',
+  'src/core/viewmodels/PreviewViewModel.*',
+  'src/core/viewmodels/EditorViewModel.cpp',
+  'src/cli/*',
+  'third_party/OrcaSlicer',
+  'tests/PerfBench.cpp',
+  'tests/CliTests.cpp',
+  'tools/gcode_compare.py',
+  'scripts/perf/*',
+  'scripts/auto_verify_with_vcvars.ps1',
+  'tests/data/slice_gate_baseline.json'
+)
+$sliceGateStatePath = Join-Path $buildDir 'perf_out\slice_gate_state.json'
+$sliceGateScript = Join-Path $repoRoot 'scripts\perf\run_slice_gate.ps1'
+
+if ($env:OWZX_SLICE_GATE -eq '0') {
+  Write-Stage 'SliceGate' 'OWZX_SLICE_GATE=0 -- slice regression gate skipped by explicit override'
+} elseif (-not (Test-Path $sliceGateScript)) {
+  Write-Host '[SliceGate] run_slice_gate.ps1 not found, skipping' -ForegroundColor DarkGray
+} else {
+  $sliceGateReason = $null
+  if ($env:OWZX_SLICE_GATE -eq 'force') {
+    $sliceGateReason = 'OWZX_SLICE_GATE=force'
+  } else {
+    $dirtySliceFiles = @(git -C $repoRoot status --porcelain -- $sliceGateSurface 2>$null)
+    if ($dirtySliceFiles.Count -gt 0) {
+      $sliceGateReason = ('uncommitted slice-surface change: ' + ($dirtySliceFiles[0] -replace '^\S+\s+', ''))
+    } else {
+      $sliceStateCommit = $null
+      if (Test-Path $sliceGateStatePath) {
+        try { $sliceStateCommit = (Get-Content $sliceGateStatePath -Raw | ConvertFrom-Json).commit } catch { $sliceStateCommit = $null }
+      }
+      $sliceStateValid = $false
+      if ($sliceStateCommit) {
+        git -C $repoRoot cat-file -e "$sliceStateCommit^{commit}" 2>$null
+        if ($LASTEXITCODE -eq 0) { $sliceStateValid = $true }
+      }
+      if (-not $sliceStateValid) {
+        $sliceGateReason = 'first run (no valid gate state recorded yet)'
+      } else {
+        $committedSliceFiles = @(git -C $repoRoot diff --name-only "$sliceStateCommit..HEAD" -- $sliceGateSurface 2>$null)
+        if ($committedSliceFiles.Count -gt 0) {
+          $sliceGateReason = ('committed slice-surface change since ' + $sliceStateCommit + ': ' + $committedSliceFiles[0])
+        }
+      }
+    }
+  }
+
+  if ($sliceGateReason) {
+    Write-Stage 'SliceGate' ("triggered -- " + $sliceGateReason)
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $sliceGateScript
+    $sliceGateExit = $LASTEXITCODE
+    if ($sliceGateExit -ne 0) {
+      Fail-Stage 'SliceGate' ("slice regression gate failed (exit " + $sliceGateExit + ": 1=correctness, 2=efficiency, 3=infra) -- see build\perf_out\slice_gate_report.json and tests\data\slice_gate_baseline.json")
+    }
+    $headCommitNow = (git -C $repoRoot rev-parse --short HEAD 2>$null)
+    if ($headCommitNow) {
+      $headCommitNow = $headCommitNow.Trim()
+      $gateStateDir = Split-Path -Parent $sliceGateStatePath
+      if (-not (Test-Path $gateStateDir)) { New-Item -ItemType Directory -Force -Path $gateStateDir | Out-Null }
+      @{ commit = $headCommitNow; passed_at_utc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') } |
+        ConvertTo-Json | Set-Content -Path $sliceGateStatePath
+      Write-Host ("[SliceGate] green at commit " + $headCommitNow) -ForegroundColor Green
+    }
+  } else {
+    Write-Host '[SliceGate] no slice-surface changes since last green run -- skipping slice regression gate' -ForegroundColor DarkGray
+  }
 }
 
 # ── Reclaim disk: PDBs are regenerable build artifacts ──

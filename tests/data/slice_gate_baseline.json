@@ -1,0 +1,80 @@
+{
+    "version":  1,
+    "established_at_utc":  "2026-10-10T13:07:13Z",
+    "established_from_commit":  "80f6e55",
+    "pins":  {
+                 "layer_height":  0.15
+             },
+    "models":  {
+                   "sphere_400k":  {
+                                       "stl":  "build/perf_models/bench_sphere_400k.stl",
+                                       "normalized_sha256":  "cc719aa5069cda5ddbe60b5bc4efc10dfacbc1061702bf58a5cfffda925368f5",
+                                       "normalized_line_count":  1411747,
+                                       "layer_changes":  334,
+                                       "commands":  {
+                                                        "G1":  1381757,
+                                                        "G21":  1,
+                                                        "G28":  1,
+                                                        "G4":  1,
+                                                        "G90":  2,
+                                                        "G92":  671,
+                                                        "M104":  3,
+                                                        "M106":  3,
+                                                        "M107":  1,
+                                                        "M109":  1,
+                                                        "M140":  2,
+                                                        "M190":  1,
+                                                        "M201":  1,
+                                                        "M203":  1,
+                                                        "M204":  18174,
+                                                        "M205":  1,
+                                                        "M73":  1381,
+                                                        "M83":  2,
+                                                        "M84":  1,
+                                                        "M900":  1
+                                                    },
+                                       "total_e":  5492.73505,
+                                       "size_bytes":  38803607
+                                   },
+                   "block_20xy":  {
+                                      "stl":  "tests/test_models/Block20XY.stl",
+                                      "normalized_sha256":  "42584ab8dbcf00503123c1e53fc9efcba945aa9528d5e476d824813d7975e853",
+                                      "normalized_line_count":  46834,
+                                      "layer_changes":  134,
+                                      "commands":  {
+                                                       "G1":  41160,
+                                                       "G21":  1,
+                                                       "G28":  1,
+                                                       "G4":  1,
+                                                       "G90":  2,
+                                                       "G92":  271,
+                                                       "M104":  3,
+                                                       "M106":  3,
+                                                       "M107":  1,
+                                                       "M109":  1,
+                                                       "M140":  2,
+                                                       "M190":  1,
+                                                       "M201":  1,
+                                                       "M203":  1,
+                                                       "M204":  2652,
+                                                       "M205":  1,
+                                                       "M73":  161,
+                                                       "M83":  2,
+                                                       "M84":  1,
+                                                       "M900":  1
+                                                   },
+                                      "total_e":  5256.67335,
+                                      "size_bytes":  1114010
+                                  }
+               },
+    "timing":  {
+                   "repeats":  3,
+                   "slice_ms_min":  1548,
+                   "preview_parse_ms_min":  779,
+                   "slice_gcode_bytes":  10579358,
+                   "max_regression_pct":  {
+                                              "slice_ms":  25,
+                                              "preview_parse_ms":  10
+                                          }
+               }
+}

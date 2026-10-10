@@ -90,3 +90,18 @@ AGENTS.md「Self-Test Standing Rules」：任何影响加载、网格序列化�
 拾取、切片或 preview 解析的改动，合并前必须重跑本基准；**稳定锚点指标**
 相对本文件基线回退超过 ~10% 视为回归，需定位或显式记录原因；易变墙钟
 指标只有在与稳定锚点同向恶化且复测复现时才判回归。
+
+## 切片回归门禁（自动门禁，2026-10-10 起）
+
+切片效率与正确性已升级为**自动门禁**（`scripts/perf/run_slice_gate.ps1`，
+内嵌于 canonical verify 末尾，触碰切片链路面时自动触发，规则详见
+`.codex/rules/build-rules.md`）：
+
+- **正确性**：`owzx-cli` 钉死配置（layer 0.2 / auto 线宽）切
+  `bench_sphere_400k.stl` + `Block20XY.stl`，gcode 经
+  `tools/gcode_compare.py --summarize` 归一化（去时间戳/缩略图/路径），
+  与 `tests/data/slice_gate_baseline.json` 黄金基线逐字段硬比对。
+- **效率**：本文件的 `slice_ms` / `preview_parse_ms` 行对应的机器可读
+  真值迁移至 `tests/data/slice_gate_baseline.json` 的 `timing` 节
+  （min-of-N + 阈值 25% / 10% + 超阈自动复测一轮）；本文件表格保留为
+  历史叙述与全阶段基线，两处不一致时以门禁基线 JSON 为准。

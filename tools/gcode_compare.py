@@ -34,9 +34,14 @@ NON_DETERMINISTIC_COMMENT_PATTERNS = [
     re.compile(r"^;\s*total\s+elapsed\s+time\b", re.IGNORECASE),
     re.compile(r"^;\s*filament\s+cost\b", re.IGNORECASE),
     re.compile(r"^;\s*nozzle_temperature\s*=", re.IGNORECASE),
+    # Object-labeling markers (M486 exclude-object): the object id is a
+    # libslic3r-internal counter that varies across process runs, and the
+    # embedded source path varies across machines -- the G-code between the
+    # markers carries the real content, so the markers themselves are dropped.
+    re.compile(r"^;\s*(stop\s+)?printing\s+object\b", re.IGNORECASE),
 ]
 
-ABSOLUTE_PATH_PATTERN = re.compile(r"([A-Za-z]:\\|/home/|/Users/|/tmp/|\\\\)")
+ABSOLUTE_PATH_PATTERN = re.compile(r"([A-Za-z]:[\\/]|/home/|/Users/|/tmp/|\\\\)")
 COMMAND_PATTERN = re.compile(r"^([GMT]\d+)\b", re.IGNORECASE)
 EXTRUSION_PATTERN = re.compile(r"(?:^|\s)E(-?\d+(?:\.\d+)?)\b", re.IGNORECASE)
 TEMP_COMMANDS = {"M104", "M109", "M140", "M190", "M141", "M191"}
@@ -124,6 +129,32 @@ def _sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def summarize_file(path: Path) -> dict[str, object]:
+    """Emit the stable regression-gate signals for a single G-code file.
+
+    Everything here must be reproducible for identical slicer input + config:
+    raw size/hash wobble only via the stripped non-deterministic lines, so the
+    gate hard-compares normalized_sha256 / line count / semantic counts and
+    treats size as informational (path lengths leak into raw bytes).
+    """
+
+    data = path.read_bytes()
+    text = data.decode("utf-8", errors="replace")
+    normalized = normalize_gcode_text(text)
+    summary = semantic_summary(normalized)
+
+    return {
+        "file": str(path),
+        "size_bytes": len(data),
+        "raw_sha256": _sha256_bytes(data),
+        "normalized_sha256": _sha256_bytes("\n".join(normalized).encode("utf-8")),
+        "normalized_line_count": len(normalized),
+        "layer_changes": summary["layer_changes"],
+        "commands": summary["commands"],
+        "total_e": summary["total_e"],
+    }
+
+
 def compare_files(expected_path: Path, actual_path: Path) -> dict[str, object]:
     expected_bytes = expected_path.read_bytes()
     actual_bytes = actual_path.read_bytes()
@@ -159,15 +190,44 @@ def compare_files(expected_path: Path, actual_path: Path) -> dict[str, object]:
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Compare two G-code files.")
-    parser.add_argument("--expected", required=True, type=Path, help="Upstream/source-truth G-code path")
-    parser.add_argument("--actual", required=True, type=Path, help="OWzx G-code path")
-    parser.add_argument("--report", required=True, type=Path, help="JSON report output path")
+    parser = argparse.ArgumentParser(description="Compare or summarize G-code files.")
+    parser.add_argument(
+        "--summarize",
+        type=Path,
+        default=None,
+        help="Single-file mode: emit stable gate signals as JSON (no comparison)",
+    )
+    parser.add_argument("--expected", type=Path, default=None, help="Upstream/source-truth G-code path")
+    parser.add_argument("--actual", type=Path, default=None, help="OWzx G-code path")
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="JSON report output path (required for compare mode; stdout default in summarize mode)",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv or sys.argv[1:])
+
+    if args.summarize is not None:
+        if not args.summarize.is_file():
+            print(f"G-code not found: {args.summarize}", file=sys.stderr)
+            return 2
+        summary = summarize_file(args.summarize)
+        payload = json.dumps(summary, indent=2, ensure_ascii=False)
+        if args.report is not None:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(payload, encoding="utf-8")
+            print(f"Summary written: {args.report}")
+        else:
+            print(payload)
+        return 0
+
+    if args.expected is None or args.actual is None or args.report is None:
+        print("compare mode requires --expected, --actual and --report", file=sys.stderr)
+        return 2
 
     if not args.expected.is_file():
         print(f"Expected G-code not found: {args.expected}", file=sys.stderr)
