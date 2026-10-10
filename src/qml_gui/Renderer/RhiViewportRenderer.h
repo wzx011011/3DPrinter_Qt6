@@ -110,6 +110,14 @@ private:
   bool ensureBedTexturePipeline();
   void uploadBedTexture(QRhiResourceUpdateBatch *updates);
   void renderBedTexture(QRhiCommandBuffer *cb);
+  // ── PLATEICONS-GL (2026-10-10): bed-surface plate icon quads ─────────────
+  // Upstream PartPlate::render_icons (PartPlate.cpp:1128-1230) draws the
+  // per-plate icon column, index badge, and plate name as textured ground
+  // quads (depth test on / write off, alpha blend). Reuses the bed-texture
+  // vertex format and shaders with a dedicated atlas texture.
+  bool ensurePlateIconPipeline();
+  void uploadPlateIcons(QRhiResourceUpdateBatch *updates);
+  void renderPlateIcons(QRhiCommandBuffer *cb);
   bool ensureModelLitPipeline();
   // P15.2 (COLOR): blended clone of the lit pipeline for the translucent
   // model pass (blend on, depth write off).
@@ -207,6 +215,18 @@ private:
   // selection-center draw gates.
   QList<int> effectiveSelectedSourceIndices() const;
 
+  // PLATEICONS-GL: atlas + quad batch pulled from RhiViewport in synchronize.
+  QImage m_plateIconAtlasPending;
+  quint64 m_plateIconAtlasCacheKey = 0;
+  QByteArray m_plateIconQuadBytesSync;
+  bool m_plateIconsPending = false;
+  std::unique_ptr<QRhiTexture> m_plateIconTexture;
+  std::unique_ptr<QRhiSampler> m_plateIconSampler;
+  std::unique_ptr<QRhiShaderResourceBindings> m_plateIconSrb;
+  std::unique_ptr<QRhiGraphicsPipeline> m_plateIconPipeline;
+  std::unique_ptr<QRhiBuffer> m_plateIconVertexBuffer;
+  quint32 m_plateIconVertexByteCount = 0;
+  quint32 m_plateIconVertexCount = 0;
   std::unique_ptr<QRhiBuffer> m_bedFillBuffer;
   std::unique_ptr<QRhiBuffer> m_bedLineBuffer;
   // v5.16 (BEDBOTTOM): grid-only lines for below-horizon camera views

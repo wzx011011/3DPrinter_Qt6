@@ -404,6 +404,17 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       m_bedTextureDirty = true;
     }
   }
+  // PLATEICONS-GL: pull the icon atlas + ground quad batch when the
+  // viewport latched a rebuild (explicit dirty flag -- byte-wise payload
+  // comparisons ran on every synchronize).
+  if (viewport->m_plateIconsSyncDirty) {
+    viewport->m_plateIconsSyncDirty = false;
+    m_plateIconAtlasPending = viewport->m_plateIconAtlas;
+    m_plateIconAtlasCacheKey = viewport->m_plateIconAtlas.cacheKey();
+    m_plateIconQuadBytesSync = viewport->m_plateIconQuadBytes;
+    m_plateIconsPending = true;
+  }
+
   // v5.16 (BEDMODEL/BEDTYPE-TEX): bed_model stream + bed-type gates. The
   // current plate's grid offset (upstream compute_shape_position) is baked
   // into both the bed model vertices and the bed-type part quads.
@@ -989,6 +1000,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       else
         renderBedTexture(cb);
     }
+    // PLATEICONS-GL: the icon column rides the bed pass (upstream draws
+    // render_icons inside the plate render, above the bed texture).
+    if (lookingDown)
+      renderPlateIcons(cb);
     // v5.16 (BEDMODEL): printer frame STL under the working mesh.
     // v5.16 (BEDBOTTOM): upstream Bed3D::render_system draws the bed model
     // only when !bottom (3DBed.cpp render_system), skipped from below.
@@ -1137,6 +1152,10 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       else
         renderBedTexture(cb);
     }
+    // PLATEICONS-GL: thumbnail pass draws the icons too (upstream plate
+    // thumbnails show the icon column).
+    if (lookingDown)
+      renderPlateIcons(cb);
     if (lookingDown)
       renderBedModel(cb);
     // P15.7 (AXES): upstream Bed3D::render_internal gates the axes on
@@ -1318,6 +1337,17 @@ void RhiViewportRenderer::releaseResources()
   m_bedTexturePath.clear();
   m_pendingBedTexturePath.clear();
   m_bedTextureDirty = false;
+  // PLATEICONS-GL: icon atlas + quad batch release.
+  m_plateIconPipeline.reset();
+  m_plateIconSrb.reset();
+  m_plateIconTexture.reset();
+  m_plateIconSampler.reset();
+  m_plateIconVertexBuffer.reset();
+  m_plateIconVertexByteCount = 0;
+  m_plateIconVertexCount = 0;
+  m_plateIconAtlasPending = QImage();
+  m_plateIconQuadBytesSync.clear();
+  m_plateIconsPending = false;
   m_bedTextureQuadDirty = true;
   m_bedTextureVertexBytes = 0;
   m_bedTextureVertexCount = 0;
@@ -2146,6 +2176,148 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
   cb->setShaderResources(m_srb.get());
 }
 
+// ── PLATEICONS-GL: bed icon atlas upload (mirrors uploadBedTexture) ─────────
+void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
+{
+  if (updates == nullptr || rhi() == nullptr || !m_plateIconsPending)
+    return;
+  m_plateIconsPending = false;
+
+  if (!m_plateIconAtlasPending.isNull()
+      && (!m_plateIconTexture
+          || m_plateIconTexture->pixelSize() != m_plateIconAtlasPending.size())) {
+    m_plateIconTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8,
+                                               m_plateIconAtlasPending.size()));
+    if (!m_plateIconTexture->create()) {
+      m_plateIconTexture.reset();
+      return;
+    }
+    m_plateIconSampler.reset(rhi()->newSampler(
+        QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+        QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+    if (!m_plateIconSampler->create()) {
+      m_plateIconSampler.reset();
+      m_plateIconTexture.reset();
+      return;
+    }
+    m_plateIconSrb.reset();
+    m_plateIconPipeline.reset();
+  }
+  if (m_plateIconTexture)
+    updates->uploadTexture(m_plateIconTexture.get(), m_plateIconAtlasPending);
+
+  if (!m_plateIconQuadBytesSync.isEmpty()) {
+    const quint32 bytes = quint32(m_plateIconQuadBytesSync.size());
+    // Dynamic buffer + full-buffer immediate update: uploadStaticBuffer
+    // records the source pointer into a batch that executes at submit, which
+    // kept racing the GUI-side rebuild of the shared payload. The dynamic
+    // update path memcpy's synchronously under the batch umbrella instead.
+    if (!m_plateIconVertexBuffer
+        || m_plateIconVertexByteCount != bytes) {
+      m_plateIconVertexBuffer.reset(
+          rhi()->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, bytes));
+      if (!m_plateIconVertexBuffer || !m_plateIconVertexBuffer->create()) {
+        m_plateIconVertexBuffer.reset();
+        m_plateIconVertexByteCount = 0;
+        m_plateIconVertexCount = 0;
+        return;
+      }
+      m_plateIconVertexByteCount = bytes;
+    }
+    // updateDynamicBuffer copies the payload into QRhi's internal storage at
+    // the next frame start; m_plateIconQuadBytesSync is a renderer-owned
+    // member that stays valid until the next synchronize, which satisfies the
+    // lifetime contract.
+    updates->updateDynamicBuffer(m_plateIconVertexBuffer.get(), 0, bytes,
+                                 m_plateIconQuadBytesSync.constData());
+    m_plateIconVertexCount = bytes / quint32(sizeof(float) * 5);
+  } else {
+    m_plateIconVertexCount = 0;
+  }
+  m_plateIconAtlasPending = QImage();
+}
+
+bool RhiViewportRenderer::ensurePlateIconPipeline()
+{
+  if (m_plateIconPipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr)
+    return false;
+  if (!m_plateIconTexture || !m_plateIconSampler || !m_cameraUniformBuffer)
+    return false;
+
+  if (!m_plateIconSrb) {
+    m_plateIconSrb.reset(rhi()->newShaderResourceBindings());
+    m_plateIconSrb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage, m_cameraUniformBuffer.get()),
+        QRhiShaderResourceBinding::sampledTexture(
+            1, QRhiShaderResourceBinding::FragmentStage,
+            m_plateIconTexture.get(), m_plateIconSampler.get()),
+    });
+    if (!m_plateIconSrb->create())
+      return false;
+  }
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/bed_texture.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/bed_texture.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  // Same 5-float layout as the bed quad: pos.xyz + uv.xy.
+  struct BedTextureVertex { float x, y, z, u, v; };
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({QRhiVertexInputBinding(sizeof(BedTextureVertex))});
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, 0),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float2, 3 * sizeof(float)),
+  });
+
+  m_plateIconPipeline.reset(rhi()->newGraphicsPipeline());
+  m_plateIconPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_plateIconPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_plateIconPipeline->setShaderResourceBindings(m_plateIconSrb.get());
+  m_plateIconPipeline->setVertexInputLayout(inputLayout);
+  m_plateIconPipeline->setRenderPassDescriptor(renderTarget()->renderPassDescriptor());
+  // Upstream render_icons keeps the depth test on and the depth mask off
+  // (PartPlate.cpp:1146-1149), so objects in front occlude the icons.
+  m_plateIconPipeline->setDepthTest(true);
+  m_plateIconPipeline->setDepthWrite(false);
+  QRhiGraphicsPipeline::TargetBlend blend;
+  blend.enable = true;
+  blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+  blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  blend.srcAlpha = QRhiGraphicsPipeline::One;
+  blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  m_plateIconPipeline->setTargetBlends({blend});
+  if (!m_plateIconPipeline->create()) {
+    m_plateIconPipeline.reset();
+    m_plateIconSrb.reset();
+    return false;
+  }
+  return true;
+}
+
+void RhiViewportRenderer::renderPlateIcons(QRhiCommandBuffer *cb)
+{
+  if (cb == nullptr || m_plateIconVertexCount == 0)
+    return;
+  if (!ensurePlateIconPipeline())
+    return;
+  cb->setGraphicsPipeline(m_plateIconPipeline.get());
+  cb->setShaderResources(m_plateIconSrb.get());
+  const QRhiCommandBuffer::VertexInput binding(m_plateIconVertexBuffer.get(), 0);
+  cb->setVertexInput(0, 1, &binding);
+  cb->draw(m_plateIconVertexCount);
+  // Restore the shared camera-only SRB for the draws that follow.
+  cb->setShaderResources(m_srb.get());
+}
+
 // ── v5.15 (MODELLIT): two-light gouraud pipeline for model meshes ──────────
 // Upstream contract: resources/shaders/140/gouraud.vs — ambient 0.3, top
 // light (dir -0.457,0.457,0.762 / diffuse 0.8 / specular 0.125 / shininess
@@ -2669,6 +2841,8 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   // v5.15 (BEDTEX): texture image + bed quad (no-op when no texture path).
   uploadBedTexture(updates);
+  // PLATEICONS-GL: icon atlas + ground quads.
+  uploadPlateIcons(updates);
   // v5.16 (BEDMODEL/BEDTYPE-TEX): printer frame mesh + BBL bed-type parts.
   // The bed-model vertices bake the current plate offset + the upstream
   // -0.41 Z placement at upload time.

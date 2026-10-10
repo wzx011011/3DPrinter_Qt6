@@ -800,6 +800,104 @@ void PrepareSceneData::plateGridOffset(int plateIndex, int plateCount,
   outOffsetY = -float(index / cols) * strideD;
 }
 
+// ── PLATEICONS-GL: bed icon ground rects (upstream PartPlate.cpp:633-700) ──
+namespace {
+// PartPlate.cpp:61-70 constants (mm at the 200mm reference bed).
+constexpr float kIconSize = 16.0f;
+constexpr float kNameEditIconSize = 9.0f;
+constexpr float kIconGapTop = 3.0f;
+constexpr float kIconGapLeft = 3.0f;
+constexpr float kIconGapY = 5.0f;
+constexpr float kTextOffsetX1 = 3.0f;
+constexpr float kTextOffsetX2 = 1.0f;
+constexpr float kTextOffsetY = 1.0f;
+}  // namespace
+
+float PrepareSceneData::plateIconScale(float bedDepth)
+{
+  return bedDepth / 200.0f;
+}
+
+PrepareSceneData::PlateIconRect PrepareSceneData::plateIconRect(
+    int plateIndex, int plateCount, int iconId, float bedWidth, float bedDepth,
+    float originX, float originY)
+{
+  PlateIconRect rect;
+  rect.plateIndex = plateIndex;
+  rect.iconId = iconId;
+  const float f = plateIconScale(bedDepth);
+  const float size = kIconSize * f;
+  // Column slot = the upstream index order (Delete 0 ... MoveFront 5);
+  // NameEdit does not live in the column (pencil sits by the plate name).
+  const int slot = iconId >= int(PlateIconId::NameEdit) ? 0 : iconId;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  plateGridOffset(plateIndex, plateCount, bedWidth, bedDepth, offsetX, offsetY);
+  const float farZ = originY + offsetY;
+  const float maxX = originX + offsetX + bedWidth;
+  // p = bed max corner + (gap_left, -(slot*(size+gap_y)+gap_top)), then the
+  // quad spans (p.x, p.y-size)..(p.x+size, p.y) in slic3r bed coords
+  // (PartPlate.cpp:641-655). slic3r +Y = far; Qt +Z = near, so the slic3r
+  // descent toward the viewer is an INCREASING z here, and the quad's
+  // slic3r y-range [p.y - size, p.y] maps to z [top, top + size] with
+  // top = farZ + gap_top + slot*(size+gap_y).
+  const float top = farZ + (kIconGapTop + float(slot) * (size + kIconGapY)) * f;
+  // Upstream hangs the column just OUTSIDE the plate's right edge
+  // (gap_left beyond the bed extents) so it never occupies the printable
+  // area -- models must be placeable across the full bed width.
+  rect.x0 = maxX + kIconGapLeft * f;
+  rect.x1 = rect.x0 + size;
+  rect.z0 = top;
+  rect.z1 = top + size;
+  return rect;
+}
+
+PrepareSceneData::PlateIconRect PrepareSceneData::plateNameEditRect(
+    int plateIndex, int plateCount, float nameWidthWorldUnits,
+    float bedWidth, float bedDepth, float originX, float originY)
+{
+  PlateIconRect rect;
+  rect.plateIndex = plateIndex;
+  rect.iconId = int(PlateIconId::NameEdit);
+  const float f = plateIconScale(bedDepth);
+  const float size = kNameEditIconSize * f;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  plateGridOffset(plateIndex, plateCount, bedWidth, bedDepth, offsetX, offsetY);
+  // Pencil = name width + text offset Y right of the far-left corner
+  // (PartPlate.cpp:660-663: p = bed min corner + (name_width, offset_y)).
+  rect.x0 = originX + offsetX + nameWidthWorldUnits + kTextOffsetY * f;
+  rect.x1 = rect.x0 + size;
+  // The pencil hangs just below the far edge, on the plate (the rendered
+  // reference shows the pencil inside the plate outline beside the name).
+  rect.z0 = originY + offsetY + kTextOffsetY * f;
+  rect.z1 = rect.z0 + size;
+  return rect;
+}
+
+PrepareSceneData::PlateIconRect PrepareSceneData::plateIndexBadgeRect(
+    int plateIndex, int plateCount, float bedWidth, float bedDepth,
+    float originX, float originY)
+{
+  PlateIconRect rect;
+  rect.plateIndex = plateIndex;
+  rect.iconId = -1;
+  const float f = plateIconScale(bedDepth);
+  const float size = kIconSize * f;
+  float offsetX = 0.0f;
+  float offsetY = 0.0f;
+  plateGridOffset(plateIndex, plateCount, bedWidth, bedDepth, offsetX, offsetY);
+  // calc_vertex_for_number #else branch (PartPlate.cpp:685-695): at the
+  // near-right corner, inset by the text offsets on both axes. slic3r
+  // measures the badge upward from the near edge (+Y = far = -z here).
+  const float nearZ = originY + offsetY + bedDepth;
+  rect.x0 = originX + offsetX + bedWidth + kIconGapLeft * f + kTextOffsetX1 * f;
+  rect.x1 = originX + offsetX + bedWidth + kIconGapLeft * f + size - kTextOffsetX2 * f;
+  rect.z0 = nearZ - (size - kTextOffsetY * f);
+  rect.z1 = nearZ - kTextOffsetY * f;
+  return rect;
+}
+
 void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();

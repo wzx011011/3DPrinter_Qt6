@@ -227,6 +227,24 @@
         <file>assets/icons/plate_settings_changed.svg</file>
         <file>assets/icons/plate_move_front.svg</file>
         <file>assets/icons/plate_name_edit.svg</file>
+        <file>assets/icons/plate_close_dark.svg</file>
+        <file>assets/icons/plate_close_hover_dark.svg</file>
+        <file>assets/icons/plate_arrange_dark.svg</file>
+        <file>assets/icons/plate_arrange_hover_dark.svg</file>
+        <file>assets/icons/plate_orient_dark.svg</file>
+        <file>assets/icons/plate_orient_hover_dark.svg</file>
+        <file>assets/icons/plate_locked_dark.svg</file>
+        <file>assets/icons/plate_locked_hover_dark.svg</file>
+        <file>assets/icons/plate_unlocked_dark.svg</file>
+        <file>assets/icons/plate_unlocked_hover_dark.svg</file>
+        <file>assets/icons/plate_settings_dark.svg</file>
+        <file>assets/icons/plate_settings_hover_dark.svg</file>
+        <file>assets/icons/plate_settings_changed_dark.svg</file>
+        <file>assets/icons/plate_settings_changed_hover_dark.svg</file>
+        <file>assets/icons/plate_move_front_dark.svg</file>
+        <file>assets/icons/plate_move_front_hover_dark.svg</file>
+        <file>assets/icons/plate_name_edit_dark.svg</file>
+        <file>assets/icons/plate_name_edit_hover_dark.svg</file>
         <file>assets/icons/print-time.svg</file>
         <file>assets/icons/print-weight.svg</file>
         <file>assets/icons/completed.svg</file>

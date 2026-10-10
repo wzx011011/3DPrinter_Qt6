@@ -135,6 +135,57 @@ public:
   static void plateGridOffset(int plateIndex, int plateCount,
                               float bedWidth, float bedDepth,
                               float &outOffsetX, float &outOffsetY);
+  // ── PLATEICONS-GL (2026-10-10): bed-surface plate icons ─────────────────
+  // Upstream PartPlate::calc_vertex_for_icons / calc_vertex_for_number /
+  // calc_vertex_for_plate_name_edit_icon (PartPlate.cpp:633-700, 3409-3422)
+  // draws each plate's action icons as textured quads pinned to the bed
+  // plane (GROUND_Z), so they move with the plate, deform with the camera
+  // perspective, and are occluded by objects. One column at the plate's
+  // max-X edge (overhanging gap-left outside the bed), descending from the
+  // far edge; the index badge sits at the near-right corner; the rename
+  // pencil sits right of the plate-name text at the far-left corner.
+  // Qt scene frame: ground y=0, +Z toward the viewer; bedOriginY is the
+  // plate's far (min-Z) edge (PrepareSceneData.cpp bed extents comment).
+  enum class PlateIconId : int
+  {
+    Delete = 0,
+    Orient = 1,
+    Arrange = 2,
+    Lock = 3,
+    Settings = 4,
+    MoveFront = 5,
+    NameEdit = 6,
+  };
+  struct PlateIconRect
+  {
+    int plateIndex = 0;
+    int iconId = 0;          // PlateIconId
+    float x0 = 0, z0 = 0;    // min corner (ground plane)
+    float x1 = 0, z1 = 0;    // max corner
+  };
+  // Upstream scale factor: bed_ext.size()(1) / 200 (PartPlate.cpp:639).
+  static float plateIconScale(float bedDepth);
+  // Upstream icon slots (PartPlate.cpp:3409-3422, single-extruder layout:
+  // move-front takes slot 5; the dual-extruder filament-map slot is not
+  // drawn). Returns the ground rect for one icon of one plate. iconId is a
+  // PlateIconId value; the column slot follows the upstream index order
+  // (Delete=0 ... MoveFront=5). plateCount feeds the grid column count, so
+  // per-plate offsets stay consistent with the bed geometry.
+  static PlateIconRect plateIconRect(int plateIndex, int plateCount,
+                                     int iconId,
+                                     float bedWidth, float bedDepth,
+                                     float originX, float originY);
+  // Upstream calc_vertex_for_plate_name_edit_icon (PartPlate.cpp:646-676):
+  // 9-unit pencil right of the plate-name text at the far-left corner.
+  static PlateIconRect plateNameEditRect(int plateIndex, int plateCount,
+                                         float nameWidthWorldUnits,
+                                         float bedWidth, float bedDepth,
+                                         float originX, float originY);
+  // Upstream calc_vertex_for_number #else branch (PartPlate.cpp:672-696):
+  // index badge inset from the near-right corner.
+  static PlateIconRect plateIndexBadgeRect(int plateIndex, int plateCount,
+                                           float bedWidth, float bedDepth,
+                                           float originX, float originY);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
   // P15.1/15.2 (COLOR): full render-channel form. batchVolumeTypes values are

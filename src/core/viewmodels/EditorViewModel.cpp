@@ -6179,13 +6179,11 @@ QVariant EditorViewModel::rotationCenter() const
     return {};
   QList<int> sources = m_selectedSourceIndices.values();
   if (sources.isEmpty()) {
-    const int count = objectCount();
-    sources.reserve(count);
-    for (int i = 0; i < count; ++i) {
-      const int sourceIndex = mapFilteredToSourceIndex(i);
-      if (sourceIndex >= 0)
-        sources.append(sourceIndex);
-    }
+    // CAM-PARITY: the no-selection fallback pivots on the CURRENT plate's
+    // objects only (upstream volumes_bounding_box(current_plate_only=true),
+    // GLCanvas3D.cpp:4667) -- a whole-scene union would park the pivot in
+    // the empty space between plates on multi-plate projects.
+    sources = projectService_->currentPlateObjectIndices();
   }
   if (sources.isEmpty())
     return {};

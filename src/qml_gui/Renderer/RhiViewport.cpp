@@ -9,9 +9,12 @@
 #include <QBuffer>
 #include <QByteArray>
 #include <QColor>
+#include <QCursor>
 #include <QHoverEvent>
 #include <QImage>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QSvgRenderer>
 #include <QTimer>
 #include <QVector4D>
 #include <QWheelEvent>
@@ -206,6 +209,8 @@ void RhiViewport::setBedWidth(float value)
   update();
   updateSceneExtent();
   // P15.9 (PLATEANCHOR): the bed footprint drives the plate grid stride.
+  // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
+  rebuildPlateIcons();
   emit plateAnchorsChanged();
 }
 
@@ -218,6 +223,8 @@ void RhiViewport::setBedDepth(float value)
   update();
   updateSceneExtent();
   // P15.9 (PLATEANCHOR): the bed footprint drives the plate grid stride.
+  // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
+  rebuildPlateIcons();
   emit plateAnchorsChanged();
 }
 
@@ -229,6 +236,8 @@ void RhiViewport::setBedOriginX(float value)
   ++m_sceneGeneration;
   update();
   // P15.9 (PLATEANCHOR): plate anchors offset from the bed origin.
+  // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
+  rebuildPlateIcons();
   emit plateAnchorsChanged();
 }
 
@@ -240,6 +249,8 @@ void RhiViewport::setBedOriginY(float value)
   ++m_sceneGeneration;
   update();
   // P15.9 (PLATEANCHOR): plate anchors offset from the bed origin.
+  // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
+  rebuildPlateIcons();
   emit plateAnchorsChanged();
 }
 
@@ -373,6 +384,8 @@ void RhiViewport::setPlateCount(int value)
   update();
   // P15.9 (PLATEANCHOR): the anchor list carries one entry per plate.
   emit plateAnchorsChanged();
+  // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
+  rebuildPlateIcons();
 }
 
 void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)
@@ -937,8 +950,11 @@ void RhiViewport::selectView(const QString &direction)
   {
     // zoom_to_bed equivalent: fit the camera to the bed rectangle. The bed
     // lives in the GL XZ plane (Y up); bedOriginX/bedOriginY are raw slic3r
-    // X/Y, and scene Z negates slic3r Y (AXES-ROT rotation mapping).
-    const float w = qMax(1.0f, m_bedWidth);
+    // X/Y, and scene Z negates slic3r Y (AXES-ROT rotation mapping). The
+    // fit includes the bed icon column overhang (~2.2% of the width) so the
+    // upstream plate icon strip stays in frame (icons hang just outside the
+    // bed edge, PartPlate.cpp:641-655).
+    const float w = qMax(1.0f, m_bedWidth) * 1.045f;
     const float d = qMax(1.0f, m_bedDepth);
     if (m_bedShapeType == 1)
     {
@@ -1205,6 +1221,340 @@ QVariantList RhiViewport::plateAnchors() const
   return anchors;
 }
 
+// ── PLATEICONS-GL: bed icon atlas + picking (upstream render_icons) ─────────
+namespace {
+constexpr int kIconAtlasSize = 2048;
+constexpr int kIconCell = 128;
+// World-space heights (mm at the 200mm reference bed, PartPlate.cpp:61-70):
+// icon cells render 16 units tall, the pencil 9, the name text ~10
+// (PARTPLATE_PLATENAME_OFFSET_Y).
+constexpr float kNameWorldHeight = 11.0f;
+// Name text inset from the plate's far-left corner (gap-left, PartPlate.cpp:64).
+constexpr float kNameTextInset = 3.0f;
+// AXES-ROT note: PrepareSceneData::setBed normalizes the QML bed origin into
+// the scene frame (m_bedOriginY ends up as the plate's far/min-Z edge,
+// PrepareSceneData.cpp:160-169/1250); every plateIconRect call below feeds
+// -(m_bedOriginY + m_bedDepth) so the icon math shares that frame.
+
+struct IconCellRef
+{
+  int col = 0;
+  int row = 0;
+};
+
+QString iconSvgPath(const char *base)
+{
+  return QStringLiteral(":/qml/assets/icons/%1.svg").arg(QLatin1String(base));
+}
+
+void rasterSvgCell(QImage &atlas, int col, int row, const QString &path)
+{
+  QSvgRenderer svg(path);
+  const QRect cell(col * kIconCell, row * kIconCell, kIconCell, kIconCell);
+  if (!svg.isValid()) {
+    qWarning("[PLATEICONS] missing icon asset: %s", qPrintable(path));
+    return;
+  }
+  // 6px inset so the rounded frame breathes inside the cell.
+  const QRect target = cell.adjusted(6, 6, -6, -6);
+  QPainter painter(&atlas);
+  svg.render(&painter, target);
+  painter.end();
+}
+}  // namespace
+
+void RhiViewport::setPlateIconStates(const QVariantList &states)
+{
+  if (states == m_plateIconStates)
+    return;
+  m_plateIconStates = states;
+  rebuildPlateIcons();
+  emit plateIconStatesChanged();
+}
+
+void RhiViewport::rebuildPlateIcons()
+{
+  m_plateIconAtlasDirty = true;
+  m_plateIconsSyncDirty = true;
+  refreshPlateIconQuads();
+}
+
+void RhiViewport::refreshPlateIconQuads()
+{
+  const int plateCount = m_plateCount;
+  m_plateIconQuadBytes.clear();
+  m_plateIconQuadCount = 0;
+  m_plateIconsSyncDirty = true;
+  if (m_canvasType != CanvasView3D || !m_showBed || plateCount <= 0) {
+    update();
+    return;
+  }
+
+  // Atlas cell per visual state (see the raster layout above refreshPlateIconQuads).
+  const auto columnCell = [&](int slot, bool hovered) -> IconCellRef {
+    return IconCellRef{slot, hovered ? 1 : 0};
+  };
+  const auto lockCell = [&](bool locked, bool hovered) -> IconCellRef {
+    if (locked)
+      return IconCellRef{3, hovered ? 1 : 0};   // row1 col3 hover / row0 col3
+    return IconCellRef{hovered ? 1 : 0, 2};     // row2: unlocked / unlocked_hover
+  };
+  const auto settingsCell = [&](bool changed, bool hovered) -> IconCellRef {
+    if (changed)
+      return IconCellRef{hovered ? 3 : 2, 2};   // row2: changed / changed_hover
+    return columnCell(4, hovered);              // plain settings slot
+  };
+
+  struct Vert
+  {
+    float x, y, z, u, v;
+  };
+  QVector<Vert> verts;
+  const float f = PrepareSceneData::plateIconScale(m_bedDepth);
+  const float uvStep = float(kIconCell) / float(kIconAtlasSize);
+
+  const auto appendQuad = [&](const PrepareSceneData::PlateIconRect &rect,
+                              const IconCellRef &cell) {
+    const float u0 = float(cell.col) * uvStep;
+    const float v0 = float(cell.row) * uvStep;
+    const float u1 = u0 + uvStep;
+    const float v1 = v0 + uvStep;
+    const float lift = 0.03f;  // above the 0.02 bed texture quad
+    verts.append(Vert{rect.x0, lift, rect.z0, u0, v0});
+    verts.append(Vert{rect.x1, lift, rect.z0, u1, v0});
+    verts.append(Vert{rect.x1, lift, rect.z1, u1, v1});
+    verts.append(Vert{rect.x0, lift, rect.z0, u0, v0});
+    verts.append(Vert{rect.x1, lift, rect.z1, u1, v1});
+    verts.append(Vert{rect.x0, lift, rect.z1, u0, v1});
+  };
+
+  for (int p = 0; p < plateCount; ++p) {
+    const QVariantMap state = m_plateIconStates.value(p).toMap();
+    const bool locked = state.value(QStringLiteral("locked")).toBool();
+    const bool changed = state.value(QStringLiteral("custom")).toBool();
+
+    for (int icon = 0; icon <= int(PrepareSceneData::PlateIconId::MoveFront); ++icon) {
+      IconCellRef cell;
+      switch (icon) {
+      case int(PrepareSceneData::PlateIconId::Lock):
+        cell = lockCell(locked, p == m_hoverPlateIndex && m_hoverPlateIconId == icon);
+        break;
+      case int(PrepareSceneData::PlateIconId::Settings):
+        cell = settingsCell(changed, p == m_hoverPlateIndex && m_hoverPlateIconId == icon);
+        break;
+      default:
+        cell = columnCell(icon, p == m_hoverPlateIndex && m_hoverPlateIconId == icon);
+        break;
+      }
+      appendQuad(PrepareSceneData::plateIconRect(p, plateCount, icon,
+                                                 m_bedWidth, m_bedDepth,
+                                                 m_bedOriginX,
+                                                 -(m_bedOriginY + m_bedDepth)),
+                 cell);
+    }
+
+    // Rename pencil (hoverable) sits right of the plate-name text, so the
+    // name geometry is resolved first (PartPlate.cpp:646-663).
+    const QString name = state.value(QStringLiteral("name")).toString();
+    const QString displayName = name.isEmpty() ? QStringLiteral("Untitled") : name;
+    QFont nameFont;
+    nameFont.setPixelSize(72);
+    const int textW = QFontMetrics(nameFont).horizontalAdvance(displayName);
+    const float nameAspect = float(textW) / 72.0f;
+    float nameWorldW = nameAspect * kNameWorldHeight;
+    nameWorldW = qMin(nameWorldW, m_bedWidth * 0.35f);
+
+    float plateOffX = 0.0f;
+    float plateOffY = 0.0f;
+    PrepareSceneData::plateGridOffset(p, plateCount, m_bedWidth, m_bedDepth,
+                                      plateOffX, plateOffY);
+    const float farZ = -(m_bedOriginY + m_bedDepth) + plateOffY;
+    const float minX = m_bedOriginX + plateOffX;
+
+    const bool pencilHover = p == m_hoverPlateIndex
+                             && m_hoverPlateIconId == int(PrepareSceneData::PlateIconId::NameEdit);
+    appendQuad(PrepareSceneData::plateNameEditRect(p, plateCount, nameWorldW,
+                                                   m_bedWidth, m_bedDepth,
+                                                   m_bedOriginX, -(m_bedOriginY + m_bedDepth)),
+               IconCellRef{pencilHover ? 5 : 4, 2});
+
+    // Plate-name text quad at the far-left corner; the uv window maps the
+    // exact pixel bounds of the drawn text so the aspect holds.
+    {
+      const int nameRow = 4 + p / 4;
+      const int nameCol = (p % 4) * 4;
+      const float pxU = float(nameCol * kIconCell + 8);
+      const float pxV = float(nameRow * kIconCell + 8);
+      const float u0 = pxU / float(kIconAtlasSize);
+      const float v0 = pxV / float(kIconAtlasSize);
+      const float u1 = u0 + float(textW) / float(kIconAtlasSize);
+      const float v1 = v0 + 72.0f / float(kIconAtlasSize);
+      const float worldH = kNameWorldHeight;
+      const float worldW = nameAspect * worldH;
+      const float lift = 0.03f;
+      const float x0 = minX + kNameTextInset * f;
+      const float z0 = farZ + kNameTextInset * f;
+      verts.append(Vert{x0, lift, z0, u0, v0});
+      verts.append(Vert{x0 + worldW, lift, z0, u1, v0});
+      verts.append(Vert{x0 + worldW, lift, z0 + worldH, u1, v1});
+      verts.append(Vert{x0, lift, z0, u0, v0});
+      verts.append(Vert{x0 + worldW, lift, z0 + worldH, u1, v1});
+      verts.append(Vert{x0, lift, z0 + worldH, u0, v1});
+    }
+
+    // Index badge at the near-right corner (not pickable upstream).
+    appendQuad(PrepareSceneData::plateIndexBadgeRect(p, plateCount, m_bedWidth,
+                                                     m_bedDepth, m_bedOriginX,
+                                                     -(m_bedOriginY + m_bedDepth)),
+               IconCellRef{p, 3});
+  }
+
+  m_plateIconQuadBytes.resize(verts.size() * int(sizeof(Vert)));
+  if (!verts.isEmpty())
+    std::memcpy(m_plateIconQuadBytes.data(), verts.constData(),
+                m_plateIconQuadBytes.size());
+  m_plateIconQuadCount = quint32(verts.size());
+  buildPlateIconAtlas();
+  m_plateIconsSyncDirty = true;
+  update();
+}
+
+void RhiViewport::buildPlateIconAtlas()
+{
+  if (!m_plateIconAtlasDirty && !m_plateIconAtlas.isNull())
+    return;
+  m_plateIconAtlasDirty = false;
+  m_plateIconAtlas = QImage(kIconAtlasSize, kIconAtlasSize,
+                            QImage::Format_RGBA8888);
+  m_plateIconAtlas.fill(Qt::transparent);
+
+  // Row 0: column icons, rest state; row 1: the same slots hovered.
+  const char *columnIcons[6] = {
+      "plate_close_dark",       "plate_orient_dark",   "plate_arrange_dark",
+      "plate_locked_dark",      "plate_settings_dark", "plate_move_front_dark"};
+  const char *columnIconsHover[6] = {
+      "plate_close_hover_dark", "plate_orient_hover_dark",
+      "plate_arrange_hover_dark", "plate_locked_hover_dark",
+      "plate_settings_hover_dark", "plate_move_front_hover_dark"};
+  for (int slot = 0; slot < 6; ++slot) {
+    rasterSvgCell(m_plateIconAtlas, slot, 0, iconSvgPath(columnIcons[slot]));
+    rasterSvgCell(m_plateIconAtlas, slot, 1, iconSvgPath(columnIconsHover[slot]));
+  }
+  // Row 2: two-state extras (unlocked lock, changed settings, pencil).
+  rasterSvgCell(m_plateIconAtlas, 0, 2, iconSvgPath("plate_unlocked_dark"));
+  rasterSvgCell(m_plateIconAtlas, 1, 2, iconSvgPath("plate_unlocked_hover_dark"));
+  rasterSvgCell(m_plateIconAtlas, 2, 2, iconSvgPath("plate_settings_changed_dark"));
+  rasterSvgCell(m_plateIconAtlas, 3, 2, iconSvgPath("plate_settings_changed_hover_dark"));
+  rasterSvgCell(m_plateIconAtlas, 4, 2, iconSvgPath("plate_name_edit_dark"));
+  rasterSvgCell(m_plateIconAtlas, 5, 2, iconSvgPath("plate_name_edit_hover_dark"));
+
+  for (int p = 0; p < m_plateCount; ++p) {
+    const QVariantMap state = m_plateIconStates.value(p).toMap();
+    const QString name = state.value(QStringLiteral("name")).toString();
+    const QString displayName = name.isEmpty() ? QStringLiteral("Untitled") : name;
+
+    // Index badge "01" (row 3, one cell per plate).
+    const QString idx = QStringLiteral("%1").arg(p + 1, 2, 10, QLatin1Char('0'));
+    QPainter idxPainter(&m_plateIconAtlas);
+    QFont idxFont;
+    idxFont.setBold(true);
+    idxFont.setPixelSize(72);
+    idxPainter.setFont(idxFont);
+    idxPainter.setPen(QColor(QStringLiteral("#18c75e")));
+    idxPainter.drawText(QRect(p * kIconCell, 3 * kIconCell, kIconCell, kIconCell),
+                        Qt::AlignCenter, idx);
+    idxPainter.end();
+
+    // Plate name (row 4+, 512x128 cell per plate).
+    QPainter namePainter(&m_plateIconAtlas);
+    QFont nameFont;
+    nameFont.setPixelSize(72);
+    namePainter.setFont(nameFont);
+    namePainter.setPen(QColor(QStringLiteral("#18c75e")));
+    namePainter.drawText(QRect((p % 4) * 4 * kIconCell + 8,
+                               (4 + p / 4) * kIconCell + 8,
+                               4 * kIconCell - 16, kIconCell - 16),
+                         Qt::AlignLeft | Qt::AlignVCenter, displayName);
+    namePainter.end();
+  }
+}
+
+bool RhiViewport::plateIconAt(const QPointF &position, int &plateIndex,
+                              int &iconId) const
+{
+  plateIndex = -1;
+  iconId = -1;
+  if (m_canvasType != CanvasView3D || !m_showBed || m_plateCount <= 0)
+    return false;
+  const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
+  QVector3D hit;
+  if (!CameraController::groundPointOnPlane(cameraMvp(aspect),
+                                            QSizeF(width(), height()),
+                                            position, &hit))
+    return false;
+  for (int p = 0; p < m_plateCount; ++p) {
+    for (int icon = 0; icon <= int(PrepareSceneData::PlateIconId::NameEdit); ++icon) {
+      if (icon == int(PrepareSceneData::PlateIconId::NameEdit)) {
+        // The pencil rect depends on the rendered name width; recompute the
+        // same bound used when building the quads.
+        const QVariantMap state = m_plateIconStates.value(p).toMap();
+        const QString name = state.value(QStringLiteral("name")).toString();
+        const QString displayName = name.isEmpty() ? QStringLiteral("Untitled") : name;
+        QFont nameFont;
+        nameFont.setPixelSize(72);
+        const float nameAspect =
+            float(QFontMetrics(nameFont).horizontalAdvance(displayName)) / 72.0f;
+        float nameWorldW = qMin(nameAspect * kNameWorldHeight, m_bedWidth * 0.35f);
+        const PrepareSceneData::PlateIconRect pencil =
+            PrepareSceneData::plateNameEditRect(p, m_plateCount, nameWorldW,
+                                                m_bedWidth, m_bedDepth,
+                                                m_bedOriginX, -(m_bedOriginY + m_bedDepth));
+        if (hit.x() >= pencil.x0 && hit.x() <= pencil.x1
+            && hit.z() >= pencil.z0 && hit.z() <= pencil.z1) {
+          plateIndex = p;
+          iconId = icon;
+          return true;
+        }
+        continue;
+      }
+      const PrepareSceneData::PlateIconRect rect = PrepareSceneData::plateIconRect(
+          p, m_plateCount, icon, m_bedWidth, m_bedDepth, m_bedOriginX, -(m_bedOriginY + m_bedDepth));
+      if (hit.x() >= rect.x0 && hit.x() <= rect.x1
+          && hit.z() >= rect.z0 && hit.z() <= rect.z1) {
+        plateIndex = p;
+        iconId = icon;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+void RhiViewport::updatePlateIconHover(const QPointF &position)
+{
+  int plate = -1;
+  int icon = -1;
+  const bool hit = plateIconAt(position, plate, icon);
+  if (hit && plate == m_hoverPlateIndex && icon == m_hoverPlateIconId)
+    return;
+  m_hoverPlateIndex = hit ? plate : -1;
+  m_hoverPlateIconId = hit ? icon : -1;
+  if (hit) {
+    m_hoverPlateIconPx = position;
+    m_plateIconHover = QVariantMap{
+        {QStringLiteral("plate"), plate},
+        {QStringLiteral("icon"), icon},
+        {QStringLiteral("x"), position.x()},
+        {QStringLiteral("y"), position.y()}};
+    setCursor(QCursor(Qt::PointingHandCursor));
+  } else {
+    m_plateIconHover.clear();
+    unsetCursor();
+  }
+  emit plateIconHoverChanged();
+  refreshPlateIconQuads();
+}
+
 bool RhiViewport::startNavigatorPress(const QPointF &position)
 {
   if (!m_navigatorEnabled)
@@ -1352,6 +1702,18 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     event->accept();
     return;
   }
+  // PLATEICONS-GL: a left click over a bed icon activates it before any
+  // scene interaction (upstream picking dispatches the icon action on
+  // LeftDown, render_icons picking ids).
+  if (event->button() == Qt::LeftButton) {
+    int iconPlate = -1;
+    int iconId = -1;
+    if (plateIconAt(event->position(), iconPlate, iconId)) {
+      event->accept();
+      emit plateIconActivated(iconPlate, iconId);
+      return;
+    }
+  }
   if (event->button() == Qt::RightButton) {
     // P11 (upstream GLGizmoPainterBase.cpp:649 RightDown): with a paint gizmo
     // active the right button paints instead of opening the context menu.
@@ -1377,6 +1739,15 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     m_contextDragExceeded = false;
     m_contextToolCapturedAtPress = activeToolCapturesContextGesture();
     m_contextLayerEditingAtPress = m_layerEditingInputActive;
+    // CAM-PARITY: right drag pans the camera (upstream default
+    // right_mouse_drag_action = Pan, AppConfig.cpp:248-249); the camera move
+    // latches m_contextDragExceeded so the menu stays closed, mirroring the
+    // upstream ignore_right_up latch. Sub-threshold releases keep the menu.
+    // Tools that capture the right button (layer editing / gizmo context
+    // capture) keep their gesture instead.
+    m_rightDragPan = !m_contextToolCapturedAtPress && !m_contextLayerEditingAtPress;
+    m_pressPosition = event->position();
+    m_lastMousePosition = event->position();
     event->accept();
     return;
   }
@@ -1584,6 +1955,21 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
       if (hit.isValid())
         m_pressPickedVolumeIndex = hit.volumeIndex;
     }
+    // CAM-PARITY: a plain left press on an object arms the bed drag-move
+    // (upstream GLCanvas3D.cpp:4508-4526 arms m_mouse.drag.move_volume_idx
+    // when m_moving_enabled and the press lands inside a volume bbox with no
+    // Ctrl; the Dragging branch :4531 then moves the object instead of
+    // orbiting). Ctrl keeps the canvas-center orbit pivot, Alt keeps the
+    // part-pick gesture, and Shift never reaches here (rectangle selection).
+    // Layer editing owns the left drag while active, mirroring the upstream
+    // layers-editing branch ordering.
+    m_bedDragCandidate = m_pressPickedSourceObjectIndex >= 0
+        && !m_ctrlRotationCenterActive
+        && !(event->modifiers() & (Qt::ControlModifier | Qt::AltModifier))
+        && !m_layerEditingInputActive;
+    m_bedDragActive = false;
+    m_bedDragSourceIndex = m_bedDragCandidate ? m_pressPickedSourceObjectIndex : -1;
+    m_bedDragLastWorldValid = false;
     setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
   }
   event->accept();
@@ -1601,6 +1987,13 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   if (m_contextPressActive) {
     const QPointF delta = event->position() - m_contextPressPosition;
     m_contextDragExceeded = m_contextDragExceeded || std::hypot(delta.x(), delta.y()) > 4.0;
+    // CAM-PARITY: right-drag pans (upstream is_camera_pan branch,
+    // GLCanvas3D.cpp:4692-4721; right_mouse_drag_action defaults to Pan).
+    // The pick-based pan unprojects the press and the cursor at one shared
+    // view-plane depth, so it works for any armed press position.
+    if (m_rightDragPan)
+      applyCameraPan();
+    m_lastMousePosition = event->position();
     event->accept();
     return;
   }
@@ -1734,13 +2127,59 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
   }
 
   const QPointF delta = event->position() - m_lastMousePosition;
-  // v5.12 gap-closure: cameraNavStyle Touchpad (1) swaps orbit/pan between
-  // left and middle button (对齐 upstream camera_navigation_style=Touchpad).
-  // Default (0): Left=orbit, Middle=pan. Touchpad (1): Left=pan, Middle=orbit.
+  // v5.12 gap-closure: cameraNavStyle Touchpad (1) routes navigation through
+  // the keyboard modifiers exactly like upstream (is_camera_rotate /
+  // is_camera_pan, GLCanvas3D.cpp:4940-4957): Alt+move rotates, Shift+move
+  // pans, unmapped buttons do nothing. Shift+left keeps the rectangle
+  // selection, whose own branch above already consumed the stroke. Default
+  // (0): Left=orbit, Middle=pan; right pans inside the context-gesture branch
+  // above (upstream AppConfig.cpp:242-249 mapping).
   const bool touchpad = (m_cameraNavStyle == 1);
-  const bool leftIsOrbit = !touchpad;
-  if (m_dragButton == Qt::LeftButton) {
-    if (leftIsOrbit && m_pressPickedSourceObjectIndex >= 0) {
+  const bool touchpadRotate = touchpad && (event->modifiers() & Qt::AltModifier);
+  const bool touchpadPan = touchpad && (event->modifiers() & Qt::ShiftModifier);
+  if (m_dragButton == Qt::LeftButton && m_bedDragCandidate) {
+    // CAM-PARITY: the press landed on an object without Ctrl/Alt/Shift -- a
+    // drag moves the object across the bed instead of orbiting the camera
+    // (upstream GLCanvas3D.cpp:4531, the move branch precedes the camera
+    // branch; :4613 also forbids camera rotation while a volume is hovered).
+    const QPointF pressDelta = event->position() - m_pressPosition;
+    const bool becameDrag = std::hypot(pressDelta.x(), pressDelta.y()) > 4.0;
+    if (m_bedDragActive || becameDrag) {
+      if (!m_bedDragActive) {
+        // Select the grabbed object first so the move chain (which operates
+        // on the primary selection) drives it; a drag past the threshold is
+        // not a click, so the release-side click-select stays suppressed.
+        if (m_bedDragSourceIndex != m_selectedSourceObjectIndex)
+          emit objectPickedSource(m_bedDragSourceIndex);
+        m_bedDragActive = true;
+        emit bedDragMoveBegin();
+      }
+      QVector3D groundPoint;
+      const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
+      if (CameraController::groundPointOnPlane(cameraMvp(aspect),
+                                               QSizeF(width(), height()),
+                                               event->position(),
+                                               &groundPoint)) {
+        // Bed-plane (y=0) pick per frame: the delta slides the object
+        // horizontally and never lifts it (upstream _mouse_to_3d z=0 pick,
+        // GLCanvas3D.cpp:4540-4560).
+        if (m_bedDragLastWorldValid)
+          emit bedDragMoveRequested(groundPoint - m_bedDragLastWorld);
+        m_bedDragLastWorld = groundPoint;
+        m_bedDragLastWorldValid = true;
+      }
+    } else {
+      setHoveredSourceObjectIndex(m_pressPickedSourceObjectIndex);
+    }
+  } else if (m_dragButton == Qt::LeftButton) {
+    if (touchpad) {
+      if (touchpadRotate)
+        applyCameraOrbit(float(delta.x()), float(delta.y()));
+      else if (touchpadPan)
+        applyCameraPan();
+    } else if (m_pressPickedSourceObjectIndex >= 0) {
+      // Modifier presses (Ctrl pivot / Alt part-pick) keep the camera drag:
+      // hover tracks until the drag threshold, then the orbit takes over.
       const QPointF pressDelta = event->position() - m_pressPosition;
       const bool becameDrag = std::hypot(pressDelta.x(), pressDelta.y()) > 4.0;
       if (!becameDrag) {
@@ -1748,24 +2187,24 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
       } else {
         m_pressPickedSourceObjectIndex = -1;
         setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
-      }
-    }
-    if (leftIsOrbit) {
-      if (m_pressPickedSourceObjectIndex < 0)
         // Raw screen deltas, matching upstream (GLCanvas3D.cpp:4622: rot =
         // pos - drag.start, y-DOWN positive; Camera's positive delta_zenit /
         // dElevation raises the eye). Negating y inverted the vertical orbit
         // so dragging "up" dived the camera under the bed, where the +-90
         // zenit clamp parked it -- the bed top face was unreachable.
         applyCameraOrbit(float(delta.x()), float(delta.y()));
+      }
     } else {
-      // Touchpad: left drag = pan
-      applyCameraPan();
+      // Raw screen deltas, matching upstream (GLCanvas3D.cpp:4622): see the
+      // note above on the y-DOWN convention.
+      applyCameraOrbit(float(delta.x()), float(delta.y()));
     }
   } else if (m_dragButton == Qt::MiddleButton) {
     if (touchpad) {
-      // Touchpad: middle drag = orbit
-      applyCameraOrbit(float(delta.x()), float(delta.y()));
+      if (touchpadRotate)
+        applyCameraOrbit(float(delta.x()), float(delta.y()));
+      else if (touchpadPan)
+        applyCameraPan();
     } else {
       applyCameraPan();
     }
@@ -1878,6 +2317,10 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
       m_paintButton = 0;
       m_dragButton = Qt::NoButton;
     }
+    // CAM-PARITY: a right stroke that panned latches m_contextDragExceeded
+    // (4px threshold) so the popup stays closed -- the upstream
+    // ignore_right_up behavior after a camera move (GLCanvas3D.cpp:4641).
+    m_rightDragPan = false;
     const bool suppress = !m_contextPressActive || m_contextDragExceeded
         || m_contextLayerEditingAtPress || m_contextToolCapturedAtPress;
     m_contextPressActive = false;
@@ -1936,6 +2379,21 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     event->accept();
     return;
   }
+
+  // CAM-PARITY: end the bed drag-move before click routing -- a moved object
+  // is not a click, so the click-select below stays suppressed
+  // (m_pressPickedSourceObjectIndex cleared); a sub-threshold release keeps
+  // the candidate inert and falls through to the normal click select.
+  if (event->button() == Qt::LeftButton && m_bedDragActive) {
+    emit bedDragMoveEnd();
+    m_bedDragActive = false;
+    m_bedDragCandidate = false;
+    m_bedDragSourceIndex = -1;
+    m_bedDragLastWorldValid = false;
+    m_pressPickedSourceObjectIndex = -1;
+  }
+  m_bedDragCandidate = false;
+  m_bedDragSourceIndex = -1;
 
   if (event->button() == Qt::LeftButton && m_pressPickedSourceObjectIndex >= 0) {
     const QPointF releaseDelta = event->position() - m_pressPosition;
@@ -2019,6 +2477,8 @@ void RhiViewport::hoverMoveEvent(QHoverEvent *event)
   // v5.16 (NAVIGATOR): cube hover highlight + face label (ImGuizmo hovered
   // face recolor, ImGuizmo.cpp:2923-2925).
   updateNavigatorHover(event->position(), false);
+  // PLATEICONS-GL: bed icon hover swap + tooltip payload.
+  updatePlateIconHover(event->position());
   setHoveredSourceObjectIndex(pickSourceObjectAt(event->position()));
   // Phase 115 (MEASURE-04): drive the snap UX on mouse-move while the measure
   // gizmo is active. The ViewModel runs the two-stage pick + getFeature and
@@ -2038,6 +2498,8 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
 {
   // v5.16 (NAVIGATOR): clear the cube hover when the cursor leaves.
   updateNavigatorHover(event->position(), true);
+  // PLATEICONS-GL: clear the bed-icon hover + tooltip payload.
+  updatePlateIconHover(QPointF(-1e6, -1e6));
   setHoveredSourceObjectIndex(-1);
   // Phase 115 (MEASURE-04): clear the hovered feature when the cursor leaves
   // the viewport so no stale highlight lingers off-mesh.

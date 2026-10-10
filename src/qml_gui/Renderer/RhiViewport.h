@@ -291,6 +291,19 @@ class RhiViewport : public QQuickRhiItem
   // camera. QML only positions the clusters; all actions stay on the
   // ViewModel.
   Q_PROPERTY(QVariantList plateAnchors READ plateAnchors NOTIFY plateAnchorsChanged)
+  // ── PLATEICONS-GL (2026-10-10): bed-surface plate icons ──────────────────
+  // The per-plate icon column (delete/orient/arrange/lock/settings/
+  // move-front), the rename pencil, the index badge, and the plate-name
+  // text are rendered IN the 3D scene as ground-pinned quads (upstream
+  // PartPlate::render_icons, PartPlate.cpp:1128-1230), so they move with
+  // the plate, deform with the camera perspective, and are occluded by
+  // objects. QML feeds the per-plate display states; the viewport builds
+  // the icon atlas + quad batch and owns picking.
+  // Entries: {locked: bool, custom: bool, name: string} per plate.
+  Q_PROPERTY(QVariantList plateIconStates READ plateIconStates WRITE setPlateIconStates NOTIFY plateIconStatesChanged)
+  // Hover payload for the QML tooltip: {plate, icon, x, y} in item pixels
+  // (upstream show_tooltip, PartPlate.cpp:1141). Empty when not hovering.
+  Q_PROPERTY(QVariantMap plateIconHover READ plateIconHover NOTIFY plateIconHoverChanged)
   // Phase 237 (VIEW-01): projection toggle for the upstream View-menu radio
   // pair "Use Perspective View" / "Use Orthogonal View"
   // (MainFrame.cpp:2604-2620, app_config use_perspective_camera). The setter
@@ -636,6 +649,24 @@ public:
   // P15.9 (PLATEANCHOR): per-plate world-anchored overlay positions (see the
   // plateAnchors Q_PROPERTY above).
   QVariantList plateAnchors() const;
+  // ── PLATEICONS-GL (see the plateIconStates Q_PROPERTY above) ─────────────
+  QVariantList plateIconStates() const { return m_plateIconStates; }
+  void setPlateIconStates(const QVariantList &states);
+  QVariantMap plateIconHover() const { return m_plateIconHover; }
+  // Rebuilds the icon atlas + ground quad batch from the current plate
+  // states and bed layout (UI thread; the renderer pulls the results in
+  // synchronize()).
+  void rebuildPlateIcons();
+  // Quad-bytes pass only (hover swaps cells without re-rasterizing the
+  // atlas).
+  void refreshPlateIconQuads();
+  // Rasterizes the icon/name/badge atlas (called by refreshPlateIconQuads
+  // when the atlas is dirty).
+  void buildPlateIconAtlas();
+  // Ground-plane hit test against the icon rects. Returns true when the
+  // position hits one; plateIndex/iconId receive the hit.
+  bool plateIconAt(const QPointF &position, int &plateIndex, int &iconId) const;
+  void updatePlateIconHover(const QPointF &position);
   // Phase 237 (VIEW-01): orthographic projection toggle (see the
   // orthographicCamera Q_PROPERTY above).
   bool orthographicCamera() const { return m_camera.useOrtho(); }
@@ -700,6 +731,12 @@ signals:
   // P15.9 (PLATEANCHOR): per-plate anchor overlay updates (camera moves,
   // plate count / bed footprint changes).
   void plateAnchorsChanged();
+  // PLATEICONS-GL: states rewritten / hover target moved. plateIconActivated
+  // fires on a left click over a bed icon; QML routes it to the same
+  // ViewModel actions the former QML cluster buttons ran.
+  void plateIconStatesChanged();
+  void plateIconHoverChanged();
+  void plateIconActivated(int plateIndex, int iconId);
   void assemblyMeasureSelectionChanged();
   void gizmoModeChanged();
   void sidebarFieldChanged();
@@ -756,6 +793,16 @@ signals:
   void gizmoScaleRequested(int axis, float factor);
   void gizmoDragBegin();
   void gizmoDragEnd();
+  // CAM-PARITY: bed drag-move (upstream LeftDown on a volume arms
+  // m_mouse.drag.move_volume_idx, GLCanvas3D.cpp:4508-4526; the drag moves
+  // the object instead of orbiting the camera, :4531). Same begin/apply/end
+  // contract as the gizmo drag: begin fires once past the drag threshold
+  // (after the click-select signal made the grabbed object the selection),
+  // requested carries the incremental bed-plane (y=0) translation per frame,
+  // end commits the coalesced undo entry.
+  void bedDragMoveBegin();
+  void bedDragMoveRequested(const QVector3D &worldDelta);
+  void bedDragMoveEnd();
   // Phase 115 (MEASURE-04): emitted on mouse-move/click while the measure
   // gizmo is active (m_gizmoMode == GizmoMeasure). worldOrigin/worldDirection
   // are the world-space pick ray (same GizmoMath::computeRay output the
@@ -1126,6 +1173,19 @@ private:
   // GLCanvas3D.cpp:4310-4317).
   bool m_ctrlRotationCenterActive = false;
   QVector3D m_ctrlRotationCenter;
+  // CAM-PARITY: bed drag-move state (upstream m_mouse.drag.move_volume_idx).
+  // Candidate arms at LeftDown over a picked object without Ctrl/Alt/Shift;
+  // active flips past the 4px threshold, and the whole stroke rides the
+  // begin/apply/end signal chain into one undo entry.
+  bool m_bedDragCandidate = false;
+  bool m_bedDragActive = false;
+  int m_bedDragSourceIndex = -1;
+  bool m_bedDragLastWorldValid = false;
+  QVector3D m_bedDragLastWorld;
+  // CAM-PARITY: right-drag pans (upstream right_mouse_drag_action defaults
+  // to Pan, AppConfig.cpp:248-249); a sub-threshold release still opens the
+  // context menu (upstream ignore_right_up only latches after a camera move).
+  bool m_rightDragPan = false;
   // Camera-routing helpers shared by the left/middle drag branches.
   void applyCameraOrbit(float dxPx, float dyPx);
   void applyCameraPan();
@@ -1187,6 +1247,27 @@ private:
   bool m_selectionRubberBandActive = false;
   bool m_cameraDirty = true;
   bool m_bedTextureDirty = true;   // v5.15 (BEDTEX): consumed by renderer synchronize
+
+  // ── PLATEICONS-GL: bed icon atlas + ground quad batch ─────────────────────
+  // Per-plate display states ({locked, custom, name}), rebuilt into an
+  // atlas QImage + BedTextureVertex quad bytes on every change; the
+  // renderer pulls both in synchronize() and draws them depth-tested on
+  // the bed plane (upstream render_icons, PartPlate.cpp:1128-1230).
+  QVariantList m_plateIconStates;
+  QImage m_plateIconAtlas;
+  QByteArray m_plateIconQuadBytes;
+  quint32 m_plateIconQuadCount = 0;
+  bool m_plateIconAtlasDirty = false;
+  bool m_plateIconQuadsDirty = false;
+  // Explicit dirty latch for the renderer sync pull (replaces byte-wise
+  // comparisons of the payload, which ran on every synchronize).
+  bool m_plateIconsSyncDirty = false;
+  // Current hover target: plateIndex/iconId, -1 when not hovering; px
+  // carries the cursor position for the QML tooltip anchor.
+  int m_hoverPlateIndex = -1;
+  int m_hoverPlateIconId = -1;
+  QPointF m_hoverPlateIconPx;
+  QVariantMap m_plateIconHover;
 
   // Phase 69/70: gizmo drag state.
   // m_gizmoAxis: 0=none, 1=X, 2=Y, 3=Z.

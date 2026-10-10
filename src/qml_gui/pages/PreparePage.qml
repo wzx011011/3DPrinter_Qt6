@@ -1516,305 +1516,134 @@ Item {
                     viewport: viewport3d
                 }
 
-                // P15.9: per-plate identity clusters anchored to each plate's
-                // own world position. Upstream PartPlate::render_icons draws
-                // the icon stack on every plate at its bed position
-                // (PartPlate.cpp:972-1076) and Plater::select_plate_by_hover_id
-                // (Plater.cpp:13862) dispatches each action to that plate.
-                // Anchors are projected in C++ (RhiViewport::plateAnchors);
-                // this overlay only positions the existing backend-driven
-                // controls, hides behind-camera clusters, and dispatches.
-                Repeater {
-                    id: plateClusterRepeater
-                    // Read the viewport size before the anchors so this
-                    // binding also refreshes when the viewport layout
-                    // settles (same pattern as NavigatorLabels.qml).
-                    model: {
-                        if (!viewport3d)
-                            return []
-                        const w = viewport3d.width
-                        const h = viewport3d.height
-                        return viewport3d.plateAnchors
+                // ── PLATEICONS-GL (2026-10-10): the per-plate identity
+                // cluster moved INTO the 3D scene. Upstream
+                // PartPlate::render_icons (PartPlate.cpp:1128-1230) draws the
+                // icon column, index badge, plate name, and rename pencil as
+                // ground-pinned bed quads with scene picking
+                // (register_model_for_picking, PartPlate.cpp:1505-1516), so
+                // they deform with the camera perspective and are occluded by
+                // objects. RhiViewport now renders exactly that (atlas +
+                // ground quads + ground-plane picking); this page only feeds
+                // the per-plate display states, shows the hover tooltip, and
+                // routes plateIconActivated to the same ViewModel actions the
+                // former QML cluster buttons ran. The screen-space
+                // plateCluster overlay (plateAnchors projection) is retired.
+                function handlePlateIconActivated(plateIndex, iconId) {
+                    if (!root.editorVm || plateIndex < 0)
+                        return
+                    switch (iconId) {
+                    case 0:  // delete (upstream picking id 1)
+                        if (root.editorVm.canDeletePlate(plateIndex))
+                            root.confirmDeletePlateAt(plateIndex)
+                        break
+                    case 1:  // auto orient on this plate (picking id 2)
+                        if (root.editorVm.plateObjectCount(plateIndex) > 0) {
+                            root.editorVm.synchronizeViewportContext(2, -1, -1, -1, plateIndex)
+                            root.editorVm.autoOrientContextPlate()
+                        }
+                        break
+                    case 2:  // arrange (picking id 3)
+                        root.editorVm.arrangePlate(plateIndex)
+                        break
+                    case 3:  // lock/unlock (picking id 4)
+                        root.editorVm.togglePlateLocked(plateIndex)
+                        break
+                    case 4:  // plate settings (picking id 5)
+                    {
+                        var dialog = plateSettingsDialogComp.createObject(root)
+                        dialog.plateIndex = plateIndex
+                        dialog.plateName = root.editorVm.plateName(plateIndex)
+                        // Re-probe has_plate_settings when the dialog
+                        // dismisses so the changed icon tracks edits.
+                        dialog.closed.connect(function() {
+                            viewportArea.rebuildPlateIconStates()
+                        })
+                        dialog.open()
+                        break
                     }
-
-                    // vp-2 (PLATEICONS): per-plate anchor point; the delegates
-                    // below hang the vertical icon column just inside the
-                    // plate's right edge and the name + pencil cluster just
-                    // inside the left edge, replacing the former horizontal
-                    // "Plate N" pill bar (design ref: ground-pinned circular
-                    // button column on the plate's right edge + top-left
-                    // rename pencil).
-                    delegate: Item {
-                        id: plateCluster
-                        required property var modelData
-                        readonly property int plateIdx: modelData ? modelData.plateIndex : -1
-                        readonly property bool onScreen: modelData && modelData.visible
-                                                         && root.editorVm && root.editorVm.plateCount > 0
-                                                         && plateIdx >= 0
-                        readonly property string plateLabel:
-                            root.editorVm && plateIdx >= 0
-                                ? (root.editorVm.plateName(plateIdx).length > 0
-                                   ? root.editorVm.plateName(plateIdx) : qsTr("Untitled"))
-                                : ""
-                        readonly property string idxText: {
-                            var n = plateIdx + 1
-                            return n < 10 ? "0" + n : "" + n
-                        }
-                        // Anchor = the plate's projected max corner (icons) /
-                        // min corner (name); the item is a zero-size point.
-                        x: plateCluster.onScreen ? modelData.x : 0
-                        y: plateCluster.onScreen ? modelData.y + 3 : 0
-                        z: 98
-                        visible: plateCluster.onScreen
-
-                        function openRenameDialog() {
-                            if (!root.editorVm || plateIdx < 0)
-                                return
-                            var dialog = plateRenameDialog.createObject(root)
-                            dialog.plateIndex = plateCluster.plateIdx
-                            dialog.currentName = root.editorVm.plateName(plateCluster.plateIdx)
-                            dialog.open()
-                        }
-
-                        // Vertical circular icon column on the plate's right
-                        // edge. Upstream order (PartPlate.cpp:3413-3423):
-                        // del, orient, arrange, lock, settings, move-front,
-                        // with the plate number texture rendered by
-                        // m_idx_textures (PartPlate.cpp:4394-4404).
-                        Column {
-                            id: plateIconColumn
-                            x: -36 - 3
-                            y: 0
-                            spacing: 8
-
-                            // Circular plate-index button ("01"): top of the
-                            // column, carries the plate switch menu + rename.
-                            // The compact plateSelector combo below stays as
-                            // the P15.9-locked switcher. Number color =
-                            // upstream PlateTextureForeground #00AE42
-                            // (PartPlate.cpp:79).
-                            Rectangle {
-                                id: idxButton
-                                width: 36
-                                height: 36
-                                radius: Theme.radiusHero  // clamps to width/2: full circle
-                                color: idxHover.containsMouse ? Theme.bgHover
-                                                              : Qt.rgba(0.10, 0.10, 0.12, 0.82)
-                                border.width: 1
-                                border.color: idxHover.containsMouse ? Theme.accent : Theme.borderSubtle
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: plateCluster.idxText
-                                    color: Theme.extruderPalette[2]
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                }
-                                HoverHandler { id: idxHover }
-                                TapHandler {
-                                    cursorShape: Qt.PointingHandCursor
-                                    onTapped: idxMenu.popup(idxButton, 0, idxButton.height + 2)
-                                }
-                                ToolTip.visible: idxHover.hovered
-                                ToolTip.text: qsTr("Switch plate")
-                                // U08 (①): CxMenu/CxMenuItem instead of the bare
-                                // native Menu — Popup.Native (the Qt 6.8+
-                                // Windows default) rendered this as a native
-                                // semi-transparent popup that let the bed show
-                                // through (openResolved capture (1080,641));
-                                // CxMenu forces popupType=Popup.Item.
-                                CxMenu {
-                                    id: idxMenu
-                                    Repeater {
-                                        model: root.editorVm ? root.editorVm.plateCount : 0
-                                        delegate: CxMenuItem {
-                                            text: {
-                                                var name = root.editorVm ? root.editorVm.plateName(index) : ""
-                                                return qsTr("Plate %1").arg(index + 1)
-                                                        + (name.length > 0 ? "  " + name
-                                                                           : "  " + qsTr("Untitled"))
-                                            }
-                                            checkable: true
-                                            checked: root.editorVm
-                                                     && root.editorVm.currentPlateIndex === index
-                                            onTriggered: if (root.editorVm)
-                                                             root.editorVm.setCurrentPlateIndex(index)
-                                        }
-                                    }
-                                    MenuSeparator {}
-                                    CxMenuItem {
-                                        text: qsTr("Rename plate")
-                                        onTriggered: plateCluster.openRenameDialog()
-                                    }
-                                }
-                            }
-
-                            // BUILDGATE restore (2026-09-24): vp-2 dropped the
-                            // cluster plate switcher, but P15.9
-                            // (prepareViewportHostsPlateIdentityOverlay) still
-                            // locks the backend-driven plateSelector combo.
-                            // Kept compact under the idx button.
-                            CxComboBox {
-                                id: plateSelector
-                                implicitWidth: 104
-                                model: {
-                                    var labels = []
-                                    if (root.editorVm) {
-                                        for (var i = 0; i < root.editorVm.plateCount; ++i) {
-                                            var name = root.editorVm.plateName(i)
-                                            labels.push(qsTr("Plate %1").arg(i + 1) + "  "
-                                                        + (name.length > 0 ? name : qsTr("Untitled")))
-                                        }
-                                    }
-                                    return labels
-                                }
-                                currentIndex: root.editorVm ? root.editorVm.currentPlateIndex : -1
-                                onActivated: if (root.editorVm) root.editorVm.setCurrentPlateIndex(currentIndex)
-                                ToolTip.visible: hovered
-                                ToolTip.text: qsTr("Switch plate")
-                            }
-
-                            PlateActionButton {
-                                iconSource: "qrc:/qml/assets/icons/plate_close.svg"
-                                toolTipText: qsTr("Delete plate")
-                                enabled: root.editorVm && plateCluster.plateIdx >= 0
-                                         && root.editorVm.canDeletePlate(plateCluster.plateIdx)
-                                onClicked: root.confirmDeletePlateAt(plateCluster.plateIdx)
-                            }
-                            PlateActionButton {
-                                iconSource: "qrc:/qml/assets/icons/plate_orient.svg"
-                                toolTipText: qsTr("Auto orient objects")
-                                enabled: root.editorVm && plateCluster.plateIdx >= 0
-                                         && root.editorVm.plateObjectCount(plateCluster.plateIdx) > 0
-                                onClicked: {
-                                    // Upstream select_plate(plate_index) +
-                                    // orient() (Plater.cpp:13956-13971):
-                                    // resolving the plate context
-                                    // (ViewportContextTarget::Plate = 2)
-                                    // selects the plate, then the existing
-                                    // context auto-orient runs on it. Same
-                                    // dispatch as the plate context menu.
-                                    root.editorVm.synchronizeViewportContext(2, -1, -1, -1, plateCluster.plateIdx)
-                                    root.editorVm.autoOrientContextPlate()
-                                }
-                            }
-                            PlateActionButton {
-                                iconSource: "qrc:/qml/assets/icons/plate_arrange.svg"
-                                toolTipText: qsTr("Arrange objects")
-                                enabled: root.editorVm && plateCluster.plateIdx >= 0
-                                onClicked: root.editorVm.arrangePlate(plateCluster.plateIdx)
-                            }
-                            PlateActionButton {
-                                iconSource: checked
-                                            ? "qrc:/qml/assets/icons/plate_locked.svg"
-                                            : "qrc:/qml/assets/icons/plate_unlocked.svg"
-                                checked: root.editorVm && plateCluster.plateIdx >= 0
-                                         && root.editorVm.isPlateLocked(plateCluster.plateIdx)
-                                toolTipText: checked ? qsTr("Unlock plate") : qsTr("Lock plate")
-                                enabled: root.editorVm && plateCluster.plateIdx >= 0
-                                onClicked: root.editorVm.togglePlateLocked(plateCluster.plateIdx)
-                            }
-                            PlateActionButton {
-                                // Upstream two-state settings icon
-                                // (PartPlate.cpp:1213-1223): the orange
-                                // "changed" texture shows when the plate's
-                                // bed type / print sequence / filament
-                                // sequences / spiral mode left the defaults
-                                // (has_plate_settings). Tooltip stays
-                                // "Customize current plate" in both states.
-                                // plateHasCustomSettings is a Q_INVOKABLE,
-                                // so the binding leans on this tick, bumped
-                                // whenever the settings dialog closes, to
-                                // re-evaluate.
-                                id: plateSettingsButton
-                                property int settingsProbeTick: 0
-                                iconSource: plateSettingsButton.settingsProbeTick >= 0
-                                            && root.editorVm && plateCluster.plateIdx >= 0
-                                            && root.editorVm.plateHasCustomSettings(plateCluster.plateIdx)
-                                            ? "qrc:/qml/assets/icons/plate_settings_changed.svg"
-                                            : "qrc:/qml/assets/icons/plate_settings.svg"
-                                toolTipText: qsTr("Customize current plate")
-                                enabled: root.editorVm && plateCluster.plateIdx >= 0
-                                onClicked: {
-                                    var dialog = plateSettingsDialogComp.createObject(root)
-                                    dialog.plateIndex = plateCluster.plateIdx
-                                    dialog.plateName = root.editorVm.plateName(plateCluster.plateIdx)
-                                    // Re-probe has_plate_settings when the
-                                    // dialog dismisses so the changed icon
-                                    // tracks edits made inside it.
-                                    dialog.closed.connect(function() {
-                                        plateSettingsButton.settingsProbeTick += 1
-                                    })
-                                    dialog.open()
-                                }
-                            }
-                            PlateActionButton {
-                                iconSource: "qrc:/qml/assets/icons/plate_move_front.svg"
-                                toolTipText: qsTr("Move plate to the front")
-                                enabled: root.editorVm && plateCluster.plateIdx > 0
-                                onClicked: root.editorVm.movePlate(plateCluster.plateIdx, 0)
-                            }
-                        }
-
-                        // vp-2: plate name + pencil rename cluster at the
-                        // plate's top-LEFT corner (upstream pins the edit
-                        // pencil next to the rendered plate name at the bed
-                        // extents min corner,
-                        // calc_vertex_for_plate_name_edit_icon,
-                        // PartPlate.cpp:646-676; the nameX/nameY anchors carry
-                        // that corner projection).
-                        Row {
-                            id: plateNameCluster
-                            x: (plateCluster.modelData ? plateCluster.modelData.nameX - plateCluster.x : 0) + 3
-                            y: (plateCluster.modelData ? plateCluster.modelData.nameY - plateCluster.y : 0) + 3
-                            spacing: 4
-
-                            Rectangle {
-                                width: 22
-                                height: 22
-                                radius: Theme.radiusXL
-                                anchors.verticalCenter: parent.verticalCenter
-                                color: nameEditHover.containsMouse ? Theme.bgHover
-                                                                   : Qt.rgba(0.10, 0.10, 0.12, 0.82)
-                                border.width: 1
-                                border.color: nameEditHover.containsMouse ? Theme.accent : Theme.borderSubtle
-
-                                Image {
-                                    anchors.centerIn: parent
-                                    width: 12
-                                    height: 12
-                                    source: "qrc:/qml/assets/icons/plate_name_edit.svg"
-                                    sourceSize: Qt.size(width, height)
-                                }
-                                HoverHandler { id: nameEditHover }
-                                TapHandler {
-                                    cursorShape: Qt.PointingHandCursor
-                                    onTapped: plateCluster.openRenameDialog()
-                                }
-                                ToolTip.visible: nameEditHover.hovered
-                                ToolTip.text: qsTr("Rename plate")
-                                ToolTip.delay: 400
-                            }
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: plateCluster.plateLabel
-                                color: Theme.textSecondary
-                                font.pixelSize: 12
-                                style: Text.Outline
-                                styleColor: Theme.chromeSurfaceAlt
-                            }
-                        }
+                    case 5:  // move plate to the front (picking id 7)
+                        if (plateIndex > 0)
+                            root.editorVm.movePlate(plateIndex, 0)
+                        break
+                    case 6:  // rename pencil (picking id 6)
+                    {
+                        var rename = plateRenameDialog.createObject(root)
+                        rename.plateIndex = plateIndex
+                        rename.currentName = root.editorVm.plateName(plateIndex)
+                        rename.closed.connect(function() {
+                            viewportArea.rebuildPlateIconStates()
+                        })
+                        rename.open()
+                        break
+                    }
                     }
                 }
 
-                // vp-4 (VIEWWIDGET) retired 2026-10-09: the top-right view
-                // shortcut tiles (top/front/home) were a design-reference
-                // addition with no upstream counterpart -- upstream Prepare
-                // keeps only the bottom-left navigator cube
-                // (GLCanvas3D.cpp:6160-6181), which this page still has.
-                // Removed under the 2026-10-07 "layout follows upstream"
-                // ruling; viewport3d.selectView stays for the cube and
-                // BBLTopbar routes.
+                // Per-plate display states for the GL icon column. The
+                // Q_INVOKABLE probes are not NOTIFY-bound, so the cache is
+                // recomputed on every ViewModel state change and after any
+                // dialog that mutates plate state closes.
+                property var plateIconStatesCache: []
+                function rebuildPlateIconStates() {
+                    var states = []
+                    if (root.editorVm) {
+                        for (var i = 0; i < root.editorVm.plateCount; ++i) {
+                            states.push({
+                                locked: root.editorVm.isPlateLocked(i),
+                                custom: root.editorVm.plateHasCustomSettings(i),
+                                name: root.editorVm.plateName(i)
+                            })
+                        }
+                    }
+                    viewportArea.plateIconStatesCache = states
+                }
+                Connections {
+                    target: root.editorVm
+                    function onStateChanged() { viewportArea.rebuildPlateIconStates() }
+                }
+                Component.onCompleted: viewportArea.rebuildPlateIconStates()
+
+                // Hover tooltip (upstream show_tooltip, PartPlate.cpp:1141:
+                // the icon action hint renders at the cursor).
+                Rectangle {
+                    readonly property var hover: viewport3d.plateIconHover
+                    readonly property int hoverIcon:
+                        hover && hover.icon !== undefined ? hover.icon : -1
+                    readonly property bool hoverPlateLocked:
+                        hover && hover.plate !== undefined && root.editorVm
+                            ? root.editorVm.isPlateLocked(hover.plate) : false
+                    readonly property string hoverText: {
+                        switch (hoverIcon) {
+                        case 0: return qsTr("Remove current plate (if not last one)")
+                        case 1: return qsTr("Auto orient objects on current plate")
+                        case 2: return qsTr("Arrange objects on current plate")
+                        case 3: return hoverPlateLocked ? qsTr("Unlock plate")
+                                                        : qsTr("Lock plate")
+                        case 4: return qsTr("Customize current plate")
+                        case 5: return qsTr("Move plate to the front")
+                        case 6: return qsTr("Rename plate")
+                        default: return ""
+                        }
+                    }
+                    visible: hoverIcon >= 0 && hoverText.length > 0
+                    x: (hover && hover.x !== undefined ? hover.x : 0) + 14
+                    y: (hover && hover.y !== undefined ? hover.y : 0) + 14
+                    z: 101
+                    width: hoverLabel.implicitWidth + 16
+                    height: hoverLabel.implicitHeight + 8
+                    radius: Theme.radiusSM
+                    color: Theme.bgFloating
+                    border.width: 1
+                    border.color: Theme.borderSubtle
+                    Label {
+                        id: hoverLabel
+                        anchors.centerIn: parent
+                        text: parent.hoverText
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                    }
+                }
 
                 GLToolbars {
                     id: glToolbars
@@ -1836,6 +1665,11 @@ Item {
                     anchors.fill: parent
                     z: 0
                     canvasType: GLViewport.CanvasView3D
+                    // PLATEICONS-GL: per-plate display states for the bed
+                    // icon column rendered inside the scene.
+                    plateIconStates: viewportArea.plateIconStatesCache
+                    onPlateIconActivated: (plateIndex, iconId) =>
+                        viewportArea.handlePlateIconActivated(plateIndex, iconId)
                     uniformScale: root.editorVm ? root.editorVm.uniformScale : true
                     meshData: root.editorVm ? root.editorVm.meshData : null
                     bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
@@ -2055,6 +1889,27 @@ Item {
                                 root.editorVm.endGizmoScaleDrag()
                             else
                                 root.editorVm.endGizmoMoveDrag()
+                        }
+                    }
+                    // CAM-PARITY: bed drag-move (upstream LeftDown on a volume
+                    // arms the move drag, GLCanvas3D.cpp:4508-4526; dragging
+                    // moves the object across the bed instead of orbiting).
+                    // Same begin/apply/end contract as the gizmo move: the
+                    // ViewModel coalesces the stroke into one undo entry.
+                    onBedDragMoveBegin: {
+                        if (root.editorVm) {
+                            viewport3d.contextToolInputCaptured = true
+                            root.editorVm.beginGizmoMoveDrag()
+                        }
+                    }
+                    onBedDragMoveRequested: function(worldDelta) {
+                        if (root.editorVm)
+                            root.editorVm.applyGizmoMoveDelta(worldDelta.x, worldDelta.y, worldDelta.z)
+                    }
+                    onBedDragMoveEnd: {
+                        if (root.editorVm) {
+                            viewport3d.contextToolInputCaptured = false
+                            root.editorVm.endGizmoMoveDrag()
                         }
                     }
                     // Phase 115 (MEASURE-04): wire the snap UX (mouse-move ->
