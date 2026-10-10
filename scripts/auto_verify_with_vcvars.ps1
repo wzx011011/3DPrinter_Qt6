@@ -177,10 +177,36 @@ function Fail-Stage([string]$Stage, [string]$Message, [int]$ExitCode = 1) {
   exit $ExitCode
 }
 
+# Stale processes from an interrupted verify keep their exe files locked
+# (LNK1104 "cannot open file"), so kill them before linking — but scoped to
+# THIS repo (Q4). The old bare-name kill of 'cmake'/'ninja'/'link' was
+# machine-wide and took down other sessions'/projects' builds.
+function Stop-RepoProcesses {
+  # (1) Anything whose executable lives under build\ — the app, test/bench/
+  #     cli exes all output there, so this covers every current and future
+  #     test target without a name list.
+  $buildPrefix = $buildDir.TrimEnd('\') + '\'
+  Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    try { $_.Path -and $_.Path.StartsWith($buildPrefix, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
+  } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+  # (2) Tool processes (cmake/ninja/link) only when their command line
+  #     references this repo's root — our configure passes absolute repo
+  #     paths (-DOWZX_UPSTREAM_ROOT/-DQt6_DIR/...). Those tools' executables
+  #     are never installed under build\, so exe-path scoping cannot reach
+  #     them; a repo path in the command line is the honest ownership signal.
+  #     (A stale `ninja -j6 <target>` spawned from build\ uses relative
+  #     arguments and stays unidentifiable after the fact — accepted: the
+  #     LNK1104 lock holders are the exes under (1), and the configure retry
+  #     covers the "failed recompaction" race.)
+  Get-CimInstance Win32_Process -Filter "Name='cmake.exe' OR Name='ninja.exe' OR Name='link.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and ($_.CommandLine.IndexOf($repoRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
 Stop-Process -Name 'OWzxSlicer' -Force -ErrorAction SilentlyContinue
-# Test executables from a previous interrupted verify keep their exe files
-# locked (LNK1104 "cannot open file"), so kill them too before linking.
-Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
+Stop-RepoProcesses
+# Belt and braces: this repo's test exe names are unique machine-wide, so the
+# name list is zero-collateral and also catches exes launched from copies.
 Stop-Process -Name 'E2EWorkflowTests', 'ViewModelSmokeTests', 'PrepareSceneDataTests',
     'ObjectPickingTests', 'NavigatorCubeTests', 'CameraParityTests',
     'ViewportContextMenuTests', 'QmlUiAuditTests', 'PartPlateTests', 'AppToolTests',
@@ -273,16 +299,44 @@ $configureSucceeded = $false
 # project (FindBoost, Qt shader/tooling discovery). Skip it entirely when the
 # existing build.ninja is NEWER than every CMake input that could change it
 # (root/cmake CMakeLists + the script's own -D switches are fixed values).
-$cmakeInputs = @('..\CMakeLists.txt') + (Get-ChildItem '..\cmake' -Filter '*.cmake' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+# Q4 (2026-10-11): patches/orcaslicer/*.patch are applied onto the OrcaSlicer
+# submodule working tree AT CONFIGURE TIME (ApplyOrcaSlicerPatches.cmake) and
+# the submodule gitlink decides which upstream tree gets built. Neither was
+# in this input set, so a patch-only or pin-only commit skipped configure and
+# ran the suites on stale, unpatched binaries (false green). The patches join
+# the mtime inputs; the pin has no file mtime at all (the gitlink moves
+# without touching any tracked file's mtime), so it is recorded after each
+# successful configure into build\ and compared by CONTENT on the fast path.
+$cmakeInputs = @(
+  '..\CMakeLists.txt'
+) + (
+  (Get-ChildItem '..\cmake' -Filter '*.cmake' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }) +
+  (Get-ChildItem '..\patches\orcaslicer' -Filter '*.patch' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+)
+$submodulePinFile = Join-Path (Get-Location) 'owzx_orcaslicer_pin.txt'
+$submoduleHead = $null
+try {
+  $submoduleHead = (& git -C (Join-Path $repoRoot 'third_party\OrcaSlicer') rev-parse HEAD 2>$null | Select-Object -First 1)
+  if (-not $submoduleHead) { $submoduleHead = $null }
+} catch {
+  $submoduleHead = $null
+}
+# An unreadable pin (git missing, submodule not initialized) must NOT allow
+# the fast path — force a real configure so the failure surfaces there.
+$submodulePinMatches = $false
+if ($null -ne $submoduleHead -and (Test-Path $submodulePinFile)) {
+  $pinnedHead = (Get-Content $submodulePinFile -Raw).Trim()
+  if ($pinnedHead -eq $submoduleHead.Trim()) { $submodulePinMatches = $true }
+}
 $buildNinja = Join-Path (Get-Location) 'build.ninja'
 $skipConfigure = $false
-if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0)) {
+if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0) -and $submodulePinMatches) {
   $ninjaTime = (Get-Item $buildNinja).LastWriteTimeUtc
   $newestInput = ($cmakeInputs | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
   if ($null -ne $newestInput -and $newestInput.LastWriteTimeUtc -le $ninjaTime) {
     $skipConfigure = $true
     $configureSucceeded = $true
-    Write-Stage 'Configure' ("Skipped (build.ninja up to date vs " + (Split-Path $newestInput.FullName -Leaf) + ")")
+    Write-Stage 'Configure' ("Skipped (build.ninja up to date vs " + (Split-Path $newestInput.FullName -Leaf) + "; OrcaSlicer pin " + $submoduleHead + " unchanged)")
   }
 }
 
@@ -305,12 +359,19 @@ for ($attempt = 1; $attempt -le 3; ++$attempt) {
 
   Write-Stage 'Configure' ("Retrying after permission-denied configure failure on attempt " + $attempt)
   Stop-Process -Name 'OWzxSlicer' -Force -ErrorAction SilentlyContinue
-  Stop-Process -Name 'cmake', 'ninja', 'link' -Force -ErrorAction SilentlyContinue
+  Stop-RepoProcesses
   Start-Sleep -Seconds 2
 }
 
 if (-not $configureSucceeded) {
   Fail-Stage 'Configure' ("CMake configure failed after retries with exit code " + $lastConfigureExitCode) $lastConfigureExitCode
+}
+
+# Record the submodule pin this build.ninja was configured against (Q4): the
+# fast path above compares it by content so a pin-only change cannot skip
+# configure on the next run. Only written after a successful configure.
+if ($null -ne $submoduleHead) {
+  Set-Content -Path $submodulePinFile -Value $submoduleHead
 }
 }  # end of skip-configure fast path
 
