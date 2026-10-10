@@ -66,6 +66,22 @@ gate's own files).
   `patches/orcaslicer/*.patch` onto the pristine `third_party/OrcaSlicer`
   submodule checkout (see `cmake/ApplyOrcaSlicerPatches.cmake`).
 
+## RHI Rendering Backend Commitment
+
+- The supported rendering configuration is **Windows + D3D11, a single
+  backend**. The backend selector probes D3D11-first
+  (`src/qml_gui/Renderer/RhiBackendSelector.cpp`); that is the product
+  commitment, not an accident of the code.
+- D3D12 is **not** part of the commitment: it crashes at QQuickWindow
+  swapchain init (0xC0000005) on AMD Radeon APU (mainstream integrated)
+  graphics — confirmed on a real machine in v5.7 Phase 211. It remains
+  reachable only as an explicit debug opt-in via `OWZX_RHI_RENDERER=d3d12`
+  (with `OWZX_D3D12_DEBUG` for the debug layer), not as a default candidate.
+- Non-D3D11 backends (Vulkan/OpenGL/Metal) and non-Windows CI are
+  deliberately out of scope until a product decision re-opens them (dev
+  plan 2026-10-10 §5). Do not widen the backend matrix or "fix" gate
+  failures by adding backend candidates without that decision.
+
 ## OrcaSlicer Submodule
 
 - The submodule stays a pristine upstream checkout; the gitlink pins the
