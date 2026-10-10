@@ -216,10 +216,18 @@ private:
   QList<int> effectiveSelectedSourceIndices() const;
 
   // PLATEICONS-GL: atlas + quad batch pulled from RhiViewport in synchronize.
+  // Q2: atlas and quads pend independently (a hover swap re-uploads only the
+  // vertex batch), and the atlas pixel transfer is gated through the
+  // PrepareSceneData::plateIconAtlasUploadDecision seam: m_plateIconAtlasCacheKey
+  // identifies the staged image, m_plateIconAtlasUploadedKey the pixels
+  // actually resident in m_plateIconTexture -- equal keys + valid texture
+  // skip the ~16.7MB uploadTexture.
   QImage m_plateIconAtlasPending;
   quint64 m_plateIconAtlasCacheKey = 0;
+  quint64 m_plateIconAtlasUploadedKey = 0;
   QByteArray m_plateIconQuadBytesSync;
-  bool m_plateIconsPending = false;
+  bool m_plateIconAtlasUploadPending = false;
+  bool m_plateIconQuadUploadPending = false;
   std::unique_ptr<QRhiTexture> m_plateIconTexture;
   std::unique_ptr<QRhiSampler> m_plateIconSampler;
   std::unique_ptr<QRhiShaderResourceBindings> m_plateIconSrb;

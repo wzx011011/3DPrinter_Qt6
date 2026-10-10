@@ -404,15 +404,21 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       m_bedTextureDirty = true;
     }
   }
-  // PLATEICONS-GL: pull the icon atlas + ground quad batch when the
-  // viewport latched a rebuild (explicit dirty flag -- byte-wise payload
-  // comparisons ran on every synchronize).
-  if (viewport->m_plateIconsSyncDirty) {
-    viewport->m_plateIconsSyncDirty = false;
+  // PLATEICONS-GL (Q2): pull the icon atlas + ground quad batch through two
+  // independent latches (explicit dirty flags -- byte-wise payload
+  // comparisons ran on every synchronize). The 2048x2048 atlas image only
+  // crosses threads when it was actually re-rasterized; a quad-only hover
+  // swap stages just the vertex batch.
+  if (viewport->m_plateIconAtlasSyncDirty) {
+    viewport->m_plateIconAtlasSyncDirty = false;
     m_plateIconAtlasPending = viewport->m_plateIconAtlas;
     m_plateIconAtlasCacheKey = viewport->m_plateIconAtlas.cacheKey();
+    m_plateIconAtlasUploadPending = true;
+  }
+  if (viewport->m_plateIconQuadSyncDirty) {
+    viewport->m_plateIconQuadSyncDirty = false;
     m_plateIconQuadBytesSync = viewport->m_plateIconQuadBytes;
-    m_plateIconsPending = true;
+    m_plateIconQuadUploadPending = true;
   }
 
   // v5.16 (BEDMODEL/BEDTYPE-TEX): bed_model stream + bed-type gates. The
@@ -808,8 +814,8 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       else
       {
         // Phase 121 (PAINT-02/PAINT-03): paint overlay + brush cursor uploads.
-        // These reuse the same batch; failure of either is non-fatal (the draw
-        // is simply skipped). uploadPaintOverlayBuffer parses the byte stream;
+        // These reuse the same batch; failure of either is non-fatal (the
+        // draw is simply skipped). uploadPaintOverlayBuffer parses the byte stream;
         // uploadBrushCursorBuffer rebuilds the sphere when inputs change.
         uploadPaintOverlayBuffer(updates);
         uploadBrushCursorBuffer(updates);
@@ -820,6 +826,17 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         uploadMeasureOverlayBuffer(updates);
         uploadFlattenHoverBuffer(updates);
       }
+    }
+
+    // PLATEICONS-GL (Q2): the icon atlas + ground quads ride their own
+    // pending latches (pulled in synchronize), NOT the scene-dirty gate
+    // above -- a hover-only change must reach the GPU on the frame it
+    // happened instead of waiting for an unrelated dirty flag.
+    if (!m_pipelineFailed
+        && (m_plateIconAtlasUploadPending || m_plateIconQuadUploadPending)) {
+      if (updates == nullptr)
+        updates = rhi()->nextResourceUpdateBatch();
+      uploadPlateIcons(updates);
     }
   }
 
@@ -1337,7 +1354,9 @@ void RhiViewportRenderer::releaseResources()
   m_bedTexturePath.clear();
   m_pendingBedTexturePath.clear();
   m_bedTextureDirty = false;
-  // PLATEICONS-GL: icon atlas + quad batch release.
+  // PLATEICONS-GL: icon atlas + quad batch release. Dropping the texture
+  // also forgets the uploaded cacheKey so the next upload decision cannot
+  // mistake a dead texture for a freshly-uploaded one.
   m_plateIconPipeline.reset();
   m_plateIconSrb.reset();
   m_plateIconTexture.reset();
@@ -1346,8 +1365,11 @@ void RhiViewportRenderer::releaseResources()
   m_plateIconVertexByteCount = 0;
   m_plateIconVertexCount = 0;
   m_plateIconAtlasPending = QImage();
+  m_plateIconAtlasCacheKey = 0;
+  m_plateIconAtlasUploadedKey = 0;
   m_plateIconQuadBytesSync.clear();
-  m_plateIconsPending = false;
+  m_plateIconAtlasUploadPending = false;
+  m_plateIconQuadUploadPending = false;
   m_bedTextureQuadDirty = true;
   m_bedTextureVertexBytes = 0;
   m_bedTextureVertexCount = 0;
@@ -2177,35 +2199,57 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
 }
 
 // ── PLATEICONS-GL: bed icon atlas upload (mirrors uploadBedTexture) ─────────
+// Q2: gated by the two pending latches pulled in synchronize(); the atlas
+// pixel transfer decision is delegated to the pure seam
+// PrepareSceneData::plateIconAtlasUploadDecision (unit-locked: one cacheKey
+// = one upload), so a quad-only hover swap re-uploads neither the atlas
+// QImage copy nor the ~16.7MB texture.
 void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
 {
-  if (updates == nullptr || rhi() == nullptr || !m_plateIconsPending)
+  if (updates == nullptr || rhi() == nullptr)
     return;
-  m_plateIconsPending = false;
 
-  if (!m_plateIconAtlasPending.isNull()
-      && (!m_plateIconTexture
-          || m_plateIconTexture->pixelSize() != m_plateIconAtlasPending.size())) {
-    m_plateIconTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8,
-                                               m_plateIconAtlasPending.size()));
-    if (!m_plateIconTexture->create()) {
-      m_plateIconTexture.reset();
-      return;
+  if (m_plateIconAtlasUploadPending) {
+    m_plateIconAtlasUploadPending = false;
+    if (!m_plateIconAtlasPending.isNull()) {
+      const PrepareSceneData::PlateIconAtlasUpload decision =
+          PrepareSceneData::plateIconAtlasUploadDecision(
+              m_plateIconAtlasCacheKey, m_plateIconAtlasUploadedKey,
+              m_plateIconTexture != nullptr,
+              m_plateIconTexture ? m_plateIconTexture->pixelSize() : QSize(),
+              m_plateIconAtlasPending.size());
+      if (decision.recreateTexture) {
+        m_plateIconTexture.reset(rhi()->newTexture(
+            QRhiTexture::RGBA8, m_plateIconAtlasPending.size()));
+        if (!m_plateIconTexture->create()) {
+          m_plateIconTexture.reset();
+          // Texture loss invalidates the resident pixels too.
+          m_plateIconAtlasUploadedKey = 0;
+        } else {
+          m_plateIconSampler.reset(rhi()->newSampler(
+              QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+              QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+          if (!m_plateIconSampler->create()) {
+            m_plateIconSampler.reset();
+            m_plateIconTexture.reset();
+            m_plateIconAtlasUploadedKey = 0;
+          } else {
+            m_plateIconSrb.reset();
+            m_plateIconPipeline.reset();
+          }
+        }
+      }
+      if (m_plateIconTexture && decision.uploadPixels) {
+        updates->uploadTexture(m_plateIconTexture.get(), m_plateIconAtlasPending);
+        m_plateIconAtlasUploadedKey = m_plateIconAtlasCacheKey;
+      }
+      m_plateIconAtlasPending = QImage();
     }
-    m_plateIconSampler.reset(rhi()->newSampler(
-        QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
-        QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
-    if (!m_plateIconSampler->create()) {
-      m_plateIconSampler.reset();
-      m_plateIconTexture.reset();
-      return;
-    }
-    m_plateIconSrb.reset();
-    m_plateIconPipeline.reset();
   }
-  if (m_plateIconTexture)
-    updates->uploadTexture(m_plateIconTexture.get(), m_plateIconAtlasPending);
 
+  if (!m_plateIconQuadUploadPending)
+    return;
+  m_plateIconQuadUploadPending = false;
   if (!m_plateIconQuadBytesSync.isEmpty()) {
     const quint32 bytes = quint32(m_plateIconQuadBytesSync.size());
     // Dynamic buffer + full-buffer immediate update: uploadStaticBuffer
@@ -2234,7 +2278,6 @@ void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
   } else {
     m_plateIconVertexCount = 0;
   }
-  m_plateIconAtlasPending = QImage();
 }
 
 bool RhiViewportRenderer::ensurePlateIconPipeline()
@@ -2841,8 +2884,10 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
     return false;
   // v5.15 (BEDTEX): texture image + bed quad (no-op when no texture path).
   uploadBedTexture(updates);
-  // PLATEICONS-GL: icon atlas + ground quads.
-  uploadPlateIcons(updates);
+  // PLATEICONS-GL (Q2): the icon atlas/quad upload moved OUT of this
+  // scene-dirty-gated path -- it is driven by its own pending latches in
+  // render() so a hover-only change reaches the GPU the frame it happens
+  // instead of waiting for an unrelated dirty flag.
   // v5.16 (BEDMODEL/BEDTYPE-TEX): printer frame mesh + BBL bed-type parts.
   // The bed-model vertices bake the current plate offset + the upstream
   // -0.41 Z placement at upload time.

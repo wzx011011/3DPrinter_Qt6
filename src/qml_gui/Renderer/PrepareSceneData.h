@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QSize>
 #include <QVariant>
 #include <QVector4D>
 #include <QtGlobal>
@@ -186,6 +187,29 @@ public:
   static PlateIconRect plateIndexBadgeRect(int plateIndex, int plateCount,
                                            float bedWidth, float bedDepth,
                                            float originX, float originY);
+  // ── Q2 (PLATEICONS-WIP): pure decision seams for the icon pipeline ─────
+  // The renderer must not hand-roll these conditions: the upload gate and
+  // the hover early-exit are the two contracts that used to be "written but
+  // never read" (m_plateIconAtlasCacheKey, hit-flag-only hover guard), and
+  // both are permanently locked by PrepareSceneDataTests without a GPU.
+  //
+  // Atlas upload gate: pendingCacheKey identifies the atlas image staged by
+  // the last synchronize(); uploadedCacheKey identifies the pixels actually
+  // resident in the GPU texture. Equal keys + a valid same-sized texture
+  // mean the 2048x2048x4 transfer can be skipped entirely.
+  struct PlateIconAtlasUpload
+  {
+    bool recreateTexture = false;  // GPU texture missing or size mismatch
+    bool uploadPixels = false;     // atlas pixels differ from the texture
+  };
+  static PlateIconAtlasUpload plateIconAtlasUploadDecision(
+      quint64 pendingCacheKey, quint64 uploadedCacheKey,
+      bool textureValid, const QSize &textureSize, const QSize &atlasSize);
+  // Hover refresh gate: keyed on the hover TARGET (plate+icon; -1/-1 = not
+  // hovering), not on the raw hit flag -- an empty-area mouse move is a
+  // no-op instead of a full quad rebuild + sync-dirty latch.
+  static bool plateIconHoverTargetChanged(int oldPlate, int oldIcon,
+                                          bool hit, int newPlate, int newIcon);
   void setPlateContext(int currentPlateIndex, int plateCount, const QList<int> &activeObjectIndices);
   void setMeshGeneration(qint64 generation);
   // P15.1/15.2 (COLOR): full render-channel form. batchVolumeTypes values are

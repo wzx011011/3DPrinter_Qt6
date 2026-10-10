@@ -1532,24 +1532,27 @@ Item {
                 function handlePlateIconActivated(plateIndex, iconId) {
                     if (!root.editorVm || plateIndex < 0)
                         return
+                    // Q2: icon ids dispatch on the GLViewport-exposed alias of
+                    // PrepareSceneData::PlateIconId (single source), not magic
+                    // numbers.
                     switch (iconId) {
-                    case 0:  // delete (upstream picking id 1)
+                    case GLViewport.PlateIconDelete:  // upstream picking id 1
                         if (root.editorVm.canDeletePlate(plateIndex))
                             root.confirmDeletePlateAt(plateIndex)
                         break
-                    case 1:  // auto orient on this plate (picking id 2)
+                    case GLViewport.PlateIconOrient:  // auto orient (picking id 2)
                         if (root.editorVm.plateObjectCount(plateIndex) > 0) {
                             root.editorVm.synchronizeViewportContext(2, -1, -1, -1, plateIndex)
                             root.editorVm.autoOrientContextPlate()
                         }
                         break
-                    case 2:  // arrange (picking id 3)
+                    case GLViewport.PlateIconArrange:  // arrange (picking id 3)
                         root.editorVm.arrangePlate(plateIndex)
                         break
-                    case 3:  // lock/unlock (picking id 4)
+                    case GLViewport.PlateIconLock:  // lock/unlock (picking id 4)
                         root.editorVm.togglePlateLocked(plateIndex)
                         break
-                    case 4:  // plate settings (picking id 5)
+                    case GLViewport.PlateIconSettings:  // plate settings (picking id 5)
                     {
                         var dialog = plateSettingsDialogComp.createObject(root)
                         dialog.plateIndex = plateIndex
@@ -1562,11 +1565,11 @@ Item {
                         dialog.open()
                         break
                     }
-                    case 5:  // move plate to the front (picking id 7)
+                    case GLViewport.PlateIconMoveFront:  // move front (picking id 7)
                         if (plateIndex > 0)
                             root.editorVm.movePlate(plateIndex, 0)
                         break
-                    case 6:  // rename pencil (picking id 6)
+                    case GLViewport.PlateIconNameEdit:  // rename pencil (picking id 6)
                     {
                         var rename = plateRenameDialog.createObject(root)
                         rename.plateIndex = plateIndex
@@ -1614,15 +1617,24 @@ Item {
                         hover && hover.plate !== undefined && root.editorVm
                             ? root.editorVm.isPlateLocked(hover.plate) : false
                     readonly property string hoverText: {
+                        // Q2: same GLViewport-exposed PlateIconId names as the
+                        // activation switch -- no magic icon numbers.
                         switch (hoverIcon) {
-                        case 0: return qsTr("Remove current plate (if not last one)")
-                        case 1: return qsTr("Auto orient objects on current plate")
-                        case 2: return qsTr("Arrange objects on current plate")
-                        case 3: return hoverPlateLocked ? qsTr("Unlock plate")
-                                                        : qsTr("Lock plate")
-                        case 4: return qsTr("Customize current plate")
-                        case 5: return qsTr("Move plate to the front")
-                        case 6: return qsTr("Rename plate")
+                        case GLViewport.PlateIconDelete:
+                            return qsTr("Remove current plate (if not last one)")
+                        case GLViewport.PlateIconOrient:
+                            return qsTr("Auto orient objects on current plate")
+                        case GLViewport.PlateIconArrange:
+                            return qsTr("Arrange objects on current plate")
+                        case GLViewport.PlateIconLock:
+                            return hoverPlateLocked ? qsTr("Unlock plate")
+                                                    : qsTr("Lock plate")
+                        case GLViewport.PlateIconSettings:
+                            return qsTr("Customize current plate")
+                        case GLViewport.PlateIconMoveFront:
+                            return qsTr("Move plate to the front")
+                        case GLViewport.PlateIconNameEdit:
+                            return qsTr("Rename plate")
                         default: return ""
                         }
                     }

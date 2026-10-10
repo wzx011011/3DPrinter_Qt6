@@ -1,5 +1,6 @@
 #include "RhiViewport.h"
 #include "RhiViewportRenderer.h"
+#include "core/model/PartPlateList.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoMath.h"
 #include "core/rendering/NavigatorCube.h"
@@ -1231,16 +1232,96 @@ constexpr int kIconCell = 128;
 constexpr float kNameWorldHeight = 11.0f;
 // Name text inset from the plate's far-left corner (gap-left, PartPlate.cpp:64).
 constexpr float kNameTextInset = 3.0f;
+// Pixel size of the name/badge font rasterized into the atlas; the name
+// UV window and the name-width metrics both derive from it.
+constexpr int kNameFontPixelSize = 72;
 // AXES-ROT note: PrepareSceneData::setBed normalizes the QML bed origin into
 // the scene frame (m_bedOriginY ends up as the plate's far/min-Z edge,
 // PrepareSceneData.cpp:160-169/1250); every plateIconRect call below feeds
 // -(m_bedOriginY + m_bedDepth) so the icon math shares that frame.
+
+// ── Q2: atlas row layout ────────────────────────────────────────────────────
+// Rows 0-1: the 6 column icon slots (rest/hover). Row 2: two-state extras
+// (unlocked lock, changed settings, pencil). Rows kBadgeRow0..: index
+// badges, kAtlasCellsPerRow per row. Rows kNameRow0..: plate names, one
+// kNameCellSpan-wide block each. The badge cells used to sit in the single
+// row 3 with the plate index as the column (IconCellRef{p, 3}) -- the atlas
+// is only 2048/128 = 16 cells wide while kMaxPlateCount = 36
+// (PartPlateList.h:32), so plate 17+ sampled outside the atlas. Badges now
+// flow onto extra rows, and the row budget is a compile-time contract
+// between the atlas geometry and kMaxPlateCount.
+constexpr int kAtlasCellsPerRow = kIconAtlasSize / kIconCell;
+constexpr int kBadgeRow0 = 3;
+constexpr int kBadgeRowCount =
+    (OWzx::kMaxPlateCount + kAtlasCellsPerRow - 1) / kAtlasCellsPerRow;
+constexpr int kNameCellSpan = 4;  // 512px block per plate name
+constexpr int kNamesPerRow = kAtlasCellsPerRow / kNameCellSpan;
+constexpr int kNameRow0 = kBadgeRow0 + kBadgeRowCount;
+constexpr int kNameRowCount =
+    (OWzx::kMaxPlateCount + kNamesPerRow - 1) / kNamesPerRow;
+// Text inset (px) applied identically when rasterizing a name block and
+// when mapping its UV window, so the quad samples exactly the drawn text.
+constexpr int kNameCellTextInset = 8;
+static_assert(kIconAtlasSize % kIconCell == 0,
+              "atlas cells must tile the atlas exactly");
+static_assert(kNamesPerRow * kNameCellSpan == kAtlasCellsPerRow,
+              "name blocks must tile an atlas row exactly");
+static_assert(kNameRow0 + kNameRowCount <= kAtlasCellsPerRow,
+              "plate icon atlas row budget overflows for kMaxPlateCount plates "
+              "(grow the atlas or shrink the name cells)");
 
 struct IconCellRef
 {
   int col = 0;
   int row = 0;
 };
+
+// Badge cell of plate `p` (multi-row flow; see the layout block above).
+IconCellRef badgeCellRef(int plateIndex)
+{
+  return IconCellRef{plateIndex % kAtlasCellsPerRow,
+                     kBadgeRow0 + plateIndex / kAtlasCellsPerRow};
+}
+
+// Name block (row, column) of plate `p` -- the raster painter and the quad
+// UV window both resolve through these so the two can never drift.
+int nameCellRow(int plateIndex) { return kNameRow0 + plateIndex / kNamesPerRow; }
+int nameCellCol(int plateIndex)
+{
+  return (plateIndex % kNamesPerRow) * kNameCellSpan;
+}
+
+// Q2: single source for the plate-name width formula. refreshPlateIconQuads
+// (quad build + pencil rect) and plateIconAt (pencil hit test) used to
+// duplicate it; a drift would have made the hover rect disagree with the
+// rendered pencil. `textPixels` is the raster-font advance, `aspect` its
+// ratio to the font size (texture space), `worldWidth` the clamped world
+// width actually used on the bed.
+struct PlateNameMetrics
+{
+  int textPixels = 0;
+  float aspect = 0.0f;
+  float worldWidth = 0.0f;
+};
+
+// Display name shared by the atlas raster and the width metrics (upstream
+// falls back to "Untitled" for unnamed plates).
+QString plateDisplayName(const QVariantMap &plateState)
+{
+  const QString name = plateState.value(QStringLiteral("name")).toString();
+  return name.isEmpty() ? QStringLiteral("Untitled") : name;
+}
+
+PlateNameMetrics plateNameMetrics(const QVariantMap &plateState, float bedWidth)
+{
+  const QString displayName = plateDisplayName(plateState);
+  QFont font;
+  font.setPixelSize(kNameFontPixelSize);
+  const int textPixels = QFontMetrics(font).horizontalAdvance(displayName);
+  const float aspect = float(textPixels) / float(kNameFontPixelSize);
+  return PlateNameMetrics{textPixels, aspect,
+                          qMin(aspect * kNameWorldHeight, bedWidth * 0.35f)};
+}
 
 QString iconSvgPath(const char *base)
 {
@@ -1275,7 +1356,6 @@ void RhiViewport::setPlateIconStates(const QVariantList &states)
 void RhiViewport::rebuildPlateIcons()
 {
   m_plateIconAtlasDirty = true;
-  m_plateIconsSyncDirty = true;
   refreshPlateIconQuads();
   // refreshPlateIconQuads early-returns (before buildPlateIconAtlas) when
   // the canvas/plate context is not ready yet; building here as well keeps
@@ -1290,7 +1370,9 @@ void RhiViewport::refreshPlateIconQuads()
   const int plateCount = m_plateCount;
   m_plateIconQuadBytes.clear();
   m_plateIconQuadCount = 0;
-  m_plateIconsSyncDirty = true;
+  // Q2: quad-only latch -- a hover swap re-uploads just this batch; the
+  // atlas sync latch is set by buildPlateIconAtlas only when it re-rasters.
+  m_plateIconQuadSyncDirty = true;
   if (m_canvasType != CanvasView3D || !m_showBed || plateCount <= 0) {
     update();
     return;
@@ -1360,15 +1442,10 @@ void RhiViewport::refreshPlateIconQuads()
     }
 
     // Rename pencil (hoverable) sits right of the plate-name text, so the
-    // name geometry is resolved first (PartPlate.cpp:646-663).
-    const QString name = state.value(QStringLiteral("name")).toString();
-    const QString displayName = name.isEmpty() ? QStringLiteral("Untitled") : name;
-    QFont nameFont;
-    nameFont.setPixelSize(72);
-    const int textW = QFontMetrics(nameFont).horizontalAdvance(displayName);
-    const float nameAspect = float(textW) / 72.0f;
-    float nameWorldW = nameAspect * kNameWorldHeight;
-    nameWorldW = qMin(nameWorldW, m_bedWidth * 0.35f);
+    // name geometry is resolved first (PartPlate.cpp:646-663). The width
+    // formula is single-sourced in plateNameMetrics (shared with the
+    // plateIconAt pencil hit test).
+    const PlateNameMetrics nameMetrics = plateNameMetrics(state, m_bedWidth);
 
     float plateOffX = 0.0f;
     float plateOffY = 0.0f;
@@ -1379,7 +1456,8 @@ void RhiViewport::refreshPlateIconQuads()
 
     const bool pencilHover = p == m_hoverPlateIndex
                              && m_hoverPlateIconId == int(PrepareSceneData::PlateIconId::NameEdit);
-    appendQuad(PrepareSceneData::plateNameEditRect(p, plateCount, nameWorldW,
+    appendQuad(PrepareSceneData::plateNameEditRect(p, plateCount,
+                                                   nameMetrics.worldWidth,
                                                    m_bedWidth, m_bedDepth,
                                                    m_bedOriginX, -(m_bedOriginY + m_bedDepth)),
                IconCellRef{pencilHover ? 5 : 4, 2});
@@ -1387,16 +1465,14 @@ void RhiViewport::refreshPlateIconQuads()
     // Plate-name text quad at the far-left corner; the uv window maps the
     // exact pixel bounds of the drawn text so the aspect holds.
     {
-      const int nameRow = 4 + p / 4;
-      const int nameCol = (p % 4) * 4;
-      const float pxU = float(nameCol * kIconCell + 8);
-      const float pxV = float(nameRow * kIconCell + 8);
+      const float pxU = float(nameCellCol(p) * kIconCell + kNameCellTextInset);
+      const float pxV = float(nameCellRow(p) * kIconCell + kNameCellTextInset);
       const float u0 = pxU / float(kIconAtlasSize);
       const float v0 = pxV / float(kIconAtlasSize);
-      const float u1 = u0 + float(textW) / float(kIconAtlasSize);
-      const float v1 = v0 + 72.0f / float(kIconAtlasSize);
+      const float u1 = u0 + float(nameMetrics.textPixels) / float(kIconAtlasSize);
+      const float v1 = v0 + float(kNameFontPixelSize) / float(kIconAtlasSize);
       const float worldH = kNameWorldHeight;
-      const float worldW = nameAspect * worldH;
+      const float worldW = nameMetrics.aspect * worldH;
       const float lift = 0.03f;
       const float x0 = minX + kNameTextInset * f;
       const float z0 = farZ + kNameTextInset * f;
@@ -1408,11 +1484,13 @@ void RhiViewport::refreshPlateIconQuads()
       verts.append(Vert{x0, lift, z0 + worldH, u0, v1});
     }
 
-    // Index badge at the near-right corner (not pickable upstream).
+    // Index badge at the near-right corner (not pickable upstream). Badge
+    // cells flow multi-row (Q2): kMaxPlateCount exceeds one 16-cell atlas
+    // row, and badgeCellRef keeps the quad UV inside the rasterized cells.
     appendQuad(PrepareSceneData::plateIndexBadgeRect(p, plateCount, m_bedWidth,
                                                      m_bedDepth, m_bedOriginX,
                                                      -(m_bedOriginY + m_bedDepth)),
-               IconCellRef{p, 3});
+               badgeCellRef(p));
   }
 
   m_plateIconQuadBytes.resize(verts.size() * int(sizeof(Vert)));
@@ -1421,7 +1499,6 @@ void RhiViewport::refreshPlateIconQuads()
                 m_plateIconQuadBytes.size());
   m_plateIconQuadCount = quint32(verts.size());
   buildPlateIconAtlas();
-  m_plateIconsSyncDirty = true;
   update();
 }
 
@@ -1430,6 +1507,9 @@ void RhiViewport::buildPlateIconAtlas()
   if (!m_plateIconAtlasDirty && !m_plateIconAtlas.isNull())
     return;
   m_plateIconAtlasDirty = false;
+  // Q2: only a real re-raster latches the atlas sync pull -- a quad-only
+  // hover refresh never re-stages the 2048x2048 image for synchronize().
+  m_plateIconAtlasSyncDirty = true;
   m_plateIconAtlas = QImage(kIconAtlasSize, kIconAtlasSize,
                             QImage::Format_RGBA8888);
   m_plateIconAtlas.fill(Qt::transparent);
@@ -1456,30 +1536,34 @@ void RhiViewport::buildPlateIconAtlas()
 
   for (int p = 0; p < m_plateCount; ++p) {
     const QVariantMap state = m_plateIconStates.value(p).toMap();
-    const QString name = state.value(QStringLiteral("name")).toString();
-    const QString displayName = name.isEmpty() ? QStringLiteral("Untitled") : name;
+    const QString displayName = plateDisplayName(state);
 
-    // Index badge "01" (row 3, one cell per plate).
+    // Index badge "01" (multi-row flow -- see the atlas layout block for
+    // why one cell per plate cannot stay in a single row).
+    const IconCellRef badge = badgeCellRef(p);
     const QString idx = QStringLiteral("%1").arg(p + 1, 2, 10, QLatin1Char('0'));
     QPainter idxPainter(&m_plateIconAtlas);
     QFont idxFont;
     idxFont.setBold(true);
-    idxFont.setPixelSize(72);
+    idxFont.setPixelSize(kNameFontPixelSize);
     idxPainter.setFont(idxFont);
     idxPainter.setPen(QColor(QStringLiteral("#18c75e")));
-    idxPainter.drawText(QRect(p * kIconCell, 3 * kIconCell, kIconCell, kIconCell),
+    idxPainter.drawText(QRect(badge.col * kIconCell, badge.row * kIconCell,
+                              kIconCell, kIconCell),
                         Qt::AlignCenter, idx);
     idxPainter.end();
 
-    // Plate name (row 4+, 512x128 cell per plate).
+    // Plate name (kNameCellSpan-wide block per plate, rows below the
+    // badges; same cell helpers the quad UV window resolves through).
     QPainter namePainter(&m_plateIconAtlas);
     QFont nameFont;
-    nameFont.setPixelSize(72);
+    nameFont.setPixelSize(kNameFontPixelSize);
     namePainter.setFont(nameFont);
     namePainter.setPen(QColor(QStringLiteral("#18c75e")));
-    namePainter.drawText(QRect((p % 4) * 4 * kIconCell + 8,
-                               (4 + p / 4) * kIconCell + 8,
-                               4 * kIconCell - 16, kIconCell - 16),
+    namePainter.drawText(QRect(nameCellCol(p) * kIconCell + kNameCellTextInset,
+                               nameCellRow(p) * kIconCell + kNameCellTextInset,
+                               kNameCellSpan * kIconCell - 2 * kNameCellTextInset,
+                               kIconCell - 2 * kNameCellTextInset),
                          Qt::AlignLeft | Qt::AlignVCenter, displayName);
     namePainter.end();
   }
@@ -1501,18 +1585,13 @@ bool RhiViewport::plateIconAt(const QPointF &position, int &plateIndex,
   for (int p = 0; p < m_plateCount; ++p) {
     for (int icon = 0; icon <= int(PrepareSceneData::PlateIconId::NameEdit); ++icon) {
       if (icon == int(PrepareSceneData::PlateIconId::NameEdit)) {
-        // The pencil rect depends on the rendered name width; recompute the
-        // same bound used when building the quads.
+        // The pencil rect depends on the rendered name width; resolve the
+        // same single-source metrics used when building the quads.
         const QVariantMap state = m_plateIconStates.value(p).toMap();
-        const QString name = state.value(QStringLiteral("name")).toString();
-        const QString displayName = name.isEmpty() ? QStringLiteral("Untitled") : name;
-        QFont nameFont;
-        nameFont.setPixelSize(72);
-        const float nameAspect =
-            float(QFontMetrics(nameFont).horizontalAdvance(displayName)) / 72.0f;
-        float nameWorldW = qMin(nameAspect * kNameWorldHeight, m_bedWidth * 0.35f);
+        const PlateNameMetrics nameMetrics = plateNameMetrics(state, m_bedWidth);
         const PrepareSceneData::PlateIconRect pencil =
-            PrepareSceneData::plateNameEditRect(p, m_plateCount, nameWorldW,
+            PrepareSceneData::plateNameEditRect(p, m_plateCount,
+                                                nameMetrics.worldWidth,
                                                 m_bedWidth, m_bedDepth,
                                                 m_bedOriginX, -(m_bedOriginY + m_bedDepth));
         if (hit.x() >= pencil.x0 && hit.x() <= pencil.x1
@@ -1541,7 +1620,13 @@ void RhiViewport::updatePlateIconHover(const QPointF &position)
   int plate = -1;
   int icon = -1;
   const bool hit = plateIconAt(position, plate, icon);
-  if (hit && plate == m_hoverPlateIndex && icon == m_hoverPlateIconId)
+  // Q2: early-exit on "hover TARGET unchanged" (not "still hitting"): a
+  // miss normalizes to (-1, -1), so moving the mouse across empty bed no
+  // longer rebuilds the quad batch / latches sync-dirty / re-emits hover.
+  // Contract locked by PrepareSceneDataTests.
+  if (!PrepareSceneData::plateIconHoverTargetChanged(m_hoverPlateIndex,
+                                                     m_hoverPlateIconId,
+                                                     hit, plate, icon))
     return;
   m_hoverPlateIndex = hit ? plate : -1;
   m_hoverPlateIconId = hit ? icon : -1;

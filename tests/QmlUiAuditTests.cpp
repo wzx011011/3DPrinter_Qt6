@@ -10138,6 +10138,14 @@ void QmlUiAuditTests::prepareViewportHostsPlateIdentityOverlay()
            "the settings icon two-state must probe plateHasCustomSettings");
   QVERIFY2(editorHeader.contains(QStringLiteral("Q_INVOKABLE bool plateHasCustomSettings(int plateIndex) const")),
            "EditorViewModel must expose the plate-customization probe");
+  // Q2 (PLATEICONS-WIP closeout): icon dispatch and hover tooltips must
+  // switch on the GLViewport-exposed PlateIconId alias (a pure conduit to
+  // the single source PrepareSceneData::PlateIconId), never magic 0-6.
+  QVERIFY2(preparePage.contains(QStringLiteral("case GLViewport.PlateIconDelete:"))
+               && preparePage.contains(QStringLiteral("case GLViewport.PlateIconLock:"))
+               && preparePage.contains(QStringLiteral("case GLViewport.PlateIconMoveFront:"))
+               && preparePage.contains(QStringLiteral("case GLViewport.PlateIconNameEdit:")),
+           "icon dispatch and hover tooltips must use GLViewport.PlateIcon* names");
 }
 // P15.9: plate-anchored control clusters. Locks the whole chain: the shared
 // PrepareSceneData plate-grid layout helper, the RhiViewport plateAnchors
@@ -10175,6 +10183,26 @@ void QmlUiAuditTests::prepareViewportAnchorsPlateClustersToWorld()
                && rendererSource.contains(QStringLiteral("renderPlateIcons(cb);"))
                && rendererSource.contains(QStringLiteral("updateDynamicBuffer")),
            "the renderer must draw the icon quads depth-tested after the bed pass");
+  // Q2 (PLATEICONS-WIP closeout): the upload/hover gates and the atlas row
+  // budget are permanent contracts. The cacheKey must be READ (decision seam
+  // consumed by uploadPlateIcons), atlas/quad uploads pend through SPLIT
+  // latches driven by their own pending flags rather than riding the
+  // scene-dirty gate, badge cells must tile multi-row under a compile-time
+  // row budget vs kMaxPlateCount, and the plate-name width formula stays
+  // single-sourced between the quad build and the pencil hit test.
+  QVERIFY2(sceneHeader.contains(QStringLiteral("plateIconAtlasUploadDecision"))
+               && sceneHeader.contains(QStringLiteral("plateIconHoverTargetChanged")),
+           "PrepareSceneData must own the pure upload/hover decision seams");
+  QVERIFY2(rendererSource.contains(QStringLiteral("PrepareSceneData::plateIconAtlasUploadDecision("))
+               && rendererSource.contains(QStringLiteral("m_plateIconAtlasUploadedKey")),
+           "uploadPlateIcons must consume the cacheKey seam (written AND read)");
+  QVERIFY2(!rendererSource.contains(QStringLiteral("m_plateIconsPending"))
+               && rendererSource.contains(QStringLiteral("m_plateIconAtlasUploadPending")),
+           "atlas and quad uploads must pend through split latches");
+  QVERIFY2(viewportSource.contains(QStringLiteral("kNameRow0 + kNameRowCount <= kAtlasCellsPerRow")),
+           "the badge multi-row atlas layout must stay a compile-time contract");
+  QVERIFY2(viewportSource.contains(QStringLiteral("plateNameMetrics")),
+           "the plate-name width formula must stay single-sourced (quads + hit test)");
 }
 
 void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()

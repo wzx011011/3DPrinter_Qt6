@@ -901,6 +901,33 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateIndexBadgeRect(
   return rect;
 }
 
+// ── Q2 (PLATEICONS-WIP): pure decision seams (see PrepareSceneData.h) ────────
+PrepareSceneData::PlateIconAtlasUpload PrepareSceneData::plateIconAtlasUploadDecision(
+    quint64 pendingCacheKey, quint64 uploadedCacheKey,
+    bool textureValid, const QSize &textureSize, const QSize &atlasSize)
+{
+  PlateIconAtlasUpload out;
+  out.recreateTexture = !textureValid || textureSize != atlasSize;
+  // A freshly (re)created texture holds garbage until the first upload, so
+  // recreation always forces the pixel transfer; afterwards the cacheKey of
+  // the pixels actually resident in the texture gates every re-upload (an
+  // unchanged key means the 2048x2048x4 transfer is redundant).
+  out.uploadPixels = out.recreateTexture || pendingCacheKey != uploadedCacheKey;
+  return out;
+}
+
+bool PrepareSceneData::plateIconHoverTargetChanged(int oldPlate, int oldIcon,
+                                                   bool hit, int newPlate,
+                                                   int newIcon)
+{
+  // A miss normalizes to the (-1, -1) target so empty->empty moves compare
+  // equal and stay no-ops; any plate/icon transition (enter, leave, swap)
+  // reports a change.
+  const int targetPlate = hit ? newPlate : -1;
+  const int targetIcon = hit ? newIcon : -1;
+  return targetPlate != oldPlate || targetIcon != oldIcon;
+}
+
 void PrepareSceneData::rebuildBedGeometry()
 {
   m_bedFillVertices.clear();

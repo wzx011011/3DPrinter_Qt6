@@ -360,6 +360,23 @@ public:
   };
   Q_ENUM(GCodeViewMode)
 
+  // Q2 (PLATEICONS-WIP): QML-facing alias of the single-source icon ids
+  // (PrepareSceneData::PlateIconId). Q_ENUM can only expose member enums, so
+  // GLViewport re-exports the values as a pure conduit -- every initializer
+  // IS the PrepareSceneData enumerator, never a literal, so the ids cannot
+  // drift. PreparePage.qml switches on these names instead of magic 0-6.
+  enum PlateIcon
+  {
+    PlateIconDelete = int(PrepareSceneData::PlateIconId::Delete),
+    PlateIconOrient = int(PrepareSceneData::PlateIconId::Orient),
+    PlateIconArrange = int(PrepareSceneData::PlateIconId::Arrange),
+    PlateIconLock = int(PrepareSceneData::PlateIconId::Lock),
+    PlateIconSettings = int(PrepareSceneData::PlateIconId::Settings),
+    PlateIconMoveFront = int(PrepareSceneData::PlateIconId::MoveFront),
+    PlateIconNameEdit = int(PrepareSceneData::PlateIconId::NameEdit),
+  };
+  Q_ENUM(PlateIcon)
+
   explicit RhiViewport(QQuickItem *parent = nullptr);
 
   QQuickRhiItemRenderer *createRenderer() override;
@@ -1238,18 +1255,24 @@ private:
 
   // ── PLATEICONS-GL: bed icon atlas + ground quad batch ─────────────────────
   // Per-plate display states ({locked, custom, name}), rebuilt into an
-  // atlas QImage + BedTextureVertex quad bytes on every change; the
-  // renderer pulls both in synchronize() and draws them depth-tested on
-  // the bed plane (upstream render_icons, PartPlate.cpp:1128-1230).
+  // atlas QImage + ground quad bytes on every change; the renderer pulls
+  // them in synchronize() and draws them depth-tested on the bed plane
+  // (upstream render_icons, PartPlate.cpp:1128-1230).
   QVariantList m_plateIconStates;
   QImage m_plateIconAtlas;
   QByteArray m_plateIconQuadBytes;
   quint32 m_plateIconQuadCount = 0;
-  bool m_plateIconAtlasDirty = false;
-  bool m_plateIconQuadsDirty = false;
-  // Explicit dirty latch for the renderer sync pull (replaces byte-wise
-  // comparisons of the payload, which ran on every synchronize).
-  bool m_plateIconsSyncDirty = false;
+  // Q2: three explicit gates replace the former single sync latch (and its
+  // dead m_plateIconQuadsDirty sibling). m_plateIconAtlasDirty is the UI-side
+  // raster gate consumed by buildPlateIconAtlas; the two sync latches are
+  // consumed by RhiViewportRenderer::synchronize() and latch INDEPENDENTLY
+  // so a hover swap re-uploads only the vertex batch -- the 2048x2048 atlas
+  // QImage crosses the thread boundary only after a real re-raster, and its
+  // GPU transfer is additionally keyed on the cacheKey seam
+  // (PrepareSceneData::plateIconAtlasUploadDecision).
+  bool m_plateIconAtlasDirty = false;      // raster gate (UI thread)
+  bool m_plateIconAtlasSyncDirty = false;  // renderer pull latch: atlas image
+  bool m_plateIconQuadSyncDirty = false;   // renderer pull latch: quad bytes
   // Current hover target: plateIndex/iconId, -1 when not hovering; px
   // carries the cursor position for the QML tooltip anchor.
   int m_hoverPlateIndex = -1;

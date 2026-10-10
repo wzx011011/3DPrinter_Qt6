@@ -79,6 +79,12 @@ private slots:
   // P15.5 (SINK): bed-plane contour bands of sinking batches
   // (3DScene.cpp:108-161).
   void sinkingContoursSliceSinkingBatchesAtBedPlane();
+  // Q2 (PLATEICONS-WIP): permanent upload-gate + hover-gate cases. The
+  // renderer's uploadPlateIcons delegates to the pure seams, so these lock
+  // the protocols without a GPU: one cacheKey = one atlas upload, and hover
+  // refreshes key on the TARGET (empty->empty is a no-op).
+  void plateIconAtlasUploadGateSkipsUnchangedCacheKey();
+  void plateIconHoverGateKeysOnTargetNotHitFlag();
 };
 
 // v5.16 (EXCLAREA): one rectangle polygon must fan-fill on every plate with
@@ -786,6 +792,71 @@ void PrepareSceneDataTests::sinkingContoursSliceSinkingBatchesAtBedPlane()
                          QList<int>{0, 1}, QList<int>{0, 1});
   QVERIFY(scene.sinkingContourVertices().isEmpty());
   QVERIFY(scene.sinkingContourRanges().isEmpty());
+}
+
+// Q2 (PLATEICONS-WIP): the atlas upload decision is a pure seam
+// (PrepareSceneData::plateIconAtlasUploadDecision) consumed by
+// RhiViewportRenderer::uploadPlateIcons. This case reduces the "two syncs,
+// one cacheKey" scenario: the first pull finds no valid texture and must
+// upload; the renderer then records the uploaded key; a second sync staging
+// the SAME cacheKey (e.g. a re-pull of an atlas whose content did not
+// change) must skip the ~16.7MB uploadTexture. Texture loss (device reset
+// path releases resources) re-forces the upload even at an unchanged key.
+void PrepareSceneDataTests::plateIconAtlasUploadGateSkipsUnchangedCacheKey()
+{
+  const QSize atlasSize(2048, 2048);
+
+  // First sync: no GPU texture yet -> create + upload.
+  const auto first = PrepareSceneData::plateIconAtlasUploadDecision(
+      111, 0, false, QSize(), atlasSize);
+  QVERIFY(first.recreateTexture);
+  QVERIFY(first.uploadPixels);
+
+  // The renderer records the key of the pixels now resident in the texture.
+  const quint64 uploadedKey = 111;
+
+  // Second sync, same cacheKey, valid same-sized texture -> no work at all.
+  const auto second = PrepareSceneData::plateIconAtlasUploadDecision(
+      111, uploadedKey, true, atlasSize, atlasSize);
+  QVERIFY(!second.recreateTexture);
+  QVERIFY(!second.uploadPixels);
+
+  // A real content change (new key) re-uploads without recreating.
+  const auto third = PrepareSceneData::plateIconAtlasUploadDecision(
+      222, uploadedKey, true, atlasSize, atlasSize);
+  QVERIFY(!third.recreateTexture);
+  QVERIFY(third.uploadPixels);
+
+  // Texture loss forces recreation + upload even at an unchanged key.
+  const auto fourth = PrepareSceneData::plateIconAtlasUploadDecision(
+      111, uploadedKey, false, QSize(), atlasSize);
+  QVERIFY(fourth.recreateTexture);
+  QVERIFY(fourth.uploadPixels);
+
+  // A size mismatch (stale texture from another atlas geometry) recreates.
+  const auto fifth = PrepareSceneData::plateIconAtlasUploadDecision(
+      222, uploadedKey, true, QSize(1024, 1024), atlasSize);
+  QVERIFY(fifth.recreateTexture);
+  QVERIFY(fifth.uploadPixels);
+}
+
+// Q2: updatePlateIconHover early-exits through this seam, so an empty-area
+// mouse move (miss -> miss) no longer rebuilds the quad batch and latches
+// sync-dirty; entering, leaving, or swapping targets still refreshes.
+void PrepareSceneDataTests::plateIconHoverGateKeysOnTargetNotHitFlag()
+{
+  // Empty -> empty (mouse gliding across blank bed): no refresh.
+  QVERIFY(!PrepareSceneData::plateIconHoverTargetChanged(-1, -1, false, -1, -1));
+  // Holding still over the same icon: no refresh.
+  QVERIFY(!PrepareSceneData::plateIconHoverTargetChanged(2, 4, true, 2, 4));
+  // Entering an icon from empty space refreshes.
+  QVERIFY(PrepareSceneData::plateIconHoverTargetChanged(-1, -1, true, 0, 0));
+  // Leaving an icon refreshes.
+  QVERIFY(PrepareSceneData::plateIconHoverTargetChanged(2, 4, false, -1, -1));
+  // Swapping to another icon of the same plate refreshes.
+  QVERIFY(PrepareSceneData::plateIconHoverTargetChanged(2, 4, true, 2, 5));
+  // Moving to the same icon of another plate refreshes.
+  QVERIFY(PrepareSceneData::plateIconHoverTargetChanged(2, 4, true, 3, 4));
 }
 
 QTEST_MAIN(PrepareSceneDataTests)
