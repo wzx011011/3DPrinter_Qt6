@@ -160,6 +160,26 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     // every ray then descends the BVH. The brute-force ObjectPicking::pick
     // sweep stays in the loop as the per-ray parity reference.
     const int kRayCount = 32;
+    // STAGE-BENCH (pick resonance): the azimuth gets a half-step offset so
+    // no ray lands on the model's symmetry planes. At the axis phases
+    // (0 / pi/2 / pi / 3pi/2) the ray stays inside the plane through the
+    // sphere center that coincides with the UV sphere's triangle boundary
+    // ring/meridian lines whenever rings is even (400k tier: rings=258,
+    // sectors=516 -- the equator ring is exactly phi=pi/2 and the meridian
+    // j=sectors/4 is exactly theta=pi/2). The hit point then sits ON a
+    // triangle edge, u/v land on the 0/1 boundary, and the Moller-Trumbore
+    // verdict flips with ULP-level input drift (the bench STLs are
+    // regenerated whenever build/perf_models is wiped): the 2026-09-13
+    // baseline round scored 32/32 on a byte-different STL while the
+    // 2026-10-10 regeneration deterministically flips two of the four
+    // axis-phase rays to misses -- parity stays ok (brute-force agrees),
+    // but the seam-crossing misses traverse far deeper and polluted
+    // pick_ray_p95 by +14% purely on float luck. The odd-rings 2m tier
+    // (rings=577) has no resonance and held 32/32 through the same
+    // regeneration, which pins the mechanism. Half a step off the axis
+    // phases puts every hit strictly inside a triangle, making hits and
+    // p50/p95 measure picking cost instead of the generator's libm.
+    const float kAzimuthHalfStep = 0.5f;
     timer.start();
     PickingRaycaster *raycaster = scene.pickingRaycaster();
     const qint64 buildMs = timer.elapsed();
@@ -175,7 +195,8 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     QVector<double> rayMs;
     timer.start();
     for (int i = 0; i < kRayCount; ++i) {
-      const float angle = float(i) * (2.0f * float(M_PI) / kRayCount);
+      const float angle = (float(i) + kAzimuthHalfStep)
+                          * (2.0f * float(M_PI) / kRayCount);
       const QVector3D origin(center.x() + 200.0f * std::cos(angle),
                              center.y() + 150.0f,
                              center.z() + 200.0f * std::sin(angle));
