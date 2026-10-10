@@ -551,11 +551,13 @@ private slots:
   // transform compose) AND re-asserts the v4.8 anchors so the v5.0 tech-debt
   // work did not regress the v4.8 contract.
   void v50TechDebtRegressionLocked();
-  // Phase 142 (VDB-01/VDB-02): OpenVDB unlock gate. Locks the CMake wiring that
-  // corrects the v4.x "OpenVDB unavailable" premise -- find_package(OpenVDB) +
-  // openvdb_libs alias + libnoise latent-issue fix. The real proof is that
-  // OWzxSlicer.exe links clean (no LNK2019 on mesh_to_grid/grid_to_mesh/
-  // redistance_grid); this slot anchors the source-level evidence.
+  // Phase 142 (VDB-01/VDB-02), revised 2026-10-11 (audit Q4d): OpenVDB
+  // unlock gate. The Phase-142 block was unreachable dead code (no
+  // option()/set() anywhere ever declared OWZX_ENABLE_OPENVDB), so its
+  // find_package(OpenVDB) + openvdb_libs shim never executed; audit Q4d
+  // deleted it. This slot now locks the honest state: the dead block stays
+  // absent, the downstream TARGET-openvdb_libs gates and the libnoise
+  // latent-issue documentation stay in place.
   void v50OpenVdbUnlockWired();
   // Phase 143 (VDB-03/04/05): Hollow gizmo reachability + panel gate.
   // Locks the EditorViewModel gizmo-availability change (case 8 returns
@@ -7786,35 +7788,38 @@ void QmlUiAuditTests::v50TechDebtRegressionLocked()
 
 void QmlUiAuditTests::v50OpenVdbUnlockWired()
 {
-  // Phase 142 (VDB-01/VDB-02): OpenVDB unlock. The v4.x "OpenVDB unavailable"
-  // premise was an incomplete CMake port -- the Qt6 fork dropped the upstream
-  // find_package(OpenVDB) call and renamed the gating target to `openvdb_libs`
-  // which no file ever created. This slot anchors the wiring that corrects it.
-  // The strongest proof is that OWzxSlicer.exe links clean with OpenVDB
-  // (no LNK2019 on mesh_to_grid/grid_to_mesh/redistance_grid); this slot
-  // anchors the source-level evidence that the wiring exists.
+  // Phase 142 (VDB-01/VDB-02), revised 2026-10-11 (audit Q4d): what this slot
+  // originally locked -- find_package(OpenVDB 5.0) + the openvdb_libs shim in
+  // the root CMakeLists -- turned out to be UNREACHABLE dead code: the
+  // OWZX_ENABLE_OPENVDB gate had no option()/set() declaration anywhere in the
+  // repo, so the "unlock" never executed, OpenVDB was never linked, and the
+  // TARGET-openvdb_libs gates below were always false. Audit Q4d deleted the
+  // block (see the tombstone comment in the root CMakeLists). This slot now
+  // locks the honest state: the dead block stays deleted, and re-introducing
+  // OpenVDB must come with a real option(OWZX_ENABLE_OPENVDB OFF) plus an
+  // update to this slot.
   const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
   const QString libsl3rCmake = readSource(QStringLiteral("cmake/BuildLibslic3rFromSource.cmake"));
   QVERIFY2(!rootCmake.isEmpty(), "Unable to read root CMakeLists.txt");
   QVERIFY2(!libsl3rCmake.isEmpty(), "Unable to read BuildLibslic3rFromSource.cmake");
 
-  // VDB-01: root CMakeLists invokes find_package(OpenVDB) and creates the
-  // openvdb_libs alias target.
-  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
-           "VDB-01: root CMakeLists.txt must invoke find_package(OpenVDB 5.0 COMPONENTS openvdb)");
-  QVERIFY2(rootCmake.contains(QStringLiteral("OPENVDB_LIBRARYDIR")),
-           "VDB-01: root CMakeLists.txt must set OPENVDB_LIBRARYDIR (find module needs explicit lib path)");
-  QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
-           "VDB-01: root CMakeLists.txt must create the openvdb_libs INTERFACE IMPORTED shim");
-  QVERIFY2(rootCmake.contains(QStringLiteral("INTERFACE_LINK_LIBRARIES \"OpenVDB::openvdb\"")),
-           "VDB-01: openvdb_libs shim must re-export OpenVDB::openvdb");
+  // VDB-01 (revised): the Phase-142 unlock block must stay ABSENT. A silent
+  // resurrection of the bare gate or the shim would re-introduce dead code
+  // that pretends OpenVDB is wired.
+  QVERIFY2(!rootCmake.contains(QStringLiteral("if(OWZX_ENABLE_OPENVDB)")),
+           "VDB-01/Q4d: root CMakeLists.txt must not carry a bare if(OWZX_ENABLE_OPENVDB) gate (dead block removed 2026-10-11)");
+  QVERIFY2(!rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "VDB-01/Q4d: the unreachable find_package(OpenVDB 5.0) block must stay deleted (audit Q4d)");
+  QVERIFY2(!rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
+           "VDB-01/Q4d: the openvdb_libs INTERFACE shim must stay deleted (it was never reachable)");
 
-  // VDB-02: OpenVDBUtils.cpp is conditionally compiled when openvdb_libs exists;
-  // the gate at BuildLibslic3rFromSource.cmake:366 must now evaluate true.
+  // VDB-02: OpenVDBUtils.cpp stays conditionally compiled behind the
+  // TARGET-openvdb_libs gates, which remain intentionally inert (always
+  // false) while the unlock stays removed.
   QVERIFY2(libsl3rCmake.contains(QStringLiteral("if(TARGET openvdb_libs)")),
            "VDB-02: BuildLibslic3rFromSource.cmake must gate OpenVDBUtils compilation on TARGET openvdb_libs");
   QVERIFY2(libsl3rCmake.contains(QStringLiteral("OpenVDBUtils.cpp")),
-           "VDB-02: OpenVDBUtils.cpp must be in the conditional source list (now active)");
+           "VDB-02: OpenVDBUtils.cpp must stay in the conditional (inert) source list");
 
   // libnoise latent-issue fix exposed by the OpenVDB link (Phase 142):
   // LIBNOISE_INCLUDE_DIR is force-set to the vcpkg path before find_package so
@@ -8343,11 +8348,13 @@ void QmlUiAuditTests::v50RegressionLocked()
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
            "REGRESS-04/WS1: meshBoolean op==2 must still call MeshBoolean::cgal::intersect");
 
-  // -- v5.0 WS2 (OpenVDB) anchor: find_package(OpenVDB) + openvdb_libs shim.
-  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
-           "REGRESS-04/WS2: root CMakeLists must keep find_package(OpenVDB)");
-  QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
-           "REGRESS-04/WS2: root CMakeLists must keep the openvdb_libs shim");
+  // -- v5.0 WS2 (OpenVDB) anchor, revised 2026-10-11 (audit Q4d): the
+  // Phase-142 unlock block was unreachable dead code and is deleted; lock
+  // its absence (Hollow reachability itself is anchored below).
+  QVERIFY2(!rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "REGRESS-04/WS2: the dead find_package(OpenVDB 5.0) block must stay deleted (audit Q4d)");
+  QVERIFY2(!rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
+           "REGRESS-04/WS2: the unreachable openvdb_libs shim must stay deleted");
 
   // -- v5.0 WS2 (Hollow) anchor: case 8 reachable.
   QVERIFY2(evm.contains(QStringLiteral("case 8: // Hollow\n    return hasSingleObject")),
@@ -8781,11 +8788,14 @@ void QmlUiAuditTests::v51RegressionLocked()
   QVERIFY2(projSvc.contains(QStringLiteral("font_prop.boldness = m_embossBoldness")),
            "REGRESS-05/EMBO-F: font_prop.boldness must stay parameterized from m_embossBoldness (not hardcoded)");
 
-  // -- v5.0 re-assertion (REGRESS-04): OpenVDB unlock + CGAL-02 + Emboss + Preset + PartPlate.
-  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
-           "REGRESS-05/v5.0: root CMakeLists must keep find_package(OpenVDB)");
-  QVERIFY2(rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
-           "REGRESS-05/v5.0: root CMakeLists must keep the openvdb_libs shim");
+  // -- v5.0 re-assertion (REGRESS-04), revised 2026-10-11 (audit Q4d): the
+  // OpenVDB unlock block was unreachable dead code and is deleted (locked
+  // absent in v50OpenVdbUnlockWired); CGAL-02 + Emboss + Preset + PartPlate
+  // anchors below stay as-is.
+  QVERIFY2(!rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "REGRESS-05/v5.0: the dead find_package(OpenVDB 5.0) block must stay deleted (audit Q4d)");
+  QVERIFY2(!rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
+           "REGRESS-05/v5.0: the unreachable openvdb_libs shim must stay deleted");
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
            "REGRESS-05/v5.0: meshBoolean op==2 must still call MeshBoolean::cgal::intersect");
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
@@ -9284,9 +9294,10 @@ void QmlUiAuditTests::v52RegressionLocked()
   QVERIFY2(vmTests.contains(QStringLiteral("multiPlateFullStateRoundTrip")),
            "REGRESS-06/v5.1: multiPlateFullStateRoundTrip live ctest must stay (Phase 157)");
 
-  // -- v5.0 re-assertion.
-  QVERIFY2(rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
-           "REGRESS-06/v5.0: root CMakeLists must keep find_package(OpenVDB)");
+  // -- v5.0 re-assertion, revised 2026-10-11 (audit Q4d): the OpenVDB unlock
+  // block was unreachable dead code and is deleted.
+  QVERIFY2(!rootCmake.contains(QStringLiteral("find_package(OpenVDB 5.0 COMPONENTS openvdb)")),
+           "REGRESS-06/v5.0: the dead find_package(OpenVDB 5.0) block must stay deleted (audit Q4d)");
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
            "REGRESS-06/v5.0: text2shapes pipeline must stay wired");
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
