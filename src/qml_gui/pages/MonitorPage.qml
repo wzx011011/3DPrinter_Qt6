@@ -2657,14 +2657,19 @@ Item {
                             }
                         }
 
-                        // Clear all button
+                        // Clear all button. Width is content+padding (matches
+                        // the refresh button above); the hover ternary drives
+                        // the background color -- it previously sat on `width`,
+                        // collapsing the button to 0px wide.
                         Rectangle {
                             Layout.alignment: Qt.AlignRight
                             visible: root.monitorVm.selectedHmsCount > 0
-                            width: clearHmsMA.containsMouse ? Theme.bgHover : Theme.bgElevated
+                            width: clearHmsLabel.implicitWidth + 16
                             height: 28; radius: Theme.radiusMD
+                            color: clearHmsMA.containsMouse ? Theme.bgHover : Theme.bgElevated
                             border.width: 1; border.color: Theme.borderSubtle
                             Text {
+                                id: clearHmsLabel
                                 anchors.centerIn: parent
                                 text: qsTr("全部标为已读")
                                 color: Theme.textSecondary
