@@ -264,6 +264,9 @@ private slots:
   void deletePlateUndoReconcilesDuplicateNamesByStableId();
   // G-04: storeProject3mf writes the thumbnail family + production strategy.
   void projectStoreWritesThumbnailFamily();
+  // Q10-1: an empty model saved to a .3mf path yields a real 3MF container,
+  // never JSON bytes in a .3mf name.
+  void emptyModelSaveTo3mfWritesRealContainer();
   // G-13: Detach flattens an inherited user preset (cut the inherits link).
   void detachFlattensInheritedUserPreset();
   // G-13: save embeds the tier selections; loading reads them back.
@@ -275,6 +278,17 @@ private slots:
   // v2.8 P2-C: INT-06 FTP URL construction + send-print routing
   void int06_FtpUrlAndSendPrintRouting();
   void monitorDeviceFilesystemCapabilityIsExplicit();
+  // Q10-3: a credential-less device connect request lands in Disconnected
+  // (explicit not-configured path) and never fakes its way to Normal.
+  void monitorCredentialLessDeviceDoesNotFakeOnline();
+  // Q10-2: plugin persisted state keyed by stable id (survives catalog
+  // reorder), legacy parallel-list shape migrates once and is removed.
+  void pluginPersistenceKeysByStableId();
+  // Q10-2: install/update report "not implemented" instead of faking success.
+  void pluginInstallUpdateReportUnimplemented();
+  // Q10-4: extruderCount reads the real per-extruder nozzle_diameter entries
+  // from the current printer preset instead of a mock constant.
+  void extruderCountReadsPrinterPresetNozzleEntries();
   void appSettingsAndEditorBedShapePersistDeterministically();
   // GAP-4/5/6/7 review-loop additions.
   void platerHotkeysBackendAnchorsPresent();
@@ -1042,6 +1056,33 @@ void ViewModelSmokeTests::monitor_selected_device_serial_is_forwarded()
   QCOMPARE(monitor.selectedDeviceSerial(), QStringLiteral("CP01001A001"));
   monitor.selectDevice(1);
   QCOMPARE(monitor.selectedDeviceSerial(), QStringLiteral("CP01002B002"));
+}
+
+void ViewModelSmokeTests::monitorCredentialLessDeviceDoesNotFakeOnline()
+{
+  // Q10-3: connecting a device WITHOUT credentials (no access code / no IP)
+  // used to run a 1.5s fake handshake that flipped the mock device online and
+  // ended in Normal -- the monitor page presented demo data as live telemetry.
+  // It must land in Disconnected immediately (whose QML panel drives the
+  // explicit access-code configuration path) and stay there.
+  DeviceServiceMock device;
+  NetworkServiceMock network;
+  CameraServiceMock camera;
+  MonitorViewModel monitor(&device, &network, &camera);
+
+  // Seeded offline device (Ender-3 V3) carries no access code.
+  monitor.selectDevice(2);
+  QVERIFY(monitor.selectedDeviceAccessCode().isEmpty());
+  QVERIFY(!monitor.selectedDeviceOnline());
+
+  monitor.connectDevice(2);
+  QCOMPARE(monitor.monitorState(), 2);  // Disconnected -- immediately, no fake
+
+  // Past the old fake-handshake window (1500ms): still Disconnected, the
+  // device was never flipped online, and no pending timer can promote it.
+  QTest::qWait(1700);
+  QCOMPARE(monitor.monitorState(), 2);
+  QVERIFY(!monitor.selectedDeviceOnline());
 }
 
 void ViewModelSmokeTests::config_default_and_switch_preset()
@@ -4160,6 +4201,85 @@ void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
 #endif
 
 #ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::emptyModelSaveTo3mfWritesRealContainer()
+{
+  // Q10-1: the target suffix decides the container, never the object count
+  // (upstream Plater::save_project exports 3MF for every project, empty
+  // included). The old "empty model -> JSON fallback" wrote JSON text into
+  // the user-picked .3mf path -- a fake container only this app could reopen
+  // via its parse-fail fallback. Both empty-model variants must now produce a
+  // genuine archive: a fresh service (empty Slic3r::Model) and a JSON-format
+  // project (model_ reset to null by the JSON loader).
+  ProjectServiceMock project;
+  QCOMPARE(project.modelCount(), 0);
+
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+
+  // 1) Fresh empty service -> .3mf must be a ZIP container ("PK\x03\x04"),
+  //    not '{' (JSON), and must round-trip as a plate-only project.
+  const QString fresh3mf = dir.path() + QStringLiteral("/empty.3mf");
+  QVERIFY(project.saveProject(fresh3mf));
+  {
+    QFile saved(fresh3mf);
+    QVERIFY(saved.open(QIODevice::ReadOnly));
+    QCOMPARE(saved.read(2), QByteArrayLiteral("PK"));
+  }
+  {
+    ProjectServiceMock reload;
+    QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+    QVERIFY(reload.loadProject(fresh3mf));
+    QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+    QVERIFY(loadSpy.takeFirst().at(0).toBool());
+    QCOMPARE(reload.modelCount(), 0);
+    QVERIFY(reload.plateCount() >= 1);
+  }
+
+  // 2) JSON-format project: LOADING the .json resets model_ to null (the JSON
+  //    loader's state reset) -- that null-model service saving as .3mf used to
+  //    hit the JSON fallback (the audit's exact line). It must now produce a
+  //    real container with the plate state.
+  const QString jsonPath = dir.path() + QStringLiteral("/proj.json");
+  QVERIFY(project.saveProject(jsonPath));
+  {
+    QFile saved(jsonPath);
+    QVERIFY(saved.open(QIODevice::ReadOnly));
+    QCOMPARE(saved.peek(1), QByteArrayLiteral("{"));
+  }
+  QVERIFY(project.loadProject(jsonPath));
+  QCOMPARE(project.modelCount(), 0);
+  const QString jsonTo3mf = dir.path() + QStringLiteral("/promoted.3mf");
+  QVERIFY(project.saveProject(jsonTo3mf));
+  {
+    QFile saved(jsonTo3mf);
+    QVERIFY(saved.open(QIODevice::ReadOnly));
+    QCOMPARE(saved.read(2), QByteArrayLiteral("PK"));
+  }
+  {
+    ProjectServiceMock reload;
+    QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+    QVERIFY(reload.loadProject(jsonTo3mf));
+    QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+    QVERIFY(loadSpy.takeFirst().at(0).toBool());
+    QCOMPARE(reload.modelCount(), 0);
+  }
+}
+#else
+void ViewModelSmokeTests::emptyModelSaveTo3mfWritesRealContainer()
+{
+  // No libslic3r writer in this build: a .3mf destination must be refused
+  // outright -- JSON bytes must never land in a .3mf name.
+  ProjectServiceMock project;
+  QTemporaryDir dir;
+  QVERIFY(dir.isValid());
+  const QString blocked3mf = dir.path() + QStringLiteral("/blocked.3mf");
+  QVERIFY(!project.saveProject(blocked3mf));
+  QVERIFY(!QFileInfo::exists(blocked3mf));
+  QVERIFY(!project.lastError().isEmpty());
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
 {
   // G-13: Detach (upstream "detach from system preset") cuts the inherits
@@ -4643,6 +4763,223 @@ void ViewModelSmokeTests::monitorDeviceFilesystemCapabilityIsExplicit()
 
   QVERIFY(!device.selectedDeviceFilesystemSupported());
   QVERIFY(!monitor.selectedDeviceFilesystemSupported());
+}
+
+void ViewModelSmokeTests::pluginPersistenceKeysByStableId()
+{
+  // Q10-2: per-plugin persisted state must be keyed by the row's stable id
+  // (localPath), not the catalog array position. The audit failure mode:
+  // parallel index lists silently re-attach every plugin's state to a
+  // DIFFERENT row once the catalog reorders or gains/loses an entry across
+  // app versions.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("Q10PluginId"));
+  ScopedSettingsSnapshot pluginKeys({
+      QStringLiteral("plugins/version"),
+      QStringLiteral("plugins/state"),
+      QStringLiteral("plugins/enabled"),
+      QStringLiteral("plugins/installed"),
+      QStringLiteral("plugins/installed_versions"),
+      QStringLiteral("plugins/update"),
+      QStringLiteral("plugins/caps"),
+      QStringLiteral("plugins/configs"),
+  });
+  pluginKeys.clear();
+
+  // Catalog order: 0 network_plugin, 1 tree_support, 2 ai_slice. The hand
+  // written v3 map deliberately attaches values that CANNOT be explained by
+  // position (row 0 disabled + config override, row 2 installed), plus an
+  // unknown id that must be ignored.
+  {
+    QVariantMap pushState;
+    pushState[QStringLiteral("enabled")] = false;
+    pushState[QStringLiteral("config")] = QStringLiteral("{\n  \"poll_interval\": 9\n}");
+    QVariantMap netCaps;
+    netCaps[QStringLiteral("设备状态推送")] = pushState;
+    QVariantMap netState;
+    netState[QStringLiteral("enabled")] = false;
+    netState[QStringLiteral("installed")] = true;
+    netState[QStringLiteral("installedVersion")] = QStringLiteral("1.2.0");
+    netState[QStringLiteral("updateStatus")] = QStringLiteral("update_available");
+    netState[QStringLiteral("caps")] = netCaps;
+    QVariantMap aiState;
+    aiState[QStringLiteral("enabled")] = true;
+    aiState[QStringLiteral("installed")] = true;
+    aiState[QStringLiteral("installedVersion")] = QStringLiteral("9.9.9");
+    aiState[QStringLiteral("updateStatus")] = QStringLiteral("normal");
+    QVariantMap state;
+    state[QStringLiteral("plugins/network_plugin")] = netState;
+    state[QStringLiteral("plugins/ai_slice")] = aiState;
+    state[QStringLiteral("ghost/removed_plugin")] = netState;  // unknown id
+    QSettings settings;
+    settings.setValue(QStringLiteral("plugins/version"), 3);
+    settings.setValue(QStringLiteral("plugins/state"),
+                      QJsonDocument(QJsonObject::fromVariantMap(state))
+                          .toJson(QJsonDocument::Compact));
+    settings.sync();
+  }
+
+  PluginService loaded;
+  // Row 0 (network_plugin): id-keyed disabled + capability override.
+  QCOMPARE(loaded.isPluginEnabled(0), false);
+  QCOMPARE(loaded.pluginAt(0).value(QStringLiteral("isInstalled")).toBool(), true);
+  {
+    const QVariantList caps =
+        loaded.pluginAt(0).value(QStringLiteral("capabilities")).toList();
+    QCOMPARE(caps.size(), 2);
+    QCOMPARE(caps[0].toMap().value(QStringLiteral("name")).toString(),
+             QStringLiteral("设备状态推送"));
+    QCOMPARE(caps[0].toMap().value(QStringLiteral("enabled")).toBool(), false);
+    QCOMPARE(caps[1].toMap().value(QStringLiteral("enabled")).toBool(), false);
+  }
+  QCOMPARE(loaded.capabilityConfig(0, QStringLiteral("设备状态推送"))
+               .value(QStringLiteral("config")).toString(),
+           QStringLiteral("{\n  \"poll_interval\": 9\n}"));
+  // Row 1 (tree_support): absent from the map -> catalog defaults survive.
+  QCOMPARE(loaded.pluginAt(1).value(QStringLiteral("isInstalled")).toBool(), false);
+  // Row 2 (ai_slice): installed by id, NOT by position (position 2 values
+  // would have landed on ai_slice only by accident -- the ghost id and the
+  // row-0 disabled state prove the map is keyed by id).
+  QCOMPARE(loaded.pluginAt(2).value(QStringLiteral("isInstalled")).toBool(), true);
+  QCOMPARE(loaded.pluginAt(2).value(QStringLiteral("installedVersion")).toString(),
+           QStringLiteral("9.9.9"));
+  QCOMPARE(loaded.pluginCount(), 3);  // unknown ids never become rows
+
+  // Round-trip: a second service reads the same id-keyed state.
+  {
+    PluginService reload;
+    QCOMPARE(reload.isPluginEnabled(0), false);
+    QCOMPARE(reload.pluginAt(2).value(QStringLiteral("installedVersion")).toString(),
+             QStringLiteral("9.9.9"));
+    QCOMPARE(reload.capabilityConfig(0, QStringLiteral("设备状态推送"))
+                 .value(QStringLiteral("config")).toString(),
+             QStringLiteral("{\n  \"poll_interval\": 9\n}"));
+  }
+
+  // Legacy v2 parallel lists migrate ONCE into the id-keyed shape and the
+  // legacy keys are retired.
+  {
+    QSettings settings;
+    settings.setValue(QStringLiteral("plugins/version"), 2);
+    settings.setValue(QStringLiteral("plugins/enabled"),
+                      QVariantList{false, true, true});
+    settings.setValue(QStringLiteral("plugins/installed"),
+                      QVariantList{true, false, false});
+    settings.setValue(QStringLiteral("plugins/installed_versions"),
+                      QVariantList{QStringLiteral("0.0.1"), QString(), QString()});
+    settings.setValue(QStringLiteral("plugins/update"),
+                      QVariantList{QStringLiteral("normal"), QString(), QString()});
+    settings.setValue(QStringLiteral("plugins/caps"),
+                      QVariantList{QVariantList{false, false}});
+    settings.setValue(QStringLiteral("plugins/configs"),
+                      QVariantList{QVariantList{QStringLiteral("poll_interval=7"), QString()}});
+    settings.sync();
+  }
+  {
+    PluginService migrated;
+    // Flat legacy keys (enabled/installed/versions/update) survive the
+    // registry backend and must land on the right rows.
+    QCOMPARE(migrated.isPluginEnabled(0), false);
+    QCOMPARE(migrated.pluginAt(0).value(QStringLiteral("installedVersion")).toString(),
+             QStringLiteral("0.0.1"));
+    // The legacy NESTED lists (caps/configs) do NOT survive the QSettings
+    // registry backend: they read back flattened to a flat string list, so
+    // per-plugin/per-capability indexing yields nothing (this is exactly why
+    // capability overrides never restored under v2 -- and why v3 stores one
+    // JSON map under a single key instead). The migration therefore no-ops
+    // them and the capability keeps its built-in default.
+    QCOMPARE(migrated.capabilityConfig(0, QStringLiteral("设备状态推送"))
+                 .value(QStringLiteral("config")).toString(),
+             QStringLiteral("{\n  \"poll_interval\": 5\n}"));
+    QSettings settings;
+    QCOMPARE(settings.value(QStringLiteral("plugins/version")).toInt(), 3);
+    QVERIFY(!settings.contains(QStringLiteral("plugins/enabled")));
+    QVERIFY(!settings.contains(QStringLiteral("plugins/installed")));
+    QVERIFY(!settings.contains(QStringLiteral("plugins/installed_versions")));
+    QVERIFY(!settings.contains(QStringLiteral("plugins/update")));
+    QVERIFY(!settings.contains(QStringLiteral("plugins/caps")));
+    QVERIFY(!settings.contains(QStringLiteral("plugins/configs")));
+    QVERIFY(settings.contains(QStringLiteral("plugins/state")));
+  }
+}
+
+void ViewModelSmokeTests::pluginInstallUpdateReportUnimplemented()
+{
+  // Q10-2: install/update have NO real download source, so they must refuse
+  // and say so instead of flipping a persisted installed flag no package
+  // backs (the "silent lie" the audit names).
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("Q10PluginTruth"));
+  ScopedSettingsSnapshot pluginKeys({
+      QStringLiteral("plugins/version"),
+      QStringLiteral("plugins/state"),
+  });
+  pluginKeys.clear();
+
+  PluginService plugins;
+  QSignalSpy statusSpy(&plugins, &PluginService::statusMessage);
+
+  // Row 0 (network_plugin) seeds update_available -> update must refuse.
+  QVERIFY(!plugins.updatePlugin(0));
+  // Row 1 (tree_support) is not installed -> install must refuse.
+  QVERIFY(!plugins.installPlugin(1));
+
+  QVERIFY(statusSpy.count() >= 2);
+  for (const QVariantList &call : statusSpy)
+    QCOMPARE(call.at(1).toString(), QStringLiteral("warn"));
+
+  // Nothing flipped: the not-installed row stays not installed, the installed
+  // row keeps its state, and a reload finds the same truth.
+  QCOMPARE(plugins.pluginAt(1).value(QStringLiteral("isInstalled")).toBool(), false);
+  QCOMPARE(plugins.pluginAt(0).value(QStringLiteral("isInstalled")).toBool(), true);
+  QCOMPARE(plugins.pluginAt(0).value(QStringLiteral("updateStatus")).toString(),
+           QStringLiteral("update_available"));
+  PluginService reload;
+  QCOMPARE(reload.pluginAt(1).value(QStringLiteral("isInstalled")).toBool(), false);
+  QCOMPARE(reload.pluginAt(0).value(QStringLiteral("updateStatus")).toString(),
+           QStringLiteral("update_available"));
+}
+
+void ViewModelSmokeTests::extruderCountReadsPrinterPresetNozzleEntries()
+{
+  // Q10-4: extruderCount must read the real extruder count from the current
+  // printer preset -- upstream counts the nozzle_diameter entries
+  // (FilamentGroupPopup.cpp:21-22). The old mock constant (<=1) made a
+  // multi-extruder printer preset present a single LeftSidebar filament row.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("Q10ExtruderCount"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetServiceMock preset;
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  ConfigViewModel config(&preset, &project);
+  editor.setConfigViewModel(&config);
+
+  // The default (built-in) preset carries one nozzle entry.
+  QCOMPARE(editor.extruderCount(), 1);
+
+  // A printer preset with two nozzle_diameter entries -> two extruders.
+  QHash<QString, QVariant> dual;
+  dual.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4, 0.4});
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Q10 Dual Nozzle Printer"), dual));
+  config.setCurrentPrinterPreset(QStringLiteral("Q10 Dual Nozzle Printer"));
+  QCOMPARE(config.currentPrinterPreset(), QStringLiteral("Q10 Dual Nozzle Printer"));
+  QCOMPARE(editor.extruderCount(), 2);
+
+  // Switching back to a single-nozzle preset restores 1.
+  QHash<QString, QVariant> single;
+  single.insert(QStringLiteral("nozzle_diameter"), 0.4);
+  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+                                    QStringLiteral("Q10 Single Nozzle Printer"), single));
+  config.setCurrentPrinterPreset(QStringLiteral("Q10 Single Nozzle Printer"));
+  QCOMPARE(editor.extruderCount(), 1);
 }
 
 void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
