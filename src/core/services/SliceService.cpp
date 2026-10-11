@@ -1329,12 +1329,6 @@ void SliceService::startSlice(const QString &projectName)
                                          // ~SliceService/cancelSlice may
                                          // still call activePrint_->cancel().
                                          , persistentSlot, reusedPersistentPrint
-                                         // P1 (preview direct hand-off): the
-                                         // structured result rides the SAME
-                                         // queued delivery chain as the
-                                         // result labels. Null on
-                                         // cancel/error (born only on the
-                                         // export success path).
                                          , processorResult
 #endif
                                          // Review P1-3: generation gate.
@@ -1460,19 +1454,10 @@ void SliceService::startSlice(const QString &projectName)
             resultPlateIndex,
             outputPath.toUtf8().constData(),
             layerCount);
-      // P1 (preview direct hand-off): publish the structured result BEFORE
-      // resultChanged/sliceFinished so the PreviewViewModel sync handlers
-      // (direct connections on this same GUI thread) can consume it instead
-      // of re-parsing the exported text. Empty moves (defensive) are not
-      // published -- the consumer falls back to the file path.
       if (processorResult && !processorResult->moves.empty())
       {
         receiver->activeProcessorResult_ = processorResult;
         ++receiver->processorResultId_;
-      }
-      else
-      {
-        receiver->activeProcessorResult_.reset();
       }
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
