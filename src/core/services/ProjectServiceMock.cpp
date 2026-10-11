@@ -11174,14 +11174,25 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     return false;
   }
 
+  // Q10-1: the target suffix decides the container, never the object count.
+  // Upstream Plater::save_project (Plater.cpp:15359) exports a real 3MF for
+  // EVERY project including an empty one (no objects.empty() gate), so a
+  // user-picked .3mf destination must always receive a genuine 3MF container
+  // -- the previous "empty model -> JSON fallback" path wrote JSON text into
+  // a .3mf file, a fake 3MF only this app could reopen (parse-fail fallback).
+  const QString saveSuffix = QFileInfo(filePath).suffix().toLower();
+  const bool saveAs3mfProject = saveSuffix == QStringLiteral("3mf")
+                             || saveSuffix == QStringLiteral("cxprj");
 #ifdef HAS_LIBSLIC3R
-  if (!model_ || model_->objects.empty())
+  if (saveAs3mfProject)
   {
-    // An empty model has no 3MF payload; keep the JSON fallback usable for
-    // plate-only state and for newly constructed services.
-  }
-  else
-  {
+    // A JSON-format project load resets model_ to null (see the JSON loader's
+    // state reset); a plate-only 3MF still needs a Model carrier, and a fresh
+    // empty Model matches that payload exactly (upstream writes the same
+    // plate-only archive for an emptied project).
+    if (!model_)
+      model_ = new Slic3r::Model();
+
     // Phase 237 (VIEW-06): the writer block lives in storeProject3mf now.
     if (!storeProject3mf(filePath))
       return false;
@@ -11199,8 +11210,18 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
     emit projectChanged();
     return true;
   }
+#else
+  if (saveAs3mfProject)
+  {
+    // No libslic3r writer in this build: refuse instead of writing JSON bytes
+    // into a .3mf name (a fake container is worse than no container).
+    lastError_ = tr("此构建缺少 3MF 写入器，请改用 .json 项目格式保存");
+    emit projectChanged();
+    return false;
+  }
 #endif
-  // JSON mock save (fallback when HAS_LIBSLIC3R is off or model_ is null)
+  // JSON mock save (explicit .json project format; HAS_LIBSLIC3R builds never
+  // reach here with a .3mf/.cxprj destination because the branch above takes it).
   if (filePath.isEmpty())
   {
     lastError_ = tr("保存路径为空");
@@ -11463,15 +11484,15 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
         if (const auto *excludeOpt = loadedConfig.option<Slic3r::ConfigOptionPoints>("bed_exclude_area"))
           loadedBedExcludeArea = excludeOpt->values;
 
-        if (!loadedModel->objects.empty())
-        {
-          ok = true;
-          loadedPlateCount = int(plateDataList.size());
-        }
-        else
-        {
-          err = "no model objects in project file";
-        }
+        // Q10-1: a plate-only project (zero objects) is a legitimate archive
+        // -- it is exactly what saveProject writes for an empty model and
+        // what upstream store_bbs_3mf produces for emptied projects (the
+        // writer's "This happens for empty projects" empty-<build/> branch,
+        // bbs_3mf.cpp:7535). The parse above already validated the container,
+        // so accept the object-less project instead of rejecting the very
+        // file this app writes.
+        ok = true;
+        loadedPlateCount = int(plateDataList.size());
       }
       catch (const std::exception &ex)
       {
