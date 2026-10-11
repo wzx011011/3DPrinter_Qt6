@@ -190,13 +190,17 @@ void CameraController::setOrientation(float azimuthDeg, float elevationDeg)
 
 void CameraController::fitView(float cx, float cy, float cz, float radius)
 {
+  // Upstream Camera::zoom_to_box (Camera.cpp:348-356) only updates the zoom
+  // (here: distance) and the target; the user's current orientation is kept.
+  // A view that needs the isometric reset sets it explicitly first
+  // (resetToDefault / viewIso / viewPlate in RhiViewport::selectView), then
+  // fits — so a user-rotated camera survives requestFitView / "plate" fits.
   m_target = clampTarget(QVector3D(cx, cy, cz));
   // FOV=45°, tan(22.5°)≈0.4142; 加 20% 边距
   const float minDist = 50.f;
   const float safeRadius = std::max(0.1f, radius);
   m_distance = std::max(minDist, safeRadius / 0.4142f * 1.2f);
   clampDistance();
-  setRotationAzEl(45.0f, 35.0f);
 }
 
 void CameraController::resetToDefault()

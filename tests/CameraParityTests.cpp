@@ -54,6 +54,7 @@ private slots:
   void zoomBoundsFollowSceneBox();
   void translateWorldClampsTargetTo3xSceneBox();
   void plateViewMatchesUpstreamTopFront();
+  void fitViewPreservesOrientation();
   void groundPointOnPlaneRoundTrip();
   void viewPlanePointRoundTrip();
   void viewPlanePointIsViewParallel();
@@ -246,6 +247,39 @@ void CameraParityTests::plateViewMatchesUpstreamTopFront()
   QVERIFY(std::abs(eyeDirection.y() - std::sqrt(0.5f)) < 1e-3f);
   QVERIFY(std::abs(eyeDirection.z() - std::sqrt(0.5f)) < 1e-3f);
   QVERIFY(std::abs(cam.elevation() - 45.0f) < 1e-3f);
+}
+
+void CameraParityTests::fitViewPreservesOrientation()
+{
+  // Q7: upstream Camera::zoom_to_box (Camera.cpp:348-356) updates only the
+  // zoom and the target — a fit after the user rotated the view must not
+  // snap the camera back to the isometric default. The isometric reset lives
+  // in resetToDefault()/the explicit view presets.
+  CameraController cam;
+  cam.orbit(30.0f, -20.0f); // user rotates away from the 45/35 default
+  const float azBefore = cam.azimuth();
+  const float elBefore = cam.elevation();
+  cam.fitView(120.0f, 5.0f, -120.0f, 90.0f);
+  QVERIFY(std::abs(cam.azimuth() - azBefore) < 1e-4f);
+  QVERIFY(std::abs(cam.elevation() - elBefore) < 1e-4f);
+  // The fit still moved the frame onto the box: target centers it and the
+  // distance re-fits (upstream zoom_to_box set_target + m_zoom).
+  QVERIFY(std::abs(cam.target().x() - 120.0f) < 1e-4f);
+  QVERIFY(std::abs(cam.target().z() + 120.0f) < 1e-4f);
+  QVERIFY(cam.distance() > 0.0f);
+
+  // The explicit view paths still land isometric when the caller asks for it
+  // (RhiViewport::selectView("plate") sets the orientation first, then fits).
+  cam.viewIso();
+  cam.fitView(0.0f, 0.0f, 0.0f, 40.0f);
+  QVERIFY(std::abs(cam.azimuth() - 45.0f) < 1e-3f);
+  QVERIFY(std::abs(cam.elevation() - 35.0f) < 1e-3f);
+
+  // resetToDefault() remains the isometric reset path.
+  cam.orbit(80.0f, 60.0f);
+  cam.resetToDefault();
+  QVERIFY(std::abs(cam.azimuth() - 45.0f) < 1e-3f);
+  QVERIFY(std::abs(cam.elevation() - 35.0f) < 1e-3f);
 }
 
 void CameraParityTests::groundPointOnPlaneRoundTrip()

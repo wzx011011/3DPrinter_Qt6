@@ -60,7 +60,9 @@ public:
   // well-defined at the poles.
   void setOrientation(float azimuthDeg, float elevationDeg);
 
-  /// 加载模型后自适应视角: 将相机对准 bbox 球心，距离自动适配
+  /// Upstream Camera::zoom_to_box (Camera.cpp:348-356): aim at the bbox
+  /// center and adapt the distance only — the current orientation is kept
+  /// (an isometric reset belongs to resetToDefault()/the view presets).
   void fitView(float cx, float cy, float cz, float radius);
   /// 重置到 K1C 平台默认视角
   void resetToDefault();
