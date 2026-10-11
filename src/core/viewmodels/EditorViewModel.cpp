@@ -9982,8 +9982,29 @@ void EditorViewModel::checkViewportWarnings()
 
 int EditorViewModel::extruderCount() const
 {
-  // Mock mode: return 1 extruder unless slice result has filament data
-  return hasSliceResult() ? 1 : 0;
+  // Q10-4: read the REAL extruder count from the current printer preset.
+  // Upstream counts the nozzle_diameter entries -- one per extruder
+  // (FilamentGroupPopup.cpp:21-22, full_config.option<ConfigOptionFloats>(
+  // "nozzle_diameter")->size()). The previous mock returned a constant <=1,
+  // which LeftSidebar.qml seeds its filament slot rows from: a multi-extruder
+  // printer preset silently presented a single filament row, and
+  // ConfigViewModel::setExtruderCount (the update_multi_material_filament_
+  // presets analog) never got a real count to resize the per-slot vector.
+  int count = 0;
+  if (configViewModel_)
+  {
+    const QVariant raw = configViewModel_->mergedConfigValues()
+        .value(QStringLiteral("nozzle_diameter"));
+    if (raw.typeId() == QMetaType::QVariantList)
+      count = raw.toList().size();
+    else
+      count = raw.toString().split(QLatin1Char(','), Qt::SkipEmptyParts).size();
+  }
+  // Preset data missing (no ConfigViewModel wired yet): keep the historical
+  // single-extruder fallback instead of inventing a count.
+  if (count <= 0)
+    count = hasSliceResult() ? 1 : 0;
+  return count;
 }
 
 QVariantList EditorViewModel::stalePlateIndices() const
