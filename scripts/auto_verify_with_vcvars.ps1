@@ -307,12 +307,33 @@ $configureSucceeded = $false
 # the mtime inputs; the pin has no file mtime at all (the gitlink moves
 # without touching any tracked file's mtime), so it is recorded after each
 # successful configure into build\ and compared by CONTENT on the fast path.
+# Q4a hardening (2026-10-11, round 2): the mtime listing only sees files that
+# EXIST. A deleted or renamed patch simply vanishes from the input list while
+# every remaining input stays older than build.ninja — configure would be
+# skipped on a tree still carrying the deleted patch's edits. The whole patch
+# series is therefore ALSO fingerprinted by content (name + SHA256 per patch,
+# sorted) and compared exactly like the pin, so add/modify/delete/rename of
+# any patch all force a real configure.
+$patchSeriesFiles = @(
+  Get-ChildItem '..\patches\orcaslicer' -Filter '*.patch' -File -ErrorAction SilentlyContinue | Sort-Object Name
+)
 $cmakeInputs = @(
   '..\CMakeLists.txt'
 ) + (
   (Get-ChildItem '..\cmake' -Filter '*.cmake' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }) +
-  (Get-ChildItem '..\patches\orcaslicer' -Filter '*.patch' -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  @($patchSeriesFiles | ForEach-Object { $_.FullName })
 )
+$patchSeriesFingerprint = ($patchSeriesFiles | ForEach-Object {
+  "{0}:{1}" -f $_.Name, (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+}) -join "`n"
+$patchSeriesFile = Join-Path (Get-Location) 'owzx_patch_series.txt'
+# Normalize CRLF->LF on read: Set-Content writes platform EOLs, the in-memory
+# fingerprint joins with LF only.
+$patchSeriesMatches = $false
+if (Test-Path $patchSeriesFile) {
+  $recordedSeries = [string](Get-Content $patchSeriesFile -Raw)
+  if (($recordedSeries -replace "`r`n", "`n").Trim() -eq $patchSeriesFingerprint) { $patchSeriesMatches = $true }
+}
 $submodulePinFile = Join-Path (Get-Location) 'owzx_orcaslicer_pin.txt'
 $submoduleHead = $null
 try {
@@ -330,13 +351,13 @@ if ($null -ne $submoduleHead -and (Test-Path $submodulePinFile)) {
 }
 $buildNinja = Join-Path (Get-Location) 'build.ninja'
 $skipConfigure = $false
-if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0) -and $submodulePinMatches) {
+if ((Test-Path $buildNinja) -and ($cmakeInputs.Count -gt 0) -and $submodulePinMatches -and $patchSeriesMatches) {
   $ninjaTime = (Get-Item $buildNinja).LastWriteTimeUtc
   $newestInput = ($cmakeInputs | Get-Item | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1)
   if ($null -ne $newestInput -and $newestInput.LastWriteTimeUtc -le $ninjaTime) {
     $skipConfigure = $true
     $configureSucceeded = $true
-    Write-Stage 'Configure' ("Skipped (build.ninja up to date vs " + (Split-Path $newestInput.FullName -Leaf) + "; OrcaSlicer pin " + $submoduleHead + " unchanged)")
+    Write-Stage 'Configure' ("Skipped (build.ninja up to date vs " + (Split-Path $newestInput.FullName -Leaf) + "; OrcaSlicer pin " + $submoduleHead + " + patch series unchanged)")
   }
 }
 
@@ -367,12 +388,14 @@ if (-not $configureSucceeded) {
   Fail-Stage 'Configure' ("CMake configure failed after retries with exit code " + $lastConfigureExitCode) $lastConfigureExitCode
 }
 
-# Record the submodule pin this build.ninja was configured against (Q4): the
-# fast path above compares it by content so a pin-only change cannot skip
+# Record the submodule pin and patch-series fingerprint this build.ninja was
+# configured against (Q4): the fast path above compares them by content so a
+# pin-only or patch-only change (add, modify, delete, rename) cannot skip
 # configure on the next run. Only written after a successful configure.
 if ($null -ne $submoduleHead) {
   Set-Content -Path $submodulePinFile -Value $submoduleHead
 }
+Set-Content -Path $patchSeriesFile -Value $patchSeriesFingerprint
 }  # end of skip-configure fast path
 
 # Reduce MSVC memory pressure in large TUs/autogen files
