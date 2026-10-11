@@ -323,6 +323,41 @@ namespace
     }
   }
 
+  // ── P1 review follow-up: single-source symbols shared by BOTH preview
+  // entries (rebuildFromGCode text parse + loadFromProcessorResult direct
+  // walk) so the dual-entry products cannot drift apart. ──
+  // Upstream travel_color(path) tri-state by delta_extruder sign
+  // (GCodeViewer.cpp:3234-3236): >0 Extrude / <0 Retract, else plain Move.
+  static const float kTravelExtrudeColor[3] = {0.112f, 0.422f, 0.103f};
+  static const float kTravelRetractColor[3] = {0.505f, 0.064f, 0.028f};
+
+  // Fallback filament scalars when neither the gcode config block (text
+  // path) nor the structured result (direct path) supplies a value.
+  constexpr float kDefaultFilamentDiameter = 1.75f;  // mm
+  constexpr float kDefaultFilamentDensity = 1.24f;   // g/cm3 (PLA default)
+
+  // Filament cross-section area mm^2 = pi*(d/2)^2 -- the shared formula
+  // behind the volumetric-rate, weight and split conversions.
+  inline float filamentCrossAreaMm2(float diameterMm)
+  {
+    return 3.14159265f * (diameterMm * 0.5f) * (diameterMm * 0.5f);
+  }
+
+  // Phase 238 (PREV-05) category split, ported from upstream
+  // GCodeProcessor.cpp:3002-3010: support roles (SupportMaterial 11 /
+  // SupportMaterialInterface 12 / SupportTransition 18) -> support,
+  // WipeTower (Prime tower, 13) -> tower, everything else -> model.
+  // Returns the m_filamentSplitLength index: 0=model, 1=support, 3=tower
+  // (2=flushed is accumulated at the unretract-while-flushing branch).
+  inline int filamentSplitBucketForRole(int role)
+  {
+    if (role == 11 || role == 12 || role == 18)
+      return 1;
+    if (role == 13)
+      return 3;
+    return 0;
+  }
+
   // Phase 238 (PREV-03): legend label for a non-extrusion move kind,
   // matching the upstream options_items display strings
   // (GCodeViewer.cpp:4936-4950: Travel/Seams/Retract/Unretract/Wipe).
@@ -1622,8 +1657,7 @@ QVariantList PreviewViewModel::filamentSplit() const
   // Flushed / Tower (GCodeViewer.cpp:4893-4903), length in meters and weight
   // in grams using the same area/density conversion as the totals.
   QVariantList rows;
-  const float radius = m_filamentDiameter * 0.5f;
-  const float area = 3.14159265f * radius * radius;
+  const float area = filamentCrossAreaMm2(m_filamentDiameter);
   for (int i = 0; i < 4; ++i)
   {
     QVariantMap row;
@@ -2034,8 +2068,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
 
   // Filament tracking
   float totalFilamentUsed = 0.f; // mm of filament extruded
-  float filamentDiameter = 1.75f; // default
-  float filamentDensity = 1.24f;  // default PLA g/cm3
+  float filamentDiameter = kDefaultFilamentDiameter;
+  float filamentDensity = kDefaultFilamentDensity;  // default PLA g/cm3
   int extrudeMoveCount = 0;
   int travelMoveCount = 0;
   int toolChangeCount = 0;
@@ -2564,7 +2598,7 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     float volumetricRate = 0.f;
     if (extruding && dist > 0.f && currentFeedrate > 0.f && extrusionDelta > 0.f)
     {
-      const float filamentArea = 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
+      const float filamentArea = filamentCrossAreaMm2(filamentDiameter);
       const float mm3PerMm = extrusionDelta * filamentArea / dist;
       volumetricRate = currentFeedrate / 60.f * mm3PerMm;
     }
@@ -2621,20 +2655,14 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     // surface->15) -- gets the correct color and visibility slot.
     const int role = extruding ? roleForTypeImpl(currentType) : 0;
 
-    // Phase 238 (PREV-05): category split for the extruded volume, ported
-    // from upstream GCodeProcessor.cpp:3002-3010 -- support roles
-    // (SupportMaterial 11 / SupportMaterialInterface 12 / SupportTransition
-    // 18) -> support, WipeTower (Prime tower, 13) -> tower, everything else
-    // -> model. Flushed is accumulated at the unretract-while-flushing branch
-    // above (upstream update_flush_per_filament).
+    // Phase 238 (PREV-05): category split for the extruded volume -- the
+    // shared filamentSplitBucketForRole() (upstream GCodeProcessor.cpp
+    // :3002-3010 port), also used by the direct walk. Flushed is accumulated
+    // at the unretract-while-flushing branch above (upstream
+    // update_flush_per_filament).
     if (extruding)
     {
-      if (role == 11 || role == 12 || role == 18)
-        m_filamentSplitLength[1] += extrusionDelta;
-      else if (role == 13)
-        m_filamentSplitLength[3] += extrusionDelta;
-      else
-        m_filamentSplitLength[0] += extrusionDelta;
+      m_filamentSplitLength[filamentSplitBucketForRole(role)] += extrusionDelta;
     }
     else if (kind == KindUnretract && flushing)
     {
@@ -2665,21 +2693,21 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       seg.baseB = kc[2];
       // P17.4: upstream travel_color(path) tri-state by delta_extruder
       // (GCodeViewer.cpp:3234-3236): <0 Retract / >0 Extrude / else Move.
+      // P1 review follow-up: the tint constants are the file-level
+      // kTravel{Extrude,Retract}Color shared with the direct walk.
       if (kind == KindTravel)
       {
-        static const float kTravelExtrude[3] = {0.112f, 0.422f, 0.103f};
-        static const float kTravelRetract[3] = {0.505f, 0.064f, 0.028f};
         if (extrusionDelta < 0.f)
         {
-          seg.baseR = kTravelRetract[0];
-          seg.baseG = kTravelRetract[1];
-          seg.baseB = kTravelRetract[2];
+          seg.baseR = kTravelRetractColor[0];
+          seg.baseG = kTravelRetractColor[1];
+          seg.baseB = kTravelRetractColor[2];
         }
         else if (extrusionDelta > 0.f)
         {
-          seg.baseR = kTravelExtrude[0];
-          seg.baseG = kTravelExtrude[1];
-          seg.baseB = kTravelExtrude[2];
+          seg.baseR = kTravelExtrudeColor[0];
+          seg.baseG = kTravelExtrudeColor[1];
+          seg.baseB = kTravelExtrudeColor[2];
         }
       }
     }
@@ -3064,7 +3092,7 @@ void PreviewViewModel::applyFilamentTotals(float totalFilamentUsedMm,
   filamentUsed_ = QStringLiteral("%1 m").arg(totalFilamentUsedMm / 1000.f, 0, 'f', 2);
   // Weight = volume_mm3 * density_g_per_cm3 * 1e-3.
   // volume_mm3 = length_mm * pi * (diameter / 2)^2.
-  const float volume_mm3 = totalFilamentUsedMm * 3.14159265f * (diameterMm * 0.5f) * (diameterMm * 0.5f);
+  const float volume_mm3 = totalFilamentUsedMm * filamentCrossAreaMm2(diameterMm);
   const float weight_g = volume_mm3 * densityGcm3 * 0.001f;
   filamentWeight_ = QStringLiteral("%1 g").arg(weight_g, 0, 'f', 1);
   m_totalFilamentGrams = weight_g;
@@ -3077,7 +3105,7 @@ void PreviewViewModel::applyFilamentTotals(float totalFilamentUsedMm,
   m_extruderUsedWeight.clear();
   for (auto it = m_extruderUsedLength.constBegin(); it != m_extruderUsedLength.constEnd(); ++it)
   {
-    const float vol = it.value() * 3.14159265f * (diameterMm * 0.5f) * (diameterMm * 0.5f);
+    const float vol = it.value() * filamentCrossAreaMm2(diameterMm);
     m_extruderUsedWeight[it.key()] = vol * densityGcm3 * 0.001f;
   }
 
@@ -3189,9 +3217,11 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
   // Config-sourced scalars (the text path parses the same values from the
   // file header/footer comments the slicer wrote from this config).
   const float filamentDiameter =
-      result.filament_diameters.empty() ? 1.75f : result.filament_diameters.front();
+      result.filament_diameters.empty() ? kDefaultFilamentDiameter
+                                         : result.filament_diameters.front();
   const float filamentDensity =
-      result.filament_densities.empty() ? 1.24f : result.filament_densities.front();
+      result.filament_densities.empty() ? kDefaultFilamentDensity
+                                        : result.filament_densities.front();
   for (size_t i = 0; i < result.filament_costs.size(); ++i)
     if (result.filament_costs[i] > 0.0)
       m_filamentPrices[int(i)] = result.filament_costs[i];
@@ -3300,21 +3330,21 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
         seg.baseR = kc[0];
         seg.baseG = kc[1];
         seg.baseB = kc[2];
+        // Same tri-state tint as the text path, from the shared
+        // kTravel{Extrude,Retract}Color symbols (P1 review follow-up).
         if (kind == KindTravel)
         {
-          static const float kTravelExtrude[3] = {0.112f, 0.422f, 0.103f};
-          static const float kTravelRetract[3] = {0.505f, 0.064f, 0.028f};
           if (dE < 0.f)
           {
-            seg.baseR = kTravelRetract[0];
-            seg.baseG = kTravelRetract[1];
-            seg.baseB = kTravelRetract[2];
+            seg.baseR = kTravelRetractColor[0];
+            seg.baseG = kTravelRetractColor[1];
+            seg.baseB = kTravelRetractColor[2];
           }
           else if (dE > 0.f)
           {
-            seg.baseR = kTravelExtrude[0];
-            seg.baseG = kTravelExtrude[1];
-            seg.baseB = kTravelExtrude[2];
+            seg.baseR = kTravelExtrudeColor[0];
+            seg.baseG = kTravelExtrudeColor[1];
+            seg.baseB = kTravelExtrudeColor[2];
           }
         }
       }
@@ -3360,13 +3390,10 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
         totalFilamentUsed += dE;
         m_extruderUsedLength[int(mv.extruder_id)] += dE;
         m_roleFilamentLength[role] += dE;
-        // Phase 238 (PREV-05) category split (same role buckets as text).
-        if (role == 11 || role == 12 || role == 18)
-          m_filamentSplitLength[1] += dE;
-        else if (role == 13)
-          m_filamentSplitLength[3] += dE;
-        else
-          m_filamentSplitLength[0] += dE;
+        // Phase 238 (PREV-05) category split -- the shared
+        // filamentSplitBucketForRole() (single source with the text path,
+        // P1 review follow-up).
+        m_filamentSplitLength[filamentSplitBucketForRole(role)] += dE;
         if (feedrateMmMin > 0.f)
         {
           feedrateSum += feedrateMmMin;
@@ -3384,7 +3411,7 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
       if (kind == KindTravel)
         ++travelMoveCount;
 
-      directMoveLineIndex_.emplace_back(quint32(mv.gcode_id), moveIndex);
+      directMoveLineIndex_.push_back(quint32(mv.gcode_id));
       ++moveIndex;
     }
 
@@ -3409,9 +3436,15 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
   // Per-segment layer time = the layer's processor total (VT_LayerTime
   // gradient + tooltip). The text path leaves this ~0 for files without
   // ;TIME_ELAPSED tags; the durations here are the authoritative ones.
-  if (!segments_.empty())
+  // PERF(P1-DIRECT): direct constData indexing -- QVector::value()
+  // re-bounds-checks every one of the 620k+ lookups on the 400k tier.
+  if (!segments_.empty() && layerCount_ > 0)
+  {
+    const float *layerTimesData = m_layerTimes.constData();
+    const int lastLayer = layerCount_ - 1;
     for (auto &seg : segments_)
-      seg.layer_time = m_layerTimes.value(qBound(0, seg.layer, layerCount_ - 1), 0.f);
+      seg.layer_time = layerTimesData[seg.layer < lastLayer ? seg.layer : lastLayer];
+  }
 
   // Average speed: same formula as the text tail (F is mm/min, label mm/s).
   if (feedrateCount > 0)
@@ -3426,7 +3459,7 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
   // converted from mm3 to filament mm.
   if (!result.print_statistics.flush_per_filament.empty())
   {
-    const float area = 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
+    const float area = filamentCrossAreaMm2(filamentDiameter);
     if (area > 0.f)
     {
       for (const auto &flush : result.print_statistics.flush_per_filament)
@@ -3552,10 +3585,10 @@ void PreviewViewModel::buildGcodeSourceIndex(const QString &filePath)
   m_gcodeSourceLines.reserve(1024);
   m_fullConfig.clear();
 
-  // Cursor over the ascending (gcode line id -> move index) pairs captured
-  // during the direct walk: the move index for file line L is the number of
-  // emitted moves whose line id is < L -- exactly the running moveIndex the
-  // text parser holds when it reaches line L.
+  // Cursor over the ascending gcode line ids captured during the direct
+  // walk (the move index IS the array position): the move index for file
+  // line L is the number of emitted moves whose line id is < L -- exactly
+  // the running moveIndex the text parser holds when it reaches line L.
   size_t moveCursor = 0;
   int moveIndexAtLine = 0;
   int sourceLineNumber = 0;
@@ -3564,9 +3597,9 @@ void PreviewViewModel::buildGcodeSourceIndex(const QString &filePath)
     const QString raw = QString::fromUtf8(file.readLine()).trimmed();
     ++sourceLineNumber;
     while (moveCursor < directMoveLineIndex_.size()
-           && directMoveLineIndex_[moveCursor].first < quint32(sourceLineNumber))
+           && directMoveLineIndex_[moveCursor] < quint32(sourceLineNumber))
     {
-      moveIndexAtLine = directMoveLineIndex_[moveCursor].second + 1;
+      moveIndexAtLine = int(moveCursor) + 1;
       ++moveCursor;
     }
     if (raw.isEmpty())

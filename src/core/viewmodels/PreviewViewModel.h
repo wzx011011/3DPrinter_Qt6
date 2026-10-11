@@ -760,9 +760,11 @@ private:
   /// deferred pass (cleared by resetPreviewState so a stale queued pass
   /// no-ops after a reset).
   QString pendingSourceIndexPath_;
-  /// (gcode line id -> emitted move index) pairs captured during the direct
-  /// walk, consumed by buildGcodeSourceIndex to map source lines to moves
-  /// exactly like the text parser's running moveIndex. Transient: cleared
-  /// once the deferred pass ran.
-  std::vector<std::pair<quint32, int>> directMoveLineIndex_;
+  /// gcode line ids of the emitted moves, captured in emission order during
+  /// the direct walk (the move index IS the array position). Consumed by
+  /// buildGcodeSourceIndex to map source lines to moves exactly like the
+  /// text parser's running moveIndex. Transient: cleared once the deferred
+  /// pass ran. PERF(P1-DIRECT): a plain quint32 vector halves the footprint
+  /// of the old (line, move) pair form on the 620k-move tier.
+  std::vector<quint32> directMoveLineIndex_;
 };
