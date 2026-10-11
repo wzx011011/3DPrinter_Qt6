@@ -31,6 +31,11 @@ namespace Slic3r
   class Print;
   class DynamicPrintConfig;
   class Model;
+  // P1 (preview direct hand-off): the structured GCodeProcessorResult the
+  // slice worker already produces (Print::export_gcode out-param). Declared
+  // here so the GUI-thread hand-off accessors below can name it without
+  // including the heavy GCodeProcessor.hpp in every consumer of this header.
+  struct GCodeProcessorResult;
 }
 #endif
 
@@ -312,6 +317,27 @@ public:
   Q_INVOKABLE bool exportAllPlateGCodeToDirectory(const QString &directoryPath, const QString &baseName = QString());
   Q_INVOKABLE void clearResults();
 
+#ifdef HAS_LIBSLIC3R
+  /// P1 (preview direct hand-off): the structured result of the most recent
+  /// SUCCESSFUL slice (startSlice) or previous-G-code reuse
+  /// (loadGCodeFromPrevious), delivered to the GUI thread through the same
+  /// queued-invokeMethod completion chain that emits sliceFinished. Upstream
+  /// GCodeViewer::load_as_gcode consumes exactly this object directly
+  /// (GCodeViewer.hpp:186 load_as_gcode(const GCodeProcessorResult&, ...))
+  /// instead of re-parsing the exported text -- this accessor gives the Qt6
+  /// PreviewViewModel the same entry point. `resultId` (optional out) is a
+  /// monotonically increasing id so consumers can distinguish a fresh result
+  /// from one they already consumed. Null after releaseProcessorResult() or
+  /// when no valid slice finished.
+  std::shared_ptr<const Slic3r::GCodeProcessorResult> activeProcessorResult(
+      quint64 *resultId = nullptr) const;
+  /// P1: drops the stored result payload (the id keeps increasing). The
+  /// consumer calls this after building its preview state so the ~40 MB moves
+  /// vector is not kept duplicated next to the preview's own segment store
+  /// (spec item: "构建完成后及时释放 result，评估与既有预览数据的重复存储").
+  void releaseProcessorResult();
+#endif
+
   /// Inject merged preset config before startSlice(), aligned with upstream PresetBundle::full_fff_config.
   /// Values come from the current user-selected printer, filament, and print presets.
   void setMergedPresetConfig(const QHash<QString, QVariant> &config);
@@ -437,6 +463,11 @@ private:
   QFuture<void> exportCopyFuture_;
 #ifdef HAS_LIBSLIC3R
   std::atomic<Slic3r::Print *> activePrint_{nullptr};
+  /// P1 (preview direct hand-off): the last successful slice's structured
+  /// result + its delivery id. GUI-thread-only (set/cleared inside the queued
+  /// completion lambda / releaseProcessorResult), so no lock is needed.
+  std::shared_ptr<Slic3r::GCodeProcessorResult> activeProcessorResult_;
+  quint64 processorResultId_ = 0;
 #endif
 
   QMap<int, PlateSliceResult> plateResults_;

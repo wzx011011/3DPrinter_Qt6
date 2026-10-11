@@ -6,6 +6,10 @@
 // Phase 118 (TICK-02/TICK-03): libslic3r custom-g-code write-back path.
 #include <libslic3r/CustomGCode.hpp>
 #include <libslic3r/Model.hpp>
+// P1 (preview direct hand-off): structured slice result + ExtrusionRole for
+// the canonical-role translation below.
+#include <libslic3r/GCode/GCodeProcessor.hpp>
+#include <libslic3r/ExtrusionEntity.hpp>
 #endif
 #include <QDebug>
 #include <QFile>
@@ -615,6 +619,44 @@ namespace
   }
 
 #ifdef HAS_LIBSLIC3R
+  // P1 (preview direct hand-off): libslic3r ExtrusionRole (ExtrusionEntity.hpp)
+  // -> canonical libvgcode EGCodeExtrusionRole index. The two enums DIVERGE
+  // past index 6 (55-RESEARCH Pitfall 6), so the translation is an explicit
+  // named switch -- never a static_cast of the libslic3r integer. Correctness
+  // is guaranteed by construction against the text path: role_to_string
+  // (ExtrusionEntity.cpp:583-608) produces exactly the strings kRoleMap keys
+  // on, so table(role) == roleForTypeImpl(role_to_string(role)) for every
+  // role the locked tree defines.
+  int canonicalRoleFromExtrusionRole(Slic3r::ExtrusionRole role)
+  {
+    switch (role)
+    {
+      case Slic3r::erNone:                     return 0;   // None
+      case Slic3r::erPerimeter:                return 1;   // Perimeter
+      case Slic3r::erExternalPerimeter:        return 2;   // ExternalPerimeter
+      case Slic3r::erOverhangPerimeter:        return 3;   // OverhangPerimeter
+      case Slic3r::erInternalInfill:           return 4;   // InternalInfill
+      case Slic3r::erSolidInfill:              return 5;   // SolidInfill
+      case Slic3r::erTopSolidInfill:           return 6;   // TopSolidInfill
+      case Slic3r::erBottomSurface:            return 15;  // BottomSurface (NOT 7)
+      case Slic3r::erIroning:                  return 7;   // Ironing        (NOT 8)
+      case Slic3r::erBridgeInfill:             return 8;   // BridgeInfill   (NOT 9)
+      case Slic3r::erInternalBridgeInfill:     return 16;  // InternalBridgeInfill (NOT 10)
+      case Slic3r::erGapFill:                  return 9;   // GapFill        (NOT 11)
+      case Slic3r::erSkirt:                    return 10;  // Skirt          (NOT 12)
+      case Slic3r::erBrim:                     return 17;  // Brim           (NOT 13)
+      case Slic3r::erSupportMaterial:          return 11;  // SupportMaterial(NOT 14)
+      case Slic3r::erSupportMaterialInterface: return 12;  // SupportMaterialInterface
+      case Slic3r::erSupportTransition:        return 18;  // SupportTransition (NOT 16)
+      case Slic3r::erWipeTower:                return 13;  // WipeTower      (NOT 17)
+      case Slic3r::erCustom:                   return 14;  // Custom         (NOT 18)
+      case Slic3r::erMixed:                    return 19;  // Mixed
+      default:                                 return 0;
+    }
+  }
+#endif
+
+#ifdef HAS_LIBSLIC3R
   // Phase 118 (TICK-02/TICK-03): pure, side-effect-free conversion of the
   // project's OWzx::TickCode list into a libslic3r CustomGCode::Info so it can
   // be written to model->plates_custom_gcodes. Extracted from writeTicksToModel
@@ -907,12 +949,14 @@ bool PreviewViewModel::loadGCodeForPreview(const QString &filePath)
   const QFileInfo info(filePath);
   if (!info.exists() || !info.isFile())
   {
+    lastLoadedPath_.clear();
     resetPreviewState();
     emit stateChanged();
     return false;
   }
 
   rebuildFromGCode(info.absoluteFilePath());
+  lastLoadedPath_ = info.absoluteFilePath();
   emit stateChanged();
   return !gcodePreviewData_.isEmpty();
 }
@@ -922,13 +966,48 @@ void PreviewViewModel::syncPreviewWithActiveResult()
   const QString activePath = sliceService_ ? sliceService_->outputPath() : QString{};
   if (activePath.isEmpty())
   {
+    lastLoadedPath_.clear();
     resetPreviewState();
     return;
   }
 
+#ifdef HAS_LIBSLIC3R
+  // P1 (preview direct hand-off): a FRESH structured result from the last
+  // slice / previous-G-code reuse takes the direct path -- the preview state
+  // is built from the processor's own moves vector (upstream load_as_gcode
+  // consumption, GCodeViewer.hpp:186) instead of re-parsing the just-written
+  // text on the GUI thread. The delivery id makes the second sync of the same
+  // completion (resultChanged AND sliceFinished both connect here) a no-op --
+  // which also retires the pre-P1 behavior of running the full text parse
+  // TWICE per slice.
+  if (sliceService_)
+  {
+    quint64 resultId = 0;
+    std::shared_ptr<const Slic3r::GCodeProcessorResult> processorResult =
+        sliceService_->activeProcessorResult(&resultId);
+    if (processorResult && resultId != lastConsumedResultId_)
+    {
+      lastConsumedResultId_ = resultId;
+      lastLoadedPath_ = activePath;
+      loadFromProcessorResult(*processorResult, activePath);
+      // The ~40 MB moves vector is now duplicated inside the preview's own
+      // segment store -- release the service copy immediately (the id keeps
+      // the duplicate-sync guard working; a later plate-switch sync re-parses
+      // that plate's file through the text path like before).
+      sliceService_->releaseProcessorResult();
+      return;
+    }
+    // Idempotence guard for the duplicate sync: same result id (or none) and
+    // the same file means the state is already built -- skip the rebuild.
+    if (activePath == lastLoadedPath_)
+      return;
+  }
+#endif
+
   const QFileInfo info(activePath);
   if (!info.exists() || !info.isFile())
   {
+    lastLoadedPath_.clear();
     resetPreviewState();
     return;
   }
@@ -937,6 +1016,7 @@ void PreviewViewModel::syncPreviewWithActiveResult()
   estimatedTime_ = activeTime.isEmpty() ? QStringLiteral("--:--:--") : activeTime;
   totalTime_ = estimatedTime_;
   rebuildFromGCode(info.absoluteFilePath());
+  lastLoadedPath_ = info.absoluteFilePath();
 }
 
 void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
@@ -1890,6 +1970,15 @@ void PreviewViewModel::resetPreviewState()
   toolActualSpeedYMax_ = 0;
   m_actualSpeedMin = std::numeric_limits<float>::max();
   m_actualSpeedMax = 0.f;
+  // P1: a reset invalidates any in-flight deferred source-index pass (the
+  // queued lambda compares against pendingSourceIndexPath_ and no-ops) and
+  // drops the transient direct-walk line index. lastLoadedPath_ /
+  // lastConsumedResultId_ are NOT cleared here -- rebuildFromGCode /
+  // loadFromProcessorResult set them at their END, so a reset followed by an
+  // empty-path sync (resetPreviewState branch in syncPreviewWithActiveResult)
+  // still needs the stale values to detect "nothing changed".
+  pendingSourceIndexPath_.clear();
+  directMoveLineIndex_.clear();
   if (hadTicks)
     emit tickMarksChanged();
 }
@@ -2111,11 +2200,22 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
         currentLayerTime = qMax(0.f, elapsedTime - layerStartElapsed);
         elapsedTagSeen = true;
       }
-      if (parseTaggedValue(raw, QStringLiteral("LINE_WIDTH"), taggedValue)
-          || parseTaggedValue(raw, QStringLiteral("WIDTH"), taggedValue))
+      // P1-parity: width tags follow the upstream tag grammar -- the tag must
+      // OPEN the comment (GCodeProcessor.cpp:4707 pos==0). The previous
+      // contains-match also swallowed free-text header prose like "; top
+      // infill extrusion width = 0.40mm" and poisoned the width state before
+      // the first real tag; the processor (whose moves vector the direct
+      // preview path consumes) leaves m_width at its last computed value
+      // there instead.
+      if (raw.startsWith(QStringLiteral(";WIDTH"), Qt::CaseInsensitive)
+          || raw.startsWith(QStringLiteral("; LINE_WIDTH"), Qt::CaseInsensitive))
       {
-        if (taggedValue > 0.f)
-          currentWidth = taggedValue;
+        if (parseTaggedValue(raw, QStringLiteral("LINE_WIDTH"), taggedValue)
+            || parseTaggedValue(raw, QStringLiteral("WIDTH"), taggedValue))
+        {
+          if (taggedValue > 0.f)
+            currentWidth = taggedValue;
+        }
       }
       if (parseTaggedValue(raw, QStringLiteral("LAYER_HEIGHT"), taggedValue)
           || parseTaggedValue(raw, QStringLiteral("HEIGHT"), taggedValue))
@@ -2631,6 +2731,36 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     ++moveIndex;
     };
 
+    // P1 (G28 parity with the direct path / upstream): GCodeProcessor::
+    // process_G28 synthesizes a G1 move to the homed axes -- bare G28 -> X0
+    // Y0 Z0, "G28 X0" -> X0 only -- so the preview renders the homing travel
+    // (GCodeProcessor.cpp process_G28). The text path previously ignored G28
+    // lines entirely, which left exactly the end-gcode "G28 X0" park move
+    // missing next to the direct GCodeProcessorResult product. Relative
+    // positioning (G91) targets 0 as a delta, i.e. no displacement, matching
+    // upstream's extract_absolute_position_on_axis.
+    if (upper == QStringLiteral("G28") || upper.startsWith(QStringLiteral("G28 ")))
+    {
+      const QStringList tokens = upper.mid(3).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+      bool homeX = false, homeY = false, homeZ = false;
+      for (const QString &token : tokens)
+      {
+        if (token.startsWith(QLatin1Char('X')))
+          homeX = true;
+        else if (token.startsWith(QLatin1Char('Y')))
+          homeY = true;
+        else if (token.startsWith(QLatin1Char('Z')))
+          homeZ = true;
+      }
+      if (!homeX && !homeY && !homeZ)
+        homeX = homeY = homeZ = true;
+      const float nx = homeX ? (absolutePositioning ? 0.f : x) : x;
+      const float ny = homeY ? (absolutePositioning ? 0.f : y) : y;
+      const float nz = homeZ ? (absolutePositioning ? 0.f : z) : z;
+      processStraightMove(nx, ny, nz, e, false);
+      continue;
+    }
+
     // P17.9 (PARSER): G2/G3 arcs — segmented into straight chords that run
     // through the same per-move processing (upstream segments arcs during
     // parsing so every toolpath vertex is a straight move). E is distributed
@@ -2870,83 +3000,8 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   else
     avgSpeed_ = QStringLiteral("--");
 
-  if (segments_.empty())
-  {
-    filamentUsed_ = QStringLiteral("--");
-    filamentWeight_ = QStringLiteral("--");
-    estimatedCost_ = QStringLiteral("--");
-    m_totalFilamentGrams = 0.0;
-  }
-  else
-  {
-    filamentUsed_ = QStringLiteral("%1 m").arg(totalFilamentUsed / 1000.f, 0, 'f', 2);
-    // Weight = volume_mm3 * density_g_per_cm3 * 1e-3.
-    // volume_mm3 = length_mm * pi * (diameter / 2)^2.
-    const float volume_mm3 = totalFilamentUsed * 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
-    const float weight_g = volume_mm3 * filamentDensity * 0.001f;
-    filamentWeight_ = QStringLiteral("%1 g").arg(weight_g, 0, 'f', 1);
-    m_totalFilamentGrams = weight_g;
-    // Phase 238 (PREV-05): keep the parsed diameter/density so the split
-    // formatter can convert lengths to grams with the same formula.
-    m_filamentDiameter = filamentDiameter;
-    m_filamentDensity = filamentDensity;
-
-    // Compute per-extruder filament weight, aligned with upstream PrintEstimatedStatistics.
-    m_extruderUsedWeight.clear();
-    for (auto it = m_extruderUsedLength.constBegin(); it != m_extruderUsedLength.constEnd(); ++it)
-    {
-      const float vol = it.value() * 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
-      m_extruderUsedWeight[it.key()] = vol * filamentDensity * 0.001f;
-    }
-
-    // Phase 238 (PREV-05): estimated cost = sum over extruders of
-    // grams * price_per_kg * 0.001 (upstream GCodeProcessor.cpp:4387-4398).
-    // Price comes from the "; filament_cost" gcode config block when present;
-    // the fallback default is the upstream DEFAULT_FILAMENT_COST 29.99/kg
-    // (GCodeProcessor.cpp:49) -- no longer a hardcoded $20/kg.
-    double totalCost = 0.0;
-    for (auto it = m_extruderUsedWeight.constBegin(); it != m_extruderUsedWeight.constEnd(); ++it)
-    {
-      const double pricePerKg = m_filamentPrices.value(it.key(), 29.99);
-      totalCost += it.value() * pricePerKg * 0.001;
-    }
-    estimatedCost_ = QStringLiteral("$%1").arg(totalCost, 0, 'f', 2);
-  }
-
-  // Build role time breakdown, aligned with upstream PrintEstimatedStatistics::roles_times.
-  m_roleTimes.clear();
-  // Map upstream TYPE labels to Chinese display names
-  static const QHash<QString, QString> roleLabels = {
-      {QStringLiteral("WALL-INNER"),          tr("内壁")},
-      {QStringLiteral("WALL-OUTER"),          tr("外壁")},
-      {QStringLiteral("WALL"),                tr("墙壁")},
-      {QStringLiteral("SKIN"),                tr("顶面/底面")},
-      {QStringLiteral("FILL"),                tr("填充")},
-      {QStringLiteral("SUPPORT"),             tr("支撑")},
-      {QStringLiteral("SUPPORT-INTERFACE"),   tr("支撑面")},
-      {QStringLiteral("BRIDGE"),              tr("桥接")},
-      {QStringLiteral("PERIMETER"),           tr("轮廓")},
-      {QStringLiteral("EXTERNAL"),            tr("外壁")},
-      {QStringLiteral("INTERNAL"),            tr("内壁")},
-      {QStringLiteral("OVERHANG"),            tr("悬空")},
-      {QStringLiteral("IRONING"),             tr("熨烫")},
-      {QStringLiteral("SKIRT"),               tr("裙边")},
-      {QStringLiteral("BRIM"),                tr("底座")},
-      {QStringLiteral("WIPE"),                tr("擦料")},
-      {QStringLiteral("PRIME-TOWER"),         tr("擦料塔")},
-      {QStringLiteral("CUSTOM"),              tr("自定义")},
-      {QStringLiteral("TRAVEL"),              tr("空驶")},
-  };
-  for (auto it = roleTimeAccum.cbegin(); it != roleTimeAccum.cend(); ++it)
-  {
-    RoleTimeEntry entry;
-    entry.name = roleLabels.value(it.key(), it.key());
-    entry.timeSecs = it.value();
-    m_roleTimes.append(entry);
-  }
-  // Sort by time descending
-  std::sort(m_roleTimes.begin(), m_roleTimes.end(),
-            [](const RoleTimeEntry &a, const RoleTimeEntry &b) { return a.timeSecs > b.timeSecs; });
+  applyFilamentTotals(totalFilamentUsed, filamentDiameter, filamentDensity);
+  buildRoleTimeBreakdown(roleTimeAccum);
 
   updateToolPositionData();
   rebuildGcodeLineWindow();
@@ -2990,6 +3045,556 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
     emit tickMarksChanged();
   }
 }
+
+// P1 (preview direct hand-off): shared finalization tail -- the filament
+// totals block of rebuildFromGCode, extracted verbatim so the text path and
+// loadFromProcessorResult compute identical derived stats from their
+// accumulators (单一结构双入口).
+void PreviewViewModel::applyFilamentTotals(float totalFilamentUsedMm,
+                                           float diameterMm, float densityGcm3)
+{
+  if (segments_.empty())
+  {
+    filamentUsed_ = QStringLiteral("--");
+    filamentWeight_ = QStringLiteral("--");
+    estimatedCost_ = QStringLiteral("--");
+    m_totalFilamentGrams = 0.0;
+    return;
+  }
+  filamentUsed_ = QStringLiteral("%1 m").arg(totalFilamentUsedMm / 1000.f, 0, 'f', 2);
+  // Weight = volume_mm3 * density_g_per_cm3 * 1e-3.
+  // volume_mm3 = length_mm * pi * (diameter / 2)^2.
+  const float volume_mm3 = totalFilamentUsedMm * 3.14159265f * (diameterMm * 0.5f) * (diameterMm * 0.5f);
+  const float weight_g = volume_mm3 * densityGcm3 * 0.001f;
+  filamentWeight_ = QStringLiteral("%1 g").arg(weight_g, 0, 'f', 1);
+  m_totalFilamentGrams = weight_g;
+  // Phase 238 (PREV-05): keep the parsed diameter/density so the split
+  // formatter can convert lengths to grams with the same formula.
+  m_filamentDiameter = diameterMm;
+  m_filamentDensity = densityGcm3;
+
+  // Compute per-extruder filament weight, aligned with upstream PrintEstimatedStatistics.
+  m_extruderUsedWeight.clear();
+  for (auto it = m_extruderUsedLength.constBegin(); it != m_extruderUsedLength.constEnd(); ++it)
+  {
+    const float vol = it.value() * 3.14159265f * (diameterMm * 0.5f) * (diameterMm * 0.5f);
+    m_extruderUsedWeight[it.key()] = vol * densityGcm3 * 0.001f;
+  }
+
+  // Phase 238 (PREV-05): estimated cost = sum over extruders of
+  // grams * price_per_kg * 0.001 (upstream GCodeProcessor.cpp:4387-4398).
+  // Price comes from the "; filament_cost" gcode config block when present;
+  // the fallback default is the upstream DEFAULT_FILAMENT_COST 29.99/kg
+  // (GCodeProcessor.cpp:49) -- no longer a hardcoded $20/kg.
+  double totalCost = 0.0;
+  for (auto it = m_extruderUsedWeight.constBegin(); it != m_extruderUsedWeight.constEnd(); ++it)
+  {
+    const double pricePerKg = m_filamentPrices.value(it.key(), 29.99);
+    totalCost += it.value() * pricePerKg * 0.001;
+  }
+  estimatedCost_ = QStringLiteral("$%1").arg(totalCost, 0, 'f', 2);
+}
+
+// P1: shared finalization tail -- the role-time breakdown of rebuildFromGCode
+// (upstream PrintEstimatedStatistics::roles_times), extracted verbatim. Keys
+// are the upstream ;TYPE: display strings, identical between the text parse
+// and the direct walk (the latter keys by kRoleLabels[canonicalRole], which
+// equals role_to_string for every role).
+void PreviewViewModel::buildRoleTimeBreakdown(const QHash<QString, double> &roleTimeAccum)
+{
+  m_roleTimes.clear();
+  // Map upstream TYPE labels to Chinese display names
+  static const QHash<QString, QString> roleLabels = {
+      {QStringLiteral("WALL-INNER"),          tr("内壁")},
+      {QStringLiteral("WALL-OUTER"),          tr("外壁")},
+      {QStringLiteral("WALL"),                tr("墙壁")},
+      {QStringLiteral("SKIN"),                tr("顶面/底面")},
+      {QStringLiteral("FILL"),                tr("填充")},
+      {QStringLiteral("SUPPORT"),             tr("支撑")},
+      {QStringLiteral("SUPPORT-INTERFACE"),   tr("支撑面")},
+      {QStringLiteral("BRIDGE"),              tr("桥接")},
+      {QStringLiteral("PERIMETER"),           tr("轮廓")},
+      {QStringLiteral("EXTERNAL"),            tr("外壁")},
+      {QStringLiteral("INTERNAL"),            tr("内壁")},
+      {QStringLiteral("OVERHANG"),            tr("悬空")},
+      {QStringLiteral("IRONING"),             tr("熨烫")},
+      {QStringLiteral("SKIRT"),               tr("裙边")},
+      {QStringLiteral("BRIM"),                tr("底座")},
+      {QStringLiteral("WIPE"),                tr("擦料")},
+      {QStringLiteral("PRIME-TOWER"),         tr("擦料塔")},
+      {QStringLiteral("CUSTOM"),              tr("自定义")},
+      {QStringLiteral("TRAVEL"),              tr("空驶")},
+  };
+  for (auto it = roleTimeAccum.cbegin(); it != roleTimeAccum.cend(); ++it)
+  {
+    RoleTimeEntry entry;
+    entry.name = roleLabels.value(it.key(), it.key());
+    entry.timeSecs = it.value();
+    m_roleTimes.append(entry);
+  }
+  // Sort by time descending
+  std::sort(m_roleTimes.begin(), m_roleTimes.end(),
+            [](const RoleTimeEntry &a, const RoleTimeEntry &b) { return a.timeSecs > b.timeSecs; });
+}
+
+#ifdef HAS_LIBSLIC3R
+bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResult &result,
+                                               const QString &gcodePath)
+{
+  const QString preservedEstimatedTime = estimatedTime_;
+  const QString preservedTotalTime = totalTime_;
+  resetPreviewState();
+  estimatedTime_ = preservedEstimatedTime;
+  totalTime_ = preservedTotalTime;
+
+  segments_.reserve(result.moves.size());
+  m_moveAccumulatedTime.reserve(result.moves.size());
+  directMoveLineIndex_.reserve(result.moves.size());
+
+  // Upstream EMoveType -> Qt MoveKind. Tool_change / Color_change /
+  // Pause_Print / Custom_GCode lines never produce a text-path segment (the
+  // parser skips them), and Noop vertices are never stored by the processor
+  // (process_G1 early-returns on zero displacement), so those map to -1 and
+  // only advance the tracked position below.
+  auto kindForMoveType = [](Slic3r::EMoveType type) -> int {
+    switch (type)
+    {
+      case Slic3r::EMoveType::Extrude:   return KindExtrude;
+      case Slic3r::EMoveType::Travel:    return KindTravel;
+      case Slic3r::EMoveType::Wipe:      return KindWipe;
+      case Slic3r::EMoveType::Retract:   return KindRetract;
+      case Slic3r::EMoveType::Unretract: return KindUnretract;
+      case Slic3r::EMoveType::Seam:      return KindSeam;
+      default:                           return -1;
+    }
+  };
+
+  // Accumulators mirroring the text parser's loop locals one-for-one so the
+  // shared finalization tail consumes the same shapes.
+  int layer = 0;
+  int moveIndex = 0;
+  float prevX = 0.f, prevY = 0.f, prevZ = 0.f;
+  float printLayerZ = 0.f;
+  bool hasPrintLayerZ = false;
+  int extrudeMoveCount = 0;
+  int travelMoveCount = 0;
+  int toolChangeCount = 0;
+  double feedrateSum = 0.0;
+  int feedrateCount = 0;
+  float totalFilamentUsed = 0.f;
+  QHash<QString, double> roleTimeAccum;
+  int lastExtruderId = 0;
+  float layerSeconds = 0.f;  // time[Normal] accumulated inside the OPEN layer
+
+  // Config-sourced scalars (the text path parses the same values from the
+  // file header/footer comments the slicer wrote from this config).
+  const float filamentDiameter =
+      result.filament_diameters.empty() ? 1.75f : result.filament_diameters.front();
+  const float filamentDensity =
+      result.filament_densities.empty() ? 1.24f : result.filament_densities.front();
+  for (size_t i = 0; i < result.filament_costs.size(); ++i)
+    if (result.filament_costs[i] > 0.0)
+      m_filamentPrices[int(i)] = result.filament_costs[i];
+  // Authoritative estimated-printing-time comments (text: the
+  // "; estimated printing time (normal|silent mode)" header lines) and the
+  // upstream prepare time (text: elapsed before the first extrusion).
+  m_normalTimeSecs = result.print_statistics.modes[0].time;
+  m_stealthTimeSecs = result.print_statistics.modes[1].time;
+  prepareTimeSeconds_ = result.print_statistics.modes[0].prepare_time;
+  prepareTimeCaptured_ = prepareTimeSeconds_ > 0.f;
+
+  const auto pushAccumulatedTime = [&](float dt) {
+    const float prev = m_moveAccumulatedTime.empty() ? 0.f : m_moveAccumulatedTime.back();
+    m_moveAccumulatedTime.push_back(prev + dt);
+  };
+
+  for (const Slic3r::GCodeProcessorResult::MoveVertex &mv : result.moves)
+  {
+    // calculate_time INSERTS cloned "actual speed" vertices (internal_only ==
+    // true, GCodeProcessor.cpp:7474) into the moves vector -- planner
+    // interpolation points that never exist in the exported file. The text
+    // path cannot see them, so skip them entirely WITHOUT advancing the
+    // tracked position (their interpolated position is not a file line's
+    // endpoint).
+    if (mv.internal_only)
+      continue;
+
+    const float x = mv.position.x();
+    const float y = mv.position.y();
+    const float z = mv.position.z();
+
+    // Tool-change bookkeeping (text: T lines whose id differs from the
+    // current extruder; upstream stores those transitions on the vertices).
+    if (int(mv.extruder_id) != lastExtruderId)
+    {
+      ++toolChangeCount;
+      m_toolChangePositions.push_back({moveIndex, int(mv.extruder_id)});
+      lastExtruderId = int(mv.extruder_id);
+    }
+
+    const int kind = kindForMoveType(mv.type);
+    if (kind >= 0)
+    {
+      const float dE = mv.delta_extruder;
+      const bool extruding = kind == KindExtrude && dE > 0.00001f;
+      const int role = extruding ? canonicalRoleFromExtrusionRole(mv.extrusion_role) : 0;
+      const float dt = mv.time[0];                 // per-move duration, Normal mode
+      const float feedrateMmMin = mv.feedrate * 60.f;  // StoredSegment unit is mm/min
+      const float actualSpeed = mv.actual_feedrate > 0.f ? mv.actual_feedrate * 60.f
+                                                         : feedrateMmMin;
+
+      // Layer table rule, identical to the text parser: a preview layer opens
+      // on the first extrusion at a new Z (travel Z-hops never create empty
+      // selectable layers).
+      if (extruding)
+      {
+        if (!hasPrintLayerZ)
+        {
+          printLayerZ = z;
+          hasPrintLayerZ = true;
+          m_layerZs.append(z);
+        }
+        else if (!isSameZ(z, printLayerZ))
+        {
+          m_layerTimes.append(layerSeconds);
+          m_maxLayerTime = qMax(m_maxLayerTime, layerSeconds);
+          ++layer;
+          printLayerZ = z;
+          m_layerZs.append(z);
+          layerSeconds = 0.f;
+        }
+      }
+
+      StoredSegment seg;
+      if (kind == KindSeam)
+      {
+        // Seam marker: the same vertical tick the text parser emits for its
+        // port of the upstream seam detector (GCodeProcessor.cpp store_seam).
+        seg.x1 = x;
+        seg.y1 = y;
+        seg.z1 = z;
+        seg.x2 = x;
+        seg.y2 = y;
+        seg.z2 = z + kMarkerTickHeight;
+      }
+      else
+      {
+        seg.x1 = prevX;
+        seg.y1 = prevY;
+        seg.z1 = prevZ;
+        seg.x2 = x;
+        seg.y2 = y;
+        seg.z2 = z;
+      }
+      if (extruding)
+      {
+        seg.baseR = kRoleColors[role][0];
+        seg.baseG = kRoleColors[role][1];
+        seg.baseB = kRoleColors[role][2];
+      }
+      else
+      {
+        // Phase 238 (PREV-03) base colors + the travel tint by delta_extruder
+        // sign (same constants as the text path).
+        const float *kc = kindBaseColor(kind);
+        seg.baseR = kc[0];
+        seg.baseG = kc[1];
+        seg.baseB = kc[2];
+        if (kind == KindTravel)
+        {
+          static const float kTravelExtrude[3] = {0.112f, 0.422f, 0.103f};
+          static const float kTravelRetract[3] = {0.505f, 0.064f, 0.028f};
+          if (dE < 0.f)
+          {
+            seg.baseR = kTravelRetract[0];
+            seg.baseG = kTravelRetract[1];
+            seg.baseB = kTravelRetract[2];
+          }
+          else if (dE > 0.f)
+          {
+            seg.baseR = kTravelExtrude[0];
+            seg.baseG = kTravelExtrude[1];
+            seg.baseB = kTravelExtrude[2];
+          }
+        }
+      }
+      seg.feedrate = kind == KindSeam ? 0.f : feedrateMmMin;
+      seg.fan_speed = mv.fan_speed;
+      seg.temperature = mv.temperature;
+      // Authoritative per-move width (the processor's own ;WIDTH handling /
+      // geometry fallback) and height (layer thickness, upstream m_height --
+      // the text path falls back to the absolute Z because no ;HEIGHT comment
+      // exists in slicer output).
+      seg.width = mv.width;
+      seg.height = mv.height;
+      seg.layer_time = 0.f;  // filled from m_layerTimes after the walk
+      seg.acceleration = mv.acceleration;
+      seg.volumetric_rate = extruding ? mv.feedrate * mv.mm3_per_mm : 0.f;
+      seg.jerk = mv.jerk;
+      seg.pressure_advance = mv.pressure_advance;
+      seg.actual_speed = kind == KindSeam ? 0.f : actualSpeed;
+      seg.actual_flow = extruding && mv.feedrate > 0.f && mv.actual_feedrate > 0.f
+                            ? mv.actual_feedrate * mv.mm3_per_mm
+                            : 0.f;
+      seg.extruder_id = int(mv.extruder_id);
+      seg.layer = layer;
+      seg.move = moveIndex;
+      seg.isTravel = (kind == KindTravel || kind == KindWipe);
+      seg.role = role;
+      seg.kind = kind;
+      seg.gcodeLine = int(mv.gcode_id);
+      segments_.push_back(seg);
+      if (seg.actual_speed < m_actualSpeedMin)
+        m_actualSpeedMin = seg.actual_speed;
+      if (seg.actual_speed > m_actualSpeedMax)
+        m_actualSpeedMax = seg.actual_speed;
+
+      // Seam ticks advance the timeline like the text marker (no duration);
+      // every other emitted move advances by the processor's duration.
+      pushAccumulatedTime(kind == KindSeam ? 0.f : dt);
+      layerSeconds += kind == KindSeam ? 0.f : dt;
+
+      if (extruding)
+      {
+        featureCount_[roleLabel(role)] += 1;
+        totalFilamentUsed += dE;
+        m_extruderUsedLength[int(mv.extruder_id)] += dE;
+        m_roleFilamentLength[role] += dE;
+        // Phase 238 (PREV-05) category split (same role buckets as text).
+        if (role == 11 || role == 12 || role == 18)
+          m_filamentSplitLength[1] += dE;
+        else if (role == 13)
+          m_filamentSplitLength[3] += dE;
+        else
+          m_filamentSplitLength[0] += dE;
+        if (feedrateMmMin > 0.f)
+        {
+          feedrateSum += feedrateMmMin;
+          ++feedrateCount;
+        }
+        m_roleTimeByIndex[role] += dt;
+        roleTimeAccum[QString::fromUtf8(kRoleLabels[role])] += dt;
+        ++extrudeMoveCount;
+      }
+      else
+      {
+        featureCount_[kindFeatureLabel(kind)] += 1;
+      }
+      m_kindCounts[kind] += 1;
+      if (kind == KindTravel)
+        ++travelMoveCount;
+
+      directMoveLineIndex_.emplace_back(quint32(mv.gcode_id), moveIndex);
+      ++moveIndex;
+    }
+
+    prevX = x;
+    prevY = y;
+    prevZ = z;
+  }
+
+  moveCount_ = moveIndex;
+  layerCount_ = qMax(1, hasPrintLayerZ ? layer + 1 : 1);
+  // Close the open layer (the text path's legacy final append).
+  m_layerTimes.append(layerSeconds);
+  m_maxLayerTime = qMax(m_maxLayerTime, layerSeconds);
+
+  currentLayerMin_ = 0;
+  currentLayerMax_ = layerCount_ - 1;
+  currentMove_ = moveCount_;
+  extrudeMoveCount_ = extrudeMoveCount;
+  travelMoveCount_ = travelMoveCount;
+  toolChangeCount_ = toolChangeCount;
+
+  // Per-segment layer time = the layer's processor total (VT_LayerTime
+  // gradient + tooltip). The text path leaves this ~0 for files without
+  // ;TIME_ELAPSED tags; the durations here are the authoritative ones.
+  if (!segments_.empty())
+    for (auto &seg : segments_)
+      seg.layer_time = m_layerTimes.value(qBound(0, seg.layer, layerCount_ - 1), 0.f);
+
+  // Average speed: same formula as the text tail (F is mm/min, label mm/s).
+  if (feedrateCount > 0)
+    avgSpeed_ = QStringLiteral("%1 mm/s").arg(feedrateSum / feedrateCount / 60.0, 0, 'f', 1);
+  else
+    avgSpeed_ = QStringLiteral("--");
+
+  // Phase 238 (PREV-05) flushed filament: the text path counts unretract
+  // moves inside FLUSH_START/FLUSH_END regions; the per-move flushing state
+  // does not survive into the moves vector, so take the processor's own
+  // per-filament flush accounting (GCodeProcessor update_flush_per_filament)
+  // converted from mm3 to filament mm.
+  if (!result.print_statistics.flush_per_filament.empty())
+  {
+    const float area = 3.14159265f * (filamentDiameter * 0.5f) * (filamentDiameter * 0.5f);
+    if (area > 0.f)
+    {
+      for (const auto &flush : result.print_statistics.flush_per_filament)
+      {
+        const float flushMm = float(flush.second) / area;
+        m_filamentSplitLength[2] += flushMm;
+        totalFilamentUsed += flushMm;
+        m_extruderUsedLength[int(flush.first)] += flushMm;
+      }
+    }
+  }
+
+  applyFilamentTotals(totalFilamentUsed, filamentDiameter, filamentDensity);
+  buildRoleTimeBreakdown(roleTimeAccum);
+
+  // Ticks: the processor's custom_gcode_per_print_z carries what the slicer
+  // wrote into the file (the text path re-derives the same list from the
+  // ;COLOR_CHANGE / ;PAUSE_PRINT / ;CUSTOM_GCODE comment tags).
+  for (const Slic3r::CustomGCode::Item &item : result.custom_gcode_per_print_z)
+  {
+    int layerIdx = -1;
+    for (int i = 0; i < m_layerZs.size(); ++i)
+    {
+      if (isSameZ(m_layerZs[i], float(item.print_z)))
+      {
+        layerIdx = i;
+        break;
+      }
+    }
+    if (layerIdx < 0)
+    {
+      // print_z between layers (e.g. between the purge line and layer 1):
+      // attribute to the first layer at or above it.
+      for (int i = 0; i < m_layerZs.size(); ++i)
+      {
+        if (m_layerZs[i] >= float(item.print_z) - 0.0001f)
+        {
+          layerIdx = i;
+          break;
+        }
+      }
+    }
+    if (layerIdx < 0)
+      continue;
+    OWzx::TickType type = OWzx::TickType::CustomGcode;
+    switch (item.type)
+    {
+      case Slic3r::CustomGCode::ColorChange: type = OWzx::TickType::ColorChange; break;
+      case Slic3r::CustomGCode::PausePrint:  type = OWzx::TickType::PausePrint;  break;
+      case Slic3r::CustomGCode::Custom:      type = OWzx::TickType::CustomGcode; break;
+      case Slic3r::CustomGCode::ToolChange:  type = OWzx::TickType::ToolChange;  break;
+      case Slic3r::CustomGCode::Template:    type = OWzx::TickType::Template;    break;
+      default: continue;
+    }
+    OWzx::TickCode tick;
+    tick.tick = layerIdx;
+    tick.type = type;
+    tick.extruder = qMax(0, int(item.extruder) - 1);  // Item extruder is 1-based
+    tick.color = QString::fromStdString(item.color);
+    tick.extra = QString::fromStdString(item.extra);
+    tickMarks_.append(tick);
+  }
+
+  updateToolPositionData();
+  rebuildGcodeLineWindow();  // empty until the deferred source pass below
+  recolorAndPackSegments();  // gcodePreviewData_ ready -> previewReady()
+
+  // Estimated-time label tail (same conditions as the text tail): only when
+  // no service label arrived yet.
+  if (m_normalTimeSecs > 0.f && estimatedTime_.contains(QStringLiteral("--")))
+  {
+    estimatedTime_ = formatTime(m_normalTimeSecs);
+    totalTime_ = estimatedTime_;
+  }
+  if (stealthMode_)
+  {
+    totalTime_ = m_stealthTimeSecs > 0.f
+        ? formatTime(m_stealthTimeSecs)
+        : formatTime(parseTimeSecs(estimatedTime_) * 1.4f);
+  }
+  qInfo("[PreviewViewModel] payload direct moves=%zu layers=%d segments=%zu travelVisible=%d",
+        result.moves.size(),
+        layerCount_,
+        segments_.size(),
+        showTravelMoves_ ? 1 : 0);
+
+  // Deferred source pass: the G-code window / config footer need the file
+  // TEXT, which is pure I/O -- keep it off the preview-ready critical path
+  // (upstream equally sources its GCodeWindow from the file, not from the
+  // result). The queued lambda no-ops when a reset superseded it.
+  if (!gcodePath.isEmpty())
+  {
+    pendingSourceIndexPath_ = gcodePath;
+    QMetaObject::invokeMethod(
+        this, [this, path = gcodePath]() {
+          if (pendingSourceIndexPath_ != path)
+            return;  // superseded by a newer load/reset
+          buildGcodeSourceIndex(path);
+        },
+        Qt::QueuedConnection);
+  }
+
+  if (!tickMarks_.isEmpty())
+  {
+    std::stable_sort(tickMarks_.begin(), tickMarks_.end());
+    emit tickMarksChanged();
+  }
+  return !gcodePreviewData_.isEmpty();
+}
+
+// P1: deferred pass -- collect the source-line index (line number, move
+// index, text) and the "; key = value" config block from the exported file.
+// This is the ONLY part of the direct path that touches the file: it skips
+// the parser's per-line state machine entirely (one linear walk), and it
+// runs after previewReady() already flipped.
+void PreviewViewModel::buildGcodeSourceIndex(const QString &filePath)
+{
+  QFile file(filePath);
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    return;
+
+  m_gcodeSourceLines.clear();
+  m_gcodeSourceLines.reserve(1024);
+  m_fullConfig.clear();
+
+  // Cursor over the ascending (gcode line id -> move index) pairs captured
+  // during the direct walk: the move index for file line L is the number of
+  // emitted moves whose line id is < L -- exactly the running moveIndex the
+  // text parser holds when it reaches line L.
+  size_t moveCursor = 0;
+  int moveIndexAtLine = 0;
+  int sourceLineNumber = 0;
+  while (!file.atEnd())
+  {
+    const QString raw = QString::fromUtf8(file.readLine()).trimmed();
+    ++sourceLineNumber;
+    while (moveCursor < directMoveLineIndex_.size()
+           && directMoveLineIndex_[moveCursor].first < quint32(sourceLineNumber))
+    {
+      moveIndexAtLine = directMoveLineIndex_[moveCursor].second + 1;
+      ++moveCursor;
+    }
+    if (raw.isEmpty())
+      continue;
+    SourceGcodeLine line;
+    line.lineNumber = sourceLineNumber;
+    line.moveIndex = moveIndexAtLine;
+    line.text = raw;
+    m_gcodeSourceLines.append(line);
+    // Same "; key = value" config rule as the text parser (header + footer
+    // blocks; feeds fullConfigValue / PreviewLayerRail).
+    if (raw.startsWith(QStringLiteral("; "))
+        && raw.contains(QStringLiteral(" = ")))
+    {
+      const QString body = raw.mid(2);
+      const int eq = body.indexOf(QStringLiteral(" = "));
+      if (eq > 0)
+        m_fullConfig.insert(body.left(eq).trimmed(),
+                            body.mid(eq + 3).trimmed());
+    }
+  }
+  directMoveLineIndex_.clear();
+  directMoveLineIndex_.shrink_to_fit();
+  pendingSourceIndexPath_.clear();
+  rebuildGcodeLineWindow();
+  emit stateChanged();
+}
+#endif // HAS_LIBSLIC3R
 
 int PreviewViewModel::roleTimeCount() const { return m_roleTimes.size(); }
 

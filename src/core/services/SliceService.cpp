@@ -443,6 +443,12 @@ void SliceService::clearStoredResult()
   resultFilamentLabel_.clear();
   resultLayerCount_ = 0;
   resultCostLabel_.clear();
+#ifdef HAS_LIBSLIC3R
+  // P1: the direct-hand-off payload belongs to the stored result -- drop it
+  // with the rest (the delivery id keeps increasing so a stale queued sync
+  // can never resurrect it).
+  activeProcessorResult_.reset();
+#endif
   emit progressChanged();
 }
 
@@ -931,6 +937,12 @@ void SliceService::startSlice(const QString &projectName)
     // lambda below so no Print* escapes the worker (Frozen Decision 1).
     FilamentMapResult capturedFilamentMap{};
     SequentialPrintClearance capturedClearance{};
+#ifdef HAS_LIBSLIC3R
+    // P1 (preview direct hand-off): the structured GCodeProcessorResult, born
+    // in a shared_ptr and filled in place by Print::export_gcode on the
+    // success path (see the export call below). Stays null on cancel/error.
+    std::shared_ptr<Slic3r::GCodeProcessorResult> processorResult;
+#endif
 
 #ifdef HAS_LIBSLIC3R
     // PLATE-PRINT-LIFECYCLE (batch 2): true when this run reused a persistent
@@ -1169,16 +1181,22 @@ void SliceService::startSlice(const QString &projectName)
       if (receiver) receiver->calibConfig_.mode = 0;
 
 
-      Slic3r::GCodeProcessorResult result;
+      // P1 (preview direct hand-off): the GCodeProcessorResult is constructed
+      // INSIDE a shared_ptr and print.export_gcode fills it in place -- the
+      // structured product is never value-copied nor re-parsed from the
+      // exported text (upstream GCodeViewer::load_as_gcode consumes the same
+      // object directly, GCodeViewer.hpp:186). The shared ownership crosses to
+      // the GUI thread through the queued completion lambda below.
+      processorResult = std::make_shared<Slic3r::GCodeProcessorResult>();
       const QString appDir = QCoreApplication::applicationDirPath();
       const QString baseName = QFileInfo(sourcePath).completeBaseName();
       const QString fileName = QStringLiteral("%1_%2.gcode")
                                    .arg(baseName)
                                    .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));
       const QString targetPath = QDir(appDir).filePath(fileName);
-      const std::string generated = print.export_gcode(targetPath.toStdString(), &result);
+      const std::string generated = print.export_gcode(targetPath.toStdString(), processorResult.get());
       outputPath = QString::fromStdString(generated);
-      estimatedTimeLabel = formatDurationLabel(result.print_statistics.modes[0].time);
+      estimatedTimeLabel = formatDurationLabel(processorResult->print_statistics.modes[0].time);
       const auto &printStats = print.print_statistics();
       if (printStats.total_weight > 0.0)
         resultWeightLabel = QStringLiteral("%1 g").arg(QString::number(printStats.total_weight, 'f', 2));
@@ -1311,6 +1329,13 @@ void SliceService::startSlice(const QString &projectName)
                                          // ~SliceService/cancelSlice may
                                          // still call activePrint_->cancel().
                                          , persistentSlot, reusedPersistentPrint
+                                         // P1 (preview direct hand-off): the
+                                         // structured result rides the SAME
+                                         // queued delivery chain as the
+                                         // result labels. Null on
+                                         // cancel/error (born only on the
+                                         // export success path).
+                                         , processorResult
 #endif
                                          // Review P1-3: generation gate.
                                          , generation
@@ -1435,6 +1460,20 @@ void SliceService::startSlice(const QString &projectName)
             resultPlateIndex,
             outputPath.toUtf8().constData(),
             layerCount);
+      // P1 (preview direct hand-off): publish the structured result BEFORE
+      // resultChanged/sliceFinished so the PreviewViewModel sync handlers
+      // (direct connections on this same GUI thread) can consume it instead
+      // of re-parsing the exported text. Empty moves (defensive) are not
+      // published -- the consumer falls back to the file path.
+      if (processorResult && !processorResult->moves.empty())
+      {
+        receiver->activeProcessorResult_ = processorResult;
+        ++receiver->processorResultId_;
+      }
+      else
+      {
+        receiver->activeProcessorResult_.reset();
+      }
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();
@@ -1472,6 +1511,21 @@ void SliceService::startSlice(const QString &projectName)
       emit receiver->sequentialPrintClearanceReady(capturedClearance);
     }, Qt::QueuedConnection); });
 }
+
+#ifdef HAS_LIBSLIC3R
+std::shared_ptr<const Slic3r::GCodeProcessorResult> SliceService::activeProcessorResult(
+    quint64 *resultId) const
+{
+  if (resultId)
+    *resultId = processorResultId_;
+  return activeProcessorResult_;
+}
+
+void SliceService::releaseProcessorResult()
+{
+  activeProcessorResult_.reset();
+}
+#endif
 
 void SliceService::cancelSlice()
 {
@@ -1558,15 +1612,19 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     QString estimatedTimeLabel;
 
 #ifdef HAS_LIBSLIC3R
+    // P1 (preview direct hand-off): same in-place shared_ptr pattern as the
+    // startSlice worker -- the reuse parse fills the structured result where
+    // it lives, no value copy, no text re-parse on the GUI thread.
+    std::shared_ptr<Slic3r::GCodeProcessorResult> processorResult;
     try
     {
       Slic3r::Print print;
-      Slic3r::GCodeProcessorResult result;
-      print.export_gcode_from_previous_file(localPath.toStdString(), &result);
+      processorResult = std::make_shared<Slic3r::GCodeProcessorResult>();
+      print.export_gcode_from_previous_file(localPath.toStdString(), processorResult.get());
       // Phase 239 (ENGN-02): the reused file IS the statistics source
       // (same readback startSlice uses; the parsed time survives the reuse
       // instead of collapsing to an empty label).
-      estimatedTimeLabel = formatDurationLabel(result.print_statistics.modes[0].time);
+      estimatedTimeLabel = formatDurationLabel(processorResult->print_statistics.modes[0].time);
     }
     catch (const std::exception &ex)
     {
@@ -1584,7 +1642,13 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta]() {
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, localPath, errorText, estimatedTimeLabel, targetPlateIndex, targetResultKey, targetPlateLabel, previousMeta
+#ifdef HAS_LIBSLIC3R
+                                         // P1 (preview direct hand-off): rides
+                                         // the same queued delivery chain.
+                                         , processorResult
+#endif
+                                         ]() {
       if (!receiver)
         return;
 
@@ -1659,6 +1723,17 @@ bool SliceService::loadGCodeFromPrevious(const QString &gcodeFilePath)
       }
       receiver->activeTargetPlateIndex_ = -1;
       receiver->activeTargetResultKey_ = -1;
+      // P1 (preview direct hand-off): publish before resultChanged so the
+      // PreviewViewModel sync consumes the structured result directly.
+      if (processorResult && !processorResult->moves.empty())
+      {
+        receiver->activeProcessorResult_ = processorResult;
+        ++receiver->processorResultId_;
+      }
+      else
+      {
+        receiver->activeProcessorResult_.reset();
+      }
       emit receiver->progressChanged();
       emit receiver->progressUpdated(100, receiver->statusLabel_);
       emit receiver->resultChanged();

@@ -35,6 +35,14 @@
 #include "core/services/SliceService.h"
 #include "core/viewmodels/PreviewViewModel.h"
 
+#ifdef HAS_LIBSLIC3R
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QSignalSpy>
+#include <QVector>
+#endif
+
 class PreviewParserTests final : public QObject
 {
   Q_OBJECT
@@ -73,6 +81,12 @@ private slots:
   // Wave 5: upstream update_by_mode visibility gates.
   void test_wave5_preview_visibility_gates();
   void test_wave5_marker_and_tick_payloads_are_data_backed();
+  // P1 (preview direct hand-off): slice -> preview through the structured
+  // GCodeProcessorResult, locked field-by-field against the text re-parse of
+  // the same exported file (层表/move 表/角色/线宽), plus the consume-once /
+  // release / deferred source-window invariants.
+  void test_p1_direct_result_matches_text_parse();
+  void test_p1_direct_handoff_releases_and_defers_source_window();
 
 private:
   QString fixturePath() const;
@@ -976,6 +990,337 @@ void PreviewParserTests::test_prev03_gradient_stops_ten_rows()
   const QVariantMap first = preview.legendGradientStops().first().toMap();
   QCOMPARE(first.value(QStringLiteral("value")).toString(),
            preview.legendGradientMinLabel());
+}
+
+// ── P1 (preview direct hand-off) ─────────────────────────────────────────────
+//
+// Upstream reference: GCodeViewer::load_as_gcode consumes the structured
+// GCodeProcessorResult directly (GCodeViewer.hpp:186; the const
+// GCodeProcessorResult* member at :260). The Qt6 preview now has the same
+// second entry: SliceService delivers the result (shared_ptr, no value copy,
+// no text round-trip) and PreviewViewModel::loadFromProcessorResult builds
+// the preview from it. The tests below lock the two entry points together:
+// the direct product and the text re-parse of the SAME exported file must
+// agree field-by-field on the layer table, the move table, roles and widths.
+#ifdef HAS_LIBSLIC3R
+namespace
+{
+  QString prusaStlPath()
+  {
+    return QDir::cleanPath(
+        QStringLiteral(QT_TESTCASE_SOURCEDIR) +
+        QStringLiteral("/third_party/OrcaSlicer/tests/data/test_3mf/Prusa.stl"));
+  }
+
+  // Mirror of PackedSegment (PreviewViewModel.cpp) / GcvPackedSegment
+  // (RhiViewportRenderer.cpp): 20 floats + 4 ints = 96 bytes after the
+  // "GCV1" + int32 count header.
+  struct GcvRow
+  {
+    float x1, y1, z1, x2, y2, z2;
+    float r, g, b;
+    float feedrate;
+    float fan_speed;
+    float temperature;
+    float width;
+    float height;
+    float layer_time;
+    float acceleration;
+    float jerk;
+    float pressure_advance;
+    float actual_speed;
+    float actual_flow;
+    int extruder_id;
+    int layer;
+    int move;
+    int role;
+  };
+  static_assert(sizeof(GcvRow) == 96, "GcvRow must mirror the 96-byte GCV1 segment");
+
+  QVector<GcvRow> parseGcv1(const QByteArray &payload)
+  {
+    QVector<GcvRow> rows;
+    if (!payload.startsWith("GCV1") || payload.size() < 8)
+      return rows;
+    int count = 0;
+    memcpy(&count, payload.constData() + 4, sizeof(count));
+    rows.reserve(count);
+    for (int i = 0; i < count; ++i)
+    {
+      const char *base = payload.constData() + 8 + i * int(sizeof(GcvRow));
+      if (base + sizeof(GcvRow) > payload.constData() + payload.size())
+        break;
+      GcvRow row;
+      memcpy(&row, base, sizeof(row));
+      rows.append(row);
+    }
+    return rows;
+  }
+
+  // Field snapshot of a built preview state (both entry points produce it).
+  struct PreviewSnapshot
+  {
+    int layerCount = 0;
+    int moveCount = 0;
+    int kindCounts[6] = {0, 0, 0, 0, 0, 0};
+    QVector<float> layerZs;
+    QVector<GcvRow> rows;
+  };
+
+  PreviewSnapshot snapshotPreview(PreviewViewModel &preview)
+  {
+    PreviewSnapshot snap;
+    snap.layerCount = preview.layerCount();
+    snap.moveCount = preview.moveCount();
+    for (int k = 0; k < 6; ++k)
+      snap.kindCounts[k] = preview.moveCountOfKind(k);
+    snap.layerZs.reserve(snap.layerCount);
+    for (int i = 0; i < snap.layerCount; ++i)
+      snap.layerZs.append(preview.layerZAt(i));
+    snap.rows = parseGcv1(preview.gcodePreviewData());
+    return snap;
+  }
+
+  // Minimal app-identity guard so QSettings / preset dirs touched by the
+  // slice path do not leak into the developer's environment (same pattern as
+  // ViewModelSmokeTests::ScopedApplicationIdentity).
+  struct ScopedAppIdentity
+  {
+    QString oldOrg;
+    QString oldApp;
+    explicit ScopedAppIdentity(const QString &tag)
+        : oldOrg(QCoreApplication::organizationName()),
+          oldApp(QCoreApplication::applicationName())
+    {
+      QCoreApplication::setOrganizationName(QStringLiteral("OWzxTests"));
+      QCoreApplication::setApplicationName(tag);
+    }
+    ~ScopedAppIdentity()
+    {
+      QCoreApplication::setOrganizationName(oldOrg);
+      QCoreApplication::setApplicationName(oldApp);
+    }
+  };
+
+  // Slice Prusa.stl once with the minimal printer config (same recipe as the
+  // ViewModelSmokeTests ENGN tests) and return the exported gcode path.
+  // Returns an empty string when the environment cannot slice (caller skips).
+  // NOTE: plain code only -- QTest macros cannot early-return from a helper
+  // with a non-void return type.
+  QString slicePrusaFixture(ProjectServiceMock &project, SliceService &slice)
+  {
+    QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+    if (!project.loadFile(prusaStlPath()) && loadSpy.isEmpty())
+      return {};
+    if (!loadSpy.wait(30000) && loadSpy.isEmpty())
+      return {};
+    if (!loadSpy.takeFirst().at(0).toBool())
+      return {};
+
+    slice.setBedShape({QPointF(0, 0), QPointF(220, 0), QPointF(220, 220), QPointF(0, 220)});
+    QHash<QString, QVariant> cfg;
+    cfg.insert(QStringLiteral("printable_height"), 250.0);
+    cfg.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4});
+    slice.setMergedPresetConfig(cfg);
+    project.arrangeObjects(5.0f, false, false, QStringLiteral("0,0,220,0,220,220,0,220"));
+
+    QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+    QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+    slice.startSlice(QStringLiteral("p1_direct_alignment"));
+    // Spin the loop so the queued completion lambda runs and the spies fill
+    // (180s budget, matching the other real-slice suites).
+    QElapsedTimer guard;
+    guard.start();
+    while (finishedSpy.isEmpty() && failedSpy.isEmpty() && guard.elapsed() < 180000)
+      QCoreApplication::processEvents(QEventLoop::AllEvents, 200);
+    if (!failedSpy.isEmpty() || finishedSpy.isEmpty())
+      return {};
+    return slice.outputPath();
+  }
+} // namespace
+#endif // HAS_LIBSLIC3R
+
+void PreviewParserTests::test_p1_direct_result_matches_text_parse()
+{
+#ifdef HAS_LIBSLIC3R
+  ScopedAppIdentity identity(QStringLiteral("P1DirectAlignment"));
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+
+  const QString gcodePath = slicePrusaFixture(project, slice);
+  if (gcodePath.isEmpty())
+    QSKIP("Slice failed in this environment -- cannot lock the direct/text parity");
+  QVERIFY2(QFileInfo::exists(gcodePath), "sliced gcode file should exist");
+
+  // The slice completion already routed the preview through the DIRECT path
+  // (resultChanged sync consumed the processor result before sliceFinished).
+  QVERIFY2(preview.previewReady(),
+           "the direct hand-off must make the preview ready without a text parse");
+  QVERIFY2(preview.gcodePreviewData().startsWith("GCV1"),
+           "the direct hand-off must produce the GCV1 renderer payload");
+  QVERIFY2(preview.moveCount() > 0 && preview.layerCount() > 0,
+           "the direct product must expose moves and layers");
+
+  // Let the deferred source-window pass finish so the snapshot sees the same
+  // complete state the text path builds synchronously.
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodeLineCount() > 0, 30000);
+
+  // Widen the locked surface: pack travels too (default hidden).
+  preview.setShowTravelMoves(true);
+
+  const PreviewSnapshot direct = snapshotPreview(preview);
+
+  // Same file, text entry (bench anchor semantics: loadGCodeForPreview stays
+  // the independent-file text path).
+  QVERIFY2(preview.loadGCodeForPreview(gcodePath),
+           "text re-parse of the same file must succeed");
+  preview.setShowTravelMoves(true);
+  const PreviewSnapshot text = snapshotPreview(preview);
+
+  // ── 层表 (layer table) ──
+  QCOMPARE(direct.layerCount, text.layerCount);
+  for (int i = 0; i < text.layerCount; ++i)
+  {
+    QVERIFY2(qAbs(direct.layerZs.at(i) - text.layerZs.at(i)) <= 0.002f,
+             qPrintable(QStringLiteral("layer %1 Z mismatch: direct=%2 text=%3")
+                            .arg(i).arg(direct.layerZs.at(i)).arg(text.layerZs.at(i))));
+  }
+
+  // ── move 表 (move table) ──
+  for (int k = 0; k < 6; ++k)
+  {
+    qInfo("[P1] kindCounts[%d] direct=%d text=%d", k, direct.kindCounts[k],
+          text.kindCounts[k]);
+  }
+  // Diagnostic first (QCOMPARE aborts on failure): (move, role) signature
+  // diff around the first divergence so a mismatch reports WHERE.
+  {
+    const int common = qMin(direct.rows.size(), text.rows.size());
+    for (int i = 0; i < common; ++i)
+    {
+      if (direct.rows.at(i).move != text.rows.at(i).move
+          || direct.rows.at(i).role != text.rows.at(i).role)
+      {
+        const int from = qMax(0, i - 2);
+        const int to = qMin(common, i + 4);
+        for (int j = from; j < to; ++j)
+        {
+          qInfo("[P1] row %d direct(move=%d role=%d layer=%d x2=%.3f) text(move=%d role=%d layer=%d x2=%.3f)",
+                j, direct.rows.at(j).move, direct.rows.at(j).role,
+                direct.rows.at(j).layer, direct.rows.at(j).x2,
+                text.rows.at(j).move, text.rows.at(j).role,
+                text.rows.at(j).layer, text.rows.at(j).x2);
+        }
+        break;
+      }
+    }
+  }
+  // Head/tail diagnostics were used to land the lock (start-gcode Z
+  // distortion, G28 homing, prose-width matching); the surviving failure
+  // context is the first-divergence block above.
+  QCOMPARE(direct.moveCount, text.moveCount);
+  for (int k = 0; k < 6; ++k)
+  {
+    QCOMPARE(direct.kindCounts[k], text.kindCounts[k]);
+  }
+
+  // ── Per-segment alignment on the packed payload ──
+  QCOMPARE(direct.rows.size(), text.rows.size());
+  int extrusionRows = 0;
+  for (int i = 0; i < text.rows.size(); ++i)
+  {
+    const GcvRow &a = direct.rows.at(i);
+    const GcvRow &b = text.rows.at(i);
+    // Ordering + identity fields: exact.
+    QCOMPARE(a.layer, b.layer);
+    QCOMPARE(a.role, b.role);
+    QCOMPARE(a.move, b.move);
+    QCOMPARE(a.extruder_id, b.extruder_id);
+    // 线宽: the processor's ;WIDTH-derived value vs the text parse of the
+    // same comments -- identical source, float round-trip tolerance. Locked
+    // on EXTRUSION rows only (role>0): width is an extrusion property
+    // upstream (GCodeProcessor computes m_width on Extrude; travel vertices
+    // just carry the stale last value). Rows where the TEXT side has no
+    // width data (b.width == 0: untagged start-gcode extrusions like the
+    // prime line, where the processor computes a geometric width the text
+    // path cannot know) are skipped as data-unavailable, same semantics as
+    // the view-mode availability gates; every tagged extrusion row must
+    // match (upstream forces m_width to the tag value, so both sides read
+    // the same number).
+    if (b.role > 0 && b.width > 0.f)
+    {
+      QVERIFY2(qAbs(a.width - b.width) <= 0.001f,
+               qPrintable(QStringLiteral("row %1 width mismatch: direct=%2 text=%3")
+                              .arg(i).arg(a.width).arg(b.width)));
+    }
+    // Feedrate: text stores the F word (mm/min), direct stores feedrate(mm/s)
+    // * 60 -- round-trip tolerance.
+    QVERIFY2(qAbs(a.feedrate - b.feedrate) <= qMax(0.05f, qAbs(b.feedrate) * 1e-3f),
+             qPrintable(QStringLiteral("row %1 feedrate mismatch: direct=%2 text=%3")
+                            .arg(i).arg(a.feedrate).arg(b.feedrate)));
+    // Geometry: the file prints coordinates with 3 decimals while the moves
+    // vector carries full precision -- compare endpoints on extrusion rows.
+    if (b.role > 0)
+    {
+      ++extrusionRows;
+      QVERIFY2(qAbs(a.x2 - b.x2) <= 0.002f && qAbs(a.y2 - b.y2) <= 0.002f
+                   && qAbs(a.z2 - b.z2) <= 0.002f,
+               qPrintable(QStringLiteral("row %1 endpoint mismatch: "
+                                         "direct=(%2,%3,%4) text=(%5,%6,%7)")
+                              .arg(i).arg(a.x2).arg(a.y2).arg(a.z2)
+                              .arg(b.x2).arg(b.y2).arg(b.z2)));
+    }
+  }
+  QVERIFY2(extrusionRows > 0, "the locked payload must contain extrusion rows");
+
+  if (QFileInfo::exists(gcodePath))
+    QFile::remove(gcodePath);
+#else
+  QSKIP("Requires HAS_LIBSLIC3R");
+#endif
+}
+
+void PreviewParserTests::test_p1_direct_handoff_releases_and_defers_source_window()
+{
+#ifdef HAS_LIBSLIC3R
+  ScopedAppIdentity identity(QStringLiteral("P1DirectLifecycle"));
+
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  PreviewViewModel preview(&project, &slice);
+
+  const QString gcodePath = slicePrusaFixture(project, slice);
+  if (gcodePath.isEmpty())
+    QSKIP("Slice failed in this environment -- cannot exercise the direct lifecycle");
+  QVERIFY2(preview.previewReady(), "direct hand-off must have built the preview");
+
+  // The service payload is released right after the consuming sync: the
+  // ~40 MB moves vector must not stay duplicated next to the preview's own
+  // segment store (the delivery id keeps the duplicate-sync guard working).
+  QVERIFY2(slice.activeProcessorResult() == nullptr,
+           "syncPreviewWithActiveResult must release the consumed result");
+  quint64 resultId = 12345;
+  QVERIFY2(slice.activeProcessorResult(&resultId) == nullptr && resultId > 0,
+           "the delivery id must survive the payload release");
+
+  // The deferred source pass fills the G-code window + config footer from the
+  // exported file AFTER preview-ready (the direct path itself does no text
+  // I/O before the payload is packed).
+  QTRY_VERIFY_WITH_TIMEOUT(preview.gcodeLineCount() > 0, 30000);
+  QVERIFY2(!preview.gcodeLines().isEmpty(),
+           "the deferred pass must populate the G-code source window");
+  QVERIFY2(preview.currentGcodeLine() > 0,
+           "the deferred pass must anchor the current G-code line");
+  QVERIFY2(!preview.fullConfig().isEmpty(),
+           "the deferred pass must collect the config footer block");
+
+  if (QFileInfo::exists(gcodePath))
+    QFile::remove(gcodePath);
+#else
+  QSKIP("Requires HAS_LIBSLIC3R");
+#endif
 }
 
 QTEST_MAIN(PreviewParserTests)

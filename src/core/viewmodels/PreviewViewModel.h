@@ -17,6 +17,16 @@ class QTimer;
 class SliceService;
 class ProjectServiceMock;
 
+#ifdef HAS_LIBSLIC3R
+// P1 (preview direct hand-off): the structured slice result delivered by
+// SliceService::activeProcessorResult(). Declared so the direct entry point
+// below can name it; the definition is only needed in the .cpp.
+namespace Slic3r
+{
+struct GCodeProcessorResult;
+}
+#endif
+
 class PreviewViewModel final : public QObject
 {
   Q_OBJECT
@@ -315,6 +325,19 @@ public:
   Q_INVOKABLE double extruderUsedLength(int extruderId) const;  // meters
   Q_INVOKABLE double extruderUsedWeight(int extruderId) const;  // grams
   Q_INVOKABLE bool loadGCodeForPreview(const QString &filePath);
+#ifdef HAS_LIBSLIC3R
+  /// P1 (preview direct hand-off): builds the whole preview state (segments,
+  /// layer/move tables, role and width data, stats, GCV1 payload) directly
+  /// from the structured GCodeProcessorResult the slice worker produced --
+  /// the upstream load_as_gcode consumption model (GCodeViewer.hpp:186),
+  /// no text re-parse. `gcodePath` is the exported file (kept for the
+  /// G-code source window / config footer, filled by a deferred file pass so
+  /// preview readiness is not blocked by text I/O). Dual entry with
+  /// rebuildFromGCode: both feed the SAME segment store and share the pack
+  /// path (recolorAndPackSegments) -- 单一结构双入口.
+  bool loadFromProcessorResult(const Slic3r::GCodeProcessorResult &result,
+                               const QString &gcodePath);
+#endif
   /// Preview view modes. Rows 0..9 mirror the upstream GCodeViewer
   /// view_type_items dropdown exactly: fixed order from update_by_mode
   /// (GCodeViewer.cpp:892-901), display strings from get_view_type_string
@@ -519,6 +542,17 @@ private:
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;
   void updateToolPositionData();
   void rebuildGcodeLineWindow();
+  // P1: shared finalization tail used by BOTH producers (text parse and
+  // processor-result walk) so the two entry points can never drift in the
+  // derived stats they compute from the same accumulators.
+  void applyFilamentTotals(float totalFilamentUsedMm, float diameterMm,
+                           float densityGcm3);
+  void buildRoleTimeBreakdown(const QHash<QString, double> &roleTimeAccum);
+  // P1: deferred pass that fills the G-code source-line index (m_gcodeSource
+  // Lines + m_fullConfig) from the exported file AFTER the direct result made
+  // the preview ready -- keeps the G-code window/config footer semantics of
+  // the text path without blocking readiness on text I/O.
+  void buildGcodeSourceIndex(const QString &filePath);
   // Phase 118 (TICK-02/TICK-03): write tickMarks_ back into libslic3r's
   // model->plates_custom_gcodes (direct field assignment -- BBS deprecated
   // set_custom_gcode_per_print_z, see Model.hpp:1559-1570) and trigger a
@@ -712,4 +746,23 @@ private:
   /// to a 0..0 range in updateToolPositionData().
   float m_actualSpeedMin = std::numeric_limits<float>::max();
   float m_actualSpeedMax = 0.f;
+  // ── P1 (preview direct hand-off) sync bookkeeping ──
+  /// Delivery id of the last processor result CONSUMED by this view. A new
+  /// id routes syncPreviewWithActiveResult through the direct path; a repeat
+  /// id means the sync is a duplicate (resultChanged + sliceFinished both
+  /// fire) and is skipped instead of re-parsing.
+  quint64 lastConsumedResultId_ = 0;
+  /// Path of the gcode the current preview state was built from (both entry
+  /// points set it) -- makes duplicate syncs idempotent and plate-switch
+  /// syncs rebuild only when the file actually changed.
+  QString lastLoadedPath_;
+  /// Path of the file whose source index is still being collected by the
+  /// deferred pass (cleared by resetPreviewState so a stale queued pass
+  /// no-ops after a reset).
+  QString pendingSourceIndexPath_;
+  /// (gcode line id -> emitted move index) pairs captured during the direct
+  /// walk, consumed by buildGcodeSourceIndex to map source lines to moves
+  /// exactly like the text parser's running moveIndex. Transient: cleared
+  /// once the deferred pass ran.
+  std::vector<std::pair<quint32, int>> directMoveLineIndex_;
 };
