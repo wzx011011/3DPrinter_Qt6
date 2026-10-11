@@ -619,6 +619,32 @@ Item {
             CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
             CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
         }
+        // Q9: the ObjectList::merge(false) entry -- merges every part of ONE
+        // object into a single mesh object (backend mergeSelectedPartsToSingle-
+        // Object, P16.2 = GUI_ObjectList.cpp:3183-3194, shipped with undo +
+        // selection tail but zero menu edges until now). Label/tooltip/gate are
+        // the upstream menu item for merge(false): append_menu_item_merge_to_
+        // single_object "Assemble" / "Assemble the selected objects into an
+        // object with single part" (GUI_Factories.cpp:1260-1266), enabled by
+        // can_merge_to_single_object (GUI_ObjectList.cpp:3585-3591) = the
+        // selected object is multipart -- the Qt6 "mergeToSingle" gate
+        // (EditorViewModel.cpp contextActionAvailable). Sits in the part menu
+        // between Mirror and Split like upstream create_part_menu's
+        // merge-parts item (GUI_Factories.cpp:1562-1568). The full upstream
+        // "Mesh boolean" item registration (GUI_Factories.cpp:1563) is an X3
+        // migration task, not this entry.
+        CxMenuItem {
+            text: qsTr("Assemble")
+            enabled: {
+                void root.menuRefreshTick  // G-07: re-evaluate per popup
+                return !!root.editorVm && root.editorVm.contextActionAvailable("mergeToSingle")
+            }
+            HoverHandler { id: assemblePartsHover }
+            ToolTip.visible: assemblePartsHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: qsTr("Assemble the selected objects into an object with single part")
+            onTriggered: if (root.editorVm) root.editorVm.mergeSelectedPartsToSingleObject()
+        }
         CxMenu {
             title: qsTr("Split")
             enabled: root.editorVm && (root.editorVm.contextActionAvailable("splitObjects")
