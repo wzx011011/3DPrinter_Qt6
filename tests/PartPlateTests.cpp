@@ -73,6 +73,29 @@ class PartPlateTests final : public QObject {
   void arrangeWipeTowerBedTempGateTruthTable();
   void lockedPlateExclusion();
   void allLockedReturnsFalse();
+  // Q8(3): rebuild decode/recycle upstream alignment.
+  // Off-grid instance decodes (negative row/col, index >= kMaxPlateCount) must
+  // take the unprintable dock ("no membership", upstream reload_all_objects
+  // PartPlate.cpp:6399-6404) instead of clamping onto plate 0 or fabricating
+  // a 36-plate grid before silently dropping the instance.
+#ifdef HAS_LIBSLIC3R
+  void rebuildParksOffGridInstancesOnUnprintableDock();
+#else
+  void rebuildParksOffGridInstancesOnUnprintableDock() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
+  // Q8(3): the trailing recycle branch must ALSO drop trailing plates that
+  // hold only unprintable instances (upstream
+  // `empty() || !has_printable_instances()`, PartPlate.cpp:6387-6390); the
+  // old Qt copy recycled only EMPTY trailing plates.
+#ifdef HAS_LIBSLIC3R
+  void rebuildRecyclesTrailingUnprintablePlates();
+#else
+  void rebuildRecyclesTrailingUnprintablePlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
+#endif
+  // Q8(5): the plate-grid stride/offset formula is single-sourced in
+  // PartPlateGridLayout (PartPlateList.h) — pin the constants and the
+  // col/row decode here so neither side can drift again.
+  void plateGridLayoutSharedHelperParity();
 #else
   void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeAvoidsWipeTowerAndExcludeAreas() { QSKIP("Requires HAS_LIBSLIC3R"); }
@@ -125,6 +148,13 @@ class PartPlateTests final : public QObject {
 
   // ── THUMB-01/02 tests (v3.2 Phase 30) ───────────────────────────────────
   void thumbnailCacheInvalidation();  // PartPlate unit test (no libslic3r)
+  // Q8(4): setLocked is a pure flag (upstream PartPlate.hpp:452 lock());
+  // lock toggles must NOT clear the thumbnail caches. The 2026-10-10 audit
+  // consumer re-grep verified no plateThumbnailBase64 consumer depends on
+  // lock-triggered invalidation (only captureMissingPlateThumbnails branches
+  // on the EMPTY state, and re-capturing an unchanged locked plate is pure
+  // waste). This slot pins the disposition.
+  void setLockedKeepsThumbnailCache();  // PartPlate unit test (no libslic3r)
 #ifdef HAS_LIBSLIC3R
   void thumbnailRoundTrip();                 // THUMB-02 (in-memory cache)
   void thumbnailSaveReloadRoundTrip();       // Phase 97 (THUMBRT-01/02): save->reload 3MF pixel round-trip
@@ -252,6 +282,42 @@ void PartPlateTests::computeColumCount() {
   QFETCH(int, count);
   QFETCH(int, expectedCols);
   QCOMPARE(OWzx::compute_colum_count(count), expectedCols);
+}
+
+void PartPlateTests::plateGridLayoutSharedHelperParity() {
+  // Q8(5): PartPlateGridLayout (PartPlateList.h) is the single source of the
+  // plate-grid formula -- upstream PartPlate.cpp:53 LOGICAL_PART_PLATE_GAP
+  // (1/5), PartPlate.hpp:38-50 compute_colum_count, PartPlate.cpp:3206
+  // compute_shape_position. Before Q8 the renderer (PrepareSceneData) kept a
+  // second copy (kPlateGapRatio + computePlateColumns + plateGridOffset);
+  // both sides now consume this helper, and this slot pins the constants and
+  // the col/row decode so neither side can drift again.
+  QCOMPARE(OWzx::PartPlateGridLayout::kLogicalPartPlateGap, 0.2);
+
+  // Stride = bed size * (1 + gap): a 200mm bed strides 240mm (the exact
+  // number computeOriginGridMath pins for PartPlateList::plateStrideX/Y).
+  QCOMPARE(OWzx::PartPlateGridLayout::strideX(200.0), 240.0);
+  QCOMPARE(OWzx::PartPlateGridLayout::strideY(200.0), 240.0);
+
+  // gridOffset decode: 5 plates -> cols = compute_colum_count(5) = 3.
+  double offX = 0.0, offY = 0.0;
+  OWzx::PartPlateGridLayout::gridOffset(0, 5, 100.0, 100.0, &offX, &offY);
+  QCOMPARE(offX, 0.0);
+  QCOMPARE(offY, 0.0);
+  OWzx::PartPlateGridLayout::gridOffset(1, 5, 100.0, 100.0, &offX, &offY);
+  QCOMPARE(offX, 120.0);   // col 1 * (100 * 1.2)
+  QCOMPARE(offY, 0.0);
+  OWzx::PartPlateGridLayout::gridOffset(3, 5, 100.0, 100.0, &offX, &offY);
+  QCOMPARE(offX, 0.0);     // row 1, col 0
+  QCOMPARE(offY, -120.0);  // NEGATIVE Y -- the grid runs toward the far rows
+  OWzx::PartPlateGridLayout::gridOffset(4, 5, 100.0, 100.0, &offX, &offY);
+  QCOMPARE(offX, 120.0);
+  QCOMPARE(offY, -120.0);
+  // Degenerate plate counts fall back to a one-plate grid: cols=1 stacks
+  // every index straight down the rows (col 0, row = index).
+  OWzx::PartPlateGridLayout::gridOffset(2, 0, 100.0, 100.0, &offX, &offY);
+  QCOMPARE(offX, 0.0);    // col 2 % 1 = 0
+  QCOMPARE(offY, -240.0); // row 2 / 1 = 2, negated
 }
 
 #ifdef HAS_LIBSLIC3R
@@ -542,6 +608,86 @@ void PartPlateTests::arrangeWipeTowerBedTempGateTruthTable() {
   }
 #endif
 }
+
+#ifdef HAS_LIBSLIC3R
+void PartPlateTests::rebuildParksOffGridInstancesOnUnprintableDock() {
+  // Q8(3): computePlateIndex decodes the negative-Y-row grid encoding. An
+  // instance parked LEFT of the grid decodes to a negative row/col; one
+  // parked beyond kMaxPlateCount columns overflows the index. Upstream
+  // reload_all_objects parks instances that intersect no plate on the shared
+  // unprintable plate (PartPlate.cpp:6399-6404); Qt keeps that shared plate
+  // out of m_plate_list (PartPlate.hpp:541), so the dock equivalent is "no
+  // membership". The old code clamped negatives onto plate 0 and fabricated
+  // a 36-plate grid before silently dropping overflows.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  QCOMPARE(service.modelCount(), 2);
+
+  // 100mm beds -> stride 120mm (size * (1 + 1/5)).
+  service.setPlateSize(100, 100, 0);
+
+  // GL x feeds slic3r x (objectPosition GL tuple); 100mm left of the grid:
+  // col_value = -100/120 -> round -> -1 -> negative plate index.
+  QVERIFY(service.setObjectPosition(0, -100.0f, 0.0f, 0.0f));
+  // 40 strides right: col 40 -> index 40 >= kMaxPlateCount (36).
+  QVERIFY(service.setObjectPosition(1, 4800.0f, 0.0f, 0.0f));
+
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+
+  // Neither instance may clamp onto plate 0, and the overflow must not
+  // fabricate the 36-plate grid the old path built before dropping it.
+  QCOMPARE(service.plateCount(), 1);
+  QVERIFY2(service.plateObjectIndices(0).isEmpty(),
+           "off-grid instances take the unprintable dock (no membership), "
+           "not plate 0");
+}
+
+void PartPlateTests::rebuildRecyclesTrailingUnprintablePlates() {
+  // Q8(3): the recycle branch mirrors upstream PartPlate.cpp:6385-6401 --
+  // trailing plates are deleted when `empty() || !has_printable_instances()`.
+  // The old Qt copy recycled only EMPTY trailing plates, so a trailing plate
+  // holding exclusively unprintable instances survived every arrange.
+  ProjectServiceMock service;
+  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  while (service.modelCount() < 3)
+    QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  QCOMPARE(service.modelCount(), 3);
+
+  service.setPlateSize(100, 100, 0);
+  // Deterministic cross-plate placement (GL x -> slic3r x):
+  //   obj 0 -> plate 0, obj 1 -> plate 1 (x=120), obj 2 -> plate 2 (x=240).
+  QVERIFY(service.setObjectPosition(0, 0.0f, 0.0f, 0.0f));
+  QVERIFY(service.setObjectPosition(1, 120.0f, 0.0f, 0.0f));
+  QVERIFY(service.setObjectPosition(2, 240.0f, 0.0f, 0.0f));
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+  QVERIFY(service.plateCount() >= 3);
+
+  // Plate 2 (the trailing one) holds a printable instance -- flip the plate
+  // to unprintable so hasPrintableInstances() turns false while non-empty.
+  QVERIFY(service.setPlatePrintable(2, false));
+
+  // Drive the recycle branch directly (arrangeObjects runs it with
+  // recyclePlates=true after a successful arrange; the test hook
+  // rebuildPlateMembership uses false, so go through the list itself).
+  service.plateListMut()->setModel(service.rawModel());
+  service.plateListMut()->rebuildPlatesAfterArrangement(
+      /*exceptLocked=*/true, /*recyclePlates=*/true);
+
+  // The trailing unprintable plate is recycled despite holding instances;
+  // the printable plate before it stops the run (obj 0/1 keep their plates)
+  // and the parked instance takes the unprintable dock.
+  QCOMPARE(service.plateCount(), 2);
+  QVERIFY(service.plateObjectIndices(0).contains(0));
+  QVERIFY(service.plateObjectIndices(1).contains(1));
+  QVERIFY(!service.plateObjectIndices(0).contains(2));
+  QVERIFY(!service.plateObjectIndices(1).contains(2));
+}
+#endif
 
 void PartPlateTests::lockedPlateExclusion() {
   // ARRANGE-03: with plate 0 locked, rebuildPlateMembership(exceptLocked=true)
@@ -1242,9 +1388,51 @@ void PartPlateTests::thumbnailCacheInvalidation() {
 
   plate.setThumbnail(QImage(64, 64, QImage::Format_RGBA8888));
   QVERIFY(plate.hasThumbnail());
+  // Q8(4): setLocked is a pure flag (upstream PartPlate.hpp:452 lock());
+  // lock toggles no longer clear the thumbnail cache -- the full
+  // disposition is pinned by setLockedKeepsThumbnailCache below.
   plate.setLocked(true);
-  QVERIFY2(!plate.hasThumbnail(), "setLocked must invalidate the thumbnail cache");
+  QVERIFY2(plate.hasThumbnail(), "setLocked must keep the thumbnail cache");
 }
+void PartPlateTests::setLockedKeepsThumbnailCache() {
+  // Q8(4) disposition (audit 2026-10-10 revision note): setLocked is a PURE
+  // flag, exactly like upstream PartPlate.hpp:452
+  // `void lock(bool state) { m_locked = state; }`. The self-invented
+  // thumbnail clearing is removed after the consumer re-grep verified the 6
+  // plateThumbnailBase64 call sites + 1 comment (PrintDialog.qml:67 comment,
+  // :81 read; SelectMachineDialog.qml:159/161; PreparePage.qml:4593
+  // captureMissingPlateThumbnails, :4681 read; PreviewPage.qml:416): none
+  // depends on lock-triggered invalidation, and only the capture scheduler
+  // branches on the EMPTY state -- re-capturing an unchanged locked plate
+  // would be pure waste. The lock indicator is a render-time GL icon
+  // (plateIconStatesCache), never baked into the thumbnail. Content changes
+  // keep invalidating -- that contract stays pinned by
+  // thumbnailCacheInvalidation.
+  OWzx::PartPlate plate(0);
+  QImage thumb(64, 64, QImage::Format_RGBA8888);
+  thumb.fill(QColor(12, 34, 56, 255));
+  QVERIFY2(!thumb.isNull(), "fixture thumbnail must be valid");
+  plate.setThumbnail(thumb);
+  plate.setNoLightThumbnail(thumb);
+  plate.setTopThumbnail(thumb);
+  plate.setPickThumbnail(thumb);
+  QVERIFY(plate.hasThumbnail());
+
+  plate.setLocked(true);
+  QVERIFY(plate.isLocked());
+  QVERIFY2(plate.hasThumbnail(),
+           "locking a plate must NOT clear the thumbnail cache (pure flag)");
+  QCOMPARE(plate.thumbnail(), thumb);
+  QVERIFY(!plate.noLightThumbnail().isNull());
+  QVERIFY(!plate.topThumbnail().isNull());
+  QVERIFY(!plate.pickThumbnail().isNull());
+
+  plate.setLocked(false);
+  QVERIFY(!plate.isLocked());
+  QVERIFY2(plate.hasThumbnail(), "unlocking keeps the thumbnail cache too");
+  QCOMPARE(plate.thumbnail(), thumb);
+}
+
 
 #ifdef HAS_LIBSLIC3R
 void PartPlateTests::thumbnailRoundTrip() {

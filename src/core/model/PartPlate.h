@@ -233,13 +233,18 @@ class PartPlate {
 
   // ── Lock / printable / slice state machine ─────────────────────────────
   bool isLocked() const { return m_locked; }
-  void setLocked(bool locked) {
-    m_locked = locked;
-    m_thumbnail = QImage();  // v3.2 Phase 30 D-30-10: invalidate cache
-    m_noLightThumbnail = QImage();  // G-04: variants follow the main cache
-    m_topThumbnail = QImage();
-    m_pickThumbnail = QImage();
-  }
+  // Q8(4): pure flag, exactly like upstream PartPlate.hpp:452
+  // `void lock(bool state) { m_locked = state; }`. The self-invented
+  // thumbnail-cache clearing is removed: the 2026-10-10 audit consumer re-grep
+  // found 6 plateThumbnailBase64 call sites + 1 comment (PrintDialog.qml:81,
+  // SelectMachineDialog.qml:159/161, PreparePage.qml:4593/4681,
+  // PreviewPage.qml:416) and none depends on lock-triggered invalidation --
+  // only PreparePage.qml captureMissingPlateThumbnails branches on the EMPTY
+  // state, and re-capturing an unchanged locked plate would be pure waste.
+  // The lock indicator is a render-time overlay (GL icon column /
+  // plateIconStatesCache), never baked into the thumbnail. Content changes
+  // (add/remove/clearInstance) still invalidate the cache below.
+  void setLocked(bool locked) { m_locked = locked; }
 
   // ── Thumbnail cache (v3.2 Phase 30) ────────────────────────────────────
   // Qt-native cached plate thumbnail. Invalidated on every content change so

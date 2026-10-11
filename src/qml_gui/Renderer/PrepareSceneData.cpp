@@ -1,5 +1,9 @@
 #include "PrepareSceneData.h"
 
+// Q8(5): single source of the plate-grid layout (gap 1/5, stride,
+// col/row decode) shared with the model side (PartPlateList.cpp).
+#include "core/model/PartPlateList.h"
+
 #include "core/rendering/PickingRaycaster.h"
 
 #include <algorithm>
@@ -58,9 +62,6 @@ namespace
   constexpr float kLineBottomG = 0.8f;
   constexpr float kLineBottomB = 0.8f;
   constexpr float kLineBottomA = 0.4f;
-  // Upstream LOGICAL_PART_PLATE_GAP = 1/5 (PartPlate.cpp:53): the stride
-  // between plate origins is bed size * (1 + gap).
-  constexpr float kPlateGapRatio = 1.0f / 5.0f;
   // P15.8 (BOLDGRID): upstream calc_gridlines bolds every 5th grid line
   // (PartPlate.cpp:483/496 count % 5) and render_grid draws the bold set a
   // second time with glLineWidth(2) (PartPlate.cpp:909). QRhi has no line
@@ -774,30 +775,29 @@ void PrepareSceneData::markDirty(quint32 flags)
 
 int PrepareSceneData::computePlateColumns(int plateCount)
 {
-  // Upstream PartPlate.hpp:38 compute_colum_count.
-  const float value = std::sqrt(float(std::max(1, plateCount)));
-  const float rounded = std::round(value);
-  return value > rounded ? int(rounded) + 1 : int(rounded);
+  // Q8(5): delegate to the shared helper (upstream PartPlate.hpp:38
+  // compute_colum_count) instead of keeping a renderer-local copy -- the
+  // model grid (PartPlateList) and the rendered grid can no longer drift.
+  return OWzx::compute_colum_count(plateCount);
 }
 
 void PrepareSceneData::plateGridOffset(int plateIndex, int plateCount,
                                        float bedWidth, float bedDepth,
                                        float &outOffsetX, float &outOffsetY)
 {
-  // P15.9 (PLATEANCHOR): single source of the per-plate grid layout.
-  // Upstream compute_shape_position (PartPlate.cpp:3206) offsets each plate
-  // by col/row * (bed size * (1 + LOGICAL_PART_PLATE_GAP 1/5),
-  // PartPlate.cpp:53); columns come from compute_colum_count
-  // (PartPlate.hpp:38).
-  const int count = plateCount > 0 ? plateCount : 1;
-  const int index = plateIndex > 0 ? plateIndex : 0;
-  const int cols = computePlateColumns(count);
-  const float strideX = bedWidth * (1.0f + kPlateGapRatio);
-  const float strideD = bedDepth * (1.0f + kPlateGapRatio);
-  outOffsetX = float(index % cols) * strideX;
-  // AXES-ROT: the plate grid runs toward scene -Z (slic3r +Y = away from the
-  // viewer under the rotation mapping), so the depth offset negates.
-  outOffsetY = -float(index / cols) * strideD;
+  // P15.9 (PLATEANCHOR) + Q8(5): delegate to the shared PartPlateGridLayout
+  // helper (upstream compute_shape_position PartPlate.cpp:3206 + gap 1/5
+  // PartPlate.cpp:53 + compute_colum_count PartPlate.hpp:38) so the rendered
+  // grid IS the model grid. The helper already negates the row stride (the
+  // grid runs toward the far rows -- scene -Z under the AXES-ROT mapping)
+  // and clamps degenerate index/count inputs exactly like the old local copy.
+  double offX = 0.0;
+  double offY = 0.0;
+  OWzx::PartPlateGridLayout::gridOffset(plateIndex, plateCount,
+                                        double(bedWidth), double(bedDepth),
+                                        &offX, &offY);
+  outOffsetX = float(offX);
+  outOffsetY = float(offY);
 }
 
 // ── PLATEICONS-GL: bed icon ground rects (upstream PartPlate.cpp:633-700) ──

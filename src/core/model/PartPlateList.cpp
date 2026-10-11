@@ -8,10 +8,9 @@
 
 namespace OWzx {
 
-// Source truth: PartPlate.cpp:55. File-private; not exported.
-namespace {
-constexpr double LOGICAL_PART_PLATE_GAP = 1.0 / 5.0;
-}  // namespace
+// Q8(5): the 1/5 plate-gap constant moved to PartPlateGridLayout
+// (PartPlateList.h) so the model grid and the renderer grid share ONE copy;
+// the file-private LOGICAL_PART_PLATE_GAP duplicate is gone.
 
 PartPlateList::PartPlateList() {
   // Upstream starts with a single default plate; Qt6 preserves the same invariant
@@ -312,21 +311,25 @@ void PartPlateList::setPlateSize(int width, int depth, int height) {
 }
 
 double PartPlateList::plateStrideX() const {
-  return m_plate_width * (1.0 + LOGICAL_PART_PLATE_GAP);  // PartPlate.cpp:4841
+  // Q8(5): single-source stride (PartPlate.cpp:4841) via PartPlateGridLayout.
+  return PartPlateGridLayout::strideX(m_plate_width);
 }
 
 double PartPlateList::plateStrideY() const {
-  return m_plate_depth * (1.0 + LOGICAL_PART_PLATE_GAP);  // PartPlate.cpp:4849
+  // Q8(5): single-source stride (PartPlate.cpp:4849) via PartPlateGridLayout.
+  return PartPlateGridLayout::strideY(m_plate_depth);
 }
 
 #ifdef HAS_LIBSLIC3R
 Slic3r::Vec2d PartPlateList::computeShapePosition(int index, int cols) const {
-  int row = index / cols;
-  int col = index % cols;
-  Slic3r::Vec2d pos;
-  pos.x() = col * plateStrideX();   // +X to the right
-  pos.y() = -row * plateStrideY();  // NEGATIVE Y downward (PartPlate.cpp:3960-3961)
-  return pos;
+  // Q8(5): the stride (size * (1 + 1/5)) and the gap constant live once in
+  // PartPlateGridLayout; this member only owns the row/col decode for its
+  // caller-supplied col count (the list's m_plate_cols, NOT recomputed).
+  const int safeCols = cols > 0 ? cols : 1;
+  const int row = index / safeCols;
+  const int col = index % safeCols;
+  return Slic3r::Vec2d(col * PartPlateGridLayout::strideX(m_plate_width),
+                       -row * PartPlateGridLayout::strideY(m_plate_depth));
 }
 
 Slic3r::Vec3d PartPlateList::computeOrigin(int index, int cols) const {
@@ -418,25 +421,44 @@ void PartPlateList::rebuildPlatesAfterArrangement(bool exceptLocked, bool recycl
       const auto& inst = obj->instances[size_t(instIdx)];
       if (!inst) continue;
       const Slic3r::Vec3d offset = inst->get_offset();  // world translation in mm
-      int plateIdx = computePlateIndex(offset.x(), offset.y());
-      if (plateIdx < 0) plateIdx = 0;  // clamp negative (objects left/above grid)
-      // Create plates up to plateIdx if needed (up to kMaxPlateCount).
-      while (plateCount() <= plateIdx && plateCount() < kMaxPlateCount) {
-        createPlate();  // createPlate keeps cols/origins consistent
+      const int plateIdx = computePlateIndex(offset.x(), offset.y());
+      // Q8(3): a decode outside the plate grid (negative row/col from objects
+      // parked left/above the grid, or an index >= kMaxPlateCount) is the
+      // unprintable case: upstream reload_all_objects parks instances that
+      // intersect NO plate on the shared unprintable plate
+      // (PartPlate.cpp:6399-6404); Qt keeps that shared plate out of
+      // m_plate_list (PartPlate.hpp:541), so "no membership" is the dock
+      // equivalent. The old code clamped negatives onto plate 0 (gluing
+      // far-away objects onto the first plate) and silently dropped
+      // >= kMaxPlateCount decodes AFTER fabricating a full 36-plate grid for
+      // them. Both now take the unprintable dock without touching the grid.
+      if (plateIdx >= 0 && plateIdx < kMaxPlateCount) {
+        // Create plates up to plateIdx if needed (createPlate caps the total
+        // at kMaxPlateCount, so this cannot exceed the grid).
+        while (plateCount() <= plateIdx) {
+          createPlate();  // createPlate keeps cols/origins consistent
+        }
+        plate(plateIdx)->addInstance(objIdx, instIdx);
       }
-      if (plateIdx < plateCount()) plate(plateIdx)->addInstance(objIdx, instIdx);
     }
   }
 
-  // 3. RECYCLE trailing empty non-locked plates (recyclePlates=true).
-  //    Mirrors PartPlate.cpp:6111-6127 EXACTLY: reverse iteration, stops at
-  //    i==1 (plate 0 NEVER deleted), `break` on first non-empty/non-locked so
-  //    only a CONTIGUOUS trailing run is recycled. Locked plates never deleted.
+  // 3. RECYCLE trailing empty/non-printable non-locked plates
+  //    (recyclePlates=true). Mirrors upstream PartPlate.cpp:6385-6401
+  //    (rebuild_plates_after_arrangement recycle branch): reverse iteration
+  //    down to i==1 (plate 0 NEVER deleted), delete when the plate is empty
+  //    OR has no printable instances (upstream
+  //    `m_plate_list[i]->empty() || !m_plate_list[i]->has_printable_instances()`,
+  //    PartPlate.cpp:6387-6390), `continue` on locked plates so they are never
+  //    deleted, and `break` on the first plate that is neither recyclable nor
+  //    locked -- so only a CONTIGUOUS trailing run is recycled. The old Qt
+  //    copy dropped the has_printable_instances half, keeping trailing plates
+  //    that hold only unprintable/outside-bed instances alive.
   if (recyclePlates) {
     for (int i = plateCount() - 1; i > 0; --i) {
       PartPlate* p = plate(i);
       if (!p) continue;
-      if (p->empty()) {
+      if (p->empty() || !p->hasPrintableInstances()) {
         deletePlate(i);  // deletePlate guards keep>=1; Plan 01 wired reindex+update
       } else if (p->isLocked()) {
         continue;

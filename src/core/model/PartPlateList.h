@@ -46,6 +46,44 @@ inline int compute_colum_count(int count) {
   return cols;
 }
 
+// ── Q8(5): single source of the plate-grid layout formula ───────────────────
+// Upstream truth: PartPlate.cpp:53 (LOGICAL_PART_PLATE_GAP = 1/5),
+// PartPlate.hpp:38-50 (compute_colum_count), PartPlate.cpp:3206
+// (compute_shape_position: col*stride_x, -row*stride_y). Before Q8 the
+// formula lived twice: here (PartPlateList) and in the renderer
+// (PrepareSceneData kPlateGapRatio + computePlateColumns + plateGridOffset).
+// Both sides now consume these inline helpers, so the stride/gap can no
+// longer drift between the model grid and the rendered grid.
+namespace PartPlateGridLayout {
+
+/// Upstream LOGICAL_PART_PLATE_GAP (PartPlate.cpp:53).
+inline constexpr double kLogicalPartPlateGap = 1.0 / 5.0;
+
+/// Upstream PartPlate.cpp:4841/:4849 — stride = bed size * (1 + gap).
+inline double strideX(double plateWidthMm) {
+  return plateWidthMm * (1.0 + kLogicalPartPlateGap);
+}
+inline double strideY(double plateDepthMm) {
+  return plateDepthMm * (1.0 + kLogicalPartPlateGap);
+}
+
+/// Upstream compute_shape_position (PartPlate.cpp:3206): plate index ->
+/// (col * strideX, -row * strideY). The Y offset is NEGATIVE (the grid runs
+/// toward the far bed row); callers that need the GL/Z convention negate.
+inline void gridOffset(int plateIndex, int plateCount,
+                       double plateWidthMm, double plateDepthMm,
+                       double *outOffsetX, double *outOffsetY) {
+  const int count = plateCount > 0 ? plateCount : 1;
+  const int index = plateIndex > 0 ? plateIndex : 0;
+  const int cols = compute_colum_count(count);
+  const double sx = strideX(plateWidthMm);
+  const double sy = strideY(plateDepthMm);
+  if (outOffsetX) *outOffsetX = double(index % cols) * sx;
+  if (outOffsetY) *outOffsetY = -double(index / cols) * sy;
+}
+
+}  // namespace PartPlateGridLayout
+
 // Geometry mirrors upstream PartPlate.cpp:3905-3964,4836-4870,5365-5376 (PartPlate.hpp:38-50).
 class PartPlateList {
  public:
