@@ -222,9 +222,12 @@ Item {
         }
     }
 
-    // ── Mock refresh timer (mirrors upstream 1000ms REFRESH_INTERVAL) ──
+    // ── Mock refresh timer (mirrors upstream 1000ms REFRESH_INTERVAL,
+    // Monitor.cpp:40) ──. The page itself is Loader-gated in main.qml, so the
+    // timer only exists while the Monitor tab is active (upstream stops
+    // m_refresh_timer on hide and restarts it on show, Monitor.cpp:428-430).
     Timer {
-        interval: 3000
+        interval: 1000
         running: true
         repeat: true
         onTriggered: root.monitorVm.refresh()

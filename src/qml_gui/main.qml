@@ -886,9 +886,19 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
-                // Page 3 (tpDevice) — Monitor
-                MonitorPage {
-                    monitorVm: backend.monitorViewModel
+                // Page 3 (tpDevice) — Monitor. Loader-gated like every other
+                // page so the page (and its refresh Timer) only exists while
+                // the Monitor tab is active (Q7: the previously always-on
+                // instance polled monitorVm every second from app start).
+                Loader {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    active: backend.currentPage === backend.tpDevice
+                    sourceComponent: Component {
+                        MonitorPage {
+                            monitorVm: backend.monitorViewModel
+                        }
+                    }
                 }
                 // Page 4 (tpMultiDevice) — Multi-machine
                 Loader {
