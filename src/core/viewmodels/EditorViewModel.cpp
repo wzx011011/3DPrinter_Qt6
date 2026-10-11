@@ -323,6 +323,10 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   m_cachedMeshBatchExtruderIds = projectService_->meshBatchExtruderIds();
   m_cachedMeshBatchPrintableFlags = projectService_->meshBatchPrintableFlags();
   m_fitHint = QVector4D();
+  // Q8(1): the mesh blob changed — measureDimensions() (selected-set bbox)
+  // must rebuild from the new blob on its next read. fitHint keeps the
+  // whole-plate trailer bbox (camera fit is scene-level by contract).
+  m_measureDimensionsDirty = true;
   // Any project mesh refresh invalidates both staged and in-flight previews.
   simplifyPreviewCancel();
 
@@ -341,9 +345,6 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   const float radius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
   m_fitHint = QVector4D(cx, cy, cz, std::max(radius, 10.f));
 
-  // 更新测量尺寸（边界框 X/Y/Z + 体积）
-  m_measureDimensions = QVector4D(dx, dy, dz, dx * dy * dz);
-
   // 检查视口告警（对齐上游 Plater::check_outside_state / EWarning）
   checkViewportWarnings();
 
@@ -357,6 +358,62 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
     refreshAssembleViewDataPool();
     m_assembleViewDataPool.update(AssembleViewDataID::ModelObjectsInfo);
   }
+}
+
+QVector4D EditorViewModel::measureDimensions() const
+{
+  // Q8(1): memoized read of the selected-set bbox. The dirty flag is armed by
+  // the constructor's stateChanged hook (covers selection changes) and by
+  // refreshMeshCacheAndFitHint (covers mesh-blob rebuilds).
+  if (m_measureDimensionsDirty)
+  {
+    m_measureDimensionsDirty = false;
+    m_measureDimensions = computeSelectedMeasureDimensions();
+  }
+  return m_measureDimensions;
+}
+
+QVector4D EditorViewModel::computeSelectedMeasureDimensions() const
+{
+  // Q8(1) header contract (EditorViewModel.h measureDimensions Q_PROPERTY):
+  // the SELECTED objects' bounding-box size; all zeros = no selection. The
+  // old implementation derived the whole-plate trailer bbox and only
+  // refreshed with the mesh — reverted to the declared contract here.
+  if (m_selectedSourceIndices.isEmpty() || m_cachedMeshData.isEmpty())
+    return QVector4D();
+
+  // Same per-object bounds source the AssembleView data pool uses: the cached
+  // mesh blob parsed into sourceObjectIndex -> unioned AABB (GL coords,
+  // matching the old trailer-bbox axis convention the QML consumers bind to).
+  const QMap<int, PrepareSceneData::ModelBounds> bounds =
+      parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
+                                             m_cachedMeshBatchSourceObjectIndices);
+  bool valid = false;
+  float minX = 0.f, minY = 0.f, minZ = 0.f;
+  float maxX = 0.f, maxY = 0.f, maxZ = 0.f;
+  for (int sourceIndex : m_selectedSourceIndices)
+  {
+    const auto it = bounds.constFind(sourceIndex);
+    if (it == bounds.constEnd())
+      continue; // selected object without a renderable batch (e.g. empty)
+    if (!valid)
+    {
+      minX = it->minX; minY = it->minY; minZ = it->minZ;
+      maxX = it->maxX; maxY = it->maxY; maxZ = it->maxZ;
+      valid = true;
+    }
+    else
+    {
+      minX = std::min(minX, it->minX); minY = std::min(minY, it->minY); minZ = std::min(minZ, it->minZ);
+      maxX = std::max(maxX, it->maxX); maxY = std::max(maxY, it->maxY); maxZ = std::max(maxZ, it->maxZ);
+    }
+  }
+  if (!valid)
+    return QVector4D();
+  const float dx = maxX - minX;
+  const float dy = maxY - minY;
+  const float dz = maxZ - minZ;
+  return QVector4D(dx, dy, dz, dx * dy * dz);
 }
 
 // ── Object manipulation (对齐上游 ObjectManipulation) ──────────────────────
@@ -1873,7 +1930,9 @@ void EditorViewModel::rebuildAdvancedCutConnectorMarkers()
   constexpr float kColor[4] = {0.30f, 0.65f, 0.95f, 0.85f}; // blue-ish pins
   constexpr int kSegs = 16;
   verts.reserve(int(connectors.size()) * 96 * 3);
-  auto pushTri = [&verts](const Slic3r::Vec3f &a, const Slic3r::Vec3f &b, const Slic3r::Vec3f &c) {
+  // kColor is constexpr so odr-use inside the lambda would need a capture on
+  // gcc (MSVC tolerates it); pass it through the capture list explicitly.
+  auto pushTri = [&verts, &kColor](const Slic3r::Vec3f &a, const Slic3r::Vec3f &b, const Slic3r::Vec3f &c) {
     verts.push_back({a.x(), a.y(), a.z(), kColor[0], kColor[1], kColor[2], kColor[3]});
     verts.push_back({b.x(), b.y(), b.z(), kColor[0], kColor[1], kColor[2], kColor[3]});
     verts.push_back({c.x(), c.y(), c.z(), kColor[0], kColor[1], kColor[2], kColor[3]});
@@ -1991,7 +2050,9 @@ QString EditorViewModel::selectedObjectInfoText() const
     return {};
 
   const QString name = projectService_->objectNames().value(idx);
-  const QVector4D dims = m_measureDimensions;
+  // Q8(1): read through the memoized getter so the info text tracks the
+  // selected object's bbox, not a stale whole-plate value.
+  const QVector4D dims = measureDimensions();
 
   if (dims.x() <= 0)
     return name;
@@ -5478,6 +5539,14 @@ void EditorViewModel::rebuildAndNotify()
 EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
+  // Q8(1): measureDimensions tracks the selection ("随 selection 更新"). Until
+  // S1 splits the NOTIFYs there is no selection-specific signal, so the memo
+  // behind measureDimensions() is invalidated on stateChanged — every
+  // selection/mesh/project mutation path ends in stateChanged, and the getter
+  // rebuilds once on the next read instead of serving a stale value.
+  connect(this, &EditorViewModel::stateChanged, this, [this]()
+          { m_measureDimensionsDirty = true; });
+
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {
         simplifyPreviewCancel();
@@ -7683,7 +7752,7 @@ void EditorViewModel::splitSelectedObject()
                                ? m_objects[srcIdx].name
                                : tr("对象");
 
-  const QVector4D dims = m_measureDimensions;
+  const QVector4D dims = measureDimensions();
 
   const int idx1 = projectService_->addObject(origName + tr("_upper"));
   const int idx2 = projectService_->addObject(origName + tr("_lower"));
@@ -9736,11 +9805,12 @@ int EditorViewModel::sliceResultLayerCount() const
 
 QString EditorViewModel::modelSizeText() const
 {
-  if (m_measureDimensions.x() > 0)
+  const QVector4D dims = measureDimensions(); // Q8(1): selected-set bbox
+  if (dims.x() > 0)
     return QStringLiteral("%1 x %2 x %3 mm")
-        .arg(m_measureDimensions.x(), 0, 'f', 1)
-        .arg(m_measureDimensions.y(), 0, 'f', 1)
-        .arg(m_measureDimensions.z(), 0, 'f', 1);
+        .arg(dims.x(), 0, 'f', 1)
+        .arg(dims.y(), 0, 'f', 1)
+        .arg(dims.z(), 0, 'f', 1);
   return {};
 }
 
@@ -9779,6 +9849,75 @@ QString EditorViewModel::viewportWarningMessage() const { return m_viewportWarni
 
 bool EditorViewModel::hasViewportWarning() const { return m_viewportWarning > 0; }
 
+// ── Q8(2): the ONE real-bed detection track ─────────────────────────────────
+// Upstream GLVolumeCollection::check_outside_state (3DScene.cpp:1325) tests
+// every volume against the current plate's build volume (bed shape +
+// printable_height). Qt6 mirrors that with ONE scan shared by the viewport
+// warning banner and the RecenterDialog detection, both reading the real bed
+// Q_PROPERTYs (bedWidth/bedDepth/bedOriginX/bedOriginY, synced from the
+// printer preset's printable_area by syncBedFromPrinterPreset). The old
+// viewportWarning track hardcoded a 220x220/250 mock bed and tested the wrong
+// GL axes (objectPosition y is HEIGHT and z is -DEPTH under the AXES-ROT
+// mapping), so the two detectors could disagree on the same scene.
+//
+// Documented limitation: the per-object footprint stays the scale*5 heuristic
+// both tracks already agreed on (Phase 236) -- the Q_PROPERTY API carries no
+// per-object mesh size; real footprints ride on the S3 meshData rework.
+
+void EditorViewModel::objectBedFootprint(int objectIndex, float *outHalfW, float *outHalfD) const
+{
+  const QVector3D scl = projectService_->objectScale(objectIndex);
+  *outHalfW = scl.x() * 5.0f; // footprint estimate (mock heuristic, shared)
+  *outHalfD = scl.z() * 5.0f;
+}
+
+EditorViewModel::BedOutsideScan EditorViewModel::scanObjectsAgainstBed(float marginMm) const
+{
+  BedOutsideScan scan;
+  if (!projectService_)
+    return scan;
+
+  // Bed rectangle in the slic3r frame the objects live in: objectPosition()
+  // reports the GL tuple (x, height, -depth), so slic3r x = pos.x() and
+  // slic3r depth y = -pos.z() (AXES-ROT rotation mapping).
+  const float bedW = bedWidth();
+  const float bedD = bedDepth();
+  const float originX = bedOriginX();
+  const float originY = bedOriginY();
+
+  const int count = projectService_->modelCount();
+  for (int i = 0; i < count; ++i)
+  {
+    const QVector3D pos = projectService_->objectPosition(i);
+    float halfW = 0.f, halfD = 0.f;
+    objectBedFootprint(i, &halfW, &halfD);
+    const float x = pos.x();
+    const float y = -pos.z(); // slic3r depth axis
+    const bool xOutside = (x - halfW < originX - marginMm) ||
+                          (x + halfW > originX + bedW + marginMm);
+    const bool yOutside = (y - halfD < originY - marginMm) ||
+                          (y + halfD > originY + bedD + marginMm);
+    if (xOutside || yOutside)
+      scan.outside.append({i, halfW, halfD});
+  }
+  return scan;
+}
+
+float EditorViewModel::printableHeightMm() const
+{
+  // Real print-height source: the merged machine preset's printable_height
+  // (seeded by the ConfigOptionModel machine table, refreshed by real
+  // presets). Unknown -> 0: the height warning is suppressed instead of
+  // inventing a bed height the way the deleted 250 hardcode did.
+  if (!configViewModel_)
+    return 0.f;
+  bool ok = false;
+  const float h = configViewModel_->mergedConfigValues()
+                      .value(QStringLiteral("printable_height"))
+                      .toFloat(&ok);
+  return (ok && h > 0.f) ? h : 0.f;
+}
+
 bool EditorViewModel::allPlatesSliced() const
 {
   if (plateCount() <= 0)
@@ -9792,47 +9931,42 @@ bool EditorViewModel::allPlatesSliced() const
 void EditorViewModel::checkViewportWarnings()
 {
   // 对齐上游 Plater::check_outside_state()
-  // Mock 模式：基于对象位置检查是否超出热床范围
-  // 假设热床尺寸为 220x220mm（K1C 默认），高度限制 250mm
-  constexpr float bedW = 220.0f, bedD = 220.0f, maxH = 250.0f;
-  constexpr float margin = 5.0f; // 超出容差
-
-  bool outsideBed = false;
-  bool beyondHeight = false;
-  int outsideCount = 0;
+  // Q8(2): unified REAL-bed detection — the hardcoded 220x220/250 mock-bed
+  // track is deleted. The scan below is the same one checkObjectsOutsideBed
+  // (RecenterDialog) runs, so the warning banner and the dialog can never
+  // disagree about which objects are outside. Axis note: objectPosition()
+  // reports the GL tuple (x, height, -depth), so the slic3r depth coordinate
+  // is -pos.z() and the height is pos.y(); the old code tested pos.y() as
+  // depth and pos.z() as height (both wrong under the AXES-ROT mapping).
+  m_viewportWarning = 0;
+  m_viewportWarningMessage.clear();
 
   if (!projectService_)
     return;
 
-  for (int i = 0; i < projectService_->modelCount(); ++i)
+  constexpr float margin = 5.0f; // 超出容差（与 RecenterDialog 检测共用）
+  const BedOutsideScan scan = scanObjectsAgainstBed(margin);
+
+  // 检查打印体积高度（objectPosition y = slic3r z = height）
+  const float maxH = printableHeightMm();
+  bool beyondHeight = false;
+  if (maxH > 0.f)
   {
-    QVector3D pos = projectService_->objectPosition(i);
-    QVector3D scl = projectService_->objectScale(i);
-    // 简化：用缩放值作为对象尺寸估算（Mock 模式无真实 mesh 尺寸）
-    const float halfW = scl.x() * 5.0f; // 估算半径
-    const float halfD = scl.z() * 5.0f;
-
-    // 检查 X/Y 范围（对象中心在热床范围内）
-    const bool xOutside = (pos.x() - halfW < -margin) || (pos.x() + halfW > bedW + margin);
-    const bool yOutside = (pos.y() - halfD < -margin) || (pos.y() + halfD > bedD + margin);
-
-    if (xOutside || yOutside)
+    const int count = projectService_->modelCount();
+    for (int i = 0; i < count; ++i)
     {
-      outsideCount++;
-      outsideBed = true;
-    }
-
-    // 检查 Z 高度（超过打印体积高度）
-    if (pos.z() > maxH + margin)
-    {
-      beyondHeight = true;
+      if (projectService_->objectPosition(i).y() > maxH + margin)
+      {
+        beyondHeight = true;
+        break;
+      }
     }
   }
 
-  if (outsideCount > 0)
+  if (!scan.outside.isEmpty())
   {
     m_viewportWarning = 2; // ObjectClashed (对齐上游)
-    m_viewportWarningMessage = tr("%1 个对象超出热床范围。请将对象移至热床范围内。").arg(outsideCount);
+    m_viewportWarningMessage = tr("%1 个对象超出热床范围。请将对象移至热床范围内。").arg(scan.outside.size());
   }
   else if (beyondHeight)
   {
@@ -10305,40 +10439,23 @@ bool EditorViewModel::requestExportGcode3mf(const QString &targetPath)
 int EditorViewModel::checkObjectsOutsideBed()
 {
   // Phase 236 (DLG-03): RecenterDialog input (upstream
-  // Plater::check_outside_state feeds the outside-bed warning dialog). Uses
-  // the real bed Q_PROPERTYs plus the same scale-based footprint estimate as
-  // checkViewportWarnings() so detection and recentering agree.
+  // Plater::check_outside_state feeds the outside-bed warning dialog).
+  // Q8(2): runs the SAME real-bed scan as checkViewportWarnings
+  // (scanObjectsAgainstBed) -- one detection track, no second opinion.
   m_objectsOutsideBed.clear();
   if (!projectService_)
     return 0;
 
-  const float bedW = bedWidth();
-  const float bedD = bedDepth();
-  const float originX = bedOriginX();
-  const float originY = bedOriginY();
-  constexpr float margin = 5.0f; // tolerance, same as checkViewportWarnings
-
+  const BedOutsideScan scan = scanObjectsAgainstBed(5.0f); // tolerance shared with the warning banner
   const QStringList names = projectService_->objectNames();
-  const int count = projectService_->modelCount();
-  for (int i = 0; i < count; ++i)
+  for (const BedOutsideScan::Entry &entry : scan.outside)
   {
-    if (i >= names.size())
+    if (entry.index >= names.size())
       break;
-    const QVector3D pos = projectService_->objectPosition(i);
-    const QVector3D scl = projectService_->objectScale(i);
-    const float halfW = scl.x() * 5.0f; // footprint estimate (mock heuristics)
-    const float halfD = scl.z() * 5.0f;
-    const bool xOutside = (pos.x() - halfW < originX - margin) ||
-                          (pos.x() + halfW > originX + bedW + margin);
-    const bool yOutside = (pos.y() - halfD < originY - margin) ||
-                          (pos.y() + halfD > originY + bedD + margin);
-    if (xOutside || yOutside)
-    {
-      QVariantMap entry;
-      entry.insert(QStringLiteral("index"), i);
-      entry.insert(QStringLiteral("name"), names.at(i));
-      m_objectsOutsideBed.append(entry);
-    }
+    QVariantMap map;
+    map.insert(QStringLiteral("index"), entry.index);
+    map.insert(QStringLiteral("name"), names.at(entry.index));
+    m_objectsOutsideBed.append(map);
   }
   emit stateChanged();
   return m_objectsOutsideBed.size();
@@ -10347,9 +10464,10 @@ int EditorViewModel::checkObjectsOutsideBed()
 int EditorViewModel::recenterObjectsOutsideBed()
 {
   // Phase 236 (DLG-03): RecenterDialog confirm action. Clamps each outside
-  // object's footprint into the printable rectangle (keeps height). The
-  // footprint estimate mirrors checkObjectsOutsideBed so a recenter run
-  // clears the detection.
+  // object's footprint into the printable rectangle (keeps the height).
+  // Q8(2): same footprint helper + the same bed Q_PROPERTYs as the detection
+  // scan, and the clamp now moves the real bed-plane axes (slic3r x / depth
+  // = -GL z) instead of the old (x, height) pair.
   if (!projectService_)
     return 0;
   const float bedW = bedWidth();
@@ -10367,18 +10485,20 @@ int EditorViewModel::recenterObjectsOutsideBed()
     if (index < 0 || index >= projectService_->modelCount())
       continue;
     const QVector3D pos = projectService_->objectPosition(index);
-    const QVector3D scl = projectService_->objectScale(index);
-    const float halfW = scl.x() * 5.0f;
-    const float halfD = scl.z() * 5.0f;
+    float halfW = 0.f, halfD = 0.f;
+    objectBedFootprint(index, &halfW, &halfD);
+    const float x = pos.x();
+    const float y = -pos.z(); // slic3r depth axis (objectPosition is GL)
     const float lowX = originX + margin + halfW;
     const float highX = originX + bedW - margin - halfW;
     const float lowY = originY + margin + halfD;
     const float highY = originY + bedD - margin - halfD;
-    const float newX = highX > lowX ? qBound(lowX, pos.x(), highX)
+    const float newX = highX > lowX ? qBound(lowX, x, highX)
                                     : originX + bedW * 0.5f;
-    const float newY = highY > lowY ? qBound(lowY, pos.y(), highY)
+    const float newY = highY > lowY ? qBound(lowY, y, highY)
                                     : originY + bedD * 0.5f;
-    if (projectService_->setObjectPosition(index, newX, newY, pos.z()))
+    // Height (pos.y()) is kept; only the bed-plane coordinates move.
+    if (projectService_->setObjectPosition(index, newX, pos.y(), -newY))
       ++moved;
   }
   if (moved > 0)

@@ -292,7 +292,13 @@ public:
   // P15.11: drag-time preview flag (see the Q_PROPERTY comment).
   bool sequentialClearancePreviewMode() const { return m_sequentialClearancePreviewMode; }
   QVector4D fitHint() const { return m_fitHint; }
-  QVector4D measureDimensions() const { return m_measureDimensions; }
+  // Q8(1) contract (Q_PROPERTY doc above): the SELECTED objects' bounding-box
+  // size (dx, dy, dz, volume); all zeros = no selection. Lazily recomputed
+  // from the cached mesh blob when stateChanged marks the memo dirty (both
+  // selection and mesh changes flow through stateChanged until S1 splits the
+  // NOTIFYs) -- the old implementation returned the whole-plate bbox and only
+  // refreshed with the mesh.
+  QVector4D measureDimensions() const;
 
   // Object info (对齐上游 Plater::show_object_info)
   QString selectedObjectInfoText() const;
@@ -1954,6 +1960,39 @@ private:
   bool currentPlateHasPrintableObjects() const;
   bool hasValidSliceResultForPlate(int plateIndex) const;
   void checkViewportWarnings();
+  // ── Q8(1): measureDimensions contract implementation ────────────────────
+  /// Selected-set bounding-box size (dx, dy, dz, dx*dy*dz) derived from the
+  /// cached mesh blob (parseAllSourceObjectBoundsFromMeshBlob), unioned over
+  /// m_selectedSourceIndices. All zeros when the selection is empty or none
+  /// of the selected objects has a renderable batch — the header contract
+  /// ("全零表示无选中") is the single source of truth for consumers.
+  QVector4D computeSelectedMeasureDimensions() const;
+  // ── Q8(2): single real-bed detection track ───────────────────────────────
+  /// One bed scan shared by checkViewportWarnings (viewport warning banner)
+  /// and checkObjectsOutsideBed (RecenterDialog input), so the two consumers
+  /// can never drift apart again. Reads the REAL bed Q_PROPERTYs
+  /// (bedWidth/bedDepth/bedOriginX/bedOriginY, synced from the printer
+  /// preset's printable_area by syncBedFromPrinterPreset) — the old
+  /// viewportWarning track hardcoded a 220x220/250 mock bed.
+  struct BedOutsideScan
+  {
+    struct Entry
+    {
+      int index = -1;
+      float halfW = 0.f;  ///< shared footprint estimate (mock scale*5), for the recenter clamp
+      float halfD = 0.f;
+    };
+    QVector<Entry> outside;  ///< one entry per object outside the bed rect
+  };
+  BedOutsideScan scanObjectsAgainstBed(float marginMm) const;
+  /// The shared per-object footprint estimate used by every bed consumer
+  /// (warning banner, RecenterDialog detection and recenter clamp). Mock-mode
+  /// heuristic (no per-object mesh size on the Q_PROPERTY API): scale * 5.
+  void objectBedFootprint(int objectIndex, float *outHalfW, float *outHalfD) const;
+  /// Real print-height limit from the merged machine preset
+  /// (printable_height). Returns 0 when unknown — the height warning is
+  /// suppressed instead of inventing a bed height.
+  float printableHeightMm() const;
   void continueSliceAllQueue();
   // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo activability. Mirrors
   // upstream GLGizmoAssembly::on_is_activable()
@@ -2044,7 +2083,11 @@ private:
   QString m_sliceEstimatedTime;
   int m_sliceResultPlateIndex = -1;
   QVector4D m_fitHint; ///< (cx, cy, cz, radius) in GL coords; zero = invalid
-  QVector4D m_measureDimensions; ///< (dx, dy, dz, volume) in mm; zero = no selection
+  // Q8(1): memoized selected-set bbox behind measureDimensions(). Mutable
+  // because the getter lazily rebuilds it; m_measureDimensionsDirty is set by
+  // the stateChanged hook (constructor) and by refreshMeshCacheAndFitHint.
+  mutable QVector4D m_measureDimensions; ///< (dx, dy, dz, volume) in mm; zero = no selection
+  mutable bool m_measureDimensionsDirty = true;
   bool m_uniformScale = true;     ///< uniform scale lock (对齐上游 ObjectManipulation)
   // Flatten/Cut state (对齐上游 GLGizmoFlatten / GLGizmoCut)
   int m_flattenFaceCount = 0;
