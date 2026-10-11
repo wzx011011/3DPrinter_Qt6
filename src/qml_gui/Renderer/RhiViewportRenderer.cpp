@@ -945,6 +945,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       // rebuildPreviewCap recorded the attempt in m_previewCapMoveEnd, so
       // settle the latch instead of re-scanning the spans every frame.
       m_previewCapUploadPending = false;
+      // The draw state must settle with it: the GPU buffer still holds the
+      // PREVIOUS position's cap and the draw gate below keys on
+      // m_previewCapVertexCount > 0, so without this a slider parked on a
+      // zero-length move (retract/unretract ticks keep the 2-vertex line
+      // form, v0 == v1 -> len < 1e-6 in rebuildPreviewCap) would keep
+      // drawing the stale cap quad at the old toolpath position.
+      m_previewCapVertexCount = 0;
     } else if (ensureBuffer(m_previewCapBuffer,
                         quint32(m_previewCapVertices.size()) * sizeof(Vertex),
                         m_previewCapBufferBytes, QRhiBuffer::VertexBuffer)) {

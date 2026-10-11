@@ -672,7 +672,9 @@ private:
   // (-1 = nothing resident, set by resetPreviewGpuState); render() settles
   // the latch once the attempt's outcome (uploaded cap, or "no cap
   // buildable" with empty vertices) is final, and keeps it armed only to
-  // retry a failed buffer upload. Never write either flag unconditionally —
+  // retry a failed buffer upload; an unbuildable outcome also zeroes
+  // m_previewCapVertexCount so the stale previous cap stops drawing.
+  // Never write either flag unconditionally —
   // that is exactly the bug this protocol replaced.
   QVector<Vertex> m_previewCapVertices;
   int m_previewCapMoveEnd = -1;
