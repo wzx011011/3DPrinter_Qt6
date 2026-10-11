@@ -439,6 +439,32 @@ Item {
                     root.previewVm.addTemplateAtLayer(root.addMenuTargetLayer)
             }
         }
+        // Q9: open chain for the Phase 238 color-change dialog -- the dialog
+        // shipped with no .open() caller anywhere (targetLayer stayed -1 and
+        // the OK guard swallowed every attempt), leaving addColorChangeAtLayer
+        // -- its only backend consumer -- unreachable from the UI. The entry
+        // carries the upstream IMSlider add-menu gate semantics: the
+        // sequential-print insertion gate (IMSlider.cpp:1492) plus the
+        // Change Filament family's m_can_change_color gate (:1522-1523), which
+        // is exactly the TICK-04 "equivalent upstream gate" the audit lock
+        // demands before advertising a local Color Change action. The "..."
+        // suffix marks a dialog-opening action (extruder + color picked there;
+        // the tick lands on OK like upstream add_code_as_tick(ColorChange),
+        // IMSlider.cpp:390-413).
+        CxMenuItem {
+            text: qsTr("Add Color Change...")
+            enabled: root.previewVm && !root.previewVm.sequentialPrint
+                     && root.previewVm.canChangeColor
+                     && root.addMenuTargetLayer >= 0
+            HoverHandler { id: addColorChangeHover }
+            ToolTip.visible: addColorChangeHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: qsTr("Insert a color change at the beginning of this layer.")
+            onTriggered: {
+                colorChangeDialog.targetLayer = root.addMenuTargetLayer
+                colorChangeDialog.open()
+            }
+        }
         CxMenuItem {
             text: qsTr("Jump to layer")
             onTriggered: jumpToLayerDialog.open()
