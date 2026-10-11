@@ -39,6 +39,94 @@ QString formatDuration(double seconds)
         .arg(minutes, 2, 10, QChar('0'))
         .arg(secs, 2, 10, QChar('0'));
 }
+
+// Q8(6): the 3-tier merged preset config (printer -> filament -> print,
+// --load-settings overlay, --key overrides) built by ONE helper so every
+// consumer shares a single source of truth: runSlice feeds it to SliceService
+// and the --arrange transform reads the bed polygon from the very same map,
+// so the arrange bed can no longer disagree with the bed the slice uses.
+// Silent on purpose -- callers own their user-facing output.
+QHash<QString, QVariant> buildMergedPresetConfig(
+    PresetServiceMock *presetService,
+    const QHash<QString, QVariant> &settingsOverlay,
+    const QHash<QString, QString> &configOverrides)
+{
+    QHash<QString, QVariant> mergedConfig;
+
+    // Tier 1: Printer preset
+    const QString printerPreset = presetService->defaultPresetForCategory(
+        static_cast<int>(PresetServiceMock::PrinterCat));
+    if (!printerPreset.isEmpty()) {
+        const auto vals = presetService->presetValues(printerPreset);
+        for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
+            mergedConfig[it.key()] = it.value();
+    }
+
+    // Tier 2: Filament preset
+    const QString filamentPreset = presetService->defaultPresetForCategory(
+        static_cast<int>(PresetServiceMock::FilamentCat));
+    if (!filamentPreset.isEmpty()) {
+        const auto vals = presetService->presetValues(filamentPreset);
+        for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
+            mergedConfig[it.key()] = it.value();
+    }
+
+    // Tier 3: Print preset
+    const QString printPreset = presetService->defaultPresetForCategory(
+        static_cast<int>(PresetServiceMock::PrintCat));
+    if (!printPreset.isEmpty()) {
+        const auto vals = presetService->presetValues(printPreset);
+        for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
+            mergedConfig[it.key()] = it.value();
+    }
+
+    // Overlay user-provided settings JSON on top (parsed by the caller via
+    // the CliRunner::loadSettingsJson member).
+    if (!settingsOverlay.isEmpty()) {
+        for (auto it = settingsOverlay.constBegin(); it != settingsOverlay.constEnd(); ++it)
+            mergedConfig[it.key()] = it.value();
+    }
+
+    // Phase 241 (CLI-02): arbitrary --key value overrides layer on top of
+    // everything (values validated at parse time; stored as strings so
+    // SliceService's injectPresetConfig deserializes them with the option's
+    // own type rules).
+    if (!configOverrides.isEmpty()) {
+        for (auto it = configOverrides.constBegin();
+             it != configOverrides.constEnd(); ++it)
+            mergedConfig[it.key()] = it.value();
+    }
+
+    return mergedConfig;
+}
+
+// Q8(6): the arrange bed polygon from the merged preset config. The preset
+// ecosystem keys the bed as printable_area (Printer preset, comma-separated
+// point pairs — the same key EditorViewModel::syncBedFromPrinterPreset
+// consumes); upstream CLI configs may also carry the legacy bed_shape key.
+// Both serialize as x1,y1,x2,y2,... which arrangeObjects parses. Returns an
+// empty string when neither key carries a usable >=4-point polygon.
+QString arrangeBedPolygonFromConfig(const QHash<QString, QVariant> &mergedConfig)
+{
+    for (const QString &key : {QStringLiteral("printable_area"),
+                               QStringLiteral("bed_shape")}) {
+        const QString raw = mergedConfig.value(key).toString().trimmed();
+        if (raw.isEmpty())
+            continue;
+        const QStringList coords = raw.split(QLatin1Char(','));
+        if (coords.size() < 8 || (coords.size() % 2) != 0)
+            continue;
+        bool ok = true;
+        for (const QString &coord : coords) {
+            bool valid = false;
+            coord.trimmed().toDouble(&valid);
+            if (!valid) { ok = false; break; }
+        }
+        if (ok)
+            return raw;
+    }
+    return QString();
+}
 }
 
 CliRunner::CliRunner(QObject *parent)
@@ -553,10 +641,23 @@ int CliRunner::applyTransforms()
     // coordinates in that case (tolerant vfn, mirrors upstream ArrangeJob
     // which retains positions when bed_idx < 0) — report and continue.
     if (arrange_) {
-        // Default printable area matches the GUI default bed (220x220).
+        // Q8(6): the bed comes from the SAME merged preset config the slice
+        // consumes (printer preset printable_area, legacy bed_shape key,
+        // --load-settings / --key overlays) instead of a hardcoded 220x220
+        // rect. The 220x220 rect below is only the documented GUI-default
+        // fallback for a run with no preset/settings bed at all.
+        QHash<QString, QVariant> settingsOverlay;
+        if (!loadSettingsPath_.isEmpty())
+            settingsOverlay = loadSettingsJson(loadSettingsPath_);
+        QString printableArea = arrangeBedPolygonFromConfig(
+            buildMergedPresetConfig(presetService_, settingsOverlay, configOverrides_));
+        if (printableArea.isEmpty())
+            printableArea = QStringLiteral("0,0,220,0,220,220,0,220");
+        else if (!quiet_)
+            out << "Arrange bed: " << printableArea << "\n";
         const bool placed = projectService_->arrangeObjects(
             5.0f, /*allowRotation=*/false, /*alignY=*/false,
-            QStringLiteral("0,0,220,0,220,220,0,220"));
+            printableArea);
         if (!quiet_)
             out << (placed ? QStringLiteral("Arranged objects\n")
                            : QStringLiteral(
@@ -691,61 +792,27 @@ int CliRunner::runSlice(QHash<int, QString> *slicedGcodes)
 {
     QTextStream out(stdout);
 
-    // Build merged preset config from default presets (printer → filament → print)
-    QHash<QString, QVariant> mergedConfig;
-
-    // Tier 1: Printer preset
-    const QString printerPreset = presetService_->defaultPresetForCategory(
-        static_cast<int>(PresetServiceMock::PrinterCat));
-    if (!printerPreset.isEmpty()) {
-        const auto vals = presetService_->presetValues(printerPreset);
-        for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
-            mergedConfig[it.key()] = it.value();
-    }
-
-    // Tier 2: Filament preset
-    const QString filamentPreset = presetService_->defaultPresetForCategory(
-        static_cast<int>(PresetServiceMock::FilamentCat));
-    if (!filamentPreset.isEmpty()) {
-        const auto vals = presetService_->presetValues(filamentPreset);
-        for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
-            mergedConfig[it.key()] = it.value();
-    }
-
-    // Tier 3: Print preset
-    const QString printPreset = presetService_->defaultPresetForCategory(
-        static_cast<int>(PresetServiceMock::PrintCat));
-    if (!printPreset.isEmpty()) {
-        const auto vals = presetService_->presetValues(printPreset);
-        for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
-            mergedConfig[it.key()] = it.value();
-    }
-
-    // Overlay user-provided settings JSON on top
+    // Q8(6): merged preset config assembled by the shared
+    // buildMergedPresetConfig helper — the SAME map the --arrange transform
+    // reads its bed polygon from (printer -> filament -> print presets,
+    // --load-settings overlay, --key overrides). Single source of truth.
+    QHash<QString, QVariant> settingsOverlay;
     if (!loadSettingsPath_.isEmpty()) {
-        QHash<QString, QVariant> settings = loadSettingsJson(loadSettingsPath_);
-        if (settings.isEmpty()) {
+        settingsOverlay = loadSettingsJson(loadSettingsPath_);
+        if (settingsOverlay.isEmpty()) {
             QTextStream err(stderr);
             err << "Error: failed to load settings: " << loadSettingsPath_ << "\n";
             return CLI_CONFIG_FILE_ERROR;
         }
-        for (auto it = settings.constBegin(); it != settings.constEnd(); ++it)
-            mergedConfig[it.key()] = it.value();
-        if (!quiet_)
-            out << "Settings overlay: " << loadSettingsPath_ << "\n";
     }
-
-    // Phase 241 (CLI-02): arbitrary --key value overrides layer on top of
-    // everything (values validated at parse time; stored as strings so
-    // SliceService's injectPresetConfig deserializes them with the option's
-    // own type rules).
-    if (!configOverrides_.isEmpty()) {
+    const QHash<QString, QVariant> mergedConfig =
+        buildMergedPresetConfig(presetService_, settingsOverlay, configOverrides_);
+    if (!quiet_) {
+        if (!loadSettingsPath_.isEmpty())
+            out << "Settings overlay: " << loadSettingsPath_ << "\n";
         for (auto it = configOverrides_.constBegin();
-             it != configOverrides_.constEnd(); ++it) {
-            mergedConfig[it.key()] = it.value();
-            if (!quiet_)
-                out << "Config override: " << it.key() << "=" << it.value() << "\n";
-        }
+             it != configOverrides_.constEnd(); ++it)
+            out << "Config override: " << it.key() << "=" << it.value() << "\n";
     }
 
     if (!mergedConfig.isEmpty()) {
