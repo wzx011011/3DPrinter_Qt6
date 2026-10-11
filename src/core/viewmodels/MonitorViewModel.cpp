@@ -338,14 +338,13 @@ void MonitorViewModel::connectDevice(int filteredIndex)
       }
     });
   } else {
-    // Mock fallback：无 access code 或无 IP（演示/测试模式）
-    QTimer::singleShot(1500, this, [this, filteredIndex]() {
-      deviceService_->connectDevice(filteredIndex);
-      if (deviceService_->selectedDeviceOnline())
-        setMonitorStateValue(Normal);
-      else
-        setMonitorStateValue(Disconnected);
-    });
+    // Q10-3: 无凭据（无 access code 或无 IP）意味着没有可建立的真实连接。
+    // 此前这里跑 1.5s 假延迟、调用 mock connectDevice 把设备翻成 online，然后
+    // 进入 Normal —— 监控页把演示数据当作在线遥测展示（伪装在线的静默谎言）。
+    // 现在立即落到 Disconnected：QML 该状态面板自带"重新连接"入口
+    //（connectWithAccessCode），对无凭据设备会打开 access-code 配置对话框，
+    // 即显式的"未配置，请先配置"路径；设备状态保持服务侧真值（不翻 online）。
+    setMonitorStateValue(Disconnected);
   }
 }
 
