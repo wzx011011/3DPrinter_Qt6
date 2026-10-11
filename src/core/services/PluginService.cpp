@@ -16,22 +16,53 @@
 // and every mutation reports its result through statusMessage() so the
 // dialog's status bar (upstream status_message command) can render it.
 // There is NO real HTTP download, NO Python / CPython, and NO plugin
-// archive extraction. installPlugin()/uninstallPlugin()/updatePlugin()
-// only flip the persisted installed/version state; the download source is
-// a documented TODO.
+// archive extraction. Q10-2: installPlugin()/updatePlugin() therefore
+// report "not implemented" honestly instead of flipping a persisted
+// installed flag that no package backs; uninstallPlugin() only clears the
+// persisted state of catalog rows. Per-plugin state persists under
+// "plugins/state" keyed by the row's stable id (localPath) -- see the v3
+// note beside kSettingsVersion.
 //
 // Upstream reference: OrcaSlicer PluginsDialog (build_plugin_dialog_item /
 // evaluate_action_policy in PluginsDialog.cpp). We mirror the user-facing
-// semantics (install, enable/disable, update, refresh, context actions)
-// without the web view / real-network layer.
+// semantics (enable/disable, refresh, context actions) without the web
+// view / real-network layer.
 
 namespace {
 // QSettings key prefix for every persisted plugin value.
 constexpr const char *kSettingsPrefix = "plugins";
 // Sentinel version key; bump when the persisted shape changes.
 constexpr const char *kSettingsVersionKey = "plugins/version";
-// v2: adds per-capability enabled flags + capability config overrides.
-constexpr int kSettingsVersion = 2;
+// v2: added per-capability enabled flags + capability config overrides.
+// v3 (Q10-2): per-plugin state is keyed by the row's STABLE id (localPath --
+// the vendor package identity: unique, untranslated, immutable across app
+// versions) instead of the catalog array position. The legacy parallel lists
+// silently re-attached every plugin's state to a DIFFERENT row whenever the
+// catalog reordered or gained/lost an entry across versions.
+constexpr int kSettingsVersion = 3;
+// Legacy v1/v2 parallel-list keys, removed after the one-time migration.
+constexpr const char *kLegacyKeys[] = {
+    "enabled", "installed", "installed_versions", "update", "caps", "configs"};
+
+// Q10-2: single source of the built-in per-capability default configs. Both
+// initDefaults() (catalog seeding) and restoreCapabilityConfig() (the restore
+// action) read this table -- the literals previously lived at both sites and
+// could drift.
+QString builtinCapabilityConfig(const QString &capabilityName)
+{
+  // NOTE: compare with QStringLiteral -- QLatin1String cannot represent
+  // non-ASCII capability names (they would mojibake and never match).
+  if (capabilityName == QStringLiteral("设备状态推送"))
+    return QStringLiteral("{\n  \"poll_interval\": 5\n}");
+  if (capabilityName == QStringLiteral("远程监控"))
+    return QStringLiteral("{\n  \"snapshot_quality\": 80\n}");
+  return QString();
+}
+
+QString settingsKey(const char *leaf)
+{
+  return QStringLiteral("%1/%2").arg(QLatin1String(kSettingsPrefix), QLatin1String(leaf));
+}
 }  // namespace
 
 PluginService::PluginService(QObject *parent)
@@ -76,7 +107,9 @@ void PluginService::initDefaults()
   push.enabled = true;
   push.canRun = true;
   push.hasConfig = true;
-  push.defaultConfig = QStringLiteral("{\n  \"poll_interval\": 5\n}");
+  // Q10-2: built-in defaults come from the shared table (single source with
+  // restoreCapabilityConfig).
+  push.defaultConfig = builtinCapabilityConfig(push.name);
   networking.capabilities.append(push);
 
   PluginCapability monitor;
@@ -85,7 +118,7 @@ void PluginService::initDefaults()
   monitor.typeKey = QStringLiteral("script");
   monitor.enabled = false;
   monitor.hasConfig = true;
-  monitor.defaultConfig = QStringLiteral("{\n  \"snapshot_quality\": 80\n}");
+  monitor.defaultConfig = builtinCapabilityConfig(monitor.name);
   networking.capabilities.append(monitor);
 
   PluginChangelogEntry net13;
@@ -141,93 +174,103 @@ void PluginService::loadFromSettings()
 {
   QSettings settings;
   const int version = settings.value(QLatin1String(kSettingsVersionKey), 0).toInt();
+
+  if (version >= 1 && version < kSettingsVersion) {
+    // ── Q10-2 one-time migration: legacy parallel index lists → id-keyed map ──
+    // The legacy shape (v1/v2) stored enabled/installed/versions/update/caps/
+    // configs as parallel QVariantLists whose element i belonged to catalog
+    // row i. Index is the ONLY mapping the legacy format carries, so the
+    // migration reads it as "index i → catalog row i" (exact while the static
+    // catalog holds) and immediately re-keys the state by stable id. From
+    // here on, catalog reorders / additions / removals across app versions
+    // can no longer re-attach one plugin's state to another row: unknown ids
+    // are ignored on load, new ids start from catalog defaults.
+    const auto legacyList = [&settings](const char *leaf) {
+      return settings.value(settingsKey(leaf)).toList();
+    };
+    const QVariantList legacyEnabled = legacyList("enabled");
+    const QVariantList legacyInstalled = legacyList("installed");
+    const QVariantList legacyVersions = legacyList("installed_versions");
+    const QVariantList legacyUpdate = legacyList("update");
+
+    if (!legacyEnabled.isEmpty()) {
+      for (int i = 0; i < m_plugins.size() && i < legacyEnabled.size(); ++i)
+        m_plugins[i].isEnabled = legacyEnabled[i].toBool();
+    }
+    if (!legacyInstalled.isEmpty()) {
+      for (int i = 0; i < m_plugins.size() && i < legacyInstalled.size(); ++i)
+        m_plugins[i].isInstalled = legacyInstalled[i].toBool();
+    }
+    if (!legacyVersions.isEmpty()) {
+      for (int i = 0; i < m_plugins.size() && i < legacyVersions.size(); ++i)
+        m_plugins[i].installedVersion = legacyVersions[i].toString();
+    } else {
+      for (int i = 0; i < m_plugins.size(); ++i)
+        m_plugins[i].installedVersion =
+            m_plugins[i].isInstalled ? m_plugins[i].version : QString();
+    }
+    if (!legacyUpdate.isEmpty()) {
+      for (int i = 0; i < m_plugins.size() && i < legacyUpdate.size(); ++i)
+        m_plugins[i].updateStatus = legacyUpdate[i].toString();
+    }
+    // The legacy caps/configs keys are NOT migrated: they were written as
+    // NESTED QVariantLists, which the QSettings registry backend cannot
+    // round-trip -- on read they arrive flattened to per-char/string
+    // fragments (QVariant::toList() on a QString element yields one entry
+    // per CHARACTER, so v2 "restored" JSON configs as garbage single chars
+    // at best). Those keys carried no recoverable state; the v3 JSON map
+    // (single value under one key) removes the failure mode entirely, and
+    // the capabilities keep their catalog defaults here.
+
+    saveToSettings();  // re-key by stable id (writes plugins/state + version 3)
+    for (const char *leaf : kLegacyKeys)
+      settings.remove(settingsKey(leaf));
+    settings.setValue(QLatin1String(kSettingsVersionKey), kSettingsVersion);
+    settings.sync();
+    return;
+  }
+
   if (version < kSettingsVersion) {
-    // Shape changed or fresh install: keep defaults, persist a baseline so
-    // later edits write back cleanly.
+    // Fresh install (no persisted shape at all): keep catalog defaults,
+    // persist a baseline so later edits write back cleanly.
     saveToSettings();
     return;
   }
 
-  // Per-plugin mutable state is stored as parallel lists keyed by index.
-  // The static catalog (name/version/description/...) is never persisted --
-  // it is re-seeded from initDefaults() -- only the mutable enabled /
-  // installed / capability / config state round-trips.
-  const QVariant enabledVar =
-      settings.value(QStringLiteral("%1/enabled").arg(kSettingsPrefix));
-  if (enabledVar.isValid()) {
-    const QVariantList list = enabledVar.toList();
-    if (list.size() == m_plugins.size()) {
-      for (int i = 0; i < m_plugins.size(); ++i)
-        m_plugins[i].isEnabled = list[i].toBool();
+  // v3: one JSON map under plugins/state keyed by the row's stable id.
+  const QVariantMap state =
+      QJsonDocument::fromJson(settings.value(settingsKey("state")).toByteArray())
+          .object()
+          .toVariantMap();
+  for (auto &p : m_plugins) {
+    const QString id = !p.localPath.isEmpty() ? p.localPath : p.name;
+    const QVariantMap entry = state.value(id).toMap();
+    if (entry.isEmpty())
+      continue;  // Unknown id (new catalog row): keep catalog defaults.
+    if (entry.contains(QLatin1String("enabled")))
+      p.isEnabled = entry.value(QLatin1String("enabled")).toBool();
+    if (entry.contains(QLatin1String("installed")))
+      p.isInstalled = entry.value(QLatin1String("installed")).toBool();
+    if (entry.contains(QLatin1String("installedVersion"))) {
+      p.installedVersion = entry.value(QLatin1String("installedVersion")).toString();
+    } else {
+      // Upstream prefers the preserved local version, falling back to the
+      // catalog one.
+      p.installedVersion = p.isInstalled ? p.version : QString();
     }
-  }
+    if (entry.contains(QLatin1String("updateStatus")))
+      p.updateStatus = entry.value(QLatin1String("updateStatus")).toString();
 
-  const QVariant installedVar =
-      settings.value(QStringLiteral("%1/installed").arg(kSettingsPrefix));
-  if (installedVar.isValid()) {
-    const QVariantList list = installedVar.toList();
-    if (list.size() == m_plugins.size()) {
-      for (int i = 0; i < m_plugins.size(); ++i)
-        m_plugins[i].isInstalled = list[i].toBool();
-    }
-  }
-
-  // Persisted installed version (empty while not installed). Falls back to
-  // the catalog version for a fresh baseline (upstream prefers the preserved
-  // local version, falling back to the descriptor one).
-  const QVariant installedVerVar =
-      settings.value(QStringLiteral("%1/installed_versions").arg(kSettingsPrefix));
-  if (installedVerVar.isValid()) {
-    const QVariantList list = installedVerVar.toList();
-    if (list.size() == m_plugins.size()) {
-      for (int i = 0; i < m_plugins.size(); ++i)
-        m_plugins[i].installedVersion = list[i].toString();
-    }
-  } else {
-    for (int i = 0; i < m_plugins.size(); ++i)
-      m_plugins[i].installedVersion =
-          m_plugins[i].isInstalled ? m_plugins[i].version : QString();
-  }
-
-  // The mock catalog is static, so without persisting the update flag an
-  // applied update would resurrect after a restart (the catalog would
-  // re-report the same "latest" forever).
-  const QVariant updateVar =
-      settings.value(QStringLiteral("%1/update").arg(kSettingsPrefix));
-  if (updateVar.isValid()) {
-    const QVariantList list = updateVar.toList();
-    if (list.size() == m_plugins.size()) {
-      for (int i = 0; i < m_plugins.size(); ++i)
-        m_plugins[i].updateStatus = list[i].toString();
-    }
-  }
-
-  const QVariant capsVar =
-      settings.value(QStringLiteral("%1/caps").arg(kSettingsPrefix));
-  if (capsVar.isValid()) {
-    const QVariantList perPlugin = capsVar.toList();
-    for (int i = 0; i < m_plugins.size() && i < perPlugin.size(); ++i) {
-      const QVariantList flags = perPlugin[i].toList();
-      for (int c = 0; c < m_plugins[i].capabilities.size() && c < flags.size(); ++c)
-        m_plugins[i].capabilities[c].enabled = flags[c].toBool();
-    }
-  }
-
-  const QVariant configsVar =
-      settings.value(QStringLiteral("%1/configs").arg(kSettingsPrefix));
-  if (configsVar.isValid()) {
-    const QVariantList perPlugin = configsVar.toList();
-    for (int i = 0; i < m_plugins.size() && i < perPlugin.size(); ++i) {
-      // Overrides ride on defaultConfig: an empty string means "no
-      // override", restored lazily by capabilityConfig().
-      const QVariantList overrides = perPlugin[i].toList();
-      for (int c = 0; c < m_plugins[i].capabilities.size() && c < overrides.size(); ++c) {
-        if (!m_plugins[i].capabilities[c].hasConfig)
-          continue;
-        const QString stored = overrides[c].toString();
-        if (!stored.isEmpty())
-          m_plugins[i].capabilities[c].defaultConfig = stored;
-      }
+    const QVariantMap caps = entry.value(QLatin1String("caps")).toMap();
+    for (auto &cap : p.capabilities) {
+      const QVariantMap capState = caps.value(cap.name).toMap();
+      if (capState.isEmpty())
+        continue;
+      if (capState.contains(QLatin1String("enabled")))
+        cap.enabled = capState.value(QLatin1String("enabled")).toBool();
+      const QString stored = capState.value(QLatin1String("config")).toString();
+      if (cap.hasConfig && !stored.isEmpty())
+        cap.defaultConfig = stored;
     }
   }
 }
@@ -237,39 +280,32 @@ void PluginService::saveToSettings() const
   QSettings settings;
   settings.setValue(QLatin1String(kSettingsVersionKey), kSettingsVersion);
 
-  QVariantList enabledList;
-  QVariantList installedList;
-  QVariantList installedVerList;
-  QVariantList updateList;
-  QVariantList capsList;
-  QVariantList configsList;
-  enabledList.reserve(m_plugins.size());
-  installedList.reserve(m_plugins.size());
+  // Q10-2: one JSON map keyed by the row's stable id. Reorders / additions /
+  // removals of catalog rows can no longer re-attach one plugin's persisted
+  // state to a different row.
+  QVariantMap state;
   for (const auto &p : m_plugins) {
-    enabledList.append(p.isEnabled);
-    installedList.append(p.isInstalled);
-    installedVerList.append(p.installedVersion);
-    updateList.append(p.updateStatus);
-
-    QVariantList capFlags;
-    QVariantList capConfigs;
-    capFlags.reserve(p.capabilities.size());
-    capConfigs.reserve(p.capabilities.size());
+    const QString id = !p.localPath.isEmpty() ? p.localPath : p.name;
+    QVariantMap caps;
     for (const auto &cap : p.capabilities) {
-      capFlags.append(cap.enabled);
+      QVariantMap capState;
+      capState[QStringLiteral("enabled")] = cap.enabled;
       // Only capabilities with an editor persist an override; "" = default.
-      capConfigs.append(cap.hasConfig ? cap.defaultConfig : QString());
+      capState[QStringLiteral("config")] =
+          cap.hasConfig ? cap.defaultConfig : QString();
+      caps[cap.name] = capState;
     }
-    capsList.append(capFlags);
-    configsList.append(capConfigs);
+    QVariantMap entry;
+    entry[QStringLiteral("enabled")] = p.isEnabled;
+    entry[QStringLiteral("installed")] = p.isInstalled;
+    entry[QStringLiteral("installedVersion")] = p.installedVersion;
+    entry[QStringLiteral("updateStatus")] = p.updateStatus;
+    entry[QStringLiteral("caps")] = caps;
+    state[id] = entry;
   }
-  settings.setValue(QStringLiteral("%1/enabled").arg(kSettingsPrefix), enabledList);
-  settings.setValue(QStringLiteral("%1/installed").arg(kSettingsPrefix), installedList);
-  settings.setValue(QStringLiteral("%1/installed_versions").arg(kSettingsPrefix),
-                    installedVerList);
-  settings.setValue(QStringLiteral("%1/update").arg(kSettingsPrefix), updateList);
-  settings.setValue(QStringLiteral("%1/caps").arg(kSettingsPrefix), capsList);
-  settings.setValue(QStringLiteral("%1/configs").arg(kSettingsPrefix), configsList);
+  settings.setValue(settingsKey("state"),
+                    QJsonDocument(QJsonObject::fromVariantMap(state))
+                        .toJson(QJsonDocument::Compact));
 }
 
 QVariantMap PluginService::capabilityToMap(const PluginCapability &capability) const
@@ -412,19 +448,17 @@ bool PluginService::installPlugin(int idx)
 {
   if (idx < 0 || idx >= m_plugins.size())
     return false;
-  // MOCK INSTALL: no real HTTP fetch, no archive extraction, no Python.
-  // This flips the persisted installed flag so the UI layer has a working
-  // real backend; a true download source is a documented TODO.
   if (m_plugins[idx].isInstalled)
     return false;
-  m_plugins[idx].isInstalled = true;
-  m_plugins[idx].isEnabled = true;
-  m_plugins[idx].installedVersion = m_plugins[idx].version;
-  saveToSettings();
-  emit stateChanged();
-  emit statusMessage(tr("已安装 %1").arg(m_plugins[idx].name),
-                     QStringLiteral("success"));
-  return true;
+  // Q10-2: report the truth instead of faking success. The previous
+  // "mock install" flipped the persisted installed flag and reported
+  // "已安装" while NO package exists on disk (no HTTP fetch, no archive
+  // extraction, no Python) -- the user kept a state that lied about the
+  // machine. Until a real download source lands, install reports
+  // "not implemented" and flips nothing.
+  emit statusMessage(tr("插件安装尚未实现：本版本没有可用的插件下载源"),
+                     QStringLiteral("warn"));
+  return false;
 }
 
 bool PluginService::uninstallPlugin(int idx)
@@ -451,16 +485,12 @@ bool PluginService::updatePlugin(int idx)
     return false;
   if (m_plugins[idx].updateStatus != QLatin1String("update_available"))
     return false;
-  // MOCK UPDATE: re-seat the installed version at the catalog latest. A
-  // real package download/replace is the documented TODO.
-  m_plugins[idx].installedVersion = m_plugins[idx].latestVersion;
-  m_plugins[idx].version = m_plugins[idx].latestVersion;
-  m_plugins[idx].updateStatus = QStringLiteral("normal");
-  saveToSettings();
-  emit stateChanged();
-  emit statusMessage(tr("已更新 %1 到 %2").arg(m_plugins[idx].name, m_plugins[idx].latestVersion),
-                     QStringLiteral("success"));
-  return true;
+  // Q10-2: same truth rule as installPlugin -- no real package download /
+  // replace exists, so an update must report "not implemented" instead of
+  // re-seating a version string that no package backs.
+  emit statusMessage(tr("插件更新尚未实现：本版本没有可用的插件下载源"),
+                     QStringLiteral("warn"));
+  return false;
 }
 
 void PluginService::refreshPluginList()
@@ -576,12 +606,10 @@ QVariantMap PluginService::restoreCapabilityConfig(int idx, const QString &name)
   for (auto &cap : m_plugins[idx].capabilities) {
     if (cap.name != name || !cap.hasConfig)
       continue;
-    // Restores the capability's own built-in defaults; the mock registry
-    // keeps them inline in initDefaults() per capability id.
-    if (cap.name == QStringLiteral("设备状态推送"))
-      cap.defaultConfig = QStringLiteral("{\n  \"poll_interval\": 5\n}");
-    else if (cap.name == QStringLiteral("远程监控"))
-      cap.defaultConfig = QStringLiteral("{\n  \"snapshot_quality\": 80\n}");
+    // Q10-2: restores the capability's own built-in defaults from the SAME
+    // shared table initDefaults() seeds from -- the literals previously
+    // lived here a second time and could drift from the seeding site.
+    cap.defaultConfig = builtinCapabilityConfig(cap.name);
     saveToSettings();
     emit stateChanged();
     emit statusMessage(tr("已恢复能力 %1 的默认配置").arg(name),
@@ -650,11 +678,12 @@ QVariantMap PluginService::runPluginAction(int idx, const QString &action)
         && m_plugins[idx].source != QLatin1String("subscribed")
         && m_plugins[idx].source != QLatin1String("orphaned"))
       return report(QString(), QString());
-    // Mock reinstall: re-seat the installed state (a real re-download is
-    // the same documented TODO as installPlugin, which carries the
-    // statusMessage).
+    // Q10-2: report the truth -- installPlugin() emits the "not implemented"
+    // warn (no real download source), so the action report mirrors that
+    // instead of claiming a reinstall that never happened.
     installPlugin(idx);
-    return report(tr("已重新安装 %1").arg(pluginName), QStringLiteral("success"));
+    return report(tr("插件重新安装尚未实现：本版本没有可用的插件下载源"),
+                  QStringLiteral("warn"));
   }
   if (action == QLatin1String("reload_plugin")
       || action == QLatin1String("clear_cache_reload_plugin")) {
