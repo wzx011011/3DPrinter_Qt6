@@ -1374,6 +1374,15 @@ public:
   /// resolvedPlatePrintSequence(currentPlateIndex) == 2.
   Q_PROPERTY(float bedHeightToRod READ bedHeightToRod NOTIFY bedShapeChanged)
   Q_PROPERTY(float bedHeightToLid READ bedHeightToLid NOTIFY bedShapeChanged)
+  /// Q9 (OUTOFBED): real print-height limit from the merged machine preset
+  /// (printable_height; printableHeightMm()). Feeds the renderer's print
+  /// volume top clamp — upstream z_data = {0, printable_height}
+  /// (GLCanvas3D.cpp:7183/7189) — so over-height objects get the OUTOFBED
+  /// dimming again. 0 when unknown: the clamp stays unbounded instead of
+  /// inventing a bed height. NOTIFY rides bedShapeChanged because the value
+  /// only changes where syncBedFromPrinterPreset() re-applies the preset
+  /// (the same point the other preset-derived bed properties refresh at).
+  Q_PROPERTY(float printableHeight READ printableHeightMm NOTIFY bedShapeChanged)
   /// v5.16 (BEDMODEL): the printer's bed_model STL packed as a triangle
   /// stream ([uint32 vertexCount][float x,y,z scene-space] * count).
   Q_PROPERTY(QByteArray bedModelMeshData READ bedModelMeshData NOTIFY bedShapeChanged)

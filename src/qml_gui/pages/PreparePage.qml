@@ -1698,6 +1698,12 @@ Item {
                     // v5.16 (EXCLAREA): printer bed_exclude_area polygons
                     // (upstream render_exclude_area).
                     bedExcludeAreas: root.editorVm ? root.editorVm.bedExcludeAreas : []
+                    // Q9 (OUTOFBED): real preset printable_height drives the
+                    // print-volume top clamp (upstream z_data = {0,
+                    // printable_height}, GLCanvas3D.cpp:7183/7189) so
+                    // over-height objects get the OUTOFBED darkening again;
+                    // 0 (unknown preset) keeps the clamp unbounded.
+                    bedPrintableHeight: root.editorVm ? root.editorVm.printableHeight : 0
                     // v5.16 (HTLIMIT): ByObject clearance rings; upstream gates
                     // on print_sequence == ByObject (PartPlate.cpp:916).
                     bedHeightToRod: root.editorVm ? root.editorVm.bedHeightToRod : 0

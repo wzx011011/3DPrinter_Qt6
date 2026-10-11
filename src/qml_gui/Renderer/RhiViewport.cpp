@@ -333,6 +333,18 @@ void RhiViewport::setBedHeightLimitActive(bool value)
   update();
 }
 
+// Q9 (OUTOFBED): plain value + update() like the HTLIMIT setters; the
+// renderer forwards it into PrepareSceneData::setPrintableHeight each
+// synchronize (that setter is nearlyEqual-guarded, so repeat values cause no
+// scene churn) and 0 keeps the print-volume top clamp unbounded.
+void RhiViewport::setBedPrintableHeight(float value)
+{
+  if (qFuzzyCompare(m_bedPrintableHeight, value))
+    return;
+  m_bedPrintableHeight = value;
+  update();
+}
+
 void RhiViewport::setBedTypeTexturesActive(bool value)
 {
   if (m_bedTypeTexturesActive == value)

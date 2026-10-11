@@ -313,6 +313,11 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     && viewport->m_bedHeightToRod > 0.0f,
                                 viewport->m_bedHeightToRod,
                                 viewport->m_bedHeightToLid);
+  // Q9 (OUTOFBED): preset printable_height becomes the print-volume top
+  // clamp (upstream z_data = {0, printable_height}, GLCanvas3D.cpp:7183/
+  // 7189). 0 keeps it unbounded; the setter is nearlyEqual-guarded so a
+  // repeated call without a preset change costs nothing.
+  m_prepareScene.setPrintableHeight(viewport->m_bedPrintableHeight);
   // P15.1 (COLOR): an extruder-color change alone must re-tint the mesh even
   // when the model data itself did not change; a signature mismatch forces
   // the setModelMeshData re-run below.

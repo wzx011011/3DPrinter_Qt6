@@ -69,6 +69,12 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(float bedHeightToRod READ bedHeightToRod WRITE setBedHeightToRod)
   Q_PROPERTY(float bedHeightToLid READ bedHeightToLid WRITE setBedHeightToLid)
   Q_PROPERTY(bool bedHeightLimitActive READ bedHeightLimitActive WRITE setBedHeightLimitActive)
+  // Q9 (OUTOFBED): printer-preset printable_height feeding the print-volume
+  // top clamp (upstream z_data = {0, printable_height}, GLCanvas3D.cpp:7183/
+  // 7189). 0 keeps the clamp unbounded. The renderer forwards it to
+  // PrepareSceneData::setPrintableHeight each synchronize (the setter is
+  // nearlyEqual-guarded, so no scene churn on repeat values).
+  Q_PROPERTY(float bedPrintableHeight READ bedPrintableHeight WRITE setBedPrintableHeight)
   // v5.16 (BEDTYPE-TEX): BBL-only bed-type texture gates + assets + the
   // current plate's bed type index (Slic3r BedType).
   Q_PROPERTY(bool bedTypeTexturesActive READ bedTypeTexturesActive WRITE setBedTypeTexturesActive)
@@ -439,6 +445,9 @@ public:
   void setBedHeightToLid(float value);
   bool bedHeightLimitActive() const { return m_bedHeightLimitActive; }
   void setBedHeightLimitActive(bool value);
+  // Q9 (OUTOFBED): preset printable_height conduit (see the Q_PROPERTY note).
+  float bedPrintableHeight() const { return m_bedPrintableHeight; }
+  void setBedPrintableHeight(float value);
   bool bedTypeTexturesActive() const { return m_bedTypeTexturesActive; }
   void setBedTypeTexturesActive(bool value);
   bool bedCaliLinesActive() const { return m_bedCaliLinesActive; }
@@ -1060,6 +1069,7 @@ private:
   float m_bedHeightToRod = 0.0f;
   float m_bedHeightToLid = 0.0f;
   bool m_bedHeightLimitActive = false;
+  float m_bedPrintableHeight = 0.0f; // Q9 (OUTOFBED): 0 = unbounded clamp
   bool m_bedTypeTexturesActive = false;
   bool m_bedCaliLinesActive = false;
   QString m_bedTypeImagesDir;
