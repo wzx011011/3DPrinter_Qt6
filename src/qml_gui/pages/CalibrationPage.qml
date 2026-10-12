@@ -106,6 +106,17 @@ Item {
         calibrationVm: root.calibrationVm
     }
 
+    // Q11 (校准页细节): Reset Parameters wipes the calibration result the
+    // user just produced — route it through the shared destructive-action
+    // confirm instead of firing immediately.
+    ConfirmDialog {
+        id: resetParamsConfirm
+        dialogTitle: qsTr("重置参数")
+        message: qsTr("确定要重置当前校准参数（K 值 / Flow 比率 / N 值）吗？已获得的校准结果将被丢弃。")
+        confirmText: qsTr("重置")
+        onAccepted: root.calibrationVm.resetParameters()
+    }
+
     // Pill button matching the upstream CaliPageButton geometry: 24DIP high,
     // corner radius 12, Body_13 font (CalibrationWizardPage.cpp:257-259).
     // kind 0 = green bg + white text (Start/Next/Calibrate/Finish,
@@ -691,6 +702,15 @@ Item {
                                                     else
                                                         root.calibrationVm.setCurrentKValue(realValue)
                                                 }
+                                                // Q11 (校准页细节): the calibration
+                                                // parameter inputs carry hover tooltips
+                                                // describing what the value feeds.
+                                                HoverHandler { id: kSpinHover }
+                                                ToolTip.visible: kSpinHover.hovered
+                                                ToolTip.delay: 400
+                                                ToolTip.text: root.isFlowRateCalibration
+                                                    ? qsTr("Filament Flow Ratio（挤出流量比率），校准结果微调起点，范围 0.500 ~ 1.500")
+                                                    : qsTr("Pressure Advance K 值（压力提前补偿），校准结果微调起点，范围 0.000 ~ 1.000")
                                             }
 
                                             // Fine adjustment buttons
@@ -747,6 +767,11 @@ Item {
                                                 textFromValue: function(v, locale) { return (v / 100.0).toFixed(2) }
                                                 valueFromText: function(text, locale) { return Math.round(parseFloat(text) * 100) }
                                                 onValueModified: root.calibrationVm.setCurrentNValue(realValue)
+                                                // Q11 (校准页细节): hover tooltip.
+                                                HoverHandler { id: nSpinHover }
+                                                ToolTip.visible: nSpinHover.hovered
+                                                ToolTip.delay: 400
+                                                ToolTip.text: qsTr("喷嘴直径（mm），用于流量与线宽换算，范围 0.10 ~ 2.00")
                                             }
 
                                             // Fine adjustment buttons
@@ -1085,12 +1110,13 @@ Item {
                         }
 
                         // White pill: Recalibration/ResetParameters family
-                        // (CalibrationWizardPage.cpp:232-237)
+                        // (CalibrationWizardPage.cpp:232-237). Q11 (校准页细节):
+                        // destructive reset confirms first.
                         CaliPillButton {
                             label: qsTr("Reset Parameters")
                             kind: 1
                             visible: root.calibrationVm.selectedStatus !== 0
-                            onActivated: root.calibrationVm.resetParameters()
+                            onActivated: resetParamsConfirm.open()
                         }
 
                         Item { Layout.fillWidth: true }
