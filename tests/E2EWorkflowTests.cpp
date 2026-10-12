@@ -78,12 +78,31 @@ namespace
   }
 }
 
+// Q12: once the initTestCase environment probe has passed (slicing engine
+// compiled in + fixture model present), a slice failure is a pipeline failure
+// and MUST fail the test. The previous QSKIP-on-slice-failure pattern absorbed
+// the failure signal, making "environment lacks config" and "pipeline broken"
+// indistinguishable. A macro (not a helper function) so QVERIFY2's early
+// return escapes the *test function*, not a helper; the failure reason is the
+// most recent sliceFailed payload so seeded/restart flows report their own
+// failure, not an earlier cancellation's.
+#define E2E_REQUIRE_SLICE_SUCCEEDED(context, finishedSpy, failedSpy)          \
+  QVERIFY2((finishedSpy).count() > 0,                                        \
+           qPrintable(QStringLiteral("slice must succeed when slicing "       \
+                                     "prerequisites are present (%1), "      \
+                                     "failed: %2")                            \
+                          .arg(context,                                       \
+                               (failedSpy).isEmpty()                          \
+                                   ? QStringLiteral("no failure reason emitted") \
+                                   : (failedSpy).last().at(0).toString())))
+
 class E2EWorkflowTests final : public QObject
 {
   Q_OBJECT
 
 private slots:
   void initTestCase();
+  void cleanupTestCase();
   void test_config_injection_applies_preset_values();
   void test_import_format_coverage_matrix_real_fixtures();
   void test_slice_produces_gcode_file();
@@ -135,6 +154,17 @@ private:
   /// Return whether the model was successfully arranged into the valid bed area.
   /// Upstream multi-plate arrange can still report bed_idx==-1, so callers may skip.
   bool ensureModelOnBed(ProjectServiceMock &project) const;
+  /// Q12 environment probe: the ONLY legitimate skip reason in this suite is a
+  /// missing *static* slicing prerequisite. Returns a non-empty problem
+  /// description when the environment cannot host slicing at all (engine not
+  /// compiled in / fixture model absent); empty means the environment is
+  /// sliceable and every slice failure below is a pipeline failure.
+  QString sliceEnvironmentProblem() const;
+  /// Q12 count-and-report: record and log every environment skip so the
+  /// yellow-skip mass stays visible in every run log instead of silently
+  /// absorbing failures.
+  void noteEnvironmentSkip(const QString &where, const QString &why);
+  int m_environmentSkips = 0;
 };
 
 bool E2EWorkflowTests::hasLibslic3r() const
@@ -144,6 +174,49 @@ bool E2EWorkflowTests::hasLibslic3r() const
 #else
   return false;
 #endif
+}
+
+QString E2EWorkflowTests::sliceEnvironmentProblem() const
+{
+  if (!hasLibslic3r())
+    return QStringLiteral("HAS_LIBSLIC3R not compiled in (no slicing engine)");
+  // The fixture lives in the optional OrcaSlicer submodule; its absence is an
+  // environment property, not a pipeline failure.
+  if (!QFileInfo::exists(kStlPath))
+    return QStringLiteral("model fixture missing: %1").arg(kStlPath);
+  return QString();
+}
+
+void E2EWorkflowTests::noteEnvironmentSkip(const QString &where, const QString &why)
+{
+  ++m_environmentSkips;
+  qWarning("[E2E][env-skip #%d] %s: %s",
+           m_environmentSkips,
+           qPrintable(where),
+           qPrintable(why));
+}
+
+void E2EWorkflowTests::initTestCase()
+{
+  // Q12 environment probe: skip ONLY when a static slicing prerequisite is
+  // missing, and count/report the skip. Every test function below inherits
+  // this gate; once it passes, a slice failure anywhere in the suite FAILS
+  // (E2E_REQUIRE_SLICE_SUCCEEDED) -- it is never absorbed by a skip.
+  const QString envProblem = sliceEnvironmentProblem();
+  if (!envProblem.isEmpty())
+  {
+    noteEnvironmentSkip(QStringLiteral("initTestCase (gates all tests)"), envProblem);
+    QSKIP(qPrintable(QStringLiteral("E2E slicing prerequisites missing: %1").arg(envProblem)));
+  }
+}
+
+void E2EWorkflowTests::cleanupTestCase()
+{
+  // Q12 count-and-report: keep the environment-skip accounting visible.
+  qInfo("[E2E][env-skip total] %d environment-skip event(s) recorded (missing "
+        "slicing engine/fixture). Slice failures with prerequisites present "
+        "are FAILs, not skips.",
+        m_environmentSkips);
 }
 
 void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectServiceMock &project) const
@@ -178,14 +251,6 @@ bool E2EWorkflowTests::ensureModelOnBed(ProjectServiceMock &project) const
       return false;
   }
   return true;
-}
-
-void E2EWorkflowTests::initTestCase()
-{
-  if (!hasLibslic3r())
-    QSKIP("E2E workflow tests require HAS_LIBSLIC3R — skipping all tests");
-  QVERIFY2(QFileInfo::exists(kStlPath), qPrintable(
-      QStringLiteral("Test STL not found: %1").arg(kStlPath)));
 }
 
 void E2EWorkflowTests::test_config_injection_applies_preset_values()
@@ -317,12 +382,9 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
   // Wait up to 120 seconds for real slicing
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  if (failedSpy.count() > 0)
-  {
-    // Include the actual slicing failure reason to keep failures diagnosable.
-    const QString failReason = failedSpy.first().at(0).toString();
-    QSKIP(QString("Slice failed: %1").arg(failReason).toUtf8().constData());
-  }
+  // Q12: prerequisites were probed in initTestCase, so a failure here is a
+  // pipeline failure and must FAIL with its reason, not be absorbed by a skip.
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("baseline slice"), finishedSpy, failedSpy);
 
   // Verify output path
   const QString outputPath = slice.outputPath();
@@ -374,8 +436,7 @@ void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — may be expected without full config setup");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("editor-vm slice"), finishedSpy, failedSpy);
 
   // Verify EditorViewModel received slice results
   QVERIFY2(editor.hasSliceResult(), "EditorViewModel should report hasSliceResult=true");
@@ -413,8 +474,7 @@ void E2EWorkflowTests::test_export_gcode_to_path()
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — cannot test export without successful slice");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("export slice seed"), finishedSpy, failedSpy);
 
   const QString srcPath = slice.outputPath();
   QVERIFY2(!srcPath.isEmpty(), "source G-code path should exist after slice");
@@ -462,8 +522,7 @@ void E2EWorkflowTests::test_export_gcode_rejects_unsafe_targets()
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed - cannot test export safety without successful slice");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("export-safety slice seed"), finishedSpy, failedSpy);
 
   const QString srcPath = slice.outputPath();
   QVERIFY2(!srcPath.isEmpty(), "source G-code path should exist after slice");
@@ -539,11 +598,7 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
   ensureModelOnBed(project);
   editor.requestSlice();
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-  {
-    const QString reason = failedSpy.first().at(0).toString();
-    QSKIP(QString("Slice failed in local workflow test: %1").arg(reason).toUtf8().constData());
-  }
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("local workflow slice"), finishedSpy, failedSpy);
 
   QVERIFY2(editor.hasSliceResult(), "completed slice should create a valid Prepare result");
   QVERIFY2(editor.canPreview(), "Preview should be available after a valid slice");
@@ -631,8 +686,7 @@ void E2EWorkflowTests::test_preview_receives_gcode_data()
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — cannot test preview data without successful slice");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("preview-data slice seed"), finishedSpy, failedSpy);
 
   // PreviewViewModel should have received G-code data
   // Note: preview rebuilds from outputPath signal; in test we check
@@ -672,9 +726,21 @@ void E2EWorkflowTests::test_backend_switches_to_preview_after_slice()
 
   QVERIFY2(editor->canRequestSlice(),
            qPrintable(QStringLiteral("editor should be slice-ready: %1").arg(editor->sliceActionHint())));
+  // Q12: spy the composition root's slice service so a slice failure FAILs
+  // with its reason instead of a bare QTRY timeout.
+  const auto *ctxSlice = qobject_cast<SliceService *>(ctx.sliceService());
+  QVERIFY(ctxSlice);
+  QSignalSpy ctxFailedSpy(ctxSlice, &SliceService::sliceFailed);
+  QVERIFY(ctxFailedSpy.isValid());
   editor->requestSlice();
 
-  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult(), 120000);
+  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult() || ctxFailedSpy.count() > 0, 120000);
+  QVERIFY2(editor->hasSliceResult(),
+           qPrintable(QStringLiteral("slice must succeed when slicing prerequisites are "
+                                     "present (backend slice), failed: %1")
+                          .arg(ctxFailedSpy.isEmpty()
+                                   ? QStringLiteral("no failure reason emitted")
+                                   : ctxFailedSpy.first().at(0).toString())));
   QCOMPARE(ctx.currentPage(), static_cast<int>(BackendContext::TabPosition::tpPreview));
   QCOMPARE(ctx.currentViewMode(), static_cast<int>(BackendContext::ViewMode::Preview));
   QVERIFY2(pageSpy.count() >= 1, "slice completion should emit currentPageChanged");
@@ -973,8 +1039,7 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
   slice.startSlice(QStringLiteral("invalidate_test"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
 
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — cannot test invalidation without successful slice");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("invalidation slice seed"), finishedSpy, failedSpy);
 
   // Verify slice result exists
   QVERIFY2(editor.hasSliceResult(), "should have slice result after slicing");
@@ -1019,8 +1084,7 @@ void E2EWorkflowTests::test_slice_affecting_bed_change_marks_current_result_stal
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("readiness_stale_test"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — cannot test stale result readiness without a real G-code result");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("stale-readiness slice seed"), finishedSpy, failedSpy);
 
   const int plateIndex = editor.currentPlateIndex();
   const QString slicedOutputPath = slice.outputPath();
@@ -1096,8 +1160,7 @@ void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload(
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("import_invalidate_test"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — cannot test import invalidation without a real G-code result");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("import-invalidation slice seed"), finishedSpy, failedSpy);
 
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   const QString staleOutputPath = slice.outputPath();
@@ -1145,8 +1208,7 @@ void E2EWorkflowTests::test_previous_gcode_reuse_marks_reused_result_and_refresh
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("reuse_seed_test"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed — cannot test previous G-code reuse without a real seed result");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("reuse seed slice"), finishedSpy, failedSpy);
 
   const int plateIndex = editor.currentPlateIndex();
   const QString generatedOutput = slice.outputPath();
@@ -1166,11 +1228,10 @@ void E2EWorkflowTests::test_previous_gcode_reuse_marks_reused_result_and_refresh
   QVERIFY2(slice.loadGCodeFromPrevious(generatedOutput),
            "valid previous G-code should start the reuse path");
   QTRY_VERIFY_WITH_TIMEOUT(reusedFinishedSpy.count() > 0 || reusedFailedSpy.count() > 0, 60000);
-  if (reusedFailedSpy.count() > 0)
-  {
-    const QString reason = reusedFailedSpy.first().at(0).toString();
-    QSKIP(QString("Previous G-code reuse failed in this environment: %1").arg(reason).toUtf8().constData());
-  }
+  // Q12: the seed G-code was verified to exist above, so a reuse failure is a
+  // pipeline failure (parser/readback), not an environment property -- FAIL.
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("previous-G-code reuse"),
+                              reusedFinishedSpy, reusedFailedSpy);
 
   QCOMPARE(slice.outputPath(), generatedOutput);
   QCOMPARE(slice.plateOutputPath(plateIndex), generatedOutput);
@@ -1211,8 +1272,8 @@ void E2EWorkflowTests::test_preview_rebuilds_on_active_result_switch_without_sli
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("preview_result_switch_seed"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Slice failed - cannot seed active-result switching without a real G-code result");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("active-result-switch seed slice"),
+                              finishedSpy, failedSpy);
 
   const QString generatedOutput = slice.outputPath();
   QVERIFY2(QFileInfo::exists(generatedOutput),
@@ -1232,16 +1293,18 @@ void E2EWorkflowTests::test_preview_rebuilds_on_active_result_switch_without_sli
   QSignalSpy reuse0Failed(&slice, &SliceService::sliceFailed);
   QVERIFY2(slice.loadGCodeFromPrevious(plate0Path), "plate 0 should accept previous G-code");
   QTRY_VERIFY_WITH_TIMEOUT(reuse0Finished.count() > 0 || reuse0Failed.count() > 0, 60000);
-  if (reuse0Failed.count() > 0)
-    QSKIP("Previous G-code reuse failed for plate 0 in this environment");
+  // Q12: plate 0's copy was verified written above; a reuse failure is a
+  // pipeline failure, not an environment property -- FAIL.
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("plate 0 previous-G-code reuse"),
+                              reuse0Finished, reuse0Failed);
 
   QVERIFY(project.setCurrentPlateIndex(1));
   QSignalSpy reuse1Finished(&slice, &SliceService::sliceFinished);
   QSignalSpy reuse1Failed(&slice, &SliceService::sliceFailed);
   QVERIFY2(slice.loadGCodeFromPrevious(plate1Path), "plate 1 should accept previous G-code");
   QTRY_VERIFY_WITH_TIMEOUT(reuse1Finished.count() > 0 || reuse1Failed.count() > 0, 60000);
-  if (reuse1Failed.count() > 0)
-    QSKIP("Previous G-code reuse failed for plate 1 in this environment");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("plate 1 previous-G-code reuse"),
+                              reuse1Finished, reuse1Failed);
 
   QVERIFY2(preview.moveCount() > 2, "seed preview should contain the generated G-code moves before switching");
 
@@ -1344,8 +1407,8 @@ void E2EWorkflowTests::test_persistent_print_reused_on_same_plate_reslice()
 
   slice.startSlice(QStringLiteral("persistent_reuse_first"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP(qPrintable(QStringLiteral("Slice failed: %1").arg(failedSpy.first().at(0).toString())));
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("persistent-reuse first slice"),
+                              finishedSpy, failedSpy);
   const QString firstOutput = slice.outputPath();
   QVERIFY2(QFileInfo::exists(firstOutput), "first slice output should exist");
   QCOMPARE(slice.persistentSliceCount(), 1);
@@ -1356,8 +1419,8 @@ void E2EWorkflowTests::test_persistent_print_reused_on_same_plate_reslice()
   // must be reused rather than rebuilt.
   slice.startSlice(QStringLiteral("persistent_reuse_second"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() == 2 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP(qPrintable(QStringLiteral("Reslice failed: %1").arg(failedSpy.first().at(0).toString())));
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("persistent-reuse reslice"),
+                              finishedSpy, failedSpy);
 
   QCOMPARE(slice.persistentSliceReuseCount(), 1);
   QCOMPARE(slice.persistentSliceCount(), 1);
@@ -1402,8 +1465,8 @@ void E2EWorkflowTests::test_plate_deletion_releases_persistent_print_entry()
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("persistent_release"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP(qPrintable(QStringLiteral("Slice failed: %1").arg(failedSpy.first().at(0).toString())));
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("persistent-release slice"),
+                              finishedSpy, failedSpy);
 
   QCOMPARE(slice.persistentSliceCount(), 1);
   const int removedPrintIndex = project.platePrintIndex(0);
@@ -1460,8 +1523,10 @@ void E2EWorkflowTests::test_cancelled_slice_restart_rebuilds_persistent_print()
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0
                                || failedSpy.count() > failuresBeforeRestart,
                            120000);
-  if (failedSpy.count() > failuresBeforeRestart)
-    QSKIP(qPrintable(QStringLiteral("Restart slice failed: %1").arg(failedSpy.last().at(0).toString())));
+  // Q12: the macro reports the most recent failure (the restart's), not the
+  // cancellation failure already sitting in the spy.
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("persistent-cancel restart slice"),
+                              finishedSpy, failedSpy);
   QVERIFY2(finishedSpy.count() > 0, "restart slice must emit a successful result");
   QCOMPARE(slice.sliceState(), SliceService::State::Completed);
   const int plateIndex = project.currentPlateIndex();
@@ -1506,11 +1571,7 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
   editor.requestSliceAll();
 
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() >= 2 || failedSpy.count() > 0, 240000);
-  if (failedSpy.count() > 0)
-  {
-    const QString reason = failedSpy.first().at(0).toString();
-    QSKIP(QString("Slice-all failed in this environment: %1").arg(reason).toUtf8().constData());
-  }
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("slice-all"), finishedSpy, failedSpy);
 
   QCOMPARE(editor.plateSliceResultStatus(0), int(EditorViewModel::SliceResultValid));
   QCOMPARE(editor.plateSliceResultStatus(1), int(EditorViewModel::SliceResultValid));
@@ -1603,8 +1664,9 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
 // marker bytes. This is the central no-placeholder regression guard -- the
 // slice output path is the editor's sliceOutputPath() (a real local file from
 // SliceService::outputPath()), not a committed fixture. Follows the proven
-// test_backend_switches_to_preview_after_slice wiring. HARD QVERIFY2 -- the
-// only QSKIP is a genuine slice-failure escape, never on the assertions.
+// test_backend_switches_to_preview_after_slice wiring. HARD QVERIFY2
+// throughout -- since Q12 the only suite-wide skip is the initTestCase
+// environment probe; a slice failure here is a FAIL.
 void E2EWorkflowTests::previewReceivesRealGcodeAfterLiveSliceNoPlaceholder()
 {
   BackendContext ctx;
@@ -1618,10 +1680,23 @@ void E2EWorkflowTests::previewReceivesRealGcodeAfterLiveSliceNoPlaceholder()
   QVERIFY2(editor->canRequestSlice(),
            qPrintable(QStringLiteral("editor should be slice-ready: %1").arg(editor->sliceActionHint())));
 
+  const auto *ctxSlice = qobject_cast<SliceService *>(ctx.sliceService());
+  QVERIFY(ctxSlice);
+  QSignalSpy ctxFailedSpy(ctxSlice, &SliceService::sliceFailed);
+  QVERIFY(ctxFailedSpy.isValid());
+
   editor->requestSlice();
-  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult(), 120000);
-  if (!editor->hasSliceResult())
-    QSKIP("Live slice did not produce a result in this environment");
+  // Q12: the environment probe passed in initTestCase, so a missing result is
+  // a pipeline failure and must FAIL with the slice reason. (The old QSKIP
+  // here was dead code anyway: QTRY_VERIFY already returns from the test on
+  // timeout, so it could never be reached.)
+  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult() || ctxFailedSpy.count() > 0, 120000);
+  QVERIFY2(editor->hasSliceResult(),
+           qPrintable(QStringLiteral("live slice must produce a result when slicing "
+                                     "prerequisites are present, failed: %1")
+                          .arg(ctxFailedSpy.isEmpty()
+                                   ? QStringLiteral("no failure reason emitted")
+                                   : ctxFailedSpy.first().at(0).toString())));
 
   // The slice output must come from a real local file, not a committed fixture.
   const QString liveOutputPath = editor->sliceOutputPath();
@@ -1674,8 +1749,8 @@ void E2EWorkflowTests::sliceFailedClearsPreviewState()
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("fail_clear_seed"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Live slice seed failed in sliceFailed test");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("sliceFailed-clears seed slice"),
+                              finishedSpy, failedSpy);
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   QVERIFY2(!preview.gcodePreviewData().isEmpty(), "seeded preview should hold a GCV1 payload");
   const QString seedOutput = slice.outputPath();
@@ -1715,8 +1790,8 @@ void E2EWorkflowTests::sliceResultClearedClearsPreviewState()
   ensureModelOnBed(project);
   editor.requestSlice();
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Live slice seed failed in sliceResultCleared test");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("sliceResultCleared seed slice"),
+                              finishedSpy, failedSpy);
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   const QString seedOutputPath = slice.outputPath();
 
@@ -1754,8 +1829,7 @@ void E2EWorkflowTests::plateSwitchToInvalidClearsPreviewState()
   ensureModelOnBed(project);
   slice.startSlice(QStringLiteral("plate_switch_seed"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Live slice seed failed in plate-switch test");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("plate-switch seed slice"), finishedSpy, failedSpy);
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   const QString seedOutputPath = slice.outputPath();
 
@@ -1802,8 +1876,7 @@ void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
   QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
   slice.startSlice(QStringLiteral("reslice_first_seed"));
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("First live slice failed in reslice test");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("reslice first seed"), finishedSpy, failedSpy);
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
   const QByteArray firstPayload = preview.gcodePreviewData();
   QVERIFY2(firstPayload.size() > 8, "first slice must produce a GCV1 payload");
@@ -1838,8 +1911,7 @@ void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
   QSignalSpy resliceFailed(&slice, &SliceService::sliceFailed);
   slice.startSlice(QStringLiteral("reslice_second"));
   QTRY_VERIFY_WITH_TIMEOUT(resliceFinished.count() > 0 || resliceFailed.count() > 0, 120000);
-  if (resliceFailed.count() > 0)
-    QSKIP("Reslice failed in this environment");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("reslice second"), resliceFinished, resliceFailed);
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
 
   const QByteArray secondPayload = preview.gcodePreviewData();
@@ -1876,8 +1948,8 @@ void E2EWorkflowTests::exportWhilePreviewVisibleLeavesGcodePreviewDataIntact()
   ensureModelOnBed(project);
   editor.requestSlice();
   QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() > 0 || failedSpy.count() > 0, 120000);
-  if (failedSpy.count() > 0)
-    QSKIP("Live slice seed failed in export-stability test");
+  E2E_REQUIRE_SLICE_SUCCEEDED(QStringLiteral("export-stability seed slice"),
+                              finishedSpy, failedSpy);
   QTRY_VERIFY_WITH_TIMEOUT(preview.gcodePreviewData().startsWith("GCV1"), 5000);
 
   const QByteArray beforeExport = preview.gcodePreviewData();
@@ -1917,10 +1989,23 @@ void E2EWorkflowTests::pageSwitchPreparePreviewPreservesGcodePreviewData()
   QVERIFY2(editor->canRequestSlice(),
            qPrintable(QStringLiteral("editor should be slice-ready: %1").arg(editor->sliceActionHint())));
 
+  // Q12: prerequisites were probed in initTestCase; FAIL with the slice
+  // reason instead of the old dead-code QSKIP (QTRY_VERIFY already returns
+  // from the test on timeout, so the old skip could never be reached).
+  const auto *ctxSlice = qobject_cast<SliceService *>(ctx.sliceService());
+  QVERIFY(ctxSlice);
+  QSignalSpy ctxFailedSpy(ctxSlice, &SliceService::sliceFailed);
+  QVERIFY(ctxFailedSpy.isValid());
+
   editor->requestSlice();
-  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult(), 120000);
-  if (!editor->hasSliceResult())
-    QSKIP("Live slice seed did not produce a result in page-switch test");
+  QTRY_VERIFY_WITH_TIMEOUT(editor->hasSliceResult() || ctxFailedSpy.count() > 0, 120000);
+  QVERIFY2(editor->hasSliceResult(),
+           qPrintable(QStringLiteral("live slice must produce a result when slicing "
+                                     "prerequisites are present (page-switch seed), "
+                                     "failed: %1")
+                          .arg(ctxFailedSpy.isEmpty()
+                                   ? QStringLiteral("no failure reason emitted")
+                                   : ctxFailedSpy.first().at(0).toString())));
   QTRY_VERIFY_WITH_TIMEOUT(preview->gcodePreviewData().startsWith("GCV1"), 5000);
 
   const QByteArray capturedPayload = preview->gcodePreviewData();
