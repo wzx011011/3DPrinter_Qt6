@@ -138,7 +138,9 @@ target_include_directories(libslic3r SYSTEM INTERFACE
     "${UPSTREAM_DEPS}/glu-libtess/include"
     "${UPSTREAM_DEPS}/libnest2d/include"
     ${EXPAT_INCLUDE_DIRS}
-    "${DEPS_PREFIX}/include/occt"
+    # OCCT headers: Windows <inc>/occt, UNIX <inc>/opencascade.
+    "$<$<PLATFORM_ID:Windows>:${DEPS_PREFIX}/include/occt>"
+    "$<$<NOT:$<PLATFORM_ID:Windows>>:${DEPS_PREFIX}/include/opencascade>"
 )
 
 # Link all pre-built static libs

@@ -18,7 +18,7 @@
 #include <algorithm>
 
 #ifdef HAS_LIBSLIC3R
-#include <libslic3r/Calib.hpp>
+#include <libslic3r/calib.hpp>
 #include <libslic3r/PrintConfig.hpp>
 
 // v5.16 (CIRC-02): upstream deleted Calib_Auto_PA_Line (cb35e89f) and the

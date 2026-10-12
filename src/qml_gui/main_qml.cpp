@@ -487,8 +487,12 @@ int main(int argc, char *argv[])
   const QString dumpDir = QCoreApplication::applicationDirPath() + QStringLiteral("/crash_dumps");
   QDir().mkpath(dumpDir);
   appendStartupLog(QStringLiteral("Crash dump dir prepared: %1").arg(dumpDir));
+#ifdef Q_OS_WIN
+  // Windows-only crash handler (CrashHandlerWin is built under if(WIN32) in
+  // CMakeLists); other platforms get no in-process handler for now.
   CrashHandlerWin::install(dumpDir);
   appendStartupLog(QStringLiteral("Crash handler install requested"));
+#endif
   if (rhiSelection.enabled)
     appendStartupLog(QStringLiteral("QRhi backend selection: %1").arg(rhiSelection.diagnostics()));
 

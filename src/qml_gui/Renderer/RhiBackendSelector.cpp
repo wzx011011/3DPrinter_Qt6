@@ -17,12 +17,23 @@ struct RhiBackendCandidate
   QRhi::Implementation implementation = QRhi::Null;
 };
 
+// The D3D probe owner only compiles where the D3D RHI backends exist; other
+// platforms need no init params for OpenGL/Vulkan/Metal probing
+// (QRhiInitParams defaults suffice for those backends' create() overloads).
+#ifdef Q_OS_WIN
 struct RhiProbeOwner
 {
   std::unique_ptr<QRhi> rhi;
   QRhiD3D12InitParams d3d12Params;
   QRhiD3D11InitParams d3d11Params;
 };
+#else
+struct RhiProbeOwner
+{
+  std::unique_ptr<QRhi> rhi;
+  QRhiGles2InitParams gles2Params;
+};
+#endif
 
 QString normalizeRequestedBackend(const QByteArray &value)
 {
@@ -42,6 +53,7 @@ QString normalizeRequestedBackend(const QByteArray &value)
 // conditional on the env flag (DL-04 / Pitfall 5): when OWZX_D3D12_DEBUG is
 // unset, the default OWzxSlicer.exe build behaves identically to pre-Phase-105
 // (enableDebugLayer stays false, no perf hit, no release-build leak).
+#ifdef Q_OS_WIN
 bool d3d12DebugLayerRequested()
 {
   if (!qEnvironmentVariableIsSet("OWZX_D3D12_DEBUG"))
@@ -52,7 +64,9 @@ bool d3d12DebugLayerRequested()
       || value == QLatin1String("on")
       || value == QLatin1String("yes");
 }
+#endif // Q_OS_WIN
 
+#ifdef Q_OS_WIN
 QVector<RhiBackendCandidate> defaultWindowsCandidates()
 {
   // D3D11-first: D3D12 crashes at QQuickWindow swapchain init on AMD Radeon
@@ -73,10 +87,24 @@ QVector<RhiBackendCandidate> defaultWindowsCandidates()
       {QStringLiteral("d3d12"), QSGRendererInterface::Direct3D12, QRhi::D3D12},
   };
 }
+#endif // Q_OS_WIN
+
+// Non-Windows candidates: OpenGL first (desktop GL 4.6 on Linux/macOS covers
+// what the pipeline needs; the RHI renderer is backend-agnostic shader-wise).
+QVector<RhiBackendCandidate> defaultUnixCandidates()
+{
+  return {
+      {QStringLiteral("opengl"), QSGRendererInterface::OpenGLRhi, QRhi::OpenGLES2},
+  };
+}
 
 QVector<RhiBackendCandidate> candidatesForRequest(const QString &requested, QStringList *failures)
 {
+#ifdef Q_OS_WIN
   const QVector<RhiBackendCandidate> candidates = defaultWindowsCandidates();
+#else
+  const QVector<RhiBackendCandidate> candidates = defaultUnixCandidates();
+#endif
   if (requested == QLatin1String("auto"))
     return candidates;
 
@@ -95,6 +123,7 @@ bool probeBackend(const RhiBackendCandidate &candidate, QString *failure)
   QRhiInitParams *params = nullptr;
 
   switch (candidate.implementation) {
+#ifdef Q_OS_WIN
     case QRhi::D3D12:
       params = &owner.d3d12Params;
       // Phase 105 (D3D12-01): enable the D3D12 debug layer for the probe path
@@ -112,6 +141,12 @@ bool probeBackend(const RhiBackendCandidate &candidate, QString *failure)
     case QRhi::D3D11:
       params = &owner.d3d11Params;
       break;
+#endif
+#ifndef Q_OS_WIN
+    case QRhi::OpenGLES2:
+      params = &owner.gles2Params;
+      break;
+#endif
     default:
       *failure = QStringLiteral("unsupported QRhi implementation");
       return false;
@@ -166,9 +201,18 @@ RhiBackendSelection selectRhiBackendFromEnvironment()
   }
 
 #ifndef Q_OS_WIN
-  selection.failureReasons.append(QStringLiteral("QRhi renderer gate is currently implemented for Windows only"));
+  // OpenGL QRhi probing requires a live QGuiApplication + platform GL
+  // context; calling QRhi::create(OpenGLES2) before main() sets one up
+  // segfaults in QOpenGLContext::create (observed under WSLg). Unix has a
+  // single viable backend anyway — hand the choice to QQuickWindow, which
+  // resolves OpenGL itself at first render.
+  selection.selectedBackend = QStringLiteral("opengl(auto)");
+  selection.selectedGraphicsApi = QSGRendererInterface::OpenGLRhi;
+  selection.canUseRhi = true;
   return selection;
 #else
+  // Probe on Windows only: the D3D candidates need no GL context, so a
+  // pre-app QRhi::create is safe there and pins the backend explicitly.
   const QVector<RhiBackendCandidate> candidates = candidatesForRequest(selection.requested, &selection.failureReasons);
   for (const RhiBackendCandidate &candidate : candidates) {
     RhiBackendAttempt attempt;
@@ -191,5 +235,5 @@ RhiBackendSelection selectRhiBackendFromEnvironment()
   }
 
   return selection;
-#endif
+#endif // Q_OS_WIN
 }

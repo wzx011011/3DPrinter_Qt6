@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QTimer>
 #include <QColor>
 #include <QTranslator>
 #include <QElapsedTimer>

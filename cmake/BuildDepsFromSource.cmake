@@ -101,6 +101,12 @@ target_include_directories(glu_libtess_from_source SYSTEM
 if(MSVC)
     target_compile_definitions(glu_libtess_from_source PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
+if(UNIX)
+    # priorityq-heap.c uses LONG_MAX without including <limits.h>; MSVC's
+    # header chain pulls it in transitively, glibc's does not.
+    target_compile_definitions(glu_libtess_from_source PRIVATE GLU_LONG_MAX_FIX)
+    target_compile_options(glu_libtess_from_source PRIVATE -include limits.h)
+endif()
 
 # ─── mcut ─────────────────────────────────────────────────────────────────────
 file(GLOB MCUT_SOURCES
@@ -271,7 +277,22 @@ else()
 endif()
 
 # qhull
-if(EXISTS "${DEPS_PREFIX}/lib/qhullstatic_r.lib")
+# UNIX: the OrcaSlicer deps superbuild installs libqhullstatic_r.a /
+# libqhullcpp.a. (The .lib probe below is the Windows/MSVC path; the source
+# fallback needs slic3r_remap_configs from the upstream top-level context and
+# cannot work inside this project.)
+if(UNIX AND EXISTS "${DEPS_PREFIX}/lib/libqhullstatic_r.a")
+    add_library(qhull_from_source STATIC IMPORTED GLOBAL)
+    set_target_properties(qhull_from_source PROPERTIES
+        IMPORTED_LOCATION "${DEPS_PREFIX}/lib/libqhullstatic_r.a"
+    )
+    if(EXISTS "${DEPS_PREFIX}/lib/libqhullcpp.a")
+        add_library(qhullcpp_from_source STATIC IMPORTED GLOBAL)
+        set_target_properties(qhullcpp_from_source PROPERTIES
+            IMPORTED_LOCATION "${DEPS_PREFIX}/lib/libqhullcpp.a"
+        )
+    endif()
+elseif(EXISTS "${DEPS_PREFIX}/lib/qhullstatic_r.lib")
     add_library(qhull_from_source STATIC IMPORTED GLOBAL)
     set_target_properties(qhull_from_source PROPERTIES
         IMPORTED_LOCATION "${DEPS_PREFIX}/lib/qhullstatic_r.lib"
