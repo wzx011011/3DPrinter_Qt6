@@ -445,10 +445,18 @@ BackendContext::BackendContext(QObject *parent)
   // applyLanguage 只连接到 languageIndexChanged 信号，而构造时 m_languageIndex
   // 默认已是 0 不会触发信号，导致程序以英文启动。此处补上初始调用。
   applyLanguage(settingsViewModel_->languageIndex());
-  // Q11-① 初始同步：把持久化的 uiScaleIndex 镜像到 pre-launch 的
-  // ui/scaleFactor 真键——旧版本只写过 SettingsViewModel 的 index，
-  // 从未写真键；补写后主程序下次启动才消费得到已选缩放。
-  applyUiScale(settingsViewModel_->uiScaleIndex());
+  // Q11-① 初始同步（迁移语义）：仅当 pre-launch 的 ui/scaleFactor 真键尚
+  // 不存在时，才把持久化的 uiScaleIndex 镜像进去——旧版本只写过
+  // SettingsViewModel 的 index，从未写真键，补一次迁移。绝不能无条件写：
+  // 命令面板（main.qml scale-* 项）直接 appSettings.setValue 写真键而不
+  // 回写 index，启动时 main() 先读键生效、随后这里的无条件镜像会用陈旧
+  // index 把面板直写的值覆写回去（双写者分叉，恰是 Q11 要消灭的双真值）。
+  {
+    QSettings uiStore(QSettings::NativeFormat, QSettings::UserScope,
+                      QStringLiteral("OWzx"), QStringLiteral("UI"));
+    if (!uiStore.contains(QStringLiteral("ui/scaleFactor")))
+      applyUiScale(settingsViewModel_->uiScaleIndex());
+  }
 
   // 同步撤销栈上限设置到 UndoRedoManager（对齐上游 UndoRedo::UndoRedoStackLimit）
   connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
