@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QStringList>
 #include <QFileInfo>
 #include <QDateTime>
@@ -17,6 +18,7 @@
 #include <QSaveFile>
 #include <QUrl>
 #include <functional>
+#include <mutex>
 #include <stdexcept>
 
 #ifdef HAS_LIBSLIC3R
@@ -71,6 +73,104 @@ namespace
 
   // P15.11: moved to SliceService::packSequentialClearance (public static) so
   // the drag-time preview packs through the SAME stream builder.
+
+  // ── P4 (step profile, docs/开发计划_2026-10-10.md §6d) ──────────────────
+  // Trailing sentinel key of the step timeline: recorded when the worker's
+  // success path finishes. It carries no step semantics; PerfBench drops it
+  // from the reported profile and uses its firstAtMs as the end anchor so
+  // the LAST real step (gcode_export) gets a visible duration too.
+  constexpr const char *kStepTimelineDoneKey = "done";
+
+  /// Maps a raw engine set_status text to the §6d step key. The TEXT is the
+  /// authority (percent is ambiguous across steps); prefix rules also cover
+  /// the parameterized per-layer/per-object progress texts. An unmapped text
+  /// becomes "unknown_<sanitized>" so an engine wording change (upstream
+  /// submodule bump) surfaces as a new key and turns the gate red -- that is
+  /// the designed re-gold trigger, not a defect. Texts are the canonical
+  /// English literals: the engine routes them through
+  /// Slic3r::I18N::translate, which is identity unless a translate callback
+  /// is installed, and no process in this repo installs one.
+  QString stepKeyForEngineText(const std::string &rawText)
+  {
+    const QString text = QString::fromUtf8(rawText.c_str());
+    // Ordered prefix rules (printable texts first, spammy parameterized
+    // variants after). Sources: PrintObjectSlice.cpp:829, PrintObject.cpp:
+    // 465/568/801/862/894/925/955/985/1018-1054, Print.cpp:2624/2943,
+    // TreeSupport.cpp:1728-1764/2747, TreeSupport3D.cpp:3546/3601,
+    // GCode.cpp:4280/4383 (vendored third_party/OrcaSlicer).
+    static const std::vector<std::pair<const char *, const char *>> kPrefixRules = {
+        {"Slicing mesh", "mesh_slicing"},
+        {"Generating walls", "perimeters"},
+        {"Generating infill regions", "infill_regions"},
+        {"Generating infill toolpath", "infill_toolpath"},
+        {"Z contouring", "z_contouring"},
+        {"Z contoured layer", "z_contouring"},
+        {"Detect overhangs for auto-lift", "overhang_lift"},
+        {"Checking support necessity", "support"},
+        {"Support:", "support"},
+        {"Generating support", "support"},
+        {"Optimizing toolpath", "path_optimization"},
+        {"Generating skirt & brim", "skirt_brim"},
+        {"Generating G-code", "gcode_export"},
+        {"Exporting G-code", "gcode_export"},
+    };
+    for (const auto &rule : kPrefixRules)
+    {
+      if (text.startsWith(QLatin1String(rule.first)))
+        return QLatin1String(rule.second);
+    }
+    // unknown_* fallback: sanitize the raw text into a stable diagnostic key.
+    QString sanitized;
+    sanitized.reserve(qMin<qsizetype>(text.size(), 48));
+    for (const QChar ch : text.left(48))
+    {
+      const ushort u = ch.unicode();
+      if ((u >= 'a' && u <= 'z') || (u >= 'A' && u <= 'Z') || (u >= '0' && u <= '9'))
+        sanitized.append(ch.toLower());
+      else if (!sanitized.endsWith(QLatin1Char('_')))
+        sanitized.append(QLatin1Char('_'));
+    }
+    while (sanitized.endsWith(QLatin1Char('_')))
+      sanitized.chop(1);
+    return QStringLiteral("unknown_") + sanitized;
+  }
+
+  /// One slice worker activation's step profiler. Owns the timeline storage
+  /// behind a shared_ptr so a callback captured by the PERSISTENT Print can
+  /// never dangle: the print keeps the previous activation's callback until
+  /// the next slice re-registers set_status_callback, and the shared_ptr
+  /// keeps both recorder and storage alive for that window. record() is
+  /// mutex-guarded because set_status fires from TBB parallel sections
+  /// (Z-contour parallel_for, tree-support contact/branch phases) as well as
+  /// the worker thread, and dedupes by key (first occurrence + count) to
+  /// strip per-layer progress spam.
+  struct StepTimelineRecorder
+  {
+    QElapsedTimer timer;
+    std::shared_ptr<std::vector<SliceStepTiming>> sink;
+    std::mutex mutex;
+
+    explicit StepTimelineRecorder(
+        std::shared_ptr<std::vector<SliceStepTiming>> timelineSink)
+        : sink(std::move(timelineSink))
+    {
+      timer.start();
+    }
+
+    void record(const QString &key, const QString &text, int percent)
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      for (SliceStepTiming &entry : *sink)
+      {
+        if (entry.key == key)
+        {
+          ++entry.count;
+          return;
+        }
+      }
+      sink->push_back(SliceStepTiming{key, text, percent, timer.elapsed(), 1});
+    }
+  };
 #endif
 
   QString formatDurationLabel(double seconds)
@@ -937,6 +1037,10 @@ void SliceService::startSlice(const QString &projectName)
     // lambda below so no Print* escapes the worker (Frozen Decision 1).
     FilamentMapResult capturedFilamentMap{};
     SequentialPrintClearance capturedClearance{};
+    // P4 (step profile): shared storage of this activation's step timeline.
+    // Declared for BOTH builds so the completion lambda assigns uniformly;
+    // the mock path below never fills it (empty timeline = mock truth).
+    auto stepTimeline = std::make_shared<std::vector<SliceStepTiming>>();
 #ifdef HAS_LIBSLIC3R
     // P1 (preview direct hand-off): the structured GCodeProcessorResult, born
     // in a shared_ptr and filled in place by Print::export_gcode on the
@@ -950,7 +1054,18 @@ void SliceService::startSlice(const QString &projectName)
     bool reusedPersistentPrint = false;
     try
     {
-      auto notify = [receiver](int progress, const QString &label) {
+      // P4 (step profile): one recorder per worker activation. Shared_ptr
+      // everywhere: the set_status callback below is stored on the
+      // PERSISTENT Print and outlives this try block until the next slice
+      // re-registers it, so by-value captures keep it alive (and harmless).
+      const auto stepRecorder = std::make_shared<StepTimelineRecorder>(stepTimeline);
+      auto notify = [receiver, stepRecorder](const char *stepKey, int progress, const QString &label) {
+        // P4: the orchestration points stamp the START of the phase that
+        // follows them (model_prep / config_prep / param_apply). The fourth
+        // point below stamps "validate" again after print.validate ran; the
+        // true validate begin is stamped right before print.validate, and
+        // the recorder's by-key dedupe keeps that earlier stamp (count=2).
+        stepRecorder->record(QString::fromLatin1(stepKey), label, progress);
         if (!receiver)
           return;
         QMetaObject::invokeMethod(receiver, [receiver, progress, label]() {
@@ -986,7 +1101,7 @@ void SliceService::startSlice(const QString &projectName)
       Slic3r::Print &print = *persistentSlot->print;
       receiver->activePrint_.store(&print, std::memory_order_release);
 
-      notify(2, QObject::tr("Preparing current plate model"));
+      notify("model_prep", 2, QObject::tr("Preparing current plate model"));
       if (!modelForSlicePtr || modelForSlicePtr->objects.empty())
         throw std::runtime_error("Current plate has no sliceable objects");
       {
@@ -1004,7 +1119,7 @@ void SliceService::startSlice(const QString &projectName)
       if (cancelFlag && cancelFlag->load())
         throw std::runtime_error("Slicing cancelled");
 
-      notify(10, QObject::tr("Preparing slice parameters"));
+      notify("config_prep", 10, QObject::tr("Preparing slice parameters"));
       Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
       // full_print_config() copies generic enum values without their key maps.
       // Restore them before preset deserialization can invoke enum parsing.
@@ -1060,7 +1175,15 @@ void SliceService::startSlice(const QString &projectName)
 
       restoreGenericEnumMaps(config);
 
-      print.set_status_callback([receiver](const Slic3r::PrintBase::SlicingStatus &st) {
+      print.set_status_callback([receiver, stepRecorder](const Slic3r::PrintBase::SlicingStatus &st) {
+        // P4 (step profile): wall-clock step stamping from the engine
+        // callback. The normalized TEXT is the key authority; record() is
+        // mutex-guarded (this callback may fire from TBB parallel support /
+        // Z-contour sections) and dedupes by key so per-layer progress
+        // spam becomes a count instead of timeline noise.
+        if (!st.text.empty())
+          stepRecorder->record(stepKeyForEngineText(st.text),
+                               QString::fromStdString(st.text), st.percent);
         if (!receiver)
           return;
         const int p = qBound(0, st.percent, 100);
@@ -1076,7 +1199,7 @@ void SliceService::startSlice(const QString &projectName)
         }, Qt::QueuedConnection);
       });
 
-      notify(18, QObject::tr("Applying slice parameters"));
+      notify("param_apply", 18, QObject::tr("Applying slice parameters"));
 
       // Set up directories for Print::apply()
       {
@@ -1149,6 +1272,13 @@ void SliceService::startSlice(const QString &projectName)
         std::vector<Slic3r::StringObjectException> validationWarnings;
         Slic3r::Polygons collisionPolygons;
         std::vector<std::pair<Slic3r::Polygon, float>> heightPolygons;
+        // P4 (step profile): stamp the TRUE begin of the validate phase here
+        // (not at the "Running slice" notify point below, which fires only
+        // after validate returned) so param_apply's delta covers print.apply
+        // alone and validate's delta covers Print::validate. The notify(25)
+        // point re-records "validate"; the by-key dedupe keeps this stamp.
+        stepRecorder->record(QStringLiteral("validate"),
+                             QObject::tr("Pre-slice validation"), 24);
         Slic3r::StringObjectException validationError = print.validate(
             &validationWarnings, &collisionPolygons, &heightPolygons);
         capturedClearance = packSequentialClearance(collisionPolygons, heightPolygons);
@@ -1166,7 +1296,7 @@ void SliceService::startSlice(const QString &projectName)
         validationWarningText = validationWarningJoined;
       }
 
-      notify(25, QObject::tr("Running slice"));
+      notify("validate", 25, QObject::tr("Running slice"));
       // Default use_cache=false: step-level reuse is governed by the apply()
       // invalidation set and the PrintBase step state machine (upstream
       // contract -- no upstream call site passes use_cache=true).
@@ -1246,6 +1376,13 @@ void SliceService::startSlice(const QString &projectName)
       // from surfacing a stale auto recommendation.
       capturedFilamentMap.valid = false;
 
+      // P4 (step profile): success-path end anchor. The "done" sentinel's
+      // firstAtMs closes gcode_export's duration downstream (PerfBench
+      // derives each step's ms from adjacent firstAtMs deltas and drops the
+      // sentinel from the reported profile).
+      stepRecorder->record(QLatin1String(kStepTimelineDoneKey),
+                           QObject::tr("Slice worker finished"), 100);
+
       receiver->activePrint_.store(nullptr, std::memory_order_release);
     }
     catch (const std::exception &ex)
@@ -1316,7 +1453,7 @@ void SliceService::startSlice(const QString &projectName)
     if (!receiver)
       return;
 
-    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, targetResultKey, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance
+    QMetaObject::invokeMethod(receiver, [receiver, cancelFlag, outputPath, errorText, estimatedTimeLabel, resultWeightLabel, resultPlateLabel, resultPlateIndex, targetResultKey, resultFilamentLabel, resultCostLabel, layerCount, validationWarningText, capturedGeometry, capturedFilamentMap, capturedClearance, stepTimeline
 #ifdef HAS_LIBSLIC3R
                                          // PLATE-PRINT-LIFECYCLE (batch 2):
                                          // on success carries the finished
@@ -1339,6 +1476,10 @@ void SliceService::startSlice(const QString &projectName)
 
       receiver->slicing_ = false;
       receiver->activeCancelFlag_.reset();
+      // P4 (step profile): carry the worker's step timeline out on EVERY
+      // ending. A cancelled/failed slice's partial timeline is the truthful
+      // profile of that activation; the mock path delivers it empty.
+      receiver->lastStepTimeline_ = std::move(*stepTimeline);
       emit receiver->slicingChanged();
 
       if (cancelFlag && cancelFlag->load())

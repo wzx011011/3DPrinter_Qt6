@@ -152,6 +152,38 @@ struct SequentialPrintClearance {
 };
 Q_DECLARE_METATYPE(SequentialPrintClearance)
 
+/// P4 (step profile, docs/开发计划_2026-10-10.md §6d): one entry of the
+/// per-step slice wall-clock timeline captured BY VALUE inside the
+/// SliceService worker. Mirrors the FilamentMapResult capture pattern (Frozen
+/// Decision 1): a plain value type with no Slic3r reference crosses the
+/// worker boundary. One entry per distinct step KEY, in first-occurrence
+/// order; the step DURATION is derived downstream (PerfBench) as the delta
+/// between adjacent firstAtMs stamps.
+struct SliceStepTiming {
+  /// Normalized step key: the four orchestration keys (model_prep,
+  /// config_prep, param_apply, validate), the engine callback keys
+  /// (mesh_slicing, perimeters, infill_regions, infill_toolpath,
+  /// z_contouring, support, overhang_lift, skirt_brim, path_optimization,
+  /// gcode_export), "unknown_<sanitized text>" for unmapped engine texts
+  /// (an engine wording change must show up as a baseline mismatch -- by
+  /// design), or the trailing "done" sentinel that anchors the last real
+  /// step's duration (recorded when the worker finishes its success path).
+  QString key;
+  /// The raw first-occurrence text (engine set_status text or the notify
+  /// label). Diagnostics only; the gate compares keys, never texts.
+  QString text;
+  /// Percent at first occurrence. Auxiliary: the engine reuses percents
+  /// across steps, so the key (mapped from text) is the authority.
+  int percent = 0;
+  /// Milliseconds since the slice worker started when the step was first
+  /// observed. Wall-clock, single worker clock for the whole timeline.
+  qint64 firstAtMs = 0;
+  /// Occurrence count (>=1). Per-layer/per-object engine progress spam
+  /// (e.g. "Z contoured layer n/m", "Generating G-code: layer n") is
+  /// deduped into the count so the timeline stays one-entry-per-step.
+  int count = 0;
+};
+
 #ifdef HAS_LIBSLIC3R
 /// PLATE-PRINT-LIFECYCLE (batch 2): persistent per-plate Print plus its
 /// applied model clone, mirroring upstream PartPlate's per-plate ownership of
@@ -317,6 +349,16 @@ public:
   Q_INVOKABLE bool exportAllPlateGCodeToDirectory(const QString &directoryPath, const QString &baseName = QString());
   Q_INVOKABLE void clearResults();
 
+  /// P4 (step profile): per-step wall-clock timeline of the most recent
+  /// slice activation, delivered out of the worker through the same
+  /// queued-invokeMethod completion chain as the other captured-by-value
+  /// results (FilamentMapResult pattern). Empty when the last activation
+  /// was a mock slice or before the first slice. GUI-thread read (set
+  /// exclusively inside the completion lambda, like outputPath_). Consumers
+  /// derive step durations from adjacent firstAtMs deltas; the trailing
+  /// "done" entry anchors the last real step.
+  std::vector<SliceStepTiming> sliceStepTimeline() const { return lastStepTimeline_; }
+
 #ifdef HAS_LIBSLIC3R
   /// P1 (preview direct hand-off): the structured result of the most recent
   /// SUCCESSFUL slice (startSlice) or previous-G-code reuse
@@ -434,6 +476,10 @@ private:
   QString resultFilamentLabel_;
   int resultLayerCount_ = 0;
   QString resultCostLabel_;
+  /// P4 (step profile): timeline of the last slice activation (see the
+  /// sliceStepTimeline() getter). Written only inside the GUI-thread
+  /// completion lambda, so no lock.
+  std::vector<SliceStepTiming> lastStepTimeline_;
   int activeTargetPlateIndex_ = -1;
   int activeTargetResultKey_ = -1;
   std::shared_ptr<std::atomic_bool> activeCancelFlag_;
