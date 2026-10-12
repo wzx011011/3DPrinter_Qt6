@@ -67,21 +67,12 @@ if ($DevQmlDir -ne "") {
   Remove-Item Env:OWZX_DEV_QML_DIR -ErrorAction SilentlyContinue
 }
 
-# Startup page: the --open-page deep link currently trips the known
-# AI-SIDECAR-RACE startup crash (same ...27a2 AV signature since 2026-09-15,
-# ~seconds after the delayed page switch; see crash_dumps/crash_stack.log and
-# the AI-SIDECAR-RACE ledger rounds). The persisted startup-page preference
-# lands on the same page via the first-frame StackLayout path and is
-# crash-free, so drive THAT instead -- saved and restored around the run.
-$pageIndex = @{ prepare = 1; preview = 2 }[$Page]
-$regPath = 'HKCU:\Software\OWzx\OWzxSlicer'
-$savedHome  = (Get-ItemProperty $regPath -Name showHomePage -ErrorAction SilentlyContinue).showHomePage
-$savedDpage = (Get-ItemProperty $regPath -Name defaultPage  -ErrorAction SilentlyContinue).defaultPage
-New-Item -Path $regPath -Force | Out-Null
-Set-ItemProperty $regPath -Name showHomePage -Value 'false' -Type String
-Set-ItemProperty $regPath -Name defaultPage  -Value "$pageIndex" -Type String
-
-$launchArgs = @("--skip-first-run")
+# Startup page: drive the --open-page deep link directly. The old
+# AI-SIDECAR-RACE crash it used to trip (AV ...27a2, 2026-09-15) was
+# root-fixed by patches/orcaslicer/0007-fix-emboss-font-registry-wstring-
+# overread.patch (2026-09-24), so the HKCU startup-page-preference detour
+# is retired (Q6) -- no registry reads/writes, no save/restore window.
+$launchArgs = @("--skip-first-run", "--open-page", $Page)
 Write-Host "[loop] launching: $Exe $($launchArgs -join ' ')"
 $proc = Start-Process -FilePath $Exe -ArgumentList $launchArgs -PassThru
 
@@ -149,17 +140,6 @@ try {
 finally {
   if (-not $KeepOpen) {
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-  }
-  # Restore the user's startup-page preference.
-  if ($null -eq $savedHome) {
-    Remove-ItemProperty $regPath -Name showHomePage -ErrorAction SilentlyContinue
-  } else {
-    Set-ItemProperty $regPath -Name showHomePage -Value $savedHome -Type String
-  }
-  if ($null -eq $savedDpage) {
-    Remove-ItemProperty $regPath -Name defaultPage -ErrorAction SilentlyContinue
-  } else {
-    Set-ItemProperty $regPath -Name defaultPage -Value $savedDpage -Type String
   }
 }
 
