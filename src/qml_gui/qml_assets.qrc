@@ -31,8 +31,11 @@
         <file>assets/icons/minus.svg</file>
         <file>assets/icons/printer.svg</file>
         <file>assets/icons/preset_cog.svg</file>
+        <file>assets/icons/preset_equal.svg</file>
         <file>assets/icons/preset_node_dot.svg</file>
+        <file>assets/icons/preset_not_equal.svg</file>
         <file>assets/icons/preset_printer.svg</file>
+        <file>assets/icons/preset_question.svg</file>
         <file>assets/icons/preset_spool.svg</file>
         <file>assets/icons/bullet_black.png</file>
         <file>assets/icons/bullet_blue.png</file>
