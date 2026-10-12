@@ -32,7 +32,6 @@ private:
     /// slicedGcodes (optional) collects plate index -> exported .gcode path
     /// for --export-slicedata.
     int runSlice(QHash<int, QString> *slicedGcodes = nullptr);
-    int directSlice();
     QHash<QString, QVariant> loadSettingsJson(const QString &path);
 
     /// Phase 241 (CLI-01): pre-slice transforms over every loaded object

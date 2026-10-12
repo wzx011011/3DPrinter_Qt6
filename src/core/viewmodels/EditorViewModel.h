@@ -873,9 +873,7 @@ public:
   Q_INVOKABLE void toggleSelectedObjectsVisibility();
   /// 镜像选中对象（对齐上游 ModelInstance::set_mirror，同步真实模型）
   Q_INVOKABLE void mirrorSelectedObjects(int axis);
-  /// 自动摆放（对齐上游 Plater::priv::on_arrange）— 委托给 GLViewport::arrangeSelected()
   /// 自动朝向（对齐上游 Plater::orient() / AutoOrienter）
-
   Q_INVOKABLE void autoOrientSelected();
   /// 拆分选中对象为独立对象（对齐上游 Plater::priv::split_object）
   Q_INVOKABLE void splitSelectedObject();

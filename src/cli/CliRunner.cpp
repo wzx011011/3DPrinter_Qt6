@@ -28,18 +28,6 @@
 #define CLI_SLICING_ERROR           -100
 
 namespace {
-QString formatDuration(double seconds)
-{
-    const qint64 totalSeconds = std::max<qint64>(0, qRound64(seconds));
-    const qint64 hours = totalSeconds / 3600;
-    const qint64 minutes = (totalSeconds % 3600) / 60;
-    const qint64 secs = totalSeconds % 60;
-    return QStringLiteral("%1:%2:%3")
-        .arg(hours, 2, 10, QChar('0'))
-        .arg(minutes, 2, 10, QChar('0'))
-        .arg(secs, 2, 10, QChar('0'));
-}
-
 // Q8(6): the 3-tier merged preset config (printer -> filament -> print,
 // --load-settings overlay, --key overrides) built by ONE helper so every
 // consumer shares a single source of truth: runSlice feeds it to SliceService
@@ -991,64 +979,3 @@ QHash<QString, QVariant> CliRunner::loadSettingsJson(const QString &path)
     return result;
 }
 
-#ifdef HAS_LIBSLIC3R
-int CliRunner::directSlice()
-{
-    QTextStream out(stdout);
-    out << "Slicing...\n";
-    out.flush();
-
-    Slic3r::Model *srcModel = projectService_->rawModel();
-    if (!srcModel || srcModel->objects.empty()) {
-        QTextStream err(stderr);
-        err << "Error: no model loaded\n";
-        return CLI_DATA_FILE_ERROR;
-    }
-
-    Slic3r::DynamicPrintConfig config = Slic3r::DynamicPrintConfig::full_print_config();
-    config.set_key_value("bed_shape", new Slic3r::ConfigOptionPoints{
-        {0, 0}, {220, 0}, {220, 220}, {0, 220}
-    });
-    config.set_key_value("printable_height", new Slic3r::ConfigOptionFloat{250.0});
-    config.set_key_value("nozzle_diameter", new Slic3r::ConfigOptionFloats{0.4});
-
-    Slic3r::Print print;
-
-    try {
-        print.apply(*srcModel, config);
-    } catch (const std::exception &ex) {
-        QTextStream err(stderr);
-        err << "Error: apply failed: " << ex.what() << "\n";
-        return CLI_SLICING_ERROR;
-    }
-
-    try {
-        print.process();
-    } catch (const std::exception &ex) {
-        QTextStream err(stderr);
-        err << "Error: slice failed: " << ex.what() << "\n";
-        return CLI_SLICING_ERROR;
-    }
-
-    QString outDir = outputDir_.isEmpty()
-                         ? QCoreApplication::applicationDirPath()
-                         : outputDir_;
-    QDir().mkpath(outDir);
-    const QString baseName = QFileInfo(projectService_->sourceFilePath()).completeBaseName();
-    const QString gcodePath = outDir + QStringLiteral("/") + baseName + QStringLiteral(".gcode");
-
-    try {
-        Slic3r::GCodeProcessorResult result;
-        print.export_gcode(gcodePath.toStdString(), &result);
-        out << "Slice complete: " << formatDuration(result.print_statistics.modes[0].time) << "\n";
-        out << "G-code: " << gcodePath << "\n";
-        out.flush();
-    } catch (const std::exception &ex) {
-        QTextStream err(stderr);
-        err << "Error: export failed: " << ex.what() << "\n";
-        return CLI_SLICING_ERROR;
-    }
-
-    return CLI_SUCCESS;
-}
-#endif

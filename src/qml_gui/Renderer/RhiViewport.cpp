@@ -989,20 +989,6 @@ void RhiViewport::setOrthographicCamera(bool ortho)
   update();
 }
 
-void RhiViewport::mirrorSelection(int axis)
-{
-  Q_UNUSED(axis);
-  update();
-}
-
-void RhiViewport::arrangeSelected(float spacing, bool rotation, bool alignY)
-{
-  Q_UNUSED(spacing);
-  Q_UNUSED(rotation);
-  Q_UNUSED(alignY);
-  update();
-}
-
 void RhiViewport::requestThumbnailCapture(int plateIndex, int size, int variant)
 {
   // Phase 95 (THUMBCAP-01/03): real QRhi texture readback dispatch. The

@@ -695,7 +695,6 @@ public:
   Q_INVOKABLE void selectView(const QString &direction);
   // v5.16 (CIRC-01): undo()/redo()/clearHistory() repaint-only no-ops removed.
   // History actions live on EditorViewModel (QUndoStack) and BackendContext.
-  Q_INVOKABLE void mirrorSelection(int axis);
   // Phase 240 (GIZ-05): project a world-space point to viewport pixel
   // coordinates (for the 2D measure annotation overlay projected from 3D
   // anchor points). Y follows Qt item coordinates (origin top-left). The
@@ -708,7 +707,6 @@ public:
   // SVG drop flow to place the dropped SVG at the drop point (upstream
   // GLGizmoSVG workbench, minimal port).
   Q_INVOKABLE QPointF screenToBedPoint(qreal screenX, qreal screenY) const;
-  Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false);
   // G-04: variant 0 = main capture, 1 = picking (per-object flat colors).
   Q_INVOKABLE void requestThumbnailCapture(int plateIndex, int size = 128,
                                            int variant = 0);
