@@ -211,7 +211,7 @@ Stop-Process -Name 'E2EWorkflowTests', 'ViewModelSmokeTests', 'PrepareSceneDataT
     'ObjectPickingTests', 'NavigatorCubeTests', 'CameraParityTests',
     'ViewportContextMenuTests', 'QmlUiAuditTests', 'PartPlateTests', 'AppToolTests',
     'PreviewParserTests', 'GizmoGeometryTests', 'CliTests', 'owzx-cli',
-    'owzx-render-bench', 'PerfBench' -Force -ErrorAction SilentlyContinue
+    'owzx-render-bench', 'PerfBench', 'QmlSmokeTests' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
 $defaultUpstreamRoot = Join-Path $repoRoot 'third_party\OrcaSlicer'
@@ -468,6 +468,9 @@ Invoke-NinjaTarget 'NavigatorCubeTests'
 Invoke-NinjaTarget 'CameraParityTests'
 Invoke-NinjaTarget 'ViewportContextMenuTests'
 Invoke-NinjaTarget 'QmlUiAuditTests'
+# Q14: QML behavior smoke suite (engine-instantiated main.qml + 10 pages;
+# suite count 12 -> 13 in the canonical gate).
+Invoke-NinjaTarget 'QmlSmokeTests'
 # Phase 66 GGEO: gizmo geometry snapshot tests + the P15.11 sidebar-hint
 # builders (buildSidebarHintVertices axis/regression coverage).
 Invoke-NinjaTarget 'GizmoGeometryTests'
@@ -674,6 +677,26 @@ if (Test-Path $uiAuditExe) {
   Write-Host "[UI] QML UI audit tests passed" -ForegroundColor Green
 } else {
   Write-Host "[UI] QmlUiAuditTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+# Q14 (2026-10-12): QML behavior smoke suite, blocking from day one. First
+# engine-instantiated QML coverage (QmlUiAuditTests is source-string locks):
+# loads the shipped qrc tree (main.qml + 10 pages) under the minimal QPA
+# platform, asserting zero QML errors, readable context properties and
+# per-page instantiation. Behavioral safety net for S1 (NOTIFY re-pointing)
+# and X2 (mass QML rewrite). Runs headless — no GPU, no window exposure.
+Write-Host "`n[QmlSmoke] Running QML behavior smoke tests..." -ForegroundColor Cyan
+$qmlSmokeExe = './QmlSmokeTests.exe'
+if (Test-Path $qmlSmokeExe) {
+  $qmlSmokeExitCode = Invoke-QtTestReport $qmlSmokeExe 'QmlSmokeTests.verify.txt'
+  if ($qmlSmokeExitCode -ne 0) {
+    Write-Host "[QmlSmoke] QML behavior smoke tests failed" -ForegroundColor Red
+    exit $qmlSmokeExitCode
+  }
+  Write-Host "[QmlSmoke] QML behavior smoke tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[QmlSmoke] QmlSmokeTests.exe not found" -ForegroundColor Red
   exit 1
 }
 

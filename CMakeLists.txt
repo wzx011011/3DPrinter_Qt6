@@ -613,6 +613,47 @@ if(BUILD_TESTING AND OWZX_QML_GUI)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # Q14 (audit 2026-10-10 ④): QML behavior smoke suite — the first engine-
+    # instantiated QML coverage (QmlUiAuditTests above is source-string locks
+    # only). Embeds the SAME qrc resources OWzxSlicer.exe ships (main.qml,
+    # 10 pages, dialogs, components/controls/panels, assets incl. fonts, the
+    # /qtquickcontrols2.conf pin and web chat assets) so the suite exercises
+    # the shipped tree, not a copy. Runs under the minimal QPA platform (no
+    # window exposure -> no scene-graph render; see tests/QmlSmokeTests.cpp
+    # header). This is the S1/X2 behavioral safety net; suite count 12 -> 13
+    # in the canonical verify.
+    qt_add_executable(QmlSmokeTests tests/QmlSmokeTests.cpp
+        src/qml_gui/qml_pages.qrc
+        src/qml_gui/qml_dialogs.qrc
+        src/qml_gui/qml_components.qrc
+        src/qml_gui/qml_assets.qrc
+        src/qml_gui/qml_web.qrc
+    )
+    target_link_libraries(QmlSmokeTests PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    # Same shared-SHA1 duplicate definitions as OWzxSlicer above (audit Q4).
+    if(MSVC)
+        target_link_options(QmlSmokeTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(QmlSmokeTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    # The test runs beside the DEPLOYED Qt6Core.dll (build/), whose relocated
+    # QLibraryInfo prefix is build/ itself — so the minimal/offscreen QPA
+    # plugins that windeployqt never deploys are invisible unless the Qt
+    # INSTALL's plugins/platforms dir is handed to the test explicitly
+    # (forward-slash path: no backslash escaping in the C++ string literal).
+    get_filename_component(_qt6_platform_plugin_dir
+        "${_qt6_bin_dir}/../plugins/platforms" ABSOLUTE)
+    target_compile_definitions(QmlSmokeTests PRIVATE
+        OWZX_QT_PLATFORM_PLUGIN_DIR="${_qt6_platform_plugin_dir}"
+    )
+    add_test(NAME QmlSmokeTests COMMAND QmlSmokeTests)
+    set_tests_properties(QmlSmokeTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+        TIMEOUT 300
+    )
+
     # Phase 58 (VERIFY-01): inventory audit harness. Encodes the 9 Phase 50
     # section 2 deterministic checks (region counts, schema, status/verification
     # enums, region-ID format, INV-02/03/04 coverage anchors, cleanup format,

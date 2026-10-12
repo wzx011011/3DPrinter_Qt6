@@ -26,9 +26,9 @@ build/
 - Do not clean or delete `build/` unless the user explicitly asks for that operation.
 - Documentation-only phases may use lightweight checks instead of a full rebuild, but must say that no full rebuild was run.
 
-## Canonical Verify Pass Criteria (Gate Truth: 12 Blocking Suites)
+## Canonical Verify Pass Criteria (Gate Truth: 13 Blocking Suites)
 
-The pass condition of `auto_verify_with_vcvars.ps1` is: **all 12 suites report
+The pass condition of `auto_verify_with_vcvars.ps1` is: **all 13 suites report
 0 failed AND the script exits 0** (each blocking suite fails the script with a
 red message and a nonzero exit). Configure, build, the app-launch liveness
 check, the conditional RenderBench stage, and the conditional slice regression
@@ -54,9 +54,12 @@ below — and on 2026-10-12 all three converted back to red-exit blocking.
 10. `AppToolTests` (blocking again 2026-10-12)
 11. `ViewportContextMenuTests` (blocking again 2026-10-12)
 12. `E2EWorkflowTests` (blocking again 2026-10-12, with the Q12 probe)
-
-The suite count grows 12 → 13 when the Q14 QML smoke suite enters the gate
-(dev plan 2026-10-10, M2) — sync this section and AGENTS.md at that point.
+13. `QmlSmokeTests` (Q14, blocking from entry 2026-10-12 — QML behavior smoke
+    suite: engine-instantiated load of the shipped qrc tree, main.qml + 10
+    pages, under the minimal QPA platform; asserts zero QML errors, readable
+    context properties, per-page instantiation. The 12 → 13 growth this
+    section anticipated happened here; S1/X2 depend on it as their behavioral
+    safety net.)
 
 ### Resolution record: import-time heap-corruption attribution (Q13, closed 2026-10-12)
 
