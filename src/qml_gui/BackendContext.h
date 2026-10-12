@@ -133,6 +133,17 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY stateChanged)
   Q_PROPERTY(bool isBusy READ isBusy NOTIFY stateChanged)
+  /// U4: aggregate "a long operation is in flight" predicate driving the
+  /// application busy cursor. Covers all four long-operation families --
+  /// slicing (slice worker), importing (load worker + the synchronous
+  /// drag-drop file parse), arranging (Slic3r::arrangement run) and exporting
+  /// (G-code export worker + the synchronous 3mf/model writes) -- plus any
+  /// beginBusyWork()/endBusyWork() scope opened by C++ or QML. The busy
+  /// override cursor is applied/removed at this single transition point
+  /// (updateGuiBusyCursor), so every success / failure / cancel / early-return
+  /// path restores the cursor by construction: they all flip the underlying
+  /// state back, and the state flip is what removes the cursor.
+  Q_PROPERTY(bool guiBusy READ guiBusy NOTIFY stateChanged)
   // Phase 51: state-dependent blocked-reason labels (mirror sliceActionLabel pattern).
   Q_PROPERTY(QString exportActionLabel READ exportActionLabel NOTIFY stateChanged)
   Q_PROPERTY(QString exportActionHint READ exportActionHint NOTIFY stateChanged)
@@ -362,6 +373,18 @@ public:
   bool canUndo() const;
   bool canRedo() const;
   bool isBusy() const;
+  /// U4: see the guiBusy Q_PROPERTY. True while any long-operation family is
+  /// in flight or a busy-work scope is open.
+  bool guiBusy() const;
+  /// U4: open a busy-work scope (reference counted). The application busy
+  /// cursor is applied while at least one scope is open OR the state-driven
+  /// long-operation families report activity. QML-side entry point for
+  /// synchronous shell operations; C++ side prefers the BusyWorkScope RAII
+  /// helper so early returns / exceptions cannot leak the scope.
+  Q_INVOKABLE void beginBusyWork();
+  /// U4: close one busy-work scope opened by beginBusyWork(). Degenerate
+  /// calls (no open scope) are a no-op, so a finally-clause cannot underflow.
+  Q_INVOKABLE void endBusyWork();
   QString exportActionLabel() const;
   QString exportActionHint() const;
   QString saveActionLabel() const;
@@ -679,6 +702,31 @@ signals:
   void updateCheckRunningChanged();
 
 private:
+  /// U4: the busy-cursor manager. guiBusyNow() recomputes the aggregate; when
+  /// it flips, updateGuiBusyCursor() applies (or removes) exactly one
+  /// QGuiApplication override cursor at this single point. No other code in
+  /// the codebase touches the override cursor.
+  //@{
+  bool guiBusyNow() const;
+  void updateGuiBusyCursor();
+  bool guiBusyActive_ = false; ///< Override cursor currently applied.
+  int busyWorkDepth_ = 0;      ///< Open beginBusyWork() scopes.
+  //@}
+  /// U4: exception-safe scope for C++-owned synchronous long operations
+  /// (openExternalGcode's GUI-thread G-code parse). Pairs
+  /// beginBusyWork()/endBusyWork() by construction, so every early return
+  /// releases the scope -- the QML finally-clause equivalent.
+  class BusyWorkScope
+  {
+  public:
+    explicit BusyWorkScope(BackendContext *ctx) : ctx_(ctx) { ctx->beginBusyWork(); }
+    ~BusyWorkScope() { ctx_->endBusyWork(); }
+    BusyWorkScope(const BusyWorkScope &) = delete;
+    BusyWorkScope &operator=(const BusyWorkScope &) = delete;
+  private:
+    BackendContext *ctx_;
+  };
+
   /// Shared async helper state for the update / host / network probes.
   QNetworkAccessManager *probeNam_ = nullptr;
   bool updateCheckRunning_ = false;

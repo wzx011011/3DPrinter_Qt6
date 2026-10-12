@@ -135,6 +135,27 @@ BackendContext::BackendContext(QObject *parent)
   connect(previewViewModel_, &PreviewViewModel::stateChanged, this, [this]() {
     emit stateChanged();
   });
+  // U4: state drivers for the central busy cursor. Direct (same-thread)
+  // connections are what make the synchronous runs work: EditorViewModel
+  // sets arranging/exporting/importing and emits stateChanged BEFORE the
+  // blocking call, so updateGuiBusyCursor applies the override cursor inline,
+  // and the matching reset after the call removes it -- pairing is linear by
+  // construction. The service signals cover the async worker families
+  // (slice / 3MF+project load / G-code export), whose terminal events
+  // (sliceFinished / sliceFailed / exportFinished / exportFailed /
+  // loadFinished success or failure) always flip the observed state back.
+  connect(editorViewModel_, &EditorViewModel::stateChanged, this,
+          &BackendContext::updateGuiBusyCursor);
+  connect(projectService_, &ProjectServiceMock::loadingChanged, this,
+          &BackendContext::updateGuiBusyCursor);
+  connect(sliceService_, &SliceService::slicingChanged, this,
+          &BackendContext::updateGuiBusyCursor);
+  connect(sliceService_, &SliceService::exportStarted, this,
+          &BackendContext::updateGuiBusyCursor);
+  connect(sliceService_, &SliceService::exportFinished, this,
+          &BackendContext::updateGuiBusyCursor);
+  connect(sliceService_, &SliceService::exportFailed, this,
+          &BackendContext::updateGuiBusyCursor);
   monitorViewModel_ = new MonitorViewModel(deviceService_, networkService_, cameraService_, this);
   configViewModel_ = new ConfigViewModel(presetService_, projectService_, this);
   // Phase 52 PREPSB-05 (CRITICAL): a real slicing config change makes any
@@ -490,6 +511,15 @@ BackendContext::BackendContext(QObject *parent)
 
 BackendContext::~BackendContext()
 {
+  // U4: release the override cursor if the app tears down mid-long-operation
+  // (shutdown during a busy scope or an in-flight worker). The aggregate may
+  // legitimately still read busy at destruction (the workers outlive the
+  // context's guards), so restore directly instead of going through
+  // updateGuiBusyCursor's transition logic.
+  if (guiBusyActive_) {
+    QGuiApplication::restoreOverrideCursor();
+    guiBusyActive_ = false;
+  }
   // Review P1-2: Qt deletes children in creation order, so ProjectServiceMock
   // (created first) would die before SliceService (created second) -- but
   // ~SliceService joins the slice worker, and that worker dereferences
@@ -513,8 +543,14 @@ bool BackendContext::openExternalGcode(const QString &filePath)
     return false;
   if (editorViewModel_)
     editorViewModel_->clearWorkspace();
-  if (!previewViewModel_->loadGCodeForPreview(filePath))
-    return false;
+  {
+    // U4: rebuildFromGCode parses the (possibly multi-hundred-MB) G-code on
+    // the GUI thread. The RAII scope applies the central busy cursor for the
+    // parse and releases it on every path -- the early return below included.
+    BusyWorkScope busyScope(this);
+    if (!previewViewModel_->loadGCodeForPreview(filePath))
+      return false;
+  }
   requestSelectTab(tpPreview());
   return true;
 }
@@ -667,6 +703,63 @@ bool BackendContext::isBusy() const
 {
   // Any blocking operation in flight: slicing or mid-load.
   return isSlicing() || (editorViewModel_ && editorViewModel_->loading());
+}
+
+// ── U4: central busy-cursor manager ──────────────────────────────────────────
+// Upstream marks long operations with wxBusyCursor / progress notifications
+// (Plater::on_action_arrange...); this codebase had no busy signal at all
+// (UX scan 2026-10-11 finding 4). One aggregate + one transition point here
+// cover all four long-operation families; EditorViewModel exposes the state
+// for its synchronous GUI-blocking runs (arrangement / export writes /
+// drag-drop file parse) because the cursor must be applied BEFORE the GUI
+// thread blocks -- a post-hoc state flip after the blocking call would never
+// be observed until the work is already done.
+
+/// U4: the long-operation aggregate. Any true term applies the busy cursor.
+bool BackendContext::guiBusyNow() const
+{
+  return busyWorkDepth_ > 0
+      || isSlicing()
+      || (editorViewModel_ && editorViewModel_->loading())
+      || (editorViewModel_ && editorViewModel_->importing())
+      || (editorViewModel_ && editorViewModel_->arranging())
+      || (editorViewModel_ && editorViewModel_->exporting())
+      || (sliceService_ && sliceService_->exportBusy());
+}
+
+/// U4: apply/remove the override cursor exactly on an aggregate transition.
+/// All state drivers (worker signals, viewmodel stateChanged umbrellas, busy
+/// scopes) funnel through here, so success, failure, cancel and early-return
+/// paths all restore the cursor by construction.
+void BackendContext::updateGuiBusyCursor()
+{
+  const bool busy = guiBusyNow();
+  if (busy == guiBusyActive_)
+    return;
+  guiBusyActive_ = busy;
+  if (busy)
+    QGuiApplication::setOverrideCursor(Qt::BusyCursor);
+  else
+    QGuiApplication::restoreOverrideCursor();
+  emit stateChanged();
+}
+
+bool BackendContext::guiBusy() const
+{
+  return guiBusyActive_;
+}
+
+void BackendContext::beginBusyWork()
+{
+  ++busyWorkDepth_;
+  updateGuiBusyCursor();
+}
+
+void BackendContext::endBusyWork()
+{
+  if (busyWorkDepth_ > 0)
+    --busyWorkDepth_;
+  updateGuiBusyCursor();
 }
 
 bool BackendContext::canImport() const

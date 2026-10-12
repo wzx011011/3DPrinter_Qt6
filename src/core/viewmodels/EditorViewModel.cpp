@@ -69,6 +69,36 @@ Slic3r::Transform3d rebuildWorldTransform(QVector3D translation,
 namespace
 {
 constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
+
+// U4: RAII scope for the synchronous GUI-blocking operation flags
+// (m_importing / m_arranging / m_exporting). The constructor flips the flag
+// and emits stateChanged -- BackendContext's direct-connection busy-cursor
+// slot runs inline and applies the override cursor BEFORE the blocking call
+// starts; the destructor resets and re-emits, so EVERY path out of the run
+// (normal return, early return, a Slic3r exception) releases the cursor.
+// No cursor code here: the pairing policy lives in BackendContext's central
+// manager; this scope only makes the state observable and exception-safe.
+class SyncBusyScope
+{
+public:
+  SyncBusyScope(EditorViewModel *vm, bool EditorViewModel::*flag)
+      : vm_(vm), flag_(flag)
+  {
+    vm_->*flag_ = true;
+    emit vm_->stateChanged();
+  }
+  ~SyncBusyScope()
+  {
+    vm_->*flag_ = false;
+    emit vm_->stateChanged();
+  }
+  SyncBusyScope(const SyncBusyScope &) = delete;
+  SyncBusyScope &operator=(const SyncBusyScope &) = delete;
+private:
+  EditorViewModel *vm_;
+  bool EditorViewModel::*flag_;
+};
+
 // Phase 129 (POLISH-01): flipped to true. Phase 121-123 shipped real PaintEngine
 // + SceneRaycaster + renderPaintOverlay; the Support/Seam/MMU paint gizmos now
 // have real triangle picking. The stale false caused gizmoStatusText to falsely
@@ -8275,6 +8305,9 @@ bool EditorViewModel::setSelectedInstanceCount(int count)
 
   const QString printableArea = QStringLiteral("0,0,%1,0,%1,%2,0,%2")
       .arg(m_bedWidth).arg(m_bedDepth);
+  // U4: re-arranging after the instance-count change is a synchronous
+  // arrangement run -- same busy scope as the toolbar arrange actions.
+  const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
   projectService_->arrangeObjects(m_arrangeDistance, m_arrangeRotation,
                                   m_arrangeAlignY, printableArea,
                                   arrangeWipeTowerContext());
@@ -8333,6 +8366,10 @@ bool EditorViewModel::fillBedWithInstances()
     return false;
 
   bool grew = false;
+  // U4: fill-bed loops synchronous arrangements until the bed is full (up to
+  // 1000 instances) -- the single longest synchronous run in the shell. One
+  // scope covers the whole loop; the guard releases it on every break.
+  const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
   while (instanceCount < 1000) {
     if (!projectService_->setObjectInstanceCount(sourceIndex, instanceCount + 1))
       break;
@@ -8440,6 +8477,10 @@ bool EditorViewModel::addFilesToContextPlate(const QStringList &filePaths)
   if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount()
       || !projectService_->setCurrentPlateIndex(m_contextPlateIndex))
     return false;
+  // U4: Slic3r::Model::read_from_file parses each dropped file synchronously
+  // on the GUI thread -- the same import family as the async load worker, so
+  // the central busy cursor must cover it too (state, not call-site cursor).
+  const SyncBusyScope busy(this, &EditorViewModel::m_importing);
   if (!projectService_->addFilesToPlate(m_contextPlateIndex, filePaths)) {
     statusText_ = projectService_->lastError();
     emit stateChanged();
@@ -8463,6 +8504,8 @@ bool EditorViewModel::addFilesToCurrentPlate(const QStringList &filePaths)
   const int plate = currentPlateIndex();
   if (plate < 0 || !projectService_->setCurrentPlateIndex(plate))
     return false;
+  // U4: same synchronous file parse as addFilesToContextPlate (drop/import).
+  const SyncBusyScope busy(this, &EditorViewModel::m_importing);
   if (!projectService_->addFilesToPlate(plate, filePaths)) {
     statusText_ = projectService_->lastError();
     emit stateChanged();
@@ -10175,9 +10218,13 @@ bool EditorViewModel::saveProjectAs(const QString &filePath) const
     return projectService_->saveProjectAs(filePath);
 }
 
-bool EditorViewModel::exportModel(const QString &filePath, const QString &format) const
+bool EditorViewModel::exportModel(const QString &filePath, const QString &format)
 {
     if (!projectService_) return false;
+    // U4: the project model write (STL/3MF/OBJ, 3mf includes per-plate
+    // thumbnails) is a synchronous GUI-thread write -- cover it with the
+    // central busy-cursor state like the async G-code export worker.
+    const SyncBusyScope busy(this, &EditorViewModel::m_exporting);
     return projectService_->exportModel(filePath, format);
 }
 
@@ -10450,6 +10497,11 @@ bool EditorViewModel::requestExportGcode3mf(const QString &targetPath)
 
   const int plate = currentPlateIndex();
   const QString gcodeSource = sliceService_->plateOutputPath(plate);
+  // U4: the sliced-file container write (G-code + 3mf, potentially hundreds
+  // of MB) runs inline on the GUI thread -- same central busy-cursor state as
+  // exportModel; the async SliceService export worker covers itself through
+  // its exportBusy() state.
+  const SyncBusyScope busy(this, &EditorViewModel::m_exporting);
   const bool ok = projectService_->exportGcode3mf(plate, localPath, gcodeSource);
   statusText_ = ok ? tr("Sliced file exported: %1").arg(QFileInfo(localPath).fileName())
                    : projectService_->lastError();
@@ -10819,8 +10871,13 @@ void EditorViewModel::arrangeAllObjects()
     const auto merged = configViewModel_->mergedConfigValues();
     printableArea = merged.value(QStringLiteral("printable_area")).toString();
   }
-  if (projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY, printableArea,
-                                      arrangeWipeTowerContext()))
+  // U4: the Slic3r::arrangement run blocks the GUI thread; the scope makes it
+  // observable for BackendContext's central busy cursor (set before the run,
+  // released on every path out).
+  const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
+  const bool arranged = projectService_->arrangeObjects(spacing, m_arrangeRotation, m_arrangeAlignY, printableArea,
+                                      arrangeWipeTowerContext());
+  if (arranged)
   {
     // Real arrange succeeded — sync transforms from model to mock arrays
     projectService_->syncTransformsFromModel();
@@ -10843,6 +10900,8 @@ bool EditorViewModel::arrangePlate(int plateIndex)
   if (configViewModel_)
     printableArea = configViewModel_->mergedConfigValues().value(QStringLiteral("printable_area")).toString();
 
+  // U4: same synchronous long run as arrangeAllObjects -- same busy scope.
+  const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
   const bool arranged = projectService_->arrangeObjects(spacing, m_arrangeRotation,
                                                          m_arrangeAlignY, printableArea,
                                                          arrangeWipeTowerContext());

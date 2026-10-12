@@ -82,6 +82,25 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
+  /// U4: true while the synchronous drag-drop file parse (addFilesToCurrentPlate
+  /// -> Slic3r::Model::read_from_file) blocks the GUI thread. BackendContext's
+  /// central busy-cursor manager reads this through its direct stateChanged
+  /// connection: set before the parse, reset after, so the override cursor is
+  /// applied while the GUI thread is inside the blocking read. Rides the
+  /// stateChanged umbrella like every other property here (no new signal
+  /// channel; S1 signal-cluster split will carry it along).
+  Q_PROPERTY(bool importing READ importing NOTIFY stateChanged)
+  /// U4: true while the synchronous arrangement (arrangeAllObjects /
+  /// arrangePlate) blocks the GUI thread inside Slic3r::arrangement. Same
+  /// mechanism and pairing guarantee as importing: set immediately before the
+  /// blocking run, reset immediately after, so every path (success, no-op,
+  /// failure) releases the busy cursor.
+  Q_PROPERTY(bool arranging READ arranging NOTIFY stateChanged)
+  /// U4: true while a synchronous export write (exportModel -> project model
+  /// write, requestExportGcode3mf -> project 3mf write) blocks the GUI thread.
+  /// The async G-code export worker state is SliceService::exportBusy; this
+  /// flag covers the inline writes that never reach a worker.
+  Q_PROPERTY(bool exporting READ exporting NOTIFY stateChanged)
   Q_PROPERTY(bool showAllObjects READ showAllObjects NOTIFY stateChanged)
   Q_PROPERTY(int objectOrganizeMode READ objectOrganizeMode NOTIFY stateChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY stateChanged)
@@ -267,6 +286,12 @@ public:
   QString statusText() const;
   int loadProgress() const;
   bool loading() const;
+  /// U4: synchronous GUI-blocking operation states (see the Q_PROPERTYs).
+  //@{
+  bool importing() const { return m_importing; }
+  bool arranging() const { return m_arranging; }
+  bool exporting() const { return m_exporting; }
+  //@}
   bool showAllObjects() const;
   bool showLabels() const;
   int objectOrganizeMode() const;
@@ -1612,7 +1637,10 @@ public:
   Q_INVOKABLE void requestSliceAll();
   // v2.4 IO: 项目保存/导出转发（EditorVM 持有 projectService_）
   Q_INVOKABLE bool saveProjectAs(const QString &filePath) const;
-  Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format) const;
+  /// U4: dropped const -- the method now flips m_exporting (observable busy
+  /// state for BackendContext's central busy cursor) around the synchronous
+  /// project model write. Q_INVOKABLE signature is unchanged for QML/tests.
+  Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format);
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
   Q_INVOKABLE bool requestExportGCode(const QString &targetPath);
@@ -2168,6 +2196,16 @@ private:
   /// Phase 239 (ENGN-02): the current preview entry reused the previous
   /// G-code; cleared by the slice-result invalidation set.
   bool m_previewReusedPreviousGcode = false;
+  // U4: synchronous GUI-blocking operation states (importing / arranging /
+  // exporting Q_PROPERTYs). Each is set true immediately before the blocking
+  // run and false immediately after, so BackendContext's direct-connection
+  // busy-cursor slot applies the override cursor BEFORE the GUI thread blocks
+  // and releases it on every linear path (success / failure / early return).
+  //@{
+  bool m_importing = false;
+  bool m_arranging = false;
+  bool m_exporting = false;
+  //@}
   // Viewport warnings (对齐上游 EWarning)
   int m_viewportWarning = 0;    ///< 0=none, 1=ObjectOutside, 2=ObjectClashed
   QString m_viewportWarningMessage;
