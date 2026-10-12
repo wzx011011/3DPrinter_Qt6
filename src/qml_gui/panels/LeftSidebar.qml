@@ -199,13 +199,17 @@ Rectangle {
 
         // Bed-type dropdown row under the printer preset row (reference
         // image). Upstream semantics: the printer section carries a
-        // bed-surface card whose combo is bound to the global curr_bed_type
-        // (Plater.cpp:2716-2786, reset_bed_type_combox_choices). The compact
-        // single-line design renders it as a plain 30px dropdown row.
-        // TODO: the selection below is display-only -- no QML-facing global
-        // curr_bed_type getter/setter exists yet (ConfigViewModel has no
-        // currentBedType property and EditorViewModel::setPlateBedType is
-        // per-plate, not the upstream global default).
+        // bed-surface card whose combo drives curr_bed_type
+        // (Plater.cpp:2716-2786 reset_bed_type_combox_choices; the selection
+        // handler at :12109-12140 writes the project config and invalidates
+        // slice results). Q11-④: the combo is real now — bound to the current
+        // plate's curr_bed_type through the same EditorViewModel accessors
+        // the plate-settings dialog uses (PreparePage PlateSettingsDialog):
+        // setPlateBedType syncs the plate DynamicPrintConfig the slicer
+        // consumes (ProjectServiceMock::setPlateBedType) and invalidates the
+        // plate's slice result. Indices mirror the libslic3r BedType enum
+        // (0 = btDefault = follow the project/preset default), so the labels
+        // line up 1:1 with the upstream enum_labels order.
         Rectangle {
             id: printerBedTypeRow
             Layout.fillWidth: true
@@ -243,19 +247,36 @@ Rectangle {
                 }
 
                 CxComboBox {
+                    id: bedTypeCombo
                     Layout.fillWidth: true
                     Layout.preferredHeight: 30
                     font.pixelSize: Theme.fontSizeSM
-                    // Labels come from the previously dead bedTypeName()
-                    // helper (same file, function section).
+                    // Same label set (and index semantics) as PreparePage's
+                    // plate-settings bed combo: 0 = 跟随全局 (btDefault),
+                    // 1..7 = the Slic3r BedType values.
                     model: [
-                        root.bedTypeName(0),
-                        root.bedTypeName(1),
-                        root.bedTypeName(2),
-                        root.bedTypeName(3),
-                        root.bedTypeName(4)
+                        qsTr("跟随全局"),
+                        qsTr("光滑 PEI"),
+                        qsTr("高温 PEI"),
+                        qsTr("纹理 PEI"),
+                        qsTr("PC 热床"),
+                        qsTr("EP 热床"),
+                        qsTr("环氧树脂板"),
+                        qsTr("自定义")
                     ]
-                    currentIndex: 0
+                    enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
+                    currentIndex: root.editorVm ? root.editorVm.currentPlateBedType : 0
+                    onActivated: function(index) {
+                        if (root.editorVm && root.editorVm.currentPlateIndex >= 0)
+                            root.editorVm.setPlateBedType(root.editorVm.currentPlateIndex, index)
+                    }
+                    // Honest scope disclosure: this writes the current
+                    // plate's curr_bed_type (the slice-effective value), not
+                    // an app-wide override.
+                    ToolTip.visible: bedTypeComboHover.hovered
+                    ToolTip.text: qsTr("作用于当前盘的 curr_bed_type（切片实际消费）；0 = 跟随全局默认")
+                    ToolTip.delay: 400
+                    HoverHandler { id: bedTypeComboHover }
                 }
             }
         }
@@ -1009,13 +1030,6 @@ Rectangle {
                 }
             }
         }
-    }
-
-    function bedTypeName(index) {
-        var names = [qsTr("PEI"), qsTr("EP"), qsTr("PC"), qsTr("纹理 PEI"), qsTr("自定义")]
-        if (index >= 0 && index < names.length)
-            return names[index]
-        return names[0]
     }
 
     // Filament slot compatibility (G-07): index into configVm

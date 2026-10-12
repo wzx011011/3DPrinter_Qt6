@@ -1158,7 +1158,6 @@ ApplicationWindow {
         }
         function onShowAMSSettingsDialogRequested() { amsSettingsDialog.open() }
         function onShowFirmwareDialogRequested() { firmwareDialog.open() }
-        function onShowSpeedLimitDialogRequested() { speedLimitDialog.open() }
         function onShowWipeTowerDialogRequested() { wipeTowerDialog.open() }
         function onShowPrintHostDialogRequested() { printHostDialog.open() }
         function onShowPluginManagerDialogRequested() { pluginManagerDialog.open() }
@@ -1210,9 +1209,6 @@ ApplicationWindow {
 
     // P8.5 — Firmware dialog
     FirmwareDialog { id: firmwareDialog }
-
-    // P8.6a — Speed limit dialog
-    SpeedLimitDialog { id: speedLimitDialog }
 
     // P8.6b — Wipe tower dialog
     WipeTowerDialog { id: wipeTowerDialog }

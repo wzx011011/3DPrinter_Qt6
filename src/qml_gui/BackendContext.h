@@ -186,8 +186,10 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QString latencyBrief READ latencyBrief NOTIFY latencyChanged)
   Q_PROPERTY(QString lastLatencyOperation READ lastLatencyOperation NOTIFY latencyChanged)
   Q_PROPERTY(int lastLatencyMs READ lastLatencyMs NOTIFY latencyChanged)
-  // Theme and scaling properties exposed to QML.
-  Q_PROPERTY(double uiScale READ uiScale NOTIFY uiScaleChanged)
+  // Theme properties exposed to QML. (UI scaling is not a QML-readable
+  // property: QT_SCALE_FACTOR is consumed at QGuiApplication construction,
+  // so the preference persists the pre-launch ui/scaleFactor key instead —
+  // see applyUiScale.)
   Q_PROPERTY(QColor bgColor READ bgColor NOTIFY themeChanged)
   Q_PROPERTY(QColor surfaceColor READ surfaceColor NOTIFY themeChanged)
   Q_PROPERTY(QColor sidebarColor READ sidebarColor NOTIFY themeChanged)
@@ -391,7 +393,6 @@ public:
   QString saveActionHint() const;
   /// Set current Plater canvas mode and emit currentViewModeChanged.
   void setCurrentViewMode(int mode);
-  double uiScale() const { return m_uiScale; }
   QColor bgColor() const { return m_bgColor; }
   QColor surfaceColor() const { return m_surfaceColor; }
   QColor sidebarColor() const { return m_sidebarColor; }
@@ -526,8 +527,6 @@ public:
   Q_INVOKABLE void showAMSSettingsDialog();
   /// Request a QML-owned dialog or workflow surface.
   Q_INVOKABLE void showFirmwareDialog();
-  /// Request a QML-owned dialog or workflow surface.
-  Q_INVOKABLE void showSpeedLimitDialog();
   /// Upstream-aligned QML API.
   Q_INVOKABLE void showWipeTowerDialog();
   /// Request a QML-owned dialog or workflow surface.
@@ -656,7 +655,6 @@ signals:
   void sidebarDockAreaChanged();
   void errorChanged();
   void latencyChanged();
-  void uiScaleChanged();
   void themeChanged();
   void languageChanged();
   void displayProjectTitleChanged();
@@ -675,7 +673,6 @@ signals:
   void showEditGCodeDialogRequested(const QString &key, const QString &value);
   void showAMSSettingsDialogRequested();
   void showFirmwareDialogRequested();
-  void showSpeedLimitDialogRequested();
   void showWipeTowerDialogRequested();
   void showPrintHostDialogRequested();
   void showPluginManagerDialogRequested();
@@ -889,7 +886,6 @@ private:
 
   // Appearance state.
   QTranslator *m_translator = nullptr;
-  double m_uiScale = 1.0;
   QColor m_bgColor{"#0d0f12"};
   QColor m_surfaceColor{"#0f1217"};
   QColor m_sidebarColor{"#0f1218"};
@@ -948,5 +944,9 @@ private:
   void applyTheme(int idx);
   void applyLanguage(int idx);
   void applyFontSize(int size);
+  /// Persists the UI-scale preset to the pre-launch "ui/scaleFactor" key of
+  /// the dedicated "OWzx/UI" store — the same key main() maps onto
+  /// QT_SCALE_FACTOR before QGuiApplication is constructed (main_qml.cpp),
+  /// so the change takes effect at next startup.
   void applyUiScale(int idx);
 };

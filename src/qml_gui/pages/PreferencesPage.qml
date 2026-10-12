@@ -14,6 +14,17 @@ Item {
         id: aboutDlg
     }
 
+    // Q11-⑤: single source of truth for shortcut documentation. The
+    // KBShortcutsDialog data tables (aligned with main.qml's real Shortcut
+    // registrations and upstream KBShortcutsDialog.cpp pages) are rendered
+    // by the dialog itself and by the shortcuts preference page below — no
+    // second hand-copied table exists. This invisible instance is that data
+    // source; it is never opened from here.
+    KBShortcutsDialog {
+        id: shortcutsCatalog
+        visible: false
+    }
+
     // 切换到《关于》分类时自动弹出
     Connections {
         target: root.settingsVm
@@ -441,75 +452,57 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("以下为当前版本支持的快捷键列表。部分快捷键仅在特定页面生效。")
+                        text: qsTr("快捷键列表与《键盘快捷键》总览对话框同源渲染；部分快捷键仅在特定页面生效。")
                         color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS; wrapMode: Text.Wrap
                         Layout.preferredWidth: 500
                         Layout.bottomMargin: 8
                     }
 
-                    // Shortcut table header
-                    Rectangle {
-                        Layout.fillWidth: true; height: 28; radius: 4; color: Theme.bgPanel
-                        Row {
-                            anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                            spacing: 8
-                            Text { text: qsTr("功能"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true; width: 160 }
-                            Text { text: qsTr("快捷键"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true; width: 120 }
-                            Text { text: qsTr("页面"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
-                        }
-                    }
-
+                    // Q11-⑤: rendered from the KBShortcutsDialog data source
+                    // (shortcutsCatalog above) — the single truth that also
+                    // feeds the Help-menu dialog and mirrors main.qml's real
+                    // Shortcut registrations. The previous hand-copied table
+                    // contradicted the actual keymap in several rows (W/E/R
+                    // gizmo keys, Ctrl+Shift+X cut, Ctrl+D "clone" vs the real
+                    // Delete all) and drifted every time a binding changed.
                     Repeater {
-                        model: [
-                            { action: qsTr("新建项目"), key: "Ctrl+N", scope: qsTr("全局") },
-                            { action: qsTr("打开项目"), key: "Ctrl+O", scope: qsTr("全局") },
-                            { action: qsTr("保存项目"), key: "Ctrl+S", scope: qsTr("全局") },
-                            { action: qsTr("另存为"), key: "Ctrl+Shift+S", scope: qsTr("全局") },
-                            { action: qsTr("撤销"), key: "Ctrl+Z", scope: qsTr("全局") },
-                            { action: qsTr("重做"), key: "Ctrl+Y", scope: qsTr("全局") },
-                            { action: qsTr("删除选中"), key: "Delete", scope: qsTr("准备") },
-                            { action: qsTr("全选"), key: "Ctrl+A", scope: qsTr("准备") },
-                            { action: qsTr("取消选择"), key: "Escape", scope: qsTr("准备") },
-                            { action: qsTr("复制"), key: "Ctrl+C", scope: qsTr("准备") },
-                            { action: qsTr("粘贴"), key: "Ctrl+V", scope: qsTr("准备") },
-                            { action: qsTr("剪切"), key: "Ctrl+X", scope: qsTr("准备") },
-                            { action: qsTr("克隆选中"), key: "Ctrl+D", scope: qsTr("准备") },
-                            { action: qsTr("搜索设置"), key: "Ctrl+F", scope: qsTr("设置") },
-                            { action: qsTr("偏好设置"), key: "Ctrl+P", scope: qsTr("全局") },
-                            { action: qsTr("移动模式"), key: "W", scope: qsTr("准备") },
-                            { action: qsTr("旋转模式"), key: "E", scope: qsTr("准备") },
-                            { action: qsTr("缩放模式"), key: "R", scope: qsTr("准备") },
-                            { action: qsTr("平放"), key: "G", scope: qsTr("准备") },
-                            { action: qsTr("切割"), key: "Ctrl+Shift+X", scope: qsTr("准备") },
-                            { action: qsTr("适应视图"), key: "F", scope: qsTr("准备") },
-                            { action: qsTr("俯视"), key: "Ctrl+0", scope: qsTr("准备/预览") },
-                            { action: qsTr("前视"), key: "Ctrl+1", scope: qsTr("准备/预览") },
-                            { action: qsTr("右视"), key: "Ctrl+3", scope: qsTr("准备/预览") },
-                            { action: qsTr("等轴视"), key: "Ctrl+6", scope: qsTr("准备/预览") },
-                            { action: qsTr("测量"), key: "Ctrl+U", scope: qsTr("准备") },
-                            { action: qsTr("播放/暂停"), key: "Space", scope: qsTr("预览") },
-                            { action: qsTr("跳转前100步"), key: "←", scope: qsTr("预览") },
-                            { action: qsTr("跳转后100步"), key: "→", scope: qsTr("预览") },
-                            { action: qsTr("跳到开头"), key: "Home", scope: qsTr("预览") },
-                            { action: qsTr("跳到结尾"), key: "End", scope: qsTr("预览") }
-                        ]
-                        delegate: Rectangle {
+                        model: shortcutsCatalog.groups
+                        delegate: ColumnLayout {
+                            id: groupSection
                             required property var modelData
                             required property int index
-                            Layout.fillWidth: true; height: 30; radius: 3
-                            color: index % 2 === 0 ? Theme.bgInset : "transparent"
+                            Layout.fillWidth: true; spacing: 4
 
-                            Row {
-                                anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
-                                spacing: 8
-                                Text { text: modelData.action; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM; width: 160 }
-                                Rectangle {
-                                    width: modelData.key.length * 8 + 12; height: 20; radius: 3
-                                    color: Theme.scrollBarTrackColor; border.color: Theme.bgHover; border.width: 1
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    Text { anchors.centerIn: parent; text: modelData.key; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeXS; font.family: "monospace" }
+                            Text {
+                                text: qsTr("%1 快捷键").arg(groupSection.modelData.name)
+                                color: Theme.textMuted; font.pixelSize: Theme.fontSizeSM; font.bold: true
+                                Layout.topMargin: index === 0 ? 0 : 8
+                            }
+
+                            Repeater {
+                                model: shortcutsCatalog.shortcutsForGroup(groupSection.modelData.id)
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    Layout.fillWidth: true; height: 26; radius: 3
+                                    color: index % 2 === 0 ? Theme.bgInset : "transparent"
+
+                                    Row {
+                                        anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12
+                                        spacing: 16
+                                        Text {
+                                            width: 180; elide: Text.ElideRight
+                                            text: modelData.key
+                                            color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSizeXS; font.family: "monospace"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Text {
+                                            text: modelData.desc
+                                            color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
                                 }
-                                Text { text: modelData.scope; color: Theme.textTertiary; font.pixelSize: Theme.fontSizeXS }
                             }
                         }
                     }
@@ -730,12 +723,14 @@ Item {
                     Layout.fillWidth: true; spacing: 16
 
                     // Phase 236 (DLG-01): dialog launchers that upstream hosts
-                    // in Preferences (AMS / Firmware / SpeedLimit / Plugin
-                    // Manager / Lite Mode). Each opens the already-instantiated
-                    // main.qml or page-local dialog via the BackendContext
-                    // request signals. NetworkTestDialog drives the real
-                    // backend probe; FirmwareDialog discloses that OTA is not
-                    // integrated instead of simulating an update.
+                    // in Preferences (AMS / Firmware / Plugin Manager / Lite
+                    // Mode). Each opens the already-instantiated main.qml or
+                    // page-local dialog via the BackendContext request
+                    // signals. NetworkTestDialog drives the real backend
+                    // probe; FirmwareDialog discloses that OTA is not
+                    // integrated instead of simulating an update. (Q11-③:
+                    // the SpeedLimit launcher is gone with the pure-mock
+                    // SpeedLimitDialog.)
                     Text {
                         text: qsTr("工具与设备对话框")
                         color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
@@ -750,10 +745,6 @@ Item {
                         CxButton {
                             text: qsTr("固件…")
                             onClicked: backend.showFirmwareDialog()
-                        }
-                        CxButton {
-                            text: qsTr("速度限制…")
-                            onClicked: backend.showSpeedLimitDialog()
                         }
                         CxButton {
                             text: qsTr("插件管理…")

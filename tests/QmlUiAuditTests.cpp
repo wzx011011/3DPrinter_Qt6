@@ -1361,8 +1361,10 @@ void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
            "Prepare export dialog must be guarded by EditorViewModel::canExportGCode");
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.requestExportGCode(\"\"")),
            "Prepare export guard must route blocked attempts through the backend for a reason");
-  QVERIFY2(preparePage.contains(QStringLiteral("plateSliceResultStatus(index)")),
-           "Prepare plate cards must render explicit valid/stale/missing result status");
+  // Q11-⑦: the former "plateSliceResultStatus(index)" pin died with the
+  // bottom plate bar (its cards were the only per-plate status surface);
+  // the C++ invalidation checks in EditorViewModel keep guarding stale
+  // results regardless of the removed display.
 }
 
 void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
@@ -3681,9 +3683,10 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
   QVERIFY2(!preparePage.contains(QStringLiteral("canAddPlate()"))
                && !glToolbars.contains(QStringLiteral("canAddPlate()")),
            "QML must bind canAddPlate as a NOTIFY property, not call it as a function");
-  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.canAddPlate"))
-               && glToolbars.contains(QStringLiteral("root.editorVm.canAddPlate")),
-           "Prepare plate controls must bind to EditorViewModel::canAddPlate");
+  // Q11-⑦: the bottom plate bar is gone; the GLToolbars add-plate button is
+  // the surviving carrier of the canAddPlate gate.
+  QVERIFY2(glToolbars.contains(QStringLiteral("root.editorVm.canAddPlate")),
+           "Prepare plate controls must bind to EditorViewModel::canAddPlate (GLToolbars carrier)");
 
   QVERIFY2(!preparePage.contains(QStringLiteral("canActivateGizmo("))
                && !glToolbars.contains(QStringLiteral("canActivateGizmo(")),
@@ -3743,17 +3746,16 @@ void QmlUiAuditTests::prepareWorkflowPanelsMatchRestorationContract()
   QVERIFY2(!glToolbars.contains(QStringLiteral("text: \">>\"")),
            "Viewport overlays must not expose the legacy floating >> Slice affordance");
 
-  const QStringList plateStripTokens = {
-    QStringLiteral("height: 44"),
-    QStringLiteral("width: 86"),
-    QStringLiteral("plateStateText"),
-    QStringLiteral("sliceResultStatus === 1"),
-    QStringLiteral("sliceResultStatus === 2"),
-    QStringLiteral("root.editorVm.canAddPlate")
-  };
-  for (const QString &token : plateStripTokens) {
-    QVERIFY2(preparePage.contains(token),
-             qPrintable(QStringLiteral("Prepare plate strip must preserve Phase 76 compact/state contract token: %1").arg(token)));
+  // Q11-⑦: the bottom plate bar (Phase 76 compact strip) stays deleted. It
+  // was judged off-design by the layout-5 pass, then resurrected verbatim
+  // in 2026-09-24 solely to satisfy the former Phase 76 string locks
+  // (height 44 / width 86 / plateStateText / sliceResultStatus pins) — the
+  // deadlock this audit names. Per AGENTS.md the off-design strip is
+  // removed together with its locks; it must not return.
+  for (const QString &token : {QStringLiteral("id: plateBar"),
+                               QStringLiteral("plateStateText")}) {
+    QVERIFY2(!preparePage.contains(token),
+             qPrintable(QStringLiteral("Prepare plate strip must stay deleted: %1").arg(token)));
   }
 }
 
@@ -3896,9 +3898,11 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QStringLiteral("readonly property bool visualCompareActive"),
     QStringLiteral("readonly property int targetViewportTopInset: 58"),
     QStringLiteral("readonly property int targetViewportBottomInset: 50"),
-    QStringLiteral("id: prepareVisualStatusPill"),
-    QStringLiteral("anchors.bottomMargin: root.targetViewportBottomInset"),
     QStringLiteral("function thumbnailSource(data)")
+    // Q11-⑦: the former "id: prepareVisualStatusPill" and
+    // "anchors.bottomMargin: root.targetViewportBottomInset" tokens died
+    // with the bottom plate bar (prepareVisualStatusPill only existed
+    // inside that strip; the object info bar keeps its own margin).
   };
   for (const QString &token : prepareTokens) {
     QVERIFY2(preparePage.contains(token),
@@ -4067,7 +4071,7 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
     QStringLiteral("DockableSidebar {"),
     QStringLiteral("GLViewport {"),
     QStringLiteral("GLToolbars {"),
-    QStringLiteral("id: plateBar"),
+    // Q11-⑦: "id: plateBar" left the list with the removed bottom plate bar.
     QStringLiteral("id: transformMiniPanel")
   };
   for (const QString &token : restoredStructureTokens) {
@@ -4117,19 +4121,14 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
            "CxTextArea must not attach ScrollBar.vertical directly to TextArea; Qt only accepts Flickable/ScrollView targets");
   QVERIFY2(!dockableSidebar.contains(QStringLiteral("anchors.right: dragHandle.left")),
            "DockableSidebar titleBar must not anchor to dragHandle because it is not a sibling");
-  const int plateBarStart = preparePage.indexOf(QStringLiteral("id: plateBar"));
+  // Q11-⑦: the plateBar half of this overlay audit died with the removed
+  // bottom plate bar; the object info bar keeps the viewportArea reparent
+  // guard on its own.
   const int objectInfoStart = preparePage.indexOf(QStringLiteral("id: objectInfoBar"));
-  QVERIFY2(plateBarStart >= 0 && objectInfoStart > plateBarStart,
-           "PreparePage must keep plateBar before objectInfoBar for the final overlay audit");
-  const QString plateBarBlock = preparePage.mid(plateBarStart, objectInfoStart - plateBarStart);
+  QVERIFY2(objectInfoStart >= 0,
+           "PreparePage must keep the object info bar overlay");
   const QString objectInfoBlock = preparePage.mid(objectInfoStart, 700);
-  QVERIFY2(plateBarBlock.contains(QStringLiteral("parent: viewportArea"))
-              && plateBarBlock.contains(QStringLiteral("anchors.bottom: parent.bottom"))
-              && plateBarBlock.contains(QStringLiteral("anchors.left: parent.left"))
-              && plateBarBlock.contains(QStringLiteral("anchors.right: parent.right"))
-              && !plateBarBlock.contains(QStringLiteral("anchors.left: viewportArea.left"))
-              && !plateBarBlock.contains(QStringLiteral("anchors.right: viewportArea.right"))
-              && objectInfoBlock.contains(QStringLiteral("parent: viewportArea"))
+  QVERIFY2(objectInfoBlock.contains(QStringLiteral("parent: viewportArea"))
               && objectInfoBlock.contains(QStringLiteral("anchors.bottom: parent.bottom"))
               && objectInfoBlock.contains(QStringLiteral("anchors.left: parent.left"))
               && !objectInfoBlock.contains(QStringLiteral("anchors.left: viewportArea.left")),
@@ -8245,14 +8244,14 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
 
-  // PLATE-02: drag-reorder wiring + EditorViewModel movePlate proxy.
-  QVERIFY2(preparePage.contains(QStringLiteral("DropArea {"))
-           && preparePage.contains(QStringLiteral("\"plate-drag\"")),
-           "PLATE-02: PreparePage must have a DropArea keyed plate-drag for drag-reorder");
-  QVERIFY2(preparePage.contains(QStringLiteral("draggedPlateIndex")),
-           "PLATE-02: PreparePage must stash the source plate index during a plate drag");
-  QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.movePlate(")),
-           "PLATE-02: PreparePage must call editorVm.movePlate on plate-drag drop");
+  // PLATE-02: EditorViewModel movePlate proxy. Q11-⑦ removed the bottom
+  // plate bar, whose card DropAreas were the drag-reorder UI (plate-drag
+  // key / draggedPlateIndex stash); the plate context menus carry the
+  // surviving movePlate surface (move-to-plate + reorder actions), so the
+  // proxy stays anchored through that carrier.
+  const QString plateContextMenus = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
+  QVERIFY2(plateContextMenus.contains(QStringLiteral("root.editorVm.movePlate(")),
+           "PLATE-02: PrepareContextMenus must call editorVm.movePlate (plate-bar carrier removed by Q11-⑦)");
   QVERIFY2(evmH.contains(QStringLiteral("Q_INVOKABLE bool movePlate(int oldIndex, int newIndex)")),
            "PLATE-02: EditorViewModel must expose movePlate Q_INVOKABLE");
   QVERIFY2(evm.contains(QStringLiteral("projectService_->movePlate(oldIndex, newIndex)")),
@@ -8376,9 +8375,9 @@ void QmlUiAuditTests::v50RegressionLocked()
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
            "REGRESS-04/WS4: comparePresets primitive must stay present");
 
-  // -- v5.0 WS5 (PartPlate) anchor: drag-reorder + staging buffers.
-  QVERIFY2(preparePage.contains(QStringLiteral("\"plate-drag\"")),
-           "REGRESS-04/WS5: PreparePage must keep the plate-drag DropArea (drag-reorder)");
+  // -- v5.0 WS5 (PartPlate) anchor: staging buffers. (Q11-⑦ removed the
+  // bottom plate bar whose card DropAreas carried the plate-drag reorder;
+  // the movePlate surface lives on the plate context menus now.)
   QVERIFY2(readSource(QStringLiteral("src/core/services/ProjectServiceMock.h")).contains(QStringLiteral("pendingPlateThumbnails_")),
            "REGRESS-04/WS5: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
 
@@ -8804,8 +8803,6 @@ void QmlUiAuditTests::v51RegressionLocked()
            "REGRESS-05/v5.0: PresetServiceMock must keep exportBundleIni (.ini interop)");
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
            "REGRESS-05/v5.0: comparePresets primitive must stay present");
-  QVERIFY2(preparePage.contains(QStringLiteral("\"plate-drag\"")),
-           "REGRESS-05/v5.0: PreparePage must keep the plate-drag DropArea (drag-reorder)");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateThumbnails_")),
            "REGRESS-05/v5.0: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
 
@@ -10529,7 +10526,6 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("AccessCodeInputDialog.qml"), QStringLiteral("accessCodeDialog.open()")},
       {QStringLiteral("AMSSettingsDialog.qml"), QStringLiteral("showAMSSettingsDialog()")},
       {QStringLiteral("FirmwareDialog.qml"), QStringLiteral("showFirmwareDialog()")},
-      {QStringLiteral("SpeedLimitDialog.qml"), QStringLiteral("showSpeedLimitDialog()")},
       {QStringLiteral("WipeTowerDialog.qml"), QStringLiteral("showWipeTowerDialog()")},
       {QStringLiteral("PrintHostDialog.qml"), QStringLiteral("showPrintHostDialog()")},
       {QStringLiteral("PluginManagerDialog.qml"), QStringLiteral("showPluginManagerDialog()")},
@@ -10603,7 +10599,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
   const QStringList emitters = {
       QStringLiteral("showBedShapeDialog"),     QStringLiteral("showEditGCodeDialog"),
       QStringLiteral("showAMSSettingsDialog"),  QStringLiteral("showFirmwareDialog"),
-      QStringLiteral("showSpeedLimitDialog"),   QStringLiteral("showWipeTowerDialog"),
+      QStringLiteral("showWipeTowerDialog"),
       QStringLiteral("showPrintHostDialog"),    QStringLiteral("showPluginManagerDialog"),
       QStringLiteral("showEnableLiteModeDialog"),
       QStringLiteral("showExportPresetBundleDialog"),
@@ -11642,9 +11638,12 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
 // real, backend-anchored behaviors.
 //   - BBLTopbar Help menu matches upstream generate_help_menu
 //     (MainFrame.cpp:2136-2173) with zero disabled entries.
-//   - NetworkTestDialog / PrintHostDialog / SpeedLimitDialog buttons call
-//     BackendContext probes or mutate their models (no enabled:false stubs,
-//     no Mock-only handlers).
+//   - NetworkTestDialog / PrintHostDialog buttons call BackendContext probes
+//     or mutate their models (no enabled:false stubs, no Mock-only handlers).
+//   - SpeedLimitDialog stays deleted (Q11-③: it was a pure mock -- hardcoded
+//     rows, handler-less reset, non-persisting OK -- so the fake entry was
+//     taken down instead of pretending; rebuilt only on the X1 real send
+//     chain per docs/代码债与架构审计_2026-10-10.md X1(d)).
 //   - PreferencesPage "check now" drives backend.checkForUpdates.
 void QmlUiAuditTests::deadControlEliminationAudit()
 {
@@ -11654,16 +11653,16 @@ void QmlUiAuditTests::deadControlEliminationAudit()
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString networkDlg = readSource(QStringLiteral("src/qml_gui/dialogs/NetworkTestDialog.qml"));
   const QString printHostDlg = readSource(QStringLiteral("src/qml_gui/dialogs/PrintHostDialog.qml"));
-  const QString speedDlg = readSource(QStringLiteral("src/qml_gui/dialogs/SpeedLimitDialog.qml"));
   const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString qrcSources = qmlQrcSources();
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
   QVERIFY2(!backendH.isEmpty(), "Unable to read BackendContext.h");
   QVERIFY2(!backendCpp.isEmpty(), "Unable to read BackendContext.cpp");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!networkDlg.isEmpty(), "Unable to read NetworkTestDialog.qml");
   QVERIFY2(!printHostDlg.isEmpty(), "Unable to read PrintHostDialog.qml");
-  QVERIFY2(!speedDlg.isEmpty(), "Unable to read SpeedLimitDialog.qml");
   QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!qrcSources.isEmpty(), "Unable to read the qml qrc sources");
 
   // Help menu: upstream item set, no Documentation/Check-for-Updates stubs.
   QVERIFY2(!topbar.contains(QStringLiteral("Documentation")),
@@ -11703,11 +11702,20 @@ void QmlUiAuditTests::deadControlEliminationAudit()
   QVERIFY2(printHostDlg.contains(QStringLiteral("testPrintHost"))
                && printHostDlg.contains(QStringLiteral("onPrintHostTestFinished")),
            "PRINTHOST: test button must drive the backend host probe");
-  QVERIFY2(!speedDlg.contains(QStringLiteral("Mock: remove item")),
-           "SPEEDLIMIT: row remove must splice the model");
-  QVERIFY2(speedDlg.contains(QStringLiteral("rows.push("))
-               && speedDlg.contains(QStringLiteral("rows.splice(")),
-           "SPEEDLIMIT: add/remove must mutate limitItems");
+
+  // Q11-③: SpeedLimitDialog was pure mock (hardcoded rows, handler-less
+  // reset, non-persisting OK). The component stays deleted with zero
+  // consumers -- no qrc registration, no topbar entry, no backend emitter,
+  // no command-palette route. It returns only with the X1 real send chain.
+  QVERIFY2(!qrcSources.contains(QStringLiteral("SpeedLimitDialog")),
+           "SPEEDLIMIT: SpeedLimitDialog must stay unregistered in the qrc");
+  QVERIFY2(!topbar.contains(QStringLiteral("showSpeedLimitDialog"))
+               && !topbar.contains(QStringLiteral("速度限制")),
+           "SPEEDLIMIT: the topbar Tools menu must not carry the mock speed-limit entry");
+  QVERIFY2(!backendH.contains(QStringLiteral("showSpeedLimitDialog"))
+               && !backendCpp.contains(QStringLiteral("showSpeedLimitDialog"))
+               && !mainQml.contains(QStringLiteral("SpeedLimitDialog")),
+           "SPEEDLIMIT: backend emitter and main.qml wiring must stay deleted");
 
   // Wave 6 local-only preferences use a real staged Apply/Cancel transaction.
   // Real integrations stay wired (the update check drives the real release

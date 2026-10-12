@@ -44,6 +44,7 @@
 #include <QJsonObject>
 #include <QDesktopServices>
 #include <QHostInfo>
+#include <QSettings>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -444,6 +445,10 @@ BackendContext::BackendContext(QObject *parent)
   // applyLanguage 只连接到 languageIndexChanged 信号，而构造时 m_languageIndex
   // 默认已是 0 不会触发信号，导致程序以英文启动。此处补上初始调用。
   applyLanguage(settingsViewModel_->languageIndex());
+  // Q11-① 初始同步：把持久化的 uiScaleIndex 镜像到 pre-launch 的
+  // ui/scaleFactor 真键——旧版本只写过 SettingsViewModel 的 index，
+  // 从未写真键；补写后主程序下次启动才消费得到已选缩放。
+  applyUiScale(settingsViewModel_->uiScaleIndex());
 
   // 同步撤销栈上限设置到 UndoRedoManager（对齐上游 UndoRedo::UndoRedoStackLimit）
   connect(settingsViewModel_, &SettingsViewModel::settingsChanged, this,
@@ -1031,11 +1036,6 @@ void BackendContext::showAMSSettingsDialog()
 void BackendContext::showFirmwareDialog()
 {
   emit showFirmwareDialogRequested();
-}
-
-void BackendContext::showSpeedLimitDialog()
-{
-  emit showSpeedLimitDialogRequested();
 }
 
 void BackendContext::showWipeTowerDialog()
@@ -2570,8 +2570,15 @@ void BackendContext::applyUiScale(int idx)
 {
   if (idx < 0 || idx >= static_cast<int>(std::size(kScales)))
     return;
-  m_uiScale = kScales[idx];
-  emit uiScaleChanged();
+  // Q11-①: QT_SCALE_FACTOR is only honored before QGuiApplication exists
+  // (main_qml.cpp maps the pre-launch "ui/scaleFactor" key of the dedicated
+  // "OWzx/UI" store onto the env var), so a scale change can never take
+  // effect in the live process. Write that real key instead of the former
+  // in-memory m_uiScale — which had zero consumers and never reached the
+  // key, making the preference a silent no-op.
+  QSettings uiStore(QSettings::NativeFormat, QSettings::UserScope,
+                    QStringLiteral("OWzx"), QStringLiteral("UI"));
+  uiStore.setValue(QStringLiteral("ui/scaleFactor"), kScales[idx]);
 }
 
 // ── Dead-control elimination: real behaviors for the former placeholder

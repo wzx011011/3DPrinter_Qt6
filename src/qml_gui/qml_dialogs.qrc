@@ -10,7 +10,6 @@
         <file>dialogs/AccessCodeInputDialog.qml</file>
         <file>dialogs/AMSSettingsDialog.qml</file>
         <file>dialogs/FirmwareDialog.qml</file>
-        <file>dialogs/SpeedLimitDialog.qml</file>
         <file>dialogs/WipeTowerDialog.qml</file>
         <file>dialogs/PrintHostDialog.qml</file>
         <file>dialogs/PluginManagerDialog.qml</file>

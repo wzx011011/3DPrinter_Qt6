@@ -31,7 +31,7 @@ deep-link product feature (anti-feature per REQUIREMENTS.md).
 `settings:material` / `filament-settings` / `material-settings`) |
 `settings:process` (alias `settings:print` / `process-settings` /
 `print-settings`) | `config-wizard` (alias `wizard`) | `bed-shape` (alias
-`bed`) | `ams-settings` (alias `ams`) | `firmware` | `speed-limit` |
+`bed`) | `ams-settings` (alias `ams`) | `firmware` |
 `wipe-tower` | `print-host` | `plugin-manager` (alias `plugins`) | `lite-mode`
 (alias `enable-lite-mode`).
 

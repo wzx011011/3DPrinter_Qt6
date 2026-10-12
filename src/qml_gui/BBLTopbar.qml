@@ -1172,10 +1172,6 @@ Item {
                 onTriggered: backend.showFirmwareDialog()
             }
             CxMenuItem {
-                text: qsTr("速度限制...")
-                onTriggered: backend.showSpeedLimitDialog()
-            }
-            CxMenuItem {
                 text: qsTr("擦料塔...")
                 onTriggered: backend.showWipeTowerDialog()
             }

@@ -25,12 +25,15 @@ Item {
     readonly property var settingsVm: (typeof backend !== "undefined" && backend) ? backend.settingsViewModel : null
     readonly property int targetViewportTopInset: 58
     readonly property int targetViewportBottomInset: 50
-    readonly property int preparePlateBarHeight: 44
-    readonly property int prepareViewportOverlayStack: root.targetViewportBottomInset
-        + ((root.editorVm && root.editorVm.plateCount > 0) ? root.preparePlateBarHeight + 8 : 0)
+    // Q11-⑦: the bottom plate bar (Phase 76 compact strip, restored verbatim
+    // 2026-09-24 only to satisfy QmlUiAuditTests string locks after the
+    // layout-5 removal judged it off-design) is gone per AGENTS.md — off-
+    // design UI is removed together with its locks, not resurrected for a
+    // test. Plate add/switch entry points live on GLToolbars and the plate
+    // context menus; per-plate state stays on the PlateSettingsDialog. The
+    // bottom inset now reserves room for the navigator cube only.
     // v5.16 (NAVIGATOR): the cube replaces the old flat view-button row at
-    // the viewport's bottom-left corner; only the plate-bar stack remains
-    // below it.
+    // the viewport's bottom-left corner.
     // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
@@ -1806,7 +1809,7 @@ Item {
                     hintLocalRotation: root.editorVm ? root.editorVm.selectedHintLocalRotation : []
                     // v5.16 (NAVIGATOR): show_3d_navigator (default on).
                     navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
-                    navigatorBottomOffset: root.prepareViewportOverlayStack
+                    navigatorBottomOffset: root.targetViewportBottomInset
                     cameraNavStyle: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.cameraNavStyle : 0
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
@@ -4600,246 +4603,6 @@ Item {
                     viewport3d.requestThumbnailCapture(i, 128)
                 }
             }
-        }
-
-        // BUILDGATE restore (2026-09-24): the layout-5 removal dropped the
-        // Phase 76 / PLATE-02 plate bar that QmlUiAuditTests still locks
-        // (plate-drag reorder DropArea, Phase 76 compact strip contract,
-        // per-plate slice status). Re-anchored verbatim from the last
-        // committed revision; the R8 layout reservation
-        // (preparePlateBarHeight) still expects it below the viewport.
-        // Bottom plate bar (aligned with upstream GLCanvas3D plate thumbnails at viewport bottom)
-        Item {
-            id: plateBar
-            parent: viewportArea
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: root.targetViewportBottomInset
-            anchors.left: parent.left
-            anchors.leftMargin: 14
-            anchors.right: parent.right
-            anchors.rightMargin: 14
-            height: 44
-            visible: root.editorVm && root.editorVm.plateCount > 0
-
-            Rectangle {
-                id: prepareVisualStatusPill
-                anchors.fill: parent
-                color: "transparent"
-
-            RowLayout {
-                anchors.fill: parent
-                spacing: 6
-
-                ListView {
-                    id: plateListView
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    orientation: ListView.Horizontal
-                    spacing: 4
-                    clip: true
-                    model: root.editorVm ? root.editorVm.plateCount : 0
-
-                    delegate: Rectangle {
-                        required property int index
-                        property bool dragHover: false
-                        // Phase 151 (PLATE-02): stash the source plate index during
-                        // a plate-drag so the drop target knows which plate to move.
-                        property int draggedPlateIndex: -1
-                        readonly property int sliceResultStatus: root.editorVm ? root.editorVm.plateSliceResultStatus(index) : 0
-                        width: 86
-                        height: plateListView.height
-                        radius: Theme.radiusSM
-                        readonly property bool isCurrent: root.editorVm && !root.editorVm.showAllObjects && root.editorVm.currentPlateIndex === index
-                        color: dragHover ? Theme.accentSubtle
-                            : isCurrent ? Theme.accentSubtle
-                            : Theme.bgElevated
-                        border.width: dragHover ? 2 : 1
-                        border.color: dragHover ? Theme.accent
-                            : isCurrent ? Theme.accent
-                            : Theme.borderSubtle
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 4
-                            anchors.rightMargin: 4
-                            spacing: 4
-
-                            // Thumbnail
-                            Rectangle {
-                                width: 28
-                                height: 28
-                                radius: Theme.radiusSM
-                                color: Theme.bgElevated
-                                border.width: 1
-                                border.color: Theme.borderSubtle
-                                clip: true
-
-                                Image {
-                                    anchors.fill: parent
-                                    anchors.margins: Theme.spacingXXS
-                                    fillMode: Image.PreserveAspectFit
-                                    smooth: true
-                                    source: {
-                                        if (!root.editorVm) return ""
-                                        var glThumb = viewport3d.lastThumbnailData
-                                        if (glThumb.length > 0 && index === root.editorVm.currentPlateIndex)
-                                            return root.thumbnailSource(glThumb)
-                                        return root.thumbnailSource(root.editorVm.plateThumbnailBase64(index))
-                                    }
-                                }
-                            }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: root.editorVm ? root.editorVm.plateName(index) : ""
-                                    color: isCurrent ? Theme.accent : Theme.textPrimary
-                                    font.pixelSize: Theme.fontSizeXS
-                                    font.bold: isCurrent
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: root.editorVm
-                                        ? qsTr("%1 对象").arg(root.editorVm.plateObjectCount(index))
-                                        : ""
-                                    color: Theme.textTertiary
-                                    font.pixelSize: Theme.fontSizeXS
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    id: plateStateText
-                                    Layout.fillWidth: true
-                                    text: sliceResultStatus === 1 ? qsTr("Sliced")
-                                        : sliceResultStatus === 2 ? qsTr("Stale")
-                                        : qsTr("Ready")
-                                    color: sliceResultStatus === 1 ? Theme.accent
-                                        : sliceResultStatus === 2 ? Theme.statusWarning
-                                        : Theme.textDisabled
-                                    font.pixelSize: Theme.fontSizeXS
-                                    elide: Text.ElideRight
-                                }
-                            }
-
-                            Rectangle {
-                                visible: sliceResultStatus !== 0
-                                width: 5; height: 5; radius: Theme.radiusSM
-                                color: sliceResultStatus === 1 ? Theme.accent : Theme.statusWarning
-                                opacity: 0.8
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            onClicked: function(mouse) {
-                                if (!root.editorVm) return
-                                if (mouse.button === Qt.RightButton) {
-                                    var family = root.editorVm.synchronizeViewportContext(2, -1, -1, -1, index)
-                                    if (family >= 0) {
-                                        var popupPoint = parent.mapToItem(root, mouse.x, mouse.y)
-                                        prepareContextMenus.openResolved(family, popupPoint.x, popupPoint.y)
-                                    }
-                                    mouse.accepted = true
-                                    return
-                                }
-                                root.editorVm.setCurrentPlateIndex(index)
-                                root.editorVm.setShowAllObjects(false)
-                            }
-                        }
-
-                        DropArea {
-                            anchors.fill: parent
-                            keys: ["object-drag"]
-                            onEntered: function(drag) { parent.dragHover = true }
-                            onExited: function(drag) { parent.dragHover = false }
-                            onDropped: function(drop) {
-                                parent.dragHover = false
-                                if (!root.editorVm) return
-                                root.editorVm.moveSelectedObjectToPlate(index)
-                                drop.acceptProposedAction()
-                            }
-                        }
-
-                        // Phase 151 (PLATE-02): drag-to-reorder. DropArea accepts
-                        // a "plate-drag" key (emitted by the DragHandler below on
-                        // sibling cards); on drop calls editorVm.movePlate.
-                        // Mirrors upstream PartPlate plate-bar drag-reorder.
-                        DropArea {
-                            anchors.fill: parent
-                            keys: ["plate-drag"]
-                            onEntered: function(drag) { parent.dragHover = true }
-                            onExited: function(drag) { parent.dragHover = false }
-                            onDropped: function(drop) {
-                                parent.dragHover = false
-                                if (!root.editorVm) return
-                                // The source plate's index is stashed on the
-                                // dragged card via draggedPlateIndex (set on drag start).
-                                const srcIndex = drop.source && drop.source.draggedPlateIndex !== undefined
-                                    ? drop.source.draggedPlateIndex : -1
-                                if (srcIndex < 0 || srcIndex === index) return
-                                root.editorVm.movePlate(srcIndex, index)
-                                drop.acceptProposedAction()
-                            }
-                        }
-
-                        // Phase 151 (PLATE-02): drag handler on the card header
-                        // area (the label strip — avoids hijacking the click-to-
-                        // select interaction on the rest of the card). On drag
-                        // start, attaches the plate index so the drop target
-                        // knows which plate to move.
-                        DragHandler {
-                            target: parent
-                            xAxis.enabled: true
-                            yAxis.enabled: false
-                            dragThreshold: 6
-                            // Only the top label strip initiates a plate drag —
-                            // clicking the thumbnail/body still selects the plate.
-                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                            onActiveChanged: {
-                                if (active && parent && root.editorVm) {
-                                    parent.Drag.startDrag("plate-drag")
-                                    parent.draggedPlateIndex = parent.index
-                                } else if (parent) {
-                                    parent.Drag.drop()
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Add plate button
-                Rectangle {
-                    visible: root.editorVm && root.editorVm.canAddPlate
-                    width: 26
-                    height: 26
-                    radius: Theme.radiusSM
-                    color: addPlateMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                    border.width: 1
-                    border.color: Theme.borderSubtle
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "+"
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeLG
-                        font.bold: true
-                    }
-
-                    MouseArea {
-                        id: addPlateMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.editorVm) root.editorVm.addPlate()
-                    }
-                }
-            }
-        }
         }
 
         // 对象信息栏（对齐上游 Plater::show_object_info）

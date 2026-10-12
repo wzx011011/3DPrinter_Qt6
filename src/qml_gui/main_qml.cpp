@@ -174,8 +174,6 @@ static QVector<StartupDialogRoute> startupDialogRoutes()
        [](BackendContext &backend) { backend.showAMSSettingsDialog(); }},
       {{QStringLiteral("firmware")},
        [](BackendContext &backend) { backend.showFirmwareDialog(); }},
-      {{QStringLiteral("speed-limit")},
-       [](BackendContext &backend) { backend.showSpeedLimitDialog(); }},
       {{QStringLiteral("wipe-tower")},
        [](BackendContext &backend) { backend.showWipeTowerDialog(); }},
       {{QStringLiteral("print-host")},

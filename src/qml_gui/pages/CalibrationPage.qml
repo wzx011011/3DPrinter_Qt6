@@ -18,6 +18,10 @@ import "../components"
 Item {
     id: root
     required property var calibrationVm
+    // Q11-⑥: machine-scoped preset source (ConfigViewModel exposes the
+    // PresetServiceMock compatibility-filtered lists for the active printer).
+    readonly property var configVm: (typeof backend !== "undefined" && backend)
+                                    ? backend.configViewModel : null
     property var _calibItems: []
     property var _totalSteps: 0
     property string activeFilter: "all"
@@ -845,11 +849,12 @@ Item {
                                         }
                                     }
 
-                                    // Filament preset selector (对齐上游 CalibrationPresetPage)
+                                    // Filament preset selector (对齐上游 CalibrationPresetPage;
+                                    // Q11-⑥ feeds the machine-scoped compatible list)
                                     Rectangle {
                                         visible: root.calibrationVm.showPresetSelector
                                         Layout.fillWidth: true
-                                        Layout.preferredHeight: 72
+                                        Layout.preferredHeight: 108
                                         radius: Theme.radiusSM
                                         color: Theme.bgElevated
                                         border.width: 1
@@ -862,102 +867,107 @@ Item {
                                             anchors.topMargin: 8
                                             spacing: 6
 
-                                            Text {
-                                                text: qsTr("耗材预设")
-                                                color: Theme.textPrimary
-                                                font.pixelSize: Theme.fontSizeSM
-                                                font.bold: true
-                                            }
-
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 spacing: 6
 
-                                                Rectangle {
-                                                    Layout.fillWidth: true
-                                                    height: 30
+                                                Text {
+                                                    text: qsTr("耗材预设")
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: Theme.fontSizeSM
+                                                    font.bold: true
+                                                }
+
+                                                Item { Layout.fillWidth: true }
+
+                                                // Q11-⑥: honest scope label — the
+                                                // selector lists machine-scoped presets,
+                                                // not the whole vendor catalogue.
+                                                Text {
+                                                    text: qsTr("当前打印机作用域")
+                                                    color: Theme.textTertiary
+                                                    font.pixelSize: Theme.fontSizeXS
+                                                }
+                                            }
+
+                                            // Current selection display. (Q11-⑥: the
+                                            // old ▾ button opened a nonexistent
+                                            // filamentMenu id — a dead control, removed
+                                            // with the truncation fix below.)
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                height: 30
+                                                radius: Theme.radiusMD
+                                                color: Theme.bgPanel
+                                                border.width: 1
+                                                border.color: Theme.borderDefault
+
+                                                Text {
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 10
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    text: root.calibrationVm.selectedFilamentPreset
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: Theme.fontSizeSM
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            // Machine-scoped preset chips. Q11-⑥: the
+                                            // model was `filamentPresetNames.slice(0, 16)`
+                                            // — a hard truncation that made 500+
+                                            // vendor presets unreachable. The machine-
+                                            // scoped compatible list (ConfigViewModel
+                                            // -> PresetServiceMock compatibility
+                                            // filter against the active printer, the
+                                            // same source the preset combos use) is
+                                            // the comment-acknowledged real fix; the
+                                            // chip row scrolls so any list length works.
+                                            ListView {
+                                                id: filPresetChipRow
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 26
+                                                orientation: ListView.Horizontal
+                                                spacing: 4
+                                                clip: true
+                                                model: root.configVm
+                                                       ? root.configVm.compatibleFilamentPresetNames
+                                                       : []
+                                                delegate: Rectangle {
+                                                    required property string modelData
+                                                    required property int index
+                                                    width: filLabel.implicitWidth + 16
+                                                    height: 26
                                                     radius: Theme.radiusMD
-                                                    color: Theme.bgPanel
+                                                    color: root.calibrationVm.selectedFilamentPreset === modelData
+                                                           ? Theme.accent : (filHov.containsMouse ? Theme.bgHover : Theme.bgPanel)
                                                     border.width: 1
-                                                    border.color: Theme.borderDefault
+                                                    border.color: root.calibrationVm.selectedFilamentPreset === modelData
+                                                                ? Theme.accent : Theme.borderSubtle
 
                                                     Text {
-                                                        anchors.left: parent.left
-                                                        anchors.leftMargin: 10
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        text: root.calibrationVm.selectedFilamentPreset
-                                                        color: Theme.textPrimary
-                                                        font.pixelSize: Theme.fontSizeSM
+                                                        id: filLabel
+                                                        anchors.centerIn: parent
+                                                        text: modelData
+                                                        color: root.calibrationVm.selectedFilamentPreset === modelData
+                                                               ? Theme.textOnAccent : Theme.textSecondary
+                                                        font.pixelSize: Theme.fontSizeXS
                                                         elide: Text.ElideRight
                                                     }
-                                                }
 
-                                                // Dropdown button
-                                                Rectangle {
-                                                    width: 24
-                                                    height: 30
-                                                    radius: Theme.radiusMD
-                                                    color: Theme.bgHover
-
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: "▾"
-                                                        color: Theme.textSecondary
-                                                        font.pixelSize: Theme.fontSizeMD
-                                                    }
-
+                                                    HoverHandler { id: filHov }
                                                     TapHandler {
-                                                        onTapped: filamentMenu.open()
+                                                        onTapped: root.calibrationVm.selectedFilamentPreset = modelData
                                                     }
                                                 }
-                                            }
-
-                                            // Simple inline preset selector (click to cycle)
-                                            Text {
-                                                color: Theme.textTertiary
-                                                font.pixelSize: Theme.fontSizeXS
-                                                Layout.fillWidth: true
-                                                wrapMode: Text.Wrap
-                                                text: qsTr("点击下方按钮切换预设")
-                                            }
-
-                                            RowLayout {
-                                                spacing: 4
-
-                                                Repeater {
-                                                    // The VM list currently carries the whole
-                                                    // vendor catalogue (Creality alone = 539
-                                                    // presets); bound here so the inline chip
-                                                    // row cannot scale with it. Machine-scoped
-                                                    // preset list is the real fix upstream of this.
-                                                    model: root.calibrationVm.filamentPresetNames.slice(0, 16)
-                                                    delegate: Rectangle {
-                                                        required property string modelData
-                                                        required property int index
-                                                        width: filLabel.implicitWidth + 16
-                                                        height: 26
-                                                        radius: Theme.radiusMD
-                                                        color: root.calibrationVm.selectedFilamentPreset === modelData
-                                                               ? Theme.accent : (filHov.containsMouse ? Theme.bgHover : Theme.bgPanel)
-                                                        border.width: 1
-                                                        border.color: root.calibrationVm.selectedFilamentPreset === modelData
-                                                                    ? Theme.accent : Theme.borderSubtle
-
-                                                        Text {
-                                                            id: filLabel
-                                                            anchors.centerIn: parent
-                                                            text: modelData
-                                                            color: root.calibrationVm.selectedFilamentPreset === modelData
-                                                                   ? Theme.textOnAccent : Theme.textSecondary
-                                                            font.pixelSize: Theme.fontSizeXS
-                                                            elide: Text.ElideRight
-                                                        }
-
-                                                        HoverHandler { id: filHov }
-                                                        TapHandler {
-                                                            onTapped: root.calibrationVm.selectedFilamentPreset = modelData
-                                                        }
-                                                    }
+                                                // Empty scope: keep an honest empty state
+                                                // instead of a blank strip.
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    visible: filPresetChipRow.count === 0
+                                                    text: qsTr("当前打印机无可用耗材预设")
+                                                    color: Theme.textDisabled
+                                                    font.pixelSize: Theme.fontSizeXS
                                                 }
                                             }
                                         }

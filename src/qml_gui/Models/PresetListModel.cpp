@@ -4,24 +4,12 @@
 PresetListModel::PresetListModel(QObject *parent)
     : QAbstractListModel(parent)
 {
-  m_presets = {
-      // ── 打印质量 ─────────────────────────────────────────────
-      {tr("0.20mm 标准 @Creality K1C"), tr("打印质量"), true},
-      {tr("0.16mm 精细"), tr("打印质量"), false},
-      {tr("0.24mm 草稿"), tr("打印质量"), false},
-      {tr("0.28mm 超草稿"), tr("打印质量"), false},
-      {tr("0.12mm 超精细"), tr("打印质量"), false},
-      // ── 耗材 ─────────────────────────────────────────────────
-      {"Hyper PLA", tr("耗材"), true},
-      {"Hyper PETG", tr("耗材"), false},
-      {"ABS", tr("耗材"), false},
-      {"TPU 95A", tr("耗材"), false},
-      {"PLA+", tr("耗材"), false},
-      // ── 打印机 ────────────────────────────────────────────────
-      {"Creality K1C 0.4 nozzle", tr("打印机"), true},
-      {"Creality K1 Max 0.4 nozzle", tr("打印机"), false},
-      {"Creality Ender-3 V3", tr("打印机"), false},
-  };
+  // Q11-②: no constructor seed. The 13 hand-written fake presets used to be
+  // built here, but ConfigViewModel calls refreshFromService() immediately
+  // after construction (and on every preset-list mutation), which clears
+  // m_presets and rebuilds from PresetServiceMock. The seed was a second
+  // source of truth that could never survive the first reset — the service
+  // (loaded vendor profiles + user presets) is the single source.
 }
 
 int PresetListModel::rowCount(const QModelIndex &parent) const
