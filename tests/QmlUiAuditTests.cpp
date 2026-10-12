@@ -3469,6 +3469,36 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
            "LeftSidebar Setting button must call backend.forwardSettingsRequest(\"process\")");
 
+  // Q11-④ (rework): bed-type combos render editorVm.bedTypeLabels — the
+  // single label source indexed by the libslic3r BedType enum
+  // (PrintConfig.hpp:404-412, btDefault=0..btSuperTack=6, btCount sentinel).
+  // The former hand tables (PreparePage 92a9670 + the first Q11 pass) were
+  // misaligned with that order and carried a fabricated 8th "自定义" value
+  // which, written through setPlateBedType, serialized out of bounds. No
+  // QML file may carry a local copy again.
+  {
+    const QString evmHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+    const QString evmImpl = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+    const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    QVERIFY2(!evmHeader.isEmpty() && !evmImpl.isEmpty() && !preparePage.isEmpty() && !projSvc.isEmpty(),
+             "Q11-④: unable to read the bed-type single-source carriers");
+    QVERIFY2(evmHeader.contains(QStringLiteral("Q_PROPERTY(QStringList bedTypeLabels"))
+                 && evmImpl.contains(QStringLiteral("QStringList EditorViewModel::bedTypeLabels()")),
+             "Q11-④: EditorViewModel must own the bedTypeLabels single source");
+    QVERIFY2(evmImpl.contains(QStringLiteral("btDefault=0")) && evmImpl.contains(QStringLiteral("btSuperTack")),
+             "Q11-④: bedTypeLabels must document the libslic3r BedType index contract");
+    QVERIFY2(sidebar.contains(QStringLiteral("editorVm.bedTypeLabels")),
+             "Q11-④: LeftSidebar bed combo must render editorVm.bedTypeLabels");
+    QVERIFY2(preparePage.contains(QStringLiteral("editorVm.bedTypeLabels")),
+             "Q11-④: PreparePage plate-settings bed combo must render editorVm.bedTypeLabels");
+    QVERIFY2(!sidebar.contains(QStringLiteral("环氧树脂板"))
+                 && !preparePage.contains(QStringLiteral("环氧树脂板")),
+             "Q11-④: the fabricated 8-label bed-type tables must stay deleted");
+    QVERIFY2(projSvc.contains(QStringLiteral("bedType >= int(Slic3r::BedType::btCount)")),
+             "Q11-④: setPlateBedType must reject values outside [0, btCount)");
+  }
+
   // PREPSB-04: ParamsPanel pages filter through the per-page C++ proxy.
   QVERIFY2(sidebar.contains(QStringLiteral("ConfigOptionFilterProxy"))
                && sidebar.contains(QStringLiteral("searchText: root.paramsSearchText"))

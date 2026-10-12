@@ -3794,6 +3794,31 @@ int EditorViewModel::currentPlateBedType() const
   return plateBedType(currentPlateIndex());
 }
 
+QStringList EditorViewModel::bedTypeLabels() const
+{
+  // Q11-④: the single bed-type label source, indexed by the libslic3r
+  // BedType enum (third_party PrintConfig.hpp:404-412: btDefault=0,
+  // btPC=1, btEP=2, btPEI=3, btPTE=4, btPCT=5, btSuperTack=6; btCount=7 is
+  // a sentinel — the plate's curr_bed_type is a ConfigOptionEnum<BedType>
+  // whose serialize() indexes the 6-entry names array without a runtime
+  // bounds check, so nothing outside [0, btCount) may be written).
+  // Names follow the s_keys_map_BedType / enum_labels semantics
+  // (PrintConfig.cpp:506-514: btPC=Cool Plate, btEP=Engineering Plate,
+  // btPEI=High Temp Plate, btPTE=Textured PEI, btPCT=Textured Cool,
+  // btSuperTack=Supertack). QML combos must render this list — no local
+  // copies (the previous hand tables were misaligned with this order and
+  // offered a fabricated 8th "自定义" value that serialized out of bounds).
+  return {
+      tr("跟随全局"),        // btDefault — inherit the project/preset default
+      tr("PC 冷感板"),       // btPC — Cool Plate
+      tr("工程板"),          // btEP — Engineering Plate
+      tr("光滑高温 PEI"),    // btPEI — Smooth High Temp Plate
+      tr("纹理 PEI"),        // btPTE — Textured PEI Plate
+      tr("纹理冷感板"),      // btPCT — Textured Cool Plate
+      tr("Supertack"),       // btSuperTack
+  };
+}
+
 QByteArray EditorViewModel::loadBedModelMesh(const QString &stlPath) const
 {
   // v5.16 (BEDMODEL): loads the printer frame STL and packs a triangle

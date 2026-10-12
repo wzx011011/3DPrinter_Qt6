@@ -9161,6 +9161,20 @@ bool ProjectServiceMock::setPlateBedType(int plateIndex, int bedType)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
+  // Q11-④ rework: bed type is a real libslic3r BedType consumed by slicing
+  // (get_bed_temp_key selects the bed-temperature key from it) and written
+  // to 3MF via ConfigOptionEnum<BedType>::serialize(), which indexes the
+  // 6-entry enum_names array with the raw value under only a debug assert
+  // (Config.hpp:2049-2054). btCount=7 is a sentinel, not a legal value
+  // (PrintConfig.hpp:404-412) — reject anything outside [0, btCount]
+  // instead of writing an out-of-bounds enum.
+#ifdef HAS_LIBSLIC3R
+  if (bedType < 0 || bedType >= int(Slic3r::BedType::btCount))
+    return false;
+#else
+  if (bedType < 0 || bedType > 6)
+    return false;
+#endif
   p->setBedType(bedType);
 #ifdef HAS_LIBSLIC3R
   // v5.16 (PLATE-01): sync the plate's DynamicPrintConfig so slicing consumes

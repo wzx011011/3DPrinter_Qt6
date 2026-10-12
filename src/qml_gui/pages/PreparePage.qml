@@ -608,7 +608,12 @@ Item {
                     }
                 }
 
-                // 热床类型（对齐上游 BedType: btDefault/btPC/btEP/btPEI/btPTE/btDEF/btER）
+                // 热床类型（Q11-④: labels from editorVm.bedTypeLabels — the
+                // single source indexed by the libslic3r BedType enum,
+                // PrintConfig.hpp:404-412. The former inline 8-label table
+                // (92a9670, with its fabricated "btDEF/btER" comment enums)
+                // was misaligned with that order and offered a fabricated
+                // 8th "自定义" value that serialized out of bounds.)
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Theme.spacingMD
@@ -621,16 +626,7 @@ Item {
                     CxComboBox {
                         id: bedTypeCombo
                         Layout.fillWidth: true
-                        model: [
-                            qsTr("跟随全局"),
-                            qsTr("光滑 PEI"),
-                            qsTr("高温 PEI"),
-                            qsTr("纹理 PEI"),
-                            qsTr("PC 热床"),
-                            qsTr("EP 热床"),
-                            qsTr("环氧树脂板"),
-                            qsTr("自定义")
-                        ]
+                        model: root.editorVm ? root.editorVm.bedTypeLabels : []
                         currentIndex: root.editorVm ? root.editorVm.plateBedType(settingsDlg.plateIndex) : 0
                         onActivated: function(index) {
                             if (root.editorVm) root.editorVm.setPlateBedType(settingsDlg.plateIndex, index)

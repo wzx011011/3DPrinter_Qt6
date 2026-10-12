@@ -1416,6 +1416,14 @@ public:
   /// v5.16: current plate's bed type (Slic3r BedType index) driving the
   /// bed-type texture parts.
   Q_PROPERTY(int currentPlateBedType READ currentPlateBedType NOTIFY stateChanged)
+  /// Q11-④: the single source for bed-type combo labels, indexed by the
+  /// libslic3r BedType enum (PrintConfig.hpp:404-412: btDefault=0, btPC=1,
+  /// btEP=2, btPEI=3, btPTE=4, btPCT=5, btSuperTack=6, btCount=7 sentinel).
+  /// Every bed-type combo (LeftSidebar, PreparePage plate settings) renders
+  /// this list; no QML file may carry its own copy — the previous two
+  /// hand-copied 8-label tables were misaligned with this enum order and
+  /// wrote a fabricated btCount "custom" value.
+  Q_PROPERTY(QStringList bedTypeLabels READ bedTypeLabels CONSTANT)
   /// Phase 100 (WTREAD-01): post-slice wipe-tower geometry read back from
   /// Print::wipe_tower_data() via SliceService. READ-only + NOTIFY because the
   /// dims flow from SliceService (libslic3r worker), not from QML. showWipeTower
@@ -1587,6 +1595,9 @@ public:
   float bedHeightToLid() const { return m_bedHeightToLid; }
   /// v5.16: current plate's bed type (Slic3r BedType index).
   int currentPlateBedType() const;
+  /// Q11-④: bed-type combo labels indexed by the libslic3r BedType enum
+  /// (see the Q_PROPERTY above for the contract).
+  QStringList bedTypeLabels() const;
   /// v5.15: pull printable_area + bed_texture from the selected printer
   /// preset into the viewport bed state (mirrors upstream set_bed_shape).
   void syncBedFromPrinterPreset();

@@ -202,14 +202,17 @@ Rectangle {
         // bed-surface card whose combo drives curr_bed_type
         // (Plater.cpp:2716-2786 reset_bed_type_combox_choices; the selection
         // handler at :12109-12140 writes the project config and invalidates
-        // slice results). Q11-④: the combo is real now — bound to the current
+        // slice results). Q11-④: the combo is real — bound to the current
         // plate's curr_bed_type through the same EditorViewModel accessors
-        // the plate-settings dialog uses (PreparePage PlateSettingsDialog):
-        // setPlateBedType syncs the plate DynamicPrintConfig the slicer
-        // consumes (ProjectServiceMock::setPlateBedType) and invalidates the
-        // plate's slice result. Indices mirror the libslic3r BedType enum
-        // (0 = btDefault = follow the project/preset default), so the labels
-        // line up 1:1 with the upstream enum_labels order.
+        // the plate-settings dialog uses: setPlateBedType syncs the plate
+        // DynamicPrintConfig the slicer consumes
+        // (ProjectServiceMock::setPlateBedType) and invalidates the plate's
+        // slice result. Indices are the libslic3r BedType enum values
+        // (PrintConfig.hpp:404-412; 0 = btDefault = follow the project/
+        // preset default); the labels come from editorVm.bedTypeLabels —
+        // the single source shared with PreparePage's plate-settings combo.
+        // No local label copy: the previous hand tables were misaligned with
+        // the enum order and carried a fabricated 8th "自定义" value.
         Rectangle {
             id: printerBedTypeRow
             Layout.fillWidth: true
@@ -251,19 +254,9 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 30
                     font.pixelSize: Theme.fontSizeSM
-                    // Same label set (and index semantics) as PreparePage's
-                    // plate-settings bed combo: 0 = 跟随全局 (btDefault),
-                    // 1..7 = the Slic3r BedType values.
-                    model: [
-                        qsTr("跟随全局"),
-                        qsTr("光滑 PEI"),
-                        qsTr("高温 PEI"),
-                        qsTr("纹理 PEI"),
-                        qsTr("PC 热床"),
-                        qsTr("EP 热床"),
-                        qsTr("环氧树脂板"),
-                        qsTr("自定义")
-                    ]
+                    // Q11-④: single label source indexed by the libslic3r
+                    // BedType enum (contract on the EditorViewModel property).
+                    model: root.editorVm ? root.editorVm.bedTypeLabels : []
                     enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
                     currentIndex: root.editorVm ? root.editorVm.currentPlateBedType : 0
                     onActivated: function(index) {
