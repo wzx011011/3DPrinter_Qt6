@@ -115,10 +115,10 @@ $objFiles = @(
     "ConfigOptionModel.cpp.obj",
     "CameraController.cpp.obj",
     "RhiViewport.cpp.obj",
-    "GLShaderUtil.cpp.obj",
+    "BackendContext.cpp.obj",
     "UndoCommands.cpp.obj",
-    "JobBase.cpp.obj",
-    "JobManager.cpp.obj",
+    "CliRunner.cpp.obj",
+    "PresetServiceMock.cpp.obj",
     "UndoRedoManager.cpp.obj"
 )
 foreach ($obj in $objFiles) {
@@ -148,7 +148,6 @@ $qmlFiles = @(
     "panels/DockableSidebar.qml",
     "components/NotificationCenter.qml",
     "components/ToolPositionTooltip.qml",
-    "components/CollapsibleSection.qml",
     "pages/PreferencesPage.qml",
     "controls/CxButton.qml",
     "controls/CxComboBox.qml",
