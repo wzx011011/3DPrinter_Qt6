@@ -61,6 +61,10 @@ private slots:
   void viewPlanePointStaysSceneBoundedAtLowElevation();
   void orbitAroundFarPivotKeepsTargetInScene();
   void zoomToMouseCompositionStaysBounded();
+  // P2 (mouse-navigation upstream alignment, 开发计划 §6 P2):
+  void rightDragPanAdvancesPerFrameNotPressAnchored();
+  void bedDragDeltasSlideOnBedPlaneAndCompose();
+  void orbitPivotFallsBackToPlateScopeCenter();
 };
 
 void CameraParityTests::defaultOrientationMatchesLegacyAnalytic()
@@ -455,6 +459,144 @@ void CameraParityTests::zoomToMouseCompositionStaysBounded()
   const float distanceAfter = cam.distance();
   cam.translateWorld(-displacement * (distanceAfter / distanceBefore));
   QVERIFY((cam.target() - target0).length() < 600.0f);
+}
+
+// P2 (CAM-PARITY): right-drag pan. Upstream GLCanvas3D.cpp:4701-4723
+// (is_camera_pan branch, right_mouse_drag_action defaults to Pan,
+// AppConfig.cpp:248-249) re-picks BOTH cursor positions at one shared depth
+// plane every event and then REPLACES drag.start_position_2D with the cursor
+// (:4721) -- the camera translation is a per-frame delta. The press-anchored
+// variant (80f6e55 regression note: the "orig" pick never advanced) re-applied
+// the cumulative displacement every frame and read as a runaway sweep. This
+// drives the exact protocol RhiViewport::applyCameraPan runs (viewFrontPoint
+// reference, per-frame viewPlanePoint pair, translateWorld(prev - current))
+// and locks its linearity: equal screen steps must yield equal world steps.
+void CameraParityTests::rightDragPanAdvancesPerFrameNotPressAnchored()
+{
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
+  const QSizeF viewport(800.0, 600.0);
+  const float aspect = float(viewport.width() / viewport.height());
+  QPointF last(300.0, 300.0);
+  // Mirrors RhiViewport::applyCameraPan: reference + matrices are taken at
+  // the CURRENT camera state, the previous position advances each frame.
+  const auto panFrame = [&](const QPointF &currentPos, QVector3D *deltaOut) {
+    const QMatrix4x4 viewProj = cam.projMatrix(aspect) * cam.viewMatrix();
+    QVector3D previous;
+    QVector3D current;
+    if (!CameraController::viewPlanePoint(viewProj, viewport, last,
+                                          cam.viewFrontPoint(), &previous))
+      return false;
+    if (!CameraController::viewPlanePoint(viewProj, viewport, currentPos,
+                                          cam.viewFrontPoint(), &current))
+      return false;
+    *deltaOut = previous - current;
+    cam.translateWorld(*deltaOut);
+    last = currentPos;
+    return true;
+  };
+  const QVector3D target0 = cam.target();
+  QVector3D first;
+  QVERIFY(panFrame(QPointF(340.0, 300.0), &first));
+  QVERIFY(first.length() > 1e-3f);
+  // The target moves opposite to the cursor (translateWorld(prev - current)):
+  // the scene follows the pointer, like upstream set_target(target + orig -
+  // cur_pos).
+  QVERIFY(qAbs(QVector3D::dotProduct(first, cam.forwardVector())) < 1e-3f);
+  QVector3D accumulated = first;
+  for (int i = 0; i < 9; ++i) {
+    QVector3D frame;
+    QVERIFY(panFrame(QPointF(340.0 + 40.0 * (i + 1), 300.0), &frame));
+    // Constant gain: identical screen steps translate the camera identically.
+    QVERIFY((frame - first).length() < 1e-2f);
+    accumulated += frame;
+  }
+  // Linear composition: 10 equal frames displace the target by exactly 10x
+  // the first frame -- not the growing re-application of a press anchor.
+  QVERIFY((cam.target() - target0 - accumulated).length() < 1e-2f);
+  QVERIFY((cam.target() - target0).length() >
+          9.5f * first.length() - 1e-2f);
+  QVERIFY((cam.target() - target0).length() <
+          10.5f * first.length() + 1e-2f);
+}
+
+// P2 (CAM-PARITY): left-drag on a model moves it across the bed (upstream
+// LeftDown inside a volume bbox arms m_mouse.drag.move_volume_idx,
+// GLCanvas3D.cpp:4508-4526, and the Dragging branch moves the object instead
+// of orbiting, :4531+). The camera-side protocol RhiViewport drives: per-frame
+// groundPointOnPlane picks at the frozen camera (orbit is suppressed while the
+// move branch owns the drag), the per-frame delta current - previous goes to
+// EditorViewModel::applyGizmoMoveDelta (PreparePage onBedDragMoveRequested).
+// Lock: every pick sits on the bed plane so the delta never lifts the object,
+// and the per-frame deltas compose exactly to the first->last displacement no
+// matter how the event stream samples the path (event-rate independence).
+void CameraParityTests::bedDragDeltasSlideOnBedPlaneAndCompose()
+{
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, 0.0f);
+  const QSizeF viewport(800.0, 600.0);
+  const QMatrix4x4 viewProj =
+      cam.projMatrix(float(viewport.width() / viewport.height()))
+      * cam.viewMatrix();
+  const QPointF path[] = {QPointF(360.0, 320.0), QPointF(390.0, 330.0),
+                          QPointF(410.0, 350.0), QPointF(450.0, 360.0)};
+  QVector3D picked[4];
+  for (int i = 0; i < 4; ++i)
+    QVERIFY(CameraController::groundPointOnPlane(viewProj, viewport, path[i],
+                                                 &picked[i]));
+  // The bed-drag channel slides on y=0: no pick ever lifts the object
+  // (upstream _mouse_to_3d z=0 pick, GLCanvas3D.cpp:4540-4560).
+  for (int i = 0; i < 4; ++i)
+    QVERIFY(qAbs(picked[i].y()) < 1e-4f);
+  // Per-frame deltas compose exactly, independent of the frame split.
+  const QVector3D coarse = picked[3] - picked[0];
+  const QVector3D fine = (picked[1] - picked[0]) + (picked[2] - picked[1])
+                         + (picked[3] - picked[2]);
+  QVERIFY((coarse - fine).length() < 1e-3f);
+  QVERIFY(coarse.length() > 1e-3f);
+  // Every per-frame delta is horizontal (object never lifts mid-stroke).
+  QVERIFY(qAbs((picked[1] - picked[0]).y()) < 1e-4f);
+  QVERIFY(qAbs((picked[2] - picked[1]).y()) < 1e-4f);
+  QVERIFY(qAbs((picked[3] - picked[2]).y()) < 1e-4f);
+}
+
+// P2 (CAM-PARITY): the plain left-drag orbit pivot falls back to the CURRENT
+// PLATE footprint center (user ruling 2026-10-10 replacing the upstream
+// selection pivot, GLCanvas3D.cpp:4661-4662 -- selection-following made the
+// bed sweep around a dragged model). RhiViewport::applyCameraOrbit pivots on
+// CameraController::bedCenter(); updateSceneExtent refreshes the extent per
+// plate (footprint + AXES-ROT minZ = -(originY + depth)), so the fallback
+// pivot must track the plate scope, not the world origin or a fixed default.
+// Ctrl+drag keeps the cached canvas-center pick instead (GLCanvas3D.cpp
+// :4310-4317); when that ground pick fails (level camera, locked false in
+// groundPointOnPlaneRoundTrip) applyCameraOrbit falls through to this plate
+// pivot.
+void CameraParityTests::orbitPivotFallsBackToPlateScopeCenter()
+{
+  // Plate with slic3r originY = 40, 220 mm deep: scene Z in [-260, -40].
+  CameraController cam;
+  cam.setSceneExtent(220.0f, 220.0f, 120.0f, -260.0f);
+  const QVector3D pivot = cam.bedCenter();
+  QVERIFY((pivot - QVector3D(110.0f, 0.0f, -150.0f)).length() < 1e-3f);
+  // A different plate origin moves the pivot with the plate scope...
+  CameraController otherPlate;
+  otherPlate.setSceneExtent(220.0f, 220.0f, 120.0f, -220.0f);
+  QVERIFY((otherPlate.bedCenter() - QVector3D(110.0f, 0.0f, -110.0f))
+              .length() < 1e-3f);
+  // ...and the pivot is the plate footprint center on the bed plane, never
+  // the world origin.
+  QVERIFY(pivot.y() == 0.0f);
+  QVERIFY(pivot.length() > 1e-3f);
+  // Rigid orbit about the plate pivot: distances are preserved (upstream
+  // rotate_on_sphere_with_target, Camera.cpp:351-370) and the pivot itself
+  // does not drift, so a long orbit stroke keeps spinning the same plate.
+  const float eyePivot0 = (cam.eye() - pivot).length();
+  const float targetPivot0 = (cam.target() - pivot).length();
+  for (int i = 0; i < 50; ++i)
+    cam.orbitAround(3.0f, 0.7f, pivot);
+  QVERIFY(std::abs((cam.eye() - pivot).length() - eyePivot0) < 1e-2f);
+  QVERIFY(std::abs((cam.target() - pivot).length() - targetPivot0) < 1e-2f);
+  QVERIFY((cam.bedCenter() - pivot).length() < 1e-6f);
 }
 
 QTEST_MAIN(CameraParityTests)
