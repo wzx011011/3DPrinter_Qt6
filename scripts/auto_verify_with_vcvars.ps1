@@ -398,6 +398,25 @@ if ($null -ne $submoduleHead) {
 Set-Content -Path $patchSeriesFile -Value $patchSeriesFingerprint
 }  # end of skip-configure fast path
 
+# Q13 (2026-10-12): kill the stale-moc/mixed-object failure class at its
+# mechanism. AUTOMOC's per-build moc regeneration is mtime-tracked per target
+# ("weak moc tracking", documented on the single-file QtTest targets in
+# CMakeLists.txt), and since the 2026-09-05 configure fast path a
+# source-only change no longer forces a configure-time automoc rescan. A
+# binary can then mix objects compiled against different Q_OBJECT layouts
+# (stale mocs_compilation.obj vs fresh consumers) -- the deterministic
+# import-time heap-corruption family that made AppToolTests /
+# ViewportContextMenuTests flake-crash between build layouts (Q13 audit:
+# 0xC0000005/0xC0000409 during the first initTestCase slot). Deleting the
+# autogen timestamp probes forces CMake's RERUN_AUTOGEN step on the next
+# ninja invocation of THIS run: moc outputs are regenerated and any
+# mismatching object rebuilds, so a canonical run can no longer emit a
+# mixed-layout binary. Cost: an automoc rescan (seconds) per verify run.
+Get-ChildItem -Path . -Filter '*_autogen' -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+  $ts = Join-Path $_.FullName 'timestamp'
+  if (Test-Path $ts) { Remove-Item $ts -Force }
+}
+
 # Reduce MSVC memory pressure in large TUs/autogen files
 $env:CL = "/Zm300 /bigobj $env:CL"
 
@@ -595,23 +614,25 @@ if (Test-Path $partPlateExe) {
   exit 1
 }
 
-# AI control surface tests (OWzx-only, docs/ai-control.md). NON-BLOCKING
-# (same policy as the E2E stage below): as of 2026-08-31 this suite hits a
-# deterministic heap-corruption crash inside its initTestCase import
-# (0xC0000005 in ntdll heap alloc, identical address across runs, outside the
-# viewport-migration workstream; needs PageHeap/admin to attribute). Do not
-# let it gate the canonical viewport regression run.
-Write-Host "`n[AppTool] Running AI control surface tests (non-blocking)..." -ForegroundColor Cyan
+# AI control surface tests (OWzx-only, docs/ai-control.md). BLOCKING again as
+# of 2026-10-12 (Q13): the 2026-08-31 import-period heap-corruption was
+# attributed to the stale-moc/mixed-object build class (see the autogen
+# timestamp cleanup above) -- a consistent-epoch rebuild passes 3/3 and the
+# canonical run can no longer emit a mixed-layout binary. The suite also
+# installs CrashHandlerWin in initTestCase, so any future crash lands in
+# build/crash_dumps/crash_stack.log + a minidump instead of exiting silently.
+Write-Host "`n[AppTool] Running AI control surface tests..." -ForegroundColor Cyan
 $appToolExe = './AppToolTests.exe'
 if (Test-Path $appToolExe) {
   $appToolExitCode = Invoke-QtTestReport $appToolExe 'AppToolTests.verify.txt'
   if ($appToolExitCode -ne 0) {
-    Write-Host "[AppTool] AI control surface tests reported failures (non-blocking)" -ForegroundColor Yellow
-  } else {
-    Write-Host "[AppTool] AI control surface tests passed" -ForegroundColor Green
+    Write-Host "[AppTool] AI control surface tests failed" -ForegroundColor Red
+    exit $appToolExitCode
   }
+  Write-Host "[AppTool] AI control surface tests passed" -ForegroundColor Green
 } else {
-  Write-Host "[AppTool] AppToolTests.exe not found, skipping" -ForegroundColor DarkGray
+  Write-Host "[AppTool] AppToolTests.exe not found" -ForegroundColor Red
+  exit 1
 }
 
 Write-Host "`n[ObjectPicking] Running precise object picking tests..." -ForegroundColor Cyan
@@ -698,21 +719,26 @@ if (Test-Path $cameraParityExe) {
   exit 1
 }
 
-# Viewport context menu tests. NON-BLOCKING as of 2026-08-31: same
-# import-path heap-corruption family as AppToolTests above (silent exit
-# during initTestCase import; floats between processes/build layouts).
-# Passed 5/5 in earlier same-day runs; needs the PageHeap attribution pass.
-Write-Host "`n[ViewportContext] Running viewport context menu tests (non-blocking)..." -ForegroundColor Cyan
+# Viewport context menu tests. BLOCKING again as of 2026-10-12 (Q13): the
+# "import-path heap-corruption family" that silenced this suite since
+# 2026-08-31 (silent 0xC0000409 fast-fail during the first initTestCase slot,
+# floating between build layouts) was the same stale-moc/mixed-object class as
+# AppToolTests -- see the autogen timestamp cleanup above. Consistent-epoch
+# rebuilds pass 3/3 and the canonical run can no longer emit a mixed-layout
+# binary; initTestCase installs CrashHandlerWin so a future crash leaves a
+# stack + minidump in build/crash_dumps/.
+Write-Host "`n[ViewportContext] Running viewport context menu tests..." -ForegroundColor Cyan
 $viewportContextMenuExe = './ViewportContextMenuTests.exe'
 if (Test-Path $viewportContextMenuExe) {
   $viewportContextExitCode = Invoke-QtTestReport $viewportContextMenuExe 'ViewportContextMenuTests.verify.txt'
   if ($viewportContextExitCode -ne 0) {
-    Write-Host "[ViewportContext] Viewport context menu tests reported failures (non-blocking)" -ForegroundColor Yellow
-  } else {
-    Write-Host "[ViewportContext] Viewport context menu tests passed" -ForegroundColor Green
+    Write-Host "[ViewportContext] Viewport context menu tests failed" -ForegroundColor Red
+    exit $viewportContextExitCode
   }
+  Write-Host "[ViewportContext] Viewport context menu tests passed" -ForegroundColor Green
 } else {
-  Write-Host "[ViewportContext] ViewportContextMenuTests.exe not found, skipping" -ForegroundColor DarkGray
+  Write-Host "[ViewportContext] ViewportContextMenuTests.exe not found" -ForegroundColor Red
+  exit 1
 }
 
 Write-Host "`n[PreviewParser] Running G-code parser/role/mode tests..." -ForegroundColor Cyan
@@ -764,18 +790,25 @@ if ($p.HasExited) {
 Write-Host ("[Launch] APP_RUNNING_PID=" + $p.Id)
 Stop-Process -Id $p.Id -Force
 
-# ── Run E2E Pipeline Tests (non-blocking) ──
-Write-Stage 'E2E' "Running pipeline tests (non-blocking)"
+# ── Run E2E Pipeline Tests ──
+# BLOCKING again as of 2026-10-12 (Q13 + Q12): the Q12 environment probe
+# (E2EWorkflowTests.cpp initTestCase) skips — counted and reported — only when
+# a static slicing prerequisite is missing; with prerequisites present a slice
+# failure FAILs. Measured on this canonical host: 32 passed / 0 failed /
+# 0 skipped, so a red run here is a real pipeline signal, not a missing-env
+# false red.
+Write-Stage 'E2E' "Running pipeline tests"
 $e2eExe = './E2EWorkflowTests.exe'
 if (Test-Path $e2eExe) {
   $e2eExitCode = Invoke-QtTestReport $e2eExe 'E2EWorkflowTests.verify.txt'
   if ($e2eExitCode -ne 0) {
-    Write-Host "[E2E] Pipeline tests reported failures (non-blocking)" -ForegroundColor Yellow
-  } else {
-    Write-Host "[E2E] All pipeline tests passed" -ForegroundColor Green
+    Write-Host "[E2E] Pipeline tests failed" -ForegroundColor Red
+    exit $e2eExitCode
   }
+  Write-Host "[E2E] All pipeline tests passed" -ForegroundColor Green
 } else {
-  Write-Host "[E2E] E2EPipelineTests.exe not found, skipping" -ForegroundColor DarkGray
+  Write-Host "[E2E] E2EWorkflowTests.exe not found" -ForegroundColor Red
+  exit 1
 }
 
 # ── Slice regression gate (conditional: fires only when slicing code changed) ──
