@@ -24,27 +24,15 @@
         <file>assets/icons/box.svg</file>
         <file>assets/icons/device-floppy.svg</file>
         <file>assets/icons/dots.svg</file>
-        <file>assets/icons/folder-plus.svg</file>
-        <file>assets/icons/folder-open.svg</file>
         <file>assets/icons/layout-grid.svg</file>
-        <file>assets/icons/layout-sidebar-right.svg</file>
         <file>assets/icons/list-details.svg</file>
-        <file>assets/icons/lock.svg</file>
         <file>assets/icons/layers.svg</file>
-        <file>assets/icons/layers-subtract.svg</file>
-        <file>assets/icons/scissors.svg</file>
-        <file>assets/icons/download.svg</file>
         <file>assets/icons/maximize.svg</file>
-        <file>assets/icons/mirror.svg</file>
         <file>assets/icons/minus.svg</file>
-        <file>assets/icons/minus-circle.svg</file>
         <file>assets/icons/printer.svg</file>
         <file>assets/icons/preset_cog.svg</file>
-        <file>assets/icons/preset_equal.svg</file>
         <file>assets/icons/preset_node_dot.svg</file>
-        <file>assets/icons/preset_not_equal.svg</file>
         <file>assets/icons/preset_printer.svg</file>
-        <file>assets/icons/preset_question.svg</file>
         <file>assets/icons/preset_spool.svg</file>
         <file>assets/icons/bullet_black.png</file>
         <file>assets/icons/bullet_blue.png</file>
@@ -58,23 +46,13 @@
         <file>assets/icons/x.svg</file>
         <file>assets/icons/copy.svg</file>
         <file>assets/icons/clipboard.svg</file>
-        <file>assets/icons/clone.svg</file>
-        <file>assets/icons/trash.svg</file>
         <file>assets/icons/plus.svg</file>
-        <file>assets/icons/layout-grid-plus.svg</file>
         <file>assets/icons/topbar_file.svg</file>
         <file>assets/icons/calib_sf.svg</file>
         <file>assets/icons/tab_home_active.svg</file>
-        <file>assets/icons/tab_3d_active.svg</file>
-        <file>assets/icons/tab_preview_active.svg</file>
-        <file>assets/icons/tab_monitor_active.svg</file>
-        <file>assets/icons/tab_multi_active.svg</file>
-        <file>assets/icons/tab_auxiliary_active.svg</file>
-        <file>assets/icons/tab_calibration_active.svg</file>
         <file>assets/icons/sidebutton_dropdown.svg</file>
         <file>assets/icons/check_on.svg</file>
         <file>assets/icons/check_half.svg</file>
-        <file>assets/icons/check_off.svg</file>
         <file>assets/icons/check_off_focused.svg</file>
         <file>assets/icons/check_off_disabled.svg</file>
         <file>assets/icons/monitor_arrow.svg</file>
@@ -83,74 +61,29 @@
         <file>assets/icons/go_next_plate.svg</file>
         <file>assets/icons/spin_inc.svg</file>
         <file>assets/icons/spin_dec.svg</file>
-        <file>assets/icons/param_3dhoneycomb.svg</file>
         <file>assets/icons/param_acceleration.svg</file>
-        <file>assets/icons/param_accessory.svg</file>
-        <file>assets/icons/param_adaptive_mesh.svg</file>
-        <file>assets/icons/param_adaptivecubic.svg</file>
-        <file>assets/icons/param_add.svg</file>
         <file>assets/icons/param_adhension.svg</file>
         <file>assets/icons/param_advanced.svg</file>
-        <file>assets/icons/param_alignedrectilinear.svg</file>
-        <file>assets/icons/param_archimedeanchords.svg</file>
         <file>assets/icons/param_bed_temp.svg</file>
         <file>assets/icons/param_bridge.svg</file>
-        <file>assets/icons/param_chamber_temp.svg</file>
-        <file>assets/icons/param_concentric.svg</file>
         <file>assets/icons/param_cooling.svg</file>
-        <file>assets/icons/param_cooling_aux_fan.svg</file>
-        <file>assets/icons/param_cooling_exhaust.svg</file>
-        <file>assets/icons/param_cooling_fan.svg</file>
-        <file>assets/icons/param_cooling_part_fan.svg</file>
-        <file>assets/icons/param_cooling_specific_layer.svg</file>
-        <file>assets/icons/param_crosshatch.svg</file>
-        <file>assets/icons/param_crosszag.svg</file>
-        <file>assets/icons/param_cubic.svg</file>
-        <file>assets/icons/param_dependencies_presets.svg</file>
-        <file>assets/icons/param_dependencies_printers.svg</file>
-        <file>assets/icons/param_extruder_clearance.svg</file>
-        <file>assets/icons/param_extruder_lift_enforcement.svg</file>
-        <file>assets/icons/param_extruder_size.svg</file>
-        <file>assets/icons/param_extruder_temp.svg</file>
         <file>assets/icons/param_filament_for_features.svg</file>
-        <file>assets/icons/param_flow_ratio_and_pressure_advance.svg</file>
         <file>assets/icons/param_flush.svg</file>
         <file>assets/icons/param_gcode.svg</file>
-        <file>assets/icons/param_grid.svg</file>
-        <file>assets/icons/param_gyroid.svg</file>
-        <file>assets/icons/param_hilbertcurve.svg</file>
-        <file>assets/icons/param_hollow.svg</file>
-        <file>assets/icons/param_honeycomb.svg</file>
         <file>assets/icons/param_infill.svg</file>
         <file>assets/icons/param_information.svg</file>
         <file>assets/icons/param_ironing.svg</file>
         <file>assets/icons/param_jerk.svg</file>
         <file>assets/icons/param_junction_deviation.svg</file>
-        <file>assets/icons/param_lateral-honeycomb.svg</file>
-        <file>assets/icons/param_lateral-lattice.svg</file>
         <file>assets/icons/param_layer_height.svg</file>
-        <file>assets/icons/param_lightning.svg</file>
-        <file>assets/icons/param_line.svg</file>
         <file>assets/icons/param_line_width.svg</file>
-        <file>assets/icons/param_lockedzag.svg</file>
-        <file>assets/icons/param_monotonic.svg</file>
-        <file>assets/icons/param_monotonicline.svg</file>
-        <file>assets/icons/param_multi_material.svg</file>
-        <file>assets/icons/param_octagramspiral.svg</file>
         <file>assets/icons/param_ooze_prevention.svg</file>
         <file>assets/icons/param_overhang.svg</file>
         <file>assets/icons/param_overhang_speed.svg</file>
-        <file>assets/icons/param_position.svg</file>
         <file>assets/icons/param_precision.svg</file>
-        <file>assets/icons/param_printable_space.svg</file>
-        <file>assets/icons/param_quartercubic.svg</file>
         <file>assets/icons/param_raft.svg</file>
-        <file>assets/icons/param_rectilinear-grid.svg</file>
         <file>assets/icons/param_rectilinear.svg</file>
-        <file>assets/icons/param_rectilinear_interlaced.svg</file>
-        <file>assets/icons/param_resonance_avoidance.svg</file>
         <file>assets/icons/param_retraction.svg</file>
-        <file>assets/icons/param_retraction_material_change.svg</file>
         <file>assets/icons/param_seam.svg</file>
         <file>assets/icons/param_settings.svg</file>
         <file>assets/icons/param_shell.svg</file>
@@ -158,26 +91,16 @@
         <file>assets/icons/param_special.svg</file>
         <file>assets/icons/param_speed.svg</file>
         <file>assets/icons/param_speed_first.svg</file>
-        <file>assets/icons/param_spiralinset.svg</file>
         <file>assets/icons/param_support.svg</file>
         <file>assets/icons/param_support_filament.svg</file>
         <file>assets/icons/param_support_tree.svg</file>
-        <file>assets/icons/param_supportcubic.svg</file>
         <file>assets/icons/param_temperature.svg</file>
-        <file>assets/icons/param_toolchange.svg</file>
-        <file>assets/icons/param_toolchange_multi_extruder.svg</file>
         <file>assets/icons/param_tower.svg</file>
-        <file>assets/icons/param_tpmsd.svg</file>
-        <file>assets/icons/param_tpmsfk.svg</file>
         <file>assets/icons/param_travel_speed.svg</file>
-        <file>assets/icons/param_tri-hexagon.svg</file>
-        <file>assets/icons/param_triangles.svg</file>
-        <file>assets/icons/param_volumetric_speed.svg</file>
         <file>assets/icons/param_wall.svg</file>
         <file>assets/icons/param_wall_generator.svg</file>
         <file>assets/icons/param_wall_surface.svg</file>
         <file>assets/icons/param_z_contouring.svg</file>
-        <file>assets/icons/param_zigzag.svg</file>
         <file>assets/icons/toolbar_open.svg</file>
         <file>assets/icons/toolbar_add_plate.svg</file>
         <file>assets/icons/toolbar_orient.svg</file>
@@ -197,8 +120,6 @@
         <file>assets/icons/instance_remove.svg</file>
         <file>assets/icons/split_objects.svg</file>
         <file>assets/icons/split_parts.svg</file>
-        <file>assets/icons/reduce_triangles.svg</file>
-        <file>assets/icons/mmu_segmentation.svg</file>
         <file>assets/icons/custom-gcode_slicing-state_global.svg</file>
         <file>assets/icons/lock_closed.svg</file>
         <file>assets/icons/lock_open.svg</file>
@@ -218,15 +139,6 @@
         <file>assets/icons/custom-gcode_vector-index.svg</file>
         <file>assets/icons/add_copies.svg</file>
         <file>assets/icons/editgcode_search.svg</file>
-        <file>assets/icons/plate_close.svg</file>
-        <file>assets/icons/plate_orient.svg</file>
-        <file>assets/icons/plate_arrange.svg</file>
-        <file>assets/icons/plate_locked.svg</file>
-        <file>assets/icons/plate_unlocked.svg</file>
-        <file>assets/icons/plate_settings.svg</file>
-        <file>assets/icons/plate_settings_changed.svg</file>
-        <file>assets/icons/plate_move_front.svg</file>
-        <file>assets/icons/plate_name_edit.svg</file>
         <file>assets/icons/plate_close_dark.svg</file>
         <file>assets/icons/plate_close_hover_dark.svg</file>
         <file>assets/icons/plate_arrange_dark.svg</file>
@@ -275,7 +187,6 @@
         <file>assets/calib/VFA.stl</file>
         <file>assets/calib/retraction_tower.stl</file>
         <file>assets/calib/SpeedTestStructure.step</file>
-        <file>assets/calib/pressure_advance_test.stl</file>
         <file>assets/calib/flowrate-test-pass1.3mf</file>
         <file>assets/calib/flowrate-test-pass2.3mf</file>
         <file>assets/calib/tower_with_seam.stl</file>
