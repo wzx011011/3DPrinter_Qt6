@@ -292,25 +292,67 @@ ApplicationWindow {
 
     // Phase 237 (VIEW-03): window-level file drop (upstream
     // PlaterDropTarget::OnDropFiles, Plater.cpp:2738-2767). Accepted model
-    // extensions match the upstream load_files surface; non-model files are
-    // filtered out silently. A single .svg routes into the existing SVG
-    // emboss flow (EditorViewModel::importSVG, upstream emboss_svg,
-    // Plater.cpp:2158-2177); multiple files import into the current plate.
+    // extensions match the upstream load_files drop patterns
+    // (Plater.cpp:17318-17319); a dropped .gcode joins them (U6) and routes
+    // through the same GAP-6 preview-only entry as the Ctrl+I dialog. A
+    // single .svg routes into the existing SVG emboss flow
+    // (EditorViewModel::importSVG, upstream emboss_svg, Plater.cpp:2158-2177);
+    // multiple files import into the current plate. Files outside the
+    // whitelist surface a toast through the shared notification channel
+    // (upstream drops them silently; U6 makes the outcome visible).
     DropArea {
         anchors.fill: parent
         onDropped: function(drop) {
-            var modelSuffixes = ["3mf", "stl", "obj", "step", "stp", "amf", "svg", "zip"]
+            var modelSuffixes = ["3mf", "stl", "obj", "step", "stp", "amf", "svg", "zip", "gcode"]
             var paths = []
+            var gcodePaths = []
+            var ignoredCount = 0
             for (var i = 0; i < drop.urls.length; ++i) {
                 var path = drop.urls[i].toString()
-                // Local file URLs only (upstream OnDropFiles receives paths).
-                if (path.indexOf("file:///") !== 0)
+                // Local file URLs only (upstream OnDropFiles receives paths);
+                // anything else counts as an unsupported drop.
+                if (path.indexOf("file:///") !== 0) {
+                    ++ignoredCount
                     continue
+                }
                 path = decodeURIComponent(path.substring(8))
                 var dot = path.lastIndexOf(".")
                 var suffix = dot >= 0 ? path.substring(dot + 1).toLowerCase() : ""
-                if (modelSuffixes.indexOf(suffix) >= 0)
+                if (suffix === "gcode")
+                    gcodePaths.push(path)
+                else if (modelSuffixes.indexOf(suffix) >= 0)
                     paths.push(path)
+                else
+                    ++ignoredCount
+            }
+            // U6: unsupported drops used to vanish silently; report them via
+            // backend.postNotification (severity 2 = NotiWarning, the same
+            // channel ErrorToast renders for every other surface).
+            if (ignoredCount > 0)
+                backend.postNotification(
+                            qsTr("已忽略 %1 个不支持导入的拖入文件").arg(ignoredCount),
+                            qsTr("拖放导入"), 2)
+            // Upstream load_files partitions the drop set: G-code and models
+            // cannot load together (Plater.cpp:17352-17355) and only one
+            // G-code file opens at a time (Plater.cpp:17346-17350); both
+            // rejections surface as "G-code loading" messages.
+            if (gcodePaths.length > 0) {
+                if (paths.length > 0) {
+                    backend.postNotification(qsTr("G-code 文件与模型不能同时加载"),
+                                             qsTr("G-code 加载"), 2)
+                    return
+                }
+                if (gcodePaths.length > 1) {
+                    backend.postNotification(qsTr("一次只能打开一个 G-code 文件"),
+                                             qsTr("G-code 加载"), 2)
+                    return
+                }
+                root.requestActivate()
+                // Same GAP-6 routing as the Ctrl+I openModelDialog onAccepted:
+                // a new preview-only project; openExternalGcode switches to
+                // the Preview tab itself (BackendContext::openExternalGcode).
+                backend.openExternalGcode(gcodePaths[0])
+                return
             }
             if (paths.length === 0)
                 return
