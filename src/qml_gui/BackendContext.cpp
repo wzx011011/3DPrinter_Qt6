@@ -242,7 +242,7 @@ BackendContext::BackendContext(QObject *parent)
             if (success)
               clearError();
             else
-              postError(message.isEmpty() ? tr("导入失败") : message, 2);
+              postError(message.isEmpty() ? tr("导入失败") : message, NotiWarning);
             // Phase 236 (DLG-03): after a successful load/drop, re-run the
             // outside-bed detection (upstream shows the outside-bed prompt on
             // import). A non-empty result raises the RecenterDialog.
@@ -528,7 +528,7 @@ void BackendContext::applyAiSettings()
                        settingsViewModel_->aiControlToken())) {
       aiAgentService_->stop();
       postError(QStringLiteral("AI MCP 服务器启动失败（端口被占用？）"),
-                /*severity=*/2);
+                NotiWarning);
       if (aiControlActive_) {
         aiControlActive_ = false;
         emit stateChanged();
@@ -1084,7 +1084,7 @@ QString BackendContext::triggerProjectBackup()
   // hijack the user's current project file).
   if (!projectService_->writeProjectSnapshot(backupPath))
   {
-    postError(tr("Project backup failed"), 1);
+    postError(tr("Project backup failed"), NotiError);
     return QString();
   }
   postNotification(tr("Project backup saved: %1").arg(backupPath),
@@ -1162,7 +1162,7 @@ bool BackendContext::topbarImportConfigs(const QString &filePath)
     postNotification(tr("There is 1 config imported."),
                      tr("Import result"));
   else
-    postError(tr("Config import failed: %1").arg(QFileInfo(localPath).fileName()), 1);
+    postError(tr("Config import failed: %1").arg(QFileInfo(localPath).fileName()), NotiError);
   pushLatencySample(QStringLiteral("topbar-import-configs"),
                     int(m_latencyClock.elapsed() - start), localPath);
   return imported;
@@ -1240,7 +1240,9 @@ bool BackendContext::topbarSaveProject()
   // per-QML-entry) so Ctrl+S and both File menus inherit it.
   if (!canSave())
   {
-    postError(tr("切片/任务进行中，暂无法保存项目"), 1);
+    // Transient gate: the action is deferred, nothing failed/broken —
+    // warning grade, not the red error block (U1 severity sweep).
+    postError(tr("切片/任务进行中，暂无法保存项目"), NotiWarning);
     return false;
   }
 
@@ -1259,13 +1261,13 @@ bool BackendContext::topbarSaveProject()
   }
   if (projectService_ && !projectService_->saveProject(projectViewModel_->currentProjectPath()))
   {
-    postError(projectService_->lastError(), 1);
+    postError(projectService_->lastError(), NotiError);
     pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
     return false;
   }
 
   projectViewModel_->saveProject();
-  postError(tr("项目已保存"), 0);
+  postError(tr("项目已保存"), NotiInfo);
   pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
   return true;
 }
@@ -1279,7 +1281,9 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   // R-P1.I: same mid-slice serialization gate as topbarSaveProject.
   if (!canSave())
   {
-    postError(tr("切片/任务进行中，暂无法保存项目"), 1);
+    // Transient gate: the action is deferred, nothing failed/broken —
+    // warning grade, not the red error block (U1 severity sweep).
+    postError(tr("切片/任务进行中，暂无法保存项目"), NotiWarning);
     return false;
   }
 
@@ -1297,13 +1301,13 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
     projectService_->setProjectEmbeddedPresets(collectProjectEmbeddedPresets());
   if (projectService_ && !projectService_->saveProject(localPath))
   {
-    postError(projectService_->lastError(), 1);
+    postError(projectService_->lastError(), NotiError);
     pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
     return false;
   }
 
   projectViewModel_->saveProjectAs(localPath);
-  postError(tr("项目已保存到: %1").arg(QFileInfo(localPath).fileName()), 0);
+  postError(tr("项目已保存到: %1").arg(QFileInfo(localPath).fileName()), NotiInfo);
   pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
   return true;
 }
@@ -2404,7 +2408,7 @@ void BackendContext::checkForUpdates()
     if (reply->error() != QNetworkReply::NoError) {
       const QString message = tr("更新检查失败：%1").arg(reply->errorString());
       qWarning("[Backend] update check failed: %s", reply->errorString().toUtf8().constData());
-      postNotification(message, tr("检查更新"), 1);
+      postNotification(message, tr("检查更新"), NotiError);
       emit updateCheckFinished(false, false, message);
       return;
     }
@@ -2412,7 +2416,7 @@ void BackendContext::checkForUpdates()
     const QString tag = doc.object().value(QStringLiteral("tag_name")).toString();
     if (tag.isEmpty()) {
       const QString message = tr("更新服务器返回了无法解析的数据");
-      postNotification(message, tr("检查更新"), 1);
+      postNotification(message, tr("检查更新"), NotiError);
       emit updateCheckFinished(false, false, message);
       return;
     }
@@ -2420,7 +2424,7 @@ void BackendContext::checkForUpdates()
     const QString message = available
         ? tr("发现新版本 %1，请到项目发布页下载。").arg(tag)
         : tr("当前已是最新版本（%1）。").arg(QString::fromLatin1(kOwzxUpdateVersion));
-    postNotification(message, tr("检查更新"), 0);
+    postNotification(message, tr("检查更新"), NotiInfo);
     emit updateCheckFinished(true, available, message);
   });
 }

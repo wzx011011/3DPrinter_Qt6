@@ -40,6 +40,11 @@ import ".."
 //   0=info(green), 1=success(green), 2=warning(amber), 3=error(red block),
 //   4=seriousWarning(amber block), 5=hint(blue), 6/7=printInfo(purple),
 //   8/9=progress(blue)
+// U1 severity contract: 1 (success) is RESERVED for genuine successes
+// (slice/export finished). Failure paths must post 2 (warning) or 3 (error)
+// from QML (backend.postError/postNotification take the raw int) — posting 1
+// renders this green success toast AND lights the amber ErrorBanner, which
+// gates on backend.lastErrorSeverity === 1.
 // Persistent mode: doesn't auto-dismiss, shows progress bar and/or confirm buttons
 // Specialized types: hint navigation, slicing progress, export/preview buttons
 // Duplicate compression: repeatCount >= 2 renders an "xN" escalation badge

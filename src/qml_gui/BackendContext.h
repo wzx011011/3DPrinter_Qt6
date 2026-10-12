@@ -404,8 +404,14 @@ public:
   Q_INVOKABLE void requestSetSidebarDockArea(int area); ///< Set persisted sidebar dock area.
   /// Restore the default window/sidebar layout used by a fresh application.
   Q_INVOKABLE void resetWindowLayout();
-  Q_INVOKABLE void postError(const QString &message, int severity = 0);
-  Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = 0);
+  /// U1 severity contract: severity is a NotificationLevel (see the enum
+  /// above). Failure paths MUST NOT pass NotiSuccess(1) — severity 1 renders
+  /// a green success toast (ErrorToast.qml) and lights the amber ErrorBanner
+  /// (ErrorBanner.qml gates on lastErrorSeverity === 1), so a failure posted
+  /// as 1 contradicts itself on screen. Hard failures post NotiError;
+  /// retryable/transient blocks post NotiWarning; successes NotiSuccess.
+  Q_INVOKABLE void postError(const QString &message, int severity = NotiInfo);
+  Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = NotiInfo);
   Q_INVOKABLE void clearError();
   Q_INVOKABLE void dismissNotification();
   /// Phase 240 (NOTI-01): dismiss one stacked notification by its id (the
