@@ -75,12 +75,12 @@ private slots:
 
 private:
   void benchModel(const QString &modelPath, bool includeSlice,
-                  QJsonObject *reportOut);
+                  bool enableSupports, QJsonObject *reportOut);
   QJsonObject m_root;
 };
 
 void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
-                           QJsonObject *reportOut)
+                           bool enableSupports, QJsonObject *reportOut)
 {
   QJsonObject modelReport;
   const QString modelName = QFileInfo(modelPath).fileName();
@@ -262,6 +262,13 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
     merged.insert(QStringLiteral("sparse_infill_line_width"), 0);
     merged.insert(QStringLiteral("top_surface_line_width"), 0);
     merged.insert(QStringLiteral("support_line_width"), 0);
+    // P4 step-profile tier: the overhang tower exists to load the SUPPORT
+    // steps (every level overhangs the previous one). enable_support is
+    // false in the engine defaults (PrintConfig.cpp), so the tower tier
+    // turns it on explicitly; the other tiers keep the stock config so the
+    // timing-layer slice_ms stays comparable with the pre-P4 baselines.
+    if (enableSupports)
+      merged.insert(QStringLiteral("enable_support"), true);
     sliceService.setMergedPresetConfig(merged);
 
     timer.start();
@@ -294,6 +301,49 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
       modelReport[QStringLiteral("slice_output_path")] = gcodePath;
     }
 
+    // ── P4 step profile: per-step wall-clock timeline ──────────────────────
+    // The worker recorded one SliceStepTiming per distinct step key (first
+    // occurrence + count); step ms = adjacent firstAtMs deltas on the
+    // worker's single clock. The trailing "done" sentinel is NOT reported:
+    // it only anchors the last real step (gcode_export), whose duration
+    // would otherwise be invisible (nothing follows it). The sum of the
+    // reported steps therefore equals done.firstAtMs ≈ slice_ms (the bench
+    // clock additionally covers worker scheduling + completion delivery).
+    // Empty in mock builds -> the keys stay absent (consumer-side skip).
+    const auto timeline = sliceService.sliceStepTimeline();
+    if (!timeline.empty()) {
+      QJsonObject stepsMs;
+      QJsonObject stepsCounts;
+      qint64 doneAtMs = -1;
+      for (const auto &entry : timeline)
+        if (entry.key == QLatin1String("done"))
+          doneAtMs = entry.firstAtMs;
+      for (qsizetype i = 0; i < timeline.size(); ++i) {
+        const auto &entry = timeline[i];
+        if (entry.key == QLatin1String("done"))
+          continue;
+        qint64 endAtMs = doneAtMs;
+        if (endAtMs < 0) {
+          // No sentinel (failed slice): the tail step has no duration.
+          endAtMs = (i + 1 < timeline.size()) ? timeline[i + 1].firstAtMs
+                                              : entry.firstAtMs;
+        } else if (i + 1 < timeline.size() &&
+                   timeline[i + 1].key != QLatin1String("done")) {
+          endAtMs = timeline[i + 1].firstAtMs;
+        }
+        stepsMs.insert(entry.key, double(qMax<qint64>(0, endAtMs - entry.firstAtMs)));
+        stepsCounts.insert(entry.key, double(entry.count));
+      }
+      double stepsSumMs = 0.0;
+      for (auto it = stepsMs.begin(); it != stepsMs.end(); ++it)
+        stepsSumMs += it.value().toDouble();
+      modelReport[QStringLiteral("slice_steps_ms")] = stepsMs;
+      modelReport[QStringLiteral("slice_step_counts")] = stepsCounts;
+      qInfo("[BENCH] %-24s %8.1f ms | steps sum=%.1f (%zu keys)",
+            "slice_steps", stepsSumMs, stepsSumMs,
+            size_t(stepsMs.size()));
+    }
+
     // Preview parse stage: the GUI-thread gcode re-parse after each slice.
     if (!gcodePath.isEmpty() && QFileInfo::exists(gcodePath)) {
       PreviewViewModel preview(&projectService, &sliceService);
@@ -324,12 +374,24 @@ void PerfBench::stages()
     QString name;
     QString file;
     bool slice;
+    // P4 step-profile tier flags: supports=true turns enable_support on for
+    // the slice (overhang tower: the support steps ARE the workload);
+    // appDirRelative=true resolves the file against
+    // <build>/../tests/test_models instead of the models dir (Block20XY is
+    // a committed test fixture, kept single-source; build/ is always
+    // <repo>/build per the build rules, so ../tests is stable).
+    bool supports = false;
+    bool appDirRelative = false;
   };
   const QList<Tier> available = {
       {QStringLiteral("400k"), QStringLiteral("bench_sphere_400k.stl"), true},
       {QStringLiteral("2m"), QStringLiteral("bench_sphere_2m.stl"), false},
       {QStringLiteral("5m"), QStringLiteral("bench_sphere_5m.stl"), false},
-      {QStringLiteral("grid"), QStringLiteral("bench_grid_20x100k.stl"), false},
+      {QStringLiteral("grid"), QStringLiteral("bench_grid_20x100k.stl"), true},
+      {QStringLiteral("tower"), QStringLiteral("bench_overhang_tower.stl"),
+       true, true},
+      {QStringLiteral("block"), QStringLiteral("Block20XY.stl"), true, false,
+       true},
   };
 
   QJsonObject models;
@@ -337,14 +399,19 @@ void PerfBench::stages()
   for (const Tier &tier : available) {
     if (!tiers.contains(tier.name, Qt::CaseInsensitive))
       continue;
-    const QString path = QDir::cleanPath(modelsDir + QLatin1Char('/') + tier.file);
+    const QString path =
+        tier.appDirRelative
+            ? QDir::cleanPath(QCoreApplication::applicationDirPath()
+                              + QStringLiteral("/../tests/test_models/")
+                              + tier.file)
+            : QDir::cleanPath(modelsDir + QLatin1Char('/') + tier.file);
     if (!QFileInfo::exists(path)) {
       qInfo("[BENCH] SKIP %s (missing %s)", qPrintable(tier.name),
             qPrintable(path));
       continue;
     }
     QJsonObject modelReport;
-    benchModel(path, includeSlice && tier.slice, &modelReport);
+    benchModel(path, includeSlice && tier.slice, tier.supports, &modelReport);
     models[tier.name] = modelReport;
     ranAny = true;
   }

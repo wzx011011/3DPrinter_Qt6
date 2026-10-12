@@ -1,7 +1,7 @@
 {
-    "version":  1,
-    "established_at_utc":  "2026-10-10T13:07:13Z",
-    "established_from_commit":  "80f6e55",
+    "version":  2,
+    "established_at_utc":  "2026-10-12T22:01:10Z",
+    "established_from_commit":  "5a0776f",
     "pins":  {
                  "layer_height":  0.15
              },
@@ -34,7 +34,7 @@
                                                         "M900":  1
                                                     },
                                        "total_e":  5492.73505,
-                                       "size_bytes":  38803607
+                                       "size_bytes":  38795591
                                    },
                    "block_20xy":  {
                                       "stl":  "tests/test_models/Block20XY.stl",
@@ -64,17 +64,159 @@
                                                        "M900":  1
                                                    },
                                       "total_e":  5256.67335,
-                                      "size_bytes":  1114010
+                                      "size_bytes":  1114278
                                   }
                },
     "timing":  {
                    "repeats":  3,
-                   "slice_ms_min":  1548,
-                   "preview_parse_ms_min":  779,
-                   "slice_gcode_bytes":  10579358,
+                   "slice_ms_min":  1670,
+                   "preview_parse_ms_min":  791,
+                   "slice_gcode_bytes":  10584858,
                    "max_regression_pct":  {
                                               "slice_ms":  25,
                                               "preview_parse_ms":  10
                                           }
-               }
+               },
+    "step_profiles":  {
+                          "sphere_400k":  {
+                                              "stl":  "build/perf_models/bench_sphere_400k.stl",
+                                              "slice_ms":  1684,
+                                              "steps_ms":  {
+                                                               "config_prep":  1,
+                                                               "gcode_export":  773,
+                                                               "infill_regions":  130,
+                                                               "infill_toolpath":  228,
+                                                               "mesh_slicing":  149,
+                                                               "model_prep":  0,
+                                                               "overhang_lift":  5,
+                                                               "param_apply":  57,
+                                                               "path_optimization":  12,
+                                                               "perimeters":  274,
+                                                               "skirt_brim":  11,
+                                                               "support":  18,
+                                                               "validate":  18
+                                                           },
+                                              "steps_counts":  {
+                                                                   "config_prep":  1,
+                                                                   "gcode_export":  251,
+                                                                   "infill_regions":  1,
+                                                                   "infill_toolpath":  1,
+                                                                   "mesh_slicing":  1,
+                                                                   "model_prep":  1,
+                                                                   "overhang_lift":  1,
+                                                                   "param_apply":  1,
+                                                                   "path_optimization":  3,
+                                                                   "perimeters":  1,
+                                                                   "skirt_brim":  1,
+                                                                   "support":  1,
+                                                                   "validate":  2
+                                                               }
+                                          },
+                          "overhang_tower":  {
+                                                 "stl":  "build/perf_models/bench_overhang_tower.stl",
+                                                 "slice_ms":  4917,
+                                                 "steps_ms":  {
+                                                                  "config_prep":  1,
+                                                                  "gcode_export":  3864,
+                                                                  "infill_regions":  9,
+                                                                  "infill_toolpath":  35,
+                                                                  "mesh_slicing":  67,
+                                                                  "model_prep":  0,
+                                                                  "overhang_lift":  5,
+                                                                  "param_apply":  34,
+                                                                  "path_optimization":  112,
+                                                                  "perimeters":  12,
+                                                                  "skirt_brim":  31,
+                                                                  "support":  739,
+                                                                  "validate":  2
+                                                              },
+                                                 "steps_counts":  {
+                                                                      "config_prep":  1,
+                                                                      "gcode_export":  698,
+                                                                      "infill_regions":  1,
+                                                                      "infill_toolpath":  1,
+                                                                      "mesh_slicing":  1,
+                                                                      "model_prep":  1,
+                                                                      "overhang_lift":  1,
+                                                                      "param_apply":  1,
+                                                                      "path_optimization":  3,
+                                                                      "perimeters":  1,
+                                                                      "skirt_brim":  1,
+                                                                      "support":  1,
+                                                                      "validate":  2
+                                                                  }
+                                             },
+                          "grid_20x100k":  {
+                                               "stl":  "build/perf_models/bench_grid_20x100k.stl",
+                                               "slice_ms":  7839,
+                                               "steps_ms":  {
+                                                                "config_prep":  1,
+                                                                "gcode_export":  2888,
+                                                                "infill_regions":  1068,
+                                                                "infill_toolpath":  971,
+                                                                "mesh_slicing":  753,
+                                                                "model_prep":  0,
+                                                                "overhang_lift":  32,
+                                                                "param_apply":  352,
+                                                                "path_optimization":  27,
+                                                                "perimeters":  1274,
+                                                                "skirt_brim":  229,
+                                                                "support":  205,
+                                                                "validate":  6
+                                                            },
+                                               "steps_counts":  {
+                                                                    "config_prep":  1,
+                                                                    "gcode_export":  91,
+                                                                    "infill_regions":  1,
+                                                                    "infill_toolpath":  1,
+                                                                    "mesh_slicing":  1,
+                                                                    "model_prep":  1,
+                                                                    "overhang_lift":  1,
+                                                                    "param_apply":  1,
+                                                                    "path_optimization":  3,
+                                                                    "perimeters":  1,
+                                                                    "skirt_brim":  1,
+                                                                    "support":  1,
+                                                                    "validate":  2
+                                                                }
+                                           },
+                          "block_20xy":  {
+                                             "stl":  "tests/test_models/Block20XY.stl",
+                                             "slice_ms":  89,
+                                             "steps_ms":  {
+                                                              "config_prep":  1,
+                                                              "gcode_export":  73,
+                                                              "infill_regions":  2,
+                                                              "infill_toolpath":  1,
+                                                              "mesh_slicing":  1,
+                                                              "model_prep":  0,
+                                                              "overhang_lift":  1,
+                                                              "param_apply":  2,
+                                                              "path_optimization":  2,
+                                                              "perimeters":  3,
+                                                              "skirt_brim":  0,
+                                                              "support":  0,
+                                                              "validate":  2
+                                                          },
+                                             "steps_counts":  {
+                                                                  "config_prep":  1,
+                                                                  "gcode_export":  101,
+                                                                  "infill_regions":  1,
+                                                                  "infill_toolpath":  1,
+                                                                  "mesh_slicing":  1,
+                                                                  "model_prep":  1,
+                                                                  "overhang_lift":  1,
+                                                                  "param_apply":  1,
+                                                                  "path_optimization":  3,
+                                                                  "perimeters":  1,
+                                                                  "skirt_brim":  1,
+                                                                  "support":  1,
+                                                                  "validate":  2
+                                                              }
+                                         }
+                      },
+    "step_thresholds":  {
+                            "max_regression_pct":  30,
+                            "min_step_ms":  20
+                        }
 }

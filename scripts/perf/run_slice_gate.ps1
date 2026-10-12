@@ -1,5 +1,10 @@
-# Slice regression gate: correctness (normalized golden gcode) + efficiency
-# (PerfBench slice stage, min-of-N vs baseline thresholds).
+# Slice regression gate, three layers:
+#   1. correctness (normalized golden gcode via owzx-cli + gcode_compare.py)
+#   2. efficiency  (PerfBench slice stage, min-of-N vs baseline thresholds)
+#   3. step profile (P4, docs/开发计划_2026-10-10.md §6d: 4 representative
+#      models x per-step wall-clock profile from the SliceService step
+#      timeline, vs baseline.step_profiles; a step regressing >+30% with a
+#      >=20ms baseline in BOTH measurement rounds is a regression)
 #
 # Invoked automatically by scripts/auto_verify_with_vcvars.ps1 when the
 # change surface touches the slicing pipeline; also runnable standalone:
@@ -10,7 +15,7 @@
 # Env overrides:
 #   OWZX_SLICE_GATE_REPEATS   PerfBench timing repeats per round (default 3)
 #
-# Exit codes: 0 pass | 1 correctness regression | 2 timing regression | 3 infra error
+# Exit codes: 0 pass | 1 correctness regression | 2 timing/step-profile regression | 3 infra error
 #
 # Baseline lives at tests/data/slice_gate_baseline.json (committed). Correctness
 # hard-compares normalized_sha256 / line count / semantic counts produced by
@@ -18,6 +23,10 @@
 # still carry path-dependent comment lengths). Timing hard-fails only when the
 # min-of-N breaches the baseline threshold in BOTH measurement rounds (the
 # docs/perf-baseline.md noise rules: slice_ms is a volatile wall-clock metric).
+# The step-profile layer hard-fails the same two-round way; small steps
+# (baseline < 20ms) are exempt from the percentage rule (noise floor), and a
+# step KEY appearing/disappearing (engine set_status wording changed) fails
+# immediately and is re-golded only via -UpdateBaseline after human review.
 
 param([switch]$UpdateBaseline)
 
@@ -54,6 +63,23 @@ $script:defaultModels = @(
     @{ key = 'block_20xy';  stl = 'tests/test_models/Block20XY.stl' }
 )
 
+# P4 step-profile manifest (§6d): 4 representative models, each sliced once
+# per profile round through PerfBench's in-process SliceService path. `tier`
+# is the PERF_BENCH_TIERS selector; the timing layer above stays pinned to
+# the 400k tier only. The tower tier enables enable_support inside PerfBench
+# (support generation IS its workload).
+$script:profileModels = @(
+    @{ key = 'sphere_400k';    tier = '400k';  stl = 'build/perf_models/bench_sphere_400k.stl' },
+    @{ key = 'overhang_tower'; tier = 'tower'; stl = 'build/perf_models/bench_overhang_tower.stl' },
+    @{ key = 'grid_20x100k';   tier = 'grid';  stl = 'build/perf_models/bench_grid_20x100k.stl' },
+    @{ key = 'block_20xy';     tier = 'block'; stl = 'tests/test_models/Block20XY.stl' }
+)
+
+# P4 step-profile thresholds: a step is a regression only when it regresses
+# by more than max_regression_pct AND the baseline step is at least
+# min_step_ms (small steps are exempt -- noise floor).
+$script:stepThresholds = [ordered]@{ max_regression_pct = 30; min_step_ms = 20 }
+
 function Write-Gate([string]$Message, [string]$Color = 'Gray') {
     Write-Host ("[slice-gate] " + $Message) -ForegroundColor $Color
 }
@@ -74,7 +100,10 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 if (-not (Test-Path $cliExe))  { Fail-Infra "owzx-cli.exe not found at $cliExe -- run scripts/auto_verify_with_vcvars.ps1 first" }
 if (-not (Test-Path $perfExe)) { Fail-Infra "PerfBench.exe not found at $perfExe -- run scripts/auto_verify_with_vcvars.ps1 first" }
 
-if (-not (Test-Path (Join-Path $modelsDir 'bench_sphere_400k.stl'))) {
+$benchSphere = Join-Path $modelsDir 'bench_sphere_400k.stl'
+$benchTower  = Join-Path $modelsDir 'bench_overhang_tower.stl'
+$benchGrid   = Join-Path $modelsDir 'bench_grid_20x100k.stl'
+if ((-not (Test-Path $benchSphere)) -or (-not (Test-Path $benchTower)) -or (-not (Test-Path $benchGrid))) {
     Write-Gate 'generating benchmark models...'
     python (Join-Path $repoRoot 'scripts\perf\gen_benchmark_models.py') $modelsDir
     if ($LASTEXITCODE -ne 0) { Fail-Infra 'gen_benchmark_models.py failed' }
@@ -284,13 +313,156 @@ if (-not $establishing) {
     Write-Gate ("timing round: slice_ms min {0}ms, preview_parse_ms min {1}ms (recorded as new baseline)" -f $curSlice, $curPreview)
 }
 
+# ── Stage 3: step profiles (P4, §6d; 4 models x one PerfBench round each) ──
+# Each profile model runs PerfBench once with its tier; the report's
+# slice_steps_ms / slice_step_counts come from the SliceService step
+# timeline (first-occurrence stamps; the trailing "done" sentinel is
+# dropped and only anchors gcode_export's duration).
+function Invoke-ProfileRound([int]$Round) {
+    $profiles = [ordered]@{}
+    foreach ($m in $script:profileModels) {
+        $env:OWZX_PERF_LOG = '1'
+        $env:PERF_BENCH_MODELS_DIR = $modelsDir
+        $env:PERF_BENCH_TIERS = $m.tier
+        $env:PERF_BENCH_SLICE = '1'
+        $profReport = Join-Path $outDir ("step_profile_r{0}_{1}.json" -f $Round, $m.key)
+        $env:PERF_BENCH_REPORT = $profReport
+        Write-Gate ("profiling {0} (tier {1}, round {2})" -f $m.key, $m.tier, $Round)
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & $perfExe *> $null
+        $ErrorActionPreference = $prevEap
+        if ($LASTEXITCODE -ne 0) { Fail-Infra "PerfBench exited with code $LASTEXITCODE (profile $($m.key) round $Round)" }
+        $r = Get-Content $profReport -Raw | ConvertFrom-Json
+        $node = $r.models.($m.tier)
+        $propNames = @($node.PSObject.Properties.Name)
+        if (-not $node -or ($propNames -notcontains 'slice_steps_ms')) {
+            Fail-Infra "step profile missing for $($m.key): PerfBench wrote no slice_steps_ms (mock build without libslic3r?)"
+        }
+        $profiles[$m.key] = [ordered]@{
+            stl           = $m.stl
+            slice_ms      = [double]$node.slice_ms
+            steps_ms      = $node.slice_steps_ms
+            steps_counts  = $node.slice_step_counts
+        }
+    }
+    return $profiles
+}
+
+# Compares one model's current profile against the baseline profile. Returns
+# rows (for report + console) and the failure list. Failure rules:
+#   - step KEY set changed (engine wording changed) -> always a failure;
+#   - step regressed > +30% AND baseline step >= min_step_ms -> a failure.
+function Compare-StepProfile([string]$Key, $BaseProfile, $CurProfile) {
+    $baseSteps = $BaseProfile.steps_ms
+    $curSteps = $CurProfile.steps_ms
+    $baseNames = @($baseSteps.PSObject.Properties.Name)
+    $curNames = @($curSteps.PSObject.Properties.Name)
+    $maxPct = [double]$script:stepThresholds.max_regression_pct
+    $minMs = [double]$script:stepThresholds.min_step_ms
+    $rows = @()
+    $failures = @()
+
+    foreach ($name in $baseNames) {
+        if ($curNames -notcontains $name) {
+            $failures += "step key '$name' disappeared (engine set_status wording changed? re-gold via -UpdateBaseline after review)"
+            $rows += @{ model = $Key; step = $name; base_ms = [math]::Round([double]$baseSteps.$name, 1); cur_ms = $null; delta_pct = $null; verdict = 'MISSING-KEY' }
+        }
+    }
+    foreach ($name in $curNames) {
+        if ($baseNames -notcontains $name) {
+            $failures += "new step key '$name' appeared (engine set_status wording changed? re-gold via -UpdateBaseline after review)"
+            $rows += @{ model = $Key; step = $name; base_ms = $null; cur_ms = [math]::Round([double]$curSteps.$name, 1); delta_pct = $null; verdict = 'NEW-KEY' }
+        }
+    }
+
+    foreach ($name in $baseNames) {
+        if ($curNames -notcontains $name) { continue }
+        $b = [double]$baseSteps.$name
+        $c = [double]$curSteps.$name
+        $pct = if ($b -gt 0) { [math]::Round(($c - $b) / $b * 100, 1) } else { 0.0 }
+        if ($b -lt $minMs) {
+            $verdict = 'ok (below {0}ms floor)' -f $minMs
+            Write-Gate ("  {0,-22} {1,9:F1} -> {2,9:F1} ms  {3,7}%  {4}" -f $name, $b, $c, $pct, $verdict) 'DarkGray'
+        } elseif ($pct -gt $maxPct) {
+            $verdict = 'REGRESSION'
+            $failures += ("step '{0}' {1}ms vs baseline {2}ms (+{3}% > {4}% limit)" -f $name, $c, $b, $pct, $maxPct)
+            Write-Gate ("  {0,-22} {1,9:F1} -> {2,9:F1} ms  {3,7}%  {4}" -f $name, $b, $c, $pct, $verdict) 'Red'
+        } elseif ($pct -lt -10) {
+            $verdict = 'improved'
+            Write-Gate ("  {0,-22} {1,9:F1} -> {2,9:F1} ms  {3,7}%  {4}" -f $name, $b, $c, $pct, $verdict) 'Green'
+        } else {
+            $verdict = 'ok'
+            Write-Gate ("  {0,-22} {1,9:F1} -> {2,9:F1} ms  {3,7}%  {4}" -f $name, $b, $c, $pct, $verdict)
+        }
+        $rows += @{ model = $Key; step = $name; base_ms = [math]::Round($b, 1); cur_ms = [math]::Round($c, 1); delta_pct = $pct; verdict = $verdict }
+    }
+    return @{ rows = $rows; failures = $failures }
+}
+
+$stepProfileRows = @()
+$stepProfileFailed = $false
+$stepProfileRoundsRun = 0
+if ($establishing) {
+    Write-Gate 'step profiles: establishing baseline (single round per model)' 'Yellow'
+    $script:baselineProfiles = Invoke-ProfileRound 1
+    $stepProfileRoundsRun = 1
+    foreach ($m in $script:profileModels) {
+        $p = $script:baselineProfiles.($m.key)
+        Write-Gate ("  {0}: slice {1:F0}ms, {2} step keys (recorded as new baseline)" -f $m.key, $p.slice_ms, @($p.steps_ms.PSObject.Properties.Name).Count)
+    }
+} else {
+    if (-not $baseline.step_profiles) {
+        Fail-Infra 'baseline lacks step_profiles (pre-P4 schema) -- run with -UpdateBaseline to re-gold'
+    }
+    $profiles1 = Invoke-ProfileRound 1
+    $stepProfileRoundsRun = 1
+    $allRows1 = @()
+    $fail1 = @()
+    foreach ($m in $script:profileModels) {
+        Write-Gate ("step profile [{0}] (slice {1:F0}ms vs baseline {2:F0}ms):" -f $m.key, $profiles1.($m.key).slice_ms, $baseline.step_profiles.($m.key).slice_ms)
+        $cmp = Compare-StepProfile $m.key $baseline.step_profiles.($m.key) $profiles1.($m.key)
+        $allRows1 += $cmp.rows
+        $fail1 += $cmp.failures
+    }
+    $stepProfileRows = $allRows1
+
+    # Volatile-metric rule (same as the timing layer): one breaching round
+    # gets an automatic re-measure; only a breach in BOTH rounds fails.
+    if ($fail1.Count -gt 0) {
+        Write-Gate ("round-1 step profile breached ({0} finding(s)) -- re-measuring profiles once" -f $fail1.Count) 'Yellow'
+        $profiles2 = Invoke-ProfileRound 2
+        $stepProfileRoundsRun = 2
+        $allRows2 = @()
+        $fail2 = @()
+        foreach ($m in $script:profileModels) {
+            Write-Gate ("step profile [{0}] round 2 (slice {1:F0}ms):" -f $m.key, $profiles2.($m.key).slice_ms)
+            $cmp2 = Compare-StepProfile $m.key $baseline.step_profiles.($m.key) $profiles2.($m.key)
+            $allRows2 += $cmp2.rows
+            $fail2 += $cmp2.failures
+        }
+        $stepProfileRows = $allRows2
+        if ($fail2.Count -gt 0) {
+            $stepProfileFailed = $true
+            foreach ($f in $fail2) { Write-Gate ("STEP PROFILE FAIL: {0}" -f $f) 'Red' }
+        } else {
+            Write-Gate 'round-2 step profiles within thresholds -- treated as noise (docs/perf-baseline.md two-round rule)' 'Yellow'
+        }
+    }
+}
+
+if ($stepProfileFailed) {
+    Write-Gate 'GATE FAILED: slice step profile regressed beyond threshold in both rounds (exit 2)' 'Red'
+    exit 2
+}
+
 # ── Persist baseline / report ──────────────────────────────────────────────
 $commit = Get-HeadCommit
 $timestamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 
 if ($establishing) {
     $newBaseline = [ordered]@{
-        version = 1
+        version = 2
         established_at_utc = $timestamp
         established_from_commit = $commit
         pins = $script:pins
@@ -302,6 +474,13 @@ if ($establishing) {
             slice_gcode_bytes = $round1.mins.gcode_bytes
             max_regression_pct = [ordered]@{ slice_ms = 25; preview_parse_ms = 10 }
         }
+        # P4 (§6d): per-step wall-clock profiles of the 4 representative
+        # models, one PerfBench round each. steps_ms keys are the §6d step
+        # keys (engine set_status text -> normalized key); a key appearing or
+        # disappearing means the engine wording changed -> gate red ->
+        # re-gold after human review.
+        step_profiles = $script:baselineProfiles
+        step_thresholds = $script:stepThresholds
     }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $baselinePath) | Out-Null
     # Write BOM-less UTF-8: PS 5.1's Set-Content -Encoding UTF8 adds a BOM,
@@ -321,15 +500,23 @@ $report = [ordered]@{
         runs_round1 = $round1.runs
         rows = $timingRows
     }
+    # P4 (§6d): step-profile verdicts, per step: baseline -> current -> delta%.
+    step_profiles = [ordered]@{
+        thresholds = $script:stepThresholds
+        rounds_run = $stepProfileRoundsRun
+        failed = $stepProfileFailed
+        rows = $stepProfileRows
+    }
 }
 ($report | ConvertTo-Json -Depth 8) | Set-Content -Path $reportPath -Encoding UTF8
 Write-Gate ("report: " + $reportPath)
 
 # Hygiene: PerfBench slices drop timestamped gcode files into build/ -- clean
 # stale bench leftovers (this gate's own outputs live under perf_out/).
-Get-ChildItem -Path $buildDir -Filter 'bench_sphere_400k_*.gcode' -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.LastWriteTime -lt (Get-Date).AddMinutes(-15) } |
+# P4: the profile tiers add the tower/grid/block base names.
+Get-ChildItem -Path $buildDir -Filter '*.gcode' -File -ErrorAction SilentlyContinue |
+    Where-Object { ($_.Name -like 'bench_*' -or $_.Name -like 'Block20XY_*') -and $_.LastWriteTime -lt (Get-Date).AddMinutes(-15) } |
     Remove-Item -Force -ErrorAction SilentlyContinue
 
-Write-Gate 'PASS: slice correctness + efficiency gate green' 'Green'
+Write-Gate 'PASS: slice correctness + efficiency + step-profile gate green' 'Green'
 exit 0
