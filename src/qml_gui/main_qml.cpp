@@ -94,6 +94,14 @@ struct StartupOpenRequest
   QString page;
   QStringList dialogs;
   QStringList modelPaths;
+  // U5: bare (flagless) argv entries = document paths. This is the
+  // upstream-aligned, user-facing file-open surface: Windows "Open With" /
+  // double-click launches `OWzxSlicer.exe <file>`. Upstream collects the same
+  // positional list into m_input_files (OrcaSlicer.cpp:7446 read_cli) and
+  // hands it to the GUI as GUI_InitParams::input_files
+  // (OrcaSlicer.cpp:1409-1425). Kept separate from the FIXTURE-04 test flags
+  // below -- never fused with them.
+  QStringList positionalPaths;
   bool skipFirstRun = false;
   // --qml-dev: load the QML tree from the source checkout instead of the
   // compiled-in resources. UI iterations then need no rcc/TU/link pass --
@@ -183,6 +191,10 @@ static QVector<StartupDialogRoute> startupDialogRoutes()
 // (--open-page, --open-dialog, --load-model, --skip-first-run) are OWzx-only
 // test-evidence plumbing. Upstream OrcaSlicer has NO equivalent argv surface;
 // upstream argv is CLI-only (--load / --slice / positional at OrcaSlicer.cpp:7183).
+// U5 carve-out: the POSITIONAL (flagless) entries are the one upstream-aligned,
+// user-facing surface -- Windows file association / double-click passes the
+// document path as a bare argument. They are parsed alongside (never fused
+// with) the test flags and share the FIXTURE-02 readiness gate.
 // These flags exist so external screenshot capture can reach a target GUI state
 // without simulated clicks, and they are gated on objectCreated +
 // QQuickWindow::frameSwapped (FIXTURE-02) so screenshots are deterministic.
@@ -228,6 +240,10 @@ static StartupOpenRequest parseStartupOpenRequest(QCoreApplication &app)
   request.page = parser.value(openPageOption);
   request.dialogs = parser.values(openDialogOption);
   request.modelPaths = parser.values(loadModelOption);
+  // U5: QCommandLineParser leaves non-option argv in positionalArguments(),
+  // so document paths coexist with every test flag above (e.g.
+  // `--open-page prepare C:\model.3mf` keeps both semantics intact).
+  request.positionalPaths = parser.positionalArguments();
   request.skipFirstRun = parser.isSet(skipFirstRunOption);
   request.qmlDev = parser.isSet(qmlDevOption);
   return request;
@@ -264,6 +280,24 @@ static void applyStartupOpenRequests(const StartupOpenRequest &request,
   {
     const bool loaded = backend.topbarImportModel(modelPath);
     appendStartupLog(QStringLiteral("Startup load-model %1: %2")
+                         .arg(loaded ? QStringLiteral("handled") : QStringLiteral("failed"),
+                              modelPath));
+  }
+
+  // U5: positional document paths. Dispatch mirrors the open-model dialog
+  // (main.qml onAccepted) and upstream: .gcode opens as a preview-only
+  // project (is_gcode_file = ".gcode" suffix, utils.cpp:1080; the
+  // Plater::load_gcode behavior via openExternalGcode, GAP-6), everything
+  // else imports as a model file through the same topbarImportModel path as
+  // --load-model (.3mf/.stl/...). Unrecognized paths fail gracefully and land
+  // in the startup log -- they can never abort startup.
+  for (const QString &modelPath : request.positionalPaths)
+  {
+    const bool loaded =
+        modelPath.endsWith(QStringLiteral(".gcode"), Qt::CaseInsensitive)
+            ? backend.openExternalGcode(modelPath)
+            : backend.topbarImportModel(modelPath);
+    appendStartupLog(QStringLiteral("Startup positional file %1: %2")
                          .arg(loaded ? QStringLiteral("handled") : QStringLiteral("failed"),
                               modelPath));
   }
@@ -639,7 +673,8 @@ int main(int argc, char *argv[])
   // instead of hanging forever. The empty-request case skips the gate entirely.
   if (!startupOpenRequest.page.isEmpty()
       || !startupOpenRequest.dialogs.isEmpty()
-      || !startupOpenRequest.modelPaths.isEmpty())
+      || !startupOpenRequest.modelPaths.isEmpty()
+      || !startupOpenRequest.positionalPaths.isEmpty())
   {
     auto *rootWindow = qobject_cast<QQuickWindow *>(engine->rootObjects().value(0));
     if (rootWindow)
