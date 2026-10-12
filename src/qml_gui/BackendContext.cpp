@@ -239,6 +239,10 @@ BackendContext::BackendContext(QObject *parent)
   connect(projectService_, &ProjectServiceMock::loadFinished, this,
           [this](bool success, const QString &message)
           {
+            // U3: the import progress toast retires on EVERY terminal state
+            // (success / failure / user cancel). Success surfaces through the
+            // editor refresh below, failure/cancel through the postError.
+            retireNotificationType(NotiTypeProgressBar);
             if (success)
               clearError();
             else
@@ -301,7 +305,23 @@ BackendContext::BackendContext(QObject *parent)
     connect(sliceService_, &SliceService::sliceFailed, this,
             [this](const QString &message)
             {
-              postNotification(message, tr("切片失败"), NotiError);
+              // U3: a slice attempt that terminates as failed OR cancelled
+              // must retire its live progress toast. The toasts posted below
+              // are Custom-type entries, so they never hit the same-type
+              // dedup that replaces the progress entry on success
+              // (postSlicingComplete) -- without the retirement the
+              // persistent "切片中" toast would linger forever.
+              retireNotificationType(NotiTypeSlicingProgress);
+              // U3: a user cancel arrives here with State::Cancelled (the
+              // cancel-flag delivery path sets it, SliceService.cpp:1346).
+              // Upstream renders the cancelled state as the plain SP_CANCELLED
+              // message that fades (SlicingProgressNotification.hpp:19), not
+              // the error block -- posting NotiError would call a deliberate
+              // cancel a failure.
+              if (sliceService_->sliceState() == SliceService::State::Cancelled)
+                postNotification(message, tr("切片已取消"), NotiInfo);
+              else
+                postNotification(message, tr("切片失败"), NotiError);
             });
     // Phase 239 (ENGN-03): upstream distinguishes non-fatal Print::validate
     // warnings from errors (Plater.cpp:13742-13759 process_validation_warning
@@ -316,10 +336,41 @@ BackendContext::BackendContext(QObject *parent)
             { postExportOngoing(stage); });
     connect(sliceService_, &SliceService::exportFinished, this,
             [this](const QString &filePath)
-            { postExportFinished(filePath); });
+            {
+              // U3: retire the export-ongoing toast on the terminal signal.
+              // The G-code copy progress reuses the progressUpdated channel
+              // (SliceService copyGcodeChunked onProgress), which revives a
+              // NotiTypeSlicingProgress entry mid-export; retire that too,
+              // but only while the slice engine is idle -- a slice started
+              // during the export owns a live progress toast that must
+              // survive.
+              retireNotificationType(NotiTypeExportOngoing);
+              if (!sliceService_->slicing())
+                retireNotificationType(NotiTypeSlicingProgress);
+              postExportFinished(filePath);
+            });
     connect(sliceService_, &SliceService::exportFailed, this,
             [this](const QString &message)
-            { postNotification(message, tr("Export failed"), NotiError); });
+            {
+              retireNotificationType(NotiTypeExportOngoing);
+              if (!sliceService_->slicing())
+                retireNotificationType(NotiTypeSlicingProgress);
+              // Same cancel-vs-failure split as the slice path above: the
+              // cancel-flag delivery sets State::Cancelled before emitting.
+              if (sliceService_->sliceState() == SliceService::State::Cancelled)
+                postNotification(message, tr("导出已取消"), NotiInfo);
+              else
+                postNotification(message, tr("Export failed"), NotiError);
+            });
+
+    // U3: 3MF 导入进度 toast。项目/模型加载在 QtConcurrent worker 里跑，
+    // loadProgressUpdated 是它唯一的 GUI 线程进度通道；此前只喂
+    // EditorViewModel::statusText，而 StatusBar 已随 layout-1 移除——大文件
+    // 导入因此"白等"（UX 报告 U3 根因）。取消按钮经 cancelNotificationAction
+    // 落到 ProjectServiceMock::cancelLoad 的取消标志。
+    connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this,
+            [this](int progress, const QString &stage)
+            { postImportProgress(progress, stage); });
 
     // Propagate 3MF embedded config to ConfigViewModel on project load
     connect(projectService_, &ProjectServiceMock::projectConfigLoaded,
@@ -1489,6 +1540,21 @@ void BackendContext::archiveNotification(const NotificationEntry &entry)
   emit historyChanged();
 }
 
+void BackendContext::retireNotificationType(int type)
+{
+  bool removed = false;
+  for (int i = m_activeNotifications.size() - 1; i >= 0; --i)
+  {
+    if (m_activeNotifications[i].type != type)
+      continue;
+    const NotificationEntry retired = m_activeNotifications.takeAt(i);
+    archiveNotification(retired);
+    removed = true;
+  }
+  if (removed)
+    showNextNotification(); // pumps the overflow queue + syncs/emits
+}
+
 void BackendContext::pushNotificationEntry(NotificationEntry entry, bool dedupByTypeOnly)
 {
   // Duplicate compression (upstream activate_existing, NotificationManager.
@@ -1515,6 +1581,7 @@ void BackendContext::pushNotificationEntry(NotificationEntry entry, bool dedupBy
     live.severity = entry.severity;
     live.persistent = entry.persistent;
     live.hasProgress = entry.hasProgress;
+    live.cancellable = entry.cancellable;
     live.progressValue = entry.progressValue;
     live.progressMin = entry.progressMin;
     live.progressMax = entry.progressMax;
@@ -1626,6 +1693,63 @@ void BackendContext::cancelNotificationById(int id)
   }
 }
 
+void BackendContext::cancelNotificationAction(int id)
+{
+  // U3: upstream on_cancel_button semantics (SlicingProgressNotification
+  // .cpp:161-170): run the cancel callback; when it reports nothing to
+  // cancel any more (service already idle), drop the notification outright
+  // (callback-false -> set_progress_state(SP_NO_SLICING)). The service
+  // workers own the terminal report -- cancelSlice/cancelExport/cancelLoad
+  // only flip their shared atomic flags, and the completion lambdas deliver
+  // sliceFailed / exportFailed / loadFinished on the GUI thread, which
+  // retire the entry via the connections in the constructor.
+  for (int i = 0; i < m_activeNotifications.size(); ++i)
+  {
+    NotificationEntry &entry = m_activeNotifications[i];
+    if (entry.id != id || !entry.cancellable)
+      continue;
+
+    QString cancellingText;
+    switch (entry.type)
+    {
+    case NotiTypeSlicingProgress:
+      if (!sliceService_ || !sliceService_->slicing())
+      {
+        dismissNotificationById(id);
+        return;
+      }
+      sliceService_->cancelSlice();
+      cancellingText = tr("正在取消切片...");
+      break;
+    case NotiTypeExportOngoing:
+      if (!sliceService_ || !sliceService_->exportBusy())
+      {
+        dismissNotificationById(id);
+        return;
+      }
+      sliceService_->cancelExport();
+      cancellingText = tr("正在取消导出...");
+      break;
+    case NotiTypeProgressBar:
+      if (!projectService_ || !projectService_->loading())
+      {
+        dismissNotificationById(id);
+        return;
+      }
+      projectService_->cancelLoad();
+      cancellingText = tr("正在取消导入...");
+      break;
+    default:
+      return; // no cancel target behind this type; QML only renders the
+              // button for cancellable entries
+    }
+    entry.message = cancellingText;
+    syncCurrentNotificationFromStack();
+    emit errorChanged();
+    return;
+  }
+}
+
 void BackendContext::activateNotificationHypertext(int id)
 {
   // Upstream render_hypertext (NotificationManager.cpp:734-753): the click
@@ -1679,6 +1803,7 @@ QVariantList BackendContext::notificationStack() const
     m.insert(QStringLiteral("type"), e.type);
     m.insert(QStringLiteral("persistent"), e.persistent);
     m.insert(QStringLiteral("hasProgress"), e.hasProgress);
+    m.insert(QStringLiteral("cancellable"), e.cancellable);
     m.insert(QStringLiteral("progressValue"), e.progressValue);
     m.insert(QStringLiteral("repeatCount"), e.repeatCount);
     m.insert(QStringLiteral("requiresConfirm"), e.requiresConfirm);
@@ -1789,6 +1914,9 @@ void BackendContext::postSlicingProgress(int percent, const QString &stage)
   entry.severity = NotiSlicingProgress;
   entry.persistent = true;
   entry.hasProgress = true;
+  // U3: the cancel button (upstream SP_PROGRESS state: "never fades outs,
+  // no close button, has cancel button", SlicingProgressNotification.hpp:18).
+  entry.cancellable = true;
   entry.progressValue = qBound(0, percent, 100);
   entry.title = tr("切片中");
   entry.message = stage.isEmpty()
@@ -1837,10 +1965,40 @@ void BackendContext::postExportOngoing(const QString &stage)
   entry.title = tr("导出中");
   entry.message = stage.isEmpty() ? tr("正在导出 G-code...") : stage;
   entry.persistent = true;
+  // U3: export joins the cancel family (upstream cancel_callback stops the
+  // background process regardless of slice/export phase; the Qt side
+  // carries the export cancel on SliceService::cancelExport's own flag).
+  entry.cancellable = true;
   entry.timestamp = QDateTime::currentDateTime();
 
   // Phase 240 (NOTI-01): type-only dedup updates the live export-ongoing
   // entry in place (upstream ExportOngoing updates the same notification).
+  pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
+}
+
+void BackendContext::postImportProgress(int percent, const QString &stage)
+{
+  // U3: 3MF/模型导入进度（上游 ProgressBarNotification，NotificationManager
+  // .hpp:107 "Progress bar with cancel button, cannot be closed"）。只在通
+  // 知开启时投递；小文件从首个 tick 到 loadFinished 只闪现一瞬，大文件则
+  // 获得全程进度 + 取消。
+  if (!m_notificationsEnabled || !m_showProgressNotifications)
+    return;
+
+  NotificationEntry entry;
+  entry.type = NotiTypeProgressBar;
+  entry.severity = NotiProgress;
+  entry.persistent = true;
+  entry.hasProgress = true;
+  entry.cancellable = true;
+  entry.progressValue = qBound(0, percent, 100);
+  entry.title = tr("导入中");
+  entry.message = stage.isEmpty()
+      ? tr("正在导入... %1%").arg(percent)
+      : tr("%1... %2%").arg(stage, QString::number(percent));
+  entry.timestamp = QDateTime::currentDateTime();
+
+  // 类型内去重：进度 tick 原地更新同一条目（同 postSlicingProgress）。
   pushNotificationEntry(entry, /*dedupByTypeOnly=*/true);
 }
 

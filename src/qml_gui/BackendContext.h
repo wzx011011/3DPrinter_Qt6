@@ -420,6 +420,19 @@ public:
   Q_INVOKABLE void dismissNotificationById(int id);
   Q_INVOKABLE void confirmNotificationById(int id);
   Q_INVOKABLE void cancelNotificationById(int id);
+  /// U3: the progress-notification cancel button (upstream
+  /// SlicingProgressNotification::on_cancel_button,
+  /// SlicingProgressNotification.cpp:161-170, wired to
+  /// background_process.stop() at Plater.cpp:13599-13606). Dispatches by
+  /// entry type to the owning service's cancel -- NotiTypeSlicingProgress
+  /// -> SliceService::cancelSlice, NotiTypeExportOngoing ->
+  /// SliceService::cancelExport, NotiTypeProgressBar (3MF import) ->
+  /// ProjectServiceMock::cancelLoad -- then flips the entry to its
+  /// "cancelling" feedback text; the service worker reports the terminal
+  /// state through its own signal, which retires the entry. A stale entry
+  /// (service already idle) is dismissed outright, mirroring upstream's
+  /// callback-false -> SP_NO_SLICING transition.
+  Q_INVOKABLE void cancelNotificationAction(int id);
   /// Upstream render_hypertext (NotificationManager.cpp:734-753): clicking a
   /// notification's trailing hypertext runs its callback and closes the pop.
   /// The Qt mock has no navigation targets, so activation acknowledges and
@@ -431,6 +444,13 @@ public:
   Q_INVOKABLE void postSlicingComplete(); ///< Post slicing-complete notification.
   Q_INVOKABLE void postExportFinished(const QString &filePath);
   Q_INVOKABLE void postExportOngoing(const QString &stage = {});
+  /// U3: 3MF import progress toast (upstream ProgressBarNotification,
+  /// NotificationManager.hpp:107 "Progress bar with cancel button"). Fed
+  /// from ProjectServiceMock::loadProgressUpdated -- before U3 the load
+  /// worker emitted progress only into EditorViewModel::statusText, which
+  /// the removed StatusBar used to render, so large imports looked like a
+  /// frozen GUI. Dedup-updates the live NotiTypeProgressBar entry.
+  Q_INVOKABLE void postImportProgress(int percent, const QString &stage = {});
   Q_INVOKABLE void postPlaterWarning(const QString &message);
   Q_INVOKABLE void postPlaterError(const QString &message);
   Q_INVOKABLE void postValidateError(const QString &message);
@@ -573,7 +593,8 @@ public:
   /// Phase 240 (NOTI-01): the visible notification stack, most important
   /// first (see the notificationStack Q_PROPERTY). Each element is a
   /// QVariantMap: id/message/title/severity/type/persistent/hasProgress/
-  /// progressValue/repeatCount/showExportButton/showPreviewButton/hypertext.
+  /// cancellable/progressValue/repeatCount/showExportButton/
+  /// showPreviewButton/hypertext.
   QVariantList notificationStack() const;
   /// Phase 240 (NOTI-01): number of simultaneously visible notifications.
   int visibleNotificationCount() const { return m_activeNotifications.size(); }
@@ -746,8 +767,17 @@ private:
     int progressValue = 0; ///< Progress percentage from 0 to 100.
     int progressMin = 0;
     int progressMax = 100;
-    bool hasProgress = false; ///< Whether the notification carries progress.
-    bool requiresConfirm = false; ///< Whether the notification requires confirmation.
+  bool hasProgress = false; ///< Whether the notification carries progress.
+  /// U3: the notification carries an upstream-style cancel button
+  /// (SlicingProgressNotification "has cancel button" in SP_PROGRESS,
+  /// SlicingProgressNotification.hpp:18; ProgressBarNotification "Progress
+  /// bar with cancel button", NotificationManager.hpp:107). Clicking it
+  /// routes through cancelNotificationAction() to the owning service's
+  /// cancel (SliceService::cancelSlice/cancelExport,
+  /// ProjectServiceMock::cancelLoad) -- the services always had the flag
+  /// paths, this flag is what makes them reachable from QML.
+  bool cancellable = false;
+  bool requiresConfirm = false; ///< Whether the notification requires confirmation.
     int confirmAction = 0; ///< Confirmation action identifier.
     QDateTime timestamp; ///< Notification creation timestamp.
     /// Upstream-aligned QML API.
@@ -794,6 +824,14 @@ private:
   /// Phase 240 (NOTI-01): move one entry into the history ring (cap 100,
   /// same as before) + unread counter.
   void archiveNotification(const NotificationEntry &entry);
+  /// U3: retire every live entry of one notification type (archived like a
+  /// manual dismiss, then the overflow queue is pumped). The terminal
+  /// signals of the background services call this for their progress
+  /// entries -- sliceFailed/exportFinished/exportFailed/loadFinished --
+  /// because a persistent progress toast is otherwise only replaced by the
+  /// same-type dedup of postSlicingComplete and would linger forever on
+  /// every failure/cancel path.
+  void retireNotificationType(int type);
   /// Update the active notification progress value.
   Q_INVOKABLE void updateNotificationProgress(int value);
   /// Confirm the active notification.

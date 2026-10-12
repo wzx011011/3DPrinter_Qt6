@@ -83,6 +83,14 @@ Item {
         readonly property int notiType: modelData.type !== undefined ? modelData.type : 0
         readonly property bool isPersistent: modelData.persistent === true
         readonly property bool hasProgress: modelData.hasProgress === true
+        // U3: backend.cancellable entries carry the progress-cancel button
+        // (upstream SlicingProgressNotification SP_PROGRESS "has cancel
+        // button", SlicingProgressNotification.hpp:18 + ProgressBarNotification
+        // "Progress bar with cancel button", NotificationManager.hpp:107).
+        // Click routes to backend.cancelNotificationAction(id), which
+        // dispatches to SliceService::cancelSlice/cancelExport or
+        // ProjectServiceMock::cancelLoad by entry type.
+        readonly property bool cancellable: modelData.cancellable === true
         readonly property int progressValue: modelData.progressValue !== undefined ? modelData.progressValue : 0
         readonly property int repeatCount: modelData.repeatCount !== undefined ? modelData.repeatCount : 1
         readonly property bool isHint: entry.notiType === 10 // NotiTypeDidYouKnowHint
@@ -116,7 +124,7 @@ Item {
         // Block notifications never get one (commented out upstream :431-434).
         readonly property bool minimizeVisible: !entry.isBlock && entry.multiline && entry.fullLineCount > 3
 
-        readonly property bool hasExtraButtons: entry.isHint || entry.isSlicingComplete || entry.requiresConfirm
+        readonly property bool hasExtraButtons: entry.isHint || entry.isSlicingComplete || entry.requiresConfirm || entry.cancellable
         width: entry.windowWidth
         // Height = (multiline ? max(lines, 2) : 2) * line_height + 1 * line_height
         // (set_next_window_size :612-618). Progress bar / action button rows
@@ -373,6 +381,28 @@ Item {
                         color: entry.textColor
                         font.pixelSize: Theme.fontSizeXS
                         font.family: Theme.fontMono
+                    }
+                }
+
+                // Progress cancel button (U3, upstream render_cancel_button,
+                // SlicingProgressNotification.cpp:436-465: click ->
+                // on_cancel_button -> m_cancel_callback). backend maps the
+                // entry type to the owning service's cancel flag
+                // (slice / export / 3MF import); the service reports the
+                // terminal state through its own signal, which retires the
+                // toast.
+                Row {
+                    visible: entry.cancellable
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+
+                    Rectangle {
+                        width: 60; height: 24; radius: Theme.radiusSM
+                        color: Theme.chromePressed
+                        border.color: Theme.borderDefault; border.width: 1
+                        Text { anchors.centerIn: parent; text: qsTr("取消"); color: entry.textColor; font.pixelSize: Theme.fontSizeSM }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                            onClicked: backend.cancelNotificationAction(entry.entryId) }
                     }
                 }
 
