@@ -96,6 +96,18 @@ its mechanism:
   CMake's RERUN_AUTOGEN step on this run's first ninja invocation — moc
   outputs are regenerated and mismatching objects rebuild, so a canonical run
   can no longer emit a mixed-layout binary.
+- **Escalation recipe when the timestamp probe is NOT enough** (re-confirmed
+  2026-10-13, P4 session): a stale mixed state can survive the
+  autogen-probe deletion (the crashing binary flapped clean/crashing across
+  RElinks of the SAME source, ~30-50% per process, at drifting phases).
+  `git stash`-based A/B does NOT rule the mixture out — stashing sources
+  never removes the stale objects. The proven stronger recipe: delete
+  `build/CMakeFiles/` wholesale, `touch CMakeLists.txt`, re-run configure
+  (inside the vcvars env), rebuild — every object recompiles against the
+  current headers. Verified on the 2026-10-13 state: AppToolTests 6/6
+  clean after the recipe (previously crashing across relinks), then all 14
+  suites + the three-layer slice gate green. Do NOT attribute such crashes
+  to hardware/source before running this recipe once.
 - **Verification**: `ViewportContextMenuTests` 3/3, `AppToolTests` 3/3 on
   consistent builds; `E2EWorkflowTests` 32 passed / 0 failed / 0 skipped
   (Q12 probe: prerequisites present on this host, so every slice test really
