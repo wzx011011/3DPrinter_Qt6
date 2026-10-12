@@ -4,6 +4,7 @@
 #include <QtTest>
 #include <cstring>
 
+#include "core/debug/CrashHandlerWin.h"
 #include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Renderer/SoftwareViewport.h"
 #include "qml_gui/Renderer/ViewportContextHit.h"
@@ -109,11 +110,26 @@ class ViewportContextMenuTests final : public QObject
   Q_OBJECT
 
 private slots:
+  void initTestCase();
   void rhiAndSoftwareExposeTheSameContextSignal();
   void selectedOutlinePropertyNotifiesAndRetainsState();
   void directRightClickClassificationMatchesAcrossRenderers();
   void dragToolLayerAndWipeSuppressContextRequests();
 };
+
+void ViewportContextMenuTests::initTestCase()
+{
+  // Q13: this suite's import-path crashes used to exit silently (fast-fail
+  // 0xC0000409 bypasses everything) and sat non-blocking in verify since
+  // 2026-08-31. Install the app's fail-fast/unhandled handlers so a crash
+  // writes build/crash_dumps/crash_stack.log + a minidump instead of exiting
+  // silently. CrashHandlerWin is built under if(WIN32) in CMakeLists
+  // (mirrors main_qml.cpp:491).
+#ifdef Q_OS_WIN
+  CrashHandlerWin::install(QCoreApplication::applicationDirPath() +
+                           QStringLiteral("/crash_dumps"));
+#endif
+}
 
 void ViewportContextMenuTests::rhiAndSoftwareExposeTheSameContextSignal()
 {

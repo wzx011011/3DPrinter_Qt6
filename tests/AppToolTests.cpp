@@ -20,6 +20,7 @@
 
 #include "core/ai/AppToolRegistry.h"
 #include "core/ai/McpHttpServer.h"
+#include "core/debug/CrashHandlerWin.h"
 #include "core/services/PresetServiceMock.h"
 #include "core/services/ProjectServiceMock.h"
 #include "core/services/SliceService.h"
@@ -124,6 +125,17 @@ class AppToolTests final : public QObject {
 };
 
 void AppToolTests::initTestCase() {
+  // Q13: this suite used to die with a silent import-period heap corruption
+  // (non-blocking yellow in verify since 2026-08-31) because nothing could
+  // attribute a crash. Install the same fail-fast/unhandled handlers the app
+  // uses so any future crash writes build/crash_dumps/crash_stack.log + a
+  // minidump instead of exiting silently. CrashHandlerWin is built under
+  // if(WIN32) in CMakeLists (mirrors main_qml.cpp:491).
+#ifdef Q_OS_WIN
+  CrashHandlerWin::install(QCoreApplication::applicationDirPath() +
+                           QStringLiteral("/crash_dumps"));
+#endif
+
   QVERIFY2(QFileInfo::exists(kStlPath),
            qPrintable(QStringLiteral("Test STL not found: %1").arg(kStlPath)));
 
