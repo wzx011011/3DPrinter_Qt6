@@ -28,7 +28,11 @@ set(PAHO_MQTT_PREFIX "" CACHE PATH "Paho MQTT C dependency prefix")
 
 project(OWzxSlicer LANGUAGES C CXX)
 
-option(OWZX_QML_GUI "Build QML-first GUI architecture" ON)
+# Q5 (audit 2026-10-10 ④): the OWZX_QML_GUI option is gone. The QML-first GUI
+# is the only build path; the pre-QML Qt Widgets layer it gated
+# (src/main.cpp, MainWindow, src/pages, src/theme) was deleted with it —
+# link-dead in the ON branch (CrashHandlerWin lives in owzx_app_core only)
+# and unbuildable in the OFF branch since 2026-03.
 option(ENABLE_VISUAL_REGRESSION "Enable visual regression tests" ON)
 option(ENABLE_COVERAGE "Enable compiler coverage instrumentation" OFF)
 option(BUILD_LIBSLIC3R "Build libslic3r backend (3MF loading etc.)" ON)
@@ -94,10 +98,9 @@ endif()
 # If OpenVDB support is ever actually wanted, re-introduce it behind a real
 # option(OWZX_ENABLE_OPENVDB OFF) next to the other project options.
 
-if(OWZX_QML_GUI)
-    if(NOT BUILD_LIBSLIC3R)
-        message(WARNING "OWZX_QML_GUI: BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")
-    endif()
+if(NOT BUILD_LIBSLIC3R)
+    message(WARNING "BUILD_LIBSLIC3R=OFF — OCCT/model loading will be stubbed out for testing.")
+endif()
     if(BUILD_LIBSLIC3R)
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
@@ -355,7 +358,6 @@ if(OWZX_QML_GUI)
         src
         ${OWZX_UPSTREAM_ROOT}/src
     )
-    target_compile_definitions(owzx_app_core PUBLIC OWZX_QML_GUI=1)
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
         target_compile_definitions(owzx_app_core PUBLIC HAS_LIBSLIC3R=1)
         if(MSVC)
@@ -496,27 +498,6 @@ if(OWZX_QML_GUI)
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${OWZX_UPSTREAM_ROOT}/resources/handy_models"
             "$<TARGET_FILE_DIR:OWzxSlicer>/resources/handy_models")
-else()
-    find_package(Qt6 REQUIRED COMPONENTS Widgets)
-
-    qt_add_executable(OWzxSlicer
-        src/main.cpp
-        src/MainWindow.cpp
-        src/MainWindow.h
-        src/theme/AppTheme.cpp
-        src/theme/AppTheme.h
-        src/pages/PreparePage.cpp
-        src/pages/PreparePage.h
-        src/pages/PreviewPage.cpp
-        src/pages/PreviewPage.h
-        src/pages/MonitorPage.cpp
-        src/pages/MonitorPage.h
-        src/pages/ParameterPage.cpp
-        src/pages/ParameterPage.h
-    )
-
-    target_link_libraries(OWzxSlicer PRIVATE Qt6::Widgets)
-endif()
 
 if(WIN32)
     set_target_properties(OWzxSlicer PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -540,7 +521,7 @@ if(OWZX_ENABLE_ASAN AND MSVC)
 endif()
 
 # ── Tests ──────────────────────────────────────────────────────────────────
-if(BUILD_TESTING AND OWZX_QML_GUI)
+if(BUILD_TESTING)
     # Ensure Qt DLLs are on PATH when running tests via ctest
     get_target_property(_qt6_core_location Qt6::Core LOCATION)
     get_filename_component(_qt6_bin_dir "${_qt6_core_location}" DIRECTORY)
@@ -890,7 +871,7 @@ if(BUILD_TESTING)
 endif()
 
 # ── CLI ────────────────────────────────────────────────────────────────────
-if(OWZX_RENDER_BENCH AND OWZX_QML_GUI)
+if(OWZX_RENDER_BENCH)
     find_package(Qt6 REQUIRED COMPONENTS Core Gui GuiPrivate ShaderTools)
 
     qt_add_executable(owzx-render-bench
