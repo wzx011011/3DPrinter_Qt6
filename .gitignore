@@ -77,6 +77,8 @@ docs/*
 !docs/perf-baseline.md
 !docs/代码债与架构审计_2026-10-10.md
 !docs/开发计划_2026-10-10.md
+!docs/UX细节扫描报告_2026-10-11.md
+!docs/Qt6现代化扫描报告_2026-10-12.md
 !docs/ui-full-restoration-inventory.md
 !docs/visual-compare/
 !docs/visual-compare/*
