@@ -28,7 +28,7 @@
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Model.hpp>
 #include <libslic3r/PrintConfig.hpp>
-#include <libslic3r/Calib.hpp>
+#include <libslic3r/calib.hpp>
 #include <libslic3r/TriangleMesh.hpp>
 #include <libslic3r/TriangleSelector.hpp>
 #include <libslic3r/miniz_extension.hpp>  // Phase 237: zip read/write wrappers for the export/config tests
@@ -3479,6 +3479,10 @@ void ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse()
 //
 // 不依赖真实 RTSP 服务器：cameraUrl_ 为空时 startRtspDecoder 为 noop，
 // 纯 mock 状态机验证。
+//
+// Q12: 时序断言收敛——不对生产 mock 的 singleShot(1500)/(800) 假时序做
+// qWait 精确中间态断言（裕度仅 200/400ms，CI 负载即偶崩）；只等终态到达，
+// 中间态回归由状态发射序列断言补偿。
 void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
 {
   CameraServiceMock camera;
@@ -3500,23 +3504,23 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
   camera.updateForDevice(QStringLiteral("192.168.1.50"), true);
   QCOMPARE(camera.cameraAvailable(), true);
 
-  QSignalSpy statusSpy(&camera, &CameraServiceMock::streamStatusChanged);
-  QVERIFY(statusSpy.isValid());
+  // streamStatusChanged() 不携带参数：用发射时刻的状态值重建发射序列。
+  QList<int> statusSequence;
+  connect(&camera, &CameraServiceMock::streamStatusChanged, &camera,
+          [&camera, &statusSequence]() { statusSequence.append(camera.streamStatus()); });
 
-  // 启动流：状态机 Connecting(1) → Connected(2) → Streaming(3)
+  // 启动流：状态机同步进入 Connecting(1)，且只发射这一次
   camera.startStream();
   QCOMPARE(camera.cameraUrl(),
            QStringLiteral("rtsp://192.168.1.50:8554/streaming/live/1"));
-  QCOMPARE(statusSpy.count(), 1);
-  QCOMPARE(camera.streamStatus(), 1); // Connecting
+  QCOMPARE(statusSequence, QList<int>{1}); // Connecting
 
-  // Connected（1500ms 后）
-  QTest::qWait(1700);
-  QCOMPARE(camera.streamStatus(), 2); // Connected
-
-  // Streaming（再 800ms 后）
-  QTest::qWait(1000);
-  QCOMPARE(camera.streamStatus(), 3); // Streaming
+  // Q12: 终态收敛——不锁 1500/800ms 的精确中间态时刻，只等终态
+  // Streaming(3) 到达（QTRY 轮询，裕度 10s >> 名义 2.3s，CI 负载不再偶崩）。
+  // 中间态回归由状态序列断言补偿：序列必须严格是
+  // Connecting(1) → Connected(2) → Streaming(3)——不回退、不跳步、无重复。
+  QTRY_COMPARE_WITH_TIMEOUT(camera.streamStatus(), 3, 10000);
+  QCOMPARE(statusSequence, (QList<int>{1, 2, 3}));
 
   // MonitorViewModel 转发一致
   QCOMPARE(monitor.cameraStreamStatus(), 3);
