@@ -282,16 +282,6 @@ class RhiViewport : public QQuickRhiItem
   // (ImGuizmo.cpp:3037 / :2942). Entries carry kind ("axis"/"face"), text,
   // and item-pixel x/y; text stays untranslated ids so QML owns qsTr().
   Q_PROPERTY(QVariantList navigatorLabels READ navigatorLabels NOTIFY navigatorLabelsChanged)
-  // P15.9 (PLATEANCHOR): per-plate identity-cluster anchors (upstream
-  // PartPlate::render_icons draws the icon stack on every plate at its own bed
-  // position, PartPlate.cpp:972-1076). Each entry carries {plateIndex, x, y,
-  // visible} in item pixels; x/y project the plate's top-right corner (the
-  // upstream icon column anchors at the bed extents max X,
-  // PartPlate.cpp:633-641 calc_vertex_for_icons) through the same camera math
-  // as projectWorldToScreen. visible=false when the anchor is behind the
-  // camera. QML only positions the clusters; all actions stay on the
-  // ViewModel.
-  Q_PROPERTY(QVariantList plateAnchors READ plateAnchors NOTIFY plateAnchorsChanged)
   // ── PLATEICONS-GL (2026-10-10): bed-surface plate icons ──────────────────
   // The per-plate icon column (delete/orient/arrange/lock/settings/
   // move-front), the rename pencil, the index badge, and the plate-name
@@ -660,9 +650,6 @@ public:
     update();
   }
   QVariantList navigatorLabels() const;
-  // P15.9 (PLATEANCHOR): per-plate world-anchored overlay positions (see the
-  // plateAnchors Q_PROPERTY above).
-  QVariantList plateAnchors() const;
   // ── PLATEICONS-GL (see the plateIconStates Q_PROPERTY above) ─────────────
   QVariantList plateIconStates() const { return m_plateIconStates; }
   void setPlateIconStates(const QVariantList &states);
@@ -742,9 +729,6 @@ signals:
   // v5.16 (NAVIGATOR): navigator cube enable + label overlay updates.
   void navigatorEnabledChanged();
   void navigatorLabelsChanged();
-  // P15.9 (PLATEANCHOR): per-plate anchor overlay updates (camera moves,
-  // plate count / bed footprint changes).
-  void plateAnchorsChanged();
   // PLATEICONS-GL: states rewritten / hover target moved. plateIconActivated
   // fires on a left click over a bed icon; QML routes it to the same
   // ViewModel actions the former QML cluster buttons ran.
