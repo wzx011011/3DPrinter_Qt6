@@ -105,3 +105,47 @@ AGENTS.md「Self-Test Standing Rules」：任何影响加载、网格序列化�
   真值迁移至 `tests/data/slice_gate_baseline.json` 的 `timing` 节
   （min-of-N + 阈值 25% / 10% + 超阈自动复测一轮）；本文件表格保留为
   历史叙述与全阶段基线，两处不一致时以门禁基线 JSON 为准。
+- **步骤画像**（P4，2026-10-13 起，门禁第三层）：4 个代表模型各跑一次
+  PerfBench 画像轮，逐步骤墙钟真值存于基线 JSON `step_profiles` 节
+  （`steps_ms` / `steps_counts`，键=§6d 步骤键），单步骤退化 >+30% 且
+  基线 ≥20ms 才记失败，超阈自动复测一轮、两轮都超才 exit 2；步骤键
+  （`model_prep…gcode_export` + `unknown_*` 兜底）是引擎 `set_status`
+  文本的归一化映射——引擎换版本改文案会让键集变化即门禁红，属设计内
+  的重建金触发器。逐步骤毫秒来源：`SliceService` worker 内
+  `SliceStepTiming{key,text,percent,firstAtMs,count}` 时间线（首现时间戳
+  + 同键计数去重），PerfBench 以相邻首现差算各步耗时，尾部 `done`
+  哨兵只作 gcode_export 时长锚、不入表。一致性口径：各步之和 ≈
+  `slice_ms`（差值=worker 调度与完成投递开销，本机实测 1–33ms）。
+
+### 逐步骤基线数值（2026-10-13 建金，PerfBench layer 0.2 钉配置，单轮）
+
+| 步骤键 | sphere_400k | overhang_tower | grid_20x100k | block_20xy |
+|---|---:|---:|---:|---:|
+| model_prep | 0 | 0 | 0 | 0 |
+| config_prep | 1 | 1 | 1 | 1 |
+| param_apply | 57 | 34 | 352 | 2 |
+| validate | 18 | 2 | 6 | 2 |
+| mesh_slicing | 149 | 67 | 753 | 1 |
+| perimeters | 274 | 12 | 1274 | 3 |
+| infill_regions | 130 | 9 | 1068 | 2 |
+| infill_toolpath | 228 | 35 | 971 | 1 |
+| z_contouring | — | — | — | — |
+| support | 18 | **739** | 205 | 0 |
+| overhang_lift | 5 | 5 | 32 | 1 |
+| skirt_brim | 11 | 31 | 229 | 0 |
+| path_optimization | 12 | 112 | 27 | 2 |
+| gcode_export | 773 | 3864 | 2888 | 73 |
+| **合计（≈slice_ms）** | **1676 / 1684** | **4911 / 4917** | **7806 / 7839** | **88 / 89** |
+
+（`z_contouring` 在四个基准画像中未触发，引擎静默步骤连同
+`posEstimateCurledExtrusions`/wipe-tower 时长一并并入相邻步骤间隙。）
+（单位 ms；`合计/slice_ms` 为逐步骤之和与同轮 slice_ms 对照。）
+
+画像形态结论（同轮目验）：sphere 以 export/墙线/填充为主（与规格预期
+一致）；tower 的 support 是第一非 export 步骤（739ms，≈球体的 40 倍）
+——本引擎上 `gcode_export` 对所有模型都是第一大步（47–80%），因为支撑
+计算产出的支撑挤出物其 G-code 生成成本约为支撑计算本身的 4 倍，字面
+"support 占大头"在引擎现状下不可达，已按可达成口径建金并在此记录。
+tower 生成器为 perf/waves 移植版（`overhang_tower(levels=200, side=100,
+shrink=0.5, layer_h=0.5, sub=16)`，230,400 三角/100mm 高/50 次外扩桥），
+tier 在 PerfBench 内开 `enable_support`（引擎默认关，PrintConfig.cpp）。

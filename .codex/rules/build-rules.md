@@ -119,11 +119,25 @@ gate's own files).
   wall clock (default N=3, `OWZX_SLICE_GATE_REPEATS`), vs baseline thresholds
   (slice_ms +25%, preview_parse_ms +10%; one automatic re-measure round before
   failing — docs/perf-baseline.md noise rules).
-- Exit codes: 0 pass / 1 correctness regression / 2 efficiency regression /
-  3 infra error. Any nonzero exit fails the whole verify.
+- Step-profile layer (P4, hard fail, exit 2, added 2026-10-13): four
+  representative models (sphere_400k / overhang_tower / grid_20x100k /
+  block_20xy), one PerfBench profile round each, comparing per-step wall
+  clock from `SliceService::sliceStepTimeline()` against
+  `baseline.step_profiles` (`steps_ms` keyed by the §6d step keys). A step is
+  a regression only when it exceeds +30% AND the baseline step is >= 20 ms
+  (small steps are noise-exempt); one breaching round triggers an automatic
+  profile re-measure, and only a breach in BOTH rounds exits 2 (same rule as
+  the efficiency layer). A step KEY appearing or disappearing means the
+  engine's `set_status` wording changed (upstream submodule bump) — that
+  always fails and is re-golded only via `-UpdateBaseline` after human
+  review. The tower tier enables `enable_support` inside PerfBench (support
+  generation is its workload); per-step baseline numbers live in
+  docs/perf-baseline.md.
+- Exit codes: 0 pass / 1 correctness regression / 2 efficiency or step-profile
+  regression / 3 infra error. Any nonzero exit fails the whole verify.
 - `OWZX_SLICE_GATE=0` skips; `OWZX_SLICE_GATE=force` runs regardless of the diff.
 - Re-golding after an INTENDED slice-output change (engine upgrade, config
-  default change): run
+  default change, engine step-text change): run
   `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/perf/run_slice_gate.ps1 -UpdateBaseline`
   on a green build and commit the rewritten `tests/data/slice_gate_baseline.json`
   together with the change. A missing baseline is auto-established (yellow)
