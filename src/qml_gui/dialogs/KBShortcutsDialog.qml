@@ -17,10 +17,19 @@ import ".."
 // preset rows therefore live in the Prepare tab (upstream Plater page,
 // cpp:242-248) and the Toolbar tab shows the gizmo keys (cpp:276-282).
 //
-// Presentation only: this dialog documents the user-visible shortcuts. Some
-// shortcuts (F/W/E/R/Space/arrows/PgUp/PgDn) are handled in C++ keyPressEvent
-// handlers (EditorViewModel/GLViewport); the rest are QML Shortcut{} bindings
-// in main.qml.
+// Presentation only: this dialog documents the user-visible shortcuts. The
+// canvas letter/slider keys (A/Q/M/R/S/F/.../arrows/PgUp/PgDn) are handled by
+// the page key tables (PreparePage.handleCanvasKey /
+// PreviewPage.handlePreviewKey); the app-wide bindings are QML Shortcut{}
+// registrations in main.qml (no C++ key handler exists).
+//
+// U7 ghost-entry alignment (docs/开发计划_2026-10-10.md §6b U7): every row
+// below now names a real binding. Deleted -- no implementation and no plan:
+// Ctrl+Shift+E "Publish 3MF" (no publish/network feature in src/, the topbar
+// publish button is a placeholder) and Ctrl+M "3Dconnexion devices settings"
+// (no 3Dconnexion/SpaceMouse support anywhere in src/). Implemented
+// instead of documented-but-dead: Space -> command palette (main.qml) and
+// "?" -> this dialog (main.qml).
 
 Dialog {
     id: root
@@ -51,7 +60,9 @@ Dialog {
         { key: "Ctrl+O", desc: qsTr("Open Project") },
         { key: "Ctrl+S", desc: qsTr("Save Project") },
         { key: "Ctrl+Shift+S", desc: qsTr("Save Project as") },
-        { key: "Ctrl+Shift+E", desc: qsTr("Publish 3MF") },
+        // U7: upstream's Ctrl+Shift+E "Publish 3MF" (KBShortcutsDialog.cpp
+        // :177) and Ctrl+M "3Dconnexion devices settings" (:199-203) are not
+        // listed here -- neither feature exists in this port (see header).
         { key: "Ctrl+I", desc: qsTr("Import geometry data from STL/STEP/3MF/OBJ/AMF files") },
         { key: "Ctrl+G", desc: qsTr("Export plate sliced file") },
         { key: "Ctrl+R", desc: qsTr("Slice plate") },
@@ -60,7 +71,6 @@ Dialog {
         { key: "Ctrl+C", desc: qsTr("Copy to clipboard") },
         { key: "Ctrl+V", desc: qsTr("Paste from clipboard") },
         { key: "Ctrl+P", desc: qsTr("Preferences") },
-        { key: "Ctrl+M", desc: qsTr("Show/Hide 3Dconnexion devices settings dialog") },
         { key: "Ctrl+Tab", desc: qsTr("Switch table page") },
         { key: "Del", desc: qsTr("Delete selected") },
         { key: "?", desc: qsTr("Show keyboard shortcuts list") }
@@ -81,7 +91,10 @@ Dialog {
         { key: "Shift+Q", desc: qsTr("Auto orientate objects on the active plate") },
         { key: "Shift+R", desc: qsTr("Auto orientate selected objects") },
         { key: "Shift+Tab", desc: qsTr("Collapse/Expand the sidebar") },
-        { key: "Ctrl+Any arrow", desc: qsTr("Movement in camera space") },
+        // U7: upstream's "Ctrl+Any arrow / Movement in camera space"
+        // (KBShortcutsDialog.cpp:231) is not listed -- the arrows here only
+        // nudge the selection (10mm, Shift = 1mm); no camera-pan binding
+        // exists in RhiViewport or the page key tables (see header).
         { key: "Alt+Left mouse", desc: qsTr("Select a part") },
         { key: "Ctrl+Left mouse", desc: qsTr("Select multiple objects") },
         { key: "Shift+Left mouse", desc: qsTr("Select objects by rectangle") },
@@ -120,7 +133,12 @@ Dialog {
         { key: "O", desc: qsTr("Zoom out") },
         { key: "V", desc: qsTr("Toggle printable for selected object/part") },
         { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
-        { key: "Space", desc: qsTr("Open actions speed dial") }
+        // U7: Space opens the command palette (main.qml window Shortcut,
+        // gated to the Prepare canvas). Upstream names the same slot "Open
+        // actions speed dial" (KBShortcutsDialog.cpp:271); this port
+        // surfaces that action list as the command palette, so the row
+        // describes the implemented behavior instead of upstream's dialog.
+        { key: "Space", desc: qsTr("Open command palette") }
     ]
     // Toolbar: the upstream Gizmo page (KBShortcutsDialog.cpp:276-282); the
     // third "Toolbar" tab shows the gizmo keys per the page binding order

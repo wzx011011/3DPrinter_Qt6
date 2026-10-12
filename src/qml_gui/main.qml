@@ -390,6 +390,18 @@ ApplicationWindow {
         id: shortcutDialog
     }
 
+    // U7: the "?" global entry the dialog always advertised is now real
+    // (upstream KBShortcutsDialog.cpp:206 "?" Show keyboard shortcuts list).
+    // Global scope like upstream -- the shortcuts table is useful from any
+    // page; text editors keep "?" for typing (the IsTextFocused gate) and
+    // an open dialog eats the accelerator (popupHoldsFocus, upstream modal
+    // semantics); the Help menu still opens it from anywhere.
+    Shortcut {
+        sequence: "?"
+        enabled: !root.textEditHoldFocus && !root.popupHoldsFocus
+        onActivated: shortcutDialog.open()
+    }
+
     // About dialog (Phase 236 DLG-04: replaced the inline duplicate with the
     // shared AboutDialog component so the Help menu surfaces the corrected
     // AGPL-3.0 license + open-source components list from one place; the
@@ -664,6 +676,26 @@ ApplicationWindow {
     readonly property bool textEditHoldFocus: {
         var it = activeFocusItem
         return !!it && it.cursorPosition !== undefined
+    }
+
+    // True while a Popup/Dialog owns keyboard focus: an open popup parents
+    // its focused contentItem to the window Overlay, so the active-focus
+    // chain reaches Overlay exactly in that state. Window-level key
+    // Shortcuts must stand down then, matching upstream where a modal
+    // dialog eats the frame accelerators -- otherwise e.g. Space would open
+    // the command palette BENEATH the overlay and its (invisible) search
+    // field would swallow every following keystroke.
+    readonly property bool popupHoldsFocus: {
+        var overlay = shell.Overlay.overlay
+        if (!overlay)
+            return false
+        var it = activeFocusItem
+        while (it) {
+            if (it === overlay)
+                return true
+            it = it.parent
+        }
+        return false
     }
 
     // ── CANVAS-FOCUS hotkey model ───────────────────────────────────────────
@@ -1366,7 +1398,11 @@ ApplicationWindow {
         onCommandTriggered: (id) => {
             const pageMap = {}
             pageMap["page-home"] = backend.tpHome
-            pageMap["page-prepare"] = backend.tpPrepare
+            // tpPrepare does not exist in TabPosition (BackendContext.h:
+            // tp3DEditor = 1 is the Prepare canvas page); the old
+            // backend.tpPrepare read was always undefined and the command
+            // dead-ended after closing the palette.
+            pageMap["page-prepare"] = backend.tp3DEditor
             pageMap["page-preview"] = backend.tpPreview
             pageMap["page-device"] = backend.tpDevice
             pageMap["page-multi"] = backend.tpMultiDevice
@@ -1397,6 +1433,30 @@ ApplicationWindow {
         }
         Shortcut {
             sequence: "Ctrl+Shift+P"
+            onActivated: commandPalette.open()
+        }
+        // U7: Space is the upstream plater's canvas "actions speed dial"
+        // (KBShortcutsDialog.cpp:271); OWzx surfaces that action list as this
+        // palette, so the advertised key gets a real binding. The gates mirror
+        // the CANVAS-FOCUS model -- the shortcut only fires while no control
+        // is operating the key:
+        // - Prepare page only: the Preview page owns Space (play/pause,
+        //   PreviewPage.handlePreviewKey) and other pages have their own
+        //   Space consumers.
+        // - !textEditHoldFocus: a focused editor must receive the space.
+        // - activeFocusControl === null: a focused QQC2 Control (button,
+        //   checkbox, combo, slider, topbar workflow tab) keeps Space for its
+        //   own press-activation; page root / RhiViewport focus yields null,
+        //   matching how every other canvas key reaches the page key table.
+        // - !popupHoldsFocus: an open dialog with the keyboard focus must
+        //   keep the key -- otherwise the palette opens beneath the Overlay
+        //   and its invisible search field swallows every keystroke.
+        Shortcut {
+            sequence: "Space"
+            enabled: backend.currentPage === backend.tp3DEditor
+                     && !root.textEditHoldFocus
+                     && root.activeFocusControl === null
+                     && !root.popupHoldsFocus
             onActivated: commandPalette.open()
         }
     }
