@@ -142,10 +142,6 @@ endif()
         src/core/services/UndoRedoManager.h
         src/core/services/UndoCommands.cpp
         src/core/services/UndoCommands.h
-        src/core/services/JobBase.h
-        src/core/services/JobBase.cpp
-        src/core/services/JobManager.h
-        src/core/services/JobManager.cpp
         src/core/services/NetworkServiceMock.cpp
         src/core/services/NetworkServiceMock.h
         src/core/services/CalibrationServiceMock.cpp
@@ -154,8 +150,6 @@ endif()
         src/core/services/AppSettingsService.h
         src/core/services/PluginService.cpp
         src/core/services/PluginService.h
-        src/core/rendering/GLShaderUtil.cpp
-        src/core/rendering/GLShaderUtil.h
         src/core/rendering/GizmoMath.cpp
         src/core/rendering/NavigatorCube.cpp
         src/core/rendering/NavigatorCube.h
@@ -910,10 +904,6 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
         src/core/services/SliceService.h
         src/core/services/PresetServiceMock.cpp
         src/core/services/PresetServiceMock.h
-        src/core/services/JobBase.cpp
-        src/core/services/JobBase.h
-        src/core/services/JobManager.cpp
-        src/core/services/JobManager.h
         src/cli/CliRunner.cpp
         src/cli/CliRunner.h
     )
