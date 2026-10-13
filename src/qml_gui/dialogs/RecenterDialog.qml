@@ -1,6 +1,5 @@
 import QtQuick
-import ".."
-import "../controls"
+import OWzx
 
 // -----------------------------------------------------------------------------
 // RecenterDialog.qml - out-of-bounds prompt, ported 1:1 from upstream

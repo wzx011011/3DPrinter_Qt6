@@ -2,10 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzxGL 1.0
-import ".."
-import "../controls"
-import "../components" as Components
-import "../panels"
+import OWzx
 
 Item {
     id: root
@@ -384,7 +381,7 @@ Item {
 
                 // v5.16 (NAVIGATOR): navigator cube label overlay
                 // (upstream ImGuizmo axis/face labels).
-                Components.NavigatorLabels {
+                NavigatorLabels {
                     anchors.fill: parent
                     viewport: previewViewport
                 }
@@ -543,7 +540,7 @@ Item {
                 // bottom-CENTER (upstream set_next_window_pos(0.5*canvas_width,
                 // canvas_height, pivot 0.5, 1.0) -- GCodeViewer.cpp:335/:721),
                 // not the bottom-left corner.
-                Components.ToolPositionTooltip {
+                ToolPositionTooltip {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 14
@@ -604,17 +601,17 @@ Item {
                                 width: rightAnalysisStack.availableWidth
                                 spacing: 6
 
-                                Components.StatsPanel {
+                                StatsPanel {
                                     Layout.fillWidth: true
                                     previewVm: root.previewVm
                                 }
 
-                                Components.VisibilityFilter {
+                                VisibilityFilter {
                                     Layout.fillWidth: true
                                     previewVm: root.previewVm
                                 }
 
-                                Components.Legend {
+                                Legend {
                                     Layout.fillWidth: true
                                     previewVm: root.previewVm
                                 }
@@ -761,7 +758,7 @@ Item {
                 border.width: 1
                 border.color: Theme.borderDefault
 
-                Components.PreviewLayerRail {
+                PreviewLayerRail {
                     anchors.fill: parent
                     anchors.margins: 4
                     previewVm: root.previewVm
@@ -777,7 +774,7 @@ Item {
             border.width: 1
             border.color: Theme.borderDefault
 
-            Components.MoveSlider {
+            MoveSlider {
                 anchors.fill: parent
                 anchors.leftMargin: 14
                 anchors.rightMargin: 14

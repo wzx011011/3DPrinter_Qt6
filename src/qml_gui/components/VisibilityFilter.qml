@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // FeatureType legend visibility list, ported 1:1 from the upstream
 // GCodeViewer render_legend FeatureType case (GCodeViewer.cpp:3160,

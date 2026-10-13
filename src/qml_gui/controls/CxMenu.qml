@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import ".."
+import OWzx
 
 // popupType=Item: render the menu inside the scene graph instead of a
 // native OS popup window. Since Qt 6.8 Windows defaults Menus to

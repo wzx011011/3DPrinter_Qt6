@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // P10.2 -- EnableLiteModeDialog (fork-only dialog; no upstream counterpart)
 // G-code preview lite mode toggle for low-memory systems

@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import ".."
+import OWzx
 
 // Enhanced icon button with animation feedback (aligns with upstream GLToolbar button states)
 // Supports: Normal, Hover, Pressed, Disabled, Selected/Active states

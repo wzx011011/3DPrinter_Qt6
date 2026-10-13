@@ -772,11 +772,19 @@ QString QmlUiAuditTests::readSource(const QString &relativePath) const
 
 QString QmlUiAuditTests::qmlQrcSources() const
 {
-  // Aggregate exactly the manifests the build embeds: the qrc set referenced
-  // by CMakeLists.txt. A parallel refactor split qml.qrc into per-domain
-  // manifests, and count-exactness contracts (e.g. "exactly one
-  // pages/AssemblePage.qml entry") must not see both worlds at once.
+  // Aggregate exactly the QML inventory the build embeds. S8 (2026-10-14)
+  // replaced the per-domain qrc manifests with the qt_add_qml_module module
+  // tree (owzx_qml target, defined in src/qml_gui/CMakeLists.txt): the QML
+  // file inventory now lives in the QML_FILES list there (one path per line,
+  // relative to src/qml_gui), while the two non-QML manifests
+  // (qml_assets.qrc / qml_web.qrc) remain plain qrc sources referenced from
+  // the top-level CMakeLists.txt. QML_FILES entries are re-rendered as
+  // <file>...</file> pseudo entries so the pre-existing presence/absence and
+  // count-exactness contracts (e.g. "exactly one pages/AssemblePage.qml
+  // entry") keep matching one world only.
   const QString cmake = readSource(QStringLiteral("CMakeLists.txt"));
+  const QString qmlModuleCmake =
+      readSource(QStringLiteral("src/qml_gui/CMakeLists.txt"));
   QStringList parts;
   static const QRegularExpression qrcRef(
       QStringLiteral("src/qml_gui/[\\w/]+\\.qrc"));
@@ -791,8 +799,24 @@ QString QmlUiAuditTests::qmlQrcSources() const
         parts << body;
     }
   }
+  // QML_FILES lines: whitespace-indented plain paths ending in .qml (this
+  // skips option lines like "URI OWzx" and any commented-out paths).
+  static const QRegularExpression qmlLine(
+      QStringLiteral("^[ \\t]*([\\w/]+\\.qml)[ \\t]*$"),
+      QRegularExpression::MultilineOption);
+  QSet<QString> seenQml;
+  auto qmlIt = qmlLine.globalMatch(qmlModuleCmake);
+  while (qmlIt.hasNext()) {
+    const QString relToGui = qmlIt.next().captured(1);
+    if (seenQml.contains(relToGui))
+      continue;
+    seenQml.insert(relToGui);
+    // Only render entries whose source file actually exists.
+    if (!readSource(QStringLiteral("src/qml_gui/") + relToGui).isEmpty())
+      parts << QStringLiteral("<file>%1</file>").arg(relToGui);
+  }
   if (parts.isEmpty()) {
-    // Fallback: no manifests parsed -- fall back to every qrc on disk so
+    // Fallback: nothing parsed -- fall back to every qrc on disk so
     // presence/absence contracts still hold against a restructured build.
     QDir qrcDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)).filePath(QStringLiteral("src/qml_gui")));
     QDirIterator dirIt(qrcDir, QDirIterator::Subdirectories);
@@ -1907,11 +1931,11 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
     QStringLiteral("id: verticalLayerRail"),
     QStringLiteral("id: moveSliderBar"),
     QStringLiteral("LeftSidebar {"),
-    QStringLiteral("Components.MoveSlider"),
-    QStringLiteral("Components.StatsPanel"),
-    QStringLiteral("Components.VisibilityFilter"),
-    QStringLiteral("Components.Legend"),
-    QStringLiteral("Components.ToolPositionTooltip"),
+    QStringLiteral("MoveSlider"),
+    QStringLiteral("StatsPanel"),
+    QStringLiteral("VisibilityFilter"),
+    QStringLiteral("Legend"),
+    QStringLiteral("ToolPositionTooltip"),
     QStringLiteral("id: gcodeList")
   };
   for (const QString &region : requiredRegions) {
@@ -2315,7 +2339,7 @@ void QmlUiAuditTests::previewLayerMoveControlsAreActionableAndRendererSafe()
   QVERIFY2(!viewportHeader.isEmpty(), "Unable to read RhiViewport.h");
   QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
 
-  QVERIFY2(previewPage.contains(QStringLiteral("Components.PreviewLayerRail")),
+  QVERIFY2(previewPage.contains(QStringLiteral("PreviewLayerRail")),
            "PreviewPage must use the compact PreviewLayerRail component");
   QVERIFY2(previewPage.contains(QStringLiteral("previewViewport.requestPreviewFit()")),
            "PreviewPage must expose an explicit fit-to-preview camera action");
@@ -2475,12 +2499,12 @@ void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
              qPrintable(QStringLiteral("PreviewPage missing restored renderer binding: %1").arg(binding)));
   }
 
-  QVERIFY2(previewPage.contains(QStringLiteral("Components.PreviewLayerRail"))
-              && previewPage.contains(QStringLiteral("Components.MoveSlider"))
-              && previewPage.contains(QStringLiteral("Components.StatsPanel"))
-              && previewPage.contains(QStringLiteral("Components.VisibilityFilter"))
-              && previewPage.contains(QStringLiteral("Components.Legend"))
-              && previewPage.contains(QStringLiteral("Components.ToolPositionTooltip")),
+  QVERIFY2(previewPage.contains(QStringLiteral("PreviewLayerRail"))
+              && previewPage.contains(QStringLiteral("MoveSlider"))
+              && previewPage.contains(QStringLiteral("StatsPanel"))
+              && previewPage.contains(QStringLiteral("VisibilityFilter"))
+              && previewPage.contains(QStringLiteral("Legend"))
+              && previewPage.contains(QStringLiteral("ToolPositionTooltip")),
            "PreviewPage must use the restored Preview component set");
   QVERIFY2(previewPage.contains(QStringLiteral("root.previewVm.currentViewModeAvailable"))
               && previewPage.contains(QStringLiteral("root.previewVm.currentViewModeStatus")),
@@ -4678,11 +4702,14 @@ void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!audits.isEmpty(), "Unable to read QmlUiAuditTests.cpp");
 
+  // S8 (2026-10-14): entries render in the qmlQrcSources() pseudo-manifest
+  // format (no qrc indentation) since the module inventory comes from the
+  // qt_add_qml_module QML_FILES list, not a literal .qrc body.
   const QStringList restoredResourceEntries = {
-      QStringLiteral("        <file>dialogs/SettingsDialog.qml</file>"),
-      QStringLiteral("        <file>dialogs/SavePresetDialog.qml</file>"),
-      QStringLiteral("        <file>dialogs/UnsavedChangesDialog.qml</file>"),
-      QStringLiteral("        <file>components/OptionRow.qml</file>")
+      QStringLiteral("<file>dialogs/SettingsDialog.qml</file>"),
+      QStringLiteral("<file>dialogs/SavePresetDialog.qml</file>"),
+      QStringLiteral("<file>dialogs/UnsavedChangesDialog.qml</file>"),
+      QStringLiteral("<file>components/OptionRow.qml</file>")
       // Phase 167 (Cmp-02): GroupNavSidebar removed -- confirmed orphan (zero
       // QML consumers per Components-UI-REVIEW).
   };
@@ -6711,8 +6738,8 @@ void QmlUiAuditTests::tickMarksRenderedOnPreviewRail()
   // deleted and its qml.qrc entry removed.
   QVERIFY2(!qrc.contains(QStringLiteral("components/LayerSlider.qml")),
            "TICK-01/TK-06: qml.qrc must NOT list components/LayerSlider.qml (orphaned slider deleted per No-Deprecated-UI rule)");
-  QVERIFY2(!rail.contains(QStringLiteral("import \"../controls\"")) == false || rail.contains(QStringLiteral("CxMenu")),
-           "TICK-01/TK-06: PreviewLayerRail.qml menus use CxMenu (controls import present)");
+  QVERIFY2(rail.contains(QStringLiteral("import OWzx")) && rail.contains(QStringLiteral("CxMenu")),
+           "TICK-01/TK-06: PreviewLayerRail.qml menus use CxMenu (S8: types come from the OWzx module import)");
 }
 
 void QmlUiAuditTests::customGcodeWritebackAndResliceWired()
@@ -10317,7 +10344,7 @@ void QmlUiAuditTests::rhiViewportHostsUpstream3dNavigator()
                && preparePage.contains(QStringLiteral("navigatorBottomOffset:")),
            "PreparePage must bind the navigator above the bottom overlay stack");
   QVERIFY2(previewPage.contains(QStringLiteral("navigatorEnabled:"))
-               && previewPage.contains(QStringLiteral("Components.NavigatorLabels")),
+               && previewPage.contains(QStringLiteral("NavigatorLabels")),
            "PreviewPage must bind the navigator and host the label overlay");
   QVERIFY2(labels.contains(QStringLiteral("navigatorLabels"))
                && labels.contains(QStringLiteral("qsTr(\"Front\")")),

@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // CxBadge.qml - compact label badge for option rows, notification counts, and
 // status chips. Extracted from the inline Badge in OptionRow.qml (Phase 194,

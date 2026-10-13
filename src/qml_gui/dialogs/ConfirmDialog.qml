@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ConfirmDialog.qml — Phase 169 (XD-01) shared destructive-action confirm.

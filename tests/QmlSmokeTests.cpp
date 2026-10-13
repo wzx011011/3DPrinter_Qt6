@@ -307,7 +307,7 @@ void QmlSmokeTests::mainQmlLoads()
 {
   const qsizetype messagesBefore = m_qmlMessages.size();
 
-  engine_->load(QUrl(QStringLiteral("qrc:/qml/main.qml")));
+  engine_->load(QUrl(QStringLiteral("qrc:/qml/OWzx/main.qml")));
 
   QVERIFY2(!engine_->rootObjects().isEmpty(),
            "main.qml must produce a root object (see captured QML messages)");
@@ -339,41 +339,41 @@ void QmlSmokeTests::pagesInstantiate_data()
   // Same required-property bindings main.qml:928-1046 (and Plater.qml:33-39,
   // which fans out to PreparePage/PreviewPage/AssemblePage) pass at runtime.
   QTest::newRow("HomePage")
-      << "qrc:/qml/pages/HomePage.qml"
+      << "qrc:/qml/OWzx/pages/HomePage.qml"
       << QVariantMap{{"homeVm", vm("homeViewModel")}};
   QTest::newRow("PreparePage")
-      << "qrc:/qml/pages/PreparePage.qml"
+      << "qrc:/qml/OWzx/pages/PreparePage.qml"
       << QVariantMap{{"editorVm", vm("editorViewModel")},
                      {"configVm", vm("configViewModel")}};
   QTest::newRow("PreviewPage")
-      << "qrc:/qml/pages/PreviewPage.qml"
+      << "qrc:/qml/OWzx/pages/PreviewPage.qml"
       << QVariantMap{{"previewVm", vm("previewViewModel")},
                      {"editorVm", vm("editorViewModel")},
                      {"configVm", vm("configViewModel")}};
   QTest::newRow("AssemblePage")
-      << "qrc:/qml/pages/AssemblePage.qml"
+      << "qrc:/qml/OWzx/pages/AssemblePage.qml"
       << QVariantMap{{"editorVm", vm("editorViewModel")}};
   QTest::newRow("Plater")
-      << "qrc:/qml/pages/Plater.qml"
+      << "qrc:/qml/OWzx/pages/Plater.qml"
       << QVariantMap{{"editorVm", vm("editorViewModel")},
                      {"previewVm", vm("previewViewModel")},
                      {"configVm", vm("configViewModel")},
                      {"viewMode", backend_->property("currentViewMode")}};
   QTest::newRow("MonitorPage")
-      << "qrc:/qml/pages/MonitorPage.qml"
+      << "qrc:/qml/OWzx/pages/MonitorPage.qml"
       << QVariantMap{{"monitorVm", vm("monitorViewModel")}};
   QTest::newRow("MultiMachinePage")
-      << "qrc:/qml/pages/MultiMachinePage.qml"
+      << "qrc:/qml/OWzx/pages/MultiMachinePage.qml"
       << QVariantMap{{"multiMachineVm", vm("multiMachineViewModel")}};
   QTest::newRow("ProjectPage")
-      << "qrc:/qml/pages/ProjectPage.qml"
+      << "qrc:/qml/OWzx/pages/ProjectPage.qml"
       << QVariantMap{{"projectVm", vm("projectViewModel")},
                      {"editorVm", vm("editorViewModel")}};
   QTest::newRow("CalibrationPage")
-      << "qrc:/qml/pages/CalibrationPage.qml"
+      << "qrc:/qml/OWzx/pages/CalibrationPage.qml"
       << QVariantMap{{"calibrationVm", vm("calibrationViewModel")}};
   QTest::newRow("PreferencesPage")
-      << "qrc:/qml/pages/PreferencesPage.qml"
+      << "qrc:/qml/OWzx/pages/PreferencesPage.qml"
       << QVariantMap{{"settingsVm", vm("settingsViewModel")},
                      {"backend", QVariant::fromValue(static_cast<QObject *>(backend_))}};
 }

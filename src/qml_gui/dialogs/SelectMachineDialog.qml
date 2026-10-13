@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SelectMachineDialog.qml — DEV-04 选择打印机发送 G-code

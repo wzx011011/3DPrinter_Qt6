@@ -2,8 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ExportPresetBundleDialog.qml — V21-02 PRESET-03 导出预设包

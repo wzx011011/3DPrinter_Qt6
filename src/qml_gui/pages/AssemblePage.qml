@@ -2,9 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzxGL 1.0
-import ".."
-import "../controls"
-import "../panels"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AssemblePage.qml — Phase 90 AssembleView shell + CanvasAssembleView host.

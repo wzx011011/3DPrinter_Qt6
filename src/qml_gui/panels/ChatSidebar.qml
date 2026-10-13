@@ -1,7 +1,7 @@
 import QtQuick
 import QtWebEngine
 import QtWebChannel
-import ".."
+import OWzx
 // ChatSidebar.qml - OWzx-only AI assistant chat panel (decision record:
 // docs/ai-control.md step 2). The chat UI itself is a local web page
 // (qrc:/web/chat/index.html, marked+DOMPurify card rendering) hosted in a

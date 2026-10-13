@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PresetDiffDialog.qml — preset side-by-side diff (upstream DiffPresetDialog)

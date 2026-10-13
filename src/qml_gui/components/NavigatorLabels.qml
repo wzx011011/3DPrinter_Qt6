@@ -1,5 +1,5 @@
 import QtQuick
-import ".."
+import OWzx
 
 // v5.16 (NAVIGATOR): label overlay for the bottom-left 3D navigator cube.
 // Upstream ImGuizmo renders uppercase axis labels ("Y"/"Z"/"X", matching the

@@ -1,5 +1,8 @@
 <RCC>
     <qresource prefix="/qml">
+        <!-- S8: data/hints.json moved here from the retired qml_pages.qrc
+             (BackendContext.cpp loads it from :/qml/data/hints.json). -->
+        <file>data/hints.json</file>
         <file>assets/prepare_ref.png</file>
         <file>assets/preview_ref.png</file>
         <file>assets/monitor_ref.png</file>

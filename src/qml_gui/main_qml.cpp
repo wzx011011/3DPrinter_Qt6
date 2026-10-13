@@ -601,6 +601,13 @@ int main(int argc, char *argv[])
         if (url.scheme() != QLatin1String("qrc"))
           return url;
         const QString path = url.path();
+        // S8: the QML module tree lives at :/qml/OWzx/<subdir>/<File>.qml in
+        // the resource system; the source checkout has no OWzx/ segment, so
+        // strip it in addition to the /qml prefix. Non-module trees
+        // (:/qml/assets, :/qml/data, :/web/chat) keep the old 1:1 mapping.
+        const QString modulePrefix = QLatin1String("/qml/OWzx/");
+        if (path.startsWith(modulePrefix))
+          return QUrl::fromLocalFile(baseDir_ + path.mid(modulePrefix.size() - 1));
         const QString prefix = QLatin1String("/qml/");
         if (!path.startsWith(prefix))
           return url;
@@ -655,9 +662,11 @@ int main(int argc, char *argv[])
 
   appendStartupLog(QStringLiteral("calling engine->load(main.qml)"));
   // --qml-dev: load from the source checkout (dev UI iteration, no rebuild).
-  // The tree must sit one level up from the exe (build/ -> src/qml_gui),
-  // matching the qrc layout under /qml so relative imports resolve the same.
-  QUrl mainQmlUrl(QStringLiteral("qrc:/qml/main.qml"));
+  // The tree must sit one level up from the exe (build/ -> src/qml_gui).
+  // S8: `import OWzx` module resolution is unaffected by file-vs-qrc loading
+  // — the engine resolves the module from the resource qmldir (:/qml/OWzx/)
+  // regardless of where the root document came from.
+  QUrl mainQmlUrl(QStringLiteral("qrc:/qml/OWzx/main.qml"));
   if (startupOpenRequest.qmlDev)
   {
     const QString devMainQml = QCoreApplication::applicationDirPath()

@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import ".."
+import OWzx
 
 // CommandPalette.qml — Ctrl+Shift+P fuzzy-ish command list (Phase 173, P3).
 //

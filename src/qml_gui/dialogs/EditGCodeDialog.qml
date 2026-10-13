@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // P8.3 -- EditGCodeDialog: G-code editor with placeholder insertion
 // Aligns 1:1 with upstream EditGCodeDialog (wxDataViewCtrl tree + wxTextCtrl

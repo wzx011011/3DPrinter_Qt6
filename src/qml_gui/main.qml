@@ -10,11 +10,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import QtQuick.Window
-import "controls"
-import "pages"
-import "components"
-import "dialogs"
-import "panels"
+import OWzx
 
 ApplicationWindow {
     id: root

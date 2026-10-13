@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SelectionSettingsDialog.qml — Phase 174 (FEAT-01) Per-Object Settings Override

@@ -3,8 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // U-WIZ -- ConfigWizardDialog: first-run configuration wizard, restructured
 // 1:1 against the upstream ConfigWizard dialog

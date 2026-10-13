@@ -1,9 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../dialogs"
-import "../controls"
+import OWzx
 
 Item {
     id: root

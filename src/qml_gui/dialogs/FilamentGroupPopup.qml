@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // Phase 110 (FMAP-03): FilamentGroupPopup -- CxPopup-based mode selector that
 // surfaces the 3 selectable filament-map modes (AutoForFlush / AutoForMatch /

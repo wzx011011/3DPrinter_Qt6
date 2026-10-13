@@ -2,11 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import ".."
-import "../controls"
-import "../panels"
-import "../components"
-import "../dialogs"
+import OWzx
 import OWzxGL 1.0
 
 Item {

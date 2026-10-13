@@ -388,19 +388,26 @@ endif()
         endif()
     endif()
 
+    # ── QML 模块（S8, 2026-10-14）────────────────────────────────────────
+    # The bare .qrc manifests are replaced by a real qt_add_qml_module module
+    # tree (URI OWzx, qmlcachegen bytecode, auto qmldir/qmltypes, qmllint
+    # tooling targets). The module is defined in src/qml_gui/CMakeLists.txt
+    # so its QML_FILES are listed relative to the module root; see the
+    # block comment there for the full rationale (shared owzx_qml STATIC
+    # target: OWzxSlicer exe + QmlSmokeTests embed the identical tree).
+    add_subdirectory(src/qml_gui)
+
     # ── 主程序 ────────────────────────────────────────────────────────────
-    # QML resources are split per area so a QML edit only re-embeds (and
-    # recompiles) its own TU instead of one monolithic 20 MB qrc_qml.cpp.
-    # Prefixes are unchanged ("/qml", "/web/chat", "/") — same resource tree.
+    # Non-QML resource trees (assets/fonts/icons, web chat, the
+    # /qtquickcontrols2.conf style pin) stay plain AUTORCC manifests here —
+    # see the note in src/qml_gui/CMakeLists.txt for why they cannot live on
+    # the owzx_qml static library.
     qt_add_executable(OWzxSlicer
         src/qml_gui/main_qml.cpp
-        src/qml_gui/qml_pages.qrc
-        src/qml_gui/qml_dialogs.qrc
-        src/qml_gui/qml_components.qrc
         src/qml_gui/qml_assets.qrc
         src/qml_gui/qml_web.qrc
     )
-    target_link_libraries(OWzxSlicer PRIVATE owzx_app_core)
+    target_link_libraries(OWzxSlicer PRIVATE owzx_app_core owzx_qml)
     target_link_libraries(OWzxSlicer PRIVATE
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Svg
     )
@@ -592,21 +599,22 @@ if(BUILD_TESTING)
 
     # Q14 (audit 2026-10-10 ④): QML behavior smoke suite — the first engine-
     # instantiated QML coverage (QmlUiAuditTests above is source-string locks
-    # only). Embeds the SAME qrc resources OWzxSlicer.exe ships (main.qml,
-    # 10 pages, dialogs, components/controls/panels, assets incl. fonts, the
-    # /qtquickcontrols2.conf pin and web chat assets) so the suite exercises
-    # the shipped tree, not a copy. Runs under the minimal QPA platform (no
-    # window exposure -> no scene-graph render; see tests/QmlSmokeTests.cpp
-    # header). This is the S1/X2 behavioral safety net; suite count 12 -> 13
-    # in the canonical verify.
+    # only). Embeds the SAME QML module + asset/web resources OWzxSlicer.exe
+    # ships (main.qml, 10 pages, dialogs, components/controls/panels, assets
+    # incl. fonts, the /qtquickcontrols2.conf pin and web chat assets) via the
+    # shared owzx_qml target so the suite exercises the shipped tree, not a
+    # copy. Runs under the minimal QPA platform (no window exposure -> no
+    # scene-graph render; see tests/QmlSmokeTests.cpp header). This is the
+    # S1/X2 behavioral safety net; suite count 12 -> 13 in the canonical
+    # verify.
     qt_add_executable(QmlSmokeTests tests/QmlSmokeTests.cpp
-        src/qml_gui/qml_pages.qrc
-        src/qml_gui/qml_dialogs.qrc
-        src/qml_gui/qml_components.qrc
+        # Same non-QML resource manifests the exe embeds (assets incl. fonts,
+        # the /qtquickcontrols2.conf pin, web chat) — the QML module tree
+        # itself comes from the shared owzx_qml target.
         src/qml_gui/qml_assets.qrc
         src/qml_gui/qml_web.qrc
     )
-    target_link_libraries(QmlSmokeTests PRIVATE owzx_app_core
+    target_link_libraries(QmlSmokeTests PRIVATE owzx_app_core owzx_qml
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
     # Same shared-SHA1 duplicate definitions as OWzxSlicer above (audit Q4).

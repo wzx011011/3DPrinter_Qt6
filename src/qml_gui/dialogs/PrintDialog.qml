@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // D2 -- PrintDialog: send print (upstream SendToPrinterDialog, SendToPrinter.cpp)
 // Usage: PrintDialog { id: printDlg; editorVm: ...; monitorVm: ... }

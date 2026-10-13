@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // KBShortcutsDialog.qml - keyboard shortcut overview dialog.
 //

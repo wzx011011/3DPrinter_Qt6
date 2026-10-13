@@ -1,9 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
-import "../components"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DockableSidebar.qml — Phase 4 Sidebar Dockable 容器

@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // D4 -- CaliHistoryDialog: calibration history records dialog
 // Usage: CaliHistoryDialog { id: historyDlg; calibrationVm: ... }  ->  historyDlg.open()

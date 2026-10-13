@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import ".."
+import OWzx
 
 // params-8 / ctl-9: upstream SpinInput structure (SpinInput.cpp:33,198-240):
 // square corners (radius 0), value text LEFT-aligned, two 14px icon step

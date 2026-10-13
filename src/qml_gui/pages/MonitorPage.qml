@@ -1,9 +1,7 @@
 ﻿import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
-import "../dialogs"
+import OWzx
 
 /// MonitorPage — device monitoring dashboard
 ///

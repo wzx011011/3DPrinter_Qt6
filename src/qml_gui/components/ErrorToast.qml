@@ -1,5 +1,5 @@
 import QtQuick
-import ".."
+import OWzx
 
 // Stacked notification toasts (Phase 240 NOTI-01, upstream NotificationManager
 // render_notifications -- every live notification is visible simultaneously,

@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // P8.6b -- WipeTowerDialog (upstream truth: the wx host WipingDialog in
 // WipeTowerDialog.cpp wraps resources/web/flush/WipingDialog.html -- a

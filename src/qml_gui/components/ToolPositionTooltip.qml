@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // Tool-position tooltip, source truth of upstream GCodeViewer::
 // SequentialView::Marker::render_position_window (GCodeViewer.cpp:326-714).

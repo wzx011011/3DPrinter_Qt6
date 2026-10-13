@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // Firmware OTA is unavailable until a device protocol implementation exists.
 CxDialog {

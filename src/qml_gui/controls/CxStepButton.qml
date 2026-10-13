@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // CxStepButton.qml - mono-font step/jump button used by the Preview move slider
 // and the layer rail. Unifies the former inline MoveStepButton (MoveSlider.qml)

@@ -1,9 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../components"
-import "../controls"
+import OWzx
 
 // v2.7 P2-A: Bambu LAN access code input dialog.
 // Opened before connecting to a printer that has no access code set.

@@ -1,5 +1,5 @@
 import QtQuick
-import ".."
+import OWzx
 
 // CxBusyIndicator.qml - lightweight spinner for async operations (e.g. Emboss
 // text generation in Phase 196). Added in Phase 194 (UI-01) as the shared

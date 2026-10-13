@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // Vertical layer rail for the Preview page, aligned with upstream OrcaSlicer IMSlider.
 // Hosts: dual-thumb layer range slider, layer jump buttons, AND tick marks (pause /

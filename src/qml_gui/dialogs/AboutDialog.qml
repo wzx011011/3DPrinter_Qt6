@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // D4 -- AboutDialog: version + build info + heritage narrative + license +
 //       open-source components list (36 upstream entries) + website link.

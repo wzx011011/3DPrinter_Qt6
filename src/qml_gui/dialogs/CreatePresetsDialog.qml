@@ -2,8 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CreatePresetsDialog.qml — upstream CreatePresetsDialog.cpp port (two dialogs)

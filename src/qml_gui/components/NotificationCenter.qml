@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // Notification center panel -- shows notification history list.
 // Opens from the bell icon in the topbar; main.qml hosts the popup.

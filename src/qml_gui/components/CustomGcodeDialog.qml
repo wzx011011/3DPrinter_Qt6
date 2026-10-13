@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // Custom G-code input dialog, ported 1:1 from the upstream ImGui popup
 // (render_input_custom_gcode, IMSlider.cpp:1294-1369).

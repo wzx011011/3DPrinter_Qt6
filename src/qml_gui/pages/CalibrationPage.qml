@@ -1,10 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../dialogs"
-import "../controls"
-import "../components"
+import OWzx
 
 // Upstream reference:
 //   CalibrationPanel (CalibrationPanel.hpp/cpp) - left tab panel with tabbook

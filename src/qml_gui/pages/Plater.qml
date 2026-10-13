@@ -2,9 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzxGL 1.0
-import ".."
-import "../controls"
-import "../components" as Components
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Plater.qml — Phase 3 单一共享实例（对齐上游 Plater.cpp 的 wxPanel 单实例设计）

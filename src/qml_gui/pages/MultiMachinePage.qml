@@ -1,9 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
-import "../dialogs"
+import OWzx
 
 // Aligns with upstream MultiMachinePage (Tabbook with 3 tabs):
 //   Tab 1: "Device"   -> MultiMachineManagerPage

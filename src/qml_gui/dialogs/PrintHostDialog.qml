@@ -2,8 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
-import ".."
-import "../controls"
+import OWzx
 
 // P8.6c -- PrintHostDialog (upstream truth: PhysicalPrinterDialog.cpp)
 // "Physical Printer" dialog = preset-name save block ("Save Printer as",

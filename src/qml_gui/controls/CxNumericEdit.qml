@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // CxNumericEdit.qml - right-aligned numeric text editor for option rows.
 // Extracted from the inline NumericEdit in OptionRow.qml (Phase 194, UI-01) so

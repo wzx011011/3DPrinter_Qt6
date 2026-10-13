@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // D3 -- CalibrationDialog: upstream two-column hardware calibration dialog
 // (Calibration.cpp:23-170). Left 303-wide "step selection" panel with the

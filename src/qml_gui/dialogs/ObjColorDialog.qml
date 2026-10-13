@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ObjColorDialog.qml — Phase 236 (DLG-03) OBJ mtl color -> extruder mapping.

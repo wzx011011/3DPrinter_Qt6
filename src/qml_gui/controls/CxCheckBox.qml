@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Controls
-import ".."
+import OWzx
 
 // ctl-7: upstream CheckBox renders three 18px bitmaps (CheckBox.cpp:11-13):
 // check_on = solid rounded box (rx1.5) + white round-cap polyline check,

@@ -12,9 +12,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx.Models 1.0
-import ".."
-import "../controls"
-import "../components"
+import OWzx
 
 ApplicationWindow {
     id: root

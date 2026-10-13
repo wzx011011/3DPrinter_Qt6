@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
-import ".."
+import OWzx
 
 // Warning-level (severity=1) banner - spans full width below title bar.
 // Geometry and element structure mirror the upstream bbl-theme warning

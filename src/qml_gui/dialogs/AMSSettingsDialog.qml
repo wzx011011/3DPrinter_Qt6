@@ -1,8 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import ".."
-import "../controls"
+import OWzx
 
 // P8.4 -- AMS Settings Dialog (aligns with upstream AMSSetting / AMSMaterialsSetting / AmsMappingPopup)
 //
