@@ -238,10 +238,13 @@ $qtRootCandidates = New-Object System.Collections.Generic.List[string]
 if ($env:OWZX_QT_ROOT) {
   [void]$qtRootCandidates.Add($env:OWZX_QT_ROOT)
 }
-[void]$qtRootCandidates.Add((Join-Path $repoRoot '.deps\Qt6.10\6.10.0\msvc2022_64'))
-[void]$qtRootCandidates.Add((Join-Path $repoRoot '.deps\Qt6.10'))
-[void]$qtRootCandidates.Add('E:\Qt6.10')
-[void]$qtRootCandidates.Add('D:\Qt6.10')
+# Qt 6.12 LTS anchor (M2.5 G1, 2026-10-13). Single-version discipline: NO
+# 6.10 fallback candidates here — if the 6.12 root is missing the build must
+# fail loudly instead of silently downgrading (mixed-version hazard).
+# Rollback = restore the previous candidates (.deps\Qt6.10\6.10.0\msvc2022_64
+# / .deps\Qt6.10 / E:\Qt6.10 / D:\Qt6.10).
+[void]$qtRootCandidates.Add((Join-Path $repoRoot '.deps\Qt6.12\6.12.0\msvc2022_64'))
+[void]$qtRootCandidates.Add((Join-Path $repoRoot '.deps\Qt6.12'))
 
 $qtRoot = $null
 foreach ($candidate in ($qtRootCandidates | Select-Object -Unique)) {
@@ -251,7 +254,7 @@ foreach ($candidate in ($qtRootCandidates | Select-Object -Unique)) {
   }
 }
 if (-not $qtRoot) {
-  $qtRoot = Join-Path $repoRoot '.deps\Qt6.10'
+  $qtRoot = Join-Path $repoRoot '.deps\Qt6.12'
 }
 $qt6ConfigDir = Join-Path $qtRoot 'lib\cmake\Qt6'
 $qt6ConfigDirCmake = $qt6ConfigDir -replace '\\', '/'

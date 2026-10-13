@@ -54,13 +54,20 @@ jobs:
       - name: Setup Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
 
-      - name: Install Qt 6.10.0
+      - name: Install Qt 6.12.0
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.10.0"
+          version: "6.12.0"
           host: "windows"
           target: "desktop"
           arch: "win64_msvc2022_64"
+          # Qt 6.11+ changed the online-repo folder layout; PyPI aqtinstall
+          # 3.3.0 (the action's default ==3.3.*) cannot resolve it ("Failed to
+          # locate XML data for Qt version '6.12.0'", verified locally
+          # 2026-10-13). The fix (aqtinstall PR #1000) is only on git master
+          # until 3.3.1/3.4.0 ships -- pin the git source, then drop this line
+          # once a release with the fix lands on PyPI.
+          aqtsource: "git+https://github.com/miurahr/aqtinstall.git"
           # qtshadertools: rhi_viewport .qsb pipeline. qtwebengine + qtwebchannel:
           # the AI chat panel hard-requires Qt6::WebEngineQuick + Qt6::WebChannel
           # (CMakeLists.txt find_package, p15-p17 line). qtwebengine's CMake

@@ -162,7 +162,28 @@ gate's own files).
 - Windows 10/11.
 - Visual Studio 2022 MSVC toolchain.
 - CMake and Ninja.
-- Qt 6.10.
+- Qt 6.12.0 (LTS, win64_msvc2022_64) installed at `.deps\Qt6.12\6.12.0\msvc2022_64`
+  (M2.5 G1 switch, 2026-10-13; anchors: `scripts/auto_verify_with_vcvars.ps1`
+  candidate list, `CMakeLists.txt` third_party fallback branch,
+  `.github/workflows/tag-build.yml`). Rollback = restore the 6.10 anchors.
+  Facts that must survive the next base bump:
+  - aqtinstall from PyPI (3.3.0) cannot install Qt 6.11+: Qt changed the
+    online-repo folder layout and aqt fixed it only in git master (PR #1000;
+    verified locally with 3.3.1.dev166). Local installs: use
+    `pip install git+https://github.com/miurahr/aqtinstall.git`; CI pins
+    `aqtsource:` on install-qt-action until a fixed PyPI release ships.
+  - Qt 6.12's supported minimum CMake for USING Qt is **3.25**; the repo
+    builds with CMake 3.21 only through the deliberate
+    `QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21` override (configure emits
+    Qt's official "not officially supported" WARNING — expected, non-fatal).
+    CMake >= 3.25 upgrades must revisit this override.
+  - C++17 remains the supported consumer standard for Qt 6.12 (no C++20 gate
+    found in the installed configs/headers; the full 6.12 build compiles with
+    `CMAKE_CXX_STANDARD 17`).
+  - `windeployqt` deployments in `build/` are Qt-version-locked: after an
+    anchor switch, stale 6.10 DLLs in `build/` make every exe fail with
+    0xc0000139 (entry-point not found) until the next canonical verify
+    redeploys with the new `$qtRoot`.
 - Prebuilt OrcaSlicer dependency prefix as configured by the project CMake files.
 - Git on PATH at configure time: the from-source build applies
   `patches/orcaslicer/*.patch` onto the pristine `third_party/OrcaSlicer`

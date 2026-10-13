@@ -107,9 +107,11 @@ endif()
         # WebEngineQuick：AI 聊天面板 + 未来模型库的内嵌网页渲染（主包内置）。
         find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel)
     else()
-        # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.10 配对
+        # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.12 配对（M2.5 G1 锚点切换，
+        # 2026-10-13；Qt 6.12 官方 supported min CMake=3.25，3.21 需靠
+        # QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 覆盖，configure 会有官方警告）
         find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel)
-        set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_10")
+        set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_12")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
 
