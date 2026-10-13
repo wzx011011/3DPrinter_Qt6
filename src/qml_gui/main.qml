@@ -489,10 +489,18 @@ ApplicationWindow {
         }
     }
 
+    // U10: the text-editing chords stand down while a text item holds active
+    // focus (textEditHoldFocus, same gate as Tab/Shift+Tab below). Upstream
+    // routes undo/redo/cut/copy/paste/select-all through the focused canvas
+    // (GLCanvas3D wxEVT_CHAR), so a focused text control always kept them;
+    // editable QML text items keep them via ShortcutOverride, while read-only
+    // TextInputs (NetworkTestDialog / PresetDiffDialog logs and diffs) ignore
+    // it -- the gate is the uniform protection.
     Shortcut {
         sequences: [StandardKey.Undo]
         enabled: backend.currentPage === backend.tp3DEditor
-            onActivated: plater.preparePageRef.undoFromTopbar()
+                 && !root.textEditHoldFocus
+        onActivated: plater.preparePageRef.undoFromTopbar()
     }
     Shortcut {
         sequences: [StandardKey.Save]
@@ -507,11 +515,13 @@ ApplicationWindow {
     Shortcut {
         sequences: [StandardKey.Redo]
         enabled: backend.currentPage === backend.tp3DEditor
+                 && !root.textEditHoldFocus
         onActivated: plater.preparePageRef.redoFromTopbar()
     }
     Shortcut {
         sequence: "Ctrl+Shift+Z"
         enabled: backend.currentPage === backend.tp3DEditor
+                 && !root.textEditHoldFocus
         onActivated: plater.preparePageRef.redoFromTopbar()
     }
     // Ctrl+Tab (upstream KBShortcutsDialog global "Switch table page",
@@ -547,16 +557,19 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+X"
         enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                 && !root.textEditHoldFocus
         onActivated: backend.editorViewModel.cutSelectedObjects()
     }
     Shortcut {
         sequence: "Ctrl+C"
         enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+                 && !root.textEditHoldFocus
         onActivated: backend.editorViewModel.copySelectedObjects()
     }
     Shortcut {
         sequence: "Ctrl+V"
         enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
+                 && !root.textEditHoldFocus
         onActivated: backend.editorViewModel.pasteObjects()
     }
     Shortcut {
@@ -581,6 +594,7 @@ ApplicationWindow {
         // Select all objects (upstream plater Ctrl+A, KBShortcutsDialog.cpp:255)
         sequence: "Ctrl+A"
         enabled: backend.currentPage === backend.tp3DEditor && backend.editorViewModel
+                 && !root.textEditHoldFocus
         onActivated: backend.editorViewModel.selectAllVisibleObjects()
     }
     Shortcut {
@@ -671,8 +685,14 @@ ApplicationWindow {
     }
 
     // True while a text-input item holds active focus (TextInput / TextEdit
-    // and the controls wrapping them); Tab must stand down so it can move
-    // focus inside the editor, matching upstream IsTextFocused gates.
+    // and the controls wrapping them). The window-level shortcuts for Tab /
+    // Shift+Tab and for the text-editing chords (undo/redo, cut/copy/paste,
+    // select-all -- U10) must stand down so the editor keeps them, matching
+    // upstream where those keys are handled by the focused canvas
+    // (GLCanvas3D wxEVT_CHAR) and a focused text control always wins.
+    // Editable TextInput/TextEdit also accept ShortcutOverride for the edit
+    // chords themselves, but a read-only TextInput ignores the override, so
+    // the explicit gate is what keeps the chord semantics uniform.
     readonly property bool textEditHoldFocus: {
         var it = activeFocusItem
         return !!it && it.cursorPosition !== undefined
