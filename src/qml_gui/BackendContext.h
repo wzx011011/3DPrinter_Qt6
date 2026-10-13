@@ -144,6 +144,12 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   /// path restores the cursor by construction: they all flip the underlying
   /// state back, and the state flip is what removes the cursor.
   Q_PROPERTY(bool guiBusy READ guiBusy NOTIFY stateChanged)
+  // U11: send-print（FTP+MQTT 真发送链路）桥接属性。真实 gcode 上传在途时
+  // printSendUploadActive 为真、printSendUploadProgress 为其 0-100 百分比；
+  // PrintDialog 发送页仪表以它们为真相源（替代本地演示动画），终态经
+  // printSendFinished 通知。失败/取消的 toast 由服务信号桥（见 ctor）。
+  Q_PROPERTY(bool printSendUploadActive READ printSendUploadActive NOTIFY printSendUploadChanged)
+  Q_PROPERTY(int printSendUploadProgress READ printSendUploadProgress NOTIFY printSendUploadChanged)
   // Phase 51: state-dependent blocked-reason labels (mirror sliceActionLabel pattern).
   Q_PROPERTY(QString exportActionLabel READ exportActionLabel NOTIFY stateChanged)
   Q_PROPERTY(QString exportActionHint READ exportActionHint NOTIFY stateChanged)
@@ -436,6 +442,13 @@ public:
   /// retryable/transient blocks post NotiWarning; successes NotiSuccess.
   Q_INVOKABLE void postError(const QString &message, int severity = NotiInfo);
   Q_INVOKABLE void postNotification(const QString &message, const QString &title = {}, int severity = NotiInfo);
+  /// U11: 中止在途的 send-print FTP 上传（PrintDialog 发送页取消按钮）。
+  /// 无在途任务时 no-op；取消终态经 printSendFinished(false, "") 通知，
+  /// 失败终态经 printSendFinished(false, reason) —— 空错误串即用户取消，
+  /// 对话据此回 prepare 页而不弹失败面板。
+  Q_INVOKABLE void cancelPrintSend();
+  bool printSendUploadActive() const { return m_printSendUploadActive; }
+  int printSendUploadProgress() const { return m_printSendUploadProgress; }
   Q_INVOKABLE void clearError();
   Q_INVOKABLE void dismissNotification();
   /// Phase 240 (NOTI-01): dismiss one stacked notification by its id (the
@@ -697,6 +710,13 @@ signals:
   /// Dead-control elimination: PrintHostDialog connection test result.
   void printHostTestFinished(bool ok, const QString &detail);
   void updateCheckRunningChanged();
+  // U11: send-print（FTP+MQTT）桥接信号。
+  /// printSendUploadActive / printSendUploadProgress 任一变化。
+  void printSendUploadChanged();
+  /// 真发送终态：success=true 打印机已接受任务；success=false 且 error 非空
+  /// = 失败（error 为可读原因，toast 已由服务信号桥发布）；success=false 且
+  /// error 为空 = 用户取消在途上传。
+  void printSendFinished(bool success, const QString &error);
 
 private:
   /// U4: the busy-cursor manager. guiBusyNow() recomputes the aggregate; when
@@ -733,6 +753,9 @@ private:
   SliceService *sliceService_ = nullptr;
   PresetServiceMock *presetService_ = nullptr;
   DeviceServiceMock *deviceService_ = nullptr;
+  // U11: send-print（FTP+MQTT）桥接状态——printSendUpload* 属性的存储。
+  bool m_printSendUploadActive = false;
+  int m_printSendUploadProgress = 0;
   ProjectServiceMock *projectService_ = nullptr;
   NetworkServiceMock *networkService_ = nullptr;
   /// Upstream-aligned QML API.

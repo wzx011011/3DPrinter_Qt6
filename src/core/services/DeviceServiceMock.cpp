@@ -717,34 +717,74 @@ void DeviceServiceMock::disconnectDevice(int filteredIndex)
 // v2.8 P2-C: Send print job via FTP upload + MQTT print command.
 // Uploads .gcode to the printer via FTPS (port 990, TLS), then publishes
 // {"print":{"command":"gcode_file","param":"<remote_path>"}} to start printing.
+//
+// U11 contract: every `return false` below is paired with sendPrintFailed so
+// the GUI can surface the reason; a false return must never degrade into the
+// mock print path — the printer that never received anything must never be
+// shown as "printing".
 bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodePath)
 {
     if (!isMqttConnected()) {
         qDebug("[Device] sendPrintViaFtp: MQTT not connected, cannot send print");
+        emit sendPrintFailed(QStringLiteral("MQTT not connected"));
         return false;
     }
     if (gcodePath.isEmpty() || !QFileInfo::exists(gcodePath)) {
         qDebug("[Device] sendPrintViaFtp: invalid gcode path: %s", gcodePath.toUtf8().constData());
+        emit sendPrintFailed(gcodePath.isEmpty()
+            ? QStringLiteral("gcode path is empty")
+            : QStringLiteral("local gcode file not found: %1").arg(gcodePath));
+        return false;
+    }
+    // U11 防重入：已有发送在途时直接拒绝（uploadFile 的 busy 拒绝不产信号，
+    // 在这里补上失败通知，且绝不 fall-through 到 mock 打印任务）。
+    if (ftpSendInProgress_ || (ftpUploader_ && ftpUploader_->isUploading())) {
+        qDebug("[Device] sendPrintViaFtp: another send is already in progress");
+        emit sendPrintFailed(QStringLiteral("another send is already in progress"));
         return false;
     }
 
     // 获取连接设备参数
     const int idx = mqttConnectedDeviceIndex_;
-    if (idx < 0 || idx >= devices_.size()) return false;
+    if (idx < 0 || idx >= devices_.size()) {
+        emit sendPrintFailed(QStringLiteral("no connected device"));
+        return false;
+    }
     const QString host = devices_[idx].ip;
     const QString accessCode = devices_[idx].accessCode;
     // Bambu 打印机 FTP 目录：/mnt/sdcard/（或 /userdata/）
     const QString remotePath = buildPrintRemotePath(gcodePath);
     lastPrintRemotePath_ = remotePath;
+    ftpSendCancelRequested_ = false;
 
-    // 创建 FtpUploader（惰性）
+    // 创建 FtpUploader（惰性）。U11：uploadStarted/uploadProgress 此前零订阅，
+    // 大 gcode 上传全程无进度；uploadFinished 的终态在这里分流为
+    // succeeded / failed / cancelled 并交由 BackendContext 桥成 toast。
     if (!ftpUploader_) {
         ftpUploader_ = new FtpUploader(this);
+        connect(ftpUploader_, &FtpUploader::uploadStarted, this, [this]() {
+            ftpSendInProgress_ = true;
+            emit sendPrintUploadStarted();
+        });
+        connect(ftpUploader_, &FtpUploader::uploadProgress, this,
+                [this](int percent) { emit sendPrintUploadProgress(percent); });
         connect(ftpUploader_, &FtpUploader::uploadFinished, this,
                 [this](bool success, const QString &error) {
+            ftpSendInProgress_ = false;
             if (success) {
                 qDebug("[Device] FTP upload complete, sending print command...");
-                publishPrintCommand("gcode_file", lastPrintRemotePath_);
+                // U11 根治点：打印机只有在命令确实送达后才允许显示
+                // "printing"。publish 返回 false（未连接/无序列号/broker
+                // 拒绝）意味着打印机什么都没收到——此前这里无视返回值
+                // 无条件置 printing，把假状态推给用户。
+                if (!publishPrintCommand("gcode_file", lastPrintRemotePath_)) {
+                    qDebug("[Device] MQTT print command not accepted - keeping"
+                           " device out of printing");
+                    emit sendPrintFailed(
+                        QStringLiteral("MQTT publish failed (print command not"
+                                       " delivered)"));
+                    return;
+                }
                 const int devIdx = mqttConnectedDeviceIndex_;
                 if (devIdx >= 0 && devIdx < devices_.size()) {
                     devices_[devIdx].status = "printing";
@@ -752,8 +792,17 @@ bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodeP
                     emit devicesChanged();
                     emit selectedDeviceChanged();
                 }
+                emit sendPrintSucceeded();
+            } else if (ftpSendCancelRequested_) {
+                // U11: 用户取消在途上传——归为取消而非失败，设备状态不动。
+                ftpSendCancelRequested_ = false;
+                qDebug("[Device] FTP upload cancelled by user");
+                emit sendPrintCancelled();
             } else {
+                // U11: 上传失败此前只有一行 qDebug，用户侧毫无感知；现在
+                // 失败原因上抛（BackendContext 桥成 NotiError toast）。
                 qDebug("[Device] FTP upload failed: %s", error.toUtf8().constData());
+                emit sendPrintFailed(error);
             }
         });
     }
@@ -762,6 +811,17 @@ bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodeP
     qDebug("[Device] starting FTP upload to %s:990 (file=%s)", host.toUtf8().constData(),
            gcodePath.toUtf8().constData());
     return ftpUploader_->uploadFile(host, 990, accessCode, gcodePath, remotePath);
+}
+
+// U11: 中止在途的 send-print 上传。仅置取消标记并请求 libcurl 中止；真正的
+// 终态（uploadFinished(false)）到达后由 uploadFinished 分支归类为 cancelled。
+void DeviceServiceMock::cancelSendPrint()
+{
+    if (!ftpUploader_ || !ftpSendInProgress_)
+        return;
+    ftpSendCancelRequested_ = true;
+    ftpUploader_->cancel();
+    qDebug("[Device] send-print cancel requested");
 }
 
 // ── SelectMachineDialog send-job state machine ────────────────────────────
@@ -845,9 +905,19 @@ void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath){
 
   // v2.8 P2-C: real print path 鈥?FTP upload + MQTT command (when connected)
   if (isMqttConnected() && !gcodePath.isEmpty()) {
+    // U11 防重入：FTP 上传在途时设备状态还不是 "printing"（终态才置位），
+    // 上面的 status 守卫拦不住二次点击；此前二次点击走到 sendPrintViaFtp →
+    // uploadFile 以 busy 返回 false → fall-through 到 mock 任务，真实上传
+    // 完成后又覆盖同一状态，造成双重 printing。在途即直接吞掉这次点击。
+    if (ftpSendInProgress_ || (ftpUploader_ && ftpUploader_->isUploading()))
+      return;
     if (sendPrintViaFtp(filteredIndex, gcodePath))
       return; // FTP upload started 鈥?async result via uploadFinished
-    // FTP start failed 鈫?fall through to mock
+    // U11: 真链路已经介入但上传没能启动（MQTT 断开/文件缺失等），
+    // sendPrintViaFtp 已发 sendPrintFailed。此处若再 fall-through 到 mock
+    // 任务，就会凭空造出打印机从未进入过的 "printing" 状态——真链路介入
+    // 后永远不再走 mock 兜底。
+    return;
   }
 
   // Create print job state

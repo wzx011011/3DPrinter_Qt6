@@ -277,6 +277,9 @@ private slots:
   void int05_MqttCommandConstructionAndControlFlow();
   // v2.8 P2-C: INT-06 FTP URL construction + send-print routing
   void int06_FtpUrlAndSendPrintRouting();
+  // U11: send-print failure surfaces as a signal, the device is never faked
+  // into "printing", in-flight sends reject reentry, cancel is a safe no-op.
+  void u11_SendPrintFailureSurfacesAndNeverFakesPrinting();
   void monitorDeviceFilesystemCapabilityIsExplicit();
   // Q10-3: a credential-less device connect request lands in Disconnected
   // (explicit not-configured path) and never fakes its way to Normal.
@@ -4763,6 +4766,63 @@ void ViewModelSmokeTests::int06_FtpUrlAndSendPrintRouting()
   if (device.deviceCount() > 0) {
     device.selectDevice(0);
     device.startPrint(0, QString()); // mock path, no crash
+  }
+}
+
+// -- U11: send-print 链路真实性自回归 ----------
+// 不连真机。upload/publish 的成功与失败分支需要真实 broker/打印机，无法
+// 离线驱动；这里锁定离线可达的契约面：
+//   - sendPrintViaFtp 失败路径必发 sendPrintFailed（此前是静默 qDebug）
+//   - 失败绝不翻转设备状态——打印机什么都没收到就绝不显示 printing
+//   - 空闲时 cancelSendPrint 是安全 no-op
+//   - MQTT 未连接时 startPrint 的 mock 演示路径保持原样（演示语义不变）
+//   - 在途防重入（真上传期间二次 startPrint 吞掉）依赖真 FTP 会话，
+//     由代码路径 ftpSendInProgress_ 守卫覆盖，离线仅验证标志位归位
+void ViewModelSmokeTests::u11_SendPrintFailureSurfacesAndNeverFakesPrinting()
+{
+  DeviceServiceMock device;
+  QSignalSpy failedSpy(&device, &DeviceServiceMock::sendPrintFailed);
+  QSignalSpy succeededSpy(&device, &DeviceServiceMock::sendPrintSucceeded);
+  QSignalSpy cancelledSpy(&device, &DeviceServiceMock::sendPrintCancelled);
+  QSignalSpy progressSpy(&device, &DeviceServiceMock::sendPrintUploadProgress);
+  QSignalSpy devicesSpy(&device, &DeviceServiceMock::devicesChanged);
+  QVERIFY(failedSpy.isValid() && succeededSpy.isValid() && cancelledSpy.isValid());
+  QVERIFY(progressSpy.isValid() && devicesSpy.isValid());
+  QVERIFY(!device.sendPrintInFlight());
+
+  if (device.deviceCount() > 0) {
+    device.selectDevice(0);
+    const QString statusBefore = device.selectedDeviceStatus();
+    const int devicesEventsBefore = devicesSpy.count();
+
+    // 1. 未连接 → false + 失败信号（携带可读原因），设备状态与进度通道全静默
+    QVERIFY(!device.sendPrintViaFtp(0, QStringLiteral("/tmp/owzx_u11.gcode")));
+    QCOMPARE(failedSpy.count(), 1);
+    QVERIFY(!failedSpy.at(0).at(0).toString().isEmpty());
+    QCOMPARE(succeededSpy.count(), 0);
+    QCOMPARE(cancelledSpy.count(), 0);
+    QCOMPARE(progressSpy.count(), 0);
+    QCOMPARE(devicesSpy.count() - devicesEventsBefore, 0);
+    QCOMPARE(device.selectedDeviceStatus(), statusBefore);
+    QVERIFY(!device.sendPrintInFlight());
+
+    // 2. 紧接的再次尝试同样失败并上报，不残留半开状态
+    QVERIFY(!device.sendPrintViaFtp(0, QString()));
+    QCOMPARE(failedSpy.count(), 2);
+    QCOMPARE(device.selectedDeviceStatus(), statusBefore);
+    QVERIFY(!device.sendPrintInFlight());
+
+    // 3. 空闲时取消是安全 no-op（不发取消信号、不留取消标记）
+    device.cancelSendPrint();
+    QCOMPARE(cancelledSpy.count(), 0);
+    QVERIFY(!device.sendPrintInFlight());
+  }
+
+  // 4. MQTT 未连接时 startPrint 的 mock 演示兜底不受 U11 改动影响
+  if (device.deviceCount() > 0) {
+    device.selectDevice(0);
+    device.startPrint(0, QString());
+    QCOMPARE(device.selectedDeviceStatus(), QStringLiteral("printing"));
   }
 }
 

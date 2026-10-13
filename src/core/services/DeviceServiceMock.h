@@ -253,9 +253,16 @@ public:
 
   /// v2.8 P2-C: 通过 FTP 上传 .gcode 到打印机，然后发 MQTT print 命令启动打印。
   /// 仅在 MQTT 已连接时启用（需要 IP + access code）。
-  /// uploadProgress 信号反馈上传百分比，uploadFinished 反馈结果。
-  /// 返回 true 表示上传已启动（结果异步通知）。
+  /// sendPrintUploadProgress 信号反馈上传百分比，终态经
+  /// sendPrintSucceeded/sendPrintFailed/sendPrintCancelled 通知。
+  /// 返回 true 表示上传已启动（结果异步通知）。U11 契约：返回 false 时
+  /// 一定伴随 sendPrintFailed（原因可读），绝不静默降级成 mock 打印态。
   Q_INVOKABLE bool sendPrintViaFtp(int filteredIndex, const QString &gcodePath);
+  /// U11: 中止在途的 send-print FTP 上传（PrintDialog 取消按钮）。
+  /// 无在途任务时为安全 no-op；取消结果经 sendPrintCancelled 通知。
+  Q_INVOKABLE void cancelSendPrint();
+  /// U11: 是否有 send-print FTP 上传在途（自 uploadStarted 至终态信号）。
+  bool sendPrintInFlight() const { return ftpSendInProgress_; }
   Q_INVOKABLE void pausePrint(int filteredIndex);
   Q_INVOKABLE void resumePrint(int filteredIndex);
   Q_INVOKABLE void stopPrint(int filteredIndex);
@@ -300,6 +307,20 @@ signals:
   void sendJobChanged();
   void printOptionsChanged();
 
+  // ── U11: send-print（FTP+MQTT）真实链路进度与终态 ─────────────────────────
+  /// FTP 上传已启动（进度归零）。BackendContext 据此置 printSendUploadActive，
+  /// PrintDialog 发送页仪表从演示动画切换到真实百分比。
+  void sendPrintUploadStarted();
+  /// FTP 上传进度（0-100；FtpUploader 自 libcurl 线程经队列投递）。
+  /// U11 之前该通道零订阅，大 gcode 上传全程无进度。
+  void sendPrintUploadProgress(int percent);
+  /// 终态三兄弟：succeeded = 上传完成且 MQTT 打印命令已被接受（设备此时才
+  /// 置 printing）；failed = 打印机永远没收到任务（上传失败或 publish 被
+  /// 拒），设备状态保持原样；cancelled = 用户中止在途上传。
+  void sendPrintSucceeded();
+  void sendPrintFailed(const QString &reason);
+  void sendPrintCancelled();
+
 private:
   void buildMockDevices();
   void rebuildFilteredIndices();
@@ -333,6 +354,11 @@ private:
   // v2.8 P2-C: FTP 上传服务（发送打印任务时用于上传 .gcode）
   FtpUploader *ftpUploader_ = nullptr;
   QString lastPrintRemotePath_;  ///< 最后一次上传的 FTP 远程路径（供测试）
+  // U11: send-print 在途/取消标记。ftpSendInProgress_ 覆盖 uploadStarted →
+  // uploadFinished 窗口，startPrint 以它防重入（此前在途期间二次点击会
+  // fall-through 到 mock 任务，造成双重 printing 状态）。
+  bool ftpSendInProgress_ = false;
+  bool ftpSendCancelRequested_ = false;
   // v2.7 P2-B: MQTT publish 调试（供 INT-05 断言 payload/topic）
   QString lastPublishPayload_;
   QString lastPublishTopic_;

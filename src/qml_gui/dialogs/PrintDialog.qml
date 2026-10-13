@@ -245,15 +245,27 @@ CxDialog {
                    : qsTr("所选打印机离线，无法发送。"), true)
         return
       }
-      // Demo send over the mock device stack: the job lands through
-      // MonitorViewModel::startPrint (DeviceServiceMock), then the sending
-      // page animates the upload and settles on the finish page.
-      root.monitorVm.startPrint(printerEntries[printerCombo.currentIndex].filteredIndex,
-                                root.editorVm.lastGcodePath)
+      // Send lands through MonitorViewModel::startPrint (DeviceServiceMock).
+      // U11: enter the sending page BEFORE the call so a synchronous send
+      // failure (missing gcode, busy, publish rejected) is consumed by the
+      // onPrintSendFinished handler below with the dialog already listening.
+      // With a real FTP upload in flight (backend.printSendUploadActive) the
+      // gauge follows backend.printSendUploadProgress; the local animation
+      // stays only for the disclosed demo path (MQTT not connected).
       sendFailed = false
       sendProgress = 0
       sendState = 1
-      sendAnim.restart()
+      root.monitorVm.startPrint(printerEntries[printerCombo.currentIndex].filteredIndex,
+                                root.editorVm.lastGcodePath)
+      if (typeof backend !== "undefined" && backend && backend.printSendUploadActive) {
+        // Real upload in flight -- gauge/terminal state arrive via backend.
+      } else if (root.monitorVm.mqttConnected) {
+        // Real path engaged but nothing is in flight: the attempt failed
+        // synchronously and onPrintSendFinished already returned the dialog
+        // to prepare with the failed-info panel; do not fake the animation.
+      } else {
+        sendAnim.restart()
+      }
     }
 
     // Upstream EVT_PRINT_JOB_CANCEL -> on_print_job_cancel -> prepare_mode
@@ -262,6 +274,11 @@ CxDialog {
       sendAnim.stop()
       sendProgress = 0
       sendState = 0
+      // U11: cancelling a real upload must actually abort it -- otherwise
+      // the job would still land on the printer after the dialog returned
+      // to prepare, and the in-flight guard would then swallow the retry.
+      if (typeof backend !== "undefined" && backend && backend.printSendUploadActive)
+        backend.cancelPrintSend()
     }
 
     onOpened: {
@@ -856,12 +873,13 @@ CxDialog {
         // Bottom margin (SendToPrinter.cpp:578)
         Item { Layout.preferredHeight: 13 }
 
-        // R-P1.E disclosure: this dialog sends through the mock device stack
-        // (DeviceServiceMock), so the demo nature stays user-visible.
+        // R-P1.E disclosure: the device list is still mock-fed; the send itself
+        // is real over MQTT (FTP upload + print command, U11) and falls back to
+        // the local demo animation only while no MQTT backend is connected.
         Text {
             Layout.fillWidth: true
             Layout.leftMargin: 16; Layout.rightMargin: 16
-            text: qsTr("演示模式：设备列表与发送流程为本地模拟数据，真实设备推送依赖 MQTT，当前为外部阻塞项。")
+            text: qsTr("设备列表为本地模拟数据；MQTT 连接后发送走真实 FTP 上传与打印命令通道（失败会明确提示），未连接时为本地演示动画。")
             color: Theme.textDisabled
             font.pixelSize: Theme.fontSizeXS
             horizontalAlignment: Text.AlignHCenter
@@ -869,9 +887,9 @@ CxDialog {
         }
     }
 
-    // Sending page upload animation: the mock send completes locally, so the
-    // gauge animates over a fixed interval and settles on the finish page
-    // (upstream settles via the real upload progress callbacks).
+    // Sending page upload animation: demo-path only (no MQTT backend). The real
+    // send settles via the backend printSend* bridge (upstream settles via the
+    // real upload progress callbacks).
     NumberAnimation {
         id: sendAnim
         target: root
@@ -937,6 +955,39 @@ CxDialog {
         }
         function onDevicesChanged() {
             root.rebuildPrinterModel()
+        }
+    }
+
+    // U11: real send feedback over the backend bridge. Progress replaces the
+    // demo animation tick by tick; the terminal event settles the simplebook
+    // -- finish page on success, failed-info panel + prepare page on failure
+    // (upstream settles via the real upload progress callbacks and shows the
+    // panel on send errors, SendToPrinter.cpp:461-463).
+    Connections {
+        target: (typeof backend !== "undefined" && backend) ? backend : null
+        function onPrintSendUploadChanged() {
+            if (root.sendState !== 1)
+                return
+            if (backend.printSendUploadActive) {
+                sendAnim.stop()
+                root.sendProgress = backend.printSendUploadProgress
+            }
+        }
+        function onPrintSendFinished(success, error) {
+            if (root.sendState !== 1)
+                return
+            if (success) {
+                root.sendProgress = 100
+                root.sendState = 2
+            } else if (error !== "") {
+                root.sendState = 0
+                root.sendFailed = true
+                root.failedCode = ""
+                root.failedDesc = error
+                root.failedExtra = ""
+            }
+            // error === "" is the user-cancel path: cancelSend already
+            // returned the dialog to prepare with no failure panel.
         }
     }
 

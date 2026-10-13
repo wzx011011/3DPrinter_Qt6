@@ -106,6 +106,46 @@ BackendContext::BackendContext(QObject *parent)
   cameraService_ = new CameraServiceMock(this);
   auto *cloudService = new CloudServiceMock(this);
 
+  // U11: 发送链路真实性桥。DeviceServiceMock 的 FTP+MQTT 真发送路径此前
+  // 只在 uploadFinished 里打日志：publish 失败仍无条件把设备置 "printing"，
+  // 上传失败静默，uploadProgress 零订阅。这里把服务的进度/终态信号桥到：
+  //   - printSendUpload* 属性（PrintDialog 发送页仪表的真相源）；
+  //   - 失败 toast（NotiError，U1 severity 纪律：失败绝不可以播成功色）；
+  //   - 取消不播 toast（对话框自身回 prepare 页即反馈，对齐上游
+  //     on_print_job_cancel 的安静语义，SendToPrinter.cpp:1055-1085）；
+  //   - 成功不播 toast（对话框 finish 页 + 设备 printing 状态即反馈）。
+  connect(deviceService_, &DeviceServiceMock::sendPrintUploadStarted, this, [this]() {
+    m_printSendUploadActive = true;
+    m_printSendUploadProgress = 0;
+    emit printSendUploadChanged();
+  });
+  connect(deviceService_, &DeviceServiceMock::sendPrintUploadProgress, this,
+          [this](int percent) {
+    m_printSendUploadActive = true;
+    m_printSendUploadProgress = percent;
+    emit printSendUploadChanged();
+  });
+  connect(deviceService_, &DeviceServiceMock::sendPrintSucceeded, this, [this]() {
+    m_printSendUploadActive = false;
+    m_printSendUploadProgress = 0;
+    emit printSendUploadChanged();
+    emit printSendFinished(true, QString());
+  });
+  connect(deviceService_, &DeviceServiceMock::sendPrintFailed, this,
+          [this](const QString &reason) {
+    m_printSendUploadActive = false;
+    m_printSendUploadProgress = 0;
+    emit printSendUploadChanged();
+    postError(tr("发送到打印机失败: %1").arg(reason), NotiError);
+    emit printSendFinished(false, reason);
+  });
+  connect(deviceService_, &DeviceServiceMock::sendPrintCancelled, this, [this]() {
+    m_printSendUploadActive = false;
+    m_printSendUploadProgress = 0;
+    emit printSendUploadChanged();
+    emit printSendFinished(false, QString());
+  });
+
   editorViewModel_ = new EditorViewModel(projectService_, sliceService_, this);
   connect(editorViewModel_, &EditorViewModel::stateChanged, this, &BackendContext::displayProjectTitleChanged);
   // GAP-7: multi-select info notification (upstream
@@ -1658,6 +1698,14 @@ int BackendContext::percentile95(const QVector<int> &samples)
   const int sampleCount = int(sorted.size());
   const int idx = std::min(sampleCount - 1, int((sampleCount - 1) * 0.95));
   return sorted[idx];
+}
+
+void BackendContext::cancelPrintSend()
+{
+  // U11: PrintDialog 发送页的取消按钮。真实上传必须真的中止——否则对话框
+  // 已回 prepare 页而任务仍会落到打印机，且重发会被在途守卫吞掉。
+  if (deviceService_)
+    deviceService_->cancelSendPrint();
 }
 
 void BackendContext::postError(const QString &message, int severity)
