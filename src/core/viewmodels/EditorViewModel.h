@@ -1538,6 +1538,13 @@ public:
   /// 自动排列全部对象（对齐上游 Plater::priv::on_arrange → arrange_objects）
   Q_INVOKABLE void arrangeAllObjects();
   Q_INVOKABLE bool arrangePlate(int plateIndex);
+private:
+  /// U9: raw per-plate arrange run (switch plate, arrange, sync, invalidate)
+  /// with NO undo bookkeeping — arrangePlate() wraps it with the "Arrange"
+  /// snapshot push; the handy-model import calls it directly so its built-in
+  /// arrange does not emit a stray undo step. Not invokable from QML.
+  bool arrangePlateObjects(int plateIndex);
+public:
   bool arrangeAvoidCalibration() const;
   void setArrangeAvoidCalibration(bool v);
   /// 重置排列设置到默认值（对齐上游 ArrangeSettings Reset）

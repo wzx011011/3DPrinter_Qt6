@@ -7740,6 +7740,24 @@ void EditorViewModel::autoOrientSelected()
 
 #ifdef HAS_LIBSLIC3R
   // 对齐上游 Plater::orient() + OrientJob → Slic3r::orientation::orient(ModelObject*)
+  // U9: 上游 orient 前置 take_snapshot("Orient")（Plater.cpp:13630）。摆向
+  // 是纯变换（只改 rotation，对象集合与盘成员都不动），而
+  // restorePlateListSnapshot 对幸存对象不回填变换——所以这里用逐对象
+  // TransformCommand 宏（同 setSelectedInstanceCount 的排布随行模式），
+  // 而不是付出整景深快照的捕获成本却还原不回摆向。
+  struct BeforeEntry
+  {
+    int index;
+    QVector3D position, rotation, scale;
+  };
+  QList<BeforeEntry> before;
+  if (m_undoManager)
+  {
+    for (int index = 0; index < projectService_->objectNames().size(); ++index)
+      before.append(BeforeEntry{index, projectService_->objectPosition(index),
+                                projectService_->objectRotation(index),
+                                projectService_->objectScale(index)});
+  }
   auto indices = m_selectedSourceIndices.values();
   bool anyOriented = false;
 
@@ -7750,7 +7768,27 @@ void EditorViewModel::autoOrientSelected()
   }
 
   if (anyOriented)
+  {
     projectService_->syncTransformsFromModel();
+    if (m_undoManager)
+    {
+      m_undoManager->beginMacro(tr("Orient"));
+      for (const BeforeEntry &entry : before)
+      {
+        const QVector3D newPos = projectService_->objectPosition(entry.index);
+        const QVector3D newRot = projectService_->objectRotation(entry.index);
+        const QVector3D newScale = projectService_->objectScale(entry.index);
+        if (newPos == entry.position && newRot == entry.rotation && newScale == entry.scale)
+          continue;
+        auto *cmd = new TransformCommand(entry.index, entry.position,
+                                         entry.rotation, entry.scale,
+                                         projectService_);
+        cmd->setNewTransform(newPos, newRot, newScale);
+        m_undoManager->push(cmd);
+      }
+      m_undoManager->endMacro();
+    }
+  }
 
   statusText_ = anyOriented ? tr("自动朝向完成") : tr("自动朝向完成（无变更）");
   rebuildObjectEntriesFromService();
@@ -7787,6 +7825,14 @@ void EditorViewModel::splitSelectedObject()
   statusText_ = tr("正在拆分对象...");
   emit stateChanged();
 
+  // U9: 拆分快照入栈就在这一层做（上游 Plater::priv::split_object 的成功
+  // 分支前置 Plater::TakeSnapshot "Split to Objects"，Plater.cpp:10338）。
+  // 拆分会把对象索引整批移位（原对象消失、N 个部分末端追加），只有整盘
+  // 深快照能表达；快照在变更前捕获、确认拆分发生后入栈。这样 QML 直调
+  // 本 Q_INVOKABLE 与 splitSelectedToObjects 包装两条路都恰好入栈一次。
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Split to objects"), projectService_) : nullptr;
+  bool splitDone = false;
+
 #ifdef HAS_LIBSLIC3R
   // 对齐上游 Plater::priv::split_object() → ModelObject::split()
   QList<int> newIndices = projectService_->splitObject(srcIdx);
@@ -7796,6 +7842,7 @@ void EditorViewModel::splitSelectedObject()
     for (int newIdx : newIndices)
       m_selectedSourceIndices.insert(newIdx);
     statusText_ = tr("已拆分为 %1 个部分").arg(newIndices.size());
+    splitDone = true;
   }
   else
   {
@@ -7818,10 +7865,24 @@ void EditorViewModel::splitSelectedObject()
     m_selectedSourceIndices.insert(idx1);
     m_selectedSourceIndices.insert(idx2);
     statusText_ = tr("已沿 Y 轴拆分为 2 个部件");
+    splitDone = true;
   } else {
     statusText_ = tr("拆分失败");
   }
 #endif
+
+  if (splitDone)
+  {
+    if (cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->push(cmd);
+    }
+  }
+  else
+  {
+    delete cmd;
+  }
 
   rebuildObjectEntriesFromService();
   invalidateSliceResultsForCurrentPlate();
@@ -8439,22 +8500,14 @@ bool EditorViewModel::arraySelectedObject(int rows, int cols, float spacingX, fl
 
 bool EditorViewModel::splitSelectedToObjects()
 {
-  // P16.8: whole-model snapshot like the upstream split flow (Plater::priv::
-  // split_object takes a snapshot; object indices shift wholesale).
-  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Split to objects"), projectService_) : nullptr;
+  // U9: the whole-model snapshot push moved into splitSelectedObject (the
+  // single source of split bookkeeping — upstream Plater::priv::split_object
+  // takes one "Split to Objects" snapshot, Plater.cpp:10338). This wrapper
+  // now only reports whether the split changed the scene, so both this
+  // toolbar/menu entry and a direct Q_INVOKABLE call undo exactly once.
   const int beforeCount = modelCount();
   splitSelectedObject();
-  if (modelCount() == beforeCount)
-  {
-    delete cmd;
-    return false;
-  }
-  if (cmd)
-  {
-    cmd->setAfterState();
-    m_undoManager->push(cmd);
-  }
-  return true;
+  return modelCount() != beforeCount;
 }
 
 bool EditorViewModel::splitSelectedToParts()
@@ -8505,11 +8558,20 @@ bool EditorViewModel::addFilesToContextPlate(const QStringList &filePaths)
   // U4: Slic3r::Model::read_from_file parses each dropped file synchronously
   // on the GUI thread -- the same import family as the async load worker, so
   // the central busy cursor must cover it too (state, not call-site cursor).
+  // U9: 模型文件导入走上游同款快照——拖放/导入在 load 之前 take_snapshot
+  // "Import Object(s)"（Plater.cpp:15717/17531），导入后 Ctrl+Z 可整体撤下。
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Import"), projectService_) : nullptr;
   const SyncBusyScope busy(this, &EditorViewModel::m_importing);
   if (!projectService_->addFilesToPlate(m_contextPlateIndex, filePaths)) {
+    delete cmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
     return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
   }
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
@@ -8530,11 +8592,20 @@ bool EditorViewModel::addFilesToCurrentPlate(const QStringList &filePaths)
   if (plate < 0 || !projectService_->setCurrentPlateIndex(plate))
     return false;
   // U4: same synchronous file parse as addFilesToContextPlate (drop/import).
+  // U9: same "Import Object(s)" snapshot as the context-plate variant
+  // (upstream Plater.cpp:15717/17531) so drops and Ctrl+I both undo.
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Import"), projectService_) : nullptr;
   const SyncBusyScope busy(this, &EditorViewModel::m_importing);
   if (!projectService_->addFilesToPlate(plate, filePaths)) {
+    delete cmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
     return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
   }
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
@@ -8559,7 +8630,9 @@ bool EditorViewModel::addHandyModelToContextPlate(const QString &modelId)
   invalidateSliceResultsForPlate(m_contextPlateIndex);
   if (modelId == QStringLiteral("orca-cube")
       || modelId == QStringLiteral("orca-sliced-combo")) {
-    arrangePlate(m_contextPlateIndex);
+    // U9: raw arrange (no undo push) — the arrange here is part of the
+    // import, not a user-initiated arrange step.
+    arrangePlateObjects(m_contextPlateIndex);
     refreshMeshCacheAndFitHint();
   }
   emit stateChanged();
@@ -8570,10 +8643,20 @@ bool EditorViewModel::replaceAllOnContextPlate(const QStringList &filePaths)
 {
   if (!projectService_ || m_contextPlateIndex < 0 || m_contextPlateIndex >= plateCount())
     return false;
+  // U9: replace-all wipes the plate before importing, so the pre-replace
+  // snapshot is the only way back — same import-family snapshot as
+  // addFilesToContextPlate (upstream "Import Object(s)", Plater.cpp:15717).
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Import"), projectService_) : nullptr;
   if (!projectService_->replaceAllOnPlateWithFiles(m_contextPlateIndex, filePaths)) {
+    delete cmd;
     statusText_ = projectService_->lastError();
     emit stateChanged();
     return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
   }
 
   m_selectedSourceIndices.clear();
@@ -10896,6 +10979,26 @@ void EditorViewModel::arrangeAllObjects()
     const auto merged = configViewModel_->mergedConfigValues();
     printableArea = merged.value(QStringLiteral("printable_area")).toString();
   }
+  // U9: 排布前置整景快照（上游 Plater::arrange / fill_bed 系均先
+  // take_snapshot("Arrange")，Plater.cpp:17945/17954/20589）。注意双轨：
+  // restorePlateListSnapshot 只回填"重新插入"对象的变换（幸存对象保持
+  // 现位），纯位移的排布必须另配逐对象 TransformCommand 才能还原布局；
+  // 快照负责盘成员/盘结构（多盘溢出时 rebuildPlatesAfterArrangement 会
+  // 重排盘），TransformCommand 负责坐标，两者合成一个 "Arrange" 宏。
+  struct BeforeEntry
+  {
+    int index;
+    QVector3D position, rotation, scale;
+  };
+  QList<BeforeEntry> before;
+  if (m_undoManager)
+  {
+    for (int index = 0; index < projectService_->objectNames().size(); ++index)
+      before.append(BeforeEntry{index, projectService_->objectPosition(index),
+                                projectService_->objectRotation(index),
+                                projectService_->objectScale(index)});
+  }
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Arrange"), projectService_) : nullptr;
   // U4: the Slic3r::arrangement run blocks the GUI thread; the scope makes it
   // observable for BackendContext's central busy cursor (set before the run,
   // released on every path out).
@@ -10906,18 +11009,48 @@ void EditorViewModel::arrangeAllObjects()
   {
     // Real arrange succeeded — sync transforms from model to mock arrays
     projectService_->syncTransformsFromModel();
+    if (m_undoManager && cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->beginMacro(tr("Arrange"));
+      m_undoManager->push(cmd);
+      for (const BeforeEntry &entry : before)
+      {
+        const QVector3D newPos = projectService_->objectPosition(entry.index);
+        const QVector3D newRot = projectService_->objectRotation(entry.index);
+        const QVector3D newScale = projectService_->objectScale(entry.index);
+        if (newPos == entry.position && newRot == entry.rotation && newScale == entry.scale)
+          continue;
+        auto *transformCmd = new TransformCommand(entry.index, entry.position,
+                                                  entry.rotation, entry.scale,
+                                                  projectService_);
+        transformCmd->setNewTransform(newPos, newRot, newScale);
+        m_undoManager->push(transformCmd);
+      }
+      m_undoManager->endMacro();
+    }
+    else
+    {
+      delete cmd;
+    }
     invalidateAllSliceResults();
     emit stateChanged();
+  }
+  else
+  {
+    delete cmd;
   }
   // If real arrange is not available (no HAS_LIBSLIC3R), the viewport fallback
   // arrange path remains a no-op rather than mutating model state in QML.
 }
 
-bool EditorViewModel::arrangePlate(int plateIndex)
+bool EditorViewModel::arrangePlateObjects(int plateIndex)
 {
-  if (!projectService_ || plateIndex < 0 || plateIndex >= plateCount())
-    return false;
-  if (!projectService_->setCurrentPlateIndex(plateIndex))
+  // U9: raw arrange run without undo bookkeeping. Shared by the user-facing
+  // arrangePlate() wrapper (which owns the "Arrange" snapshot push) and the
+  // handy-model import, whose arrange is part of the import itself and must
+  // not emit a stray "Arrange" undo step on top of it.
+  if (!projectService_ || !projectService_->setCurrentPlateIndex(plateIndex))
     return false;
 
   const float spacing = (m_arrangeDistance > 0.f) ? m_arrangeDistance : 6.0f;
@@ -10933,6 +11066,63 @@ bool EditorViewModel::arrangePlate(int plateIndex)
   if (arranged) {
     projectService_->syncTransformsFromModel();
     invalidateSliceResultsForPlate(plateIndex);
+  }
+  return arranged;
+}
+
+bool EditorViewModel::arrangePlate(int plateIndex)
+{
+  if (!projectService_ || plateIndex < 0 || plateIndex >= plateCount())
+    return false;
+
+  // U9: same upstream "Arrange" snapshot + transform pair as
+  // arrangeAllObjects (Plater.cpp:17945/17954) — the per-plate arrange is
+  // undoable exactly like the all-plates one.
+  struct BeforeEntry
+  {
+    int index;
+    QVector3D position, rotation, scale;
+  };
+  QList<BeforeEntry> before;
+  if (m_undoManager)
+  {
+    for (int index = 0; index < projectService_->objectNames().size(); ++index)
+      before.append(BeforeEntry{index, projectService_->objectPosition(index),
+                                projectService_->objectRotation(index),
+                                projectService_->objectScale(index)});
+  }
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Arrange"), projectService_) : nullptr;
+  const bool arranged = arrangePlateObjects(plateIndex);
+  if (arranged)
+  {
+    if (m_undoManager && cmd)
+    {
+      cmd->setAfterState();
+      m_undoManager->beginMacro(tr("Arrange"));
+      m_undoManager->push(cmd);
+      for (const BeforeEntry &entry : before)
+      {
+        const QVector3D newPos = projectService_->objectPosition(entry.index);
+        const QVector3D newRot = projectService_->objectRotation(entry.index);
+        const QVector3D newScale = projectService_->objectScale(entry.index);
+        if (newPos == entry.position && newRot == entry.rotation && newScale == entry.scale)
+          continue;
+        auto *transformCmd = new TransformCommand(entry.index, entry.position,
+                                                  entry.rotation, entry.scale,
+                                                  projectService_);
+        transformCmd->setNewTransform(newPos, newRot, newScale);
+        m_undoManager->push(transformCmd);
+      }
+      m_undoManager->endMacro();
+    }
+    else
+    {
+      delete cmd;
+    }
+  }
+  else
+  {
+    delete cmd;
   }
   emit stateChanged();
   return arranged;

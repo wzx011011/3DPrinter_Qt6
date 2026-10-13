@@ -663,6 +663,14 @@ private slots:
   // P16.11: per-instance printable toggle + undo
   // (GUI_ObjectList.cpp:5817-5866).
   void instancePrintableToggleRoundTrip();
+  // U9: arrange ("A") / auto-orient ("Q") / split / import+drop all ride the
+  // undo stack via SceneSnapshotCommand (upstream take_snapshot at
+  // Plater.cpp:17945 "Arrange", :13630 "Orient", :10338 "Split to Objects",
+  // :15717 "Import Object(s)").
+  void arrangeUndoRestoresLayout();
+  void autoOrientUndoRestoresRotation();
+  void splitUndoRestoresMergedObject();
+  void importAndDropRideUndoStack();
 
 private:
   bool hasLibslic3r() const;
@@ -9965,6 +9973,167 @@ void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 {
   QSKIP("P16.11 per-instance printable requires HAS_LIBSLIC3R");
+}
+#endif
+
+// ── U9: arrange/orient/split/import ride the undo stack ────────────────────
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::arrangeUndoRestoresLayout()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  // Two primitives spawn stacked on the same spot, so a successful arrange
+  // has to move at least one of them.
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.rebuildAndNotify();
+
+  const QVector3D pos0Before = project.objectPosition(0);
+  const QVector3D pos1Before = project.objectPosition(1);
+
+  // Upstream "A": Plater::arrange takes an "Arrange" snapshot before the job
+  // (Plater.cpp:17945/17954); the Qt arrange must push the equivalent.
+  editor.arrangeAllObjects();
+  QVERIFY2(undoManager.canUndo(), "a successful arrange must push an undo command");
+
+  const QVector3D pos0After = project.objectPosition(0);
+  const QVector3D pos1After = project.objectPosition(1);
+  QVERIFY(pos0After != pos0Before || pos1After != pos1Before);
+
+  undoManager.undo();
+  QCOMPARE(project.objectPosition(0), pos0Before);
+  QCOMPARE(project.objectPosition(1), pos1Before);
+
+  undoManager.redo();
+  QCOMPARE(project.objectPosition(0), pos0After);
+  QCOMPARE(project.objectPosition(1), pos1After);
+}
+
+void ViewModelSmokeTests::autoOrientUndoRestoresRotation()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  editor.rebuildAndNotify();
+  editor.selectObject(0);
+
+  // A tilted start pose so "optimize orientation" has something to change;
+  // the pre-orient rotation is what undo must bring back.
+  const QVector3D rotBefore(33.0f, 0.0f, 0.0f);
+  QVERIFY(project.setObjectRotation(0, rotBefore.x(), rotBefore.y(), rotBefore.z()));
+
+  // Upstream "Q": Plater::orient takes an "Orient" snapshot before the job
+  // (Plater.cpp:13630); the Qt orient must push the equivalent.
+  editor.autoOrientSelected();
+  QVERIFY2(undoManager.canUndo(), "auto-orient that changed a pose must push an undo command");
+
+  const QVector3D rotAfter = project.objectRotation(0);
+  undoManager.undo();
+  QCOMPARE(project.objectRotation(0), rotBefore);
+  undoManager.redo();
+  QCOMPARE(project.objectRotation(0), rotAfter);
+}
+
+void ViewModelSmokeTests::splitUndoRestoresMergedObject()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  // Build one two-volume object the same way assembleUndoRestoresSources
+  // does, but keep the sources apart so the split islands are disconnected
+  // (ModelObject::split splits by connectivity).
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.setObjectPosition(1, 50.0f, 0.0f, 0.0f));
+  editor.rebuildAndNotify();
+  editor.selectObject(0);
+  editor.toggleObjectSelection(1);
+  QVERIFY2(editor.assembleSelectedObjects(), qPrintable(project.lastError()));
+  QCOMPARE(project.modelCount(), 1);
+  QCOMPARE(project.objectVolumeCount(0), 2);
+
+  editor.rebuildAndNotify();
+  editor.selectObject(0);
+  // U9: the direct Q_INVOKABLE path (splitSelectedObject) owns the snapshot
+  // push now — upstream Plater::priv::split_object, Plater.cpp:10338.
+  editor.splitSelectedObject();
+  QCOMPARE(project.modelCount(), 2);
+  QVERIFY2(undoManager.canUndo(), "a successful split must push an undo command");
+
+  undoManager.undo();
+  QCOMPARE(project.modelCount(), 1);
+  QCOMPARE(project.objectVolumeCount(0), 2);
+
+  undoManager.redo();
+  QCOMPARE(project.modelCount(), 2);
+}
+
+void ViewModelSmokeTests::importAndDropRideUndoStack()
+{
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.rebuildAndNotify();
+
+  // Phase 237 (VIEW-03): the drop/Ctrl+I entry (main.qml routes both into
+  // addFilesToCurrentPlate) — upstream takes "Import Object(s)" before
+  // load_files (Plater.cpp:15717/17531).
+  const int countBeforeDrop = project.modelCount();
+  QVERIFY2(editor.addFilesToCurrentPlate(QStringList{kStlPath}),
+           qPrintable(project.lastError()));
+  const int countAfterDrop = project.modelCount();
+  QVERIFY(countAfterDrop > countBeforeDrop);
+  QVERIFY2(undoManager.canUndo(), "a successful drop import must push an undo command");
+  undoManager.undo();
+  QCOMPARE(project.modelCount(), countBeforeDrop);
+  undoManager.redo();
+  QCOMPARE(project.modelCount(), countAfterDrop);
+
+  // Context-plate import (the Prepare context-menu import dialog path).
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
+  const int countBeforeImport = project.modelCount();
+  QVERIFY2(editor.addFilesToContextPlate(QStringList{kStlPath}),
+           qPrintable(project.lastError()));
+  QVERIFY(project.modelCount() > countBeforeImport);
+  QVERIFY2(undoManager.canUndo(), "a successful context-plate import must push an undo command");
+  undoManager.undo();
+  QCOMPARE(project.modelCount(), countBeforeImport);
+  undoManager.redo();
+  QVERIFY(project.modelCount() > countBeforeImport);
+}
+#else
+void ViewModelSmokeTests::arrangeUndoRestoresLayout()
+{
+  QSKIP("U9 arrange undo requires HAS_LIBSLIC3R");
+}
+void ViewModelSmokeTests::autoOrientUndoRestoresRotation()
+{
+  QSKIP("U9 orient undo requires HAS_LIBSLIC3R");
+}
+void ViewModelSmokeTests::splitUndoRestoresMergedObject()
+{
+  QSKIP("U9 split undo requires HAS_LIBSLIC3R");
+}
+void ViewModelSmokeTests::importAndDropRideUndoStack()
+{
+  QSKIP("U9 import undo requires HAS_LIBSLIC3R");
 }
 #endif
 
