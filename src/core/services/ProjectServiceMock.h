@@ -1059,6 +1059,16 @@ private:
   /// QtConcurrent worker (same structure as the loadFile worker: QPointer
   /// receiver + shared payload + QueuedConnection delivery).
   bool startAsyncSave(const QString &filePath, AsyncSaveKind kind);
+  /// U8 复核: the ONE success-bookkeeping body behind saveProject (3MF +
+  /// JSON branches), saveProjectAs and the async delivery — a future field
+  /// lands on all of them or none. Project = sourceFilePath_ + projectName_;
+  /// ProjectAs = those + currentProjectPath_. Clears lastError_ and emits
+  /// projectChanged.
+  void applyProjectSaveBookkeeping(AsyncSaveKind kind, const QString &filePath);
+  /// U8 复核: the single translated busy-rejection reason shared by the
+  /// four saving_ guard sites (saveProject / saveProjectAs /
+  /// writeProjectSnapshot / startAsyncSave) and the load-side guards.
+  QString saveBusyReason() const { return tr("已有保存任务进行中"); }
   /// U8: one save job in flight (dispatch → GUI delivery). Mutated only on
   /// the GUI thread (set in startAsyncSave, cleared in the delivery lambda),
   /// so no atomicity is required; the worker never touches it.

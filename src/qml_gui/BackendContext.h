@@ -940,6 +940,15 @@ private:
 
   void pushLatencySample(const QString &operation, int elapsedMs, const QString &detail);
   static int percentile95(const QVector<int> &samples);
+  /// U8 复核（中 3 / 低 5）: the ONE rejection tail behind topbarSaveProject /
+  /// topbarSaveProjectAs — busy-in-flight reports accepted-for-now (true, so
+  /// the main.qml Ctrl+S fallback does not open Save-As), other rejections
+  /// post the service reason once. `jsonTarget` marks the cheap synchronous
+  /// JSON branch whose outcome ALREADY went through saveFinished (the handler
+  /// posted the toast) — the caller only keeps the pre-U8 bool contract.
+  /// Returns the value the caller returns.
+  bool handleSaveDispatchRejected(bool jsonTarget, const char *latencyName,
+                                  qint64 start, const QString &detail);
 
   void applyTheme(int idx);
   void applyLanguage(int idx);

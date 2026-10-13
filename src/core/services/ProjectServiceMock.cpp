@@ -1008,6 +1008,16 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
     emit projectChanged();
     return false;
   }
+  // U8 复核（阻塞 1）: 与 saving_ 单槽对称——保存 worker 在飞时拒绝导入。
+  // loadFile 的交付会把 sourceFilePath_ 盖成导入路径；若这发生在保存交付
+  // 之前，保存交付再把旧路径盖回来，正好复现忙拒绝要消灭的『陈旧状态覆盖
+  // 新状态』。U8 前该交织被同步保存的 GUI 阻塞排除。
+  if (saving_)
+  {
+    lastError_ = saveBusyReason();
+    emit projectChanged();
+    return false;
+  }
 
   QFileInfo fi(filePath);
   if (!fi.exists())
@@ -1662,7 +1672,7 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
     }
     // U8: see saveProject — serialize against an in-flight async save job.
     if (saving_) {
-        lastError_ = tr("已有保存任务进行中");
+        lastError_ = saveBusyReason();
         emit projectChanged();
         return false;
     }
@@ -1676,11 +1686,7 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
         emit projectChanged();
         return false;
     }
-    currentProjectPath_ = filePath;
-    sourceFilePath_ = filePath;
-    projectName_ = QFileInfo(filePath).completeBaseName();
-    lastError_.clear();
-    emit projectChanged();
+    applyProjectSaveBookkeeping(AsyncSaveKind::ProjectAs, filePath);
     return true;
 #else
     Q_UNUSED(filePath)
@@ -1705,7 +1711,7 @@ bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
     // U8: see saveProject — serialize against an in-flight async save job
     // (snapshot parity: this primitive does not emit projectChanged).
     if (saving_) {
-        lastError_ = tr("已有保存任务进行中");
+        lastError_ = saveBusyReason();
         return false;
     }
     if (!model_) {
@@ -8673,6 +8679,12 @@ bool ProjectServiceMock::addFilesToPlate(int plateIndex, const QStringList &file
     lastError_ = tr("Invalid plate import request");
     return false;
   }
+  // U8 复核（阻塞 1）: 该导入写 sourceFilePath_（SliceService 真模型门），
+  // 与在飞保存的交付存在同向竞态——与 loadFile/loadProject 同款忙拒绝。
+  if (saving_) {
+    lastError_ = saveBusyReason();
+    return false;
+  }
 
 #ifdef HAS_LIBSLIC3R
   const QSet<QString> supportedSuffixes = {
@@ -11337,6 +11349,21 @@ bool ProjectServiceMock::writeProjectSnapshotAsync(const QString &filePath)
   return startAsyncSave(filePath, AsyncSaveKind::Snapshot);
 }
 
+// U8 复核（中 3）: the ONE success-bookkeeping body behind saveProject
+// (3MF + JSON branches), saveProjectAs and the async delivery lambda — a
+// future field lands on all of them or none (the byte-level sync/async
+// unification extends to the bookkeeping layer).
+void ProjectServiceMock::applyProjectSaveBookkeeping(AsyncSaveKind kind,
+                                                     const QString &filePath)
+{
+  sourceFilePath_ = filePath;
+  if (kind == AsyncSaveKind::ProjectAs)
+    currentProjectPath_ = filePath;
+  projectName_ = QFileInfo(filePath).completeBaseName();
+  lastError_.clear();
+  emit projectChanged();
+}
+
 bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
 {
 #ifndef HAS_LIBSLIC3R
@@ -11352,10 +11379,15 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
 
   // Cheap JSON project save: no 3MF serialization / zip / sidecar rewrite, so
   // it completes synchronously on the calling thread and reports through the
-  // same async signal contract (the GUI never froze on this branch).
+  // same async signal contract (the GUI never froze on this branch). U8 复核:
+  // ProjectAs delegates to saveProjectAs so the JSON branch keeps the exact
+  // pre-U8 semantics (currentProjectPath_ bookkeeping + the no-model gate),
+  // not a plain saveProject.
   if (!as3mfProject && kind != AsyncSaveKind::Snapshot)
   {
-    const bool ok = saveProject(filePath);
+    const bool ok = (kind == AsyncSaveKind::ProjectAs)
+                        ? saveProjectAs(filePath)
+                        : saveProject(filePath);
     emit saveFinished(ok, filePath, ok ? QString() : lastError_);
     return ok;
   }
@@ -11369,7 +11401,7 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
   }
   if (saving_)
   {
-    lastError_ = tr("已有保存任务进行中");
+    lastError_ = saveBusyReason();
     if (kind != AsyncSaveKind::Snapshot)
       emit projectChanged();
     return false;
@@ -11464,13 +11496,11 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
         else
         {
           // saveProject / saveProjectAs bookkeeping, applied at delivery so a
-          // failed write never hijacks the current project identity.
-          receiver->sourceFilePath_ = filePath;
-          if (kind == AsyncSaveKind::ProjectAs)
-            receiver->currentProjectPath_ = filePath;
-          receiver->projectName_ = QFileInfo(filePath).completeBaseName();
-          receiver->lastError_.clear();
-          emit receiver->projectChanged();
+          // failed write never hijacks the current project identity. U8 复核:
+          // one shared body with the sync branches (applyProjectSaveBook-
+          // keeping) — the byte-level sync/async unification extends to the
+          // bookkeeping layer.
+          receiver->applyProjectSaveBookkeeping(kind, filePath);
         }
       }
       else
@@ -11501,7 +11531,7 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   // would interleave bookkeeping with the worker's GUI-thread delivery.
   if (saving_)
   {
-    lastError_ = tr("已有保存任务进行中");
+    lastError_ = saveBusyReason();
     emit projectChanged();
     return false;
   }
@@ -11535,11 +11565,7 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
       return false;
     }
 
-    sourceFilePath_ = filePath;
-    QFileInfo fi(filePath);
-    projectName_ = fi.completeBaseName();
-    lastError_.clear();
-    emit projectChanged();
+    applyProjectSaveBookkeeping(AsyncSaveKind::Project, filePath);
     return true;
   }
 #else
@@ -11694,17 +11720,22 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   }
 
   file.close();
-  sourceFilePath_ = filePath;
-  // Derive project name from path
-  QFileInfo fi(filePath);
-  projectName_ = fi.completeBaseName();
-  lastError_.clear();
-  emit projectChanged();
+  applyProjectSaveBookkeeping(AsyncSaveKind::Project, filePath);
   return true;
 }
 
 bool ProjectServiceMock::loadProject(const QString &filePath)
 {
+  // U8 复核（阻塞 1）: 与 saving_ 单槽对称——保存 worker 在飞时拒绝换工程。
+  // 换工程替换 model_/sourceFilePath_/currentProjectPath_/projectName_，而在
+  // 飞保存的交付会把派发时工程的记账（ProjectAs 含 currentProjectPath_）盖
+  // 到新工程上，之后对新工程 Ctrl+S 会把新内容写进旧工程文件。U8 前该交织
+  // 被同步保存的 GUI 阻塞排除。置于入口处，3MF 与 JSON 分支共用。
+  if (saving_)
+  {
+    lastError_ = saveBusyReason();
+    return false;
+  }
   if (filePath.isEmpty())
   {
     lastError_ = tr("加载路径为空");

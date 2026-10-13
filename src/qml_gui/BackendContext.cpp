@@ -1307,6 +1307,17 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
   if (localPath.isEmpty())
     return false;
 
+  // U8 复核（阻塞 1）: 在飞保存持有工程身份——其交付会把派发时工程的记账
+  // 盖到这里的加载结果上。service 层 loadProject/loadFile 已加 saving_ 忙拒；
+  // 这里提前拒绝的原因是双重的：省得用户等加载失败，以及防止下方的
+  // loadProject→editor 导入回退链把忙拒绝误当坏文件、把工程当模型导入。
+  if (projectService_ && projectService_->isSaving())
+  {
+    postError(tr("保存任务进行中，暂无法打开项目"), NotiWarning);
+    pushLatencySample(QStringLiteral("topbar-open-project"), int(m_latencyClock.elapsed() - start), localPath);
+    return false;
+  }
+
   // Phase 237 (VIEW-05): .3mf/.cxprj project opens route through
   // ProjectServiceMock::loadProject, which loads with LoadModel|LoadConfig
   // and emits projectConfigLoaded so the embedded config/presets apply
@@ -1442,9 +1453,11 @@ bool BackendContext::topbarSaveProject()
   if (!projectViewModel_)
     return false;
 
-  // R-P1.I (CONTEXT safety, canSave() :526): saving serializes the Model on
-  // the GUI thread while the slice worker reads it. The gate lives here (not
-  // per-QML-entry) so Ctrl+S and both File menus inherit it.
+  // R-P1.I (CONTEXT safety, canSave()): U8 复核更新依据——保存不再在 GUI 线程
+  // 序列化 Model（写盘已移 save worker），但快照构建仍在 GUI 线程读取 live
+  // Model/盘列表，且交付会改工程记账，与切片 worker 的模型读仍然互斥，门
+  // 保留。The gate lives here (not per-QML-entry) so Ctrl+S and both File
+  // menus inherit it.
   if (!canSave())
   {
     // Transient gate: the action is deferred, nothing failed/broken —
@@ -1470,24 +1483,13 @@ bool BackendContext::topbarSaveProject()
   // on this (GUI) thread — Ctrl+S no longer freezes for the duration of the
   // archive write. The terminal outcome (success toast + ProjectViewModel
   // bookkeeping + failure reason) lands via saveFinished.
-  const bool dispatched = projectService_
-                              && projectService_->saveProjectAsync(
-                                  projectViewModel_->currentProjectPath());
+  const QString savePath = projectViewModel_->currentProjectPath();
+  const QString saveSuffix = QFileInfo(savePath).suffix().toLower();
+  const bool jsonTarget = saveSuffix != QLatin1String("3mf")
+                       && saveSuffix != QLatin1String("cxprj");
+  const bool dispatched = projectService_ && projectService_->saveProjectAsync(savePath);
   if (!dispatched)
-  {
-    if (projectService_ && projectService_->isSaving())
-    {
-      // A save job is already writing: treat as accepted so the Ctrl+S
-      // fallback (main.qml opens Save-As on false) does not fire; the running
-      // job delivers the real result.
-      postError(tr("保存任务进行中，已忽略本次保存"), NotiWarning);
-      pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
-      return true;
-    }
-    postError(projectService_ ? projectService_->lastError() : tr("项目保存失败"), NotiError);
-    pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
-    return false;
-  }
+    return handleSaveDispatchRejected(jsonTarget, "topbar-save-project", start, QString());
   // U8: the sample now measures GUI dispatch latency; the write completes on
   // the worker and reports through saveFinished.
   pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
@@ -1500,7 +1502,8 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   if (!projectViewModel_)
     return false;
 
-  // R-P1.I: same mid-slice serialization gate as topbarSaveProject.
+  // R-P1.I: same gate as topbarSaveProject (U8 复核依据：快照构建读 live
+  // Model、交付改工程记账，与切片 worker 互斥)。
   if (!canSave())
   {
     // Transient gate: the action is deferred, nothing failed/broken —
@@ -1524,25 +1527,41 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   // U8: same save-worker dispatch as topbarSaveProject; the SaveAs
   // bookkeeping (current project identity + dirty clear + recent projects)
   // and the success toast land via saveFinished.
+  const QString asSuffix = QFileInfo(localPath).suffix().toLower();
+  const bool jsonTarget = asSuffix != QLatin1String("3mf")
+                       && asSuffix != QLatin1String("cxprj");
   const bool dispatched = projectService_
                               && projectService_->saveProjectAsAsync(localPath);
   if (!dispatched)
-  {
-    if (projectService_ && projectService_->isSaving())
-    {
-      // A save job is already writing — same accepted-for-now contract as
-      // topbarSaveProject (main.qml:163 ignores the return; the running job
-      // delivers the result for this path too).
-      postError(tr("保存任务进行中，已忽略本次保存"), NotiWarning);
-      pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
-      return true;
-    }
-    postError(projectService_ ? projectService_->lastError() : tr("项目保存失败"), NotiError);
-    pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
-    return false;
-  }
+    return handleSaveDispatchRejected(jsonTarget, "topbar-save-project-as", start, localPath);
   pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
   return true;
+}
+
+bool BackendContext::handleSaveDispatchRejected(bool jsonTarget,
+                                                const char *latencyName,
+                                                qint64 start,
+                                                const QString &detail)
+{
+  // U8 复核（中 3）: the shared rejection tail of topbarSaveProject /
+  // topbarSaveProjectAs (the two near-identical isSaving fallback blocks).
+  if (projectService_ && projectService_->isSaving())
+  {
+    // A save job is already writing: treat as accepted so the Ctrl+S
+    // fallback (main.qml opens Save-As on false) does not fire; the running
+    // job delivers the real result.
+    postError(tr("保存任务进行中，已忽略本次保存"), NotiWarning);
+    pushLatencySample(QLatin1String(latencyName), int(m_latencyClock.elapsed() - start), detail);
+    return true;
+  }
+  if (!jsonTarget)
+    postError(projectService_ ? projectService_->lastError() : tr("项目保存失败"), NotiError);
+  // U8 复核（低 5）: the JSON branch completed synchronously and already
+  // reported through saveFinished (the handler posted the toast/error) —
+  // posting here again produced a double toast. Keep the pre-U8 bool
+  // contract only (false → the Ctrl+S fallback opens Save-As, as before U8).
+  pushLatencySample(QLatin1String(latencyName), int(m_latencyClock.elapsed() - start), detail);
+  return false;
 }
 
 int BackendContext::beginLatency(const QString &operation, const QString &detail)
