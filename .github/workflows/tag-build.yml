@@ -230,7 +230,11 @@ jobs:
           Copy-Item "build/*.dll" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/en.qm" $outDir -Force -ErrorAction SilentlyContinue
           Copy-Item "build/zh_CN.qm" $outDir -Force -ErrorAction SilentlyContinue
-          windeployqt --release --qmldir src "$outDir/OWzxSlicer.exe"
+          # S8 (2026-10-14): the QML module tree is generated at build/OWzx
+          # (qt_add_qml_module, qmldir + copied QML sources) — windeployqt scans
+          # it to map QML imports to plugins. The OWzx module itself is embedded
+          # in the exe (NO_PLUGIN) and needs no separate deployment.
+          windeployqt --release --qmldir build/OWzx "$outDir/OWzxSlicer.exe"
           Remove-Item "$outDir/TK*.dll" -Force -ErrorAction SilentlyContinue
           Remove-Item "$outDir/cr_tpms_library.dll" -Force -ErrorAction SilentlyContinue
           $zipPath = "build/OWzxSlicer-${{ env.ARTIFACT_NAME }}-windows.zip"
