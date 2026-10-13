@@ -294,6 +294,51 @@ BackendContext::BackendContext(QObject *parent)
                 configViewModel_->refreshPresetLists();
             }
           });
+  // U8: the 3MF write runs on the ProjectServiceMock save worker, so the
+  // terminal outcomes land here. Project-save success applies the
+  // ProjectViewModel bookkeeping that used to run inline in
+  // topbarSaveProject(As) (dirty clear + recent projects; SaveAs to a NEW
+  // path moves the current project identity), and both outcomes surface with
+  // their real reason — a failed write is reported as a failure, never as
+  // success (U1 severity discipline).
+  connect(projectService_, &ProjectServiceMock::saveFinished, this,
+          [this](bool success, const QString &filePath, const QString &error)
+          {
+            if (!projectViewModel_)
+              return;
+            if (success)
+            {
+              if (filePath != projectViewModel_->currentProjectPath())
+                projectViewModel_->saveProjectAs(filePath);
+              else
+                projectViewModel_->saveProject();
+              postError(tr("项目已保存到: %1").arg(QFileInfo(filePath).fileName()),
+                        NotiSuccess);
+            }
+            else
+            {
+              postError(error.isEmpty() ? tr("项目保存失败") : error, NotiError);
+            }
+          });
+  // U8: auto-backup snapshots report here (triggerProjectBackup dispatches
+  // and returns; the archive outcome arrives asynchronously).
+  connect(projectService_, &ProjectServiceMock::snapshotFinished, this,
+          [this](bool success, const QString &filePath, const QString &error)
+          {
+            Q_UNUSED(error)
+            if (success)
+              postNotification(tr("Project backup saved: %1").arg(filePath),
+                               tr("Auto backup"));
+            else
+              postError(tr("Project backup failed"), NotiError);
+          });
+  // U8: fold an in-flight save into the canSave gate (and keep it fresh) so a
+  // Ctrl+S during a background write is a silent no-op — with the gate open,
+  // main.qml's `backend.canSave && !backend.topbarSaveProject()` fallback
+  // would open the Save-As dialog on the busy rejection.
+  connect(projectService_, &ProjectServiceMock::savingChanged, this,
+          &BackendContext::stateChanged);
+
   // Phase 237 (VIEW-04): forward the editor viewmodel's post-import prompts.
   // Zero-volume removal mirrors upstream Model::removed_objects_with_
   // zero_volume + the Plater.cpp:4231-4233 info dialog (OWzx uses a
@@ -794,7 +839,11 @@ bool BackendContext::canExport() const
 bool BackendContext::canSave() const
 {
   // Mutating the project mid-slice is unsafe (CONTEXT safety decision).
-  return !isSlicing() && !isBusy();
+  // U8: an in-flight async save gates too — the service busy-rejects a second
+  // job, and main.qml pairs `backend.canSave && !backend.topbarSaveProject()`
+  // so an open gate on a rejection would open the Save-As dialog.
+  return !isSlicing() && !isBusy()
+         && !(projectService_ && projectService_->isSaving());
 }
 
 bool BackendContext::canUndo() const
@@ -1233,14 +1282,20 @@ QString BackendContext::triggerProjectBackup()
   const QString backupPath = backupDir + QStringLiteral("/") + safeBase
                              + QStringLiteral("-") + stamp + QStringLiteral(".3mf");
   // writeProjectSnapshot keeps currentProjectPath_ intact (a backup must not
-  // hijack the user's current project file).
-  if (!projectService_->writeProjectSnapshot(backupPath))
+  // hijack the user's current project file). U8: the snapshot write runs on
+  // the save worker (writeProjectSnapshotAsync) so the autoSave tick never
+  // stalls the GUI thread mid-frame; the archive outcome lands via
+  // snapshotFinished (saved/failed notifications moved there). Returning the
+  // path now means "a backup was issued for this path". A busy save engine
+  // defers silently — the next autoSave tick retries — instead of raising a
+  // false failure for a merely postponed backup.
+  if (!projectService_->writeProjectSnapshotAsync(backupPath))
   {
+    if (projectService_->isSaving())
+      return QString();
     postError(tr("Project backup failed"), NotiError);
     return QString();
   }
-  postNotification(tr("Project backup saved: %1").arg(backupPath),
-                   tr("Auto backup"));
   return backupPath;
 }
 
@@ -1411,15 +1466,30 @@ bool BackendContext::topbarSaveProject()
     // them as project presets in the archive).
     projectService_->setProjectEmbeddedPresets(collectProjectEmbeddedPresets());
   }
-  if (projectService_ && !projectService_->saveProject(projectViewModel_->currentProjectPath()))
+  // U8: dispatch the write to the save worker instead of serializing the 3MF
+  // on this (GUI) thread — Ctrl+S no longer freezes for the duration of the
+  // archive write. The terminal outcome (success toast + ProjectViewModel
+  // bookkeeping + failure reason) lands via saveFinished.
+  const bool dispatched = projectService_
+                              && projectService_->saveProjectAsync(
+                                  projectViewModel_->currentProjectPath());
+  if (!dispatched)
   {
-    postError(projectService_->lastError(), NotiError);
+    if (projectService_ && projectService_->isSaving())
+    {
+      // A save job is already writing: treat as accepted so the Ctrl+S
+      // fallback (main.qml opens Save-As on false) does not fire; the running
+      // job delivers the real result.
+      postError(tr("保存任务进行中，已忽略本次保存"), NotiWarning);
+      pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
+      return true;
+    }
+    postError(projectService_ ? projectService_->lastError() : tr("项目保存失败"), NotiError);
     pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
     return false;
   }
-
-  projectViewModel_->saveProject();
-  postError(tr("项目已保存"), NotiInfo);
+  // U8: the sample now measures GUI dispatch latency; the write completes on
+  // the worker and reports through saveFinished.
   pushLatencySample(QStringLiteral("topbar-save-project"), int(m_latencyClock.elapsed() - start), QString());
   return true;
 }
@@ -1451,15 +1521,26 @@ bool BackendContext::topbarSaveProjectAs(const QString &filePath)
   // G-13: embed the current tier selections as above.
   if (projectService_)
     projectService_->setProjectEmbeddedPresets(collectProjectEmbeddedPresets());
-  if (projectService_ && !projectService_->saveProject(localPath))
+  // U8: same save-worker dispatch as topbarSaveProject; the SaveAs
+  // bookkeeping (current project identity + dirty clear + recent projects)
+  // and the success toast land via saveFinished.
+  const bool dispatched = projectService_
+                              && projectService_->saveProjectAsAsync(localPath);
+  if (!dispatched)
   {
-    postError(projectService_->lastError(), NotiError);
+    if (projectService_ && projectService_->isSaving())
+    {
+      // A save job is already writing — same accepted-for-now contract as
+      // topbarSaveProject (main.qml:163 ignores the return; the running job
+      // delivers the result for this path too).
+      postError(tr("保存任务进行中，已忽略本次保存"), NotiWarning);
+      pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
+      return true;
+    }
+    postError(projectService_ ? projectService_->lastError() : tr("项目保存失败"), NotiError);
     pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
     return false;
   }
-
-  projectViewModel_->saveProjectAs(localPath);
-  postError(tr("项目已保存到: %1").arg(QFileInfo(localPath).fileName()), NotiInfo);
   pushLatencySample(QStringLiteral("topbar-save-project-as"), int(m_latencyClock.elapsed() - start), localPath);
   return true;
 }

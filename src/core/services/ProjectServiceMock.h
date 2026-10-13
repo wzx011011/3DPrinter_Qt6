@@ -210,6 +210,32 @@ public:
   /// periodic auto-backup feature (upstream backup_switch). Returns false
   /// when no model is loaded or store_3mf fails.
   Q_INVOKABLE bool writeProjectSnapshot(const QString &filePath);
+  // ── U8 (M2 增补批): 保存/自动备份移 worker ──
+  // saveProject / saveProjectAs / writeProjectSnapshot 的异步对应入口，供
+  // GUI 线程调用方（Ctrl+S / File 菜单 / autoSave 定时器）使用。3MF 写盘
+  // （store_bbs_3mf + OWzx sidecar）在 QtConcurrent worker 上针对一份
+  // GUI 线程快照执行（深拷贝 Model + PlateData + 缩略图字节 + 预置对象，
+  // 见 ProjectServiceMock.cpp 的 ProjectSavePayload），调用线程只承担
+  // memcpy 级快照成本，不再冻结在 XML 序列化 + zip 压缩上。
+  // 返回 true = 任务已派发（JSON 分支为廉价写，同步完成后立即回报）；
+  // 返回 false = 拒绝派发（已有保存任务在飞 / 加载中 / 无模型），
+  // lastError_ 携带原因。写盘结果在 GUI 线程经 saveFinished /
+  // snapshotFinished 交付，失败原因原文随信号送达（写失败如实报错）。
+  // 防重入口径：同一时刻只允许一个保存任务在飞（saving_ 单槽，GUI 线程
+  // 独占读写，worker 从不触碰）；在飞期间的新请求按忙拒绝而非排队——
+  // 排队意味着旧快照落盘会覆盖更新后的工程状态，这是队列化在此唯一
+  // 不能接受的模式（loadFile 的忙拒绝同款语义）。
+  Q_INVOKABLE bool saveProjectAsync(const QString &filePath);
+  Q_INVOKABLE bool saveProjectAsAsync(const QString &filePath);
+  /// U8: async auto-backup primitive (writeProjectSnapshot semantics:
+  /// currentProjectPath_ / sourceFilePath_ stay untouched). Outcome via
+  /// snapshotFinished.
+  Q_INVOKABLE bool writeProjectSnapshotAsync(const QString &filePath);
+  /// U8: true while an async save/snapshot job is in flight (dispatch →
+  /// GUI-thread delivery). BackendContext folds this into canSave() so a
+  /// Ctrl+S during an in-flight write is a silent no-op instead of a
+  /// busy-rejection that would open the Save-As dialog.
+  bool isSaving() const { return saving_; }
   /// v5.16 (PSET2-06): preset-selection overlay written into the stored
   /// project config on the next save (printer/filament/print preset ids +
   /// the ";"-separated filament_presets slot vector). Upstream embeds the
@@ -964,6 +990,19 @@ signals:
   /// per-plate results) release the entry immediately -- printIndex
   /// identities are never reused.
   void plateRemoved(int printIndex);
+  /// U8: async project save settled (saveProjectAsync / saveProjectAsAsync).
+  /// Emitted on the GUI thread with the terminal write outcome; error carries
+  /// the human-readable failure reason (empty on success). Success has already
+  /// applied the saveProject/saveProjectAs bookkeeping (sourceFilePath_ /
+  /// currentProjectPath_ / projectName_) and emitted projectChanged.
+  void saveFinished(bool success, const QString &filePath, const QString &error);
+  /// U8: async auto-backup snapshot settled (writeProjectSnapshotAsync).
+  /// Emitted on the GUI thread; error carries the failure reason (empty on
+  /// success). Snapshot outcomes never touch project bookkeeping.
+  void snapshotFinished(bool success, const QString &filePath, const QString &error);
+  /// U8: saving_ toggled at dispatch and at GUI-thread delivery. BackendContext
+  /// re-emits its stateChanged from this so the canSave gate stays fresh.
+  void savingChanged();
 
 private:
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
@@ -1010,6 +1049,20 @@ private:
   /// used inline). Writes the model + plate list + per-plate thumbnails.
   /// Returns false on failure (lastError_ set).
   bool storeProject3mf(const QString &filePath);
+  /// U8: what the async save books on success. Snapshot = write only
+  /// (auto-backup semantics, no project identity change); Project =
+  /// sourceFilePath_ + projectName_; ProjectAs = those + currentProjectPath_.
+  enum class AsyncSaveKind { Project, ProjectAs, Snapshot };
+  /// U8: single async engine behind saveProjectAsync / saveProjectAsAsync /
+  /// writeProjectSnapshotAsync. Builds the writer snapshot on the calling
+  /// (GUI) thread, then runs store_bbs_3mf + the OWzx sidecar write on a
+  /// QtConcurrent worker (same structure as the loadFile worker: QPointer
+  /// receiver + shared payload + QueuedConnection delivery).
+  bool startAsyncSave(const QString &filePath, AsyncSaveKind kind);
+  /// U8: one save job in flight (dispatch → GUI delivery). Mutated only on
+  /// the GUI thread (set in startAsyncSave, cleared in the delivery lambda),
+  /// so no atomicity is required; the worker never touches it.
+  bool saving_ = false;
   /// R-P0.4: OWzx plate filament-state sidecar shared by saveProject and
   /// saveProjectAs so every save path writes the identical project payload.
   /// Returns false on failure (lastError_ set).

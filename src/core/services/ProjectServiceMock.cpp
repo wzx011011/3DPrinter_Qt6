@@ -1660,6 +1660,12 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
         emit projectChanged();
         return false;
     }
+    // U8: see saveProject — serialize against an in-flight async save job.
+    if (saving_) {
+        lastError_ = tr("已有保存任务进行中");
+        emit projectChanged();
+        return false;
+    }
     if (!model_) {
         qWarning("[Project] saveProjectAs: no model loaded");
         return false;
@@ -1694,6 +1700,12 @@ bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
     // writes to a separate cache copy, not the project file).
     if (loading_) {
         lastError_ = tr("加载中，无法保存");
+        return false;
+    }
+    // U8: see saveProject — serialize against an in-flight async save job
+    // (snapshot parity: this primitive does not emit projectChanged).
+    if (saving_) {
+        lastError_ = tr("已有保存任务进行中");
         return false;
     }
     if (!model_) {
@@ -10843,21 +10855,19 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
   return result;
 }
 
-// Phase 237 (VIEW-06): shared store_bbs_3mf writer extracted from saveProject
-// (same body; saveProject keeps the plate-state JSON + bookkeeping on top).
-// Mirrors upstream Plater::export_3mf -> store_bbs_3mf with plate_data_list
-// populated (Plater.cpp:11462 for the sliced-file variant).
-/// R-P0.4: the OWzx plate filament-state sidecar (per-plate filamentMapMode +
-/// filamentMaps JSON appended next to the 3MF archive). Shared by saveProject
-/// and saveProjectAs so every save path produces the identical project payload.
-bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
+/// U8: the OWzx plate-state JSON payload rendered from a plate list. Split
+/// from writePlateFilamentStateSidecar so the async save path can render the
+/// bytes on the GUI thread (a snapshot consistent with the 3MF payload at
+/// dispatch time) and hand the pure-disk archive rewrite to the worker.
+/// Byte-identical to the pre-U8 inline rendering.
+static QByteArray buildOwzxPlateFilamentStateBytes(const OWzx::PartPlateList *plateList)
 {
   QJsonArray plateStates;
-  if (m_plateList)
+  if (plateList)
   {
-    for (int plateIndex = 0; plateIndex < m_plateList->plateCount(); ++plateIndex)
+    for (int plateIndex = 0; plateIndex < plateList->plateCount(); ++plateIndex)
     {
-      const OWzx::PartPlate *plate = m_plateList->plate(plateIndex);
+      const OWzx::PartPlate *plate = plateList->plate(plateIndex);
       if (!plate)
         continue;
 
@@ -10874,8 +10884,16 @@ bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
   QJsonObject stateRoot;
   stateRoot.insert(QStringLiteral("version"), 1);
   stateRoot.insert(QStringLiteral("plates"), plateStates);
-  if (!writeOwzxPlateFilamentStates(filePath,
-                                     QJsonDocument(stateRoot).toJson(QJsonDocument::Compact)))
+  return QJsonDocument(stateRoot).toJson(QJsonDocument::Compact);
+}
+
+/// R-P0.4: the OWzx plate filament-state sidecar (per-plate filamentMapMode +
+/// filamentMaps JSON appended next to the 3MF archive). Shared by saveProject
+/// and saveProjectAs so every save path produces the identical project payload.
+bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
+{
+  if (!writeOwzxPlateFilamentStates(
+          filePath, buildOwzxPlateFilamentStateBytes(m_plateList.get())))
   {
     lastError_ = tr("Unable to write OWzx plate state");
     return false;
@@ -10883,11 +10901,87 @@ bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
   return true;
 }
 
-bool ProjectServiceMock::storeProject3mf(const QString &filePath)
-{
+// ── U8 (保存/自动备份移 worker): writer payload ────────────────────────────
 #ifdef HAS_LIBSLIC3R
-  if (!model_)
+// store_bbs_3mf serializes — and per its own contract may even mutate — the
+// Model it is handed (bbs_3mf.hpp:305-307 "The model could be modified during
+// the export process"). Handing it the live model_ from a worker thread would
+// race every GUI-thread edit (drag/undo/delete/plate rebind), so the ENTIRE
+// writer input set is snapshotted on the GUI thread first and the worker only
+// ever sees payload-owned objects:
+//   - a DEEP copy of model_ (Model copy ctor Model.hpp:1600 → assign_copy
+//     Model.cpp:61-79 → ModelObject::new_copy per object: meshes/volumes/
+//     config deep-copied; object ORDER preserved, so the (object, instance)
+//     index pairs carried by PlateData::objects_and_instances stay valid
+//     against the copy),
+//   - PlateData copies via buildPlateDataList (config/name/lock/membership/
+//     thumbnail reads only — PlateData holds index pairs, no ModelObject
+//     pointers, bbs_3mf.hpp:83-107),
+//   - per-plate thumbnail bytes copied out of the GUI-owned QImage caches,
+//   - the preset overlay + embedded presets materialized into writer-owned
+//     Slic3r::Preset / DynamicPrintConfig objects.
+// The payload owns every pointer target StoreParams borrows (params.path is a
+// std::string; model/config/thumbnail_data/plate_data_list/project_presets
+// all point into these members), and is destroyed only after the worker's
+// store call returns — nothing outlives the writer. The sync storeProject3mf
+// path builds the identical payload and stores it inline, so the two paths
+// cannot drift.
+struct ProjectSavePayload
+{
+  ProjectSavePayload() = default;
+  ProjectSavePayload(const ProjectSavePayload &) = delete;
+  ProjectSavePayload &operator=(const ProjectSavePayload &) = delete;
+  ~ProjectSavePayload() { cleanup(); }
+
+  // StoreParams borrows the members below; built once by
+  // buildProjectSavePayload on the GUI thread, read-only afterwards.
+  Slic3r::StoreParams params;
+  std::vector<Slic3r::ThumbnailData> plateThumbs;
+  std::vector<Slic3r::ThumbnailData> noLightThumbs;
+  std::vector<Slic3r::ThumbnailData> topThumbs;
+  std::vector<Slic3r::ThumbnailData> pickThumbs;
+  Slic3r::PlateDataPtrs plateData;
+  Slic3r::DynamicPrintConfig overlayConfig;
+  std::vector<Slic3r::Preset *> projectPresets;
+  Slic3r::Model *modelCopy = nullptr;  // deep copy of the live model_
+  QTemporaryDir embedDir;              // G-13 preset JSON staging dir
+  QByteArray sidecarBytes;             // U8: pre-rendered plate-state JSON
+
+  // Frees every writer-borrowed heap object. Idempotent.
+  void cleanup()
+  {
+    if (modelCopy)
+    {
+      delete modelCopy;
+      modelCopy = nullptr;
+    }
+    for (Slic3r::Preset *preset : projectPresets)
+      delete preset;
+    projectPresets.clear();
+    if (!plateData.empty())
+    {
+      Slic3r::release_PlateData_list(plateData);
+      plateData.clear();
+    }
+  }
+};
+
+// U8: builds the entire store_bbs_3mf input set on the calling (GUI) thread
+// without writing the target archive (the G-13 preset staging dir aside —
+// the same transient QTemporaryDir the pre-U8 body created per call).
+// Returns false when there is nothing to store (no Model); the caller maps
+// that to its own error contract. Never mutates live state.
+static bool buildProjectSavePayload(const Slic3r::Model *liveModel,
+                                    const OWzx::PartPlateList *plateList,
+                                    const QVariantMap &configOverlay,
+                                    const QVariantList &embeddedPresets,
+                                    const QString &filePath,
+                                    ProjectSavePayload &out)
+{
+  if (!liveModel)
     return false;
+
+  out.modelCopy = new Slic3r::Model(*liveModel);
 
   // Real 3MF export via store_bbs_3mf (对齐上游 Plater::export_3mf → store_bbs_3mf)
   // LIFETIME: StoreParams::path is a borrowed const char* (bbs_3mf.hpp:211),
@@ -10899,17 +10993,18 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // corrupted path -- the G-11 "tmp never created" full-suite failure was
   // exactly this (boost log showed the path reduced to garbage with embedded
   // control bytes). Same contract as the snapshot writer above (pathBytes).
+  // (U8: params.path is a std::string member of the payload now, so the
+  // bytes outlive the store call on the worker too.)
   const QByteArray storePathUtf8 = filePath.toUtf8();
-  Slic3r::StoreParams params;
-  params.path = storePathUtf8.constData();
-  params.model = model_;
+  out.params.path = storePathUtf8.constData();
+  out.params.model = out.modelCopy;
   // G-04: align the save strategy with upstream save_project
   // (Plater.cpp:12136: strategy | Zip64; the project strategy carries
   // FullPathSources + ShareMesh + SplitModel). FullPathSources preserves
   // source references; ShareMesh dedups meshes shared by duplicated
   // objects; SplitModel (0x1000|ProductionExt) enables the 3MF production
   // layout the multi-plate/plate-data writer targets.
-  params.strategy = static_cast<Slic3r::SaveStrategy>(
+  out.params.strategy = static_cast<Slic3r::SaveStrategy>(
       static_cast<unsigned int>(Slic3r::SaveStrategy::Zip64)
       | static_cast<unsigned int>(Slic3r::SaveStrategy::FullPathSources)
       | static_cast<unsigned int>(Slic3r::SaveStrategy::ShareMesh)
@@ -10923,9 +11018,13 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // the preset from the *_settings_id key, which is forced to the preset
   // name here. Same push-before-save pattern as setProjectConfigOverlay
   // (PSET2-06).
-  std::vector<Slic3r::Preset *> projectPresets;
-  QTemporaryDir embedDir;
-  if (!m_projectEmbeddedPresets.isEmpty() && embedDir.isValid())
+  // (U8: the backup path goes on the payload's Model COPY — the pre-U8 body
+  // set it on the live model_ and reset it after the store within the same
+  // synchronous block, so no observer could ever see it; the copy-only
+  // variant is observably identical while keeping the live model untouched
+  // while the worker runs.)
+  QTemporaryDir &embedDir = out.embedDir;
+  if (!embeddedPresets.isEmpty() && embedDir.isValid())
   {
     const std::map<int, Slic3r::Preset::Type> tierTypes = {
       {PresetServiceMock::PrinterCat,  Slic3r::Preset::TYPE_PRINTER},
@@ -10942,7 +11041,7 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
         return QString::number(value.toDouble(), 'g', 17);
       return value.toString();
     };
-    for (const QVariant &entryVar : m_projectEmbeddedPresets) {
+    for (const QVariant &entryVar : embeddedPresets) {
       const QVariantMap entry = entryVar.toMap();
       const int category = entry.value(QStringLiteral("category")).toInt();
       const QString name = entry.value(QStringLiteral("name")).toString();
@@ -10981,13 +11080,13 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
         const std::string nameStr = name.toStdString();
         preset->config.set_deserialize_strict(idKeyStr, nameStr);
       } catch (...) {}
-      projectPresets.push_back(preset);
+      out.projectPresets.push_back(preset);
     }
-    if (!projectPresets.empty()) {
+    if (!out.projectPresets.empty()) {
       const QString embedPath = embedDir.path();
       QDir().mkpath(embedPath);
-      model_->set_backup_path(QDir::toNativeSeparators(embedPath).toStdString());
-      params.project_presets = projectPresets;
+      out.modelCopy->set_backup_path(QDir::toNativeSeparators(embedPath).toStdString());
+      out.params.project_presets = out.projectPresets;
     }
   }
   // Phase 107-01 diagnostic: StoreParams::config (bbs_3mf.hpp:234) is declared
@@ -10999,13 +11098,14 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // v5.16 (PSET2-06) + R-P0.4: the preset-selection overlay (tier preset ids +
   // filament_presets slots) is embedded as the project config so it round-trips
   // on reload (upstream embeds the PresetBundle selections in the 3MF config,
-  // Plater.cpp:12021 full_config_secure). overlayConfig lives in this scope
-  // for the whole store_bbs_3mf call, which keeps the borrowed pointer valid;
-  // an empty overlay keeps config == nullptr so the writer skips the config
-  // branch entirely (same as before).
-  Slic3r::DynamicPrintConfig overlayConfig;
-  for (auto it = m_projectConfigOverlay.constBegin();
-       it != m_projectConfigOverlay.constEnd(); ++it)
+  // Plater.cpp:12021 full_config_secure). overlayConfig lives in the payload
+  // scope for the whole store_bbs_3mf call (GUI build → worker store → payload
+  // destruction), which keeps the borrowed pointer valid; an empty overlay
+  // keeps config == nullptr so the writer skips the config branch entirely
+  // (same as before).
+  Slic3r::DynamicPrintConfig &overlayConfig = out.overlayConfig;
+  for (auto it = configOverlay.constBegin();
+       it != configOverlay.constEnd(); ++it)
   {
     overlayConfig.set_key_value(it.key().toStdString(),
                                 new Slic3r::ConfigOptionString(
@@ -11018,36 +11118,36 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   // set_bed_shape -> PartPlateList::set_shapes (Plater.cpp:12996-12998,
   // :8135-8169). Keys already present in the overlay win (explicit override).
   // The rect is corner-origin raw profile data, like the upstream config.
-  if (m_plateList && m_plateList->plateWidth() > 0 && m_plateList->plateDepth() > 0
+  if (plateList && plateList->plateWidth() > 0 && plateList->plateDepth() > 0
       && !overlayConfig.has("printable_area"))
   {
-    const double w = m_plateList->plateWidth();
-    const double d = m_plateList->plateDepth();
+    const double w = plateList->plateWidth();
+    const double d = plateList->plateDepth();
     overlayConfig.set_key_value(
         "printable_area",
         new Slic3r::ConfigOptionPoints(
             std::vector<Slic3r::Vec2d>{{0.0, 0.0}, {w, 0.0}, {w, d}, {0.0, d}}));
   }
-  if (m_plateList && m_plateList->plateHeight() > 0
+  if (plateList && plateList->plateHeight() > 0
       && !overlayConfig.has("printable_height"))
   {
     overlayConfig.set_key_value(
         "printable_height",
-        new Slic3r::ConfigOptionFloat(double(m_plateList->plateHeight())));
+        new Slic3r::ConfigOptionFloat(double(plateList->plateHeight())));
   }
-  if (m_plateList && !m_plateList->excludeAreas().empty()
+  if (plateList && !plateList->excludeAreas().empty()
       && !overlayConfig.has("bed_exclude_area"))
   {
     overlayConfig.set_key_value(
         "bed_exclude_area",
-        new Slic3r::ConfigOptionPoints(m_plateList->excludeAreas()));
+        new Slic3r::ConfigOptionPoints(plateList->excludeAreas()));
   }
-  params.config = overlayConfig.keys().empty() ? nullptr : &overlayConfig;
+  out.params.config = overlayConfig.keys().empty() ? nullptr : &overlayConfig;
 
   // v3.0 Phase 18 (D-10): populate plate_data_list so multi-plate state round-trips.
   // Fixes the v2.9 blocker where save lost all plate names/locked/objects/config.
-  Slic3r::PlateDataPtrs plateData = buildPlateDataList(m_plateList.get());
-  params.plate_data_list = plateData;
+  out.plateData = buildPlateDataList(plateList);
+  out.params.plate_data_list = out.plateData;
 
   // Phase 96 (THUMBWRITE-02) + Phase 98 (THUMBVERIFY, REVIEW MEDIUM-3):
   // populate StoreParams::thumbnail_data with one entry per plate so the
@@ -11069,29 +11169,30 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
   //
   // LIFETIME: StoreParams::thumbnail_data is vector<ThumbnailData*> (raw
   // pointers, bbs_3mf.hpp:235). The pointed-to ThumbnailData MUST outlive
-  // store_bbs_3mf. plateThumbs is a single local vector in this block; we
-  // reserve() the full capacity up front and take addresses only AFTER all
-  // pushes are done, so no reallocation can invalidate the pointers before
-  // store_bbs_3mf (called below at :5187) returns and the block exits past
-  // the release_PlateData_list cleanup.
-  std::vector<Slic3r::ThumbnailData> plateThumbs;
+  // store_bbs_3mf. The vectors are single payload members; we reserve() the
+  // full capacity up front and take addresses only AFTER all pushes are done,
+  // so no reallocation can invalidate the pointers before store_bbs_3mf
+  // returns and the payload is destroyed (U8: that now holds on the worker
+  // thread too — the payload outlives the writer on whichever thread runs
+  // it).
+  std::vector<Slic3r::ThumbnailData> &plateThumbs = out.plateThumbs;
   // G-04: per-view thumbnail families (upstream Plater.cpp:12131-12136 pushes
   // no_light/top/picking vectors into StoreParams). A variant stays an
   // INVALID placeholder when it was never captured -- the writer skips
   // invalid entries (bbs_3mf.cpp is_valid guard), exactly upstream behaviour
   // when generation is skipped.
-  std::vector<Slic3r::ThumbnailData> noLightThumbs;
-  std::vector<Slic3r::ThumbnailData> topThumbs;
-  std::vector<Slic3r::ThumbnailData> pickThumbs;
-  if (m_plateList && m_plateList->plateCount() > 0)
+  std::vector<Slic3r::ThumbnailData> &noLightThumbs = out.noLightThumbs;
+  std::vector<Slic3r::ThumbnailData> &topThumbs = out.topThumbs;
+  std::vector<Slic3r::ThumbnailData> &pickThumbs = out.pickThumbs;
+  if (plateList && plateList->plateCount() > 0)
   {
-    plateThumbs.reserve(m_plateList->plateCount());
-    noLightThumbs.reserve(m_plateList->plateCount());
-    topThumbs.reserve(m_plateList->plateCount());
-    pickThumbs.reserve(m_plateList->plateCount());
-    for (int i = 0; i < m_plateList->plateCount(); ++i)
+    plateThumbs.reserve(plateList->plateCount());
+    noLightThumbs.reserve(plateList->plateCount());
+    topThumbs.reserve(plateList->plateCount());
+    pickThumbs.reserve(plateList->plateCount());
+    for (int i = 0; i < plateList->plateCount(); ++i)
     {
-      const OWzx::PartPlate *p = m_plateList->plate(i);
+      const OWzx::PartPlate *p = plateList->plate(i);
       if (p && !p->thumbnail().isNull())
         plateThumbs.push_back(qimageToThumbnailData(p->thumbnail()));
       else
@@ -11104,60 +11205,61 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
     // Take addresses of the non-const ThumbnailData entries and push as raw
     // pointers into StoreParams::thumbnail_data (vector<ThumbnailData*>,
     // bbs_3mf.hpp:235). store_bbs_3mf treats these as read-only inputs
-    // (is_valid() + pixels/width/height reads, no mutation). plateThumbs
-    // outlives the store call (single local vector, reserved up front — see
+    // (is_valid() + pixels/width/height reads, no mutation). The payload
+    // outlives the store call (single members, reserved up front — see
     // LIFETIME above). (Phase 95 REVIEW W-3: removed the prior const_cast by
     // iterating with a non-const reference so the address is already
     // ThumbnailData*.)
     for (Slic3r::ThumbnailData &td : plateThumbs)
-      params.thumbnail_data.push_back(&td);
+      out.params.thumbnail_data.push_back(&td);
     // G-04: same lifetime contract for the three variant families (the
-    // noLight/top/pick locals declared above outlive store_bbs_3mf).
+    // noLight/top/pick payload members above outlive store_bbs_3mf).
     for (Slic3r::ThumbnailData &td : noLightThumbs)
-      params.no_light_thumbnail_data.push_back(&td);
+      out.params.no_light_thumbnail_data.push_back(&td);
     for (Slic3r::ThumbnailData &td : topThumbs)
-      params.top_thumbnail_data.push_back(&td);
+      out.params.top_thumbnail_data.push_back(&td);
     for (Slic3r::ThumbnailData &td : pickThumbs)
-      params.pick_thumbnail_data.push_back(&td);
+      out.params.pick_thumbnail_data.push_back(&td);
   }
+  return true;
+}
 
-    // G-11: bounded retry with exponential backoff (50/200/800ms) -- the bbs
-    // writer's ".tmp" rename can be blocked briefly by antivirus/indexer file
-    // holds under full-suite churn. When all attempts fail, the qWarning
-    // diagnostics above name the observable cause.
-    bool ok = false;
-    try
+// U8: runs store_bbs_3mf against the payload with the G-11 bounded retry and
+// the failure diagnostics. Pure writer material — touches only the payload
+// and the target path, no live service state, so it runs identically inline
+// (sync path) or on the save worker (async path).
+static bool runStoreBbs3mf(ProjectSavePayload &payload, QString &errText)
+{
+  // G-11: bounded retry with exponential backoff (50/200/800ms) -- the bbs
+  // writer's ".tmp" rename can be blocked briefly by antivirus/indexer file
+  // holds under full-suite churn. When all attempts fail, the qWarning
+  // diagnostics below name the observable cause. (U8: the backoff sleeps now
+  // happen wherever the runner executes — for the async path that is the
+  // worker, not the GUI thread.)
+  bool ok = false;
+  try
+  {
+    const int backoffMs[] = {0, 200, 800};
+    for (int attempt = 0; attempt < 3 && !ok; ++attempt)
     {
-      const int backoffMs[] = {0, 200, 800};
-      for (int attempt = 0; attempt < 3 && !ok; ++attempt)
-      {
-        if (attempt > 0)
-          QThread::msleep(backoffMs[attempt]);
-        ok = Slic3r::store_bbs_3mf(params);
-      }
+      if (attempt > 0)
+        QThread::msleep(backoffMs[attempt]);
+      ok = Slic3r::store_bbs_3mf(payload.params);
     }
+  }
   catch (const std::exception &ex)
   {
-    Slic3r::release_PlateData_list(plateData);  // free heap PlateData even on throw
-    lastError_ = tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
-    emit projectChanged();
+    // Payload cleanup (Model copy / PlateData / presets) runs when the
+    // payload dies — including on this throw path.
+    errText = ProjectServiceMock::tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
     return false;
   }
-
-  // Free the heap PlateData objects after store (success or failure).
-  Slic3r::release_PlateData_list(plateData);
-  // G-13: the writer borrowed the preset pointers and the backup path; both
-  // are release-time bookkeeping only.
-  for (Slic3r::Preset *preset : projectPresets)
-    delete preset;
-  projectPresets.clear();
-  if (model_)
-    model_->set_backup_path("");
 
   if (!ok)
   {
     // G-11 diagnostics: store_bbs_3mf returns bool only; log the observable
     // state so in-suite failures name their cause.
+    const QString filePath = QString::fromUtf8(payload.params.path);
     QFileInfo outInfo(filePath);
     qWarning("[Project] store_bbs_3mf failed path=%s dirExists=%d dirWritable=%d "
              "outExists=%d tmpExists=%d plates=%d objects=%d",
@@ -11165,17 +11267,225 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
              int(outInfo.dir().exists()), int(outInfo.isWritable()),
              int(outInfo.exists()),
              int(QFileInfo(outInfo.dir(), outInfo.fileName() + QStringLiteral(".tmp")).exists()),
-             m_plateList ? m_plateList->plateCount() : -1,
-             model_ ? int(model_->objects.size()) : -1);
-    lastError_ = tr("3MF 保存失败");
+             int(payload.plateData.size()),
+             payload.modelCopy ? int(payload.modelCopy->objects.size()) : -1);
+    errText = ProjectServiceMock::tr("3MF 保存失败");
+    return false;
+  }
+  return true;
+}
+#endif // HAS_LIBSLIC3R
+
+// Phase 237 (VIEW-06): shared store_bbs_3mf writer extracted from saveProject
+// (same body; saveProject keeps the plate-state JSON + bookkeeping on top).
+// Mirrors upstream Plater::export_3mf -> store_bbs_3mf with plate_data_list
+// populated (Plater.cpp:11462 for the sliced-file variant).
+bool ProjectServiceMock::storeProject3mf(const QString &filePath)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return false;
+
+  // U8: the entire writer input set (deep Model copy, PlateData list,
+  // thumbnail bytes, embedded-preset objects, overlay config) is snapshotted
+  // by buildProjectSavePayload into a payload that the store call below
+  // borrows; the async save path hands the SAME payload to its QtConcurrent
+  // worker, so the sync and async writers cannot drift. Retry/diagnostics/
+  // error mapping live in runStoreBbs3mf.
+  ProjectSavePayload payload;
+  if (!buildProjectSavePayload(model_, m_plateList.get(), m_projectConfigOverlay,
+                               m_projectEmbeddedPresets, filePath, payload))
+    return false;
+  QString storeErr;
+  if (!runStoreBbs3mf(payload, storeErr))
+  {
+    lastError_ = storeErr;
     emit projectChanged();
     return false;
   }
   return true;
+
 #else
   Q_UNUSED(filePath);
   lastError_ = tr("3MF writer requires libslic3r");
   return false;
+#endif
+}
+
+// ── U8 (保存/自动备份移 worker): async entries ─────────────────────────────
+// Structure mirrors the loadFile worker (QPointer receiver + shared worker
+// payload + QueuedConnection GUI delivery): the GUI thread builds the writer
+// snapshot, the QtConcurrent worker runs store_bbs_3mf (+ the OWzx sidecar
+// rewrite for project saves), and the terminal outcome is delivered on the
+// GUI thread where the bookkeeping + signals fire. The busy gate (saving_)
+// serializes jobs: one write at a time, mid-flight requests rejected — a
+// queued STALE snapshot would overwrite newer project state, which is the
+// one re-entrancy mode a save must never have.
+
+bool ProjectServiceMock::saveProjectAsync(const QString &filePath)
+{
+  return startAsyncSave(filePath, AsyncSaveKind::Project);
+}
+
+bool ProjectServiceMock::saveProjectAsAsync(const QString &filePath)
+{
+  return startAsyncSave(filePath, AsyncSaveKind::ProjectAs);
+}
+
+bool ProjectServiceMock::writeProjectSnapshotAsync(const QString &filePath)
+{
+  return startAsyncSave(filePath, AsyncSaveKind::Snapshot);
+}
+
+bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
+{
+#ifndef HAS_LIBSLIC3R
+  // No writer in this build: degrade to the sync entries' rejection contract
+  // (a .3mf/.cxprj destination cannot be written at all here; the JSON branch
+  // of saveProject still works).
+  Q_UNUSED(kind)
+  return saveProject(filePath);
+#else
+  const QString saveSuffix = QFileInfo(filePath).suffix().toLower();
+  const bool as3mfProject = saveSuffix == QStringLiteral("3mf")
+                         || saveSuffix == QStringLiteral("cxprj");
+
+  // Cheap JSON project save: no 3MF serialization / zip / sidecar rewrite, so
+  // it completes synchronously on the calling thread and reports through the
+  // same async signal contract (the GUI never froze on this branch).
+  if (!as3mfProject && kind != AsyncSaveKind::Snapshot)
+  {
+    const bool ok = saveProject(filePath);
+    emit saveFinished(ok, filePath, ok ? QString() : lastError_);
+    return ok;
+  }
+
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法保存");
+    if (kind != AsyncSaveKind::Snapshot)
+      emit projectChanged();  // saveProject/saveProjectAs parity
+    return false;
+  }
+  if (saving_)
+  {
+    lastError_ = tr("已有保存任务进行中");
+    if (kind != AsyncSaveKind::Snapshot)
+      emit projectChanged();
+    return false;
+  }
+
+  if (kind == AsyncSaveKind::Snapshot)
+  {
+    // writeProjectSnapshot parity: no Model → no backup (qWarning, false).
+    if (!model_)
+    {
+      qWarning("[Project] writeProjectSnapshotAsync: no model loaded");
+      return false;
+    }
+  }
+  else
+  {
+    // saveProject parity (Q10-1): a plate-only 3MF still needs a Model
+    // carrier; a JSON-format load resets model_ to null, so a fresh empty
+    // Model matches the upstream emptied-project payload exactly.
+    if (!model_)
+      model_ = new Slic3r::Model();
+  }
+
+  // GUI-thread snapshot — the only section that touches live state. Bounded
+  // by memory copies (deep Model copy + PlateData configs + thumbnail bytes),
+  // orders of magnitude below the XML serialization + zip deflate that used
+  // to run here.
+  auto payload = std::make_shared<ProjectSavePayload>();
+  if (!buildProjectSavePayload(model_, m_plateList.get(), m_projectConfigOverlay,
+                               m_projectEmbeddedPresets, filePath, *payload))
+    return false;  // no Model — silent, matching storeProject3mf
+  // Project saves carry the OWzx plate-state sidecar; auto-backup snapshots
+  // keep their historical archive shape (no sidecar rewrite).
+  if (kind != AsyncSaveKind::Snapshot)
+    payload->sidecarBytes = buildOwzxPlateFilamentStateBytes(m_plateList.get());
+
+  saving_ = true;
+  emit savingChanged();
+
+  const QPointer<ProjectServiceMock> receiver(this);
+  QtConcurrent::run([receiver, payload, filePath, kind]()
+  {
+    QString errText;
+    bool ok = false;
+    // U8: on the worker a thrown writer exception cannot propagate to a
+    // caller — it must become the delivered failure reason (the sync path
+    // keeps its throw-through contract via runStoreBbs3mf's own catch).
+    try
+    {
+      ok = runStoreBbs3mf(*payload, errText);
+    }
+    catch (const std::exception &ex)
+    {
+      ok = false;
+      errText = ProjectServiceMock::tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
+    }
+    catch (...)
+    {
+      ok = false;
+      errText = ProjectServiceMock::tr("3MF 保存异常");
+    }
+    if (ok && kind != AsyncSaveKind::Snapshot && !payload->sidecarBytes.isEmpty())
+    {
+      // R-P0.4 sidecar: pure disk rewrite of the fresh archive (reads/writes
+      // only the payload bytes rendered on the GUI thread at dispatch).
+      if (!writeOwzxPlateFilamentStates(filePath, payload->sidecarBytes))
+      {
+        ok = false;
+        errText = ProjectServiceMock::tr("Unable to write OWzx plate state");
+      }
+    }
+    // The payload (Model copy, PlateData, presets, staging dir) dies with the
+    // lambda — after the writer released every borrowed pointer, off the GUI
+    // thread.
+
+    if (!receiver)
+      return;
+    QMetaObject::invokeMethod(receiver, [receiver, ok, filePath, kind, errText]()
+    {
+      if (!receiver)
+        return;
+      receiver->saving_ = false;
+      emit receiver->savingChanged();
+      if (ok)
+      {
+        if (kind == AsyncSaveKind::Snapshot)
+        {
+          // writeProjectSnapshot parity: bookkeeping-free, log only.
+          qDebug("[Project] async project snapshot written: %s",
+                 filePath.toUtf8().constData());
+        }
+        else
+        {
+          // saveProject / saveProjectAs bookkeeping, applied at delivery so a
+          // failed write never hijacks the current project identity.
+          receiver->sourceFilePath_ = filePath;
+          if (kind == AsyncSaveKind::ProjectAs)
+            receiver->currentProjectPath_ = filePath;
+          receiver->projectName_ = QFileInfo(filePath).completeBaseName();
+          receiver->lastError_.clear();
+          emit receiver->projectChanged();
+        }
+      }
+      else
+      {
+        receiver->lastError_ = errText;
+        if (kind != AsyncSaveKind::Snapshot)
+          emit receiver->projectChanged();  // sync-failure parity
+      }
+      if (kind == AsyncSaveKind::Snapshot)
+        emit receiver->snapshotFinished(ok, filePath, errText);
+      else
+        emit receiver->saveFinished(ok, filePath, errText);
+    }, Qt::QueuedConnection);
+  });
+  return true;
 #endif
 }
 
@@ -11184,6 +11494,14 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   if (loading_)
   {
     lastError_ = tr("加载中，无法保存");
+    emit projectChanged();
+    return false;
+  }
+  // U8: an in-flight async save owns the writer state; a concurrent sync save
+  // would interleave bookkeeping with the worker's GUI-thread delivery.
+  if (saving_)
+  {
+    lastError_ = tr("已有保存任务进行中");
     emit projectChanged();
     return false;
   }
