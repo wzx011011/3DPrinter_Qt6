@@ -2168,7 +2168,12 @@ private:
   bool m_showAllObjects = false;
   bool m_showLabels = false;
   int m_objectOrganizeMode = 0;
-  QString m_sliceEstimatedTime;
+  // U14: the slice-duration label is NOT cached here anymore --
+  // sliceEstimatedTime() reads SliceService's active per-plate record
+  // (estimatedTimeLabel_, re-activated on every plate switch), so the label
+  // always belongs to the plate hasSliceResult() gates on. The former
+  // m_sliceEstimatedTime kept the last-sliced plate's value and went
+  // cross-plate stale.
   int m_sliceResultPlateIndex = -1;
   QVector4D m_fitHint; ///< (cx, cy, cz, radius) in GL coords; zero = invalid
   // Q8(1): memoized selected-set bbox behind measureDimensions(). Mutable

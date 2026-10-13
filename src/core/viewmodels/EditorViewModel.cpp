@@ -247,7 +247,6 @@ void EditorViewModel::invalidateSliceResultsForPlate(int plateIndex)
 
   if (m_sliceResultPlateIndex == plateIndex)
   {
-    m_sliceEstimatedTime.clear();
     m_sliceResultPlateIndex = -1;
   }
 }
@@ -271,7 +270,6 @@ void EditorViewModel::invalidateAllSliceResults()
   }
 
   m_slicedPlateIndices.clear();
-  m_sliceEstimatedTime.clear();
   m_sliceResultPlateIndex = -1;
   if (sliceService_)
     sliceService_->clearResults();
@@ -5639,7 +5637,6 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
           {
     if (sliceService_->slicing())
     {
-      m_sliceEstimatedTime.clear();
       m_sliceResultPlateIndex = -1;
       m_sequentialClearanceOutline.clear();
       m_sequentialClearanceFill.clear();
@@ -5662,7 +5659,6 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
         emit stateChanged(); });
   connect(sliceService_, &SliceService::sliceFailed, this, [this](const QString &message)
           {
-    m_sliceEstimatedTime.clear();
       m_sliceResultPlateIndex = -1;
       m_sliceAllQueue.clear();
       m_slicingAll = false;
@@ -5673,9 +5669,11 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
       m_previewReusedPreviousGcode = false;
         statusText_ = message;
         emit stateChanged(); });
-  connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &estimatedTime)
+  // U14: the duration label stays in SliceService's per-plate record (the
+  // worker fills estimatedTimeLabel_ before this signal); the VM no longer
+  // keeps its own copy. sliceEstimatedTime() reads the active record.
+  connect(sliceService_, &SliceService::sliceFinished, this, [this](const QString &)
           {
-    m_sliceEstimatedTime = estimatedTime;
       m_sliceResultPlateIndex = sliceService_ ? sliceService_->resultPlateIndex() : -1;
     // Track per-plate slice state
     if (m_sliceResultPlateIndex >= 0) {
@@ -9933,9 +9931,33 @@ QString EditorViewModel::sliceStatusLabel() const
   return QStringLiteral("等待切片");
 }
 
+namespace {
+// U14: the slice worker formats durations as "HH:MM:SS"
+// (SliceService.cpp formatDurationLabel); parse it back to seconds for the
+// avg-speed estimate. QString::toDouble on a colon string silently yielded
+// the leading hour digits as "1.0" seconds.
+double parseDurationLabelSeconds(const QString &label)
+{
+  const QStringList parts = label.split(QLatin1Char(':'));
+  if (parts.size() != 3)
+    return 0.0;
+  bool okH = false, okM = false, okS = false;
+  const double secs = parts[0].toInt(&okH) * 3600.0
+      + parts[1].toInt(&okM) * 60.0
+      + parts[2].toInt(&okS);
+  return (okH && okM && okS) ? secs : 0.0;
+}
+} // namespace
+
 QString EditorViewModel::sliceEstimatedTime() const
 {
-  return hasSliceResult() ? m_sliceEstimatedTime : QString{};
+  // U14: read the ACTIVE per-plate record (SliceService::activatePlateResult
+  // re-activates it on every plateSelectionChanged) instead of the VM-cached
+  // m_sliceEstimatedTime, which kept the LAST-sliced plate's label and went
+  // cross-plate stale after a switch. Now exactly parallel to
+  // sliceResultCost()/sliceResultWeight(), which already read this record --
+  // one per-plate source of truth, no second cache to drift.
+  return hasSliceResult() && sliceService_ ? sliceService_->estimatedTimeLabel() : QString{};
 }
 
 QString EditorViewModel::sliceOutputPath() const
@@ -9992,7 +10014,8 @@ QString EditorViewModel::avgPrintSpeed() const
   if (!hasSliceResult())
     return {};
   // 简化计算：基于总时长和耗材长度估算平均速度
-  const double totalSecs = m_sliceEstimatedTime.toDouble();
+  const double totalSecs = sliceService_
+      ? parseDurationLabelSeconds(sliceService_->estimatedTimeLabel()) : 0.0;
   const double totalMm = sliceService_ ? sliceService_->resultTotalFilamentMm() : 0.0;
   if (totalSecs <= 0 || totalMm <= 0)
     return {};
@@ -10544,7 +10567,6 @@ void EditorViewModel::requestSlice()
     }
   }
 
-  m_sliceEstimatedTime.clear();
   m_sliceResultPlateIndex = -1;
   // Phase 239 (ENGN-02): a fresh model slice is not a previous-G-code reuse.
   m_previewReusedPreviousGcode = false;
@@ -10584,7 +10606,6 @@ bool EditorViewModel::loadFile(const QString &filePath)
   {
     if (sliceService_)
       sliceService_->clearResults();
-    m_sliceEstimatedTime.clear();
     m_sliceResultPlateIndex = -1;
     m_slicedPlateIndices.clear();
     m_stalePlateIndices.clear();
@@ -10992,7 +11013,6 @@ void EditorViewModel::clearWorkspace()
   m_selectedVolumeObjectSourceIndex = -1;
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndex = -1;
-  m_sliceEstimatedTime.clear();
   m_sliceResultPlateIndex = -1;
   m_slicedPlateIndices.clear();
   m_stalePlateIndices.clear();

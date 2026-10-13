@@ -493,6 +493,66 @@ Rectangle {
             }
         }
 
+        // ── U14 (Prepare 页信息密度)：常驻"切片信息"卡 ─────────────────────
+        // 上游 Plater 侧栏 SlicedInfo 对齐（third_party/OrcaSlicer
+        // Plater.cpp:358-414）：侧栏常驻盒子，切片完成后回填；每行初值 "N/A"，
+        // SetTextAndShow(:403-412) 对仍无值的行整行隐藏。本 fork 的这批数值
+        // 一直存在于 EditorViewModel（sliceEstimatedTime / sliceResultCost /
+        // sliceResultFilament / sliceResultWeight，全部按当前盘有效结果门控），
+        // 但此前只有预览页 StatsPanel 可见——现在侧栏常驻，Prepare 页无需切页
+        // 即可读数。对象数是场景态（非切片派生），首片前也显示；切片派生各行
+        // 跟随各自 getter（当前盘无有效结果/被编辑置 stale 时返回空串 → 整行
+        // 隐藏），与上游"切片成功才显示、无值行隐藏"语义一致。数值沿用 U12 的
+        // 只读 TextEdit 可选中样式，便于抄录。
+        Rectangle {
+            id: slicedInfoCard
+            Layout.fillWidth: true
+            visible: root.editorVm
+                     && (root.editorVm.modelCount > 0 || root.editorVm.hasSliceResult)
+            radius: Theme.radiusSM
+            color: root.sectionSurface
+            border.width: 1
+            border.color: root.dividerColor
+            implicitHeight: slicedInfoLayout.implicitHeight + 12
+
+            ColumnLayout {
+                id: slicedInfoLayout
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 6
+                spacing: 3
+
+                Text {
+                    text: qsTr("切片信息")
+                    color: root.mutedText
+                    font.pixelSize: Theme.fontSizeSM
+                    font.bold: true
+                }
+
+                SlicedInfoRow {
+                    label: qsTr("对象")
+                    value: root.editorVm ? String(root.editorVm.modelCount) : "0"
+                }
+                SlicedInfoRow {
+                    label: qsTr("预计耗时")
+                    value: root.editorVm ? root.editorVm.sliceEstimatedTime : ""
+                }
+                SlicedInfoRow {
+                    label: qsTr("总成本")
+                    value: root.editorVm ? root.editorVm.sliceResultCost : ""
+                }
+                SlicedInfoRow {
+                    label: qsTr("耗材")
+                    value: root.editorVm ? root.editorVm.sliceResultFilament : ""
+                }
+                SlicedInfoRow {
+                    label: qsTr("重量")
+                    value: root.editorVm ? root.editorVm.sliceResultWeight : ""
+                }
+            }
+        }
+
         // Params area: full-height container outlined by a 1px accent border
         // (ref layout), filling the sidebar remainder; only the option list
         // scrolls (params-1/layout-6).
@@ -1239,6 +1299,40 @@ Rectangle {
             enabled: segmentRoot.enabled
             cursorShape: Qt.PointingHandCursor
             onClicked: segmentRoot.clicked()
+        }
+    }
+
+    // U14: one label/value pair of the persistent Sliced Info card. The row
+    // hides itself when the value is empty -- the EditorViewModel slice-stat
+    // getters return QString{} when the current plate has no valid (non-stale)
+    // slice result, which reproduces upstream SlicedInfo::SetTextAndShow's
+    // "N/A rows stay hidden" (Plater.cpp:403-412). Value cell is a read-only
+    // selectable TextEdit (U12 pattern, Theme selection tokens).
+    component SlicedInfoRow: RowLayout {
+        id: slicedInfoRowRoot
+        property string label: ""
+        property string value: ""
+
+        visible: slicedInfoRowRoot.value.length > 0
+        Layout.fillWidth: true
+        spacing: 8
+
+        Text {
+            text: slicedInfoRowRoot.label
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontSizeXS
+        }
+        Item { Layout.fillWidth: true }
+        TextEdit {
+            text: slicedInfoRowRoot.value
+            readOnly: true
+            selectByMouse: true
+            color: Theme.textPrimary
+            selectionColor: Theme.selectionColor
+            selectedTextColor: Theme.selectionText
+            font.pixelSize: Theme.fontSizeSM
+            font.family: Theme.fontMono
+            wrapMode: TextEdit.NoWrap
         }
     }
 }
