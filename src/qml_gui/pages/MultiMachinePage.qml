@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -1460,6 +1461,7 @@ Item {
                 model: root.multiMachineVm.localTaskCount
                 textRole: ""
                 delegate: ItemDelegate {
+                    required property int index
                     width: taskSelector.width
                     contentItem: Text {
                         text: root.multiMachineVm.localTaskProjectName(index)

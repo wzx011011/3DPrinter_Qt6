@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import OWzx
 
@@ -93,6 +94,9 @@ ComboBox {
 
     delegate: ItemDelegate {
         id: comboItem
+        required property var modelData
+        required property int index
+        required property var model
         readonly property string entryText: root.textRole
             ? (Array.isArray(root.model) ? modelData[root.textRole] : model[root.textRole])
             : modelData

@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import OWzx
 
 // v5.16 (NAVIGATOR): label overlay for the bottom-left 3D navigator cube.

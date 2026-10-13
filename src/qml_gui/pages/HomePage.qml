@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -223,6 +224,7 @@ Item {
                 Repeater {
                     model: root.homeVm.cloudBoundDeviceCount
                     delegate: Rectangle {
+                        required property int index
                         width: 180; height: 64; radius: Theme.radiusXL
                         color: Theme.bgPanel
                         border.width: 1; border.color: Theme.borderSubtle
@@ -948,6 +950,8 @@ Item {
                 Repeater {
                     model: root._recentProjects
                     delegate: Rectangle {
+                        required property var modelData
+                        required property int index
                         width: 196; height: 164; radius: Theme.radiusXXL; color: Theme.bgPanel; border.color: Theme.borderSubtle; border.width: 1
                         Column {
                             anchors.fill: parent; anchors.margins: 12; spacing: 8

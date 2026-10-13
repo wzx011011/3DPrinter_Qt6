@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import OWzx
 
 // Stacked notification toasts (Phase 240 NOTI-01, upstream NotificationManager

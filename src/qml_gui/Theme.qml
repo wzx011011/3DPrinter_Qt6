@@ -1,5 +1,6 @@
 pragma Singleton
 import QtQuick
+pragma ComponentBehavior: Bound
 
 // =============================================================================
 // OWzx Theme — single source of truth for all design tokens.

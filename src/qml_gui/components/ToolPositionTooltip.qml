@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -173,6 +174,7 @@ Rectangle {
                 Repeater {
                     model: root.tableLabels
                     Label {
+                        required property var modelData
                         text: modelData
                         color: Theme.accent   // upstream text_colored(COL_ORCA) -- brand accent
                         font.pixelSize: Theme.fontSizeSM
@@ -187,6 +189,7 @@ Rectangle {
                     // selection tokens; no elide on this side so the layout
                     // is unchanged).
                     TextEdit {
+                        required property var modelData
                         text: modelData
                         readOnly: true
                         selectByMouse: true
@@ -317,6 +320,8 @@ Rectangle {
                             { axis: "Z", value: root.vm ? root.coordText(root.vm.toolZ) : "0.000" }
                         ]
                         delegate: Row {
+                            required property var modelData
+                            required property int index
                             x: index * (axesMetrics.width + axesSpacingMetrics.width)
                             spacing: 0
                             Label {
@@ -510,6 +515,8 @@ Rectangle {
                         Repeater {
                             model: root.vm ? root.vm.toolActualSpeedProfile : []
                             delegate: Rectangle {
+                                required property var modelData
+                                required property int index
                                 readonly property bool rowHovered:
                                     index === root.plotHoverId || index === root.plotHoverId + 1
                                 readonly property bool rowInternal: modelData.internal === true

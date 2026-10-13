@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -255,6 +256,7 @@ Item {
                                 { label: qsTr("Hardware Calibration"), cat: "hardware" }
                             ]
                             Rectangle {
+                                required property var modelData
                                 height: 26
                                 width: catLbl.implicitWidth + 20
                                 radius: Theme.radiusXL
@@ -337,6 +339,7 @@ Item {
                                 model: root._calibItems
 
                                 delegate: Rectangle {
+                                    required property var modelData
                                     width: parent.width - 8
                                     x: 4
                                     height: modelData.startable ? 52 : 66

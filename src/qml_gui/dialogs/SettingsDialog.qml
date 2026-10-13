@@ -9,6 +9,7 @@
 // in Phase 57-01 (CLEAN-01); this dialog is the sole settings surface.
 
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx

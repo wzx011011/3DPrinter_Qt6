@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -472,6 +473,7 @@ CxDialog {
             }
 
             delegate: Rectangle {
+                required property var modelData
                 width: historyListView.width
                 height: 68
                 radius: Theme.radiusMD

@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import OWzx
 
 // CxEmptyState.qml — shared empty-state block (Phase 172, P2).

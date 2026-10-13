@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -236,6 +237,7 @@ Dialog {
                 Repeater {
                     model: root.groups
                     delegate: Rectangle {
+                        required property var modelData
                         width: 150
                         height: 28
                         radius: 0
@@ -292,6 +294,7 @@ Dialog {
                 Repeater {
                     model: root.shortcutsForGroup(root.currentGroup)
                     delegate: RowLayout {
+                        required property var modelData
                         width: parent.width
                         spacing: Theme.spacingXL
 

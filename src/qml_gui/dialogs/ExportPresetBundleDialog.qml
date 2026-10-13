@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -141,6 +142,8 @@ CxDialog {
 
                         delegate: Rectangle {
                             id: columnRoot
+                            required property var modelData
+                            required property int index
                             property var section: modelData
                             readonly property bool isLast: index === root.presetSections.length - 1
 
@@ -319,6 +322,7 @@ CxDialog {
                                             Repeater {
                                                 model: columnList.filtered
                                                 delegate: CxCheckBox {
+                                                    required property var modelData
                                                     width: parent.width
                                                     // 14px case-level override (upstream web
                                                     // rows render at 14px); CxCheckBox keeps

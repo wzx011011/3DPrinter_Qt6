@@ -1,4 +1,5 @@
 ﻿import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -560,6 +561,8 @@ Item {
 
                                 delegate: Rectangle {
                                     id: deviceDelegate
+                                    required property var modelData
+                                    required property int index
                                     width: deviceListColumn.width
                                     // monitor-2: grid mode keeps the 78px card,
                                     // list mode compacts to a 36px row.
@@ -668,6 +671,7 @@ Item {
                                                     Repeater {
                                                         model: 4
                                                         Rectangle {
+                                                            required property int index
                                                             width: 3
                                                             height: 4 + index * 2
                                                             radius: Theme.radiusXS
@@ -1086,6 +1090,7 @@ Item {
                             Repeater {
                                 model: 4
                                 Rectangle {
+                                    required property int index
                                     width: 3
                                     height: 5 + index * 2.5
                                     radius: Theme.radiusXS
@@ -1149,6 +1154,8 @@ Item {
                             ]
 
                             delegate: Rectangle {
+                                required property var modelData
+                                required property int index
                                 width: tabText.implicitWidth + 24 + (index === 4 && root.monitorVm.selectedUnreadHmsCount > 0 ? 12 : 0)
                                 height: parent.height
                                 color: tabBar.currentIndex === index ? Theme.bgBase : "transparent"
@@ -1838,6 +1845,7 @@ Item {
                                             Repeater {
                                                 model: 4
                                                 Rectangle {
+                                                    required property int index
                                                     width: 6
                                                     height: 8 + index * 4
                                                     radius: Theme.radiusXS
@@ -1928,6 +1936,7 @@ Item {
 
                                             Rectangle {
                                                 id: amsSlotRect
+                                                required property var modelData
                                                 width: 64
                                                 height: 48
                                                 radius: Theme.radiusMD
@@ -2375,6 +2384,8 @@ Item {
                                             Repeater {
                                                 model: ["720P", "1080P"]
                                                 Rectangle {
+                                                    required property var modelData
+                                                    required property int index
                                                     width: 52; height: 22; radius: Theme.radiusSM
                                                     color: index === root.monitorVm.cameraResolution
                                                            ? Theme.accent : Theme.bgCard
@@ -2500,6 +2511,7 @@ Item {
                                     model: root.monitorVm.selectedHmsCount
 
                                     delegate: Rectangle {
+                                        required property int index
                                         width: parent.width - 4
                                         height: 64
                                         radius: Theme.radiusLG

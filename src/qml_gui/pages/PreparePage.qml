@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -769,6 +770,8 @@ Item {
                                     model: firstLayerCanvas.parent.seqOrder
 
                                     delegate: Item {
+                                        required property var modelData
+                                        required property int index
                                         width: pillRow.implicitWidth + 12
                                         height: 28
                                         property int seqIndex: index
@@ -907,6 +910,7 @@ Item {
                                 model: otherLayersSeqChoiceCombo.currentIndex === 1
                                         ? (root.editorVm ? root.editorVm.plateOtherLayersSeqCount(settingsDlg.plateIndex) : 0) : 0
                                 delegate: Rectangle {
+                                    required property int index
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: seqEntryCol.implicitHeight + 8
                                     radius: Theme.radiusMD
@@ -1025,6 +1029,8 @@ Item {
                                                     model: otherLayerCanvas.parent.seqOrder
 
                                                     delegate: Item {
+                                                        required property var modelData
+                                                        required property int index
                                                         width: pillOLRow.implicitWidth + 10
                                                         height: 24
                                                         property int seqIndex: index
@@ -3751,6 +3757,7 @@ Item {
                     Repeater {
                         model: root.editorVm ? root.editorVm.mmuExtruderCount : 4
                         Rectangle {
+                            required property int index
                             width: 28; height: 28; radius: Theme.radiusSM
                             color: {
                                 // Bind to configured filament colours (对齐上游
@@ -4307,6 +4314,8 @@ Item {
                     Repeater {
                         model: [qsTr("平面"), qsTr("舌槽"), qsTr("连接销")]
                         Rectangle {
+                            required property var modelData
+                            required property int index
                             width: 52; height: 22; radius: Theme.radiusSM
                             readonly property bool activeMode: index === 2
                                 ? (root.editorVm && root.editorVm.advCutConnectors)

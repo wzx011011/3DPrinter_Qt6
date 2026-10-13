@@ -818,6 +818,7 @@ CxDialog {
                 model: root._slotCount
 
                 RowLayout {
+                    required property int index
                     Layout.fillWidth: true
                     spacing: Theme.spacingMD
                     Rectangle {

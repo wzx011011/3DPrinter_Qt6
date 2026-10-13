@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -188,6 +189,7 @@ Item {
                 model: root.previewVm ? root.previewVm.tickMarks : []
                 delegate: Item {
                     id: tickDelegate
+                    required property var modelData
                     readonly property real tickY: railTrackHost.trackMargin
                         + (root.lastLayerIndex > 0
                            ? (1 - modelData.tick / root.lastLayerIndex) * railTrackHost.trackHeight

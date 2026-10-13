@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import OWzx
 
@@ -104,6 +105,8 @@ Rectangle {
                 model: root.filteredCommands
                 currentIndex: 0
                 delegate: Item {
+                    required property var modelData
+                    required property int index
                     width: listView.width
                     implicitHeight: Theme.controlHeightMD
                     Rectangle {

@@ -491,6 +491,19 @@ if ($renderBenchEnabled) {
   Invoke-NinjaTarget 'owzx-render-bench'
 }
 
+# S8 (2026-10-14): QML lint gate — qmllint over the OWzx qt_add_qml_module
+# module tree, 0-error 口径. Levels are pinned in src/qml_gui/.qmllint.ini
+# (all reviewed categories stay at warning; only error-level findings —
+# today the QML compile/syntax-failure class that historically zeroed engine
+# root objects — fail the build). Type-resolution breakage that qmllint keeps
+# at warning is caught by the QmlSmokeTests component-creation asserts.
+Write-Host "`n[QmlLint] Running qmllint over the OWzx QML module (0-error gate)..." -ForegroundColor Cyan
+& cmake --build . --target all_qmllint 2>&1 | ForEach-Object { Write-Host "  $_" }
+if ($LASTEXITCODE -ne 0) {
+  Fail-Stage 'QmlLint' ("qmllint gate failed with exit code " + $LASTEXITCODE + " -- see src/qml_gui/.qmllint.ini for the level contract") $LASTEXITCODE
+}
+Write-Host "[QmlLint] qmllint gate passed" -ForegroundColor Green
+
 # Deploy Qt runtime DLLs if not already present
 if (-not (Test-Path './Qt6Core.dll')) {
   Write-Stage 'Deploy' ("Deploying Qt runtime DLLs from " + $qtRoot)
@@ -498,7 +511,10 @@ if (-not (Test-Path './Qt6Core.dll')) {
   if (-not (Test-Path $windeployqt)) {
     Fail-Stage 'Deploy' ("windeployqt.exe not found: " + $windeployqt)
   }
-  & $windeployqt --release --qmldir '../src' --no-translations --no-system-d3d-compiler --no-opengl-sw './OWzxSlicer.exe' 2>$null
+  # S8: the QML module tree lives at build/OWzx (generated qmldir + copied
+  # QML sources) — windeployqt scans it to map imports to plugins; the OWzx
+  # module itself is embedded in the exe (NO_PLUGIN) and needs no deployment.
+  & $windeployqt --release --qmldir '../build/OWzx' --no-translations --no-system-d3d-compiler --no-opengl-sw './OWzxSlicer.exe' 2>$null
   if ($LASTEXITCODE -ne 0) {
     Fail-Stage 'Deploy' ("Qt runtime deployment failed with exit code " + $LASTEXITCODE) $LASTEXITCODE
   }

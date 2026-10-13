@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import OWzx
 
 // CxBusyIndicator.qml - lightweight spinner for async operations (e.g. Emboss
@@ -31,6 +32,7 @@ Item {
     Repeater {
         model: root.lineCount
         delegate: Rectangle {
+            required property int index
             x: root.width / 2 - width / 2
             y: 0
             width: 2

@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -125,6 +126,7 @@ CxDialog {
                     ]
 
                     RowLayout {
+                        required property var modelData
                         Layout.fillWidth: true
                         spacing: Theme.spacingMD
                         Text { Layout.preferredWidth: 100; text: modelData.feature; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeXS }

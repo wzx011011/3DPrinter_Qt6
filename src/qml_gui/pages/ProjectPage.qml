@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
@@ -118,6 +119,7 @@ Item {
                         { label: qsTr("导出"), action: "export" }
                     ]
                     delegate: CxButton {
+                        required property var modelData
                         text: modelData.label
                         compact: true
                         cxStyle: CxButton.Style.Secondary

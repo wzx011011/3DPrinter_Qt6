@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -499,6 +500,8 @@ CxDialog {
                 }
                 delegate: ItemDelegate {
                     id: printerDelegate
+                    required property var modelData
+                    required property int index
                     width: printerCombo.width
                     height: 28
                     highlighted: index === printerCombo.currentIndex

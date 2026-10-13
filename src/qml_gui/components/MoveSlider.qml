@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -59,6 +60,7 @@ Item {
                 Repeater {
                     model: root.toolChangeCount
                     delegate: Rectangle {
+                        required property int index
                         visible: root.totalMoves > 0
                         x: root.totalMoves > 0
                            ? (root.previewVm.toolChangePositionAt(index) / root.totalMoves) * toolBand.width

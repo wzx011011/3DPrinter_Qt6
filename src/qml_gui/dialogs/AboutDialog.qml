@@ -1,4 +1,5 @@
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -226,6 +227,7 @@ CxDialog {
                         Repeater {
                             model: root.libEntries
                             delegate: RowLayout {
+                                required property var modelData
                                 width: libsList.width
                                 spacing: Theme.spacingMD
                                 Text {

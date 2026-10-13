@@ -6,6 +6,7 @@
 // - 所有页面索引通过 Backend.TabPosition.tpX 引用，禁止硬编码整数（Pitfall 1）
 
 import QtQuick
+pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
