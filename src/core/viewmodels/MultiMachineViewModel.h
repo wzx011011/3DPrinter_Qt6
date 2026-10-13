@@ -36,6 +36,16 @@ class MultiMachineViewModel : public QObject
   Q_PROPERTY(int cloudSelectedCount READ cloudSelectedCount NOTIFY cloudTasksChanged)
   Q_PROPERTY(int cloudCurrentPage READ cloudCurrentPage WRITE setCloudCurrentPage NOTIFY cloudPaginationChanged)
   Q_PROPERTY(int cloudTotalPages READ cloudTotalPages NOTIFY cloudPaginationChanged)
+  // M2.5/G3 fix (2026-10-14, Qt 6.12): property twin REQUIRED for
+  // pagedCloudTaskCount. MultiMachinePage.qml:1018 binds `model:
+  // _vm.pagedCloudTaskCount` bare (same idiom as `model: _vm.machineCount`
+  // at :312); with only a Q_INVOKABLE that is a method reference, and Qt 6.12
+  // rejects assigning a function to a non-var property ("Unable to assign a
+  // function..."), which failed QmlSmokeTests::pagesInstantiate.
+  // NOTIFY cloudTasksChanged covers both task-list mutations and page
+  // switches (setCloudCurrentPage emits cloudPaginationChanged AND
+  // cloudTasksChanged, MultiMachineViewModel.cpp:343-344).
+  Q_PROPERTY(int pagedCloudTaskCount READ pagedCloudTaskCount NOTIFY cloudTasksChanged)
 
 public:
   explicit MultiMachineViewModel(QObject *parent = nullptr);
@@ -156,6 +166,13 @@ public:
   bool currentSortAsc() const;
 
   // ── Send task to device (对齐上游 SendMultiMachinePage / MultiMachinePickPage) ──
+  // M2.5/G3 fix (2026-10-14, Qt 6.12): property twin REQUIRED — the QML binds
+  // `onlineMachineCount` bare (MultiMachinePage.qml:1476 model, :675/:692
+  // visible comparisons); with only a Q_INVOKABLE that is a method reference,
+  // and Qt 6.12 rejects assigning a function to a non-var property. NOTIFY
+  // machinesChanged = the 2s refresh timer's signal, so the bindings stay
+  // live (upstream m_refresh_timer semantics).
+  Q_PROPERTY(int onlineMachineCount READ onlineMachineCount NOTIFY machinesChanged)
   Q_INVOKABLE int onlineMachineCount() const;
   Q_INVOKABLE QString onlineMachineName(int i) const;
   Q_INVOKABLE bool sendTaskToDevice(int localTaskIndex, int onlineMachineIndex);

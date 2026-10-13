@@ -1058,13 +1058,20 @@ Rectangle {
 
             PixelSegment {
                 text: qsTr("全局")
-                selected: root.configVm && root.configVm.settingsScope === "global"
+                // M2.5/G3 fix (2026-10-14, Qt 6.12): bare `a && b` yields
+                // undefined when a is undefined, and Qt 6.12 now WARNS on
+                // assigning undefined to a bool property ("Unable to assign
+                // [undefined] to bool") — surfaced by
+                // QmlSmokeTests::pagesInstantiate(AssemblePage) where
+                // root.configVm is undefined. `!!` forces the guard to a real
+                // boolean so the expression is bool in every branch.
+                selected: !!root.configVm && root.configVm.settingsScope === "global"
                 onClicked: if (root.configVm) root.configVm.requestGlobalScope()
             }
 
             PixelSegment {
                 text: qsTr("对象")
-                selected: root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
+                selected: !!root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
                 onClicked: {
                     if (root.editorVm && root.editorVm.selectedObjectIndex >= 0 && root.configVm) {
                         root.configVm.requestObjectScope("object", "",
@@ -1075,7 +1082,8 @@ Rectangle {
 
             PixelSegment {
                 text: qsTr("盘")
-                selected: root.configVm && root.configVm.settingsScope === "plate"
+                // !! guard: same Qt 6.12 undefined-to-bool warning as above.
+                selected: !!root.configVm && root.configVm.settingsScope === "plate"
                 enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
                 onClicked: {
                     if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)

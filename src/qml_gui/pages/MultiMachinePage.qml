@@ -1235,7 +1235,14 @@ Item {
             property bool _canResume: _isPaused
             property bool _canStop: _isPrinting || _isPaused
 
-            width: cloudTaskList.width
+            // M2.5/G3 fix (2026-10-14, Qt 6.12): was `width: cloudTaskList.width`
+            // — the cloudTaskList id is not in the delegate Component's scope
+            // (ReferenceError per delegate tick, row width broken in the app
+            // too). Masked until the pagedCloudTaskCount Q_PROPERTY twin made
+            // the model real and these delegates actually instantiate. Same
+            // fix the QmlSmoke allowlist prescribes for the deviceList /
+            // localTaskList twins: the ListView.view attached property.
+            width: ListView.view ? ListView.view.width : 0
             height: 50
             // Hover draws a 1px accent outline only (upstream
             // MultiTaskManagerPage.cpp:453-457); selected state shows on the
@@ -1368,7 +1375,12 @@ Item {
                 Row {
                     Layout.preferredWidth: 150
                     spacing: 4
-                    anchors.verticalCenter: parent.verticalCenter
+                    // M2.5/G3 fix (2026-10-14, Qt 6.12): was
+                    // `anchors.verticalCenter: parent.verticalCenter` — anchors
+                    // on a layout-managed item are undefined behavior per Qt
+                    // (QmlSmokeTests flag after the delegates came alive);
+                    // Layout.alignment is the prescribed equivalent.
+                    Layout.alignment: Qt.AlignVCenter
                     // Pause button (aligns with upstream MultiTaskItem::onPause)
                     Rectangle {
                         visible: _canPause
