@@ -11,6 +11,46 @@
 
 class PickingRaycaster;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// S2 (2026-10-14): the item↔renderer mirror contract — single point of truth
+// ═══════════════════════════════════════════════════════════════════════════
+// One RhiViewport (GUI thread) drives one RhiViewportRenderer (render
+// thread). The renderer never calls into the item outside synchronize();
+// everything render() consumes is a renderer-owned mirror written during
+// synchronize(). Every cross-thread value transfer follows exactly one of
+// three sanctioned change-detection protocols — a new channel picks one of
+// these, never invents a fourth:
+//
+//   1. GENERATION (heavy payloads): the item bumps a qint64 counter in its
+//      property setter (meshData → m_modelGeneration, scene bed shape →
+//      m_sceneGeneration, previewData → m_previewDataGeneration, bed model
+//      STL → m_bedModelGeneration); synchronize() compares the counter
+//      (O(1)) and re-mirrors the payload only on a bump. Byte/byte compares
+//      of multi-megabyte payloads on the render thread are forbidden.
+//   2. CONTENT KEY (cheap payloads): small byte streams / scalars / lists
+//      (overlay markers, clearance streams, gizmo fields, assemble lists,
+//      marker floats) are compared directly in synchronize(). A content key
+//      may only be used when a full compare is cheaper than the re-mirror it
+//      guards.
+//   3. DOCUMENTED LATCH (thread handoff only): when the GUI thread produces
+//      an object asynchronously and synchronize() must pull exactly the
+//      finished artifact (plate-icon atlas image + quad bytes, bed-texture
+//      path, camera-dirty pulse, thumbnail request), the item side exposes a
+//      boolean handoff latch that synchronize() consumes (resets) on pull.
+//      A latch documents WHO hands WHAT to WHOM — it is not a generic dirty
+//      flag, and it must not gate GPU uploads by itself.
+//
+// WRITE MUST BE READ: every mirror write lands in the S2 upload-channel
+// registry below (markDirty). render() gates ALL uploads through one rule —
+// read the registry once, allocate one batch, dispatch each pending channel,
+// clear the bits that settled. There is no second gate list, no per-frame
+// unconditional batch, and no first-N-frames window: a swapchain rebuild
+// re-arms the registry through seedMaskForCanvas(). Payload writes go
+// through the setters, which mark the payload bits (DirtyBed..DirtyCamera);
+// renderer mirror writes mark their channel bits
+// (DirtySceneBuffers..DirtyCameraUniform) directly on the renderer's
+// m_prepareScene.
+// ═══════════════════════════════════════════════════════════════════════════
 
 class PrepareSceneData
 {
@@ -97,17 +137,111 @@ public:
     int vertexCount = 0;
   };
 
+  // ── S2 single dirty registry ─────────────────────────────────────────────
+  // One word, two flag families:
+  //  * payload bits (DirtyBed..DirtyCamera): WHAT scene data changed. Set by
+  //    the setters, consumed as upload granularity by the scene/camera
+  //    channels (uploadBedBuffers / uploadModelBuffer / uploadCameraUniform).
+  //  * renderer channel bits (DirtySceneBuffers..DirtyCameraUniform): WHICH
+  //    GPU upload channel is pending. Set by the renderer's synchronize()
+  //    mirror writes / initialize() seeding, consumed ONLY through
+  //    uploadChannelsForCanvas() by the single render() rule.
+  // DirtyCameraUniform is a derived bit (never stored): routing projects the
+  // camera feed payload onto it so both canvases share one camera channel.
   enum DirtyFlag : quint32
   {
     DirtyNone = 0,
+    // payload bits
     DirtyBed = 1u << 0,
     DirtyPlate = 1u << 1,
     DirtyMesh = 1u << 2,
     DirtyVisibility = 1u << 3,
     DirtyGpu = 1u << 4,
     DirtySelection = 1u << 5,
-    DirtyCamera = 1u << 6
+    DirtyCamera = 1u << 6,
+    // renderer channel bits (S2 registry)
+    DirtySceneBuffers = 1u << 8,        // bed/model/highlight/assembly composite
+    DirtyGizmoBuffer = 1u << 9,         // shared gizmo + selection-center + sidebar hints
+    DirtyCutPlane = 1u << 10,
+    DirtyWipeTower = 1u << 11,
+    DirtyPaintOverlay = 1u << 12,
+    DirtyBrushCursor = 1u << 13,
+    DirtyHollowMarker = 1u << 14,
+    DirtyAdvancedCutMarker = 1u << 15,
+    DirtyMeasureOverlay = 1u << 16,
+    DirtyFlattenHover = 1u << 17,
+    DirtySequentialClearance = 1u << 18,
+    DirtyPlateIconAtlas = 1u << 19,     // thread-handoff latch arms this
+    DirtyPlateIconQuads = 1u << 20,     // thread-handoff latch arms this
+    DirtyBedTexture = 1u << 21,
+    DirtyBedModel = 1u << 22,
+    DirtyBedTypeParts = 1u << 23,
+    DirtyPreviewSegment = 1u << 24,
+    DirtyGhostShell = 1u << 25,
+    DirtyToolMarker = 1u << 26,
+    DirtyPreviewCap = 1u << 27,         // Q3 seam arms this (was a boolean latch)
+    DirtyNavigator = 1u << 28,
+    DirtyCameraUniform = 1u << 29,      // derived from kCameraFeedMask by routing
   };
+
+  // Registry layout constants (pure data, locked by static_asserts below and
+  // exercised by PrepareSceneDataTests).
+  static constexpr quint32 kScenePayloadMask =
+      DirtyBed | DirtyPlate | DirtyMesh | DirtyVisibility | DirtyGpu
+      | DirtySelection | DirtyCamera;
+  // Payload bits whose change is reflected inside the camera UBO pack
+  // (mvp/gizmoCenter/view/printVolume — uploadCameraUniform's feed).
+  static constexpr quint32 kCameraFeedMask =
+      DirtyCamera | DirtyGpu | DirtySelection | DirtyBed;
+  // Payload bits whose change re-anchors the cut plane on the selected
+  // object (uploadCutPlaneBuffers' legacy feed).
+  static constexpr quint32 kCutPlaneFeedMask = DirtyMesh | DirtySelection | DirtyGpu;
+  // Payload bits whose change re-anchors the bed-texture quad on the bed rect.
+  static constexpr quint32 kBedTextureFeedMask = DirtyBed | DirtyGpu;
+  // Every stored channel bit (DirtyCameraUniform is derived, never stored).
+  static constexpr quint32 kRendererChannelMask =
+      DirtySceneBuffers | DirtyGizmoBuffer | DirtyCutPlane | DirtyWipeTower
+      | DirtyPaintOverlay | DirtyBrushCursor | DirtyHollowMarker
+      | DirtyAdvancedCutMarker | DirtyMeasureOverlay | DirtyFlattenHover
+      | DirtySequentialClearance | DirtyPlateIconAtlas | DirtyPlateIconQuads
+      | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts
+      | DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
+      | DirtyPreviewCap | DirtyNavigator;
+  // Channels routable per canvas family. Canvas values mirror
+  // RhiViewport::CanvasType (equality is locked by static_assert in
+  // RhiViewport.h — PrepareSceneData cannot include that header).
+  static constexpr int kCanvasView3D = 0;
+  static constexpr int kCanvasPreview = 1;
+  static constexpr int kCanvasAssembleView = 2;
+  static constexpr quint32 kSceneCanvasChannelMask =
+      DirtySceneBuffers | DirtyGizmoBuffer | DirtyCutPlane | DirtyWipeTower
+      | DirtyPaintOverlay | DirtyBrushCursor | DirtyHollowMarker
+      | DirtyAdvancedCutMarker | DirtyMeasureOverlay | DirtyFlattenHover
+      | DirtySequentialClearance | DirtyPlateIconAtlas | DirtyPlateIconQuads
+      | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts | DirtyNavigator;
+  static constexpr quint32 kPreviewCanvasChannelMask =
+      DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
+      | DirtyPreviewCap | DirtyNavigator;
+
+  static_assert((kRendererChannelMask & kScenePayloadMask) == 0,
+                "channel bits and payload bits must not collide");
+  static_assert((kSceneCanvasChannelMask & ~kRendererChannelMask) == 0,
+                "scene canvas mask must only name registry channels");
+  static_assert((kPreviewCanvasChannelMask & ~kRendererChannelMask) == 0,
+                "preview canvas mask must only name registry channels");
+
+  // ── S2 pure routing/seeding seams (unit-locked, GPU-free) ────────────────
+  // uploadChannelsForCanvas is THE render() gate: given the raw registry
+  // word, return the channel bits this canvas must upload this frame. A
+  // stored bit masked out for the canvas stays stored (harmless — a renderer
+  // instance never changes canvas); payload bits are PROJECTED onto their
+  // channel feeds (scene composite / camera / cut plane / bed-texture quad).
+  static quint32 uploadChannelsForCanvas(int canvasType, quint32 dirtyFlags);
+  // seedMaskForCanvas re-arms the registry after a swapchain rebuild: every
+  // channel the canvas can route plus the full payload (the D3D12-safe
+  // "first frame after initialize() re-uploads everything" guarantee of the
+  // retired m_frameCount<=3 force window, expressed as registry state).
+  static quint32 seedMaskForCanvas(int canvasType);
 
   PrepareSceneData();
   // PICK-BVH: movable, non-copyable. Moves are what keep scene builders
@@ -287,9 +421,16 @@ public:
   void setPrintableHeight(float height);
   void markCameraDirty();
 
+  // ── S2 registry access (single render() rule + renderer mirror writes) ──
+  // markDirty arms registry/payload bits (idempotent); clearDirtyFlags(mask)
+  // settles exactly the handled bits so a failed channel stays pending while
+  // its siblings' work is kept; takeDirtyFlags consumes the whole word (the
+  // all-channels-settled fast path).
+  void markDirty(quint32 flags);
   quint32 peekDirtyFlags() const;
   quint32 takeDirtyFlags();
   void clearDirtyFlags();
+  void clearDirtyFlags(quint32 mask);
 
   float bedWidth() const;
   float bedDepth() const;
@@ -360,7 +501,6 @@ private:
   static bool nearlyEqual(float left, float right);
   static bool sameObjectIndices(const QList<int> &left, const QList<int> &right);
 
-  void markDirty(quint32 flags);
   void rebuildBedGeometry();
   void rebuildPlateGeometry(int plateRow, int plateCol, float left, float top, bool selected);
   void clearModelGeometry();

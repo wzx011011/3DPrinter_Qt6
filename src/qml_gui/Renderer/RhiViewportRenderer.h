@@ -52,6 +52,12 @@ private:
   void releaseResources();
   void releaseRenderPassDependentResources();
   void resetPreviewGpuState(bool keepCpuStaging);
+  // S2 single rule: the ONLY consumer of the PrepareSceneData channel
+  // registry. Given the routed channel bits, upload each pending channel
+  // into one batch and return the bits whose upload settled (a failed
+  // channel keeps its bit and retries next frame).
+  quint32 uploadPendingChannels(QRhiResourceUpdateBatch *updates,
+                                quint32 channels, quint32 dirtyFlags);
   bool ensurePipelines();
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                       QRhiGraphicsPipeline::Topology topology,
@@ -108,7 +114,10 @@ private:
   // v5.15 (BEDTEX/MODELLIT): bed texture upload (image + quad) and the
   // per-face model normal upload for the lit pipeline.
   bool ensureBedTexturePipeline();
-  void uploadBedTexture(QRhiResourceUpdateBatch *updates);
+  // S2: channel uploads return true when the channel settled (uploaded, or
+  // nothing left to do) so the dispatcher can clear its registry bit; false
+  // keeps the bit pending for the next frame.
+  bool uploadBedTexture(QRhiResourceUpdateBatch *updates);
   void renderBedTexture(QRhiCommandBuffer *cb);
   // ── PLATEICONS-GL (2026-10-10): bed-surface plate icon quads ─────────────
   // Upstream PartPlate::render_icons (PartPlate.cpp:1128-1230) draws the
@@ -116,7 +125,9 @@ private:
   // quads (depth test on / write off, alpha blend). Reuses the bed-texture
   // vertex format and shaders with a dedicated atlas texture.
   bool ensurePlateIconPipeline();
-  void uploadPlateIcons(QRhiResourceUpdateBatch *updates);
+  // Returns the subset of DirtyPlateIconAtlas|DirtyPlateIconQuads that
+  // settled (the two halves pend independently).
+  quint32 uploadPlateIcons(QRhiResourceUpdateBatch *updates);
   void renderPlateIcons(QRhiCommandBuffer *cb);
   bool ensureModelLitPipeline();
   // P15.2 (COLOR): blended clone of the lit pipeline for the translucent
@@ -124,7 +135,7 @@ private:
   bool ensureModelLitBlendPipeline();
   void renderModelTranslucentPass(QRhiCommandBuffer *cb);
   // v5.16 (BEDMODEL/BEDTYPE-TEX)
-  void uploadBedModelMesh(QRhiResourceUpdateBatch *updates);
+  bool uploadBedModelMesh(QRhiResourceUpdateBatch *updates);
   void renderBedModel(QRhiCommandBuffer *cb);
   // P15.7 (AXES): origin arrows through the lit pipeline.
   void renderAxes(QRhiCommandBuffer *cb);
@@ -132,7 +143,7 @@ private:
   // depth-unconditional (upstream glDepthFunc(GL_ALWAYS), 3DScene.cpp:1018).
   void renderSinkingContours(QRhiCommandBuffer *cb);
   void releaseBedTypeParts();
-  void prepareBedTypeParts(QRhiResourceUpdateBatch *updates);
+  bool prepareBedTypeParts(QRhiResourceUpdateBatch *updates);
   void renderBedTypeParts(QRhiCommandBuffer *cb);
   void renderSelectionCenter(QRhiCommandBuffer *cb);         // P15.11
   void renderSidebarHints(QRhiCommandBuffer *cb);
@@ -222,6 +233,12 @@ private:
   // identifies the staged image, m_plateIconAtlasUploadedKey the pixels
   // actually resident in m_plateIconTexture -- equal keys + valid texture
   // skip the ~16.7MB uploadTexture.
+  // S2: the two pending flags below are the RENDER-SIDE HALF of the
+  // documented thread-handoff latch (RhiViewport::m_plateIconAtlasSyncDirty /
+  // m_plateIconQuadSyncDirty): they say which half of the handoff is still in
+  // flight. They are not the gate -- the upload gate is the
+  // DirtyPlateIconAtlas / DirtyPlateIconQuads registry bit, armed from these
+  // flags at the end of the synchronize pull (write must be read).
   QImage m_plateIconAtlasPending;
   quint64 m_plateIconAtlasCacheKey = 0;
   quint64 m_plateIconAtlasUploadedKey = 0;
@@ -296,8 +313,10 @@ private:
   QImage m_bedTextureImage;
   QString m_bedTexturePath;
   QString m_pendingBedTexturePath;
+  // S2: the path-change content key of the documented bed-texture thread
+  // handoff (RhiViewport::m_bedTextureDirty latch). The upload gate is the
+  // DirtyBedTexture registry bit.
   bool m_bedTextureDirty = false;
-  bool m_bedTextureQuadDirty = true;
   quint32 m_bedTextureVertexBytes = 0;
   quint32 m_bedTextureVertexCount = 0;
   // v5.15 (MODELLIT): two-light gouraud pipeline for model meshes (upstream
@@ -338,6 +357,17 @@ private:
   quint32 m_bedModelVertexCount = 0;
   QByteArray m_bedModelMeshBytes;
   bool m_bedModelUploaded = false;
+  // S2: the current-plate grid offsets the bed-model vertices were last
+  // baked with (per-instance change keys — the former function-level statics
+  // s_lastBedModelOffX/Z were shared by every renderer instance, violating
+  // the per-instance mirror contract).
+  float m_lastBedModelGridOffsetX = 1e9f;
+  float m_lastBedModelGridOffsetZ = 1e9f;
+  // S2: generation mirrors of the heavy item payloads (protocol 1). The item
+  // bumps them in its setters; synchronize() compares the counters instead
+  // of memcmp-ing multi-megabyte byte arrays on the render thread.
+  qint64 m_bedModelGeneration = 0;
+  qint64 m_previewDataGeneration = 0;
   // v5.16 (BEDTYPE-TEX): BBL bed-type texture parts (upstream PartPlateList
   // bed_texture_info). One texture+pipeline per part (2-3 visible).
   struct BedTypePartGpu {
@@ -441,19 +471,15 @@ private:
   // slic3r frame). Premultiplied into the sidebar hint vertices at upload.
   QVector3D m_hintLocalRotationDegrees{0.f, 0.f, 0.f};
   QRhiRenderPassDescriptor *m_renderPassDescriptor = nullptr;
-  bool m_sceneBuffersUploaded = false;
+  // S2: m_sceneBuffersUploaded and the m_frameCount force window are retired
+  // — the DirtySceneBuffers registry channel plus initialize()'s
+  // seedMaskForCanvas() seeding carry both roles (first-upload guarantee and
+  // swapchain-rebuild re-upload). The remaining *Uploaded flags are internal
+  // residency/content guards read inside their upload functions.
   bool m_modelVertexBufferUploaded = false;
   bool m_highlightVertexBufferUploaded = false;
   bool m_cameraUniformBufferUploaded = false;
   bool m_pipelineFailed = false;
-  // Phase 210 (MIT-03 / Seam C): frame counter for the first-N-frames force
-  // window. After a swapchain rebuild (initialize()) the counter resets to 0
-  // and the first 3 frames unconditionally upload the camera UBO (and all
-  // scene buffers, via the *Uploaded flag resets) so the first SRB bind never
-  // sees uninitialized GPU memory under D3D12. Incremented at the start of
-  // render(); the value seen during upload logic is 1-based on frame 1, so
-  // the force window is m_frameCount <= 3 (frames 1..3).
-  int m_frameCount = 0;
   quint32 m_bedFillBufferBytes = 0;
   quint32 m_bedLineBufferBytes = 0;
   quint32 m_bedBottomLineBufferBytes = 0;
@@ -488,15 +514,16 @@ private:
   bool m_gizmoDragging = false;
   quint32 m_navigatorFillVertexCount = 0;
   // v5.16 (NAVIGATOR): cube state mirrored from RhiViewport in synchronize().
+  // S2: the DirtyNavigator registry bit replaces the former per-frame
+  // rebuild cache (m_navigatorLast* members + m_navigatorBufferUploaded
+  // flag) — synchronize() compares the mirrored inputs and arms the bit; a
+  // dispatched upload rebuilds unconditionally. The render-target pixel size
+  // key is implied: a resize changes the aspect-corrected camera MVP, which
+  // re-arms the camera feed and the navigator with it.
   bool m_navigatorEnabled = true;
-  bool m_navigatorBufferUploaded = false;
   NavigatorCube::RectF m_navigatorRect;
   int m_navigatorHoverBox = -1;
   QVector3D m_navigatorHoverFaceNormal;
-  QMatrix4x4 m_navigatorLastView;   // geometry rebuild cache key
-  QMatrix4x4 m_navigatorLastMvp;
-  int m_navigatorLastHoverBox = -2;
-  QSize m_navigatorLastPixelSize;
   quint32 m_bedLimitVertexCount = 0;
   quint32 m_modelVertexCount = 0;
   quint32 m_highlightVertexCount = 0;
@@ -577,6 +604,11 @@ private:
   float m_cutRotationZ = 0.f;
   QVector3D m_gizmoCenter;      // midpoint of ALL selected objects' union AABB; origin if no selection
   QVector3D m_cameraEye;        // Phase 68: camera position for gizmoScale computation
+  // S2: m_cutPlaneDirty / m_wipeTowerDirty are the synchronize-local change
+  // keys: set by the input compares, read at the end of synchronize() where
+  // they arm the DirtyCutPlane / DirtyWipeTower registry channels, and reset
+  // by their upload functions on success (so a failed upload retries with
+  // the key still armed). They no longer decide render()-side gating.
   bool m_cutPlaneDirty = true;
   bool m_showWipeTower = false;
   float m_wipeTowerWidth = 10.f;
@@ -621,7 +653,6 @@ private:
   // P15.11: true while the streams above hold the drag-time preview; selects
   // the upstream NO_FILL gray color and the during-draw visibility gate.
   bool m_sequentialClearancePreviewMode = false;
-  bool m_sequentialClearanceBuffersUploaded = false;
   QVariantList m_extrudersColors;
   float m_brushRadius = 2.0f;
   int m_brushCursorType = 1;     // 1=Sphere
@@ -665,23 +696,22 @@ private:
   // move position while dragging. Rebuilt when moveEnd changes.
   // Q3 (CAP-GATE) protocol, unit-locked via
   // PrepareSceneData::previewCapUploadArmed in PrepareSceneDataTests:
-  // synchronize() arms m_previewCapUploadPending ONLY through that pure seam
-  // (a real moveEnd change, or a stale/missing GPU-side cap such as renderer
-  // boot or a resetPreviewGpuState after a payload swap); m_previewCapMoveEnd
-  // records the moveEnd the last rebuildPreviewCap() ATTEMPT reflects
-  // (-1 = nothing resident, set by resetPreviewGpuState); render() settles
-  // the latch once the attempt's outcome (uploaded cap, or "no cap
-  // buildable" with empty vertices) is final, and keeps it armed only to
-  // retry a failed buffer upload; an unbuildable outcome also zeroes
-  // m_previewCapVertexCount so the stale previous cap stops drawing.
-  // Never write either flag unconditionally —
-  // that is exactly the bug this protocol replaced.
+  // synchronize() arms the DirtyPreviewCap registry channel ONLY through
+  // that pure seam (a real moveEnd change, or a stale/missing GPU-side cap
+  // such as renderer boot or a resetPreviewGpuState after a payload swap);
+  // m_previewCapMoveEnd records the moveEnd the last rebuildPreviewCap()
+  // ATTEMPT reflects (-1 = nothing resident, set by resetPreviewGpuState);
+  // the S2 dispatcher settles the channel once the attempt's outcome
+  // (uploaded cap, or "no cap buildable" with empty vertices) is final and
+  // keeps it armed only to retry a failed buffer upload; an unbuildable
+  // outcome also zeroes m_previewCapVertexCount so the stale previous cap
+  // stops drawing. Never arm the channel unconditionally — that is exactly
+  // the bug this protocol replaced.
   QVector<Vertex> m_previewCapVertices;
   int m_previewCapMoveEnd = -1;
   std::unique_ptr<QRhiBuffer> m_previewCapBuffer;
   quint32 m_previewCapBufferBytes = 0;
   quint32 m_previewCapVertexCount = 0;
-  bool m_previewCapUploadPending = false;
   std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;

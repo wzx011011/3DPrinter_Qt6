@@ -156,7 +156,6 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   // and bind stale or invalid memory. Re-uploading once per rebuild is cheap
   // and backend-agnostic (D3D11/Vulkan/Metal tolerate it as a no-op cost).
   // This mirrors what releaseResources() does for the full-destroy path.
-  m_sceneBuffersUploaded = false;
   m_modelVertexBufferUploaded = false;
   m_highlightVertexBufferUploaded = false;
   m_cameraUniformBufferUploaded = false;
@@ -181,9 +180,14 @@ void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
   m_bedBoldFillBufferUploaded = false;
   m_sinkingContourBufferUploaded = false;
   m_bedAxesBuffersUploaded = false;
-  // Reset the first-N-frames force window so the new swapchain gets a
-  // guaranteed camera UBO upload on its first render() (see render()).
-  m_frameCount = 0;
+  // S2: the retired m_frameCount<=3 force window, expressed as registry
+  // state. Seeding re-arms every channel this canvas routes (plus the full
+  // payload, which re-runs the scene sub-buffer granularity once), so the
+  // first render() after the rebuild uploads everything through the single
+  // rule — per-channel first-frame visibility by construction. synchronize()
+  // runs before initialize() in the QQuickRhiItem frame (sync phase precedes
+  // the render phase), so m_canvasType is already mirrored here.
+  m_prepareScene.markDirty(PrepareSceneData::seedMaskForCanvas(m_canvasType));
   rhiTrace("seamC-initialize-reset");
 }
 
@@ -368,6 +372,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     batchPrintableFlags,
                                     extruderColors);
   }
+  // S2 (PREV-01): the ghost-shell buffer rebuilds with the model generation
+  // (protocol 1) — arm its channel whenever the resident generation lags the
+  // mirrored one (boot, object edits, extruder re-tint). The upload itself
+  // re-checks the generation, so a no-op attempt settles the channel.
+  if (m_modelGeneration != m_ghostShellModelGeneration)
+    m_prepareScene.markDirty(PrepareSceneData::DirtyGhostShell);
   const int prevSelectedSourceObjectIndex = m_prepareScene.selectedSourceObjectIndex();
   m_prepareScene.setSelectedSourceObjectIndex(viewport->m_selectedSourceObjectIndex);
   // P15.11 (MULTICENTER): mirror the full multi-selection so the renderer's
@@ -398,8 +408,10 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_cameraView = viewport->m_camera.viewMatrix();
   // v5.16 (NAVIGATOR): mirror the bottom-left navigator cube state. The rect
   // scales from item-logical to render-target pixels so the cube keeps its
-  // 128 logical px footprint at any device pixel ratio.
-  m_navigatorEnabled = viewport->m_navigatorEnabled;
+  // 128 logical px footprint at any device pixel ratio. S2: the mirrored
+  // inputs are the channel's content key — any change arms DirtyNavigator
+  // (the former per-frame rebuild cache moved here; a resize re-arms via the
+  // aspect-corrected camera MVP below).
   {
     const NavigatorCube::RectF itemRect = viewport->navigatorRect();
     const float itemW = float(std::max(1.0, viewport->width()));
@@ -407,37 +419,59 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     const QSize px = renderTarget() != nullptr ? renderTarget()->pixelSize() : QSize(int(itemW), int(itemH));
     const float sx = float(px.width()) / itemW;
     const float sy = float(px.height()) / itemH;
-    m_navigatorRect.x = itemRect.x * sx;
-    m_navigatorRect.y = itemRect.y * sy;
-    m_navigatorRect.w = itemRect.w * sx;
-    m_navigatorRect.h = itemRect.h * sy;
+    NavigatorCube::RectF nextRect;
+    nextRect.x = itemRect.x * sx;
+    nextRect.y = itemRect.y * sy;
+    nextRect.w = itemRect.w * sx;
+    nextRect.h = itemRect.h * sy;
+    const bool nextEnabled = viewport->m_navigatorEnabled;
+    const int nextHoverBox = viewport->m_navigatorHoverBox;
+    const QVector3D nextHoverNormal = viewport->m_navigatorHoverFaceNormal;
+    const bool rectChanged =
+        nextRect.x != m_navigatorRect.x || nextRect.y != m_navigatorRect.y
+        || nextRect.w != m_navigatorRect.w || nextRect.h != m_navigatorRect.h;
+    if (nextEnabled != m_navigatorEnabled || rectChanged
+        || nextHoverBox != m_navigatorHoverBox
+        || nextHoverNormal != m_navigatorHoverFaceNormal)
+      m_prepareScene.markDirty(PrepareSceneData::DirtyNavigator);
+    m_navigatorEnabled = nextEnabled;
+    m_navigatorRect = nextRect;
+    m_navigatorHoverBox = nextHoverBox;
+    m_navigatorHoverFaceNormal = nextHoverNormal;
   }
-  m_navigatorHoverBox = viewport->m_navigatorHoverBox;
-  m_navigatorHoverFaceNormal = viewport->m_navigatorHoverFaceNormal;
-  // v5.15 (BEDTEX): pick up a pending bed texture path change.
+  // v5.15 (BEDTEX): pick up a pending bed texture path change. S2: the
+  // boolean is the documented GUI→render thread handoff; arming the
+  // DirtyBedTexture channel here is what makes a texture-only change reach
+  // the GPU on the next frame instead of stranding until an unrelated scene
+  // dirty flag opens the old scene gate.
   if (viewport->m_bedTextureDirty) {
     viewport->m_bedTextureDirty = false;
     const QString path = viewport->m_bedTextureUrl.toLocalFile();
     if (path != m_pendingBedTexturePath) {
       m_pendingBedTexturePath = path;
       m_bedTextureDirty = true;
+      m_prepareScene.markDirty(PrepareSceneData::DirtyBedTexture);
     }
   }
   // PLATEICONS-GL (Q2): pull the icon atlas + ground quad batch through two
   // independent latches (explicit dirty flags -- byte-wise payload
   // comparisons ran on every synchronize). The 2048x2048 atlas image only
   // crosses threads when it was actually re-rasterized; a quad-only hover
-  // swap stages just the vertex batch.
+  // swap stages just the vertex batch. S2: each pulled half arms its own
+  // registry channel, so a hover reaches the GPU the frame it happened
+  // regardless of scene dirt.
   if (viewport->m_plateIconAtlasSyncDirty) {
     viewport->m_plateIconAtlasSyncDirty = false;
     m_plateIconAtlasPending = viewport->m_plateIconAtlas;
     m_plateIconAtlasCacheKey = viewport->m_plateIconAtlas.cacheKey();
     m_plateIconAtlasUploadPending = true;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyPlateIconAtlas);
   }
   if (viewport->m_plateIconQuadSyncDirty) {
     viewport->m_plateIconQuadSyncDirty = false;
     m_plateIconQuadBytesSync = viewport->m_plateIconQuadBytes;
     m_plateIconQuadUploadPending = true;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyPlateIconQuads);
   }
 
   // v5.16 (BEDMODEL/BEDTYPE-TEX): bed_model stream + bed-type gates. The
@@ -458,15 +492,22 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_bedTypePlateOffsetX = offsetXF;
     m_bedTypePlateOffsetZ = offsetZF;
 
-    static float s_lastBedModelOffX = 1e9f;
-    static float s_lastBedModelOffZ = 1e9f;
-    if (viewport->m_bedModelMeshData != m_bedModelMeshBytes
-        || m_bedTypePlateOffsetX != s_lastBedModelOffX
-        || m_bedTypePlateOffsetZ != s_lastBedModelOffZ) {
+    // S2: per-instance change keys (the former function-level statics
+    // s_lastBedModelOffX/Z were shared across the three page renderers and
+    // corrupted each other's baselines) + the item-side bed-model generation
+    // (protocol 1) instead of a multi-KB byte compare per synchronize. Any
+    // key change re-bakes the mirror and arms DirtyBedModel, so an STL-only
+    // or plate-move-only change reaches the GPU without waiting for an
+    // unrelated scene dirty.
+    if (viewport->m_bedModelGeneration != m_bedModelGeneration
+        || m_bedTypePlateOffsetX != m_lastBedModelGridOffsetX
+        || m_bedTypePlateOffsetZ != m_lastBedModelGridOffsetZ) {
+      m_bedModelGeneration = viewport->m_bedModelGeneration;
       m_bedModelMeshBytes = viewport->m_bedModelMeshData;
+      m_lastBedModelGridOffsetX = m_bedTypePlateOffsetX;
+      m_lastBedModelGridOffsetZ = m_bedTypePlateOffsetZ;
       m_bedModelUploaded = false;
-      s_lastBedModelOffX = m_bedTypePlateOffsetX;
-      s_lastBedModelOffZ = m_bedTypePlateOffsetZ;
+      m_prepareScene.markDirty(PrepareSceneData::DirtyBedModel);
     }
     const bool typeActive = viewport->m_bedTypeTexturesActive;
     if (typeActive != m_bedTypeActive
@@ -476,11 +517,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       m_bedCaliActive = viewport->m_bedCaliLinesActive;
       m_bedTypeImagesDir = viewport->m_bedTypeImagesDir;
       releaseBedTypeParts();
+      m_prepareScene.markDirty(PrepareSceneData::DirtyBedTypeParts);
     }
     if (viewport->m_currentPlateBedType != m_bedTypeIndex) {
       m_bedTypeIndex = viewport->m_currentPlateBedType;
       // Different bed type -> different part set; drop the stale quads.
       releaseBedTypeParts();
+      m_prepareScene.markDirty(PrepareSceneData::DirtyBedTypeParts);
     }
   }
   if (viewport->m_cameraDirty) {
@@ -504,7 +547,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_clearColor = QColor(54, 54, 56);
 
   // ── Phase 26: Preview segment pipeline — store preview data + control props ──
-  if (m_previewData != viewport->m_previewData) {
+  // S2 (protocol 1): the payload is detected through the item-side
+  // generation (m_previewDataGeneration, bumped by setPreviewData on real
+  // content change) instead of a multi-megabyte QByteArray compare on the
+  // render thread every synchronize.
+  if (m_previewDataGeneration != viewport->m_previewDataGeneration) {
+    m_previewDataGeneration = viewport->m_previewDataGeneration;
     m_previewData = viewport->m_previewData;
     resetPreviewGpuState(false);
     parsePreviewSegments();
@@ -515,8 +563,8 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   }
   m_layerMin = viewport->m_layerMin;
   m_layerMax = viewport->m_layerMax;
-  // Q3 (CAP-GATE): arm the sequential-range cap upload latch through the
-  // pure seam PrepareSceneData::previewCapUploadArmed -- only a REAL moveEnd
+  // Q3 (CAP-GATE): arm the sequential-range cap channel through the pure
+  // seam PrepareSceneData::previewCapUploadArmed -- only a REAL moveEnd
   // change or a known-stale GPU-side cap (renderer boot, or the
   // resetPreviewGpuState above that a payload swap just ran) arms it. The
   // former unconditional arm neutered the change detection: every playback
@@ -524,7 +572,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // re-uploaded the cap buffer even with the slider parked.
   if (PrepareSceneData::previewCapUploadArmed(viewport->m_moveEnd, m_moveEnd,
                                               m_previewCapMoveEnd))
-    m_previewCapUploadPending = true;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyPreviewCap);
   m_moveEnd = viewport->m_moveEnd;
   m_showTravelMoves = viewport->m_showTravelMoves;
   m_gcodeViewMode = viewport->m_gcodeViewMode;
@@ -533,18 +581,22 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // markerX/Y/Z + showMarker already existed as Q_PROPERTYs (bound to
   // previewVm.toolX/Y/Z in PreviewPage.qml, updated on every playback tick by
   // PreviewViewModel::updateToolPositionData) but were never consumed. A
-  // position/visibility change forces a marker buffer rebuild.
+  // position or visibility change arms the DirtyToolMarker channel (S2: the
+  // visibility compare also covers a parked marker whose showMarker flips —
+  // the old flag-only path missed that toggle until the next move).
+  const bool prevShowMarker = m_showMarker;
   m_markerX = viewport->m_markerX;
   m_markerY = viewport->m_markerY;
   m_markerZ = viewport->m_markerZ;
   m_showMarker = viewport->m_showMarker;
   if (m_markerX != m_lastMarkerX || m_markerY != m_lastMarkerY
-      || m_markerZ != m_lastMarkerZ)
+      || m_markerZ != m_lastMarkerZ || m_showMarker != prevShowMarker)
   {
     m_lastMarkerX = m_markerX;
     m_lastMarkerY = m_markerY;
     m_lastMarkerZ = m_markerZ;
     m_toolMarkerBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyToolMarker);
   }
 
   // ── Phase 67: Gizmo state pipeline ──
@@ -576,7 +628,10 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
           : QVector3D(0.f, 0.f, 0.f);
   if (m_sidebarField != prevSidebarField || m_uniformScale != prevUniformScale
       || m_hintLocalRotationDegrees != prevHintLocalRotation)
+  {
     m_gizmoVertexBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyGizmoBuffer);
+  }
   m_cutAxis = viewport->m_cutAxis;
   m_cutPosition = viewport->m_cutPosition;
   m_gizmoCenter = computeGizmoCenter();
@@ -586,8 +641,10 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // camera distance. Rebuild only when that scale changes.
   const float selectionCenterGizmoScale =
       std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.0f);
-  if (!qFuzzyCompare(selectionCenterGizmoScale, m_selectionCenterLastGizmoScale))
+  if (!qFuzzyCompare(selectionCenterGizmoScale, m_selectionCenterLastGizmoScale)) {
     m_gizmoVertexBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyGizmoBuffer);
+  }
   if (m_gizmoMode != prevGizmoMode || m_cutAxis != prevCutAxis ||
       !qFuzzyCompare(m_cutPosition, prevCutPosition) ||
       m_gizmoCenter != prevGizmoCenter)
@@ -680,9 +737,14 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
       prevHeightFill != m_sequentialHeightFill ||
       prevClearanceActive != m_sequentialClearanceActive ||
       prevClearancePreviewMode != m_sequentialClearancePreviewMode)
-    m_sequentialClearanceBuffersUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtySequentialClearance);
 
   const QByteArray prevPaintOverlay = m_paintOverlayData;
+  const float prevBrushRadius = m_brushRadius;
+  const int prevBrushCursorType = m_brushCursorType;
+  const float prevBrushScreenX = m_brushMouseScreenX;
+  const float prevBrushScreenY = m_brushMouseScreenY;
+  const int prevBrushButtonState = m_brushButtonState;
   m_paintOverlayData = viewport->m_paintOverlayData;
   m_extrudersColors = viewport->m_extrudersColors;
   m_brushRadius = viewport->m_brushRadius;
@@ -691,32 +753,50 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_brushMouseScreenX = viewport->m_brushMouseScreenX;
   m_brushMouseScreenY = viewport->m_brushMouseScreenY;
   m_brushButtonState = viewport->m_brushButtonState;
-  if (m_paintOverlayData != prevPaintOverlay)
+  if (m_paintOverlayData != prevPaintOverlay) {
     m_paintOverlayBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyPaintOverlay);
+  }
+  // S2 (PAINT-03): the brush cursor's content key is its mirrored input set
+  // (screen position / radius / cursor type / button state — the same keys
+  // uploadBrushCursorBuffer compares). A parked cursor stays untouched.
+  if (m_brushRadius != prevBrushRadius || m_brushCursorType != prevBrushCursorType
+      || !qFuzzyCompare(m_brushMouseScreenX, prevBrushScreenX)
+      || !qFuzzyCompare(m_brushMouseScreenY, prevBrushScreenY)
+      || m_brushButtonState != prevBrushButtonState)
+    m_prepareScene.markDirty(PrepareSceneData::DirtyBrushCursor);
 
   // Phase HOLLOW: drain-hole marker byte stream (same pipe as paint overlay).
   const QByteArray prevHollowMarker = m_hollowMarkerData;
   m_hollowMarkerData = viewport->m_hollowMarkerData;
-  if (m_hollowMarkerData != prevHollowMarker)
+  if (m_hollowMarkerData != prevHollowMarker) {
     m_hollowMarkerBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyHollowMarker);
+  }
 
   // v5.13: connector-pin marker byte stream (same pipe pattern).
   const QByteArray prevAdvCutMarker = m_advancedCutMarkerData;
   m_advancedCutMarkerData = viewport->m_advancedCutMarkerData;
-  if (m_advancedCutMarkerData != prevAdvCutMarker)
+  if (m_advancedCutMarkerData != prevAdvCutMarker) {
     m_advancedCutMarkerBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyAdvancedCutMarker);
+  }
 
   // Phase 240 (GIZ-05): measure overlay line stream (same pipe pattern).
   const QByteArray prevMeasureOverlay = m_measureOverlayData;
   m_measureOverlayData = viewport->m_measureOverlayData;
-  if (m_measureOverlayData != prevMeasureOverlay)
+  if (m_measureOverlayData != prevMeasureOverlay) {
     m_measureOverlayBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyMeasureOverlay);
+  }
 
   // Phase 240 (GIZ-03): flatten hover facet stream (same pipe pattern).
   const QByteArray prevFlattenHover = m_flattenHoverData;
   m_flattenHoverData = viewport->m_flattenHoverData;
-  if (m_flattenHoverData != prevFlattenHover)
+  if (m_flattenHoverData != prevFlattenHover) {
     m_flattenHoverBufferUploaded = false;
+    m_prepareScene.markDirty(PrepareSceneData::DirtyFlattenHover);
+  }
 
   // Phase 240 (GIZ-04): cut-plane tilt + gizmo-mode rotation state. A change
   // to either rotation or the plane grab state marks the cut plane dirty so
@@ -767,6 +847,189 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // Cache the item pointer only for queued GUI-thread delivery. It is never
   // dereferenced for render-side state.
   m_viewportItem = viewport;
+
+  // ── S2: end-of-synchronize change-key → registry conversion ─────────────
+  // The synchronize-local change keys (m_cutPlaneDirty / m_wipeTowerDirty,
+  // set by the input compares above) arm their registry channels. The flags
+  // themselves are consumed by the upload functions' internal gates (which
+  // rebuild from the changed inputs) and reset there on success — so a
+  // failed upload retries with the flag still armed, and render()'s single
+  // rule reads only the registry.
+  if (m_cutPlaneDirty)
+    m_prepareScene.markDirty(PrepareSceneData::DirtyCutPlane);
+  if (m_wipeTowerDirty)
+    m_prepareScene.markDirty(PrepareSceneData::DirtyWipeTower);
+}
+
+// ── S2: the single upload-channel dispatcher ────────────────────────────────
+// The ONLY consumer of the PrepareSceneData channel registry (defined before
+// render() so the flow reads route → dispatch → settle top-down). Every
+// branch is one registry bit; a channel that uploaded — or has nothing left
+// to do — contributes its bit to the return value, while a failed channel
+// stays silent so its bit keeps it pending for the next frame. The former
+// four gating regimes (scene-dirty branch, the *Uploaded else-if list, the
+// unconditional CanvasPreview batch, the m_frameCount force window) all live
+// as registry bits now.
+quint32 RhiViewportRenderer::uploadPendingChannels(QRhiResourceUpdateBatch *updates,
+                                                   quint32 channels,
+                                                   quint32 dirtyFlags)
+{
+  quint32 handled = 0;
+  if (m_canvasType != RhiViewport::CanvasPreview) {
+    // Scene composite: bed/model/highlight/assembly (the camera UBO moved to
+    // its own channel below). Its success is what lets the caller consume
+    // the payload bits.
+    if (channels & PrepareSceneData::DirtySceneBuffers) {
+      if (!uploadSceneBuffers(updates, dirtyFlags)) {
+        // Scheduling failed: the scene channel stays pending and the payload
+        // stays untouched; the whole word retries on the next frame.
+      } else {
+        handled |= PrepareSceneData::DirtySceneBuffers;
+      }
+    }
+    // Phase 68: the shared gizmo buffer (move/rotate/scale + selection
+    // center + sidebar hints). The *Uploaded flag is the content guard
+    // (written by synchronize on input changes), the bit is the call key.
+    if ((channels & PrepareSceneData::DirtyGizmoBuffer)
+        && !m_gizmoVertexBufferUploaded
+        && uploadGizmoBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyGizmoBuffer;
+    }
+    if ((channels & PrepareSceneData::DirtyCutPlane)
+        && uploadCutPlaneBuffers(updates, dirtyFlags)) {
+      handled |= PrepareSceneData::DirtyCutPlane;
+    }
+    if ((channels & PrepareSceneData::DirtyWipeTower)
+        && uploadWipeTowerBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyWipeTower;
+    }
+    if ((channels & PrepareSceneData::DirtyPaintOverlay)
+        && uploadPaintOverlayBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyPaintOverlay;
+    }
+    if ((channels & PrepareSceneData::DirtyBrushCursor)
+        && uploadBrushCursorBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyBrushCursor;
+    }
+    if ((channels & PrepareSceneData::DirtyHollowMarker)
+        && uploadHollowMarkerBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyHollowMarker;
+    }
+    if ((channels & PrepareSceneData::DirtyAdvancedCutMarker)
+        && uploadAdvancedCutMarkerBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyAdvancedCutMarker;
+    }
+    if ((channels & PrepareSceneData::DirtyMeasureOverlay)
+        && uploadMeasureOverlayBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyMeasureOverlay;
+    }
+    if ((channels & PrepareSceneData::DirtyFlattenHover)
+        && uploadFlattenHoverBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyFlattenHover;
+    }
+    if ((channels & PrepareSceneData::DirtySequentialClearance)
+        && uploadSequentialClearanceBuffers(updates)) {
+      handled |= PrepareSceneData::DirtySequentialClearance;
+    }
+    // PLATEICONS-GL (Q2): the two icon halves pend through the documented
+    // thread-handoff latches and settle independently — a hover-only change
+    // reaches the GPU on the frame it happened, scene dirt or not.
+    if (channels & (PrepareSceneData::DirtyPlateIconAtlas
+                    | PrepareSceneData::DirtyPlateIconQuads))
+      handled |= uploadPlateIcons(updates);
+    if ((channels & PrepareSceneData::DirtyBedTexture)
+        && uploadBedTexture(updates)) {
+      handled |= PrepareSceneData::DirtyBedTexture;
+    }
+    if ((channels & PrepareSceneData::DirtyBedModel)
+        && uploadBedModelMesh(updates)) {
+      handled |= PrepareSceneData::DirtyBedModel;
+    }
+    if (channels & PrepareSceneData::DirtyBedTypeParts) {
+      // Inactive bed-type parts have nothing to do: settle. Active parts
+      // lazily create their missing GPU bundles (an unloadable SVG stays
+      // absent until the next bed-type input change, as before).
+      if (!m_bedTypeActive || prepareBedTypeParts(updates))
+        handled |= PrepareSceneData::DirtyBedTypeParts;
+    }
+  } else {
+    // Preview canvas: segment staging settles when already resident or when
+    // nothing was parsed yet (a payload swap re-arms through
+    // resetPreviewGpuState).
+    if (channels & PrepareSceneData::DirtyPreviewSegment) {
+      if (m_previewSegmentBufferUploaded || m_previewVertices.isEmpty()) {
+        handled |= PrepareSceneData::DirtyPreviewSegment;
+      } else if (uploadPreviewSegmentBuffer(updates)) {
+        m_previewSegmentBufferUploaded = true;
+        handled |= PrepareSceneData::DirtyPreviewSegment;
+      }
+    }
+    // Phase 238 (PREV-01): ghost shells rebuild on the model generation; the
+    // upload re-checks the generation, so a no-op attempt settles.
+    if ((channels & PrepareSceneData::DirtyGhostShell)
+        && uploadGhostShellBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyGhostShell;
+    }
+    // Phase 238 (PREV-02): tool marker (rebuilds on position/visibility
+    // change; hidden markers settle with a zero vertex count).
+    if ((channels & PrepareSceneData::DirtyToolMarker)
+        && uploadToolMarkerBuffer(updates)) {
+      handled |= PrepareSceneData::DirtyToolMarker;
+    }
+  }
+
+  // P17.7/Q3: sequential-range cap (preview only in practice, canvas-agnostic
+  // by routing). moveEnd <= 0 = full view: nothing to draw, settle the
+  // channel — the arming seam will not re-arm until moveEnd really moves.
+  if (channels & PrepareSceneData::DirtyPreviewCap) {
+    if (m_moveEnd <= 0) {
+      m_previewCapVertexCount = 0;
+      handled |= PrepareSceneData::DirtyPreviewCap;
+    } else {
+      rebuildPreviewCap();
+      if (m_previewCapVertices.isEmpty()) {
+        // Q3: "no buildable cap at this moveEnd" (at/over the span count or
+        // a degenerate move) is a final decision until moveEnd moves again
+        // — rebuildPreviewCap recorded the attempt in m_previewCapMoveEnd,
+        // so settle the channel instead of re-scanning the spans per frame.
+        // The draw state must settle with it: the GPU buffer still holds the
+        // PREVIOUS position's cap and the draw gate keys on
+        // m_previewCapVertexCount > 0, so without this a slider parked on a
+        // zero-length move would keep drawing the stale cap quad.
+        m_previewCapVertexCount = 0;
+        handled |= PrepareSceneData::DirtyPreviewCap;
+      } else if (ensureBuffer(m_previewCapBuffer,
+                          quint32(m_previewCapVertices.size()) * sizeof(Vertex),
+                          m_previewCapBufferBytes, QRhiBuffer::VertexBuffer)) {
+        updates->uploadStaticBuffer(m_previewCapBuffer.get(), 0,
+                                    quint32(m_previewCapVertices.size()) * sizeof(Vertex),
+                                    m_previewCapVertices.constData());
+        m_previewCapVertexCount = quint32(m_previewCapVertices.size());
+        handled |= PrepareSceneData::DirtyPreviewCap;
+      }
+      // An ensureBuffer failure (rhi not ready) deliberately keeps the bit
+      // armed: the next frame retries the upload.
+    }
+  }
+
+  // v5.16 (NAVIGATOR): overlay cube; disabled settles empty (count 0).
+  if ((channels & PrepareSceneData::DirtyNavigator)
+      && uploadNavigatorBuffer(updates)) {
+    handled |= PrepareSceneData::DirtyNavigator;
+  }
+
+  // Camera uniform — BUG-V31-1: must be recorded BEFORE beginPass, which
+  // holds for the shared pre-pass batch here. Feeds: camera/Gpu/Selection/Bed
+  // payload (mvp, gizmoCenter, view, print volume). On the first frame after
+  // initialize() the seeding guarantees the feed is armed, so the first SRB
+  // bind never reads uninitialized GPU memory (the retired m_frameCount
+  // force window's guarantee, as registry state).
+  if ((channels & PrepareSceneData::DirtyCameraUniform)
+      && uploadCameraUniform(updates, dirtyFlags)) {
+    handled |= PrepareSceneData::DirtyCameraUniform;
+  }
+
+  return handled;
 }
 
 void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
@@ -775,13 +1038,6 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     return;
   }
   rhiTrace("render-enter");
-
-  // Phase 210 (MIT-03 / Seam C): bump the frame counter first so the value
-  // seen by the upload logic below is 1-based. The first 3 frames after every
-  // initialize() fall in the force window (m_frameCount <= 3) and get an
-  // unconditional camera UBO upload so the first SRB bind never reads
-  // uninitialized GPU memory (a D3D12 0xC0000005 candidate).
-  ++m_frameCount;
 
   // Phase 95 (THUMBCAP-01/03): poll the async thumbnail readback at the START
   // of render(), before the on-screen pass. readBackTexture completes on a
@@ -794,128 +1050,32 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     deliverCompletedThumbnail();
   }
 
+  // ── S2: the single upload rule ───────────────────────────────────────────
+  // Route the registry word for this canvas, allocate ONE batch when anything
+  // is pending, dispatch the pending channels, and settle exactly the ones
+  // that succeeded (a failed channel keeps its bit; its siblings' uploads
+  // are kept too). Steady state: an empty word allocates no batch at all.
   QRhiResourceUpdateBatch *updates = nullptr;
-  quint32 dirtyFlags = m_prepareScene.peekDirtyFlags();
-  // Phase 90: CanvasAssembleView reuses the View3D mesh-render path (basic
-  // mesh render proves the canvas host). Guard widened to != CanvasPreview so
-  // both CanvasView3D and CanvasAssembleView upload scene/gizmo buffers;
-  // CanvasPreview keeps its own segment upload block below. Mirrors the
-  // upstream CanvasAssembleView render branch on selection change
-  // (Plater.cpp:7322). Explosion-driven separation rendering is Phase 91.
-  if (m_canvasType != RhiViewport::CanvasPreview) {
-    const bool sceneDirty = (dirtyFlags & (PrepareSceneData::DirtyBed
-                                           | PrepareSceneData::DirtyPlate
-                                           | PrepareSceneData::DirtyMesh
-                                           | PrepareSceneData::DirtySelection
-                                           | PrepareSceneData::DirtyCamera
-                                           | PrepareSceneData::DirtyGpu)) != 0;
-    if ((sceneDirty || !m_sceneBuffersUploaded) && !m_pipelineFailed) {
-      updates = rhi()->nextResourceUpdateBatch();
-      if (!uploadSceneBuffers(updates, dirtyFlags)) {
-        delete updates;
-        updates = nullptr;
-      } else {
-        // Phase 68: upload the gizmo vertex buffer in the same batch.
-        uploadGizmoBuffer(updates);
-        m_prepareScene.takeDirtyFlags();
-      }
+  const quint32 dirtyFlags = m_prepareScene.peekDirtyFlags();
+  const quint32 channels =
+      PrepareSceneData::uploadChannelsForCanvas(m_canvasType, dirtyFlags);
+  if (channels != PrepareSceneData::DirtyNone && !m_pipelineFailed) {
+    updates = rhi()->nextResourceUpdateBatch();
+    const quint32 handled = uploadPendingChannels(updates, channels, dirtyFlags);
+    quint32 settledPayload = 0;
+    if (handled & PrepareSceneData::DirtySceneBuffers)
+      settledPayload |= PrepareSceneData::kScenePayloadMask;
+    if ((handled & PrepareSceneData::DirtyCameraUniform) != 0
+        && m_canvasType == RhiViewport::CanvasPreview) {
+      // On the preview canvas the camera channel owns the feed bits (the
+      // scene composite never routes there to consume them).
+      settledPayload |= PrepareSceneData::kCameraFeedMask;
     }
-    else if (!m_pipelineFailed && (m_cutPlaneDirty || m_wipeTowerDirty ||
-                                   !m_cutPlaneFillBufferUploaded ||
-                                   !m_wipeTowerBufferUploaded ||
-                                   !m_paintOverlayBufferUploaded ||
-                                   !m_brushCursorBufferUploaded ||
-                                   !m_hollowMarkerBufferUploaded ||
-                                   !m_advancedCutMarkerBufferUploaded ||
-                                   !m_measureOverlayBufferUploaded ||
-                                   !m_flattenHoverBufferUploaded ||
-                                   !m_sequentialClearanceBuffersUploaded ||
-                                   !m_gizmoVertexBufferUploaded)) {
-      updates = rhi()->nextResourceUpdateBatch();
-      if (!uploadCutPlaneBuffers(updates, dirtyFlags) ||
-          !uploadWipeTowerBuffer(updates))
-      {
-        delete updates;
-        updates = nullptr;
-      }
-      else
-      {
-        // Phase 121 (PAINT-02/PAINT-03): paint overlay + brush cursor uploads.
-        // These reuse the same batch; failure of either is non-fatal (the
-        // draw is simply skipped). uploadPaintOverlayBuffer parses the byte stream;
-        // uploadBrushCursorBuffer rebuilds the sphere when inputs change.
-        uploadPaintOverlayBuffer(updates);
-        uploadBrushCursorBuffer(updates);
-        uploadHollowMarkerBuffer(updates);
-        uploadAdvancedCutMarkerBuffer(updates);
-        uploadSequentialClearanceBuffers(updates);
-        // Phase 240 (GIZ-05/GIZ-03): measure overlay + flatten hover streams.
-        uploadMeasureOverlayBuffer(updates);
-        uploadFlattenHoverBuffer(updates);
-      }
-    }
-
-    // PLATEICONS-GL (Q2): the icon atlas + ground quads ride their own
-    // pending latches (pulled in synchronize), NOT the scene-dirty gate
-    // above -- a hover-only change must reach the GPU on the frame it
-    // happened instead of waiting for an unrelated dirty flag.
-    if (!m_pipelineFailed
-        && (m_plateIconAtlasUploadPending || m_plateIconQuadUploadPending)) {
-      if (updates == nullptr)
-        updates = rhi()->nextResourceUpdateBatch();
-      uploadPlateIcons(updates);
-    }
-  }
-
-  // ── Phase 26/28: Preview segment buffer + camera uniform upload (before beginPass) ──
-  // BUG-V31-1 fix: camera uniform MUST be uploaded before beginPass, not after.
-  // beginPass-after-resourceUpdate is undefined in QRhi; D3D12 strictly enforces
-  // command buffer ordering and segfaults on this pattern (root cause of the
-  // D3D12 crash that was worked around with D3D11-first in RhiBackendSelector).
-  if (m_canvasType == RhiViewport::CanvasPreview) {
-    if (!updates)
-      updates = rhi()->nextResourceUpdateBatch();
-    // Segment buffer upload
-    if (!m_previewSegmentBufferUploaded && !m_previewVertices.isEmpty()) {
-      if (uploadPreviewSegmentBuffer(updates))
-        m_previewSegmentBufferUploaded = true;
-    }
-    // Phase 238 (PREV-01): ghost-shell mesh upload (upstream always loads
-    // shells for preview, GCodeViewer.cpp:3076; the buffer rebuilds when the
-    // model generation changes).
-    uploadGhostShellBuffer(updates);
-    // Phase 238 (PREV-02): tool-marker upload (rebuilds when the marker
-    // position or visibility changed in synchronize()).
-    uploadToolMarkerBuffer(updates);
-    // Camera uniform upload (merged into the same pre-beginPass batch).
-    // Phase 210 (MIT-03 / Seam C): in the first-N-frames force window OR the
-    // DirtyGpu/DirtySelection case, pass DirtyGpu in addition to DirtyCamera
-    // so the upload is guaranteed even if m_cameraUniformBufferUploaded was
-    // left stale by a swapchain rebuild (the flag is also reset in
-    // initialize(), but DirtyGpu is belt-and-suspenders for the very first
-    // bind).
-    const quint32 camFlags = (m_frameCount <= 3)
-        ? (PrepareSceneData::DirtyCamera | PrepareSceneData::DirtyGpu)
-        : PrepareSceneData::DirtyCamera;
-    uploadCameraUniform(updates, camFlags);
-  }
-  else if (!m_pipelineFailed && m_frameCount <= 3
-           && m_cameraUniformBuffer != nullptr) {
-    // Phase 210 (MIT-03 / Seam C): View3D/AssembleView first-N-frames force
-    // upload of the camera UBO. When the scene is not dirty and the buffers
-    // are already flagged uploaded (the common steady-state path), the
-    // scene-dirty guard above does not allocate an updates batch and the
-    // camera UBO is not re-issued. After a swapchain rebuild that leaves the
-    // GPU-side buffer contents invalid under D3D12, the first SRB bind would
-    // then read uninitialized memory. Force a camera upload here for the
-    // first 3 frames regardless of dirty state. uploadSceneBuffers (taken on
-    // the scene-dirty branch above) already uploads the camera, so this arm
-    // only fires on the steady-state path.
-    if (updates == nullptr)
-      updates = rhi()->nextResourceUpdateBatch();
-    uploadCameraUniform(updates,
-                        PrepareSceneData::DirtyCamera | PrepareSceneData::DirtyGpu);
-    rhiTrace("seamC-force-frame");
+    if (handled == channels)
+      m_prepareScene.takeDirtyFlags();
+    else
+      m_prepareScene.clearDirtyFlags(
+          (handled & PrepareSceneData::kRendererChannelMask) | settledPayload);
   }
 
   // Phase 208 (MIT-01 / Seam A): fold the deferred thumbnail readback batch
@@ -936,47 +1096,6 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     delete m_pendingReadbackUpdates;
     m_pendingReadbackUpdates = nullptr;
     rhiTrace("seamA-folded");
-  }
-
-  // P17.7: sequential-range cap — rebuild the geometry when moveEnd changed
-  // and upload through this frame's pre-pass batch (the draw itself happens
-  // inside the pass below).
-  if (m_moveEnd > 0 && (m_previewCapMoveEnd != m_moveEnd
-                        || m_previewCapUploadPending)) {
-    rebuildPreviewCap();
-    if (m_previewCapVertices.isEmpty()) {
-      // Q3: "no buildable cap at this moveEnd" (at/over the span count or a
-      // degenerate move) is a final decision until moveEnd moves again --
-      // rebuildPreviewCap recorded the attempt in m_previewCapMoveEnd, so
-      // settle the latch instead of re-scanning the spans every frame.
-      m_previewCapUploadPending = false;
-      // The draw state must settle with it: the GPU buffer still holds the
-      // PREVIOUS position's cap and the draw gate below keys on
-      // m_previewCapVertexCount > 0, so without this a slider parked on a
-      // zero-length move (retract/unretract ticks keep the 2-vertex line
-      // form, v0 == v1 -> len < 1e-6 in rebuildPreviewCap) would keep
-      // drawing the stale cap quad at the old toolpath position.
-      m_previewCapVertexCount = 0;
-    } else if (ensureBuffer(m_previewCapBuffer,
-                        quint32(m_previewCapVertices.size()) * sizeof(Vertex),
-                        m_previewCapBufferBytes, QRhiBuffer::VertexBuffer)) {
-      if (updates == nullptr)
-        updates = rhi()->nextResourceUpdateBatch();
-      updates->uploadStaticBuffer(m_previewCapBuffer.get(), 0,
-                                  quint32(m_previewCapVertices.size()) * sizeof(Vertex),
-                                  m_previewCapVertices.constData());
-      m_previewCapVertexCount = quint32(m_previewCapVertices.size());
-      m_previewCapUploadPending = false;
-    }
-    // An ensureBuffer failure (rhi not ready) deliberately keeps the latch
-    // armed: the next frame retries the upload.
-  }
-
-  // v5.16 (NAVIGATOR): overlay cube upload runs every frame (cached inside).
-  if (m_navigatorEnabled) {
-    if (updates == nullptr)
-      updates = rhi()->nextResourceUpdateBatch();
-    uploadNavigatorBuffer(updates);
   }
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
@@ -1260,7 +1379,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // render_sequential_range_cap, GCodeViewer.cpp:3965-4019): a dark-gray
     // quad at the toolpath end, only when a partial move position is active.
     // Geometry rebuilds in synchronize(); the upload rides the pre-pass
-    // updates batch (see the m_previewCapUploadPending arm above beginPass).
+    // updates batch through the DirtyPreviewCap registry channel.
     if (m_moveEnd > 0 && m_moveEnd < m_previewDrawSpans.size()
         && m_previewCapBuffer && m_previewCapVertexCount > 0) {
       cb->setGraphicsPipeline(m_translucentFillPipeline.get());
@@ -1414,7 +1533,6 @@ void RhiViewportRenderer::releaseResources()
   m_plateIconQuadBytesSync.clear();
   m_plateIconAtlasUploadPending = false;
   m_plateIconQuadUploadPending = false;
-  m_bedTextureQuadDirty = true;
   m_bedTextureVertexBytes = 0;
   m_bedTextureVertexCount = 0;
   m_modelLitPipeline.reset();
@@ -1474,7 +1592,6 @@ void RhiViewportRenderer::releaseResources()
   m_bedFillBuffer.reset();
   // v5.16 (NAVIGATOR): overlay cube buffer.
   m_navigatorFillBuffer.reset();
-  m_navigatorBufferUploaded = false;
   resetPreviewGpuState(true);
   // Phase 238 (PREV-01/02): drop the preview ghost-shell + tool-marker GPU
   // buffers with the rest of the scene resources.
@@ -1488,7 +1605,6 @@ void RhiViewportRenderer::releaseResources()
   m_toolMarkerVertexCount = 0;
   m_toolMarkerBufferUploaded = false;
   m_renderPassDescriptor = nullptr;
-  m_sceneBuffersUploaded = false;
   m_modelVertexBufferUploaded = false;
   m_highlightVertexBufferUploaded = false;
   m_cameraUniformBufferUploaded = false;
@@ -1850,6 +1966,11 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
   m_previewLastFrameMs = -1;
   m_previewFirstFrameMs = -1;
   m_previewFirstFrameDone = false;
+  // S2: the reset destroyed the segment + cap GPU buffers — re-arm their
+  // registry channels so the next frame re-stages them (the old code relied
+  // on the preview branch re-checking the flags every frame).
+  m_prepareScene.markDirty(PrepareSceneData::DirtyPreviewSegment
+                           | PrepareSceneData::DirtyPreviewCap);
 
   if (!keepCpuStaging) {
     m_previewVertices.clear();
@@ -2111,10 +2232,10 @@ bool RhiViewportRenderer::ensureBedTexturePipeline()
   return true;
 }
 
-void RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
+bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
 {
   if (updates == nullptr || rhi() == nullptr)
-    return;
+    return false;
 
   // 1. (Re)load the source image when the pending path changed. Mirrors
   // upstream update_logo_texture_filename: only .png/.svg are considered;
@@ -2164,19 +2285,18 @@ void RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
       m_bedTextureSampler.reset();
       m_bedTextureSrb.reset();
       m_bedTexturePipeline.reset();
-      m_bedTextureQuadDirty = true;
     }
   }
 
   if (m_bedTextureImage.isNull())
-    return;
+    return true;  // nothing to draw — the channel settles
 
   // 2. Create + upload the GPU texture.
   if (!m_bedTexture) {
     m_bedTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8, m_bedTextureImage.size()));
     if (!m_bedTexture->create()) {
       m_bedTexture.reset();
-      return;
+      return false;  // keeps the channel pending; the next frame retries
     }
     m_bedTextureSampler.reset(rhi()->newSampler(
         QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
@@ -2184,45 +2304,46 @@ void RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
     if (!m_bedTextureSampler->create()) {
       m_bedTextureSampler.reset();
       m_bedTexture.reset();
-      return;
+      return false;
     }
     updates->uploadTexture(m_bedTexture.get(), m_bedTextureImage);
   }
 
-  // 3. Rebuild the bed quad when the bed rect changed. The quad uses the
+  // 3. Re-anchor the bed quad on the current bed rect. The quad uses the
   // same scene mapping as buildSceneVertices, lifted to GROUND_Z + 0.02
   // (upstream texture height, PartPlate.cpp:6765/:3394; the plate fill is at
   // GROUND_Z): with the v6 depth-test-on texture pipeline the quad must sit
   // strictly above the coplanar y=0 fill/grid to pass the depth test.
+  // S2: rebuilt on every dispatched call (six vertices) — the channel bit is
+  // the only "needs work" state; the former m_bedTextureQuadDirty flag is
+  // retired.
   struct BedTextureVertex { float x, y, z, u, v; };
   const float left = m_prepareScene.bedOriginX();
   const float top = m_prepareScene.bedOriginY();
   const float right = left + m_prepareScene.bedWidth();
   const float bottom = top + m_prepareScene.bedDepth();
-  if (m_bedTextureQuadDirty) {
-    m_bedTextureQuadDirty = false;
-    QVector<BedTextureVertex> quad;
-    quad.reserve(6);
-    // QRhi texture uploads keep the image's top row at v=0, so v grows with
-    // the bed's +depth axis (image top edge maps to the bed's top edge).
-    const auto append = [&](float x, float z, float u, float v) {
-      quad.append(BedTextureVertex{x, 0.02f, z, u, v});
-    };
-    append(left,  top,    0.f, 0.f);
-    append(right, top,    1.f, 0.f);
-    append(right, bottom, 1.f, 1.f);
-    append(left,  top,    0.f, 0.f);
-    append(right, bottom, 1.f, 1.f);
-    append(left,  bottom, 0.f, 1.f);
-    const quint32 bytes = quint32(quad.size() * int(sizeof(BedTextureVertex)));
-    if (ensureBuffer(m_bedTextureVertexBuffer, bytes, m_bedTextureVertexBytes, QRhiBuffer::VertexBuffer)
-        && m_bedTextureVertexBuffer && bytes > 0) {
-      updates->uploadStaticBuffer(m_bedTextureVertexBuffer.get(), 0, bytes, quad.constData());
-      m_bedTextureVertexCount = quint32(quad.size());
-    } else {
-      m_bedTextureVertexCount = 0;
-    }
+  QVector<BedTextureVertex> quad;
+  quad.reserve(6);
+  // QRhi texture uploads keep the image's top row at v=0, so v grows with
+  // the bed's +depth axis (image top edge maps to the bed's top edge).
+  const auto append = [&](float x, float z, float u, float v) {
+    quad.append(BedTextureVertex{x, 0.02f, z, u, v});
+  };
+  append(left,  top,    0.f, 0.f);
+  append(right, top,    1.f, 0.f);
+  append(right, bottom, 1.f, 1.f);
+  append(left,  top,    0.f, 0.f);
+  append(right, bottom, 1.f, 1.f);
+  append(left,  bottom, 0.f, 1.f);
+  const quint32 bytes = quint32(quad.size() * int(sizeof(BedTextureVertex)));
+  if (!ensureBuffer(m_bedTextureVertexBuffer, bytes, m_bedTextureVertexBytes, QRhiBuffer::VertexBuffer)
+      || !m_bedTextureVertexBuffer || bytes == 0) {
+    m_bedTextureVertexCount = 0;
+    return false;
   }
+  updates->uploadStaticBuffer(m_bedTextureVertexBuffer.get(), 0, bytes, quad.constData());
+  m_bedTextureVertexCount = quint32(quad.size());
+  return true;
 }
 
 void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
@@ -2248,13 +2369,16 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
 // PrepareSceneData::plateIconAtlasUploadDecision (unit-locked: one cacheKey
 // = one upload), so a quad-only hover swap re-uploads neither the atlas
 // QImage copy nor the ~16.7MB texture.
-void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
+quint32 RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
 {
+  quint32 handled = 0;
   if (updates == nullptr || rhi() == nullptr)
-    return;
+    return handled;
 
+  // S2: each half settles its own registry bit. A GPU-object creation
+  // failure leaves the half pending (bit armed, staged payload kept) so the
+  // next frame retries instead of silently dropping the handoff.
   if (m_plateIconAtlasUploadPending) {
-    m_plateIconAtlasUploadPending = false;
     if (!m_plateIconAtlasPending.isNull()) {
       const PrepareSceneData::PlateIconAtlasUpload decision =
           PrepareSceneData::plateIconAtlasUploadDecision(
@@ -2262,6 +2386,7 @@ void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
               m_plateIconTexture != nullptr,
               m_plateIconTexture ? m_plateIconTexture->pixelSize() : QSize(),
               m_plateIconAtlasPending.size());
+      bool ready = true;
       if (decision.recreateTexture) {
         m_plateIconTexture.reset(rhi()->newTexture(
             QRhiTexture::RGBA8, m_plateIconAtlasPending.size()));
@@ -2269,6 +2394,7 @@ void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
           m_plateIconTexture.reset();
           // Texture loss invalidates the resident pixels too.
           m_plateIconAtlasUploadedKey = 0;
+          ready = false;
         } else {
           m_plateIconSampler.reset(rhi()->newSampler(
               QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
@@ -2277,51 +2403,62 @@ void RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
             m_plateIconSampler.reset();
             m_plateIconTexture.reset();
             m_plateIconAtlasUploadedKey = 0;
+            ready = false;
           } else {
             m_plateIconSrb.reset();
             m_plateIconPipeline.reset();
           }
         }
       }
-      if (m_plateIconTexture && decision.uploadPixels) {
-        updates->uploadTexture(m_plateIconTexture.get(), m_plateIconAtlasPending);
-        m_plateIconAtlasUploadedKey = m_plateIconAtlasCacheKey;
+      if (ready) {
+        if (m_plateIconTexture && decision.uploadPixels) {
+          updates->uploadTexture(m_plateIconTexture.get(), m_plateIconAtlasPending);
+          m_plateIconAtlasUploadedKey = m_plateIconAtlasCacheKey;
+        }
+        m_plateIconAtlasUploadPending = false;
+        m_plateIconAtlasPending = QImage();
+        handled |= PrepareSceneData::DirtyPlateIconAtlas;
       }
-      m_plateIconAtlasPending = QImage();
+    } else {
+      // Staged image already dropped (release path): settle the latch.
+      m_plateIconAtlasUploadPending = false;
+      handled |= PrepareSceneData::DirtyPlateIconAtlas;
     }
   }
 
-  if (!m_plateIconQuadUploadPending)
-    return;
-  m_plateIconQuadUploadPending = false;
-  if (!m_plateIconQuadBytesSync.isEmpty()) {
-    const quint32 bytes = quint32(m_plateIconQuadBytesSync.size());
-    // Dynamic buffer + full-buffer immediate update: uploadStaticBuffer
-    // records the source pointer into a batch that executes at submit, which
-    // kept racing the GUI-side rebuild of the shared payload. The dynamic
-    // update path memcpy's synchronously under the batch umbrella instead.
-    if (!m_plateIconVertexBuffer
-        || m_plateIconVertexByteCount != bytes) {
-      m_plateIconVertexBuffer.reset(
-          rhi()->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, bytes));
-      if (!m_plateIconVertexBuffer || !m_plateIconVertexBuffer->create()) {
-        m_plateIconVertexBuffer.reset();
-        m_plateIconVertexByteCount = 0;
-        m_plateIconVertexCount = 0;
-        return;
+  if (m_plateIconQuadUploadPending) {
+    if (!m_plateIconQuadBytesSync.isEmpty()) {
+      const quint32 bytes = quint32(m_plateIconQuadBytesSync.size());
+      // Dynamic buffer + full-buffer immediate update: uploadStaticBuffer
+      // records the source pointer into a batch that executes at submit, which
+      // kept racing the GUI-side rebuild of the shared payload. The dynamic
+      // update path memcpy's synchronously under the batch umbrella instead.
+      if (!m_plateIconVertexBuffer
+          || m_plateIconVertexByteCount != bytes) {
+        m_plateIconVertexBuffer.reset(
+            rhi()->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, bytes));
+        if (!m_plateIconVertexBuffer || !m_plateIconVertexBuffer->create()) {
+          m_plateIconVertexBuffer.reset();
+          m_plateIconVertexByteCount = 0;
+          m_plateIconVertexCount = 0;
+          return handled;  // quad half stays pending for the next frame
+        }
+        m_plateIconVertexByteCount = bytes;
       }
-      m_plateIconVertexByteCount = bytes;
+      // updateDynamicBuffer copies the payload into QRhi's internal storage at
+      // the next frame start; m_plateIconQuadBytesSync is a renderer-owned
+      // member that stays valid until the next synchronize, which satisfies the
+      // lifetime contract.
+      updates->updateDynamicBuffer(m_plateIconVertexBuffer.get(), 0, bytes,
+                                   m_plateIconQuadBytesSync.constData());
+      m_plateIconVertexCount = bytes / quint32(sizeof(float) * 5);
+    } else {
+      m_plateIconVertexCount = 0;
     }
-    // updateDynamicBuffer copies the payload into QRhi's internal storage at
-    // the next frame start; m_plateIconQuadBytesSync is a renderer-owned
-    // member that stays valid until the next synchronize, which satisfies the
-    // lifetime contract.
-    updates->updateDynamicBuffer(m_plateIconVertexBuffer.get(), 0, bytes,
-                                 m_plateIconQuadBytesSync.constData());
-    m_plateIconVertexCount = bytes / quint32(sizeof(float) * 5);
-  } else {
-    m_plateIconVertexCount = 0;
+    m_plateIconQuadUploadPending = false;
+    handled |= PrepareSceneData::DirtyPlateIconQuads;
   }
+  return handled;
 }
 
 bool RhiViewportRenderer::ensurePlateIconPipeline()
@@ -2412,12 +2549,14 @@ void RhiViewportRenderer::renderPlateIcons(QRhiCommandBuffer *cb)
 // space. Shares m_srb (camera UBO); reads the per-face normal buffer at
 // vertex-input binding 1 alongside the shared position/color buffer.
 // ── v5.16 (BEDMODEL): printer frame STL (upstream Bed3D::render_model) ─────
-void RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
+bool RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
 {
   if (updates == nullptr || rhi() == nullptr)
-    return;
+    return false;
+  // Empty stream: nothing to draw — settle the channel (a later STL change
+  // re-arms it through the bed-model generation mirror).
   if (!m_bedModelUploaded && m_bedModelMeshBytes.isEmpty())
-    return;
+    return true;
 
   // Parse the stream: [uint32 vertexCount][float x,y,z] * count.
   QVector<Vertex> vertices;
@@ -2464,7 +2603,7 @@ void RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
 
   const quint32 bytes = quint32(vertices.size() * int(sizeof(Vertex)));
   if (!ensureBuffer(m_bedModelVertexBuffer, bytes, m_bedModelVertexBytes, QRhiBuffer::VertexBuffer))
-    return;
+    return false;  // keeps the channel pending; the next frame retries
   if (m_bedModelVertexBuffer && bytes > 0)
     updates->uploadStaticBuffer(m_bedModelVertexBuffer.get(), 0, bytes, vertices.constData());
 
@@ -2503,6 +2642,7 @@ void RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
   }
   m_bedModelVertexCount = quint32(vertices.size());
   m_bedModelUploaded = true;
+  return true;
 }
 
 void RhiViewportRenderer::renderBedModel(QRhiCommandBuffer *cb)
@@ -2617,13 +2757,13 @@ void RhiViewportRenderer::releaseBedTypeParts()
   m_bedTypePartGpu.clear();
 }
 
-void RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
+bool RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
 {
   if (updates == nullptr || rhi() == nullptr || renderTarget() == nullptr)
-    return;
+    return false;
   if (m_bedTypeImagesDir.isEmpty() || m_bedTypeIndex <= 0
       || m_bedTypeIndex >= int(sizeof(kBedTypeParts) / sizeof(kBedTypeParts[0])))
-    return;
+    return true;  // nothing configurable — settle
 
   const BedTypePartDef *parts[4] = {nullptr, nullptr, nullptr, nullptr};
   int partCount = 0;
@@ -2635,7 +2775,7 @@ void RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
   if (m_bedCaliActive)
     parts[partCount++] = &kCaliPart;
   if (partCount == 0)
-    return;
+    return true;  // settle
 
   // Plate origin in scene coords; upstream part rects are measured from the
   // plate's lower-left corner (y grows up), the bed quad maps depth growing
@@ -2757,6 +2897,7 @@ void RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
       }
     }
   }
+  return true;
 }
 
 void RhiViewportRenderer::renderBedTypeParts(QRhiCommandBuffer *cb)
@@ -2922,31 +3063,16 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
   if (updates == nullptr || rhi() == nullptr)
     return false;
 
-  if (!uploadCameraUniform(updates, dirtyFlags))
-    return false;
+  // S2: this is now purely the scene composite — the camera uniform, bed
+  // texture / bed model / bed-type parts, plate icons, sequential clearance,
+  // cut plane and wipe tower each register their own channel and are
+  // dispatched by uploadPendingChannels, so a change in one no longer waits
+  // for (or rides) an unrelated scene dirty.
   if (!uploadBedBuffers(updates, dirtyFlags))
     return false;
-  // v5.15 (BEDTEX): texture image + bed quad (no-op when no texture path).
-  uploadBedTexture(updates);
-  // PLATEICONS-GL (Q2): the icon atlas/quad upload moved OUT of this
-  // scene-dirty-gated path -- it is driven by its own pending latches in
-  // render() so a hover-only change reaches the GPU the frame it happens
-  // instead of waiting for an unrelated dirty flag.
-  // v5.16 (BEDMODEL/BEDTYPE-TEX): printer frame mesh + BBL bed-type parts.
-  // The bed-model vertices bake the current plate offset + the upstream
-  // -0.41 Z placement at upload time.
-  uploadBedModelMesh(updates);
-  if (m_bedTypeActive)
-    prepareBedTypeParts(updates);
   if (!uploadModelBuffer(updates, dirtyFlags))
     return false;
   if (!uploadHighlightBuffer(updates, dirtyFlags))
-    return false;
-  if (!uploadSequentialClearanceBuffers(updates))
-    return false;
-  if (!uploadCutPlaneBuffers(updates, dirtyFlags))
-    return false;
-  if (!uploadWipeTowerBuffer(updates))
     return false;
   // Phase 91 (ASMEXPLODE-02): connector guide lines (AssembleView, ratio > 1.0).
   if (!uploadAssemblyConnectorBuffer(updates, dirtyFlags))
@@ -2955,8 +3081,6 @@ bool RhiViewportRenderer::uploadSceneBuffers(QRhiResourceUpdateBatch *updates, q
   // gizmo mode 19). Upload is a no-op (empty buffers) outside that gate.
   if (!uploadAssemblyMeasureBuffers(updates, dirtyFlags))
     return false;
-
-  m_sceneBuffersUploaded = true;
   return true;
 }
 
@@ -2965,10 +3089,10 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   if (updates == nullptr || rhi() == nullptr)
     return false;
 
-  const bool uploadScene = !m_sceneBuffersUploaded
-      || (dirtyFlags & (PrepareSceneData::DirtyBed
-                        | PrepareSceneData::DirtyPlate
-                        | PrepareSceneData::DirtyGpu)) != 0;
+  const bool uploadScene =
+      (dirtyFlags & (PrepareSceneData::DirtyBed
+                     | PrepareSceneData::DirtyPlate
+                     | PrepareSceneData::DirtyGpu)) != 0;
   // P15.5 (SINK): the contour bands follow the model mesh, not the bed.
   const bool uploadSinking = !m_sinkingContourBufferUploaded
       || (dirtyFlags & (PrepareSceneData::DirtyMesh
@@ -2976,9 +3100,8 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   if (!uploadScene && !uploadSinking)
     return true;
 
-  // v5.15 (BEDTEX): the texture quad follows the bed rect, so a bed
-  // geometry change must rebuild it too.
-  m_bedTextureQuadDirty = true;
+  // S2 (BEDTEX): the bed-texture quad re-anchors through the
+  // DirtyBedTexture channel (kBedTextureFeedMask), not a side write here.
 
   const QVector<Vertex> fillVertices = buildSceneVertices(m_prepareScene.bedFillVertices());
   const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
@@ -3316,7 +3439,6 @@ bool RhiViewportRenderer::uploadSequentialClearanceBuffers(QRhiResourceUpdateBat
               m_sequentialClearanceFillBytes, m_sequentialClearanceFillVertexCount)) return false;
   if (!upload(m_sequentialHeightFill, m_sequentialHeightFillBuffer,
               m_sequentialHeightFillBytes, m_sequentialHeightFillVertexCount)) return false;
-  m_sequentialClearanceBuffersUploaded = true;
   return true;
 }
 
@@ -5302,7 +5424,6 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
     return false;
   if (!m_navigatorEnabled) {
     m_navigatorFillVertexCount = 0;
-    m_navigatorBufferUploaded = false;
     return true;
   }
   if (renderTarget() == nullptr)
@@ -5310,14 +5431,10 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
 
   const QSize px = renderTarget()->pixelSize();
   const NavigatorCube::CameraBasis basis = NavigatorCube::cameraBasis(m_cameraView);
-  if (m_navigatorBufferUploaded && m_navigatorLastView == m_cameraView
-      && m_navigatorLastHoverBox == m_navigatorHoverBox
-      && m_navigatorLastPixelSize == px && m_navigatorLastMvp == m_cameraMvp)
-    return true;
-  m_navigatorLastView = m_cameraView;
-  m_navigatorLastHoverBox = m_navigatorHoverBox;
-  m_navigatorLastPixelSize = px;
-  m_navigatorLastMvp = m_cameraMvp;
+  // S2: the DirtyNavigator bit is the rebuild key (synchronize compares the
+  // mirrored inputs — rect/hover/enabled — and the camera feed re-arms the
+  // bit on view/MVP changes); a dispatched upload always rebuilds. The
+  // former m_navigatorLast* per-frame cache is retired with it.
 
   const NavigatorCube::RectF rect = m_navigatorRect;
 
@@ -5495,7 +5612,6 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
   m_navigatorFillVertexCount = quint32(fill.size());
   if (m_navigatorFillBuffer && fillBytes > 0)
     updates->uploadStaticBuffer(m_navigatorFillBuffer.get(), 0, fillBytes, fill.constData());
-  m_navigatorBufferUploaded = true;
   return true;
 }
 

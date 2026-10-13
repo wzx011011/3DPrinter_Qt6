@@ -82,16 +82,24 @@ private slots:
   // Q2 (PLATEICONS-WIP): permanent upload-gate + hover-gate cases. The
   // renderer's uploadPlateIcons delegates to the pure seams, so these lock
   // the protocols without a GPU: one cacheKey = one atlas upload, and hover
-  // refreshes key on the TARGET (empty->empty is a no-op).
+  // refreshes key on the TARGET (empty->empty is a no-op). S2: the upload
+  // GATE itself is the DirtyPlateIconAtlas/DirtyPlateIconQuads registry
+  // bits (armed from the documented thread-handoff latches); the seams stay
+  // the content-key layer underneath.
   void plateIconAtlasUploadGateSkipsUnchangedCacheKey();
   void plateIconHoverGateKeysOnTargetNotHitFlag();
-  // Q3 (CAP-GATE): permanent cap upload-latch case. synchronize() arms
-  // m_previewCapUploadPending only through the pure seam
+  // Q3 (CAP-GATE): permanent cap upload-gate case. synchronize() arms the
+  // DirtyPreviewCap registry channel only through the pure seam
   // PrepareSceneData::previewCapUploadArmed, so the moveEnd change
   // detection actually gates the rebuildPreviewCap span scan: an unchanged
   // moveEnd never re-arms, a change arms exactly once, and the first-frame
   // / resetPreviewGpuState paths (GPU-side cap dropped) still arm.
   void previewCapUploadGateArmsOnRealChangeOnly();
+  // S2 (2026-10-14): the single upload registry — routing, seeding and the
+  // masked settle are the permanent contracts behind render()'s single rule.
+  void uploadRegistryRoutingFollowsCanvasAndPayload();
+  void seedMaskArmsEveryRoutableChannelForFirstFrame();
+  void maskedClearKeepsFailedChannelsPending();
 };
 
 // v5.16 (EXCLAREA): one rectangle polygon must fan-fill on every plate with
@@ -910,6 +918,121 @@ void PrepareSceneDataTests::previewCapUploadGateArmsOnRealChangeOnly()
   // needs moveEnd > 0), and moveEnd 0 itself never arms.
   QVERIFY(PrepareSceneData::previewCapUploadArmed(0, 900, 900));
   QVERIFY(!PrepareSceneData::previewCapUploadArmed(0, 0, 900));
+}
+
+// S2: render()'s single upload rule reads the registry only through
+// uploadChannelsForCanvas. This locks the routing contract: payload bits
+// project onto their channel feeds per canvas, canvas-foreign stored bits
+// never route (no perma-batch), and the camera feed arms the camera UBO on
+// BOTH canvases (the print-volume/gizmoCenter pack rides it everywhere).
+void PrepareSceneDataTests::uploadRegistryRoutingFollowsCanvasAndPayload()
+{
+  using P = PrepareSceneData;
+
+  // A pure camera move on the scene canvas opens BOTH the scene composite
+  // (historical (a) gate — camera is a scene payload bit) and the camera UBO.
+  const quint32 sceneCamera = P::uploadChannelsForCanvas(P::kCanvasView3D, P::DirtyCamera);
+  QVERIFY2(sceneCamera & P::DirtySceneBuffers, "camera payload must open the scene composite");
+  QVERIFY2(sceneCamera & P::DirtyCameraUniform, "camera payload must arm the camera UBO");
+  QCOMPARE(sceneCamera & P::kPreviewCanvasChannelMask & ~P::DirtyNavigator,
+           quint32(P::DirtyNone));
+
+  // The cut-plane feed: mesh/selection/Gpu payload re-anchors the plane.
+  const quint32 cutFeed = P::uploadChannelsForCanvas(P::kCanvasAssembleView, P::DirtySelection);
+  QVERIFY2(cutFeed & P::DirtyCutPlane, "selection change must re-anchor the cut plane");
+  QVERIFY2(cutFeed & P::DirtySceneBuffers, "selection change must open the scene composite");
+
+  // A bed-rect change re-anchors the bed-texture quad on the scene canvas.
+  QVERIFY2(P::uploadChannelsForCanvas(P::kCanvasView3D, P::DirtyBed) & P::DirtyBedTexture,
+           "bed change must re-anchor the bed-texture quad");
+
+  // Preview canvas: the same camera payload arms ONLY the camera UBO.
+  QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyCamera),
+           quint32(P::DirtyCameraUniform));
+  // ...and a bed change routes only the camera feed there (print volume).
+  QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyBed),
+           quint32(P::DirtyCameraUniform));
+
+  // Stored scene-canvas bits never route on preview and vice versa: a
+  // seeded-but-unroutable bit cannot cause a per-frame batch.
+  const quint32 mixed = P::DirtyPlateIconQuads | P::DirtyPreviewSegment;
+  QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, mixed),
+           quint32(P::DirtyPreviewSegment));
+  QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasView3D, mixed),
+           quint32(P::DirtyPlateIconQuads));
+
+  // The navigator routes on both canvases.
+  QVERIFY(P::uploadChannelsForCanvas(P::kCanvasView3D, P::DirtyNavigator)
+          & P::DirtyNavigator);
+  QVERIFY(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyNavigator)
+          & P::DirtyNavigator);
+
+  // Registry/payload separation is static_asserted in the header; re-check
+  // the masks at runtime so a test failure names the broken invariant.
+  QCOMPARE(P::kRendererChannelMask & P::kScenePayloadMask, quint32(P::DirtyNone));
+}
+
+// S2: per-channel first-frame visibility, locked without a GPU — seeding a
+// canvas (what initialize() does after every swapchain rebuild) must arm
+// EVERY channel that canvas can route, so the first render() uploads each
+// channel through the single rule. The preview seed must additionally NOT
+// contain scene-canvas channel bits (they would never route and would wedge
+// the registry word non-empty forever).
+void PrepareSceneDataTests::seedMaskArmsEveryRoutableChannelForFirstFrame()
+{
+  using P = PrepareSceneData;
+
+  const quint32 sceneSeed = P::seedMaskForCanvas(P::kCanvasView3D);
+  const quint32 sceneRouted = P::uploadChannelsForCanvas(P::kCanvasView3D, sceneSeed);
+  QCOMPARE(sceneRouted,
+           P::kSceneCanvasChannelMask | P::DirtySceneBuffers | P::DirtyCameraUniform);
+
+  const quint32 previewSeed = P::seedMaskForCanvas(P::kCanvasPreview);
+  const quint32 previewRouted = P::uploadChannelsForCanvas(P::kCanvasPreview, previewSeed);
+  QCOMPARE(previewRouted,
+           P::kPreviewCanvasChannelMask | P::DirtyCameraUniform);
+
+  // Seeding is re-runnable: seeding twice equals seeding once (idempotent).
+  QCOMPARE(P::seedMaskForCanvas(P::kCanvasView3D), sceneSeed);
+
+  // No foreign channel bits in either seed.
+  QCOMPARE(sceneSeed & (P::kPreviewCanvasChannelMask & ~P::kSceneCanvasChannelMask),
+           quint32(P::DirtyNone));
+  QCOMPARE(previewSeed & (P::kSceneCanvasChannelMask & ~P::kPreviewCanvasChannelMask),
+           quint32(P::DirtyNone));
+}
+
+// S2: the masked settle — a failed channel keeps its bit (and its payload
+// context) while the succeeded siblings' bits drop; a full settle consumes
+// the whole word. This is the render() partial-failure contract.
+void PrepareSceneDataTests::maskedClearKeepsFailedChannelsPending()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  scene.markDirty(PrepareSceneData::DirtyPaintOverlay
+                  | PrepareSceneData::DirtyPlateIconQuads);
+  QCOMPARE(scene.peekDirtyFlags(),
+           PrepareSceneData::DirtyPaintOverlay | PrepareSceneData::DirtyPlateIconQuads);
+
+  // markDirty is idempotent and composes with payload bits.
+  scene.markDirty(PrepareSceneData::DirtyPaintOverlay | PrepareSceneData::DirtyMesh);
+  QVERIFY(scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh);
+  QVERIFY(scene.peekDirtyFlags() & PrepareSceneData::DirtyPaintOverlay);
+  QCOMPARE(scene.peekDirtyFlags() & PrepareSceneData::DirtyPlateIconQuads,
+           PrepareSceneData::DirtyPlateIconQuads);
+
+  // Partial settle: the icon-quads upload succeeded, the paint overlay and
+  // the mesh payload stay pending for the next frame.
+  scene.clearDirtyFlags(PrepareSceneData::DirtyPlateIconQuads);
+  QCOMPARE(scene.peekDirtyFlags() & PrepareSceneData::DirtyPlateIconQuads,
+           quint32(PrepareSceneData::DirtyNone));
+  QVERIFY(scene.peekDirtyFlags() & PrepareSceneData::DirtyPaintOverlay);
+  QVERIFY(scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh);
+
+  // The all-settled fast path still consumes everything.
+  scene.takeDirtyFlags();
+  QCOMPARE(scene.peekDirtyFlags(), quint32(PrepareSceneData::DirtyNone));
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

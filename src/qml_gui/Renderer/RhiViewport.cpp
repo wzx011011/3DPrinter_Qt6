@@ -147,6 +147,10 @@ void RhiViewport::setPreviewData(const QByteArray &data)
   if (m_previewData == data)
     return;
   m_previewData = data;
+  // S2 (protocol 1): the generation replaces the renderer-side per-frame
+  // multi-megabyte payload compare (GUI-side setter compare is the cheap
+  // spot; the render thread only ever sees the counter).
+  ++m_previewDataGeneration;
   fitPreviewCameraToData();
   update();
 }
@@ -278,12 +282,15 @@ void RhiViewport::setBedTextureUrl(const QUrl &value)
 }
 
 // v5.16 setters: plain value + update(); the renderer diff-checks the
-// members each synchronize (same pattern as meshData).
+// members each synchronize (same pattern as meshData). S2 (protocol 1): the
+// bed-model channel keys on the generation bumped here instead of a
+// multi-KB byte compare on the render thread per synchronize.
 void RhiViewport::setBedModelMeshData(const QByteArray &value)
 {
   if (m_bedModelMeshData == value)
     return;
   m_bedModelMeshData = value;
+  ++m_bedModelGeneration;
   update();
 }
 

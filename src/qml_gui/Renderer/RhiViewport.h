@@ -308,6 +308,8 @@ public:
   // Mirrors upstream ECanvasType { CanvasView3D=0, CanvasPreview=1,
   // CanvasAssembleView=2 } (GLCanvas3D.hpp:509-513). Phase 90 adds the third
   // canvas host so AssembleView reuses the default RHI/D3D11 mesh-render path.
+  // S2: the numeric values are the single source; PrepareSceneData's canvas
+  // routing constants mirror them and the equality is locked below.
   enum CanvasType
   {
     CanvasView3D = 0,
@@ -315,6 +317,10 @@ public:
     CanvasAssembleView = 2
   };
   Q_ENUM(CanvasType)
+  static_assert(int(CanvasView3D) == PrepareSceneData::kCanvasView3D
+                    && int(CanvasPreview) == PrepareSceneData::kCanvasPreview
+                    && int(CanvasAssembleView) == PrepareSceneData::kCanvasAssembleView,
+                "RhiViewport::CanvasType must mirror the PrepareSceneData canvas routing constants");
 
   enum GizmoMode {
     GizmoMove = 0,
@@ -1034,6 +1040,10 @@ private:
   bool m_sequentialClearanceActive = false;
   bool m_sequentialClearancePreviewMode = false;
   QByteArray m_previewData;
+  // S2 (protocol 1): bumped by setPreviewData on a real content change; the
+  // renderer compares this counter instead of memcmp-ing the payload on the
+  // render thread every synchronize.
+  qint64 m_previewDataGeneration = 0;
   int m_layerMin = 0;
   int m_layerMax = 0;
   int m_moveEnd = 0;
@@ -1047,6 +1057,10 @@ private:
   float m_bedDiameter = 220.f;
   QUrl m_bedTextureUrl;
   QByteArray m_bedModelMeshData;
+  // S2 (protocol 1): bumped by setBedModelMeshData on a real content change;
+  // consumed by the renderer's DirtyBedModel channel key (with the per-
+  // instance plate-offset keys).
+  qint64 m_bedModelGeneration = 0;
   QVariantList m_bedExcludeAreas;
   float m_bedHeightToRod = 0.0f;
   float m_bedHeightToLid = 0.0f;

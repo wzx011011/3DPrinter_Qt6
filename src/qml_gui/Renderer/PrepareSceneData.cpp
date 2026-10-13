@@ -563,6 +563,56 @@ void PrepareSceneData::clearDirtyFlags()
   m_dirtyFlags = DirtyNone;
 }
 
+// S2: masked settle — clear exactly the bits whose channel uploads succeeded
+// this frame; failed channels (and untouched payload bits) stay pending and
+// re-route on the next frame.
+void PrepareSceneData::clearDirtyFlags(quint32 mask)
+{
+  m_dirtyFlags &= ~mask;
+}
+
+// ── S2 pure routing/seaming: the render() single rule reads the registry
+// only through these two functions, so the canvas routing and the
+// swapchain-rebuild seeding stay unit-locked without a GPU.
+quint32 PrepareSceneData::uploadChannelsForCanvas(int canvasType, quint32 dirtyFlags)
+{
+  const quint32 payload = dirtyFlags & kScenePayloadMask;
+  quint32 channels = dirtyFlags & kRendererChannelMask;
+  if (canvasType == kCanvasPreview) {
+    // Preview canvas: only its own channels route. Scene-canvas bits seeded
+    // before the first synchronize (or set by shared mirror code) stay
+    // stored but never route, so they cannot cause a per-frame batch.
+    channels &= kPreviewCanvasChannelMask;
+    if ((payload & kCameraFeedMask) != 0)
+      channels |= DirtyCameraUniform;
+  } else {
+    channels &= kSceneCanvasChannelMask;
+    // Any payload change opens the scene composite (the historical (a) gate:
+    // bed/model/highlight/assembly re-check their own granularity inside).
+    if (payload != DirtyNone)
+      channels |= DirtySceneBuffers;
+    if ((payload & kCameraFeedMask) != 0)
+      channels |= DirtyCameraUniform;
+    if ((payload & kCutPlaneFeedMask) != 0)
+      channels |= DirtyCutPlane;
+    if ((payload & kBedTextureFeedMask) != 0)
+      channels |= DirtyBedTexture;
+  }
+  return channels;
+}
+
+quint32 PrepareSceneData::seedMaskForCanvas(int canvasType)
+{
+  // Full payload: the sub-buffer granularity inside the scene/camera channels
+  // re-runs once (the retired *Uploaded-flag reset + m_frameCount window did
+  // exactly this). Channel bits: everything the canvas can route, so the
+  // first frame after initialize() re-uploads every channel — per-channel
+  // first-frame visibility by construction.
+  if (canvasType == kCanvasPreview)
+    return kScenePayloadMask | kPreviewCanvasChannelMask;
+  return kScenePayloadMask | kSceneCanvasChannelMask;
+}
+
 float PrepareSceneData::bedWidth() const
 {
   return m_bedWidth;
