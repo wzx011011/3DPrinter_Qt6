@@ -11,6 +11,14 @@ import ".."
 // Separator (GCodeViewer.cpp:638) stacked above the bottom row. The speed
 // profile itself renders in a companion window to the left (upstream
 // "ToolPositionTableWnd", GCodeViewer.cpp:595-632).
+// U12 copyable coordinates: the value texts of the main window (property
+// table values, X/Y/Z coordinates, speed/detail line) are read-only
+// selectable TextEdits with the shared Theme selection tokens, so a
+// problematic print's coordinates/parameters can be copied out. The label
+// columns stay Label (TextEdit has no elide -- converting eliding text
+// would change layout), and the companion profile table stays
+// non-selectable: its rows sit in a Flickable whose scroll gesture must
+// not be captured by selection drags.
 Rectangle {
     id: root
     required property var previewVm
@@ -175,10 +183,18 @@ Rectangle {
                 spacing: Theme.spacingXS
                 Repeater {
                     model: root.tableValues
-                    Label {
+                    // U12: selectable value cell (read-only TextEdit, Theme
+                    // selection tokens; no elide on this side so the layout
+                    // is unchanged).
+                    TextEdit {
                         text: modelData
+                        readOnly: true
+                        selectByMouse: true
                         color: Theme.textPrimary
+                        selectionColor: Theme.selectionColor
+                        selectedTextColor: Theme.selectionText
                         font.pixelSize: Theme.fontSizeSM
+                        wrapMode: TextEdit.NoWrap
                     }
                 }
             }
@@ -308,10 +324,19 @@ Rectangle {
                                 color: Theme.textTertiary
                                 font: root.monoFont
                             }
-                            Label {
+                            // U12: selectable coordinate value (read-only
+                            // TextEdit). Column origins stay pinned by the
+                            // TextMetrics math above, so per-value content
+                            // width cannot shift the layout.
+                            TextEdit {
                                 text: modelData.value
+                                readOnly: true
+                                selectByMouse: true
                                 color: Theme.textPrimary
+                                selectionColor: Theme.selectionColor
+                                selectedTextColor: Theme.selectionText
                                 font: root.monoFont
+                                wrapMode: TextEdit.NoWrap
                             }
                         }
                     }
@@ -322,20 +347,31 @@ Rectangle {
                 Item {
                     implicitWidth: speedMetrics.width + detailLabel.implicitWidth
                     implicitHeight: speedLabel.implicitHeight
-                    Label {
+                    // U12: both cells selectable (read-only TextEdit).
+                    TextEdit {
                         id: speedLabel
                         x: 0
                         text: root.vm ? qsTr("Speed: %1").arg(Math.round(root.vm.toolFeedrate / 60)) : ""
+                        readOnly: true
+                        selectByMouse: true
                         color: Theme.textPrimary
+                        selectionColor: Theme.selectionColor
+                        selectedTextColor: Theme.selectionText
                         font: root.monoFont
+                        wrapMode: TextEdit.NoWrap
                     }
-                    Label {
+                    TextEdit {
                         id: detailLabel
                         x: speedMetrics.width
                         visible: root.vm && root.vm.toolDetailText !== ""
                         text: root.vm ? root.vm.toolDetailText : ""
+                        readOnly: true
+                        selectByMouse: true
                         color: Theme.textPrimary
+                        selectionColor: Theme.selectionColor
+                        selectedTextColor: Theme.selectionText
                         font: root.monoFont
+                        wrapMode: TextEdit.NoWrap
                     }
                 }
             }
