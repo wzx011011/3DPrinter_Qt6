@@ -145,18 +145,31 @@ Item {
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight
                         }
-                        Label {
+                        // U12: selectable value cells (read-only TextEdit,
+                        // Theme selection tokens; no elide on this side so
+                        // the layout is unchanged).
+                        TextEdit {
                             text: splitRow.modelData.lengthText
+                            readOnly: true
+                            selectByMouse: true
                             color: Theme.textPrimary
+                            selectionColor: Theme.selectionColor
+                            selectedTextColor: Theme.selectionText
                             font.pixelSize: Theme.fontSizeXS
                             font.family: Theme.fontMono
+                            wrapMode: TextEdit.NoWrap
                         }
-                        Label {
+                        TextEdit {
                             Layout.preferredWidth: 64
                             text: splitRow.modelData.weightText
+                            readOnly: true
+                            selectByMouse: true
                             color: Theme.textSecondary
+                            selectionColor: Theme.selectionColor
+                            selectedTextColor: Theme.selectionText
                             font.pixelSize: Theme.fontSizeXS
-                            horizontalAlignment: Text.AlignRight
+                            horizontalAlignment: TextEdit.AlignRight
+                            wrapMode: TextEdit.NoWrap
                         }
                     }
                 }
@@ -192,16 +205,27 @@ Item {
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight
                         }
-                        Label {
+                        // U12: selectable value cells (read-only TextEdit).
+                        TextEdit {
                             text: root.previewVm ? root.previewVm.extruderUsedLength(extruderRow.index).toFixed(2) + " m" : "0.00 m"
+                            readOnly: true
+                            selectByMouse: true
                             color: Theme.textPrimary
+                            selectionColor: Theme.selectionColor
+                            selectedTextColor: Theme.selectionText
                             font.pixelSize: Theme.fontSizeXS
                             font.family: Theme.fontMono
+                            wrapMode: TextEdit.NoWrap
                         }
-                        Label {
+                        TextEdit {
                             text: root.previewVm ? root.previewVm.extruderUsedWeight(extruderRow.index).toFixed(1) + " g" : "0.0 g"
+                            readOnly: true
+                            selectByMouse: true
                             color: Theme.textSecondary
+                            selectionColor: Theme.selectionColor
+                            selectedTextColor: Theme.selectionText
                             font.pixelSize: Theme.fontSizeXS
+                            wrapMode: TextEdit.NoWrap
                         }
                     }
                 }
@@ -231,18 +255,29 @@ Item {
                             font.pixelSize: Theme.fontSizeSM
                             elide: Text.ElideRight
                         }
-                        Label {
+                        // U12: selectable value cells (read-only TextEdit).
+                        TextEdit {
                             text: root.previewVm ? root.previewVm.roleTimeValue(roleTimeRow.index) : ""
+                            readOnly: true
+                            selectByMouse: true
                             color: Theme.textPrimary
+                            selectionColor: Theme.selectionColor
+                            selectedTextColor: Theme.selectionText
                             font.pixelSize: Theme.fontSizeXS
                             font.family: Theme.fontMono
+                            wrapMode: TextEdit.NoWrap
                         }
-                        Label {
+                        TextEdit {
                             Layout.preferredWidth: 44
                             text: root.previewVm ? root.previewVm.roleTimePercent(roleTimeRow.index).toFixed(1) + "%" : "0%"
+                            readOnly: true
+                            selectByMouse: true
                             color: Theme.textSecondary
+                            selectionColor: Theme.selectionColor
+                            selectedTextColor: Theme.selectionText
                             font.pixelSize: Theme.fontSizeXS
-                            horizontalAlignment: Text.AlignRight
+                            horizontalAlignment: TextEdit.AlignRight
+                            wrapMode: TextEdit.NoWrap
                         }
                     }
                 }
@@ -306,12 +341,24 @@ Item {
             font.pixelSize: Theme.fontSizeSM
             elide: Text.ElideRight
         }
-        Label {
+        // U12: value text is selectable (read-only TextEdit) so numbers can
+        // be copied out. TextEdit carries no elide, which is why only the
+        // non-eliding value side converts -- layout at NoWrap matches the
+        // former Label (same implicitWidth/alignment), and selection styling
+        // comes from the shared Theme tokens so the highlight never shifts
+        // geometry. A focused copy keeps the U10 contract: the window-level
+        // edit chords stand down while a text item holds focus.
+        TextEdit {
             text: statRowRoot.value
+            readOnly: true
+            selectByMouse: true
             color: Theme.textPrimary
+            selectionColor: Theme.selectionColor
+            selectedTextColor: Theme.selectionText
             font.pixelSize: Theme.fontSizeSM
             font.family: Theme.fontMono
-            horizontalAlignment: Text.AlignRight
+            horizontalAlignment: TextEdit.AlignRight
+            wrapMode: TextEdit.NoWrap
         }
     }
 
@@ -336,12 +383,19 @@ Item {
                 color: Theme.textTertiary
                 font.pixelSize: Theme.fontSizeXS
             }
-            Text {
+            // U12: selectable value (read-only TextEdit, Theme selection
+            // tokens).
+            TextEdit {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: pillRoot.value
+                readOnly: true
+                selectByMouse: true
                 color: Theme.textPrimary
+                selectionColor: Theme.selectionColor
+                selectedTextColor: Theme.selectionText
                 font.pixelSize: Theme.fontSizeXS
                 font.family: Theme.fontMono
+                wrapMode: TextEdit.NoWrap
             }
         }
     }

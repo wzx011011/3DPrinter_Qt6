@@ -49,6 +49,14 @@ import ".."
 // Specialized types: hint navigation, slicing progress, export/preview buttons
 // Duplicate compression: repeatCount >= 2 renders an "xN" escalation badge
 // (upstream UpdatedItemsInfoNotification counter).
+// U12 copyable details: warning/error/serious-warning entries (severity 2/3/4
+// -- the U1 contract reserves 1 for genuine successes, so every failure path
+// lands here) carry a "复制详情" button that puts "title\nmessage" on the
+// system clipboard, so the text can be pasted into a bug report. QML has no
+// clipboard singleton and the entry model is QML-owned, so the bridge is a
+// hidden read-only TextEdit whose copy() routes to
+// QGuiApplication::clipboard() (same thread; the clipboard owns its copy
+// after the helper is cleared).
 // Hypertext: entries may carry a trailing clickable link (upstream
 // NotificationData.hypertext rendered by render_hypertext :734-753).
 Item {
@@ -68,6 +76,28 @@ Item {
     width: childrenRect.width
     height: childrenRect.height
     z: 200
+
+    // U12: system-clipboard bridge for the copy-details buttons. QML exposes
+    // no clipboard API; a hidden read-only TextEdit reaches the real
+    // QGuiApplication clipboard through TextEdit.copy() (selection-based, so
+    // select-all first; clearing afterwards does not retract the clipboard
+    // content).
+    TextEdit {
+        id: clipboardHelper
+        visible: false
+        width: 0
+        height: 0
+        readOnly: true
+    }
+    function copyTextToClipboard(text) {
+        clipboardHelper.text = text
+        if (text !== "") {
+            clipboardHelper.selectAll()
+            clipboardHelper.copy()
+        }
+        clipboardHelper.text = ""
+        clipboardHelper.deselect()
+    }
 
     // One delegate per stacked notification. Each entry owns its own
     // auto-dismiss timer and dismisses ONLY itself via
@@ -103,6 +133,19 @@ Item {
         // levels to bbl_render_block_notification (render_notifications
         // :3142-3143).
         readonly property bool isBlock: entry.sev === 3 || entry.sev === 4
+        // U12: warning/error/serious-warning entries offer "复制详情" (see the
+        // root header comment). Progress/hint/success entries churn or carry
+        // nothing worth reporting, so they stay button-free.
+        readonly property bool canCopyDetails: entry.sev === 2 || entry.sev === 3 || entry.sev === 4
+        // Copied text: title (if any) above the message, newline-joined --
+        // paste-ready for a bug report without UI noise.
+        readonly property string detailText: {
+            const t = modelData.title !== undefined ? modelData.title : ""
+            const m = modelData.message !== undefined ? modelData.message : ""
+            return t !== "" ? t + "\n" + m : m
+        }
+        // Transient "已复制" acknowledgement on the copy button itself.
+        property bool copyAcknowledged: false
 
         // -- Upstream window geometry (scale 1) ----------------------------
         // Line height = ImGui font size (ImGuiWrapper.hpp:59 m_font_size 18).
@@ -132,6 +175,7 @@ Item {
         height: (entry.lineRows + 1) * entry.lineHeight
                 + (entry.hasProgress ? 36 : 0)
                 + (entry.hasExtraButtons ? 30 : 0)
+                + (entry.canCopyDetails ? 30 : 0)
 
         // -- Colors --------------------------------------------------------
         // m_CurrentColor (use_bbl_theme :224-234): error -> m_ErrorColor,
@@ -177,6 +221,13 @@ Item {
             id: hideTimer
             interval: entry.autoDismissMs
             onTriggered: backend.dismissNotificationById(entry.entryId)
+        }
+
+        // U12: resets the copy button label after the "已复制" acknowledgement.
+        Timer {
+            id: copyAckTimer
+            interval: 1500
+            onTriggered: entry.copyAcknowledged = false
         }
 
         NumberAnimation on opacity { id: slideAnim; to: 1; from: 0; duration: Theme.motionNormal; easing.type: Theme.easingStandard }
@@ -569,6 +620,38 @@ Item {
                         Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                             onClicked: backend.confirmNotificationById(entry.entryId) }
+                    }
+                }
+
+                // Copy-details button (U12): puts the entry's title + message
+                // on the system clipboard so failure text can be pasted into
+                // a bug report. Button language follows the shared row style
+                // (chromePressed chip); on the solid block form the label
+                // switches to the forced white text color.
+                Row {
+                    visible: entry.canCopyDetails
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 8
+
+                    Rectangle {
+                        width: 72; height: 24; radius: Theme.radiusSM
+                        color: Theme.chromePressed
+                        border.color: Theme.borderDefault; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: entry.copyAcknowledged ? qsTr("已复制") : qsTr("复制详情")
+                            color: entry.isBlock ? entry.textColor : Theme.chromeText
+                            font.pixelSize: Theme.fontSizeXS
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.copyTextToClipboard(entry.detailText)
+                                entry.copyAcknowledged = true
+                                copyAckTimer.restart()
+                            }
+                        }
                     }
                 }
             }
