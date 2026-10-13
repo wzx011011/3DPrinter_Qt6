@@ -361,16 +361,43 @@ BackendContext::BackendContext(QObject *parent)
             }
           });
   // U8: auto-backup snapshots report here (triggerProjectBackup dispatches
-  // and returns; the archive outcome arrives asynchronously).
+  // and returns; the archive outcome arrives asynchronously). U13: a
+  // completion that belongs to an async 3MF model export is consumed by the
+  // EditorViewModel first (it owns the dispatch attribution and the export
+  // status/report) so an explicit export never surfaces as "Project backup".
   connect(projectService_, &ProjectServiceMock::snapshotFinished, this,
           [this](bool success, const QString &filePath, const QString &error)
           {
+            if (editorViewModel_
+                && editorViewModel_->consumePendingExportSnapshot(success, filePath, error))
+              return;
             Q_UNUSED(error)
             if (success)
               postNotification(tr("Project backup saved: %1").arg(filePath),
                                tr("Auto backup"));
             else
               postError(tr("Project backup failed"), NotiError);
+          });
+  // U13: async model export + zip-archive import sequences report through
+  // the EditorViewModel completion signals (the workers own the terminal
+  // report, same discipline as the SliceService export family).
+  connect(editorViewModel_, &EditorViewModel::modelExportFinished, this,
+          [this](bool success, const QString &filePath, const QString &error)
+          {
+            if (success)
+              postNotification(tr("模型已导出到: %1").arg(QFileInfo(filePath).fileName()),
+                               tr("导出完成"), NotiSuccess);
+            else
+              postError(error.isEmpty() ? tr("模型导出失败") : error, NotiError);
+          });
+  connect(editorViewModel_, &EditorViewModel::archiveImportFinished, this,
+          [this](int imported, int requested)
+          {
+            if (imported > 0)
+              postNotification(tr("压缩包导入完成: %1/%2 个模型").arg(imported).arg(requested),
+                               tr("导入完成"), NotiSuccess);
+            else
+              postError(tr("压缩包导入失败（%1 个模型均未加载）").arg(requested), NotiError);
           });
   // U8: fold an in-flight save into the canSave gate (and keep it fresh) so a
   // Ctrl+S during a background write is a silent no-op — with the gate open,

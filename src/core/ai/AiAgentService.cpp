@@ -8,8 +8,21 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QProcessEnvironment>
+#include <QTimer>
 
 AiAgentService::AiAgentService(QObject *parent) : QObject(parent) {}
+
+AiAgentService::~AiAgentService()
+{
+  // U13: the async stop() hands draining sidecars to closingProcesses_ with
+  // a 3s kill timer. Timers need a live event loop, which the destructor
+  // (typically app shutdown) cannot guarantee -- kill synchronously here.
+  // The QProcess objects are children, so ~QObject reclaims them.
+  for (QProcess *closing : std::as_const(closingProcesses_)) {
+    closing->disconnect();
+    closing->kill();
+  }
+}
 
 void AiAgentService::configure(const Config &config) {
   config_ = config;
@@ -104,19 +117,38 @@ bool AiAgentService::start() {
 void AiAgentService::stop() {
   if (!process_)
     return;
-  process_->disconnect(this);
-  if (process_->state() != QProcess::NotRunning) {
-    process_->write("{\"type\":\"shutdown\"}\n");
-    process_->waitForBytesWritten(1000);
-    process_->terminate();
-    if (!process_->waitForFinished(3000))
-      process_->kill();
-  }
-  process_->deleteLater();
+  // U13: signal-driven close. The old handshake froze the GUI thread for up
+  // to 4s (waitForBytesWritten(1000) + waitForFinished(3000)). The service
+  // state now flips to stopped immediately; the draining sidecar keeps only
+  // self-contained connections (kill timer + deleteLater), so no signal can
+  // re-enter the service after the disconnect below.
+  QProcess *closing = process_;
   process_ = nullptr;
   ready_ = false;
   busy_ = false;
   buffer_.clear();
+  closing->disconnect(this);
+  if (closing->state() != QProcess::NotRunning) {
+    closingProcesses_.insert(closing);
+    // Graceful handshake, just without the blocking waits: the shutdown
+    // line flushes on the event loop, stdin EOF covers sidecars that never
+    // parse it, terminate() asks again, and the child QTimer escalates to
+    // kill() after the same 3s grace the old waitForFinished(3000) used.
+    closing->write("{\"type\":\"shutdown\"}\n");
+    closing->closeWriteChannel();
+    closing->terminate();
+    auto *killTimer = new QTimer(closing);
+    killTimer->setSingleShot(true);
+    connect(killTimer, &QTimer::timeout, closing, &QProcess::kill);
+    connect(closing, &QProcess::finished, this, [this, closing, killTimer]() {
+      closingProcesses_.remove(closing);
+      killTimer->stop();
+    });
+    connect(closing, &QProcess::finished, closing, &QObject::deleteLater);
+    killTimer->start(3000);
+  } else {
+    closing->deleteLater();
+  }
   emit stateChanged();
 }
 

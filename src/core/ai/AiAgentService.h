@@ -17,6 +17,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QProcess>
+#include <QSet>
 
 class QProcessEnvironment;
 
@@ -27,6 +28,10 @@ class AiAgentService final : public QObject {
 
  public:
   explicit AiAgentService(QObject *parent = nullptr);
+  // U13: hard teardown for processes still draining an asynchronous stop().
+  // The kill timer needs a live event loop, which the destructor cannot rely
+  // on (app shutdown), so lingering closes are killed synchronously here.
+  ~AiAgentService() override;
 
   struct Config {
     QString sidecarScriptPath;  // <appDir>/ai_sidecar/agent.py
@@ -46,6 +51,13 @@ class AiAgentService final : public QObject {
 
  public slots:
   bool start();
+  /// U13: asynchronous close. The old implementation blocked the calling
+  /// (GUI) thread up to 4s with waitForBytesWritten(1000) +
+  /// waitForFinished(3000). Now the graceful "shutdown" line + terminate()
+  /// still go out, the service state flips to stopped immediately, and a
+  /// single-shot QTimer (same 3s grace the blocking wait used) escalates to
+  /// kill() if the sidecar has not exited. teardown completes on the
+  /// process's finished signal; the destructor force-kills stragglers.
   void stop();
   bool sendMessage(const QString &text);
   void cancelTurn();
@@ -68,6 +80,10 @@ class AiAgentService final : public QObject {
 
   Config config_;
   QProcess *process_ = nullptr;
+  /// U13: sidecar processes handed off by an async stop() and not finished
+  /// yet. They are disconnected from the service, escalate to kill() via
+  /// their own child QTimer, and remove themselves on finished.
+  QSet<QProcess *> closingProcesses_;
   QString buffer_;  // partial NDJSON line from the sidecar's stdout
   bool busy_ = false;
   bool ready_ = false;

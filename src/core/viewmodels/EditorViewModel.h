@@ -96,10 +96,11 @@ class EditorViewModel final : public QObject
   /// blocking run, reset immediately after, so every path (success, no-op,
   /// failure) releases the busy cursor.
   Q_PROPERTY(bool arranging READ arranging NOTIFY stateChanged)
-  /// U4: true while a synchronous export write (exportModel -> project model
-  /// write, requestExportGcode3mf -> project 3mf write) blocks the GUI thread.
-  /// The async G-code export worker state is SliceService::exportBusy; this
-  /// flag covers the inline writes that never reach a worker.
+  /// U4: true while an export write is in flight. Since U13 the model export
+  /// (exportModel) runs on a worker — this flag spans dispatch → completion
+  /// signal; requestExportGcode3mf still sets it around its inline project
+  /// 3mf write. The async G-code export worker state is
+  /// SliceService::exportBusy.
   Q_PROPERTY(bool exporting READ exporting NOTIFY stateChanged)
   Q_PROPERTY(bool showAllObjects READ showAllObjects NOTIFY stateChanged)
   Q_PROPERTY(int objectOrganizeMode READ objectOrganizeMode NOTIFY stateChanged)
@@ -292,6 +293,13 @@ public:
   bool arranging() const { return m_arranging; }
   bool exporting() const { return m_exporting; }
   //@}
+  /// U13: consumes the snapshotFinished delivery that belongs to an async
+  /// 3MF model export (writeProjectSnapshotAsync dispatch from exportModel).
+  /// Returns true when the completion was the export's — flips m_exporting,
+  /// reports status and emits modelExportFinished; BackendContext then skips
+  /// its auto-backup toast. U8's saving_ single-slot guarantees at most one
+  /// outstanding snapshot, so the pending-path match is exact.
+  bool consumePendingExportSnapshot(bool success, const QString &filePath, const QString &error);
   bool showAllObjects() const;
   bool showLabels() const;
   int objectOrganizeMode() const;
@@ -1653,9 +1661,17 @@ public:
   Q_INVOKABLE void requestSliceAll();
   // v2.4 IO: 项目保存/导出转发（EditorVM 持有 projectService_）
   Q_INVOKABLE bool saveProjectAs(const QString &filePath) const;
-  /// U4: dropped const -- the method now flips m_exporting (observable busy
-  /// state for BackendContext's central busy cursor) around the synchronous
-  /// project model write. Q_INVOKABLE signature is unchanged for QML/tests.
+  /// U13: the model export no longer blocks the GUI thread. STL/OBJ run on a
+  /// QtConcurrent worker against a GUI-thread deep-copy of the project model
+  /// (same clone-then-handoff idiom as SliceService::startSlice), 3MF rides
+  /// ProjectServiceMock::writeProjectSnapshotAsync (the U8 async snapshot
+  /// engine). Returns true = the export was dispatched; the outcome arrives
+  /// through modelExportFinished (BackendContext posts the toast). Returns
+  /// false = rejected up front (no model / busy / unsupported format) with
+  /// the reason in statusText.
+  /// U4: dropped const -- the method flips m_exporting (observable busy
+  /// state for BackendContext's central busy cursor) for the whole export
+  /// flight. Q_INVOKABLE signature is unchanged for QML/tests.
   Q_INVOKABLE bool exportModel(const QString &filePath, const QString &format);
   Q_INVOKABLE void cancelSlice();
   Q_INVOKABLE QString defaultExportGCodeFileName(int plateIndex = -1) const;
@@ -1706,9 +1722,13 @@ public:
   Q_INVOKABLE QStringList listArchiveEntries(const QString &archivePath) const;
   /// Phase 236 (DLG-03): extract the selected entries of a zip archive into a
   /// per-import temp directory and load each through the normal loadFile()
-  /// path (FileArchiveDialog "import selected"). Returns the number of
-  /// successfully started imports.
-  Q_INVOKABLE int importArchiveEntries(const QString &archivePath, const QStringList &entries);
+  /// path (FileArchiveDialog "import selected").
+  /// U13: the entry sequence is signal-continued — the old implementation
+  /// spun QCoreApplication::processEvents() between entries (up to 10s of
+  /// busy-wait with full user-input reentrancy mid-import). Returns true
+  /// when the sequence started; the imported count is delivered through
+  /// archiveImportFinished when the last entry's load settles.
+  Q_INVOKABLE bool importArchiveEntries(const QString &archivePath, const QStringList &entries);
   /// Phase 236 (DLG-03): apply the user's ObjColorDialog mapping — sets every
   /// volume of the pending object to the chosen extruder (upstream
   /// ObjImportColorDialog on_confirm sets the object extruder per color).
@@ -1970,6 +1990,12 @@ signals:
   void objectLayerRangeRequested();
   /// 请求切换到预览页面（对齐上游 Plater::priv::on_preview）
   void previewRequested();
+  /// U13: async model export (exportModel) settled. success=false carries
+  /// the failure reason. BackendContext turns this into the export toast.
+  void modelExportFinished(bool success, const QString &filePath, const QString &error);
+  /// U13: the zip-archive import sequence started by importArchiveEntries
+  /// finished — imported of requested entries loaded successfully.
+  void archiveImportFinished(int imported, int requested);
 
 private:
   void refreshMeshCacheAndFitHint();
@@ -2047,6 +2073,15 @@ private:
   /// suppressed instead of inventing a bed height.
   float printableHeightMm() const;
   void continueSliceAllQueue();
+  // ── U13: GUI-freeze removal ──────────────────────────────────────────────
+  /// Dispatches the next pending zip-archive entry (or finishes the
+  /// sequence). Re-entered from the loadFinished continuation connection
+  /// after each entry's async load settles (registered after the main
+  /// loadFinished handler, so per-entry post-load rebuild runs first).
+  void startNextArchiveImport();
+  /// Ends the archive-import sequence: clears the pending queue, reports the
+  /// imported/requested count through archiveImportFinished.
+  void finishArchiveImportSequence();
   // Phase 92 (ASMMEASURE-01): Assembly measurement gizmo activability. Mirrors
   // upstream GLGizmoAssembly::on_is_activable()
   // (third_party/OrcaSlicer/src/slic3r/GUI/Gizmos/GLGizmoAssembly.cpp:53-68):
@@ -2221,6 +2256,17 @@ private:
   bool m_importing = false;
   bool m_arranging = false;
   bool m_exporting = false;
+  // ── U13: GUI-freeze removal ──────────────────────────────────────────────
+  /// Target path of the 3MF model export dispatched through
+  /// ProjectServiceMock::writeProjectSnapshotAsync; consumed by
+  /// consumePendingExportSnapshot when snapshotFinished delivers.
+  QString m_pendingExportSnapshotPath;
+  /// Zip-archive import sequence state (signal-continued since U13).
+  bool m_archiveImportActive = false;
+  QString m_archiveImportArchivePath;
+  QStringList m_archiveImportPendingEntries;
+  int m_archiveImportTotalCount = 0;
+  int m_archiveImportedCount = 0;
   //@}
   // Viewport warnings (对齐上游 EWarning)
   int m_viewportWarning = 0;    ///< 0=none, 1=ObjectOutside, 2=ObjectClashed

@@ -32,18 +32,20 @@
 #include <libslic3r/QuadricEdgeCollapse.hpp>
 #include <libslic3r/TriangleSelector.hpp>  // EnforcerBlockerType + select_patch
 #include <libslic3r/TriangleMesh.hpp>  // v5.16 bed_model STL loader (ReadSTLFile)
+#include <libslic3r/Model.hpp>     // U13: export worker snapshot (Model deep copy)
 #endif
 #include <QFileInfo>
+#include <QFile>
 #include <QDir>
 #include <QUrl>
+#include <QPointer> // U13: async export delivery guard
 #include <QVector4D>
 #include <QMatrix4x4> // Phase 240 (GIZ-03): flatten rotation math
 #include <QQuaternion> // Phase 240 (GIZ-03): QQuaternion::rotationTo
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QCoreApplication>
-#include <QEventLoop>
-#include <QtConcurrent/QtConcurrentRun> // Phase 240 (GIZ-06): simplify preview job
+#include <QtConcurrent/QtConcurrentRun> // Phase 240 (GIZ-06): simplify preview job / U13 export worker
 #include <QFutureWatcher> // P15.11: drag-time clearance preview compute delivery
 #include <algorithm>
 
@@ -5839,6 +5841,25 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
     }
     emit stateChanged(); });
 
+  // U13: archive-import continuation. importArchiveEntries used to spin
+  // QCoreApplication::processEvents() between entries (up to 10s busy-wait
+  // with full user-input reentrancy mid-import). The sequence now rides the
+  // service's own terminal signal: this connection is registered AFTER the
+  // loadFinished handler above, so each entry's post-load rebuild runs
+  // before the next entry is dispatched. Both outcomes (success and the
+  // failure/cancel delivery of loadFinished(false, ...)) advance the queue,
+  // matching the old bounded-wait behavior of moving on either way.
+  connect(projectService_, &ProjectServiceMock::loadFinished, this,
+          [this](bool success, const QString &message)
+          {
+            Q_UNUSED(message)
+            if (!m_archiveImportActive)
+              return;
+            if (success)
+              ++m_archiveImportedCount;
+            startNextArchiveImport();
+          });
+
   // Restore bed shape from QSettings (对齐上游 bed_shape persistence)
   {
     QSettings s;
@@ -10329,11 +10350,160 @@ bool EditorViewModel::saveProjectAs(const QString &filePath) const
 bool EditorViewModel::exportModel(const QString &filePath, const QString &format)
 {
     if (!projectService_) return false;
-    // U4: the project model write (STL/3MF/OBJ, 3mf includes per-plate
-    // thumbnails) is a synchronous GUI-thread write -- cover it with the
-    // central busy-cursor state like the async G-code export worker.
-    const SyncBusyScope busy(this, &EditorViewModel::m_exporting);
-    return projectService_->exportModel(filePath, format);
+    // U13: the model export no longer freezes the window. The old path ran
+    // the whole write inline on the GUI thread (mesh merge + STL/OBJ disk
+    // write, or the 3MF zip+XML snapshot) under the U4 busy scope. Now:
+    //  - 3MF rides ProjectServiceMock::writeProjectSnapshotAsync (the U8
+    //    async snapshot engine — same writer as before, still WITHOUT
+    //    project bookkeeping), outcome via consumePendingExportSnapshot;
+    //  - STL/OBJ run the merge+write on a QtConcurrent worker against a
+    //    GUI-thread deep copy of the project model, the same
+    //    clone-then-single-ownership-handoff idiom SliceService::startSlice
+    //    uses — a concurrent scene edit can never race the export.
+    // m_exporting spans the whole flight (U4 contract: flipped BEFORE the
+    // remaining GUI-thread stretch so the busy cursor is observable).
+    const QString ext = format.toLower();
+    if (m_exporting)
+    {
+      statusText_ = tr("模型导出正在进行中");
+      emit stateChanged();
+      return false;
+    }
+    if (ext == QLatin1String("3mf"))
+    {
+      m_pendingExportSnapshotPath = filePath;
+      const bool dispatched = projectService_->writeProjectSnapshotAsync(filePath);
+      if (!dispatched)
+      {
+        m_pendingExportSnapshotPath.clear();
+        statusText_ = projectService_->lastError();
+        emit stateChanged();
+        return false;
+      }
+      m_exporting = true;
+      statusText_ = tr("正在导出 3MF...");
+      emit stateChanged();
+      return true;
+    }
+    if (ext == QLatin1String("stl") || ext == QLatin1String("obj"))
+    {
+#ifdef HAS_LIBSLIC3R
+      Slic3r::Model *liveModel = projectService_->rawModel();
+      if (!liveModel)
+      {
+        statusText_ = tr("没有可导出的模型");
+        emit stateChanged();
+        return false;
+      }
+      if (projectService_->loading())
+      {
+        statusText_ = tr("模型正在加载，请稍后再导出");
+        emit stateChanged();
+        return false;
+      }
+      m_exporting = true;
+      statusText_ = tr("正在导出 %1...").arg(ext.toUpper());
+      emit stateChanged();
+      // GUI-thread deep copy while the model state is stable (memcpy-grade
+      // cost — the U8 save engine accepts the same). The worker owns the
+      // snapshot exclusively afterwards.
+      auto snapshot = std::make_shared<Slic3r::Model>(*liveModel);
+      const QPointer<EditorViewModel> receiver(this);
+      (void)QtConcurrent::run([receiver, snapshot, filePath, ext]() {
+        // Merge loop mirrors ProjectServiceMock::exportModel's STL branch
+        // (upstream export_stl as_one semantics: every object's model-part
+        // volumes with volume + instance transforms applied).
+        Slic3r::TriangleMesh combined;
+        for (const Slic3r::ModelObject *object : snapshot->objects)
+        {
+          if (!object)
+            continue;
+          for (const Slic3r::ModelVolume *volume : object->volumes)
+          {
+            if (!volume || !volume->is_model_part())
+              continue;
+            Slic3r::TriangleMesh volumeMesh(volume->mesh());
+            volumeMesh.transform(volume->get_transformation().get_matrix(), true);
+            if (object->instances.empty())
+            {
+              combined.merge(volumeMesh);
+              continue;
+            }
+            for (const Slic3r::ModelInstance *instance : object->instances)
+            {
+              if (!instance)
+                continue;
+              Slic3r::TriangleMesh instanceMesh(volumeMesh);
+              instanceMesh.transform(instance->get_transformation().get_matrix(), true);
+              combined.merge(instanceMesh);
+            }
+          }
+        }
+        bool ok = false;
+        QString error;
+        if (combined.empty())
+        {
+          error = EditorViewModel::tr("没有可导出的网格");
+        }
+        else
+        {
+          const QByteArray nativePath = QFile::encodeName(filePath);
+          if (ext == QLatin1String("stl"))
+          {
+            ok = combined.write_binary(nativePath.constData());
+            if (!ok)
+              error = EditorViewModel::tr("STL 写入失败: %1").arg(filePath);
+          }
+          else
+          {
+            // Upstream parity: WriteOBJFile reports no status (void); the
+            // export is reported as started-and-written like the old path.
+            combined.WriteOBJFile(nativePath.constData());
+            ok = true;
+          }
+        }
+        if (!receiver)
+          return;
+        QMetaObject::invokeMethod(receiver, [receiver, ok, error, filePath]() {
+          if (!receiver)
+            return;
+          receiver->m_exporting = false;
+          receiver->statusText_ = ok
+              ? EditorViewModel::tr("模型已导出: %1").arg(QFileInfo(filePath).fileName())
+              : error;
+          emit receiver->modelExportFinished(ok, filePath, error);
+          emit receiver->stateChanged();
+        }, Qt::QueuedConnection);
+      });
+      return true;
+#else
+      Q_UNUSED(filePath)
+      Q_UNUSED(ext)
+      return false;
+#endif
+    }
+    statusText_ = tr("不支持的导出格式: %1").arg(format);
+    emit stateChanged();
+    return false;
+}
+
+bool EditorViewModel::consumePendingExportSnapshot(bool success, const QString &filePath, const QString &error)
+{
+  // U13: exact attribution — U8's saving_ single-slot guarantees at most one
+  // outstanding snapshot, and m_pendingExportSnapshotPath is only set between
+  // a 3MF export dispatch and its delivery, so a path match cannot be a
+  // foreign auto-backup completion.
+  if (!m_exporting || m_pendingExportSnapshotPath.isEmpty() || filePath != m_pendingExportSnapshotPath)
+    return false;
+  m_pendingExportSnapshotPath.clear();
+  m_exporting = false;
+  if (success)
+    statusText_ = tr("模型已导出: %1").arg(QFileInfo(filePath).fileName());
+  else
+    statusText_ = error.isEmpty() ? tr("模型导出失败") : error;
+  emit modelExportFinished(success, filePath, error);
+  emit stateChanged();
+  return true;
 }
 
 void EditorViewModel::requestSlice()
@@ -10695,38 +10865,75 @@ QStringList EditorViewModel::listArchiveEntries(const QString &archivePath) cons
   return projectService_ ? projectService_->listArchiveEntries(archivePath) : QStringList();
 }
 
-int EditorViewModel::importArchiveEntries(const QString &archivePath, const QStringList &entries)
+bool EditorViewModel::importArchiveEntries(const QString &archivePath, const QStringList &entries)
 {
   // Phase 236 (DLG-03): FileArchiveDialog confirm — extract each checked
   // entry into a temp directory and run the normal loadFile() path.
   // loadFile() parses on a worker under HAS_LIBSLIC3R, so the extracted
   // files must outlive this call: the per-import temp dir disables
   // auto-remove and relies on OS temp cleanup.
+  //
+  // U13: the entries are no longer sequenced by a processEvents busy-wait
+  // (up to 10s of reentrant GUI pumping per entry). The queue rides the
+  // service's loadFinished signal instead: startNextArchiveImport()
+  // dispatches one entry, the constructor-registered continuation
+  // (registered after the main loadFinished handler, so post-load rebuild
+  // runs first) counts the outcome and dispatches the next. The old return
+  // value counted entries whose load had merely STARTED — the delivered
+  // archiveImportFinished count now reflects actual load outcomes.
   if (!projectService_ || archivePath.isEmpty() || entries.isEmpty())
-    return 0;
-  int imported = 0;
-  for (const QString &entry : entries)
+    return false;
+  if (m_archiveImportActive)
   {
+    statusText_ = tr("压缩包导入正在进行中");
+    emit stateChanged();
+    return false;
+  }
+  m_archiveImportActive = true;
+  m_archiveImportArchivePath = archivePath;
+  m_archiveImportPendingEntries = entries;
+  m_archiveImportTotalCount = entries.size();
+  m_archiveImportedCount = 0;
+  emit stateChanged();
+  startNextArchiveImport();
+  return true;
+}
+
+void EditorViewModel::startNextArchiveImport()
+{
+  while (!m_archiveImportPendingEntries.isEmpty())
+  {
+    const QString entry = m_archiveImportPendingEntries.takeFirst();
     QTemporaryDir tempDir(QDir::temp().filePath(QStringLiteral("owzx-archive-XXXXXX")));
     tempDir.setAutoRemove(false); // async load reads the files after return
     if (!tempDir.isValid())
-      break;
-    const QString extracted = projectService_->extractArchiveEntry(archivePath, entry, tempDir.path());
+      continue;
+    const QString extracted = projectService_->extractArchiveEntry(m_archiveImportArchivePath, entry, tempDir.path());
     if (extracted.isEmpty())
       continue;
     if (loadFile(extracted))
-      ++imported;
-    // Sequential loads: the service's loading_ guard rejects concurrent
-    // starts, so wait (bounded) for the current import to finish before the
-    // next entry.
-    int waitMs = 0;
-    while (projectService_->loading() && waitMs < 10000)
-    {
-      QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
-      waitMs += 50;
-    }
+      return; // async load in flight; the loadFinished continuation re-enters here
+    // Synchronous rejection (service busy / missing file): nothing is in
+    // flight to wait for, so move on to the next entry.
   }
-  return imported;
+  finishArchiveImportSequence();
+}
+
+void EditorViewModel::finishArchiveImportSequence()
+{
+  const int imported = m_archiveImportedCount;
+  const int requested = m_archiveImportTotalCount;
+  m_archiveImportActive = false;
+  m_archiveImportArchivePath.clear();
+  m_archiveImportPendingEntries.clear();
+  m_archiveImportTotalCount = 0;
+  m_archiveImportedCount = 0;
+  if (imported > 0)
+    statusText_ = tr("已从压缩包导入 %1 个模型").arg(imported);
+  // imported == 0: the failing entry's loadFinished delivery already put
+  // the real reason into statusText_; do not overwrite it here.
+  emit archiveImportFinished(imported, requested);
+  emit stateChanged();
 }
 
 bool EditorViewModel::applyPendingObjColors(int extruderId)
