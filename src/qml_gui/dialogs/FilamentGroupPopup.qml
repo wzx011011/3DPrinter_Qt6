@@ -27,7 +27,7 @@ import OWzx
 //     (PartPlate.cpp:337-349) so the inherit-sentinel resolves to the real
 //     global mode instead of always seeding AutoForFlush.
 //
-// Usage: FilamentGroupPopup { id: filamentGroupPopup; editorVm: backend.editorViewModel }
+// Usage: FilamentGroupPopup { id: filamentGroupPopup; editorVm: Backend.editorViewModel }
 // Trigger: filamentGroupPopup.open()
 CxPopup {
     id: root

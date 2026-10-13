@@ -24,7 +24,7 @@ import OWzx
 //    via Qt.openUrlExternally, link color uses the R1 accent token
 //    (upstream #009789 semantic slot = R1 green).
 //  - Three-paragraph heritage narrative (AboutDialog.cpp:270-272).
-//  - Build line bound to backend.systemInfo().buildCommit (U04 contract),
+//  - Build line bound to Backend.systemInfo().buildCommit (U04 contract),
 //    hidden when empty — upstream "Build %s" (AboutDialog.cpp:249).
 //  - Copyright(C) 2026 OWzx line (AboutDialog.cpp:315 format).
 //  - The former 7-row static info table: fake values ("6.10.0", "Debug",
@@ -81,8 +81,8 @@ CxDialog {
     readonly property string buildCommit: (sysInfo.buildCommit || "") + ""
 
     onAboutToShow: {
-        sysInfo = (typeof backend !== "undefined" && backend && backend.systemInfo)
-            ? backend.systemInfo() : {}
+        sysInfo = (typeof Backend !== "undefined" && Backend && Backend.systemInfo)
+            ? Backend.systemInfo() : {}
     }
 
     dialogTitle: qsTr("关于 OWzx")
@@ -162,7 +162,7 @@ CxDialog {
             }
         }
 
-        // Runtime info table — values bound to backend.systemInfo() truth
+        // Runtime info table — values bound to Backend.systemInfo() truth
         // (upstream has no such table; the former static fake rows
         // "6.10.0"/"V4 / JavaScript"/"Debug"/"Windows x64 (MSVC)"/
         // "2026-03-03" were removed or rebound).

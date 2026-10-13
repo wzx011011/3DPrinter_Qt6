@@ -30,7 +30,7 @@ Item {
     required property var configVm
     property string processCategory: ""
 
-    // Dock 状态（绑定 backend.sidebarXxx）
+    // Dock 状态（绑定 Backend.sidebarXxx）
     required property bool collapsed
     required property int sidebarWidth      // 当前宽度（展开时）
     required property int minWidth
@@ -123,7 +123,7 @@ Item {
             hoverEnabled: true
             cursorShape: Qt.SplitHCursor
 
-            // 拖拽实时改 sidebarWidth（通过 backend 持久化）
+            // 拖拽实时改 sidebarWidth（通过 Backend 持久化）
             property real _startX: 0
             property int _startWidth: 0
             onPressed: (mouse) => {
@@ -137,7 +137,7 @@ Item {
                 const delta = Math.round(gx - _startX)
                 // dockArea=Right 时反向（拖右减小宽度）—— 由外部传入 isRightDocked
                 const newW = root._isRightDocked ? (_startWidth - delta) : (_startWidth + delta)
-                // 实时更新（clamp 在 backend）
+                // 实时更新（clamp 在 Backend）
                 if (root.widthChanged)
                     root.widthChanged(newW)
             }
@@ -149,8 +149,8 @@ Item {
 
     // dockArea=Right 标志（外部传入，决定拖拽方向）
     property bool _isRightDocked: false
-    // 宽度变更回调（外部注入，转发到 backend.requestSetSidebarWidth）
+    // 宽度变更回调（外部注入，转发到 Backend.requestSetSidebarWidth）
     property var widthChanged: null
-    // 折叠/展开回调（外部注入，转发到 backend.requestToggleSidebar）
+    // 折叠/展开回调（外部注入，转发到 Backend.requestToggleSidebar）
     property var toggleRequested: null
 }

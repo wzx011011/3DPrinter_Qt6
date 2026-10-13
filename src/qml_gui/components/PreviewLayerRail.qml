@@ -168,7 +168,7 @@ Item {
                 first.onMoved: root.commitRange(first.value, second.value)
                 second.onMoved: root.commitRange(first.value, second.value)
                 // IMSlider::on_mouse_wheel changes the active handle. The rail
-                // itself owns wheel input so the backend remains the source of truth.
+                // itself owns wheel input so the Backend remains the source of truth.
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: function(event) {
@@ -441,7 +441,7 @@ Item {
         // Q9: open chain for the Phase 238 color-change dialog -- the dialog
         // shipped with no .open() caller anywhere (targetLayer stayed -1 and
         // the OK guard swallowed every attempt), leaving addColorChangeAtLayer
-        // -- its only backend consumer -- unreachable from the UI. The entry
+        // -- its only Backend consumer -- unreachable from the UI. The entry
         // carries the upstream IMSlider add-menu gate semantics: the
         // sequential-print insertion gate (IMSlider.cpp:1492) plus the
         // Change Filament family's m_can_change_color gate (:1522-1523), which

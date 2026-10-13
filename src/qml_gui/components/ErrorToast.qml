@@ -42,9 +42,9 @@ import OWzx
 //   8/9=progress(blue)
 // U1 severity contract: 1 (success) is RESERVED for genuine successes
 // (slice/export finished). Failure paths must post 2 (warning) or 3 (error)
-// from QML (backend.postError/postNotification take the raw int) — posting 1
+// from QML (Backend.postError/postNotification take the raw int) — posting 1
 // renders this green success toast AND lights the amber ErrorBanner, which
-// gates on backend.lastErrorSeverity === 1.
+// gates on Backend.lastErrorSeverity === 1.
 // Persistent mode: doesn't auto-dismiss, shows progress bar and/or confirm buttons
 // Specialized types: hint navigation, slicing progress, export/preview buttons
 // Duplicate compression: repeatCount >= 2 renders an "xN" escalation badge
@@ -64,7 +64,7 @@ Item {
 
     // The visible stack, most important first (index 0 renders at the top,
     // matching upstream ErrorNotificationLevel at the "Top most position").
-    readonly property var stack: backend.notificationStack
+    readonly property var stack: Backend.notificationStack
     readonly property bool shouldShow: stack.length > 0
     visible: shouldShow
     // Docked bottom-right (upstream canvas bottom-right corner), 10px
@@ -101,7 +101,7 @@ Item {
 
     // One delegate per stacked notification. Each entry owns its own
     // auto-dismiss timer and dismisses ONLY itself via
-    // backend.dismissNotificationById(id) (upstream PopNotification::close()).
+    // Backend.dismissNotificationById(id) (upstream PopNotification::close()).
     component ToastEntry: Item {
         id: entry
 
@@ -113,11 +113,11 @@ Item {
         readonly property int notiType: modelData.type !== undefined ? modelData.type : 0
         readonly property bool isPersistent: modelData.persistent === true
         readonly property bool hasProgress: modelData.hasProgress === true
-        // U3: backend.cancellable entries carry the progress-cancel button
+        // U3: Backend.cancellable entries carry the progress-cancel button
         // (upstream SlicingProgressNotification SP_PROGRESS "has cancel
         // button", SlicingProgressNotification.hpp:18 + ProgressBarNotification
         // "Progress bar with cancel button", NotificationManager.hpp:107).
-        // Click routes to backend.cancelNotificationAction(id), which
+        // Click routes to Backend.cancelNotificationAction(id), which
         // dispatches to SliceService::cancelSlice/cancelExport or
         // ProjectServiceMock::cancelLoad by entry type.
         readonly property bool cancellable: modelData.cancellable === true
@@ -194,7 +194,7 @@ Item {
         // Block notifications force white text (push Text {1,1,1,1} :420).
         readonly property color textColor: entry.isBlock ? Theme.textOnAccent : Theme.chromeText
         // Auto-dismiss uses user preference (in seconds)
-        readonly property int autoDismissMs: backend.autoDismissSec * 1000
+        readonly property int autoDismissMs: Backend.autoDismissSec * 1000
 
         Component.onCompleted: {
             slideAnim.restart()
@@ -220,7 +220,7 @@ Item {
         Timer {
             id: hideTimer
             interval: entry.autoDismissMs
-            onTriggered: backend.dismissNotificationById(entry.entryId)
+            onTriggered: Backend.dismissNotificationById(entry.entryId)
         }
 
         // U12: resets the copy button label after the "已复制" acknowledgement.
@@ -362,7 +362,7 @@ Item {
 
                     // Hypertext link (upstream NotificationData.hypertext,
                     // render_hypertext :734-753; mutually exclusive with
-                    // "More" there). Click routes through the backend, which
+                    // "More" there). Click routes through the Backend, which
                     // acknowledges + closes the entry (PopNotification::
                     // on_text_click -> close()).
                     Text {
@@ -379,7 +379,7 @@ Item {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.activateNotificationHypertext(entry.entryId)
+                            onClicked: Backend.activateNotificationHypertext(entry.entryId)
                         }
                     }
 
@@ -437,7 +437,7 @@ Item {
 
                 // Progress cancel button (U3, upstream render_cancel_button,
                 // SlicingProgressNotification.cpp:436-465: click ->
-                // on_cancel_button -> m_cancel_callback). backend maps the
+                // on_cancel_button -> m_cancel_callback). Backend maps the
                 // entry type to the owning service's cancel flag
                 // (slice / export / 3MF import); the service reports the
                 // terminal state through its own signal, which retires the
@@ -453,7 +453,7 @@ Item {
                         border.color: Theme.borderDefault; border.width: 1
                         Text { anchors.centerIn: parent; text: qsTr("取消"); color: entry.textColor; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.cancelNotificationAction(entry.entryId) }
+                            onClicked: Backend.cancelNotificationAction(entry.entryId) }
                     }
                 }
 
@@ -473,7 +473,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.prevHint()
+                            onClicked: Backend.prevHint()
                         }
                     }
 
@@ -486,13 +486,13 @@ Item {
                         // one-shot binding kept the creation-time counter.
                         property int refreshTick: 0
                         Connections {
-                            target: backend
+                            target: Backend
                             function onDailyTipChanged() { ++hintCounter.refreshTick }
                         }
                         text: {
                             const tick = hintCounter.refreshTick  // re-evaluate per move
-                            return backend.currentHintIndex() >= 0
-                                  ? (backend.currentHintIndex() + 1) + "/" + backend.hintCount() : ""
+                            return Backend.currentHintIndex() >= 0
+                                  ? (Backend.currentHintIndex() + 1) + "/" + Backend.hintCount() : ""
                         }
                         color: entry.isBlock ? entry.textColor : Theme.textTertiary
                         font.pixelSize: Theme.fontSizeXS
@@ -508,13 +508,13 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.nextHint()
+                            onClicked: Backend.nextHint()
                         }
                     }
 
                     // Documentation link button (aligns with upstream HintNotification documentation button)
                     Rectangle {
-                        visible: backend.currentHintHasDocumentationLink()
+                        visible: Backend.currentHintHasDocumentationLink()
                         width: 40; height: 22; radius: Theme.radiusSM
                         color: docMA.containsMouse ? Theme.bgWarningSubtle : Theme.bgCard
                         Text { anchors.centerIn: parent; text: qsTr("文档"); color: entry.isBlock ? entry.textColor : Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
@@ -523,7 +523,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.openHintDocumentation()
+                            onClicked: Backend.openHintDocumentation()
                         }
                     }
 
@@ -540,8 +540,8 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                backend.dismissNotificationById(entry.entryId)
-                                backend.setHintsEnabled(false)
+                                Backend.dismissNotificationById(entry.entryId)
+                                Backend.setHintsEnabled(false)
                             }
                         }
                     }
@@ -565,8 +565,8 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                backend.dismissNotificationById(entry.entryId)
-                                backend.setCurrentPage(2)
+                                Backend.dismissNotificationById(entry.entryId)
+                                Backend.setCurrentPage(2)
                             }
                         }
                     }
@@ -583,8 +583,8 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                backend.dismissNotificationById(entry.entryId)
-                                backend.exportGCodeRequested()
+                                Backend.dismissNotificationById(entry.entryId)
+                                Backend.exportGCodeRequested()
                             }
                         }
                     }
@@ -596,7 +596,7 @@ Item {
                         border.color: Theme.borderDefault; border.width: 1
                         Text { anchors.centerIn: parent; text: qsTr("关闭"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeXS }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.dismissNotificationById(entry.entryId) }
+                            onClicked: Backend.dismissNotificationById(entry.entryId) }
                     }
                 }
 
@@ -612,14 +612,14 @@ Item {
                         border.color: Theme.borderDefault; border.width: 1
                         Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.cancelNotificationById(entry.entryId) }
+                            onClicked: Backend.cancelNotificationById(entry.entryId) }
                     }
                     Rectangle {
                         width: 60; height: 24; radius: Theme.radiusSM
                         color: entry.currentColor
                         Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
                         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.confirmNotificationById(entry.entryId) }
+                            onClicked: Backend.confirmNotificationById(entry.entryId) }
                     }
                 }
 
@@ -697,7 +697,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: backend.dismissNotificationById(entry.entryId)
+                    onClicked: Backend.dismissNotificationById(entry.entryId)
                 }
             }
 
@@ -719,7 +719,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: backend.dismissNotificationById(entry.entryId)
+                    onClicked: Backend.dismissNotificationById(entry.entryId)
                 }
             }
 
@@ -735,7 +735,7 @@ Item {
                 height: entry.minimizeVisible ? entry.height - entry.lineHeight * 2 : entry.height
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: backend.dismissNotificationById(entry.entryId)
+                onClicked: Backend.dismissNotificationById(entry.entryId)
             }
         }
     }

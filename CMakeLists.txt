@@ -116,10 +116,14 @@ endif()
     endif()
 
     # ── 共享源码 OBJECT 库（主程序和测试共用） ────────────────────────────
+    # S8 (2026-10-14): BackendContext.cpp/.h moved OUT of this object library
+    # into the owzx_qml QML module target (src/qml_gui/CMakeLists.txt) so its
+    # QML_SINGLETON registration is statically visible to qmlcachegen/qmllint
+    # (qmltyperegistrar only processes the module target's own sources; an
+    # OBJECT library cannot host a qt_add_qml_module). Consumers that need the
+    # BackendContext symbols link owzx_qml transitively.
     add_library(owzx_app_core OBJECT
         src/nanosvg_impl.cpp
-        src/qml_gui/BackendContext.cpp
-        src/qml_gui/BackendContext.h
         src/qml_gui/AiChatBridge.cpp
         src/qml_gui/AiChatBridge.h
         src/core/viewmodels/AiMessageDecorate.cpp
@@ -530,7 +534,9 @@ if(BUILD_TESTING)
     get_filename_component(_qt6_bin_dir "${_qt6_core_location}" DIRECTORY)
 
     qt_add_executable(E2EWorkflowTests tests/E2EWorkflowTests.cpp)
-    target_link_libraries(E2EWorkflowTests PRIVATE owzx_app_core
+    # owzx_qml: hosts the BackendContext symbols since S8 (moved out of
+    # owzx_app_core into the QML module target).
+    target_link_libraries(E2EWorkflowTests PRIVATE owzx_app_core owzx_qml
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
     # Same shared-SHA1 duplicate definitions as OWzxSlicer above (audit Q4).
@@ -554,7 +560,7 @@ if(BUILD_TESTING)
     # editing the test class. The canonical verify script does this; for
     # incremental builds, delete the autogen timestamp before building:
     #   rm build/ViewModelSmokeTests_autogen/timestamp
-    target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core
+    target_link_libraries(ViewModelSmokeTests PRIVATE owzx_app_core owzx_qml
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
     )
     if(MSVC)

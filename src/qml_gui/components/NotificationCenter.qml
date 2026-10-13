@@ -84,7 +84,7 @@ Item {
 
                 // Unread badge
                 Rectangle {
-                    visible: backend.unreadHistoryCount > 0
+                    visible: Backend.unreadHistoryCount > 0
                     width: unreadBadge.implicitWidth + 12
                     height: 20
                     radius: Theme.radiusXL
@@ -93,7 +93,7 @@ Item {
                     Text {
                         id: unreadBadge
                         anchors.centerIn: parent
-                        text: backend.unreadHistoryCount > 99 ? "99+" : backend.unreadHistoryCount.toString()
+                        text: Backend.unreadHistoryCount > 99 ? "99+" : Backend.unreadHistoryCount.toString()
                         color: Theme.accentDark
                         font.pixelSize: Theme.fontSizeXS
                         font.bold: true
@@ -102,7 +102,7 @@ Item {
 
                 // Mark read button
                 Rectangle {
-                    visible: backend.unreadHistoryCount > 0
+                    visible: Backend.unreadHistoryCount > 0
                     width: 24; height: 24; radius: Theme.radiusSM
                     color: "transparent"
 
@@ -113,13 +113,13 @@ Item {
                         font.pixelSize: Theme.fontSize13
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.markHistoryRead()
+                        onClicked: Backend.markHistoryRead()
                     }
                 }
 
                 // Clear all button
                 Rectangle {
-                    visible: backend.historyCount > 0
+                    visible: Backend.historyCount > 0
                     width: 24; height: 24; radius: Theme.radiusSM
                     color: "transparent"
 
@@ -130,7 +130,7 @@ Item {
                         font.pixelSize: Theme.fontSizeMD
                     }
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.clearHistory()
+                        onClicked: Backend.clearHistory()
                     }
                 }
 
@@ -160,7 +160,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                model: backend.notificationHistory
+                model: Backend.notificationHistory
                 spacing: 4
 
                 delegate: Rectangle {
@@ -353,7 +353,7 @@ Item {
                         anchors.bottom: parent.bottom
                         width: 2.125 * root.notifLineHeight
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.removeHistoryById(card.modelData.id)
+                        onClicked: Backend.removeHistoryById(card.modelData.id)
                     }
 
                     // Per-row close glyph (render_close_button,
@@ -374,7 +374,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.removeHistoryById(card.modelData.id)
+                            onClicked: Backend.removeHistoryById(card.modelData.id)
                         }
                     }
 
@@ -394,7 +394,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: backend.removeHistoryById(card.modelData.id)
+                            onClicked: Backend.removeHistoryById(card.modelData.id)
                         }
                     }
                 }
@@ -412,7 +412,7 @@ Item {
 
             // Empty state
             Text {
-                visible: backend.historyCount === 0
+                visible: Backend.historyCount === 0
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 horizontalAlignment: Text.AlignHCenter

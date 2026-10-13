@@ -5,7 +5,8 @@
 // instantiation). Loads the real qrc resources that ship in OWzxSlicer.exe
 // (main.qml + all 10 pages) through a QQmlApplicationEngine and asserts:
 //   1. zero QML errors during creation,
-//   2. the app's context properties are present and the backend view-model
+//   2. the app's OWzx module singletons (Backend / AppSettings, S8) are
+//      present and the backend view-model
 //      surface (editorViewModel / previewViewModel / ... ) is non-null,
 //   3. main.qml instantiates (root window + 9-slot StackLayout contract,
 //      main.qml:928-1046),
@@ -52,38 +53,6 @@
 #include "qml_gui/Models/ConfigOptionFilterProxy.h"
 
 namespace {
-
-// Test-local stand-in for main_qml.cpp:329 UiSettingsStore (a cpp-local
-// class, not linkable). Same QML surface the app exposes — value()/setValue()
-// Q_INVOKABLEs (the only members QML calls: main.qml:1467-1469 reads,
-// main.qml:1419-1429 writes) — but backed by a temp INI file instead of the
-// developer's real HKCU registry so a smoke run can never persist a ui/theme
-// or ui/scaleFactor change into the host's real OWzx/UI store.
-class TestUiSettingsStore : public QObject
-{
-  Q_OBJECT
-
-public:
-  explicit TestUiSettingsStore(QObject *parent = nullptr) : QObject(parent)
-  {
-    const QString iniPath = tempDir_.filePath(QStringLiteral("qml_smoke_ui_settings.ini"));
-    settings_ = new QSettings(iniPath, QSettings::IniFormat, this);
-  }
-
-  Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = {}) const
-  {
-    return settings_->value(key, defaultValue);
-  }
-
-  Q_INVOKABLE void setValue(const QString &key, const QVariant &val)
-  {
-    settings_->setValue(key, val);
-  }
-
-private:
-  QTemporaryDir tempDir_;
-  QSettings *settings_ = nullptr;
-};
 
 // Known pre-existing QML defects the FIRST run of this suite (2026-10-12,
 // Q14) surfaced in MultiMachinePage — surfaced here, not introduced here.
@@ -141,8 +110,11 @@ private:
   QObject *backendProperty(const char *name) const;
   void failOnUnexpectedQmlMessages(qsizetype before, const char *context);
 
-  // BackendContext + engine are intentionally leaked (see file header).
+  // BackendContext + engine are intentionally leaked (see file header);
+  // backend_ is the engine-created OWzx module singleton (S8). tempDir_ keeps
+  // the QSettings isolation alive for the whole run (see initTestCase).
   BackendContext *backend_ = nullptr;
+  std::unique_ptr<QTemporaryDir> tempDir_;
   QQmlApplicationEngine *engine_ = nullptr;
   QList<QQmlError> m_qmlMessages;
   // Allowlist bookkeeping: how many captured messages each entry matched
@@ -160,15 +132,16 @@ void QmlSmokeTests::initTestCase()
                            QStringLiteral("/crash_dumps"));
 #endif
 
-  // Mirror the two runtime type registrations main_qml.cpp performs
-  // (main_qml.cpp:533-542). GLViewport is registered as RhiViewport
-  // unconditionally instead of replaying selectRhiBackendFromEnvironment():
-  // this suite never renders a frame, so the render-path difference between
-  // RhiViewport/SoftwareViewport is not under test, and the unconditional
-  // registration keeps the suite independent of GPU probe availability.
-  // The app's selector remains the authority in main_qml.cpp.
-  qmlRegisterType<RhiViewport>("OWzxGL", 1, 0, "GLViewport");
-  qmlRegisterType<ConfigOptionFilterProxy>("OWzx.Models", 1, 0,
+  // Mirror the runtime type registrations main_qml.cpp performs into the OWzx
+  // QML module (S8: the former OWzxGL / OWzx.Models URIs are retired).
+  // GLViewport is registered as RhiViewport unconditionally instead of
+  // replaying selectRhiBackendFromEnvironment(): this suite never renders a
+  // frame, so the render-path difference between RhiViewport/SoftwareViewport
+  // is not under test, and the unconditional registration keeps the suite
+  // independent of GPU probe availability. The app's selector remains the
+  // authority in main_qml.cpp.
+  qmlRegisterType<RhiViewport>("OWzx", 1, 0, "GLViewport");
+  qmlRegisterType<ConfigOptionFilterProxy>("OWzx", 1, 0,
                                            "ConfigOptionFilterProxy");
 
   // Same bundled-font setup as main_qml.cpp:463-476 so QML text items resolve
@@ -178,12 +151,26 @@ void QmlSmokeTests::initTestCase()
   QFontDatabase::addApplicationFont(
       QStringLiteral(":/qml/assets/fonts/HarmonyOS_Sans_SC_Bold.ttf"));
 
-  backend_ = new BackendContext;
-  // Phase 241 (PAGE-04) parity: the app applies the persisted startup-page
-  // preference before engine->load (main_qml.cpp:579).
-  backend_->applyStartupPagePreference();
+  // S8 registry isolation: `appSettings` (UiSettingsStore) is now an
+  // engine-created module singleton backed by QSettings("OWzx","UI") — the
+  // developer's real HKCU store. Redirect QSettings to a temp INI BEFORE the
+  // engine (and thus the singleton) exists, so a smoke run can never persist
+  // a ui/theme or ui/scaleFactor change into the host registry. (Replaces the
+  // old TestUiSettingsStore stand-in, which existed only because the class
+  // was cpp-local and un-linkable — it lives in the module now.)
+  tempDir_ = std::make_unique<QTemporaryDir>();
+  QSettings::setDefaultFormat(QSettings::IniFormat);
+  QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+                     tempDir_->filePath(QStringLiteral("settings")));
 
   engine_ = new QQmlApplicationEngine;
+
+  // S8: NO_PLUGIN module — force the generated type registration TU in (the
+  // static initializer would otherwise be dropped from the static archive),
+  // exactly like main_qml.cpp does before loading QML.
+  extern void qml_register_types_OWzx();
+  qml_register_types_OWzx();
+
   m_allowlistMatchCounts.fill(0, int(std::size(kAllowedQmlMessages)));
   connect(engine_, &QQmlEngine::warnings, this,
           [this](const QList<QQmlError> &warnings)
@@ -197,15 +184,17 @@ void QmlSmokeTests::initTestCase()
             }
           });
 
-  // Same context-property set as main_qml.cpp:600-617. appSettings is the
-  // test-local store (registry-isolated, see TestUiSettingsStore).
-  engine_->rootContext()->setContextProperty(QStringLiteral("backend"), backend_);
-  engine_->rootContext()->setContextProperty(QStringLiteral("appSettings"),
-                                             new TestUiSettingsStore(engine_));
-  engine_->rootContext()->setContextProperty(QStringLiteral("startupSkipFirstRun"),
-                                             QVariant(false));
-  engine_->rootContext()->setContextProperty(QStringLiteral("debugOverlayVisible"),
-                                             QVariant(false));
+  // S8: `Backend` is the OWzx module's QML_SINGLETON — the engine creates the
+  // one shared instance on first access; fetch it BEFORE engine->load like
+  // main_qml.cpp does. Phase 241 (PAGE-04) parity: the app applies the
+  // persisted startup-page preference before load. startupSkipFirstRun /
+  // debugOverlayVisible are BackendContext Q_PROPERTYs now; a fresh
+  // BackendContext defaults (false/false) match the app's non-debug,
+  // first-run-path values.
+  backend_ = engine_->singletonInstance<BackendContext *>("OWzx", "Backend");
+  QVERIFY2(backend_ != nullptr,
+           "OWzx module must expose the Backend singleton (BackendContext)");
+  backend_->applyStartupPagePreference();
 
   // CAM-03 parity: register the camera image provider so any
   // image://camera/live request resolves exactly like the app
@@ -223,19 +212,14 @@ QObject *QmlSmokeTests::backendProperty(const char *name) const
 
 void QmlSmokeTests::contextPropertiesReadable()
 {
-  // The context properties main.qml and the pages consume unguarded at load
-  // (main.qml:928-1046, PreferencesPage `backend:` alias) must all resolve.
-  QVERIFY(engine_->rootContext()->contextProperty(QStringLiteral("backend"))
-              .value<QObject *>() == backend_);
-  QVERIFY(engine_->rootContext()
-              ->contextProperty(QStringLiteral("appSettings"))
-              .value<QObject *>() != nullptr);
-  QVERIFY(engine_->rootContext()
-              ->contextProperty(QStringLiteral("startupSkipFirstRun"))
-              .typeId() == QMetaType::Bool);
-  QVERIFY(engine_->rootContext()
-              ->contextProperty(QStringLiteral("debugOverlayVisible"))
-              .typeId() == QMetaType::Bool);
+  // The module singletons main.qml and the pages consume unguarded at load
+  // (main.qml:928-1046, PreferencesPage `backend:` alias) must resolve through
+  // the OWzx module registration (S8: former context properties).
+  QVERIFY(engine_->singletonInstance<QObject *>("OWzx", "Backend") == backend_);
+  QVERIFY(engine_->singletonInstance<QObject *>("OWzx", "AppSettings")
+          != nullptr);
+  QCOMPARE(backend_->property("startupSkipFirstRun").typeId(), QMetaType::Bool);
+  QCOMPARE(backend_->property("debugOverlayVisible").typeId(), QMetaType::Bool);
 
   // Every view model a page binds as a required property must be non-null
   // (property list: BackendContext.h:94-102).
@@ -374,8 +358,7 @@ void QmlSmokeTests::pagesInstantiate_data()
       << QVariantMap{{"calibrationVm", vm("calibrationViewModel")}};
   QTest::newRow("PreferencesPage")
       << "qrc:/qml/OWzx/pages/PreferencesPage.qml"
-      << QVariantMap{{"settingsVm", vm("settingsViewModel")},
-                     {"backend", QVariant::fromValue(static_cast<QObject *>(backend_))}};
+      << QVariantMap{{"settingsVm", vm("settingsViewModel")}};
 }
 
 void QmlSmokeTests::pagesInstantiate()

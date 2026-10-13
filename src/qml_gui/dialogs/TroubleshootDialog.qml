@@ -24,7 +24,7 @@ import OWzx
 //   - Margins FromDIP(15), 20px column gap (:353-356). No in-body close
 //     button: upstream closes via title bar / Esc (wxDEFAULT_DIALOG_STYLE
 //     only, :118-119).
-// Backend: system RAM/GPU strings come from backend.systemInfo()
+// Backend: system RAM/GPU strings come from Backend.systemInfo()
 // (BackendContext::systemInfo); OS/package/CPU, log storage, ZIP packing,
 // cache clean and the log-severity key live on MonitorViewModel (diagnostic*).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,8 +129,8 @@ CxDialog {
     }
 
     onAboutToShow: {
-        sysInfo = (typeof backend !== "undefined" && backend && backend.systemInfo)
-            ? backend.systemInfo() : {}
+        sysInfo = (typeof Backend !== "undefined" && Backend && Backend.systemInfo)
+            ? Backend.systemInfo() : {}
         sysDiag = monitorVm ? monitorVm.diagnosticSystemInfo() : {}
         logFiles = monitorVm ? monitorVm.diagnosticLogFiles() : []
         var stored = monitorVm ? monitorVm.logSeverityLevel() : ""
@@ -142,8 +142,8 @@ CxDialog {
     // ── Profiles overview counts (upstream create_item_loaded_profiles,
     //    TroubleshootDialog.cpp:55-95) ─────────────────────────────────────
     function refreshProfileCounts() {
-        var psvc = (typeof backend !== "undefined" && backend && backend.presetServiceMock)
-            ? backend.presetServiceMock : null
+        var psvc = (typeof Backend !== "undefined" && Backend && Backend.presetServiceMock)
+            ? Backend.presetServiceMock : null
         if (!psvc) {
             profileCounts = null
             return
@@ -171,8 +171,8 @@ CxDialog {
     // the overview counts plus the per-collection enabled/user name lists
     // available from PresetServiceMock.
     function buildOverviewJson() {
-        var psvc = (typeof backend !== "undefined" && backend && backend.presetServiceMock)
-            ? backend.presetServiceMock : null
+        var psvc = (typeof Backend !== "undefined" && Backend && Backend.presetServiceMock)
+            ? Backend.presetServiceMock : null
         if (!psvc || !profileCounts)
             return "{}"
         var printerModel = psvc.selectedPrinterModel()
@@ -217,15 +217,15 @@ CxDialog {
     }
 
     function notify(message, title, severity) {
-        if (typeof backend !== "undefined" && backend && backend.postNotification)
-            backend.postNotification(message, title, severity)
+        if (typeof Backend !== "undefined" && Backend && Backend.postNotification)
+            Backend.postNotification(message, title, severity)
     }
 
     function startPackAll() {
         // PackAll (TroubleshootDialog.cpp:905-951): session logs + project
         // file; a dirty project is offered for saving first (:926-940).
-        var proj = (typeof backend !== "undefined" && backend && backend.projectViewModel)
-            ? backend.projectViewModel : null
+        var proj = (typeof Backend !== "undefined" && Backend && Backend.projectViewModel)
+            ? Backend.projectViewModel : null
         var projectPath = proj ? (proj.currentProjectPath || "") : ""
         if (projectPath !== "" && proj.isDirty) {
             saveDirtyDialog.open()
@@ -702,15 +702,15 @@ CxDialog {
                     text: qsTr("保存")
                     cxStyle: CxButton.Style.Primary
                     onClicked: {
-                        var saved = (typeof backend !== "undefined" && backend)
-                            ? backend.topbarSaveProject() : false
+                        var saved = (typeof Backend !== "undefined" && Backend)
+                            ? Backend.topbarSaveProject() : false
                         saveDirtyDialog.accept()
                         if (!saved) {
                             root.notify(qsTr("项目保存失败，已取消打包。"), qsTr("打包"), 2)
                             return
                         }
-                        var proj = (typeof backend !== "undefined" && backend && backend.projectViewModel)
-                            ? backend.projectViewModel : null
+                        var proj = (typeof Backend !== "undefined" && Backend && Backend.projectViewModel)
+                            ? Backend.projectViewModel : null
                         root._packPaths = root.collectPackPaths(proj ? (proj.currentProjectPath || "") : "")
                         root._packBaseName = "OWzx_PackedDebugInfo_" + root.exportTimestamp()
                         packDestDialog.open()

@@ -13,7 +13,7 @@ Item {
     // P17.10: imperial display — SettingsViewModel.units 1 = inch
     // (upstream use_inches, Preferences.cpp:1110). mm -> in (/25.4).
     readonly property bool imperialUnits: {
-        const b = typeof backend !== "undefined" ? backend : null
+        const b = typeof Backend !== "undefined" ? Backend : null
         return b && b.settingsViewModel ? b.settingsViewModel.units === 1 : false
     }
     function lengthValue(mmText) {

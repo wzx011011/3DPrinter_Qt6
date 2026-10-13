@@ -17,8 +17,8 @@ Item {
     required property var calibrationVm
     // Q11-⑥: machine-scoped preset source (ConfigViewModel exposes the
     // PresetServiceMock compatibility-filtered lists for the active printer).
-    readonly property var configVm: (typeof backend !== "undefined" && backend)
-                                    ? backend.configViewModel : null
+    readonly property var configVm: (typeof Backend !== "undefined" && Backend)
+                                    ? Backend.configViewModel : null
     property var _calibItems: []
     property var _totalSteps: 0
     property string activeFilter: "all"
@@ -856,7 +856,7 @@ Item {
                                                         onClicked: {
                                                             var ok = root.calibrationVm.saveCalibrationResultToPreset()
                                                             if (!ok)
-                                                                backend.postError(qsTr("写入预设失败：预设可能为只读或不支持该模式的保存"), 1)
+                                                                Backend.postError(qsTr("写入预设失败：预设可能为只读或不支持该模式的保存"), 1)
                                                         }
                                                     }
 

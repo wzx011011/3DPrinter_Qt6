@@ -248,16 +248,16 @@ CxDialog {
       // U11: enter the sending page BEFORE the call so a synchronous send
       // failure (missing gcode, busy, publish rejected) is consumed by the
       // onPrintSendFinished handler below with the dialog already listening.
-      // With a real FTP upload in flight (backend.printSendUploadActive) the
-      // gauge follows backend.printSendUploadProgress; the local animation
+      // With a real FTP upload in flight (Backend.printSendUploadActive) the
+      // gauge follows Backend.printSendUploadProgress; the local animation
       // stays only for the disclosed demo path (MQTT not connected).
       sendFailed = false
       sendProgress = 0
       sendState = 1
       root.monitorVm.startPrint(printerEntries[printerCombo.currentIndex].filteredIndex,
                                 root.editorVm.lastGcodePath)
-      if (typeof backend !== "undefined" && backend && backend.printSendUploadActive) {
-        // Real upload in flight -- gauge/terminal state arrive via backend.
+      if (typeof Backend !== "undefined" && Backend && Backend.printSendUploadActive) {
+        // Real upload in flight -- gauge/terminal state arrive via Backend.
       } else if (root.monitorVm.mqttConnected) {
         // Real path engaged but nothing is in flight: the attempt failed
         // synchronously and onPrintSendFinished already returned the dialog
@@ -276,8 +276,8 @@ CxDialog {
       // U11: cancelling a real upload must actually abort it -- otherwise
       // the job would still land on the printer after the dialog returned
       // to prepare, and the in-flight guard would then swallow the retry.
-      if (typeof backend !== "undefined" && backend && backend.printSendUploadActive)
-        backend.cancelPrintSend()
+      if (typeof Backend !== "undefined" && Backend && Backend.printSendUploadActive)
+        Backend.cancelPrintSend()
     }
 
     onOpened: {
@@ -874,7 +874,7 @@ CxDialog {
 
         // R-P1.E disclosure: the device list is still mock-fed; the send itself
         // is real over MQTT (FTP upload + print command, U11) and falls back to
-        // the local demo animation only while no MQTT backend is connected.
+        // the local demo animation only while no MQTT Backend is connected.
         Text {
             Layout.fillWidth: true
             Layout.leftMargin: 16; Layout.rightMargin: 16
@@ -886,8 +886,8 @@ CxDialog {
         }
     }
 
-    // Sending page upload animation: demo-path only (no MQTT backend). The real
-    // send settles via the backend printSend* bridge (upstream settles via the
+    // Sending page upload animation: demo-path only (no MQTT Backend). The real
+    // send settles via the Backend printSend* bridge (upstream settles via the
     // real upload progress callbacks).
     NumberAnimation {
         id: sendAnim
@@ -957,19 +957,19 @@ CxDialog {
         }
     }
 
-    // U11: real send feedback over the backend bridge. Progress replaces the
+    // U11: real send feedback over the Backend bridge. Progress replaces the
     // demo animation tick by tick; the terminal event settles the simplebook
     // -- finish page on success, failed-info panel + prepare page on failure
     // (upstream settles via the real upload progress callbacks and shows the
     // panel on send errors, SendToPrinter.cpp:461-463).
     Connections {
-        target: (typeof backend !== "undefined" && backend) ? backend : null
+        target: (typeof Backend !== "undefined" && Backend) ? Backend : null
         function onPrintSendUploadChanged() {
             if (root.sendState !== 1)
                 return
-            if (backend.printSendUploadActive) {
+            if (Backend.printSendUploadActive) {
                 sendAnim.stop()
-                root.sendProgress = backend.printSendUploadProgress
+                root.sendProgress = Backend.printSendUploadProgress
             }
         }
         function onPrintSendFinished(success, error) {

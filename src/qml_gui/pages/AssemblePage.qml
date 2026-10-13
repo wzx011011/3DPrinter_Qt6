@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import OWzxGL 1.0
 import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,8 +32,8 @@ Item {
     property string processCategory: ""
 
     // Phase 164 (SW-01): assemble sidebar now sources its width from the
-    // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
-    readonly property int sidebarWidth: backend ? backend.sidebarWidth : 392
+    // Backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
+    readonly property int sidebarWidth: Backend ? Backend.sidebarWidth : 392
     // Upstream collapse toolbar toggles the settings sidebar
     // (GLCanvas3D.cpp:8671 _render_collapse_toolbar overlay). Collapsing frees
     // the canvas width; the viewport re-anchors via the sidebar width binding.
@@ -98,7 +97,7 @@ Item {
     // extracts the material family; empty when no preset service/family is
     // available (the badge then shows the plate number only).
     function plateFilamentAbbrev() {
-        const service = (typeof backend !== "undefined") ? backend.presetServiceMock : null
+        const service = (typeof Backend !== "undefined") ? Backend.presetServiceMock : null
         if (!service)
             return ""
         const name = String(service.selectedPresetForCategory(1))
@@ -357,8 +356,8 @@ Item {
             border.width: 1
             border.color: backPill.hovered ? root.lightBorder : "transparent"
         }
-        onClicked: if (typeof backend !== "undefined" && backend)
-                       backend.requestChangeViewMode(backend.vmView3D)
+        onClicked: if (typeof Backend !== "undefined" && Backend)
+                       Backend.requestChangeViewMode(Backend.vmView3D)
     }
 
     // ── Canvas overlay: top-center green plate badge ──

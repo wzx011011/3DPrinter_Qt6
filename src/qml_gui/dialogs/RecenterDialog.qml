@@ -35,8 +35,8 @@ import OWzx
 //
 // Usage (unchanged wiring in main.qml):
 //   RecenterDialog {
-//       editorVm: backend.editorViewModel
-//       onRecenterRequested: backend.editorViewModel.recenterObjectsOutsideBed()
+//       editorVm: Backend.editorViewModel
+//       onRecenterRequested: Backend.editorViewModel.recenterObjectsOutsideBed()
 //   }
 // -----------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ CxDialog {
     height: 44 + 100 + 10 + btnRow.implicitHeight + 20
     padding: 0
 
-    // Injected by main.qml (editorVm: backend.editorViewModel). Wiring-only:
+    // Injected by main.qml (editorVm: Backend.editorViewModel). Wiring-only:
     // the upstream dialog shows no object list, so nothing reads the model
     // here; the objectsOutsideBed property stays on EditorViewModel.
     required property var editorVm

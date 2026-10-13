@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import OWzxGL 1.0
 import OWzx
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,12 +26,12 @@ import OWzx
 Item {
     id: root
 
-    // ViewModel 注入（main.qml 从 backend 透传）
+    // ViewModel 注入（main.qml 从 Backend 透传）
     required property var editorVm
     required property var previewVm
     property var configVm
 
-    /// Plater 当前视图模式（绑定 backend.currentViewMode）
+    /// Plater 当前视图模式（绑定 Backend.currentViewMode）
     /// vmView3D=0 / vmPreview=1 / vmAssembleView=2
     required property int viewMode
 
@@ -47,13 +46,13 @@ Item {
     /// 处理流程分类透传（PreparePage 原有属性）
     property string processCategory: ""
 
-    // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage)
+    // Phase 4: sidebar dockable 三态透传 (Backend → Plater → PreparePage)
     property bool sidebarCollapsed: false
     // Phase 164 (SW-01): sidebar resizable within [300, 520] — was locked
     // min==max==392 making the drag handle a no-op.
-    property int sidebarWidth: backend ? backend.sidebarWidth : 392
-    property int sidebarMinWidth: backend ? backend.sidebarMinWidth : 300
-    property int sidebarMaxWidth: backend ? backend.sidebarMaxWidth : 520
+    property int sidebarWidth: Backend ? Backend.sidebarWidth : 392
+    property int sidebarMinWidth: Backend ? Backend.sidebarMinWidth : 300
+    property int sidebarMaxWidth: Backend ? Backend.sidebarMaxWidth : 520
     property int sidebarDockArea: 0
     property var sidebarToggleRequested: null
     property var sidebarWidthChanged: null

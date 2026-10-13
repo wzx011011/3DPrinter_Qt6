@@ -36,8 +36,8 @@ CxDialog {
     required property string gcodePath  // 要发送的 G-code 路径
 
     // 板缩略图 / 项目名 / 时间重量来自编辑器 VM（只读，不回写其文件）
-    readonly property var editorVm: (typeof backend !== "undefined" && backend !== null)
-                                    ? backend.editorViewModel : null
+    readonly property var editorVm: (typeof Backend !== "undefined" && Backend !== null)
+                                    ? Backend.editorViewModel : null
 
     // 对话框内选中的设备（filtered index，同步到 deviceVm 全局选中）
     property int comboIndex: -1

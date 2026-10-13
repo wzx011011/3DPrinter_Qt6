@@ -318,32 +318,9 @@ static void applyStartupOpenRequests(const StartupOpenRequest &request,
   }
 }
 
-// Phase 171/173 (P1/P3): thin QSettings facade for QML. QSettings itself
-// does not expose value()/setValue() as Q_INVOKABLE, so a bare QSettings
-// context property is call-blind from QML; main.qml's Theme bridge and the
-// appearance actions call through this store instead. Backed by the
-// dedicated "OWzx/UI" store -- the same one main() reads ui/scaleFactor
-// from pre-app-creation, so registry seeding pre-launch is honored.
-class UiSettingsStore : public QObject
-{
-  Q_OBJECT
-
-public:
-  explicit UiSettingsStore(QObject *parent = nullptr) : QObject(parent) {}
-
-  Q_INVOKABLE QVariant value(const QString &key, const QVariant &defaultValue = {}) const
-  {
-    return settings_.value(key, defaultValue);
-  }
-
-  Q_INVOKABLE void setValue(const QString &key, const QVariant &val)
-  {
-    settings_.setValue(key, val);
-  }
-
-private:
-  QSettings settings_{QStringLiteral("OWzx"), QStringLiteral("UI")};
-};
+// Phase 171/173 (P1/P3) + S8: the thin QSettings facade lives in
+// UiSettingsStore.h now — it is the OWzx module's `appSettings` QML_SINGLETON
+// (engine-created; main() never touches it pre-load, so no include here).
 
 int main(int argc, char *argv[])
 {
@@ -559,28 +536,49 @@ int main(int argc, char *argv[])
     appendStartupLog(QStringLiteral("QRhi backend selection: %1").arg(rhiSelection.diagnostics()));
 
   // Register the stable QML type name. RhiViewport is the default path, with
-  // SoftwareViewport retained as a driver/init fallback when QRhi is unavailable.
+  // SoftwareViewport retained as a driver/init fallback when QRhi is
+  // unavailable. S8: both register into the OWzx QML module (the one the
+  // qt_add_qml_module tree declares), so QML needs no separate versioned
+  // import. The same-name swap stays a runtime decision and therefore cannot
+  // be expressed as QML_ELEMENT (one module exposes one name per C++ type);
+  // type resolution merges with the module at runtime (verified: pages
+  // instantiate GLViewport through the module import). qmlcachegen falls back
+  // to interpreted code for GLViewport call sites and resolves them through
+  // this registration at runtime.
   if (rhiSelection.canUseRhi)
-    qmlRegisterType<RhiViewport>("OWzxGL", 1, 0, "GLViewport");
+    qmlRegisterType<RhiViewport>("OWzx", 1, 0, "GLViewport");
   else
-    qmlRegisterType<SoftwareViewport>("OWzxGL", 1, 0, "GLViewport");
+    qmlRegisterType<SoftwareViewport>("OWzx", 1, 0, "GLViewport");
 
   // Per-page C++ filter proxies for the params UIs (LeftSidebar pages and
-  // SettingsDialog lists) are declared in place from QML.
-  qmlRegisterType<ConfigOptionFilterProxy>("OWzx.Models", 1, 0, "ConfigOptionFilterProxy");
-
-  BackendContext backend;
-  // Phase 241 (PAGE-04): the persisted startup-page preference
-  // (showHomePage/defaultPage, upstream app_config "show_home_page" /
-  // "default_page") drives the initial page BEFORE QML loads, so the
-  // StackLayout lands on the user's chosen page on the first frame.
-  backend.applyStartupPagePreference();
-  appendStartupLog(QStringLiteral("BackendContext constructed"));
+  // SettingsDialog lists) are declared in place from QML. Stays a runtime
+  // registration: the class is also used by core-internal C++ (ConfigViewModel,
+  // ConfigOptionModel) so it cannot move into the module target (would invert
+  // the owzx_qml -> owzx_app_core dependency).
+  qmlRegisterType<ConfigOptionFilterProxy>("OWzx", 1, 0, "ConfigOptionFilterProxy");
 
   // Intentionally leak the engine to skip late Qt teardown hazards seen in
   // VisualRegressionTests. The OS reclaims all memory on process exit.
   auto *engine = new QQmlApplicationEngine;
 
+  // S8: the owzx_qml module is NO_PLUGIN — its generated C++ type
+  // registration (backend / appSettings singletons, enums) lives in a static
+  // initializer that the linker drops from the static archive because nothing
+  // references it. Referencing the entry point forces the TU in and runs the
+  // registration before any engine loads QML. (Pure-QML module members need
+  // no registration — they resolve from the embedded qmldir.)
+  extern void qml_register_types_OWzx();
+  qml_register_types_OWzx();
+
+  // S8 (2026-10-14): the four ROOT CONTEXT PROPERTIES are gone. `Backend` is
+  // the OWzx module's QML_SINGLETON (QML_ELEMENT-marked BackendContext in
+  // owzx_qml); the engine creates the one shared instance on first access, so
+  // main() fetches it BEFORE loading main.qml — the persisted startup-page
+  // preference (Phase 241/PAGE-04, upstream app_config "show_home_page" /
+  // "default_page") and the two former-bool-context-property flags below must
+  // land before the StackLayout's first binding evaluation.
+  // `appSettings` (UiSettingsStore, Phase 171/P1) is likewise engine-created;
+  // nothing in main() reads it pre-load.
   // Dev-only QML source override (docs/ui-reference/restoration-map.md §5
   // loop): set OWZX_DEV_QML_DIR=<src/qml_gui absolute path> to redirect every
   // qrc:/qml/... load to the source tree, so QML edits only need an app
@@ -632,25 +630,17 @@ int main(int argc, char *argv[])
                      appendStartupLog(QStringLiteral("QML object creation failed"));
                      QCoreApplication::exit(-1); }, Qt::QueuedConnection);
 
-  engine->rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
-  appendStartupLog(QStringLiteral("context property set, loading main.qml"));
-  // Phase 171 (P1): appearance store. QSettings' value()/setValue() are not
-  // Q_INVOKABLE, so a bare QSettings context property is call-blind from
-  // QML; this thin store re-exposes the same API as invokables. Uses the
-  // dedicated "OWzx/UI" store (same one main() reads ui/scaleFactor from)
-  // so seeding the registry pre-launch works for screenshots/tests.
-  engine->rootContext()->setContextProperty(QStringLiteral("appSettings"),
-                                            new UiSettingsStore(&app));
-  engine->rootContext()->setContextProperty(QStringLiteral("startupSkipFirstRun"),
-                                            startupOpenRequest.skipFirstRun);
+  auto *backend = engine->singletonInstance<BackendContext *>("OWzx", "Backend");
+  appendStartupLog(QStringLiteral("backend module singleton acquired"));
+  backend->applyStartupPagePreference();
+  backend->setStartupSkipFirstRun(startupOpenRequest.skipFirstRun);
   // layout-1: the removed StatusBar used to surface backend.latencyBrief
-  // unconditionally at the window bottom. That debug data is env-gated now:
-  // main.qml renders a tiny bottom-right latency overlay only when this
-  // context property is true (QML_DEBUG_LOG or OWZX_DEBUG_OVERLAY set).
-  engine->rootContext()->setContextProperty(
-      QStringLiteral("debugOverlayVisible"),
-      QVariant(qEnvironmentVariableIsSet("QML_DEBUG_LOG")
-               || qEnvironmentVariableIsSet("OWZX_DEBUG_OVERLAY")));
+  // unconditionally at the window bottom. That debug data is env-gated:
+  // main.qml renders a tiny bottom-right latency overlay only when
+  // backend.debugOverlayVisible is true (QML_DEBUG_LOG or OWZX_DEBUG_OVERLAY
+  // set).
+  backend->setDebugOverlayVisible(qEnvironmentVariableIsSet("QML_DEBUG_LOG")
+                                  || qEnvironmentVariableIsSet("OWZX_DEBUG_OVERLAY"));
   // The main window is frameless + maximized by default (declared directly in
   // main.qml) for screenshot parity with OrcaSlicer. No context-property toggle
   // is exposed — the frameless shell is always on.
@@ -658,7 +648,7 @@ int main(int argc, char *argv[])
   // v2.6 CAM-03：注册摄像头图像提供者（image://camera/live），供 MonitorPage 实时视频显示
   // provider 归 engine 所有，engine 在进程退出时被故意 leak（见上方注释），故不手动释放。
   engine->addImageProvider(QStringLiteral("camera"),
-                           new CameraImageProvider(backend.cameraService()));
+                           new CameraImageProvider(backend->cameraService()));
 
   appendStartupLog(QStringLiteral("calling engine->load(main.qml)"));
   // --qml-dev: load from the source checkout (dev UI iteration, no rebuild).
@@ -688,7 +678,7 @@ int main(int argc, char *argv[])
   appendStartupLog(QStringLiteral("engine->load returned"));
 
   // Retranslate all QML qsTr() after language switch
-  QObject::connect(&backend, &BackendContext::languageChanged,
+  QObject::connect(backend, &BackendContext::languageChanged,
                    engine, &QQmlApplicationEngine::retranslate);
 
   if (engine->rootObjects().isEmpty())
@@ -732,18 +722,18 @@ int main(int argc, char *argv[])
       const auto gateFired = std::make_shared<bool>(false);
       QObject::connect(
           rootWindow, &QQuickWindow::frameSwapped, rootWindow,
-          [&backend, startupOpenRequest, gateFired]() {
+          [backend, startupOpenRequest, gateFired]() {
             if (*gateFired)
               return;
             *gateFired = true;
-            applyStartupOpenRequests(startupOpenRequest, backend);
+            applyStartupOpenRequests(startupOpenRequest, *backend);
           },
           Qt::QueuedConnection);
     }
     else
     {
       appendStartupLog(QStringLiteral("FIXTURE-02: root object is not a QQuickWindow; applying startup requests immediately (degraded mode)"));
-      applyStartupOpenRequests(startupOpenRequest, backend);
+      applyStartupOpenRequests(startupOpenRequest, *backend);
     }
   }
 
@@ -761,4 +751,5 @@ int main(int argc, char *argv[])
   return app.exec();
 }
 
-#include "main_qml.moc"
+// (No Q_OBJECT classes remain in this TU since S8 moved UiSettingsStore into
+// the OWzx module — the former #include "main_qml.moc" is gone.)

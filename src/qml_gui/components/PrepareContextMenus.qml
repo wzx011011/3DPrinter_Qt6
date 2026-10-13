@@ -88,7 +88,7 @@ Item {
 
     // P16.9: Flush Options submenu (upstream append_menu_items_flush_options,
     // GUI_Factories.cpp:1104-1196). U08 (③): real check items like upstream
-    // append_menu_check_item; the check state stays backend-owned
+    // append_menu_check_item; the check state stays Backend-owned
     // (flushOptionValue per popup via G-07 tick).
     component FlushOptionsSubmenu: CxMenu {
         title: qsTr("Flush Options")
@@ -238,7 +238,7 @@ Item {
         }
         MenuSeparator { }
         // Upstream primitive order Cube/Cylinder/Sphere/Cone/Disc/Torus
-        // (:556-572). The Qt6 in-object primitive backend only covers
+        // (:556-572). The Qt6 in-object primitive Backend only covers
         // cube/sphere/cylinder/torus (ProjectServiceMock::addPrimitive), so
         // Cone and Disc stay honestly disabled with a tooltip.
         CxMenuItem { text: qsTr("Cube"); onTriggered: root.editorVm.addPrimitive(root.editorVm.selectedObjectIndex, 0, addVolMenu.volumeType) }
@@ -620,7 +620,7 @@ Item {
             CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
         }
         // Q9: the ObjectList::merge(false) entry -- merges every part of ONE
-        // object into a single mesh object (backend mergeSelectedPartsToSingle-
+        // object into a single mesh object (Backend mergeSelectedPartsToSingle-
         // Object, P16.2 = GUI_ObjectList.cpp:3183-3194, shipped with undo +
         // selection tail but zero menu edges until now). Label/tooltip/gate are
         // the upstream menu item for merge(false): append_menu_item_merge_to_
@@ -877,7 +877,7 @@ Item {
         MenuSeparator { }
         // Upstream carries an Auto Drop check item here too
         // (append_menu_item_set_auto_drop :2336-2354, called :1953); disabled
-        // for the same no-backend reason as on the object menu.
+        // for the same no-Backend reason as on the object menu.
         CxMenuItem {
             checkable: true
             checked: false

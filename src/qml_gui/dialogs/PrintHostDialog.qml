@@ -32,8 +32,8 @@ CxDialog {
 
     // Preset-service handle for the OK save (upstream OnOK writes the printer
     // preset, :792-797; OWzx routes through ConfigViewModel).
-    readonly property var configVm: typeof backend !== "undefined" && backend
-        ? backend.configViewModel : null
+    readonly property var configVm: typeof Backend !== "undefined" && Backend
+        ? Backend.configViewModel : null
 
     // ── Host-type enum (PrintConfig.cpp:5385-5424) ────────────────────────
     // Per-host capability flags consumed by update_printhost_buttons
@@ -86,7 +86,7 @@ CxDialog {
     // SimplyPrint disables printhost_cafile and its Browse button (:686-692).
     readonly property bool caRowEnabled: hostTypeIndex !== 12
 
-    // Async probe state (backend.testPrintHost -> onPrintHostTestFinished).
+    // Async probe state (Backend.testPrintHost -> onPrintHostTestFinished).
     property bool testRunning: false
     // OnOK persistence failure text; empty while the name check rules the label.
     property string saveError: ""
@@ -272,7 +272,7 @@ CxDialog {
                     root.testRunning = true
                     // show_error branch for a missing host never triggers
                     // here: can_test() is true for every host type.
-                    backend.testPrintHost(hostUrlField.text.trim(),
+                    Backend.testPrintHost(hostUrlField.text.trim(),
                                           root.showApiKeyRow ? apiKeyField.text : "",
                                           root.showUserPasswordRows ? userField.text : "",
                                           root.showUserPasswordRows ? passwordField.text : "")
@@ -390,8 +390,8 @@ CxDialog {
                     // update_printers (:732-758) mock: OWzx has no Repetier /
                     // Obico server probe, so the combo fills from the device
                     // roster and disables when it comes back empty (:753).
-                    const vm = typeof backend !== "undefined" && backend
-                        ? backend.monitorViewModel : null
+                    const vm = typeof Backend !== "undefined" && Backend
+                        ? Backend.monitorViewModel : null
                     const roster = vm ? vm.discoveredPrinters() : []
                     const names = roster.map(function(d) { return d.name })
                     portCombo.model = names
@@ -583,8 +583,8 @@ CxDialog {
             radius: Theme.radiusLG
         }
         onOpened: {
-            const vm = typeof backend !== "undefined" && backend
-                ? backend.monitorViewModel : null
+            const vm = typeof Backend !== "undefined" && Backend
+                ? Backend.monitorViewModel : null
             discoveryPopup.printers = vm ? vm.discoveredPrinters() : []
         }
         contentItem: ColumnLayout {
@@ -691,7 +691,7 @@ CxDialog {
         }
     }
     Connections {
-        target: typeof backend !== "undefined" ? backend : null
+        target: typeof Backend !== "undefined" ? Backend : null
         function onPrintHostTestFinished(ok, detail) {
             root.testRunning = false
             testResultPopup.isError = !ok

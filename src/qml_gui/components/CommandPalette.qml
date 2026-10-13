@@ -7,7 +7,7 @@ import OWzx
 // Cross-industry baseline (VS Code / Figma / JetBrains): one overlay that
 // filters a flat command list and executes via the owner. The palette owns
 // presentation + filtering only; `commands` comes from main.qml (which knows
-// backend/page enums/appSettings), and results are reported through
+// Backend/page enums/AppSettings), and results are reported through
 // commandTriggered(id). Escape / dim-click closes; ↑↓ moves, Enter runs.
 Rectangle {
     id: root

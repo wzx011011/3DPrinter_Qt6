@@ -36,7 +36,7 @@ import QtQuick
 
 QtObject {
     // ── Theme mode (Phase 171, P1)
-    // Persisted via the `appSettings` context property (QSettings "ui/theme");
+    // Persisted via the `AppSettings` context property (QSettings "ui/theme");
     // main.qml bridges the stored value in on startup, the topbar toggle
     // writes it back. Dark remains the default and the design-referenceTruth.
     property string theme: "dark"

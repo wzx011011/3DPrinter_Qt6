@@ -28,7 +28,7 @@ import OWzx
 //   - Overridden rows driven by scopedOverrideCount/scopedOverriddenKey
 //     (ProjectServiceMock scoped-config keys()).
 //   - "添加覆盖参数" entry: category combo → option combo → 添加；the add
-//     writes an empty value, which seeds the override through the backend
+//     writes an empty value, which seeds the override through the Backend
 //     default-clone channel (writeConfigValue, ProjectServiceMock.cpp:367-413)
 //     — the user then edits the seeded row (no inherited-preset read channel
 //     exists on the current VM surface).
@@ -85,7 +85,7 @@ CxDialog {
         return names
     }
 
-    // Overridden rows, rebuilt from the backend scoped config (upstream
+    // Overridden rows, rebuilt from the Backend scoped config (upstream
     // update_settings_list rebuilds from config->keys(), :84-87).
     property var overrideRows: []
 
@@ -130,7 +130,7 @@ CxDialog {
         var option = category.options[addKeyCombo.currentIndex]
         if (!option)
             return
-        // Empty-value write seeds the override via the backend default-clone
+        // Empty-value write seeds the override via the Backend default-clone
         // channel (writeConfigValue, ProjectServiceMock.cpp:367-413); the
         // seeded row then shows up in the list for editing.
         root.editorVm.setScopedOptionValue(root.objectIndex, root.volumeIndex, option.key, "")

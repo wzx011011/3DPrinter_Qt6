@@ -390,7 +390,7 @@ CxDialog {
 
     function loadPlaceholderGroups() {
         // Real ConfigDef-driven placeholder tree (upstream init_params_list).
-        var vm = backend && backend.configViewModel ? backend.configViewModel : null
+        var vm = Backend && Backend.configViewModel ? Backend.configViewModel : null
         root.groupData = vm ? vm.editGcodeParamGroups(root.optionKey) : []
     }
 

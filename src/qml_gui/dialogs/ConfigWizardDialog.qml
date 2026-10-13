@@ -31,7 +31,7 @@ import OWzx
 //   - Geometry (init_dialog_size :1803-1824): width = index panel + 90*em
 //     (em fixed 10, hpp:616), clamped to 9/10 of the screen client area; the
 //     height fits the content instead of being fixed.
-// Data comes from backend.configViewModel (PresetServiceMock enumeration;
+// Data comes from Backend.configViewModel (PresetServiceMock enumeration;
 // the vendor/model/variant persistence is AppConfig-lite QSettings). The
 // network PresetUpdater remains deferred.
 //
@@ -76,8 +76,8 @@ CxDialog {
 
     // Lazily resolve the preset service proxy; null-safe (typeof guard
     // matches the PreparePage.qml convention) so the dialog still renders in
-    // designer / contexts without a backend context property.
-    readonly property var configVm: typeof backend !== "undefined" && backend ? backend.configViewModel : null
+    // designer / contexts without a Backend context property.
+    readonly property var configVm: typeof Backend !== "undefined" && Backend ? Backend.configViewModel : null
     // All available vendor names (filename scan, no preset load). The vendor
     // picker lists all availableVendorNames() and loads the chosen vendor's
     // presets on demand (wizardLoadVendor).
@@ -387,7 +387,7 @@ CxDialog {
         // Finishing the wizard APPLIES the selections (upstream
         // ConfigWizard::apply_config): the current presets switch to what the
         // user picked when a preset of that exact name exists.
-        const cfgVm = typeof backend !== "undefined" && backend ? backend.configViewModel : null
+        const cfgVm = typeof Backend !== "undefined" && Backend ? Backend.configViewModel : null
         if (cfgVm) {
             if (root.selectedFilament.length > 0
                     && cfgVm.filamentPresetNames.indexOf(root.selectedFilament) >= 0)
@@ -396,7 +396,7 @@ CxDialog {
                     && cfgVm.printerPresetNames.indexOf(root.selectedPrinter) >= 0)
                 cfgVm.setCurrentPrinterPreset(root.selectedPrinter)
         }
-        backend.configWizardCompleted = true
+        Backend.configWizardCompleted = true
         root.wizardFinished()
         root.close()
     }

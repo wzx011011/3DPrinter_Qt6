@@ -6,7 +6,6 @@ import OWzx
 Item {
     id: root
     required property var settingsVm
-    property var backend
 
     AboutDialog {
         id: aboutDlg
@@ -33,28 +32,28 @@ Item {
     }
 
     // Advanced-category diagnostics entries (upstream MainFrame hosts these
-    // launchers in Preferences). NetworkTestDialog drives the real backend
+    // launchers in Preferences). NetworkTestDialog drives the real Backend
     // DNS+HTTPS probe; TroubleshootDialog is the device diagnostics walkthrough.
     NetworkTestDialog {
         id: networkTestDialog
         // Required properties must be wired or Qt 6 aborts the whole page
         // creation (blank page); same wiring as main.qml:1219.
-        networkVm: backend.monitorViewModel
+        networkVm: Backend.monitorViewModel
     }
 
     TroubleshootDialog {
         id: troubleshootDialog
-        monitorVm: backend.monitorViewModel
+        monitorVm: Backend.monitorViewModel
     }
 
     // Dead-control elimination: the update check drives the real
-    // backend.checkForUpdates release query (upstream Help > Check for
+    // Backend.checkForUpdates release query (upstream Help > Check for
     // Update, MainFrame.cpp:2160); the result lands here.
     property string updateCheckMessage: qsTr("点击“检查更新”获取最新版本信息。")
     property bool updateCheckOk: false
 
     Connections {
-        target: root.backend
+        target: root.Backend
         function onUpdateCheckFinished(ok, available, message) {
             root.updateCheckOk = ok
             root.updateCheckMessage = message
@@ -679,15 +678,15 @@ Item {
                     }
 
                     // Check now button (dead-control elimination: drives the
-                    // real backend.checkForUpdates release query).
+                    // real Backend.checkForUpdates release query).
                     Rectangle {
                         Layout.preferredWidth: 140; Layout.preferredHeight: 32; radius: 6
-                        opacity: backend.updateCheckRunning ? 0.6 : 1.0
+                        opacity: Backend.updateCheckRunning ? 0.6 : 1.0
                         color: updateBtnMA.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                        Text { anchors.centerIn: parent; text: backend.updateCheckRunning ? qsTr("检查中…") : qsTr("检查更新"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
+                        Text { anchors.centerIn: parent; text: Backend.updateCheckRunning ? qsTr("检查中…") : qsTr("检查更新"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
                         MouseArea {
                             id: updateBtnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: if (!backend.updateCheckRunning) backend.checkForUpdates()
+                            onClicked: if (!Backend.updateCheckRunning) Backend.checkForUpdates()
                         }
                     }
 
@@ -724,7 +723,7 @@ Item {
                     // in Preferences (AMS / Firmware / Plugin Manager / Lite
                     // Mode). Each opens the already-instantiated main.qml or
                     // page-local dialog via the BackendContext request
-                    // signals. NetworkTestDialog drives the real backend
+                    // signals. NetworkTestDialog drives the real Backend
                     // probe; FirmwareDialog discloses that OTA is not
                     // integrated instead of simulating an update. (Q11-③:
                     // the SpeedLimit launcher is gone with the pure-mock
@@ -738,23 +737,23 @@ Item {
                         spacing: Theme.spacingSM
                         CxButton {
                             text: qsTr("AMS 设置…")
-                            onClicked: backend.showAMSSettingsDialog()
+                            onClicked: Backend.showAMSSettingsDialog()
                         }
                         CxButton {
                             text: qsTr("固件…")
-                            onClicked: backend.showFirmwareDialog()
+                            onClicked: Backend.showFirmwareDialog()
                         }
                         CxButton {
                             text: qsTr("插件管理…")
-                            onClicked: backend.showPluginManagerDialog()
+                            onClicked: Backend.showPluginManagerDialog()
                         }
                         CxButton {
                             text: qsTr("精简模式…")
-                            onClicked: backend.showEnableLiteModeDialog()
+                            onClicked: Backend.showEnableLiteModeDialog()
                         }
                         CxButton {
                             text: qsTr("擦料塔…")
-                            onClicked: backend.showWipeTowerDialog()
+                            onClicked: Backend.showWipeTowerDialog()
                         }
                     }
 

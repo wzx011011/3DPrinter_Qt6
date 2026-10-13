@@ -24,7 +24,7 @@ import OWzx
 Rectangle {
     id: root
 
-    readonly property QtObject bridge: backend ? backend.aiChatBridge : null
+    readonly property QtObject bridge: Backend ? Backend.aiChatBridge : null
     signal closed()
 
     color: Theme.bgPanel
@@ -32,8 +32,8 @@ Rectangle {
     border.color: Theme.borderSubtle
 
     Component.onCompleted: {
-        if (backend)
-            backend.attachAiChatChannel(chatChannel)
+        if (Backend)
+            Backend.attachAiChatChannel(chatChannel)
     }
 
     WebEngineView {

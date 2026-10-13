@@ -26,7 +26,7 @@ import OWzx
 //      removes + re-adds the range through the existing VM channels — the QML
 //      composition of ObjectList::edit_layer_range erase+insert
 //      (GUI_ObjectList.cpp:4717-4745) — carrying the layer_height override
-//      across; the backend clips overlaps on add (ProjectServiceMock.cpp:
+//      across; the Backend clips overlaps on add (ProjectServiceMock.cpp:
 //      6989-7031, call-only per U12 — U07 mutex).
 //   ② Per-row '+' inserts after the row's maxZ via addObjectLayerRange
 //      (upstream add_layer_range_after_current, GUI_ObjectList.cpp:4552-4644:
@@ -86,7 +86,7 @@ CxDialog {
         }
         // Upstream shows layer_config_ranges (std::map → sorted by range);
         // the mock keeps list order (appends at the end), so sort for display
-        // and carry the backend index used by remove/set calls.
+        // and carry the Backend index used by remove/set calls.
         rows.sort(function(a, b) {
             return a.minZ !== b.minZ ? a.minZ - b.minZ : a.maxZ - b.maxZ
         })
@@ -141,7 +141,7 @@ CxDialog {
     // (GUI_ObjectList.cpp:4717-4745: erase the old key, insert the new key,
     // move the per-range config): remove + re-add through the existing VM
     // proxies and carry the layer_height override over via setLayerRangeValue.
-    // The backend trims overlaps of neighbouring ranges on add
+    // The Backend trims overlaps of neighbouring ranges on add
     // (ProjectServiceMock.cpp:6989-7031 — call-only per U12).
     function applyRangeEdit(rangeIndex, newMin, newMax, editor, revertValue) {
         if (!root.editorVm || root.objectIndex < 0) return
@@ -151,7 +151,7 @@ CxDialog {
         if (!root.editorVm.removeObjectLayerRange(root.objectIndex, rangeIndex))
             return
         if (!root.editorVm.addObjectLayerRange(root.objectIndex, newMin, newMax)) {
-            // Rejected by the backend (e.g. minZ >= maxZ) — roll the range
+            // Rejected by the Backend (e.g. minZ >= maxZ) — roll the range
             // back so it is not lost and revert the field (m_valid_value).
             root.editorVm.addObjectLayerRange(root.objectIndex, oldMin, oldMax)
             if (carryLH !== "")
@@ -160,8 +160,8 @@ CxDialog {
                     "layer_height", carryLH)
             editor.text = formatZ(revertValue)
             // The remove+re-add round-trip moved the restored range to the
-            // end of the backend list — rebuild so delegate rangeIndex values
-            // match the backend indices again before any further row action.
+            // end of the Backend list — rebuild so delegate rangeIndex values
+            // match the Backend indices again before any further row action.
             refreshModel()
             showHint(qsTr("修改失败：范围无效"))
             return
@@ -329,7 +329,7 @@ CxDialog {
                             if (root.editorVm && root.objectIndex >= 0) {
                                 // upstream add_layer_range_after_current
                                 // (GUI_ObjectList.cpp:4552-4644): the new range
-                                // starts at the row's maxZ; the backend clips
+                                // starts at the row's maxZ; the Backend clips
                                 // overlaps with the following ranges
                                 // (ProjectServiceMock.cpp:6989-7031).
                                 root.editorVm.addObjectLayerRange(root.objectIndex, maxZ, maxZ + 2.0)

@@ -77,8 +77,8 @@ CxDialog {
     // v5.12 gap-closure: flush volume matrix computed from filament colours
     // via PresetServiceMock::calculateFlushMatrix (FlushVolCalculator). Falls
     // back to a flat default when no preset service is available.
-    readonly property var configVm: typeof backend !== "undefined" && backend
-        ? backend.configViewModel : null
+    readonly property var configVm: typeof Backend !== "undefined" && Backend
+        ? Backend.configViewModel : null
     property var flushMatrix: defaultMatrix(4)
     property int extruderCount: 4
     // Flush matrices are N×N over the ACTIVE machine's filament slots

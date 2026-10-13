@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QTimer>
+#include <QtQml/QtQml>
 #include <QColor>
 #include <QTranslator>
 #include <QElapsedTimer>
@@ -88,9 +89,16 @@ struct HintData {
   QString callbackTarget;      ///< URL or settings key.
 };
 
-class BackendContext final : public QObject, public OWzx::AppToolUiProvider
+class BackendContext : public QObject, public OWzx::AppToolUiProvider
 {
   Q_OBJECT
+  // S8 (2026-10-14): the composition root is the OWzx QML module's `backend`
+  // singleton (formerly a root context property). The engine creates the one
+  // shared instance on first access; main() fetches it via
+  // QQmlEngine::singletonInstance BEFORE loading main.qml (startup-page
+  // preference and the two bool flags below must land pre-load).
+  QML_SINGLETON
+  QML_NAMED_ELEMENT(Backend)
   Q_PROPERTY(QObject *editorViewModel READ editorViewModel CONSTANT)
   Q_PROPERTY(QObject *previewViewModel READ previewViewModel CONSTANT)
   Q_PROPERTY(QObject *monitorViewModel READ monitorViewModel CONSTANT)
@@ -124,6 +132,12 @@ class BackendContext final : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QObject *aiChatBridge READ aiChatBridge CONSTANT)
   Q_PROPERTY(bool aiControlActive READ aiControlActive NOTIFY stateChanged)
   Q_PROPERTY(bool visualCompareMode READ visualCompareMode CONSTANT)
+  // S8 (2026-10-14): the two former ROOT CONTEXT PROPERTIES
+  // (startupSkipFirstRun / debugOverlayVisible) ride the backend module
+  // singleton now. main() sets both right after construction, before the QML
+  // engine loads, so they are CONSTANT from QML's point of view.
+  Q_PROPERTY(bool startupSkipFirstRun READ startupSkipFirstRun CONSTANT)
+  Q_PROPERTY(bool debugOverlayVisible READ debugOverlayVisible CONSTANT)
   // Phase 51: shell-level action gate properties (SHELL-03) - forward to EditorViewModel/PreviewViewModel.
   Q_PROPERTY(bool canImport READ canImport NOTIFY stateChanged)
   Q_PROPERTY(bool canSlice READ canSlice NOTIFY stateChanged)
@@ -352,6 +366,11 @@ public:
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
   bool visualCompareMode() const;
+  // S8: former root context properties (see Q_PROPERTY block above).
+  bool startupSkipFirstRun() const { return startupSkipFirstRun_; }
+  void setStartupSkipFirstRun(bool v) { startupSkipFirstRun_ = v; }
+  bool debugOverlayVisible() const { return debugOverlayVisible_; }
+  void setDebugOverlayVisible(bool v) { debugOverlayVisible_ = v; }
 
   // AI 助手（OWzx-only，docs/ai-control.md）
   QObject *aiViewModel() const;
@@ -791,6 +810,9 @@ private:
   AmsMaterialsViewModel *amsMaterialsViewModel_ = nullptr;
 
   bool visualCompareMode_ = false;
+  // S8: former root context properties (fixed before QML engine load).
+  bool startupSkipFirstRun_ = false;
+  bool debugOverlayVisible_ = false;
   int currentPage_ = 1;
   /// Phase 3: current Plater view mode. Default is View3D.
   ViewMode currentViewMode_ = ViewMode::View3D;

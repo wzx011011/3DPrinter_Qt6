@@ -2,8 +2,8 @@
 //
 // 顶层框架对齐：third_party/OrcaSlicer/src/slic3r/GUI/MainFrame.cpp + BBLTopbar.cpp
 // - BBLTopbar.qml 承载完整标题栏（Plan 02-02 Task 1）
-// - 9-page StackLayout 与 backend.TabPosition 枚举 0..8 一一对应（ARCH-01）
-// - 所有页面索引通过 backend.TabPosition.tpX 引用，禁止硬编码整数（Pitfall 1）
+// - 9-page StackLayout 与 Backend.TabPosition 枚举 0..8 一一对应（ARCH-01）
+// - 所有页面索引通过 Backend.TabPosition.tpX 引用，禁止硬编码整数（Pitfall 1）
 
 import QtQuick
 import QtQuick.Controls
@@ -51,8 +51,8 @@ ApplicationWindow {
             close.accepted = true
             return
         }
-        if (backend.projectViewModel && backend.projectViewModel.isDirty
-                && !backend.dirtyProjectDiscardRemembered()) {
+        if (Backend.projectViewModel && Backend.projectViewModel.isDirty
+                && !Backend.dirtyProjectDiscardRemembered()) {
             close.accepted = false
             root.pendingGuardAction = "quit"
             root.pendingOpenPath = ""
@@ -68,8 +68,8 @@ ApplicationWindow {
     // quit entry point. Dirty projects get the confirm dialog; clean projects
     // (or an approved forceClose) quit directly.
     function requestQuit() {
-        if (backend.projectViewModel && backend.projectViewModel.isDirty
-                && !backend.dirtyProjectDiscardRemembered()) {
+        if (Backend.projectViewModel && Backend.projectViewModel.isDirty
+                && !Backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "quit"
             root.pendingOpenPath = ""
             newProjectDialog.open()
@@ -80,32 +80,32 @@ ApplicationWindow {
     }
 
     function requestNewProject() {
-        if (backend.projectViewModel && backend.projectViewModel.isDirty
-                && !backend.dirtyProjectDiscardRemembered()) {
+        if (Backend.projectViewModel && Backend.projectViewModel.isDirty
+                && !Backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "new"
             root.pendingOpenPath = ""
             newProjectDialog.open()
             return
         }
-        backend.topbarNewProject()
+        Backend.topbarNewProject()
     }
 
     function requestOpenProject(filePath) {
         var path = filePath || ""
         if (path !== "" && root.openDialogGuardApproved) {
             root.openDialogGuardApproved = false
-            backend.topbarOpenProject(path)
+            Backend.topbarOpenProject(path)
             return
         }
-        if (backend.projectViewModel && backend.projectViewModel.isDirty
-                && !backend.dirtyProjectDiscardRemembered()) {
+        if (Backend.projectViewModel && Backend.projectViewModel.isDirty
+                && !Backend.dirtyProjectDiscardRemembered()) {
             root.pendingGuardAction = "open"
             root.pendingOpenPath = path
             newProjectDialog.open()
             return
         }
         if (path !== "")
-            backend.topbarOpenProject(path)
+            Backend.topbarOpenProject(path)
         else
             openProjectDialog.open()
     }
@@ -135,10 +135,10 @@ ApplicationWindow {
             // the preview-only context (upstream Plater::load_gcode,
             // Plater.cpp:10037-10058).
             if (modelPath.toLowerCase().substring(modelPath.length - 6) === ".gcode") {
-                backend.openExternalGcode(modelPath)
+                Backend.openExternalGcode(modelPath)
                 return
             }
-            backend.topbarImportModel(selectedFile.toString())
+            Backend.topbarImportModel(selectedFile.toString())
         }
     }
 
@@ -156,7 +156,7 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)"), qsTr("项目元数据 (*.json)")]
         onAccepted: {
-            backend.topbarSaveProjectAs(selectedFile.toString())
+            Backend.topbarSaveProjectAs(selectedFile.toString())
         }
     }
 
@@ -169,8 +169,8 @@ ApplicationWindow {
         onAccepted: {
             var path = selectedFile.toString().replace("file:///", "")
             var ext = path.split(".").pop().toLowerCase()
-            if (backend.editorViewModel)
-                backend.editorViewModel.exportModel(path, ext)
+            if (Backend.editorViewModel)
+                Backend.editorViewModel.exportModel(path, ext)
         }
     }
 
@@ -181,7 +181,7 @@ ApplicationWindow {
         id: importConfigsDialog
         title: qsTr("导入配置")
         nameFilters: [qsTr("配置文件 (*.json)"), qsTr("所有文件 (*)")]
-        onAccepted: backend.topbarImportConfigs(selectedFile.toString())
+        onAccepted: Backend.topbarImportConfigs(selectedFile.toString())
     }
 
     // Phase 237 (VIEW-06): export the plate sliced file as .gcode.3mf
@@ -195,8 +195,8 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("切片文件 (*.gcode.3mf)")]
         onAccepted: {
-            if (backend.editorViewModel)
-                backend.editorViewModel.requestExportGcode3mf(selectedFile.toString())
+            if (Backend.editorViewModel)
+                Backend.editorViewModel.requestExportGcode3mf(selectedFile.toString())
         }
     }
 
@@ -206,16 +206,16 @@ ApplicationWindow {
         id: exportAllGcodeDialog
         title: qsTr("导出全部平板 G-code")
         onAccepted: {
-            if (backend.editorViewModel)
-                backend.editorViewModel.requestExportAllGCode(selectedFolder.toString())
+            if (Backend.editorViewModel)
+                Backend.editorViewModel.requestExportAllGCode(selectedFolder.toString())
         }
     }
 
     Connections {
-        target: backend
+        target: Backend
         function onCurrentPageChanged() {
             if (root.activeTabSwitchToken >= 0) {
-                backend.endLatency(root.activeTabSwitchToken)
+                Backend.endLatency(root.activeTabSwitchToken)
                 root.activeTabSwitchToken = -1
             }
         }
@@ -228,15 +228,15 @@ ApplicationWindow {
     // selected device to Monitor::jump_to_monitor(dev_id). Keep identity
     // resolution in MonitorViewModel and page navigation in the shell.
     Connections {
-        target: backend.multiMachineViewModel
+        target: Backend.multiMachineViewModel
         function onDeviceViewRequested(ip, name, model) {
-            if (!backend.monitorViewModel
-                || !backend.monitorViewModel.selectDeviceByIdentity(ip, name)) {
-                backend.postNotification(qsTr("Device is no longer available in Monitor."),
+            if (!Backend.monitorViewModel
+                || !Backend.monitorViewModel.selectDeviceByIdentity(ip, name)) {
+                Backend.postNotification(qsTr("Device is no longer available in Monitor."),
                                          qsTr("Device"), 2)
                 return
             }
-            backend.requestSelectTab(backend.tpDevice)
+            Backend.requestSelectTab(Backend.tpDevice)
         }
     }
 
@@ -249,7 +249,7 @@ ApplicationWindow {
         dialogTitle: qsTr("全部删除")
         message: qsTr("将移除所有对象，是否继续？")
         confirmText: qsTr("删除")
-        onAccepted: if (backend.editorViewModel) backend.editorViewModel.clearWorkspace()
+        onAccepted: if (Backend.editorViewModel) Backend.editorViewModel.clearWorkspace()
     }
 
     // Phase 237 (VIEW-04): unit-conversion confirm (upstream "Object too
@@ -267,9 +267,9 @@ ApplicationWindow {
         message: qsTr("来自文件 %1 的对象过小，可能以米或英寸为单位。\n是否缩放为毫米？").arg(targetObjectName)
         confirmText: qsTr("缩放")
         onAccepted: {
-            if (backend.editorViewModel && targetObjectIndex >= 0) {
+            if (Backend.editorViewModel && targetObjectIndex >= 0) {
                 // meters -> CONV_FROM_METER (3); imperial -> CONV_FROM_INCH (1)
-                backend.editorViewModel.applyUnitConversion(
+                Backend.editorViewModel.applyUnitConversion(
                             targetObjectIndex, targetUnitHint === 1 ? 3 : 1)
             }
         }
@@ -277,7 +277,7 @@ ApplicationWindow {
 
     // Phase 237 (VIEW-04): editor prompt relayed by BackendContext.
     Connections {
-        target: backend
+        target: Backend
         function onUnitConversionPromptRequested(objectIndex, unitHint, objectName) {
             unitConvertConfirm.targetObjectIndex = objectIndex
             unitConvertConfirm.targetUnitHint = unitHint
@@ -322,10 +322,10 @@ ApplicationWindow {
                     ++ignoredCount
             }
             // U6: unsupported drops used to vanish silently; report them via
-            // backend.postNotification (severity 2 = NotiWarning, the same
+            // Backend.postNotification (severity 2 = NotiWarning, the same
             // channel ErrorToast renders for every other surface).
             if (ignoredCount > 0)
-                backend.postNotification(
+                Backend.postNotification(
                             qsTr("已忽略 %1 个不支持导入的拖入文件").arg(ignoredCount),
                             qsTr("拖放导入"), 2)
             // Upstream load_files partitions the drop set: G-code and models
@@ -334,12 +334,12 @@ ApplicationWindow {
             // rejections surface as "G-code loading" messages.
             if (gcodePaths.length > 0) {
                 if (paths.length > 0) {
-                    backend.postNotification(qsTr("G-code 文件与模型不能同时加载"),
+                    Backend.postNotification(qsTr("G-code 文件与模型不能同时加载"),
                                              qsTr("G-code 加载"), 2)
                     return
                 }
                 if (gcodePaths.length > 1) {
-                    backend.postNotification(qsTr("一次只能打开一个 G-code 文件"),
+                    Backend.postNotification(qsTr("一次只能打开一个 G-code 文件"),
                                              qsTr("G-code 加载"), 2)
                     return
                 }
@@ -347,7 +347,7 @@ ApplicationWindow {
                 // Same GAP-6 routing as the Ctrl+I openModelDialog onAccepted:
                 // a new preview-only project; openExternalGcode switches to
                 // the Preview tab itself (BackendContext::openExternalGcode).
-                backend.openExternalGcode(gcodePaths[0])
+                Backend.openExternalGcode(gcodePaths[0])
                 return
             }
             if (paths.length === 0)
@@ -355,17 +355,17 @@ ApplicationWindow {
             // Upstream raises the window and switches to the Prepare tab
             // before importing (Plater.cpp:2745-2748).
             root.requestActivate()
-            if (backend.currentPage !== backend.tp3DEditor)
-                backend.requestSelectTab(backend.tp3DEditor)
+            if (Backend.currentPage !== Backend.tp3DEditor)
+                Backend.requestSelectTab(Backend.tp3DEditor)
             // Single .svg: SVG emboss flow (upstream emboss_svg). OWzx's
             // importer adds the SVG volume to the selected object; without a
             // selection the path is parked on editorVm.svgFilePath for the
             // SVG gizmo panel (PreparePage binds the field).
             if (paths.length === 1 && paths[0].toLowerCase().endsWith(".svg")) {
-                if (backend.editorViewModel) {
-                    backend.editorViewModel.svgFilePath = paths[0]
-                    if (backend.editorViewModel.hasSelection)
-                        backend.editorViewModel.importSVG()
+                if (Backend.editorViewModel) {
+                    Backend.editorViewModel.svgFilePath = paths[0]
+                    if (Backend.editorViewModel.hasSelection)
+                        Backend.editorViewModel.importSVG()
                 }
                 return
             }
@@ -375,8 +375,8 @@ ApplicationWindow {
                 fileArchiveDialog.openFor(paths[0])
                 return
             }
-            if (backend.editorViewModel)
-                backend.editorViewModel.addFilesToCurrentPlate(paths)
+            if (Backend.editorViewModel)
+                Backend.editorViewModel.addFilesToCurrentPlate(paths)
         }
     }
 
@@ -459,7 +459,7 @@ ApplicationWindow {
                         anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (rememberDiscardCheck.checked)
-                                backend.setDirtyProjectDiscardRemembered(true)
+                                Backend.setDirtyProjectDiscardRemembered(true)
                             var action = root.pendingGuardAction
                             var path = root.pendingOpenPath
                             root.pendingGuardAction = ""
@@ -470,13 +470,13 @@ ApplicationWindow {
                                 Qt.quit()
                             } else if (action === "open") {
                                 if (path !== "")
-                                    backend.topbarOpenProject(path)
+                                    Backend.topbarOpenProject(path)
                                 else {
                                     root.openDialogGuardApproved = true
                                     openProjectDialog.open()
                                 }
                             } else if (action === "new") {
-                                backend.topbarNewProject()
+                                Backend.topbarNewProject()
                             }
                         }
                     }
@@ -494,7 +494,7 @@ ApplicationWindow {
     // it -- the gate is the uniform protection.
     Shortcut {
         sequences: [StandardKey.Undo]
-        enabled: backend.currentPage === backend.tp3DEditor
+        enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
         onActivated: plater.preparePageRef.undoFromTopbar()
     }
@@ -504,19 +504,19 @@ ApplicationWindow {
             // R-P1.I: topbarSaveProject() already gates on canSave() (visible
             // error posted). The save-as fallback must not fire for a gated
             // save -- only for the empty-path case.
-            if (backend.canSave && !backend.topbarSaveProject())
+            if (Backend.canSave && !Backend.topbarSaveProject())
                 saveProjectAsDialog.open()
         }
     }
     Shortcut {
         sequences: [StandardKey.Redo]
-        enabled: backend.currentPage === backend.tp3DEditor
+        enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
         onActivated: plater.preparePageRef.redoFromTopbar()
     }
     Shortcut {
         sequence: "Ctrl+Shift+Z"
-        enabled: backend.currentPage === backend.tp3DEditor
+        enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
         onActivated: plater.preparePageRef.redoFromTopbar()
     }
@@ -527,20 +527,20 @@ ApplicationWindow {
     Shortcut {
         sequences: ["Ctrl+Tab"]
         onActivated: {
-            var order = [backend.tpHome, backend.tp3DEditor, backend.tpPreview,
-                         backend.tpDevice, backend.tpMultiDevice, backend.tpProject,
-                         backend.tpCalibration, backend.tpPreferences]
-            var cur = order.indexOf(backend.currentPage)
+            var order = [Backend.tpHome, Backend.tp3DEditor, Backend.tpPreview,
+                         Backend.tpDevice, Backend.tpMultiDevice, Backend.tpProject,
+                         Backend.tpCalibration, Backend.tpPreferences]
+            var cur = order.indexOf(Backend.currentPage)
             var next = order[(cur + 1 + order.length) % order.length]
-            backend.requestSelectTab(next)
+            Backend.requestSelectTab(next)
         }
     }
     Shortcut {
         sequence: "Delete"
-        enabled: backend.currentPage === backend.tp3DEditor
-                 && backend.editorViewModel
-                 && backend.editorViewModel.hasSelection
-        onActivated: backend.editorViewModel.deleteSelection()
+        enabled: Backend.currentPage === Backend.tp3DEditor
+                 && Backend.editorViewModel
+                 && Backend.editorViewModel.hasSelection
+        onActivated: Backend.editorViewModel.deleteSelection()
     }
     Shortcut {
         sequence: "Ctrl+I"
@@ -552,26 +552,26 @@ ApplicationWindow {
     }
     Shortcut {
         sequence: "Ctrl+X"
-        enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+        enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
                  && !root.textEditHoldFocus
-        onActivated: backend.editorViewModel.cutSelectedObjects()
+        onActivated: Backend.editorViewModel.cutSelectedObjects()
     }
     Shortcut {
         sequence: "Ctrl+C"
-        enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
+        enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
                  && !root.textEditHoldFocus
-        onActivated: backend.editorViewModel.copySelectedObjects()
+        onActivated: Backend.editorViewModel.copySelectedObjects()
     }
     Shortcut {
         sequence: "Ctrl+V"
-        enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
+        enabled: Backend.editorViewModel && Backend.editorViewModel.hasClipboardContent
                  && !root.textEditHoldFocus
-        onActivated: backend.editorViewModel.pasteObjects()
+        onActivated: Backend.editorViewModel.pasteObjects()
     }
     Shortcut {
         sequence: "Ctrl+K"
-        enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-        onActivated: backend.editorViewModel.duplicateSelectedObjects()
+        enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
+        onActivated: Backend.editorViewModel.duplicateSelectedObjects()
     }
     // ── Phase 237 (VIEW-02): upstream global shortcut bindings ────────────
     // Each binding calls a real existing API (upstream KBShortcutsDialog.cpp
@@ -589,45 +589,45 @@ ApplicationWindow {
     Shortcut {
         // Select all objects (upstream plater Ctrl+A, KBShortcutsDialog.cpp:255)
         sequence: "Ctrl+A"
-        enabled: backend.currentPage === backend.tp3DEditor && backend.editorViewModel
+        enabled: Backend.currentPage === Backend.tp3DEditor && Backend.editorViewModel
                  && !root.textEditHoldFocus
-        onActivated: backend.editorViewModel.selectAllVisibleObjects()
+        onActivated: Backend.editorViewModel.selectAllVisibleObjects()
     }
     Shortcut {
         // Deselect all (upstream WXK_ESCAPE -> deselect_all,
         // GLCanvas3D.cpp:3234; KBShortcutsDialog.cpp:245)
         sequence: "Esc"
-        enabled: backend.currentPage === backend.tp3DEditor && backend.editorViewModel
-        onActivated: backend.editorViewModel.clearObjectSelection()
+        enabled: Backend.currentPage === Backend.tp3DEditor && Backend.editorViewModel
+        onActivated: Backend.editorViewModel.clearObjectSelection()
     }
     Shortcut {
         // Delete all (upstream Ctrl+D "Delete all", GLCanvas3D.cpp:3210
         // -3213 -> EVT_GLTOOLBAR_DELETE_ALL; KBShortcutsDialog.cpp:256).
         // Destructive: confirmed via the shared ConfirmDialog first.
         sequence: "Ctrl+D"
-        enabled: backend.currentPage === backend.tp3DEditor
-                 && backend.editorViewModel
-                 && backend.editorViewModel.modelCount > 0
+        enabled: Backend.currentPage === Backend.tp3DEditor
+                 && Backend.editorViewModel
+                 && Backend.editorViewModel.modelCount > 0
         onActivated: deleteAllConfirm.open()
     }
     Shortcut {
         // Preferences (upstream Ctrl+P, KBShortcutsDialog.cpp:197 /
         // MainFrame.cpp:2697)
         sequence: "Ctrl+P"
-        onActivated: backend.openSettings()
+        onActivated: Backend.openSettings()
     }
     Shortcut {
         // Slice plate (upstream Ctrl+R "Slice plate", KBShortcutsDialog.cpp:184)
         sequence: "Ctrl+R"
-        enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
-        onActivated: backend.editorViewModel.requestSlice()
+        enabled: Backend.editorViewModel && Backend.editorViewModel.canRequestSlice
+        onActivated: Backend.editorViewModel.requestSlice()
     }
     Shortcut {
         // Export plate sliced file as .gcode.3mf (upstream Ctrl+G "Export
         // plate sliced file", KBShortcutsDialog.cpp:182 -> Plater::
         // export_gcode_3mf, Plater.cpp:7298)
         sequence: "Ctrl+G"
-        enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
+        enabled: Backend.editorViewModel && Backend.editorViewModel.canExportGCode
         onActivated: {
             exportGcode3mfDialog.currentFile = defaultSlicedFileUrl()
             exportGcode3mfDialog.open()
@@ -637,7 +637,7 @@ ApplicationWindow {
         // Print plate (upstream Ctrl+Shift+G "Print plate",
         // KBShortcutsDialog.cpp:189)
         sequence: "Ctrl+Shift+G"
-        enabled: backend.currentPage === backend.tp3DEditor
+        enabled: Backend.currentPage === Backend.tp3DEditor
         onActivated: plater.preparePageRef.openPrintDialog()
     }
     // ── Phase 237 (VIEW-01): camera view presets (upstream Ctrl+0..6,
@@ -646,37 +646,37 @@ ApplicationWindow {
     // uses; upstream routes to the current canvas3D, MainFrame.cpp:3455).
     Shortcut {
         sequence: "Ctrl+0"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("plate")
     }
     Shortcut {
         sequence: "Ctrl+1"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("top")
     }
     Shortcut {
         sequence: "Ctrl+2"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("bottom")
     }
     Shortcut {
         sequence: "Ctrl+3"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("front")
     }
     Shortcut {
         sequence: "Ctrl+4"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("rear")
     }
     Shortcut {
         sequence: "Ctrl+5"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("left")
     }
     Shortcut {
         sequence: "Ctrl+6"
-        enabled: backend.currentPage === backend.tp3DEditor || backend.currentPage === backend.tpPreview
+        enabled: Backend.currentPage === Backend.tp3DEditor || Backend.currentPage === Backend.tpPreview
         onActivated: bblTopbar.selectViewOnActiveViewport("right")
     }
 
@@ -732,40 +732,40 @@ ApplicationWindow {
         // Upstream Tab: switch Prepare <-> Preview (KBShortcutsDialog.cpp
         // global list).
         sequence: "Tab"
-        enabled: (backend.currentPage === backend.tp3DEditor
-                  || backend.currentPage === backend.tpPreview)
+        enabled: (Backend.currentPage === Backend.tp3DEditor
+                  || Backend.currentPage === Backend.tpPreview)
                  && !root.textEditHoldFocus
-        onActivated: backend.requestSelectTab(
-            backend.currentPage === backend.tpPreview
-                ? backend.tp3DEditor : backend.tpPreview)
+        onActivated: Backend.requestSelectTab(
+            Backend.currentPage === Backend.tpPreview
+                ? Backend.tp3DEditor : Backend.tpPreview)
     }
     Shortcut {
         // Upstream Shift+Tab: collapse/expand the sidebar.
         sequence: "Shift+Tab"
-        enabled: (backend.currentPage === backend.tp3DEditor
-                  || backend.currentPage === backend.tpPreview)
+        enabled: (Backend.currentPage === Backend.tp3DEditor
+                  || Backend.currentPage === Backend.tpPreview)
                  && !root.textEditHoldFocus
-        onActivated: backend.requestToggleSidebar()
+        onActivated: Backend.requestToggleSidebar()
     }
 
     // Phase 237 (VIEW-06): default .gcode.3mf suggestion derived from the
     // gcode export name (upstream derives it from the output template,
     // Plater.cpp:11508-11529).
     function defaultSlicedFileUrl() {
-        if (!backend.editorViewModel)
+        if (!Backend.editorViewModel)
             return ""
-        var name = backend.editorViewModel.defaultExportGCodeFileName()
+        var name = Backend.editorViewModel.defaultExportGCodeFileName()
         if (name.endsWith(".gcode"))
             name = name.substring(0, name.length - 6)
         return "file:///" + name + ".gcode.3mf"
     }
 
     // Visual compare reference PNG 映射 — 使用 TabPosition 枚举替代整数（Pitfall 1）
-    readonly property string compareReferenceSource: backend.currentPage === backend.tp3DEditor
+    readonly property string compareReferenceSource: Backend.currentPage === Backend.tp3DEditor
         ? "qrc:/qml/assets/prepare_ref.png"
-        : backend.currentPage === backend.tpPreview
+        : Backend.currentPage === Backend.tpPreview
             ? "qrc:/qml/assets/preview_ref.png"
-            : backend.currentPage === backend.tpDevice
+            : Backend.currentPage === Backend.tpDevice
                 ? "qrc:/qml/assets/monitor_ref.png"
                 : ""
 
@@ -774,25 +774,25 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: root.frameMargin
         radius: root.frameRadius
-        color: backend ? backend.bgColor : Theme.bgBase
-        border.color: backend.borderColor
+        color: Backend ? Backend.bgColor : Theme.bgBase
+        border.color: Backend.borderColor
         border.width: root.visibility === Window.Maximized ? 0 : 1
         clip: true
 
         Image {
             anchors.fill: parent
-            visible: backend.visualCompareMode && root.compareReferenceSource !== ""
+            visible: Backend.visualCompareMode && root.compareReferenceSource !== ""
             source: root.compareReferenceSource
             fillMode: Image.Stretch
         }
 
         ColumnLayout {
-            visible: !backend.visualCompareMode || root.compareReferenceSource === ""
+            visible: !Backend.visualCompareMode || root.compareReferenceSource === ""
             anchors.fill: parent
             spacing: 0
 
             // ── BBLTopbar 完整标题栏（替代旧的 titleBar Rectangle）──────────
-            // `backend` 由 rootContext 注入（main_qml.cpp:134），BBLTopbar 内部直接读取，
+            // `Backend` 由 rootContext 注入（main_qml.cpp:134），BBLTopbar 内部直接读取，
             // 无需显式 property 传递（避免 required property 在构造期求值产生 undefined 误报）
             BBLTopbar {
                 id: bblTopbar
@@ -822,20 +822,20 @@ ApplicationWindow {
                 onExportAllGcodeRequested: exportAllGcodeDialog.open()
                 onExportProjectRequested: saveProjectAsDialog.open()
                 onExportModelRequested: exportModelDialog.open()
-                onUndoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
-                onRedoRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
+                onUndoRequested: if (Backend.currentPage === Backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
+                onRedoRequested: if (Backend.currentPage === Backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
                 // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the
                 // Edit-menu clipboard/delete/clone set routes through the same
                 // ViewModel actions as the shortcuts; delete-selected keeps the
                 // Phase 169 confirm, duplicate-plate clones the current plate.
-                onEditCutRequested: if (backend.editorViewModel) backend.editorViewModel.cutSelectedObjects()
-                onEditCopyRequested: if (backend.editorViewModel) backend.editorViewModel.copySelectedObjects()
-                onEditPasteRequested: if (backend.editorViewModel) backend.editorViewModel.pasteObjects()
-                onEditDeleteRequested: if (backend.currentPage === backend.tp3DEditor) plater.preparePageRef.confirmDeleteSelection()
-                onEditCloneRequested: if (backend.editorViewModel) backend.editorViewModel.duplicateSelectedObjects()
-                onEditDuplicatePlateRequested: if (backend.editorViewModel) backend.editorViewModel.clonePlate(backend.editorViewModel.currentPlateIndex)
-                onCalibrationRequested: backend.requestSelectTab(backend.tpCalibration)
-                onPreferencesRequested: backend.openSettings()
+                onEditCutRequested: if (Backend.editorViewModel) Backend.editorViewModel.cutSelectedObjects()
+                onEditCopyRequested: if (Backend.editorViewModel) Backend.editorViewModel.copySelectedObjects()
+                onEditPasteRequested: if (Backend.editorViewModel) Backend.editorViewModel.pasteObjects()
+                onEditDeleteRequested: if (Backend.currentPage === Backend.tp3DEditor) plater.preparePageRef.confirmDeleteSelection()
+                onEditCloneRequested: if (Backend.editorViewModel) Backend.editorViewModel.duplicateSelectedObjects()
+                onEditDuplicatePlateRequested: if (Backend.editorViewModel) Backend.editorViewModel.clonePlate(Backend.editorViewModel.currentPlateIndex)
+                onCalibrationRequested: Backend.requestSelectTab(Backend.tpCalibration)
+                onPreferencesRequested: Backend.openSettings()
                 onAboutRequested: aboutDialog.open()
                 onShortcutOverviewRequested: shortcutDialog.open()
                 // Dead-control elimination: upstream Help menu entries
@@ -843,7 +843,7 @@ ApplicationWindow {
                 onDailyTipRequested: dailyTipDialog.open()
                 onNetworkTestRequested: topbarNetworkTestDialog.open()
                 onSliceRequested: sliceTopMenuExternal.popup()
-                onSliceSinglePlateRequested: if (backend.editorViewModel) backend.editorViewModel.requestSlice()
+                onSliceSinglePlateRequested: if (Backend.editorViewModel) Backend.editorViewModel.requestSlice()
                 onPrintRequested: printTopMenuExternal.popup()
                 // Phase 237 (VIEW-02): destructive delete-all confirm (upstream
                 // message "All objects will be removed, continue?",
@@ -883,11 +883,11 @@ ApplicationWindow {
                 id: sliceTopMenuExternal
                 CxMenuItem {
                     text: qsTr("切片当前平板")
-                    onTriggered: if (backend.editorViewModel) backend.editorViewModel.requestSlice()
+                    onTriggered: if (Backend.editorViewModel) Backend.editorViewModel.requestSlice()
                 }
                 CxMenuItem {
                     text: qsTr("切片全部平板")
-                    onTriggered: if (backend.editorViewModel) backend.editorViewModel.requestSliceAll()
+                    onTriggered: if (Backend.editorViewModel) Backend.editorViewModel.requestSliceAll()
                 }
             }
 
@@ -932,17 +932,17 @@ ApplicationWindow {
                 // Plater 内部通过 viewMode 切 PreparePage/PreviewPage 可见性。
                 // 上游契约：third_party/OrcaSlicer/src/slic3r/GUI/Plater.cpp 单一 wxPanel 实例
                 // 被 Prepare/Preview tab 共享（ARCH-05）。
-                currentIndex: (backend.currentPage === backend.tp3DEditor
-                               || backend.currentPage === backend.tpPreview)
-                              ? backend.tp3DEditor   // 两 tab 都落到 slot 1 (Plater)
-                              : backend.currentPage
+                currentIndex: (Backend.currentPage === Backend.tp3DEditor
+                               || Backend.currentPage === Backend.tpPreview)
+                              ? Backend.tp3DEditor   // 两 tab 都落到 slot 1 (Plater)
+                              : Backend.currentPage
 
                 // Page 0 (tpHome) — Home
                 Loader {
-                    active: backend.currentPage === backend.tpHome
+                    active: Backend.currentPage === Backend.tpHome
                     sourceComponent: Component {
                         HomePage {
-                            homeVm: backend.homeViewModel
+                            homeVm: Backend.homeViewModel
                             onNewProjectRequested: root.requestNewProject()
                             onOpenProjectRequested: function(filePath) {
                                 root.requestOpenProject(filePath)
@@ -954,18 +954,18 @@ ApplicationWindow {
                 // PreparePage 和 PreviewPage 作为 Plater 内部常驻子组件，由 viewMode 切可见性（ARCH-05/06/07）。
                 Plater {
                     id: plater
-                    editorVm: backend.editorViewModel
-                    previewVm: backend.previewViewModel
-                    configVm: backend.configViewModel
-                    viewMode: backend.currentViewMode
-                    // Phase 4: sidebar dockable 三态绑定 backend (统一管理 + 持久化)
-                    sidebarCollapsed: backend.sidebarCollapsed
-                    sidebarWidth: backend.sidebarWidth
-                    sidebarMinWidth: backend.sidebarMinWidth
-                    sidebarMaxWidth: backend.sidebarMaxWidth
-                    sidebarDockArea: backend.sidebarDockArea
-                    sidebarToggleRequested: function() { backend.requestToggleSidebar() }
-                    sidebarWidthChanged: function(w) { backend.requestSetSidebarWidth(w) }
+                    editorVm: Backend.editorViewModel
+                    previewVm: Backend.previewViewModel
+                    configVm: Backend.configViewModel
+                    viewMode: Backend.currentViewMode
+                    // Phase 4: sidebar dockable 三态绑定 Backend (统一管理 + 持久化)
+                    sidebarCollapsed: Backend.sidebarCollapsed
+                    sidebarWidth: Backend.sidebarWidth
+                    sidebarMinWidth: Backend.sidebarMinWidth
+                    sidebarMaxWidth: Backend.sidebarMaxWidth
+                    sidebarDockArea: Backend.sidebarDockArea
+                    sidebarToggleRequested: function() { Backend.requestToggleSidebar() }
+                    sidebarWidthChanged: function(w) { Backend.requestSetSidebarWidth(w) }
                     // Phase 4 (Sidebar Dockable) 会在此接 BBLTopbar 折叠按钮；当前默认展开
                     leftPanelVisible: true
                 }
@@ -983,10 +983,10 @@ ApplicationWindow {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: backend.currentPage === backend.tpDevice
+                    active: Backend.currentPage === Backend.tpDevice
                     sourceComponent: Component {
                         MonitorPage {
-                            monitorVm: backend.monitorViewModel
+                            monitorVm: Backend.monitorViewModel
                         }
                     }
                 }
@@ -994,20 +994,20 @@ ApplicationWindow {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: backend.currentPage === backend.tpMultiDevice
+                    active: Backend.currentPage === Backend.tpMultiDevice
                     sourceComponent: Component {
-                        MultiMachinePage { multiMachineVm: backend.multiMachineViewModel }
+                        MultiMachinePage { multiMachineVm: Backend.multiMachineViewModel }
                     }
                 }
                 // Page 5 (tpProject) — Project
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: backend.currentPage === backend.tpProject
+                    active: Backend.currentPage === Backend.tpProject
                     sourceComponent: Component {
                         ProjectPage {
-                            projectVm: backend.projectViewModel
-                            editorVm: backend.editorViewModel
+                            projectVm: Backend.projectViewModel
+                            editorVm: Backend.editorViewModel
                             onNewProjectRequested: root.requestNewProject()
                             onOpenProjectDialogRequested: root.requestOpenProject("")
                         }
@@ -1017,9 +1017,9 @@ ApplicationWindow {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: backend.currentPage === backend.tpCalibration
+                    active: Backend.currentPage === Backend.tpCalibration
                     sourceComponent: Component {
-                        CalibrationPage { calibrationVm: backend.calibrationViewModel }
+                        CalibrationPage { calibrationVm: Backend.calibrationViewModel }
                     }
                 }
                 // Page 7 (tpPlaceholder1) — structural placeholder.
@@ -1037,11 +1037,10 @@ ApplicationWindow {
                 Loader {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: backend.currentPage === backend.tpPreferences
+                    active: Backend.currentPage === Backend.tpPreferences
                     sourceComponent: Component {
                         PreferencesPage {
-                            settingsVm: backend.settingsViewModel
-                            backend: backend
+                            settingsVm: Backend.settingsViewModel
                         }
                     }
                 }
@@ -1068,13 +1067,13 @@ ApplicationWindow {
         // tpPreferences) that WAVE-4 still locks, without resurrecting the
         // permanent bar upstream MainFrame never had.
         Text {
-            visible: debugOverlayVisible
+            visible: Backend.debugOverlayVisible
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: 6
             z: 250
-            text: (backend.currentPage + 1) + " / " + (backend.tpPreferences + 1)
-                  + (backend.latencyBrief !== "" ? "  |  " + backend.latencyBrief : "")
+            text: (Backend.currentPage + 1) + " / " + (Backend.tpPreferences + 1)
+                  + (Backend.latencyBrief !== "" ? "  |  " + Backend.latencyBrief : "")
             color: Theme.textTertiary
             font.pixelSize: Theme.fontSizeXS
             font.family: Theme.fontMono
@@ -1082,10 +1081,10 @@ ApplicationWindow {
 
         // ── AI 助手聊天侧栏（OWzx-only，docs/ai-control.md）──────────────────
         // 右缘常驻窄条（仅 AI 启用时可见）+ 360px 覆盖式面板；状态与动作全部
-        // 走 backend.aiViewModel（AiViewModel），此处纯呈现。
+        // 走 Backend.aiViewModel（AiViewModel），此处纯呈现。
         Rectangle {
             id: aiChatEdgeTab
-            visible: backend && backend.aiControlActive && !root.aiChatOpen
+            visible: Backend && Backend.aiControlActive && !root.aiChatOpen
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             width: 22
@@ -1149,21 +1148,21 @@ ApplicationWindow {
             // preset; Qt6 selects the first available print preset, mirroring
             // the chain's default pick.
             var dlg = configWizardDialog
-            if (backend.configViewModel) {
+            if (Backend.configViewModel) {
                 if (dlg.selectedPrinter && dlg.selectedPrinter.length > 0)
-                    backend.configViewModel.requestCurrentPrinterPreset(dlg.selectedPrinter)
+                    Backend.configViewModel.requestCurrentPrinterPreset(dlg.selectedPrinter)
                 if (dlg.selectedFilament && dlg.selectedFilament.length > 0)
-                    backend.configViewModel.requestCurrentFilamentPreset(dlg.selectedFilament)
-                var printNames = backend.configViewModel.printPresetNames
+                    Backend.configViewModel.requestCurrentFilamentPreset(dlg.selectedFilament)
+                var printNames = Backend.configViewModel.printPresetNames
                 if (printNames && printNames.length > 0)
-                    backend.configViewModel.requestCurrentPrintPreset(printNames[0])
+                    Backend.configViewModel.requestCurrentPrintPreset(printNames[0])
             }
         }
     }
 
     // Dialog request signals
     Connections {
-        target: backend
+        target: Backend
         function onShowConfigWizardRequested() { configWizardDialog.open() }
         function onShowBedShapeDialogRequested() { bedShapeDialog.open() }
         function onShowEditGCodeDialogRequested(key, value) {
@@ -1196,7 +1195,7 @@ ApplicationWindow {
     // P8.2 — Bed shape dialog
     BedShapeDialog {
         id: bedShapeDialog
-        editorVm: backend.editorViewModel
+        editorVm: Backend.editorViewModel
     }
 
     // P8.3 — G-code editor dialog
@@ -1208,8 +1207,8 @@ ApplicationWindow {
             // ConfigOptionModel (tier mapping + dirty tracking), identical to
             // an inline OptionRow edit. Key-less opens (template browsing
             // without a source field) skip the write-back.
-            if (editGCodeDialog.optionKey !== "" && backend.configViewModel) {
-                if (!backend.configViewModel.setValue(editGCodeDialog.optionKey, gcode))
+            if (editGCodeDialog.optionKey !== "" && Backend.configViewModel) {
+                if (!Backend.configViewModel.setValue(editGCodeDialog.optionKey, gcode))
                     console.warn("[EditGCode] no owning option for key:",
                                  editGCodeDialog.optionKey)
             }
@@ -1220,7 +1219,7 @@ ApplicationWindow {
     // Phase 201 (v5.6): bound to AmsMaterialsViewModel (mock data + QSettings persistence).
     AMSSettingsDialog {
         id: amsSettingsDialog
-        amsVm: backend.amsMaterialsViewModel
+        amsVm: Backend.amsMaterialsViewModel
     }
 
     // P8.5 — Firmware dialog
@@ -1232,10 +1231,10 @@ ApplicationWindow {
     // P8.6c — Print host dialog
     PrintHostDialog { id: printHostDialog }
 
-    // P10.1 — Plugin manager dialog (Phase 202: PluginService real backend)
+    // P10.1 — Plugin manager dialog (Phase 202: PluginService real Backend)
     PluginManagerDialog {
         id: pluginManagerDialog
-        pluginService: backend.pluginService
+        pluginService: Backend.pluginService
     }
 
     // P10.2 — Enable lite mode dialog
@@ -1244,7 +1243,7 @@ ApplicationWindow {
     // Phase 236 (DLG-01) — Export Preset Bundle (File > 导出预设包...).
     ExportPresetBundleDialog {
         id: exportPresetBundleDialog
-        configVm: backend.configViewModel
+        configVm: Backend.configViewModel
     }
 
     // Phase 236 (DLG-03) — system information dump (Help > 系统信息).
@@ -1266,7 +1265,7 @@ ApplicationWindow {
 
             Text {
                 Layout.fillWidth: true
-                text: backend.currentHintText()
+                text: Backend.currentHintText()
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.WordWrap
@@ -1274,8 +1273,8 @@ ApplicationWindow {
 
             Text {
                 Layout.fillWidth: true
-                visible: backend.currentHintFollowText() !== ""
-                text: backend.currentHintFollowText()
+                visible: Backend.currentHintFollowText() !== ""
+                text: Backend.currentHintFollowText()
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSizeSM
                 wrapMode: Text.WordWrap
@@ -1288,12 +1287,12 @@ ApplicationWindow {
                 CxButton {
                     text: qsTr("上一条")
                     compact: true
-                    onClicked: backend.prevHint()
+                    onClicked: Backend.prevHint()
                 }
                 CxButton {
                     text: qsTr("下一条")
                     compact: true
-                    onClicked: backend.nextHint()
+                    onClicked: Backend.nextHint()
                 }
                 Item { Layout.fillWidth: true }
                 CxButton {
@@ -1312,18 +1311,18 @@ ApplicationWindow {
     NetworkTestDialog {
         id: topbarNetworkTestDialog
         parent: Overlay.overlay
-        networkVm: backend.monitorViewModel
+        networkVm: Backend.monitorViewModel
     }
 
     // Phase 236 (DLG-03) — out-of-bed objects prompt. Opened via
-    // backend.recenterPromptRequested after a load; "全部居中" routes through
+    // Backend.recenterPromptRequested after a load; "全部居中" routes through
     // EditorViewModel::recenterObjectsOutsideBed.
     RecenterDialog {
         id: recenterDialog
-        editorVm: backend.editorViewModel
+        editorVm: Backend.editorViewModel
         onRecenterRequested: {
-            if (backend.editorViewModel)
-                backend.editorViewModel.recenterObjectsOutsideBed()
+            if (Backend.editorViewModel)
+                Backend.editorViewModel.recenterObjectsOutsideBed()
         }
     }
 
@@ -1331,10 +1330,10 @@ ApplicationWindow {
     // model entries; confirm extracts + loads the checked entries.
     FileArchiveDialog {
         id: fileArchiveDialog
-        editorVm: backend.editorViewModel
+        editorVm: Backend.editorViewModel
         onImportRequested: function(archivePath, selectedEntries) {
-            if (backend.editorViewModel && selectedEntries.length > 0)
-                backend.editorViewModel.importArchiveEntries(archivePath, selectedEntries)
+            if (Backend.editorViewModel && selectedEntries.length > 0)
+                Backend.editorViewModel.importArchiveEntries(archivePath, selectedEntries)
         }
     }
 
@@ -1342,24 +1341,24 @@ ApplicationWindow {
     // editorVm.objColorMappingRequested after a multi-color .obj import.
     ObjColorDialog {
         id: objColorDialog
-        editorVm: backend.editorViewModel
+        editorVm: Backend.editorViewModel
         onApplyRequested: function(extruderId) {
-            if (backend.editorViewModel)
-                backend.editorViewModel.applyPendingObjColors(extruderId)
+            if (Backend.editorViewModel)
+                Backend.editorViewModel.applyPendingObjColors(extruderId)
         }
     }
 
     // Phase 236 (DLG-03): editor-triggered dialog opens (obj color prompt)
     // and the outside-bed recenter prompt.
     Connections {
-        target: backend.editorViewModel
+        target: Backend.editorViewModel
         function onObjColorMappingRequested(objectName) {
             objColorDialog.targetObjectName = objectName || ""
             objColorDialog.open()
         }
     }
     Connections {
-        target: backend
+        target: Backend
         function onRecenterPromptRequested() { recenterDialog.open() }
     }
 
@@ -1369,27 +1368,27 @@ ApplicationWindow {
     // stays focusable alongside the main window (CONTEXT.md decision).
     SettingsDialog {
         id: printerSettingsDialog
-        configVm: backend.configViewModel
+        configVm: Backend.configViewModel
         presetTier: "printer"
-        optionModel: backend.configViewModel ? backend.configViewModel.machineOptions : null
+        optionModel: Backend.configViewModel ? Backend.configViewModel.machineOptions : null
     }
     SettingsDialog {
         id: materialSettingsDialog
-        configVm: backend.configViewModel
+        configVm: Backend.configViewModel
         presetTier: "filament"
-        optionModel: backend.configViewModel ? backend.configViewModel.filamentOptions : null
+        optionModel: Backend.configViewModel ? Backend.configViewModel.filamentOptions : null
     }
     SettingsDialog {
         id: processSettingsDialog
-        configVm: backend.configViewModel
+        configVm: Backend.configViewModel
         presetTier: "print"
-        optionModel: backend.configViewModel ? backend.configViewModel.printOptions : null
+        optionModel: Backend.configViewModel ? Backend.configViewModel.printOptions : null
     }
 
     // Phase 173 (P3): command palette (Ctrl+Shift+P). Cross-industry
     // baseline: one overlay to reach every page and appearance action. The
     // palette owns presentation; main.qml owns the command table and side
-    // effects (backend page enums, Theme, appSettings persistence).
+    // effects (Backend page enums, Theme, AppSettings persistence).
     CommandPalette {
         id: commandPalette
         commands: [
@@ -1409,37 +1408,37 @@ ApplicationWindow {
         ]
         onCommandTriggered: (id) => {
             const pageMap = {}
-            pageMap["page-home"] = backend.tpHome
+            pageMap["page-home"] = Backend.tpHome
             // tpPrepare does not exist in TabPosition (BackendContext.h:
             // tp3DEditor = 1 is the Prepare canvas page); the old
-            // backend.tpPrepare read was always undefined and the command
+            // Backend.tpPrepare read was always undefined and the command
             // dead-ended after closing the palette.
-            pageMap["page-prepare"] = backend.tp3DEditor
-            pageMap["page-preview"] = backend.tpPreview
-            pageMap["page-device"] = backend.tpDevice
-            pageMap["page-multi"] = backend.tpMultiDevice
-            pageMap["page-project"] = backend.tpProject
-            pageMap["page-calibration"] = backend.tpCalibration
-            pageMap["page-preferences"] = backend.tpPreferences
+            pageMap["page-prepare"] = Backend.tp3DEditor
+            pageMap["page-preview"] = Backend.tpPreview
+            pageMap["page-device"] = Backend.tpDevice
+            pageMap["page-multi"] = Backend.tpMultiDevice
+            pageMap["page-project"] = Backend.tpProject
+            pageMap["page-calibration"] = Backend.tpCalibration
+            pageMap["page-preferences"] = Backend.tpPreferences
             if (pageMap[id] !== undefined) {
-                backend.requestSelectTab(pageMap[id])
+                Backend.requestSelectTab(pageMap[id])
                 return
             }
             if (id === "theme-toggle") {
                 const nextTheme = Theme.isDark ? "light" : "dark"
                 Theme.setTheme(nextTheme)
-                appSettings.setValue("ui/theme", nextTheme)
+                AppSettings.setValue("ui/theme", nextTheme)
                 return
             }
             if (id === "density-toggle") {
                 const nextDensity = Theme.compactMode ? "comfortable" : "compact"
                 Theme.setDensity(nextDensity)
-                appSettings.setValue("ui/density", nextDensity)
+                AppSettings.setValue("ui/density", nextDensity)
                 return
             }
             if (id.indexOf("scale-") === 0) {
-                appSettings.setValue("ui/scaleFactor", Number(id.slice(6)) / 100)
-                backend.postNotification(qsTr("界面缩放已保存，重启应用后生效"))
+                AppSettings.setValue("ui/scaleFactor", Number(id.slice(6)) / 100)
+                Backend.postNotification(qsTr("界面缩放已保存，重启应用后生效"))
                 return
             }
         }
@@ -1465,7 +1464,7 @@ ApplicationWindow {
         //   and its invisible search field swallows every keystroke.
         Shortcut {
             sequence: "Space"
-            enabled: backend.currentPage === backend.tp3DEditor
+            enabled: Backend.currentPage === Backend.tp3DEditor
                      && !root.textEditHoldFocus
                      && root.activeFocusControl === null
                      && !root.popupHoldsFocus
@@ -1476,10 +1475,10 @@ ApplicationWindow {
     Component.onCompleted: {
         // Phase 171 (P1): bridge the persisted theme into the Theme singleton
         // (QML singletons cannot see root-context properties directly).
-        Theme.setTheme(appSettings.value("ui/theme", "dark").toString())
+        Theme.setTheme(AppSettings.value("ui/theme", "dark").toString())
         // Phase 173 (P3): persisted density mode.
-        Theme.setDensity(appSettings.value("ui/density", "comfortable").toString())
-        if (!startupSkipFirstRun && !backend.configWizardCompleted) {
+        Theme.setDensity(AppSettings.value("ui/density", "comfortable").toString())
+        if (!Backend.startupSkipFirstRun && !Backend.configWizardCompleted) {
             configWizardDialog.open()
         }
     }
@@ -1490,7 +1489,7 @@ ApplicationWindow {
         color: "transparent"
         border.width: 0
         z: 999
-        visible: root.visibility !== Window.Maximized && !backend.visualCompareMode
+        visible: root.visibility !== Window.Maximized && !Backend.visualCompareMode
 
         MouseArea {
             anchors.left: parent.left

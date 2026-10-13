@@ -10,7 +10,7 @@ import OWzx
 // （按钮|标题|值，初值 "N/A" :131-164）+ "Log Info" 多行滚动日志 txt_log
 // （:176-186），EVT_UPDATE_RESULT 按时间戳追加事件并含 ip/步骤事件
 // （:195-219/:246-252/:285-288）。
-// OWzx: 三行（DNS/HTTPS/延迟）由 backend.runNetworkTest() 单探针驱动；每行
+// OWzx: 三行（DNS/HTTPS/延迟）由 Backend.runNetworkTest() 单探针驱动；每行
 // 附 Regular 独立测试按钮（触发同一探针，测试中禁用）。
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -24,14 +24,14 @@ CxDialog {
 
     required property var networkVm
 
-    // True while backend.runNetworkTest() is in flight.
+    // True while Backend.runNetworkTest() is in flight.
     property bool testRunning: false
 
     // Timestamped log buffer (upstream txt_log, NetworkTestDialog.cpp:195-219:
     // each EVT_UPDATE_RESULT appends "<timestamp>:<event>\n").
     property string logText: ""
 
-    // Live test rows driven by backend.runNetworkTest() (upstream
+    // Live test rows driven by Backend.runNetworkTest() (upstream
     // create_content_sizer :131-164: each row = 按钮|标题|值, value starts
     // at "N/A"). Declared on the dialog root: unqualified lookups from the
     // Repeater binding and startTest() resolve along the component root
@@ -44,8 +44,8 @@ CxDialog {
 
     // Basic Info source (upstream create_info_sizer :86-129 binds the studio
     // version + OS version here).
-    readonly property var sysInfo: (typeof backend !== "undefined" && backend && backend.systemInfo)
-        ? backend.systemInfo() : ({})
+    readonly property var sysInfo: (typeof Backend !== "undefined" && Backend && Backend.systemInfo)
+        ? Backend.systemInfo() : ({})
 
     function appendLog(message) {
         logText += Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm:ss") + ": " + message + "\n"
@@ -60,7 +60,7 @@ CxDialog {
         // Upstream step events (NetworkTestDialog.cpp:246-252 start_test_url).
         appendLog("test github start...")
         appendLog("[test github]: url=https://api.github.com")
-        backend.runNetworkTest()
+        Backend.runNetworkTest()
     }
 
     contentItem: Rectangle {
@@ -143,7 +143,7 @@ CxDialog {
                         font.pixelSize: Theme.fontSizeSM
                     }
                     // Per-row Regular test button (upstream rows carry a per
-                    // target test Button; OWzx rows share the single backend
+                    // target test Button; OWzx rows share the single Backend
                     // probe channel). Upstream ButtonStyle::Regular maps to
                     // the CxButton Secondary tier.
                     CxButton {
@@ -221,7 +221,7 @@ CxDialog {
             }
 
             Connections {
-                target: backend
+                target: Backend
                 function onNetworkTestFinished(dnsOk, online, latencyMs, detail) {
                     root.testRunning = false
                     var rows = testRows
@@ -234,7 +234,7 @@ CxDialog {
                     testRows = rows
                     // Upstream step + ip events appended to txt_log
                     // (NetworkTestDialog.cpp:195-219/:285-288; the resolved ip
-                    // and HTTP status travel inside the backend detail).
+                    // and HTTP status travel inside the Backend detail).
                     root.appendLog(online ? "test github ok" : "test github failed")
                     root.appendLog(detail)
                     networkTestDetail.text = detail

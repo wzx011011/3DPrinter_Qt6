@@ -52,7 +52,7 @@ private slots:
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube (upstream
   // _render_3d_navigator + ImGuizmo ViewManipulate).
   void rhiViewportHostsUpstream3dNavigator();
-  // P15.9: active plate identity overlay remains backend-derived and actionable.
+  // P15.9: active plate identity overlay remains Backend-derived and actionable.
   void prepareViewportHostsPlateIdentityOverlay();
   // P15.9: plate clusters are anchored to each plate's world position via the
   // shared PrepareSceneData layout + the RhiViewport plateAnchors projection.
@@ -71,7 +71,7 @@ private slots:
   void rhiViewportSelectionPickingBridgeStaysCppOwned();
   // SEL-MODIFIERS-RECT: modifier clicks + the rubber-band rectangle selection
   // must carry the modifiers in dedicated signals, resolve containment in
-  // C++, apply the state change through an EditorViewModel backend method,
+  // C++, apply the state change through an EditorViewModel Backend method,
   // and keep the no-modifier objectPickedSource -> selectSourceObject path
   // unchanged.
   void rhiViewportSelectionModifiersRouteThroughBackend();
@@ -144,7 +144,7 @@ private slots:
   void waveFourRoutesAndPageIndicesAreDiscoverable();
   // Phase 53: Prepare object, plate, and viewport actions bind to C++ gates.
   void prepareWorkflowActionsBindCppGates();
-  // Phase 76: Prepare workflow panels must stay compact and backend-gated.
+  // Phase 76: Prepare workflow panels must stay compact and Backend-gated.
   void prepareWorkflowPanelsMatchRestorationContract();
   // Phase 77: Prepare viewport controls and gizmo panels must be icon-first.
   void prepareViewportControlsMatchRestorationContract();
@@ -277,7 +277,7 @@ private slots:
   // QString::contains + QVERIFY2 with a D3D12-01-named message). Source-level
   // only; runs in the regression ctest.
   void d3d12DebugLayerWiredBehindEnvFlag();
-  // v5.7 Phase 211 rollback: D3D12 was briefly promoted to the default backend
+  // v5.7 Phase 211 rollback: D3D12 was briefly promoted to the default Backend
   // for `auto` on Windows, but real-machine verification found that D3D12
   // crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream
   // integrated graphics). D3D11 is the default again; D3D12 stays as an opt-in
@@ -664,7 +664,7 @@ private slots:
   // font.pixelSize literals to Theme.fontSize* tokens + Consolas → Theme.fontMono.
   void v52TypographyHardcodeSwept();
   // Phase 164 (TK-03/SW-01): sidebar width system unbroken. Locks the 7-layer
-  // 392px hardcode removal -- backend.sidebarWidth is now resizable within
+  // 392px hardcode removal -- Backend.sidebarWidth is now resizable within
   // [300, 520]; DockableSidebar drag handle is functional (was visible no-op).
   void v52SidebarWidthUnbroken();
   // Phase 165 (CW-01/02): copywriting & language sweep gate. Locks one source
@@ -1053,7 +1053,7 @@ void QmlUiAuditTests::guiStartupDeepLinkArgumentsAreExtensible()
       QStringLiteral("parser.values(openDialogOption)"),
       QStringLiteral("parser.values(loadModelOption)"),
       QStringLiteral("backend.topbarImportModel(modelPath)"),
-      QStringLiteral("startupSkipFirstRun"),
+      QStringLiteral("setStartupSkipFirstRun("),
       QStringLiteral("&QQuickWindow::frameSwapped")
   };
   for (const QString &token : requiredTokens) {
@@ -1088,7 +1088,7 @@ void QmlUiAuditTests::guiStartupDeepLinkArgumentsAreExtensible()
 
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
-  QVERIFY2(mainQml.contains(QStringLiteral("!startupSkipFirstRun && !backend.configWizardCompleted")),
+  QVERIFY2(mainQml.contains(QStringLiteral("!Backend.startupSkipFirstRun && !Backend.configWizardCompleted")),
            "GUI startup skip-first-run must suppress the wizard for this launch without persisting QSettings");
 }
 
@@ -1105,9 +1105,9 @@ void QmlUiAuditTests::mainRegistersRhiViewportByDefaultWithSoftwareFallback()
             "main_qml.cpp must not keep the retired OpenGL viewport environment gate");
   QVERIFY2(mainCpp.contains(QStringLiteral("qputenv(\"OWZX_RHI_RENDERER\", \"auto\")")),
             "default startup must enable QRhi auto instead of the software viewport");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
             "default GLViewport registration must use RhiViewport when QRhi initializes");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
             "SoftwareViewport must remain registered as the QRhi fallback");
   QVERIFY2(!mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>")),
             "retired OpenGL GLViewport must not be registered");
@@ -1123,7 +1123,7 @@ void QmlUiAuditTests::mainRegistersRhiViewportByDefaultWithSoftwareFallback()
   QVERIFY2(!verifyScript.contains(QStringLiteral("OWZX_OPENGL")),
            "canonical startup smoke should cover the default QRhi/D3D11 path");
   QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER = \"")),
-           "canonical startup smoke must not unconditionally force a QRhi backend "
+           "canonical startup smoke must not unconditionally force a QRhi Backend "
            "(Phase 211 rollback: D3D11 is the app-side default; the script may "
            "only conditionally override via OWZX_VERIFY_RHI_BACKEND for IDD/virtual-display hosts)");
 }
@@ -1157,17 +1157,17 @@ void QmlUiAuditTests::mainRegistersRhiViewportOnlyBehindExplicitGate()
            "legacy OWZX_OPENGL path must stay retired");
   QVERIFY2(!mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>")),
            "legacy OpenGL GLViewport registration must stay removed");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "SoftwareViewport must remain the fallback GLViewport registration");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
-           "RhiViewport must be registered under the existing OWzxGL.GLViewport type behind QRhi gate");
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
+           "RhiViewport must be registered under the OWzx module GLViewport type behind QRhi gate");
   QVERIFY2(!verifyScript.contains(QStringLiteral("$env:OWZX_RHI_RENDERER = \"")),
-           "canonical verification must not unconditionally enable a QRhi backend "
+           "canonical verification must not unconditionally enable a QRhi Backend "
            "(Phase 211 rollback: conditional override via OWZX_VERIFY_RHI_BACKEND "
            "for IDD hosts is allowed, but D3D11 is the app-side default)");
 
   QVERIFY2(selectorHeader.contains(QStringLiteral("RhiBackendSelection")),
-           "RhiBackendSelector must expose structured backend diagnostics");
+           "RhiBackendSelector must expose structured Backend diagnostics");
   QVERIFY2(selectorSource.contains(QStringLiteral("Direct3D12")),
            "QRhi app selector must keep Direct3D12 available for explicit opt-in");
   QVERIFY2(selectorSource.contains(QStringLiteral("Direct3D11")),
@@ -1266,9 +1266,9 @@ void QmlUiAuditTests::legacyOpenGlViewportPathsStayDeleted()
            "OWZX_OPENGL must no longer activate a retired OpenGL viewport path");
   QVERIFY2(!mainCpp.contains(QStringLiteral("qmlRegisterType<GLViewport>")),
            "OpenGL GLViewport must not be registered after retirement");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "RhiViewport must remain registered under the existing QML type name");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "SoftwareViewport must remain the non-RHI fallback registration");
 }
 
@@ -1384,7 +1384,7 @@ void QmlUiAuditTests::prepareReadinessControlsBindBackendAvailability()
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.canExportGCode")),
            "Prepare export dialog must be guarded by EditorViewModel::canExportGCode");
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.requestExportGCode(\"\"")),
-           "Prepare export guard must route blocked attempts through the backend for a reason");
+           "Prepare export guard must route blocked attempts through the Backend for a reason");
   // Q11-⑦: the former "plateSliceResultStatus(index)" pin died with the
   // bottom plate bar (its cards were the only per-plate status surface);
   // the C++ invalidation checks in EditorViewModel keep guarding stale
@@ -1412,7 +1412,7 @@ void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
   QVERIFY2(exportDialog.contains(QStringLiteral("fileMode: FileDialog.SaveFile")),
            "G-code export must use a SaveFile dialog, not an open-file dialog");
   QVERIFY2(exportDialog.contains(QStringLiteral("defaultExportGCodeFileName")),
-           "G-code export dialog must use a backend-provided default filename");
+           "G-code export dialog must use a Backend-provided default filename");
 
   QVERIFY2(editorHeader.contains(QStringLiteral("defaultExportGCodeFileName")),
            "EditorViewModel must expose a default G-code export filename to QML");
@@ -1424,7 +1424,7 @@ void QmlUiAuditTests::exportUiUsesSaveDialogAndAvoidsSourcePathTarget()
            "Topbar must expose an all-plate G-code export action");
   QVERIFY2(mainQml.contains(QStringLiteral("FolderDialog"))
                && mainQml.contains(QStringLiteral("requestExportAllGCode")),
-           "All-plate export must ask for a destination directory and call the backend all-plate API");
+           "All-plate export must ask for a destination directory and call the Backend all-plate API");
 }
 
 void QmlUiAuditTests::rhiViewportRendererUsesPrepareSceneDataAndDirtyUploads()
@@ -1645,7 +1645,7 @@ void QmlUiAuditTests::importEntryPointsAdvertiseConsistentModelFormats()
              qPrintable(QStringLiteral("Project import dialog must advertise %1").arg(ext)));
   }
 
-  QVERIFY2(mainQml.contains(QStringLiteral("backend.topbarImportModel(selectedFile.toString())")),
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.topbarImportModel(selectedFile.toString())")),
            "Topbar import dialog must route through BackendContext::topbarImportModel");
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.loadFile(selectedFile.toString())")),
            "Prepare import dialog must route through EditorViewModel::loadFile");
@@ -1678,7 +1678,7 @@ void QmlUiAuditTests::previewRhiRendererBindsPreviewStateAndUsesExactDrawSpans()
              qPrintable(QStringLiteral("Preview GLViewport must bind %1").arg(binding)));
   }
 
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "Preview normal path must keep RhiViewport registered as GLViewport");
   QVERIFY2(!previewPage.contains(QStringLiteral("SoftwareViewport")),
            "PreviewPage must not instantiate SoftwareViewport directly as the normal path");
@@ -1859,9 +1859,9 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
 
   QVERIFY2(mainCpp.contains(QStringLiteral("qputenv(\"OWZX_RHI_RENDERER\", \"auto\")")),
            "Default startup must select the QRhi auto policy");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "QRhi startup path must register RhiViewport as the GLViewport QML type");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "SoftwareViewport must stay fallback-only behind failed QRhi initialization");
   const int defaultCandidatesStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> defaultWindowsCandidates()"));
   const int candidatesForRequestStart = selectorSource.indexOf(QStringLiteral("QVector<RhiBackendCandidate> candidatesForRequest"));
@@ -2002,10 +2002,10 @@ void QmlUiAuditTests::previewLayoutRestoresScreenshotRegionsAndGcodePanel()
   }
 
   const QStringList requiredPhase80Tokens = {
-    // Phase 164 (SW-01): preview left width now sources from backend.sidebarWidth
+    // Phase 164 (SW-01): preview left width now sources from Backend.sidebarWidth
     // (was hardcoded 392 -- part of the 7-layer lock). The contract is now that
-    // the property exists and resolves to the backend value.
-    QStringLiteral("readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392"),
+    // the property exists and resolves to the Backend value.
+    QStringLiteral("readonly property int targetPreviewLeftWidth: Backend ? Backend.sidebarWidth : 392"),
     QStringLiteral("readonly property int targetPreviewRightWidth: Theme.rightPanelWidth"),
     QStringLiteral("id: rightAnalysisStack"),
     QStringLiteral("id: gcodeSourcePanel"),
@@ -2146,7 +2146,7 @@ void QmlUiAuditTests::rhiViewportSelectionPickingBridgeStaysCppOwned()
 // KBShortcutsDialog.cpp:235-239): the modifier selection surface must (a)
 // carry the press modifiers in dedicated viewport signals, (b) resolve the
 // rectangle containment in C++ (projected pick-scene batches), (c) apply the
-// state change through EditorViewModel backend methods with QML forwarding
+// state change through EditorViewModel Backend methods with QML forwarding
 // only, and (d) keep the no-modifier objectPickedSource -> selectSourceObject
 // path untouched.
 void QmlUiAuditTests::rhiViewportSelectionModifiersRouteThroughBackend()
@@ -2188,7 +2188,7 @@ void QmlUiAuditTests::rhiViewportSelectionModifiersRouteThroughBackend()
                && !preparePage.contains(QStringLiteral("selectionRubberBand.x()")),
            "PreparePage must not recompute or mutate the selection rectangle geometry");
 
-  // (c) the state change flows through EditorViewModel backend methods, QML
+  // (c) the state change flows through EditorViewModel Backend methods, QML
   // forwards opaquely.
   QVERIFY2(editorHeader.contains(QStringLiteral("selectObjectsInRect(int modifiers, const QRectF &rect,"))
                && editorSource.contains(QStringLiteral("void EditorViewModel::selectObjectsInRect")),
@@ -2468,9 +2468,9 @@ void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
              qPrintable(QStringLiteral("Preview restored resource missing from qml.qrc: %1").arg(resource)));
   }
 
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<RhiViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "Normal Preview path must register RhiViewport as GLViewport");
-  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzxGL\", 1, 0, \"GLViewport\")")),
+  QVERIFY2(mainCpp.contains(QStringLiteral("qmlRegisterType<SoftwareViewport>(\"OWzx\", 1, 0, \"GLViewport\")")),
            "SoftwareViewport must remain an explicit QRhi-unavailable fallback");
   QVERIFY2(previewPage.contains(QStringLiteral("GLViewport {")),
            "PreviewPage must instantiate the registered GLViewport type");
@@ -3172,12 +3172,12 @@ void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
   }
 
   // Dead-control elimination: the Preferences update check is no longer an
-  // unavailable placeholder — it drives backend.checkForUpdates (upstream
+  // unavailable placeholder — it drives Backend.checkForUpdates (upstream
   // Help > Check for Update). The old "must be visibly disabled" honesty
   // assertion is inverted accordingly; the wiring itself is locked by
   // deadControlEliminationAudit.
   QVERIFY2(preferences.contains(QStringLiteral("checkForUpdates")),
-           "Preferences update check must call backend.checkForUpdates");
+           "Preferences update check must call Backend.checkForUpdates");
 }
 
 void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
@@ -3221,26 +3221,26 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
   // Undo/Redo toolbar buttons must bind enabled to BOTH the page gate AND the
   // C++ undo/redo-stack gate (defense-in-depth; CONTEXT decision to keep both
   // checks in QML). This is the concrete fix for the stack-empty UX bug.
-  QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor && backend.canUndo")),
-           "Undo toolbar button must bind enabled to page-gate AND backend.canUndo");
-  QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor && backend.canRedo")),
-           "Redo toolbar button must bind enabled to page-gate AND backend.canRedo");
+  QVERIFY2(topbar.contains(QStringLiteral("Backend.currentPage === Backend.tp3DEditor && Backend.canUndo")),
+           "Undo toolbar button must bind enabled to page-gate AND Backend.canUndo");
+  QVERIFY2(topbar.contains(QStringLiteral("Backend.currentPage === Backend.tp3DEditor && Backend.canRedo")),
+           "Redo toolbar button must bind enabled to page-gate AND Backend.canRedo");
 
   // Page gate preserved as defense-in-depth (the new gate is ADDITIONAL).
-  QVERIFY2(topbar.contains(QStringLiteral("backend.currentPage === backend.tp3DEditor")),
+  QVERIFY2(topbar.contains(QStringLiteral("Backend.currentPage === Backend.tp3DEditor")),
            "Undo/Redo must keep the Prepare page gate");
 
   // Save toolbar button gated on canSave (forwards to !isSlicing && !isBusy).
-  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.canSave")),
-           "Save toolbar button must bind enabled to backend.canSave");
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: Backend.canSave")),
+           "Save toolbar button must bind enabled to Backend.canSave");
 
   // Slice side-tool button gated on canSlice.
-  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.canSlice")),
-           "Slice side-tool button must bind enabled to backend.canSlice");
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: Backend.canSlice")),
+           "Slice side-tool button must bind enabled to Backend.canSlice");
 
   QVERIFY2(topbar.contains(QStringLiteral("function selectWorkflowTab(tab)"))
-              && topbar.contains(QStringLiteral("backend.requestSelectTab(tab.pos)")),
-           "Workflow tabs must route through a shared backend.requestSelectTab helper");
+              && topbar.contains(QStringLiteral("Backend.requestSelectTab(tab.pos)")),
+           "Workflow tabs must route through a shared Backend.requestSelectTab helper");
   QVERIFY2(topbar.contains(QStringLiteral("delegate: Button"))
               && topbar.contains(QStringLiteral("Accessible.name: workflowTab.modelData.label"))
               && topbar.contains(QStringLiteral("onClicked: root.selectWorkflowTab(workflowTab.modelData)")),
@@ -3251,12 +3251,12 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
 
   // canUndo / canRedo must each appear at least twice (toolbar icon + Edit-menu
   // item) so a regression deleting one binding is caught.
-  const int canUndoCount = topbar.count(QStringLiteral("backend.canUndo"));
+  const int canUndoCount = topbar.count(QStringLiteral("Backend.canUndo"));
   QVERIFY2(canUndoCount >= 2,
-           qPrintable(QStringLiteral("backend.canUndo must appear >= 2 times (toolbar + menu), got %1").arg(canUndoCount)));
-  const int canRedoCount = topbar.count(QStringLiteral("backend.canRedo"));
+           qPrintable(QStringLiteral("Backend.canUndo must appear >= 2 times (toolbar + menu), got %1").arg(canUndoCount)));
+  const int canRedoCount = topbar.count(QStringLiteral("Backend.canRedo"));
   QVERIFY2(canRedoCount >= 2,
-           qPrintable(QStringLiteral("backend.canRedo must appear >= 2 times (toolbar + menu), got %1").arg(canRedoCount)));
+           qPrintable(QStringLiteral("Backend.canRedo must appear >= 2 times (toolbar + menu), got %1").arg(canRedoCount)));
 }
 
 void QmlUiAuditTests::mainWindowDefaultsToFramelessMaximizedShell()
@@ -3362,7 +3362,7 @@ void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
            "NOTI-01: duplicate compression must escalate the repeat counter (upstream activate_existing)");
   QVERIFY2(backendHeader.contains(QStringLiteral("dismissNotificationById")),
            "NOTI-01: per-entry dismissal must exist for stacked toasts");
-  QVERIFY2(errorToast.contains(QStringLiteral("backend.notificationStack")),
+  QVERIFY2(errorToast.contains(QStringLiteral("Backend.notificationStack")),
            "NOTI-01: the toast container must render the stack, not a single slot");
   QVERIFY2(errorToast.contains(QStringLiteral("dismissNotificationById")),
            "NOTI-01: each toast delegate must dismiss only itself");
@@ -3490,8 +3490,8 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar settings entry buttons must stay clickable even when a preset cannot be renamed");
 
   // PREPSB-02: Setting button visible+enabled and forwards the request.
-  QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
-           "LeftSidebar Setting button must call backend.forwardSettingsRequest(\"process\")");
+  QVERIFY2(sidebar.contains(QStringLiteral("Backend.forwardSettingsRequest(\"process\")")),
+           "LeftSidebar Setting button must call Backend.forwardSettingsRequest(\"process\")");
 
   // Q11-④ (rework): bed-type combos render editorVm.bedTypeLabels — the
   // single label source indexed by the libslic3r BedType enum
@@ -3879,22 +3879,22 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
 
   // Phase 164 (SW-01, v5.2): the 392px hardcode was a 7-layer lock that made
   // the DockableSidebar drag handle a visible no-op (Panels-UI-REVIEW BLOCKER).
-  // The contract is now: sidebar width sources from backend.sidebarWidth, and
+  // The contract is now: sidebar width sources from Backend.sidebarWidth, and
   // min/max are real bounds (300/520) -- no longer min==max==392. v5.14: the
   // default narrows to 320 to match the screenshot truth's compact density
   // (~15% of a 1920 window); users can still resize within 300/520.
-  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
-           "Prepare page sidebar width must source from backend.sidebarWidth (Phase 164 unbreaks the 7-layer lock)");
-  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarMinWidth : 300"))
-               && preparePage.contains(QStringLiteral("backend ? backend.sidebarMaxWidth : 520")),
+  QVERIFY2(preparePage.contains(QStringLiteral("Backend ? Backend.sidebarWidth : 392")),
+           "Prepare page sidebar width must source from Backend.sidebarWidth (Phase 164 unbreaks the 7-layer lock)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Backend ? Backend.sidebarMinWidth : 300"))
+               && preparePage.contains(QStringLiteral("Backend ? Backend.sidebarMaxWidth : 520")),
            "Phase 164 SW-01: Prepare sidebar must have real resizable min/max bounds (was min==max==392 no-op drag handle)");
   QVERIFY2(backendContext.contains(QStringLiteral("kSidebarMinWidth = 300"))
                && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 520")),
            "Phase 164 SW-01: BackendContext kSidebar{Min,Max}Width must allow resize (was both 392)");
-  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392"))
-               && platerPage.contains(QStringLiteral("backend ? backend.sidebarMinWidth : 300"))
-               && platerPage.contains(QStringLiteral("backend ? backend.sidebarMaxWidth : 520")),
-           "Phase 164 SW-01: Plater sidebar must use the same resizable backend-driven contract as Prepare");
+  QVERIFY2(platerPage.contains(QStringLiteral("Backend ? Backend.sidebarWidth : 392"))
+               && platerPage.contains(QStringLiteral("Backend ? Backend.sidebarMinWidth : 300"))
+               && platerPage.contains(QStringLiteral("Backend ? Backend.sidebarMaxWidth : 520")),
+           "Phase 164 SW-01: Plater sidebar must use the same resizable Backend-driven contract as Prepare");
   QVERIFY2(backendContext.contains(QStringLiteral("kSidebarDefaultWidth = 392"))
                && backendContext.contains(QStringLiteral("kSidebarMinWidth = 300"))
                && backendContext.contains(QStringLiteral("kSidebarMaxWidth = 520")),
@@ -4057,19 +4057,19 @@ void QmlUiAuditTests::prepareRestoredControlsAreActionable()
              qPrintable(QStringLiteral("Prepare restored action missing after U09 toolbar trim: %1").arg(token)));
   }
   QVERIFY2(glToolbars.contains(QStringLiteral("root.editorVm.gizmoStatusText(mode)")),
-           "Prepare right gizmo toolbar must surface backend capability reasons in tooltips");
+           "Prepare right gizmo toolbar must surface Backend capability reasons in tooltips");
   QVERIFY2(glToolbars.contains(QStringLiteral("availableGizmoMask & (1 << mode)")),
            "Prepare right gizmo toolbar must bind enabled state to EditorViewModel::availableGizmoMask");
 
-  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice")),
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: Backend.editorViewModel && Backend.editorViewModel.canRequestSlice")),
            "Prepare top slice button must bind to EditorViewModel::canRequestSlice");
   QVERIFY2(topbar.contains(QStringLiteral("onClicked: root.sliceSinglePlateRequested()")),
            "Prepare top slice button must directly request single-plate slicing");
-  QVERIFY2(topbar.contains(QStringLiteral("enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode")),
+  QVERIFY2(topbar.contains(QStringLiteral("enabled: Backend.editorViewModel && Backend.editorViewModel.canExportGCode")),
            "Prepare top export button must bind to EditorViewModel::canExportGCode");
-  QVERIFY2(topbar.contains(QStringLiteral("toolTipText: backend.editorViewModel ? backend.editorViewModel.exportActionHint")),
-           "Prepare top export button must show backend export readiness");
-  QVERIFY2(mainQml.contains(QStringLiteral("onSliceSinglePlateRequested: if (backend.editorViewModel) backend.editorViewModel.requestSlice()")),
+  QVERIFY2(topbar.contains(QStringLiteral("toolTipText: Backend.editorViewModel ? Backend.editorViewModel.exportActionHint")),
+           "Prepare top export button must show Backend export readiness");
+  QVERIFY2(mainQml.contains(QStringLiteral("onSliceSinglePlateRequested: if (Backend.editorViewModel) Backend.editorViewModel.requestSlice()")),
            "main.qml must wire the topbar single-plate slice signal to EditorViewModel::requestSlice");
 }
 
@@ -4445,7 +4445,7 @@ void QmlUiAuditTests::settingsDialogStringsQsTr()
   }
 }
 
-// SETTINGS-01: main.qml structurally wires backend.settingsRequested to the
+// SETTINGS-01: main.qml structurally wires Backend.settingsRequested to the
 // three SettingsDialog show() calls (runtime open-path proof is the
 // ViewModelSmokeTests::testSettingsDialogOpenFromSidebar spy test).
 void QmlUiAuditTests::settingsDialogMainQmlDispatchStructural()
@@ -4453,7 +4453,7 @@ void QmlUiAuditTests::settingsDialogMainQmlDispatchStructural()
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(mainQml.contains(QStringLiteral("function onSettingsRequested")),
-           "main.qml must define an onSettingsRequested handler on backend");
+           "main.qml must define an onSettingsRequested handler on Backend");
   QVERIFY2(mainQml.contains(QStringLiteral("printerSettingsDialog.show()")) &&
                mainQml.contains(QStringLiteral("materialSettingsDialog.show()")) &&
                mainQml.contains(QStringLiteral("processSettingsDialog.show()")),
@@ -4675,13 +4675,13 @@ void QmlUiAuditTests::leftSidebarParamsPanelUsesRealOptionRows()
            "LeftSidebar ParamsPanel must choose an option model for the active tab");
   QVERIFY2(sidebar.contains(QStringLiteral("ConfigOptionFilterProxy")),
            "LeftSidebar params pages must filter through the per-page C++ filter proxy");
-  QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"process\")")),
+  QVERIFY2(sidebar.contains(QStringLiteral("Backend.forwardSettingsRequest(\"process\")")),
            "LeftSidebar process edit button must open the process SettingsDialog");
-  QVERIFY2(sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"printer\")"))
-               && sidebar.contains(QStringLiteral("backend.forwardSettingsRequest(\"filament\")")),
+  QVERIFY2(sidebar.contains(QStringLiteral("Backend.forwardSettingsRequest(\"printer\")"))
+               && sidebar.contains(QStringLiteral("Backend.forwardSettingsRequest(\"filament\")")),
             "LeftSidebar preset edit buttons must open tier-specific SettingsDialog windows");
-  QVERIFY2(sidebar.contains(QStringLiteral("onActionTriggered: backend.forwardSettingsRequest(\"printer\")"))
-              && !sidebar.contains(QStringLiteral("onActionTriggered: backend.showConfigWizard()")),
+  QVERIFY2(sidebar.contains(QStringLiteral("onActionTriggered: Backend.forwardSettingsRequest(\"printer\")"))
+              && !sidebar.contains(QStringLiteral("onActionTriggered: Backend.showConfigWizard()")),
            "LeftSidebar printer settings header must open printer settings, not the first-run config wizard");
   QVERIFY2(!sidebar.contains(QStringLiteral("presetActionBlocker(2, root.configVm.currentPrinterPreset, \"rename\")"))
               && !sidebar.contains(QStringLiteral("presetActionBlocker(1, root.configVm.currentFilamentPreset, \"rename\")")),
@@ -4877,7 +4877,7 @@ void QmlUiAuditTests::assembleViewShellReplacesPlaceholderAndRegistersCanvasHost
            "RhiViewportRenderer.cpp must keep the CanvasPreview-only guards unchanged");
 
   // (6) Navigation toggle wired (ASM-NAVIGATION / ASMSHELL-01).
-  QVERIFY2(topbar.contains(QStringLiteral("backend.requestChangeViewMode(backend.vmAssembleView)")),
+  QVERIFY2(topbar.contains(QStringLiteral("Backend.requestChangeViewMode(Backend.vmAssembleView)")),
            "BBLTopbar must wire the AssembleView view-mode toggle");
 
   // (7) qml.qrc registers AssemblePage (ASM-SHELL).
@@ -5742,7 +5742,7 @@ void QmlUiAuditTests::d3d12DebugLayerWiredBehindEnvFlag()
 
   // D3D12-01 / DL-03 (QGuiApplication-before timing): QSG_RHI_DEBUG must be
   // set BEFORE QGuiApplication construction because Qt Quick reads it during
-  // QGuiApplication startup (scene-graph RHI backend init). The env-gate
+  // QGuiApplication startup (scene-graph RHI Backend init). The env-gate
   // comment must document this timing constraint.
   QVERIFY2(mainCpp.contains(QStringLiteral("BEFORE QGuiApplication")),
            "D3D12-01/DL-03: main_qml.cpp must document the QSG_RHI_DEBUG timing constraint (set BEFORE QGuiApplication construction)");
@@ -5754,7 +5754,7 @@ void QmlUiAuditTests::d3d12DebugLayerWiredBehindEnvFlag()
 
 void QmlUiAuditTests::d3d12StaysOptInBehindEnvFlag()
 {
-  // v5.7 Phase 211 rollback: D3D12 was briefly promoted to the default backend
+  // v5.7 Phase 211 rollback: D3D12 was briefly promoted to the default Backend
   // for `auto` on Windows, but real-machine verification found that D3D12
   // crashes at QQuickWindow swapchain init on AMD Radeon APU (mainstream
   // integrated graphics). The D3D12 probe (QRhi::create) succeeds and
@@ -5808,14 +5808,14 @@ void QmlUiAuditTests::d3d12StaysOptInBehindEnvFlag()
   // so a power user can pin d3d12 via OWZX_RHI_RENDERER=d3d12 on a discrete-GPU
   // host. Removing D3D12 would turn the opt-in path into a hard failure.
   QVERIFY2(defaultCandidates.contains(QStringLiteral("Direct3D12")),
-           "D3D12-04: defaultWindowsCandidates() must keep D3D12 in the list as the opt-in backend (Phase 211 rollback)");
+           "D3D12-04: defaultWindowsCandidates() must keep D3D12 in the list as the opt-in Backend (Phase 211 rollback)");
 
   // D3D12-04 (explicit override gate): OWZX_RHI_RENDERER must remain the
   // explicit override gate so power users can pin d3d12 on verified discrete-
   // GPU hosts, and so anyone who needs to escape a problematic default can do
   // so. The selector must keep reading OWZX_RHI_RENDERER as the gate.
   QVERIFY2(selectorSource.contains(QStringLiteral("OWZX_RHI_RENDERER")),
-           "D3D12-04: RhiBackendSelector must keep OWZX_RHI_RENDERER as the backend override gate (d3d12 opt-in / d3d11 default)");
+           "D3D12-04: RhiBackendSelector must keep OWZX_RHI_RENDERER as the Backend override gate (d3d12 opt-in / d3d11 default)");
 
   // D3D12-04 (no Vulkan in the default selector): Vulkan is SDK-blocked (Qt
   // disables the `vulkan` public feature) and must not appear in the default
@@ -6629,7 +6629,7 @@ void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
   QVERIFY2(recipeInfo.exists(),
            "VV-01c/WS3: tests/data/fixture_recipes.md must exist (argv recipe doc, Phase 104 FIXTURE-03)");
 
-  // WS4: D3D11 default backend (debug layer wired behind env flag; D3D12 kept
+  // WS4: D3D11 default Backend (debug layer wired behind env flag; D3D12 kept
   // as opt-in after the Phase 211 real-machine rollback). Phases 105/106/211.
   // OWZX_RHI_RENDERER stays the explicit override gate so power users can pin
   // d3d12 on verified discrete-GPU hosts, and d3d11 remains the default.
@@ -6638,7 +6638,7 @@ void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
   QVERIFY2(rhiBackendSelector.contains(QStringLiteral("OWZX_RHI_RENDERER")),
            "VV-01c/WS4: RhiBackendSelector.cpp must read the OWZX_RHI_RENDERER env flag (D3D11 default after Phase 211 rollback, env flag stays the override gate)");
   QVERIFY2(rhiBackendSelector.contains(QStringLiteral("d3d12")),
-           "VV-01c/WS4: RhiBackendSelector.cpp must accept the d3d12 value (Phase 211 opt-in backend)");
+           "VV-01c/WS4: RhiBackendSelector.cpp must accept the d3d12 value (Phase 211 opt-in Backend)");
 
   // WS5: GLGizmoMeasure engine (per-volume ITS + raycaster + Measuring +
   // snap UX). Phases 112/113/114/115. This is the measure chain VV-01b
@@ -9094,15 +9094,15 @@ void QmlUiAuditTests::v52SidebarWidthUnbroken()
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarSettingsVersion = 5")),
            "R8: settings version bumped to 5 (migration sentinel: pre-R8 widths reset to 392)");
 
-  // (2) QML pages source sidebar width from the backend (not hardcoded 392).
-  QVERIFY2(preparePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
-           "SW-01: PreparePage sidebarWidth must source from backend (was hardcoded 392)");
-  QVERIFY2(platerPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
-           "SW-01: Plater sidebarWidth must source from backend (was hardcoded 392)");
-  QVERIFY2(previewPage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
-           "SW-01: PreviewPage targetPreviewLeftWidth must source from backend (was hardcoded 392)");
-  QVERIFY2(assemblePage.contains(QStringLiteral("backend ? backend.sidebarWidth : 392")),
-           "SW-01: AssemblePage sidebarWidth must source from backend (was hardcoded 392)");
+  // (2) QML pages source sidebar width from the Backend (not hardcoded 392).
+  QVERIFY2(preparePage.contains(QStringLiteral("Backend ? Backend.sidebarWidth : 392")),
+           "SW-01: PreparePage sidebarWidth must source from Backend (was hardcoded 392)");
+  QVERIFY2(platerPage.contains(QStringLiteral("Backend ? Backend.sidebarWidth : 392")),
+           "SW-01: Plater sidebarWidth must source from Backend (was hardcoded 392)");
+  QVERIFY2(previewPage.contains(QStringLiteral("Backend ? Backend.sidebarWidth : 392")),
+           "SW-01: PreviewPage targetPreviewLeftWidth must source from Backend (was hardcoded 392)");
+  QVERIFY2(assemblePage.contains(QStringLiteral("Backend ? Backend.sidebarWidth : 392")),
+           "SW-01: AssemblePage sidebarWidth must source from Backend (was hardcoded 392)");
 }
 
 // Phase 165 (CW-01/02): copywriting & language sweep gate.
@@ -9588,7 +9588,7 @@ void QmlUiAuditTests::v53SimplifyGizmoReal()
   QVERIFY2(vmCpp.contains(QStringLiteral("return simplifySelected()")),
            "FEAT-03: simplifyMeshSelected must delegate to simplifySelected (the real QuadricEdgeCollapse path)");
 
-  // (3) The real simplifyObject backend exists (this was already there but
+  // (3) The real simplifyObject Backend exists (this was already there but
   //     audit missed it -- Phase 176 confirms the full chain works).
   const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::its_quadric_edge_collapse")),
@@ -10006,18 +10006,18 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
              "GATE-01/DLG-03: AmsMaterialsViewModel must keep its slotCount Q_PROPERTY");
   }
 
-  // -- v5.6 DLG-04 (Phase 202): plugin manager real (local) backend.
+  // -- v5.6 DLG-04 (Phase 202): plugin manager real (local) Backend.
   // PluginService must exist with the local-registry + QSettings persistence.
   {
     const QDir sourceDir(QStringLiteral(QT_TESTCASE_SOURCEDIR));
     QVERIFY2(QFileInfo::exists(sourceDir.filePath(QStringLiteral("src/core/services/PluginService.h"))),
-             "GATE-01/DLG-04: PluginService.h must exist (plugin manager local backend)");
+             "GATE-01/DLG-04: PluginService.h must exist (plugin manager local Backend)");
     const QString pluginH = readSource(QStringLiteral("src/core/services/PluginService.h"));
     QVERIFY2(!pluginH.isEmpty(), "GATE-01/DLG-04: Unable to read PluginService.h");
     QVERIFY2(pluginH.contains(QStringLiteral("installPlugin")),
-             "GATE-01/DLG-04: PluginService must keep installPlugin (mock install backend)");
+             "GATE-01/DLG-04: PluginService must keep installPlugin (mock install Backend)");
     QVERIFY2(pluginH.contains(QStringLiteral("uninstallPlugin")),
-             "GATE-01/DLG-04: PluginService must keep uninstallPlugin (mock uninstall backend)");
+             "GATE-01/DLG-04: PluginService must keep uninstallPlugin (mock uninstall Backend)");
     QVERIFY2(pluginH.contains(QStringLiteral("QSettings")),
              "GATE-01/DLG-04: PluginService must reference QSettings (local persistence)");
   }
@@ -10054,7 +10054,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
     const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
     QVERIFY2(!selectorSource.isEmpty(), "GATE-01/RHI-01: Unable to read RhiBackendSelector.cpp");
     QVERIFY2(selectorSource.contains(QStringLiteral("OWZX_RHI_RENDERER")),
-             "GATE-01/RHI-01: RhiBackendSelector must keep OWZX_RHI_RENDERER as the backend override gate (D3D11 default after Phase 211 rollback, d3d12 opt-in)");
+             "GATE-01/RHI-01: RhiBackendSelector must keep OWZX_RHI_RENDERER as the Backend override gate (D3D11 default after Phase 211 rollback, d3d12 opt-in)");
     QVERIFY2(selectorSource.contains(QStringLiteral("D3D11-first")),
              "GATE-01/RHI-01: RhiBackendSelector must keep the D3D11-first rationale comment (Phase 211 rollback)");
   }
@@ -10564,7 +10564,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
 
   // Reachability table: dialog file name -> trigger token that must appear
   // in a QML file OTHER than the dialog's own source. Tokens are either a
-  // BackendContext emitter call (backend.showXxxDialog...) or the opening
+  // BackendContext emitter call (Backend.showXxxDialog...) or the opening
   // action on an instantiated id.
   const QStringList exemptDialogs = {
       // Shared generic single-choice picker (DLG-03): registered component
@@ -10800,7 +10800,7 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-01: perspective/orthographic items must flip the viewport camera projection");
   // G-code window check item toggles the viewmodel (upstream
   // MainFrame.cpp:2623-2629) and stays Preview-gated.
-  QVERIFY2(topbar.contains(QStringLiteral("setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)")),
+  QVERIFY2(topbar.contains(QStringLiteral("setShowGcodeWindow(!Backend.previewViewModel.showGcodeWindow)")),
            "VIEW-01: Show G-code Window must toggle PreviewViewModel::showGcodeWindow");
   // Wave 4: only the View actions with live Qt6 consumers are exposed.
   const QString wave4BackendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
@@ -10808,7 +10808,7 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
   const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
   const QString rendererImpl = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString wave4RhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
-  QVERIFY2(topbar.contains(QStringLiteral("backend.resetWindowLayout()"))
+  QVERIFY2(topbar.contains(QStringLiteral("Backend.resetWindowLayout()"))
                && wave4BackendHeader.contains(QStringLiteral("Q_INVOKABLE void resetWindowLayout()"))
                && wave4BackendImpl.contains(QStringLiteral("requestSetSidebarCollapsed(false)"))
                && wave4BackendImpl.contains(QStringLiteral("requestSetSidebarWidth(kSidebarDefaultWidth)"))
@@ -10885,9 +10885,9 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-02: Ctrl+A must call selectAllVisibleObjects");
   QVERIFY2(mainQml.contains(QStringLiteral("clearObjectSelection()")),
            "VIEW-02: Esc must call clearObjectSelection");
-  QVERIFY2(mainQml.contains(QStringLiteral("backend.openSettings()")),
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.openSettings()")),
            "VIEW-02: Ctrl+P must open Preferences (upstream KBShortcutsDialog.cpp:197)");
-  QVERIFY2(mainQml.contains(QStringLiteral("backend.editorViewModel.clearWorkspace()")),
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.editorViewModel.clearWorkspace()")),
            "VIEW-02: delete-all confirm must run EditorViewModel::clearWorkspace");
   QVERIFY2(mainQml.contains(QStringLiteral("requestExportGcode3mf(")),
            "VIEW-06: the sliced-file dialog must call requestExportGcode3mf");
@@ -10923,9 +10923,9 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-03: main.qml must declare a window-level DropArea");
   QVERIFY2(mainQml.contains(QStringLiteral("addFilesToCurrentPlate(paths)")),
            "VIEW-03: multi-file drops must import through addFilesToCurrentPlate");
-  QVERIFY2(mainQml.contains(QStringLiteral("backend.requestSelectTab(backend.tp3DEditor)")),
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.requestSelectTab(Backend.tp3DEditor)")),
            "VIEW-03: drops must switch to the Prepare tab (upstream Plater.cpp:2745-2748)");
-  QVERIFY2(mainQml.contains(QStringLiteral("backend.editorViewModel.importSVG()")),
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.editorViewModel.importSVG()")),
            "VIEW-03: single .svg drops must route into the SVG emboss flow");
 
   // ── VIEW-04/05/06: service + viewmodel plumbing exists ────────────────
@@ -11033,12 +11033,12 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
   QVERIFY2(rhiHeader.contains(QStringLiteral("Q_INVOKABLE void requestZoom(float delta);")),
            "HOTKEYS: RhiViewport must expose requestZoom(delta)");
 
-  // Tab / Shift+Tab route through the backend page/sidebar actions -- as
+  // Tab / Shift+Tab route through the Backend page/sidebar actions -- as
   // window Shortcuts in main.qml (HOTKEY-FWD: focus navigation consumes Tab
   // before item Keys, so the binding must live at the window level).
   const QString mainQmlHotkeys = readSource(QStringLiteral("src/qml_gui/main.qml"));
-  QVERIFY2(mainQmlHotkeys.contains(QStringLiteral("backend.requestSelectTab("))
-               && mainQmlHotkeys.contains(QStringLiteral("backend.requestToggleSidebar()")),
+  QVERIFY2(mainQmlHotkeys.contains(QStringLiteral("Backend.requestSelectTab("))
+               && mainQmlHotkeys.contains(QStringLiteral("Backend.requestToggleSidebar()")),
            "HOTKEYS: Tab must switch Prepare/Preview and Shift+Tab must toggle"
            " the sidebar through BackendContext (window Shortcuts in main.qml)");
 
@@ -11290,7 +11290,7 @@ void QmlUiAuditTests::previewWave5SliderSourceAudit()
            "W5: PreviewViewModel must expose one-layer and wheel APIs");
   QVERIFY2(vmcpp.contains(QStringLiteral("accelerated ? 5 : 1"))
                && vmcpp.contains(QStringLiteral("if (singleLayer_)")),
-           "W5: backend wheel semantics must support accelerated and single-layer modes");
+           "W5: Backend wheel semantics must support accelerated and single-layer modes");
 }
 
 void QmlUiAuditTests::previewWave5GcodeWindowAndAddMenuHonesty()
@@ -11309,8 +11309,8 @@ void QmlUiAuditTests::previewWave5GcodeWindowAndAddMenuHonesty()
            "W5: analysis disclosure must be independent from showGcodeWindow");
   QVERIFY2(page.contains(QStringLiteral("showMarker && root.previewVm.hasToolPosition && root.hasPreviewData")),
            "W5: marker and tooltip must be gated by a real current move");
-  QVERIFY2(topbar.contains(QStringLiteral("currentPage === backend.tpPreview"))
-               && topbar.contains(QStringLiteral("backend.previewViewModel.previewReady")),
+  QVERIFY2(topbar.contains(QStringLiteral("currentPage === Backend.tpPreview"))
+               && topbar.contains(QStringLiteral("Backend.previewViewModel.previewReady")),
            "W5: Show G-code Window must remain Preview-scoped and data-gated");
 
   // PREVIEW-GCODE-SOURCE-TOKENS (upstream GCodeViewer.cpp:509-540): the
@@ -11424,10 +11424,10 @@ void QmlUiAuditTests::shellGuardNotificationAndDialogRegressionAudit()
                mainQml.contains(QStringLiteral("function requestOpenProject(filePath)")) &&
                mainQml.contains(QStringLiteral("onAccepted: root.requestOpenProject(selectedFile.toString())")),
            "New/open destructive routing must be centralized in shell guard functions");
-  QVERIFY2(!homePage.contains(QStringLiteral("backend.topbarNewProject()")) &&
-               !homePage.contains(QStringLiteral("backend.topbarOpenProject(")) &&
-               !projectPage.contains(QStringLiteral("backend.topbarNewProject()")) &&
-               !topbar.contains(QStringLiteral("backend.topbarOpenProject(modelData)")),
+  QVERIFY2(!homePage.contains(QStringLiteral("Backend.topbarNewProject()")) &&
+               !homePage.contains(QStringLiteral("Backend.topbarOpenProject(")) &&
+               !projectPage.contains(QStringLiteral("Backend.topbarNewProject()")) &&
+               !topbar.contains(QStringLiteral("Backend.topbarOpenProject(modelData)")),
            "Page and recent-menu triggers must not bypass the shell dirty guard");
   QVERIFY2(mainQml.contains(QStringLiteral("PreferencesPage {")) &&
                backendCpp.contains(QStringLiteral("TabPosition::tpPreferences")),
@@ -11477,7 +11477,7 @@ void QmlUiAuditTests::multiMachineViewRoutesToMonitorIdentity()
            "WAVE-3: Monitor must resolve the selected device by local identity");
   QVERIFY2(mainQml.contains(QStringLiteral("onDeviceViewRequested(ip, name, model)")) &&
                mainQml.contains(QStringLiteral("selectDeviceByIdentity(ip, name)")) &&
-               mainQml.contains(QStringLiteral("backend.requestSelectTab(backend.tpDevice)")),
+               mainQml.contains(QStringLiteral("Backend.requestSelectTab(Backend.tpDevice)")),
            "WAVE-3: shell must select the Monitor identity before routing to tpDevice");
   QVERIFY2(!mainQml.contains(QStringLiteral("schedule")) &&
                !mainQml.contains(QStringLiteral("cloud scheduling")),
@@ -11508,9 +11508,9 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
   QVERIFY2(!topbar.isEmpty() && !mainQml.isEmpty() && !backendH.isEmpty() && !backendCpp.isEmpty(),
            "WAVE-4: unable to read shell/page routing sources");
 
-  QVERIFY2(topbar.contains(QStringLiteral("pos: backend.tpMultiDevice"))
-               && topbar.contains(QStringLiteral("pos: backend.tpCalibration"))
-               && topbar.contains(QStringLiteral("pos: backend.tpPreferences")),
+  QVERIFY2(topbar.contains(QStringLiteral("pos: Backend.tpMultiDevice"))
+               && topbar.contains(QStringLiteral("pos: Backend.tpCalibration"))
+               && topbar.contains(QStringLiteral("pos: Backend.tpPreferences")),
            "WAVE-4: MultiMachine, Calibration, and Preferences must be discoverable in the workflow strip");
 
   QVERIFY2(backendH.contains(QStringLiteral("tpDebug = tpPlaceholder1"))
@@ -11524,8 +11524,8 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
            "WAVE-4: existing routing must continue to accept Preferences as the final page index");
 
   QVERIFY2(mainQml.contains(QStringLiteral("PreferencesPage {"))
-               && mainQml.contains(QStringLiteral("active: backend.currentPage === backend.tpPreferences"))
-               && mainQml.contains(QStringLiteral("+ (backend.tpPreferences + 1)")),
+               && mainQml.contains(QStringLiteral("active: Backend.currentPage === Backend.tpPreferences"))
+               && mainQml.contains(QStringLiteral("+ (Backend.tpPreferences + 1)")),
            "WAVE-4: Preferences must remain mounted at its semantic route and status index");
 
   // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the Edit menu must
@@ -11541,7 +11541,7 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
   QVERIFY2(mainQml.contains(QStringLiteral("onEditCutRequested")) &&
            mainQml.contains(QStringLiteral("cutSelectedObjects()")) &&
            mainQml.contains(QStringLiteral("onEditDuplicatePlateRequested")) &&
-           mainQml.contains(QStringLiteral("clonePlate(backend.editorViewModel.currentPlateIndex)")) &&
+           mainQml.contains(QStringLiteral("clonePlate(Backend.editorViewModel.currentPlateIndex)")) &&
            mainQml.contains(QStringLiteral("confirmDeleteSelection()")),
            "MENU-EDIT-EXPAND: entries must route to the real ViewModel actions (delete keeps the confirm)");
 }
@@ -11591,10 +11591,10 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
            "PAGE-01: the New Project quick action must route through the shell guard signal");
   QVERIFY2(homePage.contains(QStringLiteral("root.openProjectRequested(\"\")")),
            "PAGE-01: the Open Project quick action must route through the shell guard signal");
-  QVERIFY2(homePage.contains(QStringLiteral("backend.requestSelectTab(backend.tpCalibration)")),
+  QVERIFY2(homePage.contains(QStringLiteral("Backend.requestSelectTab(Backend.tpCalibration)")),
            "PAGE-01: the Calibration quick action must route to the Calibration tab");
   // Daily Tips rotate the hint database with link support.
-  QVERIFY2(homePage.contains(QStringLiteral("backend.showDailyTip()")),
+  QVERIFY2(homePage.contains(QStringLiteral("Backend.showDailyTip()")),
            "PAGE-01: Daily Tips must rotate via BackendContext::showDailyTip");
   QVERIFY2(homePage.contains(QStringLiteral("openHintDocumentation")),
            "PAGE-01: Daily Tips must honor the hint documentation link");
@@ -11692,7 +11692,7 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
 }
 
 // Dead-control elimination audit: the former placeholder controls must carry
-// real, backend-anchored behaviors.
+// real, Backend-anchored behaviors.
 //   - BBLTopbar Help menu matches upstream generate_help_menu
 //     (MainFrame.cpp:2136-2173) with zero disabled entries.
 //   - NetworkTestDialog / PrintHostDialog buttons call BackendContext probes
@@ -11701,7 +11701,7 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
 //     rows, handler-less reset, non-persisting OK -- so the fake entry was
 //     taken down instead of pretending; rebuilt only on the X1 real send
 //     chain per docs/代码债与架构审计_2026-10-10.md X1(d)).
-//   - PreferencesPage "check now" drives backend.checkForUpdates.
+//   - PreferencesPage "check now" drives Backend.checkForUpdates.
 void QmlUiAuditTests::deadControlEliminationAudit()
 {
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
@@ -11753,16 +11753,16 @@ void QmlUiAuditTests::deadControlEliminationAudit()
            "NETTEST: start button and rows must be live (no TODO placeholders)");
   QVERIFY2(networkDlg.contains(QStringLiteral("runNetworkTest"))
                && networkDlg.contains(QStringLiteral("onNetworkTestFinished")),
-           "NETTEST: start button must drive the backend probe");
+           "NETTEST: start button must drive the Backend probe");
   QVERIFY2(!printHostDlg.contains(QStringLiteral("enabled: false")),
            "PRINTHOST: test-connection button must be enabled");
   QVERIFY2(printHostDlg.contains(QStringLiteral("testPrintHost"))
                && printHostDlg.contains(QStringLiteral("onPrintHostTestFinished")),
-           "PRINTHOST: test button must drive the backend host probe");
+           "PRINTHOST: test button must drive the Backend host probe");
 
   // Q11-③: SpeedLimitDialog was pure mock (hardcoded rows, handler-less
   // reset, non-persisting OK). The component stays deleted with zero
-  // consumers -- no qrc registration, no topbar entry, no backend emitter,
+  // consumers -- no qrc registration, no topbar entry, no Backend emitter,
   // no command-palette route. It returns only with the X1 real send chain.
   QVERIFY2(!qrcSources.contains(QStringLiteral("SpeedLimitDialog")),
            "SPEEDLIMIT: SpeedLimitDialog must stay unregistered in the qrc");
@@ -11772,7 +11772,7 @@ void QmlUiAuditTests::deadControlEliminationAudit()
   QVERIFY2(!backendH.contains(QStringLiteral("showSpeedLimitDialog"))
                && !backendCpp.contains(QStringLiteral("showSpeedLimitDialog"))
                && !mainQml.contains(QStringLiteral("SpeedLimitDialog")),
-           "SPEEDLIMIT: backend emitter and main.qml wiring must stay deleted");
+           "SPEEDLIMIT: Backend emitter and main.qml wiring must stay deleted");
 
   // Wave 6 local-only preferences use a real staged Apply/Cancel transaction.
   // Real integrations stay wired (the update check drives the real release
@@ -11782,7 +11782,7 @@ void QmlUiAuditTests::deadControlEliminationAudit()
   QVERIFY2(prefsPage.contains(QStringLiteral("applyPreferences"))
                && prefsPage.contains(QStringLiteral("cancelPreferences")),
            "PREFS: Apply and Cancel must use the SettingsViewModel transaction API");
-  QVERIFY2(prefsPage.contains(QStringLiteral("backend.checkForUpdates()"))
+  QVERIFY2(prefsPage.contains(QStringLiteral("Backend.checkForUpdates()"))
                && prefsPage.contains(QStringLiteral("onUpdateCheckFinished")),
            "PREFS: the update check must drive the real BackendContext release query");
   QVERIFY2(prefsPage.contains(QStringLiteral("networkTestDialog.open()"))
@@ -11894,7 +11894,7 @@ void QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure()
 }
 
 // Layering anti-revival: the wizard/wipe-tower dialogs once carried an
-// orphaned "? backend.presetServiceMock : null" continuation line that made
+// orphaned "? Backend.presetServiceMock : null" continuation line that made
 // their configVm property evaluate to the SERVICE (runtime TypeErrors on
 // every wizard* call). Pin both dialogs to the viewmodel-only contract.
 void QmlUiAuditTests::wizardAndWipeTowerBindConfigViewModelOnly()
@@ -11907,7 +11907,7 @@ void QmlUiAuditTests::wizardAndWipeTowerBindConfigViewModelOnly()
                && !wipeTower.contains(QStringLiteral("presetServiceMock")),
            "LAYERING: wizard/wipe-tower dialogs must not reference the preset"
            " service directly");
-  QVERIFY2(wizard.contains(QStringLiteral("backend.configViewModel"))
-               && wipeTower.contains(QStringLiteral("backend.configViewModel")),
+  QVERIFY2(wizard.contains(QStringLiteral("Backend.configViewModel"))
+               && wipeTower.contains(QStringLiteral("Backend.configViewModel")),
            "LAYERING: wizard/wipe-tower dialogs must bind configViewModel");
 }

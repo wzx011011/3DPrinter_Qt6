@@ -34,7 +34,7 @@ CxDialog {
     property bool liteModeEnabled: false
 
     Component.onCompleted: {
-        liteModeEnabled = backend.gcodePreviewLiteMode
+        liteModeEnabled = Backend.gcodePreviewLiteMode
     }
 
     contentItem: ColumnLayout {
@@ -186,7 +186,7 @@ CxDialog {
                 // previous accept() dropped the choice on the floor. Cancel
                 // rejects without writing.
                 onClicked: {
-                    backend.setGcodePreviewLiteMode(root.liteModeEnabled)
+                    Backend.setGcodePreviewLiteMode(root.liteModeEnabled)
                     root.accept()
                 }
             }

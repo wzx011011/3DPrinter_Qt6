@@ -6,7 +6,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import OWzx.Models 1.0
 import OWzx
 
 Item {
@@ -661,15 +660,15 @@ Item {
                                     : qsTr("编辑热床形状…")
                                 enabled: true
                                 onClicked: {
-                                    if (typeof backend === "undefined" || !backend)
+                                    if (typeof Backend === "undefined" || !Backend)
                                         return
                                     if (root.isGcodeOption)
-                                        backend.showEditGCodeDialog(
+                                        Backend.showEditGCodeDialog(
                                             root.oKey,
                                             typeof root.oVal === "string" ? root.oVal
                                                 : (root.oVal ? root.oVal.toString() : ""))
                                     else
-                                        backend.showBedShapeDialog()
+                                        Backend.showBedShapeDialog()
                                 }
                             }
                         }

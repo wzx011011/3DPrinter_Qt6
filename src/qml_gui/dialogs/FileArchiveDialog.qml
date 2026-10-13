@@ -19,7 +19,7 @@ import OWzx
 //
 // Usage:
 //   FileArchiveDialog {
-//       editorVm: backend.editorViewModel
+//       editorVm: Backend.editorViewModel
 //       // openFor(path) lists entries; onImportRequested carries the archive path.
 //   }
 //

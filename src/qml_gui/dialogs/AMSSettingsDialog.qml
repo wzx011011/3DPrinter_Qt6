@@ -44,7 +44,7 @@ import OWzx
 // mock stack cannot carry -- persistence channel deferred with the VM batch.
 //
 // Phase 201 (v5.6 AMS Architecture Cleanup): slot data comes from AmsMaterialsViewModel
-// (backend.amsMaterialsViewModel) via the set* / removeMappingRule / resetToDefaults APIs,
+// (Backend.amsMaterialsViewModel) via the set* / removeMappingRule / resetToDefaults APIs,
 // persisted to local QSettings (ams/materials/*). No network / device / cloud access.
 
 CxDialog {

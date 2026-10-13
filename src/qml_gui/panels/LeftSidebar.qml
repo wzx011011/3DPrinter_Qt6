@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import OWzx.Models 1.0
 import OWzx
 
 Rectangle {
@@ -92,13 +91,13 @@ Rectangle {
             ]
             onExtraActionTriggered: (index) => {
                 if (index === 0)
-                    backend.showPrintHostDialog()
-                else if (index === 1 && backend.monitorViewModel)
-                    backend.monitorViewModel.refresh()
+                    Backend.showPrintHostDialog()
+                else if (index === 1 && Backend.monitorViewModel)
+                    Backend.monitorViewModel.refresh()
             }
             actionIcon: "qrc:/qml/assets/icons/settings.svg"
             actionToolTip: qsTr("打印机设置")
-            onActionTriggered: backend.forwardSettingsRequest("printer")
+            onActionTriggered: Backend.forwardSettingsRequest("printer")
             // Whole-bar fold toggle (upstream Plater.cpp:2515-2525); while
             // folded the title carries the preset name (Plater.cpp:2518-2521).
             collapsible: true
@@ -183,14 +182,14 @@ Rectangle {
                     hoverShow: true
                     iconSource: "qrc:/qml/assets/icons/settings.svg"
                     toolTipText: qsTr("编辑打印机预设")
-                    onClicked: backend.forwardSettingsRequest("printer")
+                    onClicked: Backend.forwardSettingsRequest("printer")
                 }
 
                 PixelIconButton {
                     hoverShow: true
                     iconSource: "qrc:/qml/assets/icons/send-2.svg"
                     toolTipText: qsTr("打印机连接")
-                    onClicked: backend.showPrintHostDialog()
+                    onClicked: Backend.showPrintHostDialog()
                 }
             }
         }
@@ -306,7 +305,7 @@ Rectangle {
             }
             actionIcon: "qrc:/qml/assets/icons/settings.svg"
             actionToolTip: qsTr("耗材设置")
-            onActionTriggered: backend.forwardSettingsRequest("filament")
+            onActionTriggered: Backend.forwardSettingsRequest("filament")
             // Whole-bar fold toggle (upstream Plater.cpp:2892-2911).
             collapsible: true
         }
@@ -422,7 +421,7 @@ Rectangle {
             middleComponent: processScopePills
             actionIcon: "qrc:/qml/assets/icons/settings.svg"
             actionToolTip: qsTr("工艺设置")
-            onActionTriggered: backend.forwardSettingsRequest("process")
+            onActionTriggered: Backend.forwardSettingsRequest("process")
         }
 
         Rectangle {
@@ -897,7 +896,7 @@ Rectangle {
                 if (!root.configVm)
                     return
                 if (!root.configVm.canDeletePreset(root.presetEditName)) {
-                    backend.postError(root.configVm.presetActionBlocker(
+                    Backend.postError(root.configVm.presetActionBlocker(
                         root.presetEditCategory, root.presetEditName, "delete"), 1)
                     return
                 }

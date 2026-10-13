@@ -42,6 +42,17 @@ qt_add_qml_module(owzx_qml
     # via import paths (silences the "target path" tooling warning); resource
     # paths inside the binaries are unaffected.
     OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/OWzx
+    # C++ QML-facing types owned by the module (S8): BackendContext is the
+    # `backend` singleton (moved out of the owzx_app_core OBJECT library,
+    # which qt_add_qml_module cannot host); UiSettingsStore is the
+    # `appSettings` singleton (formerly a cpp-local class behind a root
+    # context property). QML_ELEMENT/QML_SINGLETON here make both statically
+    # visible to qmlcachegen/qmllint. The types must live in THIS target:
+    # qmltyperegistrar only processes the module target's own metatypes.
+    SOURCES
+        BackendContext.h
+        BackendContext.cpp
+        UiSettingsStore.h
     QML_FILES
         main.qml
         BBLTopbar.qml
@@ -137,4 +148,9 @@ qt_add_qml_module(owzx_qml
 # linked test exe while the module's own resources survived via qmlcache).
 target_link_libraries(owzx_qml PRIVATE
     Qt6::Qml Qt6::Quick
+    # BackendContext.cpp compiles against the whole viewmodel/service surface;
+    # the OBJECT library's usage requirements (includes, HAS_LIBSLIC3R, Qt
+    # modules) feed this target's compilation and its objects ride the link
+    # closure of every owzx_qml consumer.
+    owzx_app_core
 )

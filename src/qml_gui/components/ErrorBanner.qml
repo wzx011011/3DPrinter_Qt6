@@ -18,7 +18,7 @@ Rectangle {
     id: root
 
     Layout.fillWidth: true
-    visible: backend.lastErrorSeverity === 1 && backend.lastErrorMessage !== ""
+    visible: Backend.lastErrorSeverity === 1 && Backend.lastErrorMessage !== ""
     clip:    true
     color:   Theme.bgBase
 
@@ -49,7 +49,7 @@ Rectangle {
     readonly property real contentX: lineHeight
     readonly property real contentWidth: width - contentX - 3 * lineHeight
 
-    readonly property string message: backend.lastErrorMessage
+    readonly property string message: Backend.lastErrorMessage
     readonly property int lineCount: Math.max(measureText.lineCount, 1)
 
     // Expansion state (upstream m_multiline): fresh notifications with <= 6
@@ -346,7 +346,7 @@ Rectangle {
         height: root.buttonSize
         source: closeZone.hovered ? "qrc:/qml/assets/icons/notification_close_hover_dark.svg"
                                   : "qrc:/qml/assets/icons/notification_close_dark.svg"
-        TapHandler { onTapped: backend.dismissNotification() }
+        TapHandler { onTapped: Backend.dismissNotification() }
     }
 
     Item {
@@ -365,6 +365,6 @@ Rectangle {
         y: 0
         width: 2.125 * root.lineHeight
         height: minimizeButton.visible ? root.height - 2 * root.lineHeight : root.height
-        TapHandler { onTapped: backend.dismissNotification() }
+        TapHandler { onTapped: Backend.dismissNotification() }
     }
 }

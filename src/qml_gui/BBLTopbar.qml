@@ -13,8 +13,8 @@
 //              upstream injects side_tools into the Notebook tab strip
 //              (MainFrame.cpp:1244-1246) so the groups show on every page.
 //
-// 所有 Tab 切换通过 backend.requestSelectTab(backend.TabPosition.tpX)（Plan 02-01 提供）。
-// 所有页面索引通过 backend.TabPosition 枚举引用——禁止硬编码整数（Pitfall 1）。
+// 所有 Tab 切换通过 Backend.requestSelectTab(Backend.TabPosition.tpX)（Plan 02-01 提供）。
+// 所有页面索引通过 Backend.TabPosition 枚举引用——禁止硬编码整数（Pitfall 1）。
 
 import QtQuick
 import QtQuick.Controls
@@ -26,8 +26,8 @@ Item {
     id: root
 
     // ── 外部依赖 ──────────────────────────────────────────────────────────
-    // `backend` 是 rootContext 的 context property（main_qml.cpp:134 注入），
-    // 因此 BBLTopbar 内部直接通过 `backend` 引用，无需重复声明为 required property
+    // `Backend` 是 rootContext 的 context property（main_qml.cpp:134 注入），
+    // 因此 BBLTopbar 内部直接通过 `Backend` 引用，无需重复声明为 required property
     // （QML required property 在构造时绑定求值会先于 main.qml 的属性赋值，导致 undefined 误报）。
     property var preparePageRef: null        // PreparePage reference (undo/redo dispatch)
     property var previewPageRef: null        // PreviewPage reference (VIEW-01 preview-canvas viewport routing)
@@ -89,30 +89,30 @@ Item {
     // strip destinations, and BackendContext routing (kLastTab) still ends
     // at tpPreferences.
     readonly property var workflowTabs: [
-        { label: qsTr("首页"), pos: backend.tpHome },
-        { label: qsTr("准备"), pos: backend.tp3DEditor },
-        { label: qsTr("预览"), pos: backend.tpPreview },
-        { label: qsTr("设备"), pos: backend.tpDevice },
-        { label: qsTr("多设备"), pos: backend.tpMultiDevice },
-        { label: qsTr("项目"), pos: backend.tpProject },
-        { label: qsTr("校准"), pos: backend.tpCalibration },
-        { label: qsTr("偏好设置"), pos: backend.tpPreferences }
+        { label: qsTr("首页"), pos: Backend.tpHome },
+        { label: qsTr("准备"), pos: Backend.tp3DEditor },
+        { label: qsTr("预览"), pos: Backend.tpPreview },
+        { label: qsTr("设备"), pos: Backend.tpDevice },
+        { label: qsTr("多设备"), pos: Backend.tpMultiDevice },
+        { label: qsTr("项目"), pos: Backend.tpProject },
+        { label: qsTr("校准"), pos: Backend.tpCalibration },
+        { label: qsTr("偏好设置"), pos: Backend.tpPreferences }
     ]
 
     function selectWorkflowTab(tab) {
-        if (!tab || backend.currentPage === tab.pos)
+        if (!tab || Backend.currentPage === tab.pos)
             return
-        root.lastTabSwitchToken = backend.beginLatency("tab-switch", tab.label)
-        backend.requestSelectTab(tab.pos)
+        root.lastTabSwitchToken = Backend.beginLatency("tab-switch", tab.label)
+        Backend.requestSelectTab(tab.pos)
     }
 
     // ── Phase 237 (VIEW-01): View-menu camera routing ────────────────────
     // Upstream routes select_view() to the CURRENT canvas
     // (MainFrame.cpp:3455 -> Plater::select_view -> current canvas3D). The
     // Preview tab hosts its own RhiViewport inside PreviewPage, so the
-    // active-viewport resolution follows backend.currentPage.
+    // active-viewport resolution follows Backend.currentPage.
     readonly property var activeViewport: {
-        if (backend.currentPage === backend.tpPreview && root.previewPageRef)
+        if (Backend.currentPage === Backend.tpPreview && root.previewPageRef)
             return root.previewPageRef.previewViewportRef
         if (root.preparePageRef)
             return root.preparePageRef.viewport3dRef
@@ -141,8 +141,8 @@ Item {
                     text: qsTr("保存项目")
                     // R-P1.I: gated while slicing (topbarSaveProject posts the
                     // visible error); save-as fallback only for empty path.
-                    enabled: backend.canSave
-                    onTriggered: if (backend.canSave && !backend.topbarSaveProject()) root.saveAsRequested()
+                    enabled: Backend.canSave
+                    onTriggered: if (Backend.canSave && !Backend.topbarSaveProject()) root.saveAsRequested()
                 }
                 MenuItem { text: qsTr("退出"); onTriggered: root.quitRequested() }
             }
@@ -216,7 +216,7 @@ Item {
                 }
                 HoverHandler { id: logoHover }
                 TapHandler {
-                    onTapped: backend.requestSelectTab(backend.tpHome)
+                    onTapped: Backend.requestSelectTab(Backend.tpHome)
                 }
             }
 
@@ -294,9 +294,9 @@ Item {
                 iconSize: 18
                 iconSource: "qrc:/qml/assets/icons/device-floppy.svg"
                 toolTipText: qsTr("保存项目")
-                enabled: backend.canSave
+                enabled: Backend.canSave
                 onClicked: {
-                    if (backend.canSave && !backend.topbarSaveProject())
+                    if (Backend.canSave && !Backend.topbarSaveProject())
                         root.saveAsRequested()
                 }
             }
@@ -308,8 +308,8 @@ Item {
                 iconSize: 18
                 iconSource: "qrc:/qml/assets/icons/arrow-back-up.svg"
                 toolTipText: qsTr("撤销")
-                enabled: backend.currentPage === backend.tp3DEditor && backend.canUndo
-                onClicked: if (backend.currentPage === backend.tp3DEditor && backend.canUndo) root.undoRequested()
+                enabled: Backend.currentPage === Backend.tp3DEditor && Backend.canUndo
+                onClicked: if (Backend.currentPage === Backend.tp3DEditor && Backend.canUndo) root.undoRequested()
             }
 
             // Redo (对齐上游 wxID_REDO) — Phase 51 SHELL-03: gate on BOTH page AND canRedo (redo stack non-empty)
@@ -319,8 +319,8 @@ Item {
                 iconSize: 18
                 iconSource: "qrc:/qml/assets/icons/arrow-forward-up.svg"
                 toolTipText: qsTr("重做")
-                enabled: backend.currentPage === backend.tp3DEditor && backend.canRedo
-                onClicked: if (backend.currentPage === backend.tp3DEditor && backend.canRedo) root.redoRequested()
+                enabled: Backend.currentPage === Backend.tp3DEditor && Backend.canRedo
+                onClicked: if (Backend.currentPage === Backend.tp3DEditor && Backend.canRedo) root.redoRequested()
             }
 
             // Calibration 快捷按钮 (对齐上游 ID_CALIB)
@@ -413,7 +413,7 @@ Item {
                     iconSize: 16
                     iconSource: "qrc:/qml/assets/icons/layers.svg"
                     toolTipText: qsTr("切片")
-                    enabled: backend.canSlice
+                    enabled: Backend.canSlice
                     onClicked: root.sliceRequested()
                 }
 
@@ -441,8 +441,8 @@ Item {
                     iconSize: 16
                     iconSource: "qrc:/qml/assets/icons/box.svg"
                     toolTipText: qsTr("Filament Group")
-                    enabled: backend.editorViewModel != null
-                             && backend.editorViewModel.multiNozzleConfigured
+                    enabled: Backend.editorViewModel != null
+                             && Backend.editorViewModel.multiNozzleConfigured
                     onClicked: {
                         // U02: anchor the popup to this trigger button
                         // (upstream MainFrame.cpp:1969-1973 positions the
@@ -462,7 +462,7 @@ Item {
                 Layout.alignment: Qt.AlignVCenter
                 Layout.maximumWidth: Math.max(160, (root.width / 2) - 500)
                 Layout.minimumWidth: 160
-                text: backend.displayProjectTitle
+                text: Backend.displayProjectTitle
                 color: Theme.chromeText
                 font.pixelSize: Theme.fontSizeMD
                 elide: Text.ElideRight
@@ -498,7 +498,7 @@ Item {
                 // 8x8 unread badge (Theme.statusError #e04040), gated on the
                 // BackendContext unread-history counter.
                 Rectangle {
-                    visible: backend.unreadHistoryCount > 0
+                    visible: Backend.unreadHistoryCount > 0
                     anchors.top: bellButton.top; anchors.topMargin: 2
                     anchors.left: bellButton.left; anchors.leftMargin: 18
                     width: 8; height: 8; radius: Theme.radiusSM
@@ -518,7 +518,7 @@ Item {
                 onClicked: {
                     const next = Theme.isDark ? "light" : "dark"
                     Theme.setTheme(next)
-                    appSettings.setValue("ui/theme", next)
+                    AppSettings.setValue("ui/theme", next)
                 }
             }
 
@@ -589,7 +589,7 @@ Item {
                         }
 
                         background: Rectangle {
-                            color: backend.currentPage === workflowTab.modelData.pos ? Theme.accent : "transparent"
+                            color: Backend.currentPage === workflowTab.modelData.pos ? Theme.accent : "transparent"
                         }
 
                         contentItem: Item {
@@ -597,9 +597,9 @@ Item {
                                 id: workflowLabel
                                 anchors.centerIn: parent
                                 text: workflowTab.modelData.label
-                                color: backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
+                                color: Backend.currentPage === workflowTab.modelData.pos ? Theme.textOnAccent : Theme.chromeText
                                 font.pixelSize: Theme.fontSizeMD
-                                font.bold: backend.currentPage === workflowTab.modelData.pos
+                                font.bold: Backend.currentPage === workflowTab.modelData.pos
                             }
                         }
                     }
@@ -628,12 +628,12 @@ Item {
                 // is #818183 bg + #E0E0E0 text (slice-4/topbar-14).
                 Rectangle {
                     id: prepareSliceButton
-                    property string toolTipText: backend.editorViewModel ? backend.editorViewModel.sliceActionHint : qsTr("Backend unavailable")
+                    property string toolTipText: Backend.editorViewModel ? Backend.editorViewModel.sliceActionHint : qsTr("Backend unavailable")
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: sliceGroupRow.implicitWidth
                     implicitHeight: 24
                     color: Theme.surfaceDeep
-                    enabled: backend.editorViewModel && backend.editorViewModel.canRequestSlice
+                    enabled: Backend.editorViewModel && Backend.editorViewModel.canRequestSlice
                     ToolTip.visible: sliceMouse.containsMouse && prepareSliceButton.toolTipText.length > 0
                     ToolTip.text: prepareSliceButton.toolTipText
                     ToolTip.delay: 400
@@ -690,12 +690,12 @@ Item {
 
                 Rectangle {
                     id: prepareExportGcodeButton
-                    property string toolTipText: backend.editorViewModel ? backend.editorViewModel.exportActionHint : qsTr("Backend unavailable")
+                    property string toolTipText: Backend.editorViewModel ? Backend.editorViewModel.exportActionHint : qsTr("Backend unavailable")
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: exportGroupRow.implicitWidth
                     implicitHeight: 24
                     color: Theme.surfaceDeep
-                    enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
+                    enabled: Backend.editorViewModel && Backend.editorViewModel.canExportGCode
                     ToolTip.visible: exportMouse.containsMouse && prepareExportGcodeButton.toolTipText.length > 0
                     ToolTip.text: prepareExportGcodeButton.toolTipText
                     ToolTip.delay: 400
@@ -766,7 +766,7 @@ Item {
     FilamentGroupPopup {
         id: filamentGroupPopup
         parent: Overlay.overlay
-        editorVm: backend.editorViewModel
+        editorVm: Backend.editorViewModel
     }
 
     // ── TitleBarDivider 复用组件 ────────────────────────────────────────
@@ -796,7 +796,7 @@ Item {
             id: fileRecentMenu
             title: qsTr("最近文件")
             Instantiator {
-                model: backend.projectViewModel ? backend.projectViewModel.recentProjects : []
+                model: Backend.projectViewModel ? Backend.projectViewModel.recentProjects : []
                 delegate: CxMenuItem {
                     required property string modelData
                     text: modelData
@@ -811,8 +811,8 @@ Item {
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("清空最近文件")
-                enabled: backend.projectViewModel && backend.projectViewModel.recentProjects.length > 0
-                onTriggered: backend.projectViewModel && backend.projectViewModel.clearRecentProjects()
+                enabled: Backend.projectViewModel && Backend.projectViewModel.recentProjects.length > 0
+                onTriggered: Backend.projectViewModel && Backend.projectViewModel.clearRecentProjects()
             }
         }
 
@@ -822,9 +822,9 @@ Item {
             text: qsTr("保存项目")
             // R-P1.I: gated while slicing (topbarSaveProject posts the
             // visible error); save-as fallback only for empty path.
-            enabled: backend.canSave
+            enabled: Backend.canSave
             onTriggered: {
-                if (backend.canSave && !backend.topbarSaveProject())
+                if (Backend.canSave && !Backend.topbarSaveProject())
                     root.saveAsRequested()
             }
         }
@@ -839,27 +839,27 @@ Item {
         CxMenu {
             title: qsTr("导入")
             CxMenuItem {
-                enabled: backend.canImport
+                enabled: Backend.canImport
                 text: qsTr("Import 3MF")
                 onTriggered: root.importModelRequested(qsTr("3MF 文件 (*.3mf)"))
             }
             CxMenuItem {
-                enabled: backend.canImport
+                enabled: Backend.canImport
                 text: qsTr("Import STL")
                 onTriggered: root.importModelRequested(qsTr("STL 文件 (*.stl)"))
             }
             CxMenuItem {
-                enabled: backend.canImport
+                enabled: Backend.canImport
                 text: qsTr("Import OBJ")
                 onTriggered: root.importModelRequested(qsTr("OBJ 文件 (*.obj)"))
             }
             CxMenuItem {
-                enabled: backend.canImport
+                enabled: Backend.canImport
                 text: qsTr("Import STEP")
                 onTriggered: root.importModelRequested(qsTr("STEP 文件 (*.step *.stp)"))
             }
             CxMenuItem {
-                enabled: backend.canImport
+                enabled: Backend.canImport
                 text: qsTr("Import AMF")
                 onTriggered: root.importModelRequested(qsTr("AMF 文件 (*.amf)"))
             }
@@ -868,7 +868,7 @@ Item {
             // existing openModelDialog zip branch opens the FileArchiveDialog
             // (Phase 236), so this reuses the same file dialog + routing.
             CxMenuItem {
-                enabled: backend.canImport
+                enabled: Backend.canImport
                 text: qsTr("Import Zip Archive")
                 onTriggered: root.importZipRequested()
             }
@@ -887,7 +887,7 @@ Item {
         CxMenu {
             title: qsTr("导出")
             CxMenuItem {
-                enabled: backend.canExport
+                enabled: Backend.canExport
                 text: qsTr("Export G-code")
                 onTriggered: root.exportGcodeRequested()
             }
@@ -897,22 +897,22 @@ Item {
             // on a valid current-plate slice result, matching the Prepare
             // export button's canExportGCode gate.
             CxMenuItem {
-                enabled: backend.editorViewModel && backend.editorViewModel.canExportGCode
+                enabled: Backend.editorViewModel && Backend.editorViewModel.canExportGCode
                 text: qsTr("导出切片文件...") + "\tCtrl+G"
                 onTriggered: root.exportSlicedFileRequested()
             }
             CxMenuItem {
-                enabled: backend.canExport
+                enabled: Backend.canExport
                 text: qsTr("Export All Plate G-code")
                 onTriggered: root.exportAllGcodeRequested()
             }
             CxMenuItem {
-                enabled: backend.canExport
+                enabled: Backend.canExport
                 text: qsTr("Export 3MF")
                 onTriggered: root.exportProjectRequested()
             }
             CxMenuItem {
-                enabled: backend.canExport
+                enabled: Backend.canExport
                 text: qsTr("Export Model")
                 onTriggered: root.exportModelRequested()
             }
@@ -922,7 +922,7 @@ Item {
             // not gated on a sliced result).
             CxMenuItem {
                 text: qsTr("导出预设包...")
-                onTriggered: backend.showExportPresetBundleDialog()
+                onTriggered: Backend.showExportPresetBundleDialog()
             }
         }
 
@@ -953,35 +953,35 @@ Item {
             title: qsTr("编辑")
             CxMenuItem {
                 text: qsTr("撤销")
-                enabled: backend.currentPage === backend.tp3DEditor && backend.canUndo
-                onTriggered: if (backend.currentPage === backend.tp3DEditor && backend.canUndo) root.undoRequested()
+                enabled: Backend.currentPage === Backend.tp3DEditor && Backend.canUndo
+                onTriggered: if (Backend.currentPage === Backend.tp3DEditor && Backend.canUndo) root.undoRequested()
             }
             CxMenuItem {
                 text: qsTr("重做")
-                enabled: backend.currentPage === backend.tp3DEditor && backend.canRedo
-                onTriggered: if (backend.currentPage === backend.tp3DEditor && backend.canRedo) root.redoRequested()
+                enabled: Backend.currentPage === Backend.tp3DEditor && Backend.canRedo
+                onTriggered: if (Backend.currentPage === Backend.tp3DEditor && Backend.canRedo) root.redoRequested()
             }
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("剪切")
-                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-                onTriggered: backend.editorViewModel.cutSelectedObjects()
+                enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
+                onTriggered: Backend.editorViewModel.cutSelectedObjects()
             }
             CxMenuItem {
                 text: qsTr("复制")
-                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-                onTriggered: backend.editorViewModel.copySelectedObjects()
+                enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
+                onTriggered: Backend.editorViewModel.copySelectedObjects()
             }
             CxMenuItem {
                 text: qsTr("粘贴")
-                enabled: backend.editorViewModel && backend.editorViewModel.hasClipboardContent
-                onTriggered: backend.editorViewModel.pasteObjects()
+                enabled: Backend.editorViewModel && Backend.editorViewModel.hasClipboardContent
+                onTriggered: Backend.editorViewModel.pasteObjects()
             }
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("删除选中")
-                enabled: backend.editorViewModel && backend.editorViewModel.hasSelection
-                onTriggered: backend.editorViewModel.deleteSelectedObjects()
+                enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
+                onTriggered: Backend.editorViewModel.deleteSelectedObjects()
             }
             // Phase 237 (VIEW-02): Delete All (upstream Ctrl+D, KBShortcuts
             // .cpp:256 "Delete all"; GLCanvas3D.cpp:3210-3213 posts
@@ -989,16 +989,16 @@ Item {
             // model, Plater.cpp:4939). main.qml confirms first.
             CxMenuItem {
                 text: qsTr("全部删除") + "\tCtrl+D"
-                enabled: backend.editorViewModel && backend.editorViewModel.modelCount > 0
+                enabled: Backend.editorViewModel && Backend.editorViewModel.modelCount > 0
                 onTriggered: root.deleteAllRequested()
             }
             CxMenuItem {
                 text: qsTr("全选")
-                onTriggered: if (backend.editorViewModel) backend.editorViewModel.selectAllVisibleObjects()
+                onTriggered: if (Backend.editorViewModel) Backend.editorViewModel.selectAllVisibleObjects()
             }
             CxMenuItem {
                 text: qsTr("取消选择")
-                onTriggered: if (backend.editorViewModel) backend.editorViewModel.clearObjectSelection()
+                onTriggered: if (Backend.editorViewModel) Backend.editorViewModel.clearObjectSelection()
             }
             MenuSeparator {}
             CxMenuItem {
@@ -1019,8 +1019,8 @@ Item {
         CxMenu {
             id: viewMenu
 
-            readonly property bool viewEnabled: backend.currentPage === backend.tp3DEditor
-                                                || backend.currentPage === backend.tpPreview
+            readonly property bool viewEnabled: Backend.currentPage === Backend.tp3DEditor
+                                                || Backend.currentPage === Backend.tpPreview
 
             CxMenuItem {
                 text: qsTr("默认视图") + "\tCtrl+0"
@@ -1068,7 +1068,7 @@ Item {
             CxMenuItem {
                 text: qsTr("重置窗口布局")
                 enabled: viewMenu.viewEnabled
-                onTriggered: backend.resetWindowLayout()
+                onTriggered: Backend.resetWindowLayout()
             }
             CxMenuItem {
                 text: (root.activeViewport && root.activeViewport.showSelectedOutline ? "✓ " : "")
@@ -1102,13 +1102,13 @@ Item {
             // only on the Preview tab, toggles show_gcode_window). The Qt6
             // PreviewPage right-panel G-code source view is the consumer.
             CxMenuItem {
-                text: (backend.previewViewModel && backend.previewViewModel.showGcodeWindow ? "✓ " : "")
+                text: (Backend.previewViewModel && Backend.previewViewModel.showGcodeWindow ? "✓ " : "")
                       + qsTr("显示 G-code 窗口")
-                enabled: backend.currentPage === backend.tpPreview
-                          && backend.previewViewModel !== null
-                          && backend.previewViewModel.previewReady
-                onTriggered: if (backend.previewViewModel)
-                    backend.previewViewModel.setShowGcodeWindow(!backend.previewViewModel.showGcodeWindow)
+                enabled: Backend.currentPage === Backend.tpPreview
+                          && Backend.previewViewModel !== null
+                          && Backend.previewViewModel.previewReady
+                onTriggered: if (Backend.previewViewModel)
+                    Backend.previewViewModel.setShowGcodeWindow(!Backend.previewViewModel.showGcodeWindow)
             }
 
             // v5.16 (NAVIGATOR): Show 3D Navigator (upstream MainFrame.cpp:
@@ -1116,11 +1116,11 @@ Item {
             // AppConfig.cpp:200 -- "Show 3D navigator in Prepare and Preview
             // scene"). The viewport navigatorEnabled Q_PROPERTY binds this.
             CxMenuItem {
-                text: (backend.settingsViewModel && backend.settingsViewModel.show3DNavigator ? "✓ " : "")
+                text: (Backend.settingsViewModel && Backend.settingsViewModel.show3DNavigator ? "✓ " : "")
                       + qsTr("显示 3D 导航器")
-                enabled: viewMenu.viewEnabled && backend.settingsViewModel !== null
-                onTriggered: if (backend.settingsViewModel)
-                    backend.settingsViewModel.setShow3DNavigator(!backend.settingsViewModel.show3DNavigator)
+                enabled: viewMenu.viewEnabled && Backend.settingsViewModel !== null
+                onTriggered: if (Backend.settingsViewModel)
+                    Backend.settingsViewModel.setShow3DNavigator(!Backend.settingsViewModel.show3DNavigator)
             }
 
             MenuSeparator {}
@@ -1130,10 +1130,10 @@ Item {
             // upstream select_view("Assemble") view-mode semantics
             // (Plater.cpp:7631 binds the assemble canvas toggle the same way).
             CxMenuItem {
-                text: (backend.currentViewMode === backend.vmAssembleView ? "✓ " : "")
+                text: (Backend.currentViewMode === Backend.vmAssembleView ? "✓ " : "")
                       + qsTr("装配视图")
-                enabled: backend.currentPage === backend.tp3DEditor
-                onTriggered: backend.requestChangeViewMode(backend.vmAssembleView)
+                enabled: Backend.currentPage === Backend.tp3DEditor
+                onTriggered: Backend.requestChangeViewMode(Backend.vmAssembleView)
             }
         }
 
@@ -1163,23 +1163,23 @@ Item {
             title: qsTr("工具")
             CxMenuItem {
                 text: qsTr("AMS 设置...")
-                onTriggered: backend.showAMSSettingsDialog()
+                onTriggered: Backend.showAMSSettingsDialog()
             }
             CxMenuItem {
                 text: qsTr("固件...")
-                onTriggered: backend.showFirmwareDialog()
+                onTriggered: Backend.showFirmwareDialog()
             }
             CxMenuItem {
                 text: qsTr("擦料塔...")
-                onTriggered: backend.showWipeTowerDialog()
+                onTriggered: Backend.showWipeTowerDialog()
             }
             CxMenuItem {
                 text: qsTr("插件管理...")
-                onTriggered: backend.showPluginManagerDialog()
+                onTriggered: Backend.showPluginManagerDialog()
             }
             CxMenuItem {
                 text: qsTr("精简模式...")
-                onTriggered: backend.showEnableLiteModeDialog()
+                onTriggered: Backend.showEnableLiteModeDialog()
             }
         }
 
@@ -1196,21 +1196,21 @@ Item {
             CxMenuItem {
                 text: qsTr("Flow Dynamics")
                 onTriggered: {
-                    backend.calibrationViewModel.selectItemById("flow_dynamics")
+                    Backend.calibrationViewModel.selectItemById("flow_dynamics")
                     root.calibrationRequested()
                 }
             }
             CxMenuItem {
                 text: qsTr("Flow Rate")
                 onTriggered: {
-                    backend.calibrationViewModel.selectItemById("flow_rate")
+                    Backend.calibrationViewModel.selectItemById("flow_rate")
                     root.calibrationRequested()
                 }
             }
             CxMenuItem {
                 text: qsTr("Temp Tower")
                 onTriggered: {
-                    backend.calibrationViewModel.selectItemById("temp_tower")
+                    Backend.calibrationViewModel.selectItemById("temp_tower")
                     root.calibrationRequested()
                 }
             }
@@ -1229,12 +1229,12 @@ Item {
             }
             CxMenuItem {
                 text: qsTr("设置向导")
-                onTriggered: backend.showConfigWizard()
+                onTriggered: Backend.showConfigWizard()
             }
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("显示配置文件夹")
-                onTriggered: backend.openConfigFolder()
+                onTriggered: Backend.openConfigFolder()
             }
             CxMenuItem {
                 text: qsTr("每日提示")
@@ -1243,7 +1243,7 @@ Item {
             CxMenuItem {
                 text: root.updateCheckRunning ? qsTr("正在检查更新…") : qsTr("检查更新")
                 enabled: !root.updateCheckRunning
-                onTriggered: backend.checkForUpdates()
+                onTriggered: Backend.checkForUpdates()
             }
             CxMenuItem {
                 text: qsTr("网络测试")
@@ -1254,7 +1254,7 @@ Item {
             // Help > System Information).
             CxMenuItem {
                 text: qsTr("系统信息")
-                onTriggered: backend.showSysInfoDialog()
+                onTriggered: Backend.showSysInfoDialog()
             }
             CxMenuItem { text: qsTr("About"); onTriggered: root.aboutRequested() }
         }
@@ -1268,5 +1268,5 @@ Item {
     signal networkTestRequested()
 
     // Drives the busy label on Help > 检查更新.
-    property bool updateCheckRunning: backend ? backend.updateCheckRunning : false
+    property bool updateCheckRunning: Backend ? Backend.updateCheckRunning : false
 }

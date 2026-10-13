@@ -15,7 +15,7 @@ import OWzx
 // U04: brand row uses the existing printer icon as a logo placeholder
 // (brand asset deferred — no logo asset in assets/ yet).
 //
-// Usage: SysInfoDialog { } -> opened via backend.showSysInfoDialogRequested
+// Usage: SysInfoDialog { } -> opened via Backend.showSysInfoDialogRequested
 // (Help menu 系统信息).
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -48,8 +48,8 @@ CxDialog {
     ]
 
     onAboutToShow: {
-        info = (typeof backend !== "undefined" && backend && backend.systemInfo)
-            ? backend.systemInfo() : {}
+        info = (typeof Backend !== "undefined" && Backend && Backend.systemInfo)
+            ? Backend.systemInfo() : {}
     }
 
     contentItem: ColumnLayout {

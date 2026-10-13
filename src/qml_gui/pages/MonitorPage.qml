@@ -209,11 +209,11 @@ Item {
         manualAddMode: true
         onManualAddRequested: function(name, ip, code, port) {
             if (root.monitorVm.addManualDevice(name, ip, code, port)) {
-                backend.postNotification(
+                Backend.postNotification(
                     qsTr("设备 %1 已添加（演示模式：设备数据为本地模拟，下次扫描后上线）。").arg(name),
                     qsTr("手动添加"), 0)
             } else {
-                backend.postNotification(
+                Backend.postNotification(
                     qsTr("添加设备失败：设备名称不能为空。"),
                     qsTr("手动添加"), 1)
             }
@@ -258,7 +258,7 @@ Item {
         // ── Page-top action row (monitor-2, ref monitor_ref.png y37-88): ──
         // small home icon top-left; "manage group" / "view tasks" buttons
         // below it; grid/list view toggles on the far right of the row.
-        // Actions without a backend stay honestly disabled (no empty handlers).
+        // Actions without a Backend stay honestly disabled (no empty handlers).
         ColumnLayout {
             Layout.fillWidth: true
             Layout.topMargin: Theme.spacingXS
@@ -272,7 +272,7 @@ Item {
                 cxStyle: CxIconButton.Style.Ghost
                 iconSource: "qrc:/qml/assets/icons/tab_home_active.svg"
                 toolTipText: qsTr("返回主页")
-                onClicked: backend.setCurrentPage(backend.tpHome)
+                onClicked: Backend.setCurrentPage(Backend.tpHome)
             }
 
             RowLayout {

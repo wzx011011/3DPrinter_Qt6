@@ -3,7 +3,6 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 import OWzx
-import OWzxGL 1.0
 
 Item {
     id: root
@@ -14,11 +13,11 @@ Item {
     property bool leftPanelVisible: true
     property int activeGizmoDragMode: GLViewport.GizmoMove
     readonly property int gizmoPanelTopOffset: 74
-    readonly property bool visualCompareActive: typeof backend !== "undefined" && backend.visualCompareMode
+    readonly property bool visualCompareActive: typeof Backend !== "undefined" && Backend.visualCompareMode
     // Phase 241 (PAGE-04): units preference (upstream use_inches,
     // Preferences.cpp:1109) for length readouts — display-only mm <-> inch
     // conversion; every stored transform stays in mm.
-    readonly property var settingsVm: (typeof backend !== "undefined" && backend) ? backend.settingsViewModel : null
+    readonly property var settingsVm: (typeof Backend !== "undefined" && Backend) ? Backend.settingsViewModel : null
     readonly property int targetViewportTopInset: 58
     readonly property int targetViewportBottomInset: 50
     // Q11-⑦: the bottom plate bar (Phase 76 compact strip, restored verbatim
@@ -30,16 +29,16 @@ Item {
     // bottom inset now reserves room for the navigator cube only.
     // v5.16 (NAVIGATOR): the cube replaces the old flat view-button row at
     // the viewport's bottom-left corner.
-    // Phase 4: sidebar dockable 三态透传 (backend → Plater → PreparePage → DockableSidebar)
+    // Phase 4: sidebar dockable 三态透传 (Backend → Plater → PreparePage → DockableSidebar)
     property bool sidebarCollapsed: false
     // Phase 164 (SW-01): sidebar is now resizable within [300, 520] — was
-    // min==max==392 making the drag handle a no-op. Bound to backend.* which
+    // min==max==392 making the drag handle a no-op. Bound to Backend.* which
     // sources from BackendContext's kSidebar{Min,Max,Default}Width constants.
-    property int sidebarWidth: backend ? backend.sidebarWidth : 392
-    property int sidebarMinWidth: backend ? backend.sidebarMinWidth : 300
-    property int sidebarMaxWidth: backend ? backend.sidebarMaxWidth : 520
+    property int sidebarWidth: Backend ? Backend.sidebarWidth : 392
+    property int sidebarMinWidth: Backend ? Backend.sidebarMinWidth : 300
+    property int sidebarMaxWidth: Backend ? Backend.sidebarMaxWidth : 520
     property int sidebarDockArea: 0   // 0=Left, 1=Right
-    // sidebar 操作回调 (转发到 backend, 由 main.qml 注入)
+    // sidebar 操作回调 (转发到 Backend, 由 main.qml 注入)
     property var sidebarToggleRequested: null
     property var sidebarWidthChanged: null
     focus: true
@@ -84,7 +83,7 @@ Item {
     // P15.9: shared per-plate delete confirmation. The plate context menu and
     // the anchored plate clusters both land here so destructive plate actions
     // keep the confirm step (v5.14 UI-REVIEW blocker) and target the same
-    // backend API (editorVm.deletePlate).
+    // Backend API (editorVm.deletePlate).
     function confirmDeletePlateAt(plateIdx) {
         deleteConfirm.dialogTitle = qsTr("删除平板")
         deleteConfirm.message = qsTr("确定要删除该平板吗？其上对象将一并移除，可通过撤销（Ctrl+Z）恢复。")
@@ -97,7 +96,7 @@ Item {
     // Phase 174 (FEAT-01): per-object settings override dialog. Opens when
     // selectionSettingsRequested fires (right-click Settings, GLToolbars
     // settings button, ObjectList menu). Reads/writes via the scopedOption*
-    // VM proxies; backend lives on ProjectServiceMock.
+    // VM proxies; Backend lives on ProjectServiceMock.
     SelectionSettingsDialog {
         id: selectionSettingsDialog
         editorVm: root.editorVm
@@ -1175,7 +1174,7 @@ Item {
         editorVm: root.editorVm
         // R-P1.E: SelectMachineDialog needs the device VM; it was never
         // injected, so the print flow always opened with an empty device list.
-        monitorVm: typeof backend !== "undefined" ? backend.monitorViewModel : null
+        monitorVm: typeof Backend !== "undefined" ? Backend.monitorViewModel : null
     }
 
     // 排列设置弹出面板（对齐上游 ArrangeSettings popup）
@@ -1473,7 +1472,7 @@ Item {
 
             // ═══ Left sidebar (280px) ═══
             // Phase 4: DockableSidebar 替代固定 LeftSidebar
-            // 折叠/宽度/dockArea 由 backend 统一管理 + 持久化 (ARCH-08/09/10)
+            // 折叠/宽度/dockArea 由 Backend 统一管理 + 持久化 (ARCH-08/09/10)
             // dockArea=Right 时通过 Layout 顺序镜像 (见下方 RowLayout 逻辑)
             DockableSidebar {
                 id: leftSidebar
@@ -1791,18 +1790,18 @@ Item {
                     }
                     extrudersColors: root.editorVm ? root.editorVm.extrudersColors : []
                     // v5.12: camera preferences wired from settingsViewModel
-                    reverseZoom: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.reverseZoom : false
-                    zoomToMouse: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.zoomToMouse : true
-                    freeCamera: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.freeCamera : false
+                    reverseZoom: typeof Backend !== "undefined" && Backend.settingsViewModel ? Backend.settingsViewModel.reverseZoom : false
+                    zoomToMouse: typeof Backend !== "undefined" && Backend.settingsViewModel ? Backend.settingsViewModel.zoomToMouse : true
+                    freeCamera: typeof Backend !== "undefined" && Backend.settingsViewModel ? Backend.settingsViewModel.freeCamera : false
                     // P15.11 (SIDEBAR-LOCAL-AXES): orient the sidebar transform
                     // hint arrows on the selected object's local axes
                     // (upstream Selection.cpp orient_matrix). Re-evaluates via
                     // stateChanged on every selection change.
                     hintLocalRotation: root.editorVm ? root.editorVm.selectedHintLocalRotation : []
                     // v5.16 (NAVIGATOR): show_3d_navigator (default on).
-                    navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
+                    navigatorEnabled: typeof Backend !== "undefined" && Backend.settingsViewModel ? Backend.settingsViewModel.show3DNavigator : true
                     navigatorBottomOffset: root.targetViewportBottomInset
-                    cameraNavStyle: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.cameraNavStyle : 0
+                    cameraNavStyle: typeof Backend !== "undefined" && Backend.settingsViewModel ? Backend.settingsViewModel.cameraNavStyle : 0
                     brushRadius: root.editorVm ? _activeBrushRadius() : 2
                     brushCursorType: root.editorVm ? _activeBrushCursorType() : 1
                     paintState: root.editorVm ? _activePaintState() : 1
@@ -1850,7 +1849,7 @@ Item {
                     // GLCanvas3D.cpp:1872 + 3506-3508 + 4384-4391): a finished
                     // Shift(+Alt) rubber-band stroke. The viewport already
                     // resolved the contained source objects in C++; QML only
-                    // forwards modifiers + rect + indices to the backend
+                    // forwards modifiers + rect + indices to the Backend
                     // method that owns the selection change.
                     onRectangleSelectionFinished: function(modifiers, rect, containedIndices) {
                         if (root.editorVm)
@@ -4235,10 +4234,10 @@ Item {
                     // Phase 145 (EMB-03): the viewmodel handles object/mesh refresh
                     // internally on embossVolumeAdded; QML just shows user feedback.
                     function onEmbossVolumeAdded(objectIndex, volumeName) {
-                        if (backend) backend.postNotification(qsTr("浮雕完成：") + volumeName)
+                        if (Backend) Backend.postNotification(qsTr("浮雕完成：") + volumeName)
                     }
                     function onEmbossVolumeFailed(reason) {
-                        if (backend) backend.postError(qsTr("浮雕失败：") + reason, 2)
+                        if (Backend) Backend.postError(qsTr("浮雕失败：") + reason, 2)
                     }
                 }
             }
@@ -4530,7 +4529,7 @@ Item {
         // 转发预览请求到页面导航（对齐上游 Plater::priv::on_preview）
         Connections {
             target: root.editorVm
-            function onPreviewRequested() { backend.setCurrentPage(2) }
+            function onPreviewRequested() { Backend.setCurrentPage(2) }
             // 平板切换或对象变更时请求 GL 缩略图更新（对齐上游 Plater::update_plate_thumbnails）
             function onCurrentPlateIndexChanged() { root.requestGLThumbnail() }
             // Phase 156 (CLOS-03): on state change (covers project content

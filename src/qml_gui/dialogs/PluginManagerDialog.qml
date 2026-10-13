@@ -5,7 +5,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
 
-// P10.1 -- PluginManagerDialog (Phase 202: real PluginService backend).
+// P10.1 -- PluginManagerDialog (Phase 202: real PluginService Backend).
 //
 // Aligns 1:1 with the upstream OrcaSlicer PluginsDialog (NOT
 // WebDownPluginDlg -- an earlier comment here pointed at the wrong
@@ -44,7 +44,7 @@ import OWzx
 // plugins/*. installPlugin is a mock state flip (no real HTTP download /
 // no Python) -- see PLAN.md.
 //
-// Usage: PluginManagerDialog { id: dlg; pluginService: backend.pluginService }
+// Usage: PluginManagerDialog { id: dlg; pluginService: Backend.pluginService }
 //   -> dlg.open()
 
 CxDialog {
@@ -58,8 +58,8 @@ CxDialog {
 
     dialogTitle: qsTr("插件管理")
 
-    // Phase 202: backend binding. Caller (main.qml) sets
-    // pluginService: backend.pluginService. Falls back to a null-safe render
+    // Phase 202: Backend binding. Caller (main.qml) sets
+    // pluginService: Backend.pluginService. Falls back to a null-safe render
     // when unset so the dialog stays usable in isolation.
     property var pluginService: null
 

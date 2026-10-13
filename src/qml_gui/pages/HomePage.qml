@@ -22,8 +22,8 @@ Item {
         // Phase 241 (PAGE-01): Daily Tips rotate the BackendContext hint
         // database (hints.json, upstream DailyTips/MarkdownTip) instead of a
         // single static string.
-        if (typeof backend !== "undefined")
-            backend.showDailyTip()
+        if (typeof Backend !== "undefined")
+            Backend.showDailyTip()
     }
 
     function reloadRecentProjects() {
@@ -711,9 +711,9 @@ Item {
             readonly property string tipImageUrl: ""
             readonly property string tipFullText: {
                 var _rev = tipRevision
-                if (typeof backend === "undefined")
+                if (typeof Backend === "undefined")
                     return ""
-                return backend.currentHintText()
+                return Backend.currentHintText()
             }
             // First line (before \n) is the headline
             // (DailyTips.cpp:169-173 / HintNotification.cpp:893-896).
@@ -724,24 +724,24 @@ Item {
             readonly property string tipBody: {
                 var i = tipFullText.indexOf("\n")
                 var base = i >= 0 ? tipFullText.substring(i + 1) : ""
-                var follow = (typeof backend !== "undefined" && tipRevision >= 0)
-                             ? backend.currentHintFollowText() : ""
+                var follow = (typeof Backend !== "undefined" && tipRevision >= 0)
+                             ? Backend.currentHintFollowText() : ""
                 var parts = []
                 if (base !== "") parts.push(base)
                 if (follow !== "") parts.push(follow)
                 return parts.join(" ")
             }
             readonly property bool tipHasWiki: tipRevision >= 0
-                && typeof backend !== "undefined"
-                && backend.currentHintHasDocumentationLink()
-                && backend.currentHintHypertext() !== ""
+                && typeof Backend !== "undefined"
+                && Backend.currentHintHasDocumentationLink()
+                && Backend.currentHintHypertext() !== ""
             readonly property string tipWikiUrl: tipRevision >= 0
-                && typeof backend !== "undefined"
-                ? backend.currentHintHypertext() : ""
+                && typeof Backend !== "undefined"
+                ? Backend.currentHintHypertext() : ""
             // Page counter "n/m" (upstream DailyTips.cpp:478-488).
             readonly property string tipPage: tipRevision >= 0
-                && typeof backend !== "undefined"
-                ? (backend.currentHintIndex() + 1) + "/" + backend.hintCount() : ""
+                && typeof Backend !== "undefined"
+                ? (Backend.currentHintIndex() + 1) + "/" + Backend.hintCount() : ""
             // Expanded = content + 30px footer; collapsed = footer only
             // (upstream DailyTips.cpp:293-299).
             Layout.preferredHeight: expanded ? tipsColumn.height + 28 : 30
@@ -752,7 +752,7 @@ Item {
             clip: true
 
             Connections {
-                target: typeof backend !== "undefined" ? backend : null
+                target: typeof Backend !== "undefined" ? Backend : null
                 function onDailyTipChanged() { dailyTipsCard.tipRevision++ }
             }
 
@@ -819,7 +819,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.openHintDocumentation()
+                        onClicked: Backend.openHintDocumentation()
                     }
                 }
             }
@@ -899,7 +899,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.prevHint()
+                        onClicked: Backend.prevHint()
                     }
                 }
                 Rectangle {
@@ -921,7 +921,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: backend.showDailyTip()
+                        onClicked: Backend.showDailyTip()
                     }
                 }
             }
@@ -1024,7 +1024,7 @@ Item {
                                     root.newProjectRequested()
                                     break
                                 case "calibration":
-                                    backend.requestSelectTab(backend.tpCalibration)
+                                    Backend.requestSelectTab(Backend.tpCalibration)
                                     break
                             }
                         }

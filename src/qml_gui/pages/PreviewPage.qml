@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import OWzxGL 1.0
 import OWzx
 
 Item {
@@ -31,8 +30,8 @@ Item {
     // The analysis pane and upstream G-code window are separate surfaces.
     property bool analysisExpanded: true
     // Phase 164 (SW-01): preview left panel now sources its width from the
-    // backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
-    readonly property int targetPreviewLeftWidth: backend ? backend.sidebarWidth : 392
+    // Backend sidebar constants (was hardcoded 392 — part of the 7-layer lock).
+    readonly property int targetPreviewLeftWidth: Backend ? Backend.sidebarWidth : 392
     readonly property int targetPreviewRightWidth: Theme.rightPanelWidth
     readonly property int targetPreviewLayerRailWidth: 38
     readonly property int targetPreviewMoveBarHeight: 50
@@ -326,7 +325,7 @@ Item {
                     canvasType: GLViewport.CanvasPreview
                     previewData: root.previewVm.gcodePreviewData
                     // v5.16 (NAVIGATOR): show_3d_navigator (default on).
-                    navigatorEnabled: typeof backend !== "undefined" && backend.settingsViewModel ? backend.settingsViewModel.show3DNavigator : true
+                    navigatorEnabled: typeof Backend !== "undefined" && Backend.settingsViewModel ? Backend.settingsViewModel.show3DNavigator : true
                     // Phase 238 (PREV-01): ghost shells -- the preview canvas
                     // receives the SAME object mesh stream the Prepare canvas
                     // uses (upstream always loads shells at preview,
