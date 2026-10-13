@@ -238,11 +238,11 @@ $qtRootCandidates = New-Object System.Collections.Generic.List[string]
 if ($env:OWZX_QT_ROOT) {
   [void]$qtRootCandidates.Add($env:OWZX_QT_ROOT)
 }
-# Qt 6.12 LTS anchor (M2.5 G1, 2026-10-13). Single-version discipline: NO
-# 6.10 fallback candidates here — if the 6.12 root is missing the build must
-# fail loudly instead of silently downgrading (mixed-version hazard).
-# Rollback = restore the previous candidates (.deps\Qt6.10\6.10.0\msvc2022_64
-# / .deps\Qt6.10 / E:\Qt6.10 / D:\Qt6.10).
+# Qt 6.12 LTS anchor (M2.5 G1, 2026-10-13; 6.10 candidates retired in G5,
+# 2026-10-14). Single-version discipline: only 6.12 candidates here — if the
+# 6.12 root is missing the build must fail loudly instead of silently
+# downgrading (mixed-version hazard). Never re-add fallback candidates from a
+# retired base; rollback history lives in docs/qt612-upgrade-notes.md.
 [void]$qtRootCandidates.Add((Join-Path $repoRoot '.deps\Qt6.12\6.12.0\msvc2022_64'))
 [void]$qtRootCandidates.Add((Join-Path $repoRoot '.deps\Qt6.12'))
 

@@ -165,7 +165,9 @@ gate's own files).
 - Qt 6.12.0 (LTS, win64_msvc2022_64) installed at `.deps\Qt6.12\6.12.0\msvc2022_64`
   (M2.5 G1 switch, 2026-10-13; anchors: `scripts/auto_verify_with_vcvars.ps1`
   candidate list, `CMakeLists.txt` third_party fallback branch,
-  `.github/workflows/tag-build.yml`). Rollback = restore the 6.10 anchors.
+  `.github/workflows/tag-build.yml`). Rollback = restore the previous base's
+  anchors — the 6.10 candidates were retired in M2.5 G5 (2026-10-14); their
+  history lives in `docs/qt612-upgrade-notes.md`, do not re-add them.
   Facts that must survive the next base bump:
   - aqtinstall from PyPI (3.3.0) cannot install Qt 6.11+: Qt changed the
     online-repo folder layout and aqt fixed it only in git master (PR #1000;
@@ -181,7 +183,8 @@ gate's own files).
     found in the installed configs/headers; the full 6.12 build compiles with
     `CMAKE_CXX_STANDARD 17`).
   - `windeployqt` deployments in `build/` are Qt-version-locked: after an
-    anchor switch, stale 6.10 DLLs in `build/` make every exe fail with
+    anchor switch, stale DLLs from the previous base (seen as stale 6.10
+    DLLs at the 6.10→6.12 switch) make every exe fail with
     0xc0000139 (entry-point not found) until the next canonical verify
     redeploys with the new `$qtRoot`.
 - Prebuilt OrcaSlicer dependency prefix as configured by the project CMake files.
