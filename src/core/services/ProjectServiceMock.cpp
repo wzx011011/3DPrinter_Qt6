@@ -1043,7 +1043,12 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
   const QPointer<ProjectServiceMock> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
 
-  QtConcurrent::run([receiver, localPath, cancelFlag]()
+  // Qt 6.12 (G2): QtConcurrent::run is [[nodiscard]] -- the discarded QFuture
+  // is deliberate. QtConcurrent captures worker exceptions into that future,
+  // while QThreadPool::start(Callable&&) (Qt's suggested replacement) would
+  // std::terminate on any throw escaping these lambdas -- their try/catch
+  // coverage is partial by design (failures are delivered via signals below).
+  (void)QtConcurrent::run([receiver, localPath, cancelFlag]()
                     {
     auto *loadedModel = new Slic3r::Model();
     std::string err;
@@ -3899,7 +3904,9 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
   const float boldness = m_embossBoldness;
   const bool italic = m_embossItalic;
 
-  QtConcurrent::run([receiver, objectIndex, text, cancelFlag, fontPath, height, depth, boldness, italic]()
+  // (void) keeps QtConcurrent's exception-swallow future semantics -- see the
+  // full rationale at the import lambda (G2 Qt 6.12 [[nodiscard]] review).
+  (void)QtConcurrent::run([receiver, objectIndex, text, cancelFlag, fontPath, height, depth, boldness, italic]()
                     {
       // ── Worker thread: heavy text2shapes + polygons2model. No Qt signals,
       // no model_ mutation, no Qt-event-loop touch. This is the genuine
@@ -11442,7 +11449,9 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
   emit savingChanged();
 
   const QPointer<ProjectServiceMock> receiver(this);
-  QtConcurrent::run([receiver, payload, filePath, kind]()
+  // (void) keeps QtConcurrent's exception-swallow future semantics -- see the
+  // full rationale at the import lambda (G2 Qt 6.12 [[nodiscard]] review).
+  (void)QtConcurrent::run([receiver, payload, filePath, kind]()
   {
     QString errText;
     bool ok = false;
@@ -11771,7 +11780,9 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
     const QPointer<ProjectServiceMock> receiver(this);
     const auto cancelFlag = activeCancelFlag_;
 
-    QtConcurrent::run([receiver, localPath, cancelFlag]()
+    // (void) keeps QtConcurrent's exception-swallow future semantics -- see the
+    // full rationale at the import lambda (G2 Qt 6.12 [[nodiscard]] review).
+    (void)QtConcurrent::run([receiver, localPath, cancelFlag]()
     {
       auto *loadedModel = new Slic3r::Model();
       std::string err;

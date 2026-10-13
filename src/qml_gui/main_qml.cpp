@@ -363,11 +363,24 @@ int main(int argc, char *argv[])
     QLibrary webEngineQuick(QStringLiteral("Qt6WebEngineQuick"));
     if (webEngineQuick.load()) {
       using WebEngineInit = void (*)();
+      // MSVC-decorated name of QtWebEngineQuick::initialize() — an undocumented
+      // ABI detail. G2 review (2026-10-13, Qt 6.12 switch): the export is
+      // byte-identical in 6.10.2 and 6.12.0 (dumpbin -exports, ordinal 252),
+      // so the dynamic resolve stands; a direct Qt6::WebEngineQuick link was
+      // rejected because it would turn the graceful "DLL absent -> chat panel
+      // degrades, app runs" path into a hard pre-main loader dependency.
+      // A future Qt that renames/collapses the export now FAILS LOUDLY here
+      // instead of silently skipping AA_ShareOpenGLContexts.
       const QString kInitMangled =
           QStringLiteral("?initialize@QtWebEngineQuick@@YAXXZ");
       if (auto *init = reinterpret_cast<WebEngineInit>(
               webEngineQuick.resolve(kInitMangled.toUtf8().constData())))
         init();
+      else
+        qWarning("Qt6WebEngineQuick loaded but initialize() export '%s' not "
+                 "resolved — WebEngine init skipped (chat panel will fail); "
+                 "check the mangled name against this Qt version",
+                 kInitMangled.toUtf8().constData());
     }
   }
 
