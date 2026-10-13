@@ -387,25 +387,40 @@ int main(int argc, char *argv[])
   if (!qEnvironmentVariableIsSet("OWZX_RHI_RENDERER"))
     qputenv("OWZX_RHI_RENDERER", "auto");
 
-  // Qt 6.10 routes window update requests through QDxgiVSyncService: when a
+  // Qt 6.10 routed window update requests through QDxgiVSyncService: when a
   // window maps to a DXGI output, QWindowsWindow::requestUpdate() registers a
   // vsync callback and stops the platform timer fallback, so update requests
   // are ONLY delivered from QDxgiVSyncThread (which loops on
-  // IDXGIOutput::WaitForVBlank and fires the callback on success). On this
-  // stack (AMD amdxx64, Win11 build 26200) WaitForVBlank returns in <=1 ms or
-  // fails, and that thread then just msleeps -- the callback never fires.
-  // Result: the Quick render thread blocks forever in QWaitCondition::wait
-  // and nothing is presented after the first frames (input keeps being
-  // processed invisibly; only resize/expose forces a frame). Reproduced 100%
-  // at launch and verified via cdb render-thread stacks; setting
+  // IDXGIOutput::WaitForVBlank and fires the callback on success). On the
+  // 2026-09-12 stack (AMD amdxx64, driver 32.0.12033.1030, Win11 build 26200)
+  // WaitForVBlank returned in <=1 ms or failed, and that thread then just
+  // msleeped -- the callback never fired. Result: the Quick render thread
+  // blocked forever in QWaitCondition::wait and nothing was presented after
+  // the first frames (input kept being processed invisibly; only
+  // resize/expose forced a frame). Reproduced 100% at launch back then and
+  // verified via cdb render-thread stacks.
+  // M2.5/G3 RETIREMENT (2026-10-13, Qt 6.12.0): the pinned
   // QT_D3D_NO_VBLANK_THREAD=1 (Qt's own escape hatch, read once when the
-  // service is constructed) makes supportsWindow() return false so
-  // requestUpdate() falls back to the timer-based delivery. Verified 2026-
-  // 09-12: tab switches, click-to-page and orbit drags present live, clock
-  // repaints, render thread sits in QRhi::beginFrame instead of the dead
-  // wait. Must run before QGuiApplication; a user-set value is respected.
-  if (!qEnvironmentVariableIsSet("QT_D3D_NO_VBLANK_THREAD"))
-    qputenv("QT_D3D_NO_VBLANK_THREAD", "1");
+  // service is constructed) is REMOVED after a verified retirement trial.
+  // Upstream did NOT change the mechanism: qtbase qdxgivsyncservice.cpp's
+  // run() loop is byte-identical across v6.10.0/v6.11.0/v6.12.0 (the
+  // "<=1 ms or FAILED(hr) -> msleep, no callback" branch still stands); only
+  // registration-side hardening landed (swapInterval-0 skip, destroyed-prune).
+  // On the current stack (driver 32.0.31036.15) WaitForVBlank genuinely
+  // blocks until vblank again, so the callback path delivers updates:
+  // trial ran 3+ launches with no env var set -- --open-page
+  // prepare/--load-model/preview all presented continuously (screenshots
+  // differ over time after the frameSwapped-gated deep link), and cdb showed
+  // the QDxgiVSyncThread parked in dxgi!CDXGIOutput::WaitForVBlank with the
+  // render thread healthy (no dead QWaitCondition::wait). ROLLBACK PLAN: if
+  // the stall reappears (driver update, new machine, or a Qt point release),
+  // restore the pin:
+  //   if (!qEnvironmentVariableIsSet("QT_D3D_NO_VBLANK_THREAD"))
+  //     qputenv("QT_D3D_NO_VBLANK_THREAD", "1");
+  // (must run before QGuiApplication; a user-set value is respected). The
+  // env var itself is still honored by Qt 6.12, so
+  // QT_D3D_NO_VBLANK_THREAD=1 OWzxSlicer.exe remains a user-side escape
+  // hatch without a rebuild. Re-verify on every 6.12 point release.
 
   // Phase 105 (D3D12-01): forward OWZX_D3D12_DEBUG to Qt's QSG RHI debug
   // mechanism so the LIVE QQuickRhiItem render path emits GPU validation
@@ -423,8 +438,10 @@ int main(int argc, char *argv[])
 
   // RhiBackendSelector owns D3D11-first / D3D12 explicit opt-in policy.
   // D3D12 is NOT the default because it crashes at QQuickWindow swapchain
-  // init on AMD Radeon APU (v5.7 Phase 211 finding). OWZX_RHI_RENDERER=d3d12
-  // opts in on verified discrete-GPU hosts.
+  // init on AMD hardware (v5.7 Phase 211 finding on an APU; re-confirmed on
+  // a discrete RX 7800 XT under Qt 6.12.0 — M2.5/G3 retest, 2026-10-13).
+  // OWZX_RHI_RENDERER=d3d12 is a triage opt-in, not a verified production
+  // path.
   const RhiBackendSelection rhiSelection = selectRhiBackendFromEnvironment();
 
   if (rhiSelection.canUseRhi) {

@@ -70,18 +70,21 @@ bool d3d12DebugLayerRequested()
 QVector<RhiBackendCandidate> defaultWindowsCandidates()
 {
   // D3D11-first: D3D12 crashes at QQuickWindow swapchain init on AMD Radeon
-  // APU (integrated graphics) — confirmed on a real machine (AMD Radeon
+  // hardware — originally confirmed on an integrated APU (AMD Radeon
   // Graphics, driver 32.0.12033.1030, real display, no virtual-display
-  // software running) in v5.7 Phase 211. The D3D12 probe (QRhi::create)
-  // succeeds and offscreen render_bench runs 60 frames clean, but the
-  // QQuickWindow flip-model swapchain path crashes with 0xC0000005 right
-  // after app.exec() (before RhiViewportRenderer::render() is reached). AMD
-  // APU is mainstream integrated graphics, so a D3D12 default would crash on
-  // launch for a large user share. D3D11 is the safe default; D3D12 remains
-  // available via explicit OWZX_RHI_RENDERER=d3d12 for discrete-GPU hosts
-  // where it has been verified. The Phase 208/209/210 seam mitigations are
-  // retained (correct QRhi-usage improvements) even though the crash is in
-  // the swapchain path, not render(). See v5.7-MILESTONE-AUDIT.md.
+  // software running) in v5.7 Phase 211, and RE-CONFIRMED under the Qt
+  // 6.12.0 switch (M2.5/G3 retest, 2026-10-13) on a DISCRETE AMD Radeon RX
+  // 7800 XT (driver 32.0.31036.15, Win11 build 26200): the D3D12 probe
+  // (QRhi::create) succeeds and the scene starts rendering, but the
+  // QQuickWindow swapchain path dies with 0xC0000005 in Qt6Gui's D3D12
+  // backend right after app.exec() (crash handler stack: render thread in
+  // Qt6Quick -> Qt6Gui; minidump in build/crash_dumps/). D3D11 is the only
+  // safe default; D3D12 remains available via explicit
+  // OWZX_RHI_RENDERER=d3d12 as a TRIAGE opt-in (it is NOT verified for
+  // production use on any host class at this time). The Phase 208/209/210
+  // seam mitigations are retained (correct QRhi-usage improvements) even
+  // though the crash is in the swapchain path, not render().
+  // Re-verify D3D12 on every 6.12 point release before revisiting.
   return {
       {QStringLiteral("d3d11"), QSGRendererInterface::Direct3D11, QRhi::D3D11},
       {QStringLiteral("d3d12"), QSGRendererInterface::Direct3D12, QRhi::D3D12},
