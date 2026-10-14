@@ -688,6 +688,20 @@ if(BUILD_TESTING)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # X3: faithful upstream FlushVolCalc + FlushVolPredictor port (embedded
+    # datasets, data-driven prediction, x1.3 dark->light correction, 20000
+    # clamp). Standalone header-only target, no renderer deps.
+    qt_add_executable(FlushVolCalculatorTests
+        tests/FlushVolCalculatorTests.cpp
+        src/core/FlushVolCalculator.h
+    )
+    target_include_directories(FlushVolCalculatorTests PRIVATE src)
+    target_link_libraries(FlushVolCalculatorTests PRIVATE Qt6::Test Qt6::Core)
+    add_test(NAME FlushVolCalculatorTests COMMAND FlushVolCalculatorTests)
+    set_tests_properties(FlushVolCalculatorTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
     # v5.16 (NAVIGATOR): 3D navigator cube math tests (hit-test grid, snap
     # directions, drag clamp, orientation mapping -- the ImGuizmo
     # ViewManipulate port). Standalone, no live renderer.

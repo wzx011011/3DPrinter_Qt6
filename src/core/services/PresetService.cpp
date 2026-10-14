@@ -1386,7 +1386,36 @@ QVariantList PresetService::calculateFlushMatrix() const
   if (n > kMaxFlushMatrixN)
     return matrix;
   matrix.reserve(n * n);
-  const OWzx::FlushVolCalculator calc(/*min*/ 0, /*max*/ 800, /*multiplier*/ 1.0f);
+  // X3: faithful upstream flush derivation (WipeTowerDialog.cpp:569 passes
+  // Slic3r::g_max_flush_volume as the clamp and the per-nozzle dataset value
+  // as flush_dataset; the old hard 800 cap and the non-upstream `multiplier`
+  // argument are gone). The dataset key "nozzle_flush_dataset"
+  // (PrintConfig.cpp:2967, coIntsNullable, default 0 = standard dataset) is
+  // read from the active printer preset when present; absent keys fall back
+  // to the upstream default 0.
+  int flushDataset = 0;
+  for (const QString &printerName : m_categoryPresets.value(PrinterCat)) {
+    const auto printerIt = m_presetStore.constFind(printerName);
+    if (printerIt == m_presetStore.constEnd())
+      continue;
+    const QVariant datasetValue =
+        printerIt.value().value(QStringLiteral("nozzle_flush_dataset"));
+    if (!datasetValue.isValid())
+      continue;
+    if (datasetValue.userType() == QMetaType::QVariantList
+        || datasetValue.userType() == QMetaType::QStringList) {
+      const QVariantList values = datasetValue.toList();
+      if (!values.isEmpty()) {
+        flushDataset = values.first().toInt();
+        break;
+      }
+    } else {
+      flushDataset = datasetValue.toInt();
+      break;
+    }
+  }
+  const OWzx::FlushVolCalculator calc(/*min*/ 0, /*max*/ OWzx::g_max_flush_volume,
+                                      /*flush_dataset*/ flushDataset);
   // Parse hex colours (#RRGGBB) to RGB bytes.
   auto parseHex = [](const QString &hex) -> std::tuple<int, int, int> {
     QString h = hex.trimmed();
