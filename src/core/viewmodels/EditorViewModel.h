@@ -337,7 +337,11 @@ public:
   QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
   // P15.11: drag-time preview flag (see the Q_PROPERTY comment).
   bool sequentialClearancePreviewMode() const { return m_sequentialClearancePreviewMode; }
-  QVector4D fitHint() const { return m_fitHint; }
+  // S3 (2026-10-14): non-inline -- under the decomposed blob the getter
+  // derives the whole-plate fit box LIVE from the cached per-batch local
+  // bounds composed through the live transform channel (O(batches) per
+  // read); the trailer-derived m_fitHint stays the legacy-format value.
+  QVector4D fitHint() const;
   // Q8(1) contract (Q_PROPERTY doc above): the SELECTED objects' bounding-box
   // size (dx, dy, dz, volume); all zeros = no selection. Lazily recomputed
   // from the cached mesh blob when stateChanged marks the memo dirty (both
@@ -2243,6 +2247,11 @@ private:
   QList<int> m_cachedMeshBatchSourceObjectIndices;
   QList<int> m_cachedMeshBatchVolumeIndices;
   QList<int> m_cachedMeshBatchInstanceIndices;
+  // S3 (2026-10-14): exact per-batch bounds from the cached blob --
+  // VOLUME-LOCAL under the decomposed format (world for legacy). Feeds the
+  // live fitHint derivation (local bounds x live channel); refreshed with
+  // the blob in refreshMeshCacheAndFitHint (topology cadence).
+  QList<PrepareSceneData::ModelBounds> m_cachedMeshBatchLocalBounds;
   // P15.1/15.2 (COLOR): per-batch render-channel metadata caches.
   QList<int> m_cachedMeshBatchVolumeTypes;
   QList<int> m_cachedMeshBatchExtruderIds;

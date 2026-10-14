@@ -244,6 +244,105 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
   }
   return result;
 }
+
+// S3 (2026-10-14): exact per-batch bounds from the mesh blob, batch order
+// preserved. VOLUME-LOCAL bounds under the decomposed format (magic 'MDS2'),
+// world bounds for legacy blobs. One vertex scan per topology refresh; feeds
+// the live fitHint derivation (local bounds composed through the live
+// transform channel). Empty list on a malformed blob.
+QList<PrepareSceneData::ModelBounds>
+parsePerBatchBoundsFromMeshBlob(const QByteArray &blob)
+{
+  QList<PrepareSceneData::ModelBounds> bounds;
+  constexpr qsizetype kFloatBytes = qsizetype(sizeof(float));
+  constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
+  constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
+  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2'
+
+  qsizetype offset = 0;
+  qint32 objectCount = 0;
+  if (blob.size() < qsizetype(sizeof(qint32)))
+    return bounds;
+  memcpy(&objectCount, blob.constData() + offset, kIntBytes);
+  offset += kIntBytes;
+  const bool decomposed = (objectCount == kMeshBlobMagicV2);
+  if (decomposed)
+  {
+    if (blob.size() < 2 * qsizetype(sizeof(qint32)))
+      return bounds;
+    memcpy(&objectCount, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+  }
+  if (objectCount < 0)
+    return bounds;
+
+  bounds.reserve(objectCount);
+  for (qint32 i = 0; i < objectCount; ++i)
+  {
+    if (offset + 2 * kIntBytes > blob.size())
+      return {};
+    qint32 triangleCount = 0;
+    offset += kIntBytes; // renderObjectId (unused for bounds)
+    memcpy(&triangleCount, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    if (triangleCount < 0)
+      return {};
+    const qsizetype vertexCount = qsizetype(triangleCount) * 3;
+    const qsizetype payloadBytes = vertexCount * kVertexBytes;
+    if (payloadBytes < 0 || blob.size() - offset < payloadBytes)
+      return {};
+
+    PrepareSceneData::ModelBounds batchBounds{};
+    bool first = true;
+    for (qsizetype v = 0; v < vertexCount; ++v)
+    {
+      float x = 0.0f, y = 0.0f, z = 0.0f;
+      memcpy(&x, blob.constData() + offset + v * kVertexBytes + 0 * kFloatBytes, kFloatBytes);
+      memcpy(&y, blob.constData() + offset + v * kVertexBytes + 1 * kFloatBytes, kFloatBytes);
+      memcpy(&z, blob.constData() + offset + v * kVertexBytes + 2 * kFloatBytes, kFloatBytes);
+      if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+      {
+        first = false;
+        break;
+      }
+      if (first)
+      {
+        batchBounds = PrepareSceneData::ModelBounds{x, y, z, x, y, z};
+        first = false;
+      }
+      else
+      {
+        batchBounds.minX = std::min(batchBounds.minX, x);
+        batchBounds.minY = std::min(batchBounds.minY, y);
+        batchBounds.minZ = std::min(batchBounds.minZ, z);
+        batchBounds.maxX = std::max(batchBounds.maxX, x);
+        batchBounds.maxY = std::max(batchBounds.maxY, y);
+        batchBounds.maxZ = std::max(batchBounds.maxZ, z);
+      }
+    }
+    if (!first)
+      bounds.append(batchBounds);
+    else
+      bounds.append(PrepareSceneData::ModelBounds{}); // keep batch alignment
+    offset += payloadBytes;
+  }
+  return bounds;
+}
+
+// S3: the shared whole-plate fit-hint formula (center + bounding-sphere
+// radius, 10mm floor) -- identical numbers to the trailer-derived path in
+// refreshMeshCacheAndFitHint, expressed over a bounds struct.
+QVector4D fitHintFromBounds(const PrepareSceneData::ModelBounds &bounds)
+{
+  const float cx = (bounds.minX + bounds.maxX) * 0.5f;
+  const float cy = (bounds.minY + bounds.maxY) * 0.5f;
+  const float cz = (bounds.minZ + bounds.maxZ) * 0.5f;
+  const float dx = bounds.maxX - bounds.minX;
+  const float dy = bounds.maxY - bounds.minY;
+  const float dz = bounds.maxZ - bounds.minZ;
+  const float radius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
+  return QVector4D(cx, cy, cz, std::max(radius, 10.f));
+}
 } // namespace
 
 void EditorViewModel::invalidateSliceResultsForCurrentPlate()
@@ -382,6 +481,10 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   m_cachedMeshBatchVolumeTypes = projectService_->meshBatchVolumeTypes();
   m_cachedMeshBatchExtruderIds = projectService_->meshBatchExtruderIds();
   m_cachedMeshBatchPrintableFlags = projectService_->meshBatchPrintableFlags();
+  // S3: exact per-batch bounds cache for the live fitHint derivation --
+  // VOLUME-LOCAL under the decomposed format, world for legacy. One vertex
+  // scan at the topology cadence of this refresh.
+  m_cachedMeshBatchLocalBounds = parsePerBatchBoundsFromMeshBlob(m_cachedMeshData);
   m_fitHint = QVector4D();
   // Q8(1): the mesh blob changed — measureDimensions() (selected-set bbox)
   // must rebuild from the new blob on its next read. fitHint keeps the
@@ -396,14 +499,8 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
 
   float bbox[6];
   memcpy(bbox, m_cachedMeshData.constData() + m_cachedMeshData.size() - kBboxBytes, kBboxBytes);
-  const float cx = (bbox[0] + bbox[3]) * 0.5f;
-  const float cy = (bbox[1] + bbox[4]) * 0.5f;
-  const float cz = (bbox[2] + bbox[5]) * 0.5f;
-  const float dx = bbox[3] - bbox[0];
-  const float dy = bbox[4] - bbox[1];
-  const float dz = bbox[5] - bbox[2];
-  const float radius = std::sqrt(dx * dx + dy * dy + dz * dz) * 0.5f;
-  m_fitHint = QVector4D(cx, cy, cz, std::max(radius, 10.f));
+  m_fitHint = fitHintFromBounds(PrepareSceneData::ModelBounds{
+      bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]});
 
   // 检查视口告警（对齐上游 Plater::check_outside_state / EWarning）
   checkViewportWarnings();
@@ -418,6 +515,65 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
     refreshAssembleViewDataPool();
     m_assembleViewDataPool.update(AssembleViewDataID::ModelObjectsInfo);
   }
+}
+
+QVector4D EditorViewModel::fitHint() const
+{
+  // S3 (2026-10-14): under the decomposed blob the mesh trailer is the
+  // PRODUCTION-time world bbox and goes stale under transform edits by
+  // design (the blob is transform-free; the transform family never re-runs
+  // the whitelist). Derive the live whole-plate fit box instead: cached
+  // per-batch LOCAL bounds composed through the LIVE transform channel --
+  // O(batches) per read, change-driven like the rest of S3 (the stateChanged
+  // umbrella re-reading the QML binding picks up every transform edit; S1's
+  // transformChanged will own this NOTIFY later). Legacy blobs keep the
+  // trailer-derived m_fitHint untouched.
+  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2'
+  if (!m_cachedMeshBatchLocalBounds.isEmpty() && m_cachedMeshData.size() >= qsizetype(sizeof(qint32))
+      && projectService_)
+  {
+    qint32 magic = 0;
+    memcpy(&magic, m_cachedMeshData.constData(), sizeof(qint32));
+    if (magic == kMeshBlobMagicV2)
+    {
+      const QList<QMatrix4x4> transforms = projectService_->meshBatchInstanceTransforms();
+      if (transforms.size() == m_cachedMeshBatchLocalBounds.size())
+      {
+        bool valid = false;
+        PrepareSceneData::ModelBounds world{};
+        for (int i = 0; i < transforms.size(); ++i)
+        {
+          const PrepareSceneData::ModelBounds &local = m_cachedMeshBatchLocalBounds.at(i);
+          // Exact corners of the local box mapped through the world matrix
+          // (a rotation makes the world box conservative -- the same
+          // transformed_bounding_box semantics upstream uses).
+          for (int corner = 0; corner < 8; ++corner)
+          {
+            const QVector3D mapped = transforms.at(i).map(QVector3D(
+                (corner & 1) ? local.maxX : local.minX,
+                (corner & 2) ? local.maxY : local.minY,
+                (corner & 4) ? local.maxZ : local.minZ));
+            if (!valid)
+            {
+              world = PrepareSceneData::ModelBounds{mapped.x(), mapped.y(), mapped.z(),
+                                                    mapped.x(), mapped.y(), mapped.z()};
+              valid = true;
+              continue;
+            }
+            world.minX = std::min(world.minX, mapped.x());
+            world.minY = std::min(world.minY, mapped.y());
+            world.minZ = std::min(world.minZ, mapped.z());
+            world.maxX = std::max(world.maxX, mapped.x());
+            world.maxY = std::max(world.maxY, mapped.y());
+            world.maxZ = std::max(world.maxZ, mapped.z());
+          }
+        }
+        if (valid)
+          return fitHintFromBounds(world);
+      }
+    }
+  }
+  return m_fitHint;
 }
 
 QVector4D EditorViewModel::measureDimensions() const

@@ -248,6 +248,10 @@ private slots:
   // the structural replacement for the refreshMeshCacheAndFitHint whitelist
   // on the transform path.
   void meshInstanceChannelKeepsBlobStableUnderTransforms();
+  // S3: fitHint derives LIVE under the decomposed blob (cached local bounds x
+  // live channel) so the camera-fit hint tracks transform edits without any
+  // whitelist refresh.
+  void fitHintTracksInstanceTransformsWithoutMeshRefresh();
   // v5.16 (PLATE-05): real edits mark the project dirty; load/save clear it.
   void projectEditsDriveDirtyState();
   // Phase 241 (PAGE-01): recent projects persist across viewmodel instances
@@ -3867,6 +3871,34 @@ void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
   // Rotation behaves the same way: channel moves, no re-production involved.
   QVERIFY(project.setObjectRotation(0, 90.0f, 0.0f, 0.0f));
   QVERIFY(project.meshBatchInstanceTransforms().at(0) != transformsB.at(0));
+
+  qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
+}
+
+void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
+{
+  // S3: under the decomposed blob fitHint() derives from the cached
+  // per-batch LOCAL bounds through the LIVE transform channel, so moving an
+  // object moves the whole-plate fit center WITHOUT any mesh refresh (the
+  // legacy trailer-derived hint went stale here -- the stale-transform
+  // defect S3 removes).
+  qputenv("OWZX_MESH_INSTANCE_CHANNEL", "1");
+  ProjectServiceMock project;
+  SliceService slice(&project);
+  EditorViewModel vm(&project, &slice);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+
+  vm.refreshMeshCacheAndFitHint();
+  const QVector4D hintBefore = vm.fitHint();
+  QVERIFY(!qFuzzyIsNull(hintBefore.lengthSquared()));
+
+  const QVector3D pos0 = project.objectPosition(0);
+  QVERIFY(project.setObjectPosition(0, pos0.x() + 17.0f, pos0.y(), pos0.z()));
+
+  // NO refreshMeshCacheAndFitHint call -- the hint must still track the move.
+  const QVector4D hintAfter = vm.fitHint();
+  QVERIFY(std::abs(hintAfter.x() - hintBefore.x() - 17.0f) < 0.5f);
+  QVERIFY(std::abs(hintAfter.z() - hintBefore.z()) < 0.5f);
 
   qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
 }
