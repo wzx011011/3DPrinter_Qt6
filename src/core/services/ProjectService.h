@@ -568,6 +568,24 @@ public:
   Q_INVOKABLE bool arrayObject(int objectIndex, int rows, int cols, float spacingX, float spacingY);
   /// 从真实模型同步变换到 Mock 数组（orient/split/arrange/cut 等 API 变更模型后调用）
   void syncTransformsFromModel();
+  /// S5 (audit 2026-10-10 ch.4): the ONE writer for the per-object metadata
+  /// mirrors (objectNames_ / objectModuleNames_ / objectPrintableStates_ /
+  /// objectVisibleStates_ / objectPositions_ / objectRotations_ /
+  /// objectScales_). Rebuilds all seven from the real Slic3r::Model and
+  /// updates modelCount_. Replaces the 11 copy-pasted ~30-line rebuild
+  /// blocks that had drifted (English vs translated fallback names, a
+  /// printable default of false, and a +off.y GL.z position mapping where
+  /// the loader and the objectPosition/objectRotation/objectScale accessors
+  /// use the AXES-ROT mapping GL.z=-slic3r.y). Without a model (non-lib
+  /// build / model_==nullptr) this clears the mirrors and zeroes
+  /// modelCount_.
+  void syncObjectMetadataMirrors();
+  /// S5: clear the per-object metadata mirrors WITHOUT rebuilding. Used by
+  /// the failed/aborted load delivery paths: a failed load must leave an
+  /// EMPTY workspace even when model_ still holds the previous project's
+  /// objects (rebuilding from it would resurrect stale entries). Also
+  /// zeroes modelCount_ so the seven mirrors and the count stay consistent.
+  void clearObjectMetadataMirrors();
 
   /// ── Mesh snapshot for undo/redo (used by BooleanCommand / DrillCommand) ──
   /// Serializes the first model_part volume mesh of the given object to a byte array.

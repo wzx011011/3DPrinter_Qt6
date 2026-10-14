@@ -792,6 +792,32 @@ if(BUILD_TESTING)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # S5 (audit 2026-10-10 ch.4): permanent behavior locks for the first
+    # m_mockVolumes mirror-retirement cut — changeVolumeType must work on
+    # file-imported (mirror-less) objects, and the converged
+    # syncObjectMetadataMirrors() must keep the metadata mirrors consistent
+    # across the structural object operations. Links owzx_app_core (same
+    # pattern as PartPlateTests) so the real service + libslic3r
+    # (HAS_LIBSLIC3R) are available.
+    # AUTOMOC note: same weak-moc caveat as PartPlateTests — for incremental
+    # builds delete build/ProjectMirrorTests_autogen/timestamp.
+    qt_add_executable(ProjectMirrorTests tests/ProjectMirrorTests.cpp)
+    target_link_libraries(ProjectMirrorTests PRIVATE owzx_app_core
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::Test
+    )
+    target_compile_definitions(ProjectMirrorTests PRIVATE
+        QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+    )
+    if(MSVC)
+        target_link_options(ProjectMirrorTests PRIVATE /FORCE:MULTIPLE /SUBSYSTEM:CONSOLE)
+    else()
+        target_link_options(ProjectMirrorTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME ProjectMirrorTests COMMAND ProjectMirrorTests)
+    set_tests_properties(ProjectMirrorTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
     # Phase 67: gizmo state wiring tests (GWIRE-02). Verifies the free
     # GizmoCenter::fromSelectedBatch helper that derives the gizmo center from
     # the selected object's AABB midpoint. Standalone pattern (compiles

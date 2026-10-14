@@ -1397,39 +1397,14 @@ bool ProjectService::loadFile(const QString &filePath)
 
     const bool canceled = cancelFlag && cancelFlag->load();
 
-    QStringList names;
-    QStringList moduleNames;
-    QList<bool> printableStates;
-    QList<bool> visibleStates;
+    // S5: the object mirrors are rebuilt on the GUI thread by the converged
+    // syncObjectMetadataMirrors(); the worker no longer pre-builds
+    // name/module/printable/visible lists for the delivery.
     QString errorText;
     QString loadedProjectName;
     if (ok && !canceled)
     {
       loadedProjectName = QFileInfo(localPath).completeBaseName();
-      const auto &objs = loadedModel->objects;
-      names.reserve(int(objs.size()));
-      moduleNames.reserve(int(objs.size()));
-      printableStates.reserve(int(objs.size()));
-      visibleStates.reserve(int(objs.size()));
-      for (size_t i = 0; i < objs.size(); ++i)
-      {
-        const auto *obj = objs[i];
-        if (obj && !obj->name.empty())
-          names << QString::fromStdString(obj->name);
-        else
-          names << QObject::tr("对象 %1").arg(int(i + 1));
-
-        if (obj && !obj->module_name.empty())
-          moduleNames << QString::fromStdString(obj->module_name);
-        else
-          moduleNames << QObject::tr("默认模块");
-
-        const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
-        printableStates.append(printable);
-
-        // R-P0.5: same source as the printable mirror.
-        visibleStates.append(printable);
-      }
     }
     else
     {
@@ -1443,7 +1418,7 @@ bool ProjectService::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -1484,50 +1459,10 @@ bool ProjectService::loadFile(const QString &filePath)
         receiver->model_ = loadedModel;
         receiver->projectName_ = loadedProjectName;
         receiver->sourceFilePath_ = localPath;
-        receiver->objectNames_ = names;
-        receiver->objectModuleNames_ = moduleNames;
-        receiver->objectPrintableStates_ = printableStates;
-        receiver->objectVisibleStates_ = visibleStates;
-        receiver->modelCount_ = names.size();
-
-        // P0.5.1: 同步 libslic3r 真实变换到 Mock 平行数组（slic3r → GL 坐标转换）
-        {
-          receiver->objectPositions_.clear();
-          receiver->objectRotations_.clear();
-          receiver->objectScales_.clear();
-          const auto &objs = loadedModel->objects;
-          receiver->objectPositions_.reserve(int(objs.size()));
-          receiver->objectRotations_.reserve(int(objs.size()));
-          receiver->objectScales_.reserve(int(objs.size()));
-          for (const auto *obj : objs)
-          {
-            if (!obj || obj->instances.empty() || !obj->instances.front())
-            {
-              receiver->objectPositions_.append(QVector3D(0, 0, 0));
-              receiver->objectRotations_.append(QVector3D(0, 0, 0));
-              receiver->objectScales_.append(QVector3D(1, 1, 1));
-              continue;
-            }
-            const auto *inst = obj->instances.front();
-            const auto off = inst->get_offset();
-            // slic3r(X,Y,Z) → GL(X,-Z-Y 旋转映射, AXES-ROT): GL.x=slic3r.x, GL.y=slic3r.z(高度), GL.z=-slic3r.y
-            receiver->objectPositions_.append(QVector3D(
-              static_cast<float>(off.x()),
-              static_cast<float>(off.z()),
-              -static_cast<float>(off.y())));
-            const auto rot = inst->get_rotation();
-            // 旋转：弧度 → 角度，不做 Y/Z 互换（分量级操作）
-            receiver->objectRotations_.append(QVector3D(
-              qRadiansToDegrees(static_cast<float>(rot.x())),
-              qRadiansToDegrees(static_cast<float>(rot.y())),
-              qRadiansToDegrees(static_cast<float>(rot.z()))));
-            const auto sc = inst->get_scaling_factor();
-            receiver->objectScales_.append(QVector3D(
-              static_cast<float>(sc.x()),
-              static_cast<float>(sc.y()),
-              static_cast<float>(sc.z())));
-          }
-        }
+        // S5: the converged single mirror rebuild replaces both the
+        // worker-built name/module/printable/visible lists and the inline
+        // AXES-ROT transform loop that used to follow the assignment.
+        receiver->syncObjectMetadataMirrors();
 
         // v3.0 Phase 16 (D-05): rebuild m_plateList from the loaded plate data.
         // loadedPlateNames / loadedPlateObjectIndices are local QStringLists / QList<QList<int>>
@@ -1649,10 +1584,9 @@ bool ProjectService::loadFile(const QString &filePath)
         receiver->attachPlateInstanceBounds();
         receiver->m_plateList->setCurrentPlateIndex(-1);
         receiver->sourceFilePath_.clear();
-        receiver->objectNames_.clear();
-        receiver->objectModuleNames_.clear();
-        receiver->objectPrintableStates_.clear();
-        receiver->objectVisibleStates_.clear();
+        // S5: clear ALL seven metadata mirrors (the old copy only cleared
+        // four and left stale positions/rotations/scales behind).
+        receiver->clearObjectMetadataMirrors();
         receiver->lastError_ = errorText;
         qWarning("[ProjectService] import failed path=%s reason=%s",
                  localPath.toUtf8().constData(),
@@ -3343,24 +3277,37 @@ bool ProjectService::changeVolumeType(int objectIndex, int volumeIndex, int newV
     return false;
   }
 
+  // S5 (audit 2026-10-10 ch.4, first mirror-retirement cut): the REAL
+  // ModelVolume is the write target. m_mockVolumes is never populated by the
+  // real-engine build (every writer path goes straight to the Slic3r
+  // model), so gating on the mirror used to make this Q_INVOKABLE fail with
+  // "部件索引无效" for EVERY object -- the audit's "文件导入对象恒失败".
+  // Same contract as setVolumeExtruderId (P16.4): the mirror entry is
+  // updated when present but is no longer required to exist.
+  const bool hasRealVolume =
+#ifdef HAS_LIBSLIC3R
+      model_ && size_t(objectIndex) < model_->objects.size() &&
+      model_->objects[size_t(objectIndex)] &&
+      volumeIndex >= 0 &&
+      size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size();
+#else
+      false;
+#endif
   auto it = m_mockVolumes.find(objectIndex);
-  if (it == m_mockVolumes.end() || volumeIndex < 0 || volumeIndex >= it->size())
+  const bool hasMockEntry = it != m_mockVolumes.end() && volumeIndex >= 0 && volumeIndex < it->size();
+  if (!hasRealVolume && !hasMockEntry)
   {
     lastError_ = tr("类型转换失败：部件索引无效");
     return false;
   }
 
-  auto oldType = it->at(volumeIndex).type;
   auto newType = static_cast<MockVolumeType>(newVolumeType);
-  if (oldType == newType)
-    return true; // no change
 
-  // P0.5.4: 同步真实 ModelVolume 类型（仅 0-4 映射到上游 ModelVolumeType）
+  // P0.5.4: write the real ModelVolume type (only 0-4 map onto the upstream
+  // ModelVolumeType; 5/6 are Qt-only emboss labels and must leave the real
+  // volume untouched).
 #ifdef HAS_LIBSLIC3R
-  if (model_ && newVolumeType <= 4 &&
-      size_t(objectIndex) < model_->objects.size() &&
-      model_->objects[size_t(objectIndex)] &&
-      size_t(volumeIndex) < model_->objects[size_t(objectIndex)]->volumes.size())
+  if (hasRealVolume && newVolumeType <= 4)
   {
     auto *vol = model_->objects[size_t(objectIndex)]->volumes[size_t(volumeIndex)];
     if (vol)
@@ -3368,25 +3315,24 @@ bool ProjectService::changeVolumeType(int objectIndex, int volumeIndex, int newV
   }
 #endif
 
-  // 对齐上游约束：转换时保留部件名，但更新类型
-  it->operator[](volumeIndex).type = newType;
-
-  // 更新部件名称前缀
-  static const char *typeNames[] = {
-      QT_TRANSLATE_NOOP("ProjectService", "部件"),
-      QT_TRANSLATE_NOOP("ProjectService", "负体积"),
-      QT_TRANSLATE_NOOP("ProjectService", "修改器"),
-      QT_TRANSLATE_NOOP("ProjectService", "支撑屏蔽"),
-      QT_TRANSLATE_NOOP("ProjectService", "支撑增强"),
-      QT_TRANSLATE_NOOP("ProjectService", "文字浮雕"),
-      QT_TRANSLATE_NOOP("ProjectService", "SVG浮雕"),
-  };
-  // 保留编号，更新类型名
-  QString oldName = it->at(volumeIndex).name;
-  QRegularExpression re(QStringLiteral("^(?:部件|负体积|修改器|支撑屏蔽|支撑增强|文字浮雕|SVG浮雕)\\s+(\\d+)$"));
-  auto match = re.match(oldName);
-  if (match.hasMatch())
-    it->operator[](volumeIndex).name = tr(typeNames[newVolumeType]) + QStringLiteral(" ") + match.captured(1);
+  if (hasMockEntry && it->at(volumeIndex).type != newType)
+  {
+    // Mirror display bookkeeping: keep the numbering, update the type name.
+    static const char *typeNames[] = {
+        QT_TRANSLATE_NOOP("ProjectService", "部件"),
+        QT_TRANSLATE_NOOP("ProjectService", "负体积"),
+        QT_TRANSLATE_NOOP("ProjectService", "修改器"),
+        QT_TRANSLATE_NOOP("ProjectService", "支撑屏蔽"),
+        QT_TRANSLATE_NOOP("ProjectService", "支撑增强"),
+        QT_TRANSLATE_NOOP("ProjectService", "文字浮雕"),
+        QT_TRANSLATE_NOOP("ProjectService", "SVG浮雕"),
+    };
+    (*it)[volumeIndex].type = newType;
+    QRegularExpression re(QStringLiteral("^(?:部件|负体积|修改器|支撑屏蔽|支撑增强|文字浮雕|SVG浮雕)\\s+(\\d+)$"));
+    auto match = re.match(it->at(volumeIndex).name);
+    if (match.hasMatch())
+      (*it)[volumeIndex].name = tr(typeNames[newVolumeType]) + QStringLiteral(" ") + match.captured(1);
+  }
 
   lastError_.clear();
   emit projectChanged();
@@ -5522,6 +5468,79 @@ void ProjectService::syncTransformsFromModel()
 #endif
 }
 
+void ProjectService::clearObjectMetadataMirrors()
+{
+  objectNames_.clear();
+  objectModuleNames_.clear();
+  objectPrintableStates_.clear();
+  objectVisibleStates_.clear();
+  objectPositions_.clear();
+  objectRotations_.clear();
+  objectScales_.clear();
+  modelCount_ = 0;
+}
+
+void ProjectService::syncObjectMetadataMirrors()
+{
+  clearObjectMetadataMirrors();
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return;
+  const int count = int(model_->objects.size());
+  objectNames_.reserve(count);
+  objectModuleNames_.reserve(count);
+  objectPrintableStates_.reserve(count);
+  objectVisibleStates_.reserve(count);
+  objectPositions_.reserve(count);
+  objectRotations_.reserve(count);
+  objectScales_.reserve(count);
+  for (size_t i = 0; i < model_->objects.size(); ++i)
+  {
+    const auto *obj = model_->objects[i];
+    objectNames_ << ((obj && !obj->name.empty()) ? QString::fromStdString(obj->name)
+                                                 : tr("对象 %1").arg(int(i + 1)));
+    objectModuleNames_ << ((obj && !obj->module_name.empty()) ? QString::fromStdString(obj->module_name)
+                                                              : tr("默认模块"));
+    // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
+    // from the SAME source.
+    const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
+    objectPrintableStates_.append(printable);
+    objectVisibleStates_.append(printable);
+
+    // P0.5.1: instance transform (slic3r -> GL). The AXES-ROT position
+    // mapping here (GL.x=slic3r.x, GL.y=slic3r.z, GL.z=-slic3r.y) is the
+    // SAME one the objectPosition/objectRotation/objectScale accessors and
+    // the async loaders use -- the pre-convergence copy-paste blocks wrote
+    // +off.y here, a drift the accessors masked but the JSON project save
+    // (which serializes these mirrors verbatim) persisted to disk.
+    if (obj && !obj->instances.empty() && obj->instances.front())
+    {
+      const auto *inst = obj->instances.front();
+      const auto off = inst->get_offset();
+      objectPositions_.append(QVector3D(
+          static_cast<float>(off.x()), static_cast<float>(off.z()), -static_cast<float>(off.y())));
+      const auto rot = inst->get_rotation();
+      objectRotations_.append(QVector3D(
+          qRadiansToDegrees(static_cast<float>(rot.x())),
+          qRadiansToDegrees(static_cast<float>(rot.y())),
+          qRadiansToDegrees(static_cast<float>(rot.z()))));
+      const auto sc = inst->get_scaling_factor();
+      objectScales_.append(QVector3D(
+          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
+    }
+    else
+    {
+      objectPositions_.append(QVector3D(0, 0, 0));
+      objectRotations_.append(QVector3D(0, 0, 0));
+      objectScales_.append(QVector3D(1, 1, 1));
+    }
+  }
+#endif
+  // modelCount_ is the mirror-count summary; every consumer of the seven
+  // lists above assumes it equals objectNames_.size() after a rebuild.
+  modelCount_ = objectNames_.size();
+}
+
 // ── Mesh snapshot for undo/redo ──
 
 QByteArray ProjectService::captureObjectMeshSnapshot(int objectIndex) const
@@ -5823,52 +5842,9 @@ int ProjectService::restoreFullObjectSnapshot(const QByteArray &snapshot, int in
         inst->printable = printable;
     }
 
-    // 重建元数据镜像（对齐 addObject/duplicateObject 的同步代码段）
-    objectNames_.clear();
-    objectNames_.reserve(int(model_->objects.size()));
-    objectModuleNames_.clear();
-    objectModuleNames_.reserve(int(model_->objects.size()));
-    objectPrintableStates_.clear();
-    objectVisibleStates_.clear();
-    objectPrintableStates_.reserve(int(model_->objects.size()));
-    objectVisibleStates_.reserve(int(model_->objects.size()));
-    objectPositions_.clear();
-    objectRotations_.clear();
-    objectScales_.clear();
-    for (size_t i = 0; i < model_->objects.size(); ++i)
-    {
-      const auto *o = model_->objects[i];
-      objectNames_ << (o && !o->name.empty() ? QString::fromStdString(o->name)
-                                             : tr("对象 %1").arg(int(i + 1)));
-      objectModuleNames_ << (o && !o->module_name.empty()
-                                 ? QString::fromStdString(o->module_name)
-                                 : tr("默认模块"));
-      const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
-      objectPrintableStates_.append(pr);
-      // R-P0.5: seed the visibility mirror from the same source.
-      objectVisibleStates_.append(pr);
-      if (o && !o->instances.empty() && o->instances.front())
-      {
-        const auto *inst = o->instances.front();
-        const auto off = inst->get_offset();
-        objectPositions_.append(QVector3D(
-            static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
-        const auto rot = inst->get_rotation();
-        objectRotations_.append(QVector3D(
-            qRadiansToDegrees(static_cast<float>(rot.x())),
-            qRadiansToDegrees(static_cast<float>(rot.y())),
-            qRadiansToDegrees(static_cast<float>(rot.z()))));
-        const auto sc = inst->get_scaling_factor();
-        objectScales_.append(QVector3D(
-            static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
-      }
-      else
-      {
-        objectPositions_.append(QVector3D(0, 0, 0));
-        objectRotations_.append(QVector3D(0, 0, 0));
-        objectScales_.append(QVector3D(1, 1, 1));
-      }
-    }
+    // S5: single converged mirror rebuild (was a copy-paste of the
+    // addObject/duplicateObject sync block).
+    syncObjectMetadataMirrors();
 
     // visibility 是 GL 侧概念（Qt6 镜像数组），不属于 slic3r 实例状态
     if (newIdx >= 0 && newIdx < objectVisibleStates_.size())
@@ -7220,60 +7196,10 @@ bool ProjectService::deleteObject(int index)
       m_mockVolumeOverrides = shiftedVolOverrides;
     }
 
-    objectNames_.clear();
-    objectNames_.reserve(int(model_->objects.size()));
-    objectModuleNames_.clear();
-    objectModuleNames_.reserve(int(model_->objects.size()));
-    objectPrintableStates_.clear();
-    objectVisibleStates_.clear();
-    objectPositions_.clear();
-    objectRotations_.clear();
-    objectScales_.clear();
-    objectPrintableStates_.reserve(int(model_->objects.size()));
-    objectVisibleStates_.reserve(int(model_->objects.size()));
-    for (size_t i = 0; i < model_->objects.size(); ++i)
-    {
-      const auto *obj = model_->objects[i];
-      if (obj && !obj->name.empty())
-        objectNames_ << QString::fromStdString(obj->name);
-      else
-        objectNames_ << tr("对象 %1").arg(int(i + 1));
-
-      if (obj && !obj->module_name.empty())
-        objectModuleNames_ << QString::fromStdString(obj->module_name);
-      else
-        objectModuleNames_ << tr("默认模块");
-
-      const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
-      objectPrintableStates_.append(printable);
-
-      // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
-      // from the SAME source (is_printable() previously let them diverge).
-      objectVisibleStates_.append(printable);
-
-      // P0.5.1: 从真实实例同步变换（slic3r → GL）
-      if (obj && !obj->instances.empty() && obj->instances.front())
-      {
-        const auto *inst = obj->instances.front();
-        const auto off = inst->get_offset();
-        objectPositions_.append(QVector3D(
-          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
-        const auto rot = inst->get_rotation();
-        objectRotations_.append(QVector3D(
-          qRadiansToDegrees(static_cast<float>(rot.x())),
-          qRadiansToDegrees(static_cast<float>(rot.y())),
-          qRadiansToDegrees(static_cast<float>(rot.z()))));
-        const auto sc = inst->get_scaling_factor();
-        objectScales_.append(QVector3D(
-          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
-      }
-      else
-      {
-        objectPositions_.append(QVector3D(0, 0, 0));
-        objectRotations_.append(QVector3D(0, 0, 0));
-        objectScales_.append(QVector3D(1, 1, 1));
-      }
-    }
+    // S5: single converged mirror rebuild (was a 54-line copy-paste; the
+    // copy wrote +off.y for GL.z where the accessors use the AXES-ROT
+    // -off.y mapping).
+    syncObjectMetadataMirrors();
 #else
     // Clean up mock volumes and layer ranges for this object
     m_mockVolumes.remove(index);
@@ -7917,56 +7843,8 @@ int ProjectService::assembleObjectsReturningIndex(const QList<int> &objIndices)
 
     // Rebuild the metadata mirrors from the real model (same contract as
     // deleteObject / splitObject — the old assemble skipped this and left
-    // modelCount_/objectNames_ stale).
-    objectNames_.clear();
-    objectNames_.reserve(int(model_->objects.size()));
-    objectModuleNames_.clear();
-    objectModuleNames_.reserve(int(model_->objects.size()));
-    objectPrintableStates_.clear();
-    objectVisibleStates_.clear();
-    objectPositions_.clear();
-    objectRotations_.clear();
-    objectScales_.clear();
-    for (size_t i = 0; i < model_->objects.size(); ++i)
-    {
-      const auto *obj = model_->objects[i];
-      if (obj && !obj->name.empty())
-        objectNames_ << QString::fromStdString(obj->name);
-      else
-        objectNames_ << tr("对象 %1").arg(int(i + 1));
-
-      if (obj && !obj->module_name.empty())
-        objectModuleNames_ << QString::fromStdString(obj->module_name);
-      else
-        objectModuleNames_ << tr("默认模块");
-
-      const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
-      objectPrintableStates_.append(printable);
-      objectVisibleStates_.append(printable);
-
-      if (obj && !obj->instances.empty() && obj->instances.front())
-      {
-        const auto *inst = obj->instances.front();
-        const auto off = inst->get_offset();
-        objectPositions_.append(QVector3D(
-          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
-        const auto rot = inst->get_rotation();
-        objectRotations_.append(QVector3D(
-          qRadiansToDegrees(static_cast<float>(rot.x())),
-          qRadiansToDegrees(static_cast<float>(rot.y())),
-          qRadiansToDegrees(static_cast<float>(rot.z()))));
-        const auto sc = inst->get_scaling_factor();
-        objectScales_.append(QVector3D(
-          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
-      }
-      else
-      {
-        objectPositions_.append(QVector3D(0, 0, 0));
-        objectRotations_.append(QVector3D(0, 0, 0));
-        objectScales_.append(QVector3D(1, 1, 1));
-      }
-    }
-    modelCount_ = objectNames_.size();
+    // modelCount_/objectNames_ stale). S5: the converged single helper.
+    syncObjectMetadataMirrors();
 
     // Rebuild plate membership: drop the merged sources, shift survivors and
     // register the assembly on the first source's plate.
@@ -8973,28 +8851,6 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
       plate->addInstance(entry.first, entry.second);
   }
 
-  objectNames_.clear();
-  objectModuleNames_.clear();
-  objectPrintableStates_.clear();
-  objectVisibleStates_.clear();
-  objectNames_.reserve(int(model_->objects.size()));
-  objectModuleNames_.reserve(int(model_->objects.size()));
-  objectPrintableStates_.reserve(int(model_->objects.size()));
-  objectVisibleStates_.reserve(int(model_->objects.size()));
-  for (size_t objectIndex = 0; objectIndex < model_->objects.size(); ++objectIndex) {
-    const Slic3r::ModelObject *object = model_->objects[objectIndex];
-    objectNames_.append(object && !object->name.empty()
-                            ? QString::fromStdString(object->name)
-                            : tr("Object %1").arg(int(objectIndex + 1)));
-    objectModuleNames_.append(object && !object->module_name.empty()
-                                  ? QString::fromStdString(object->module_name)
-                                  : QStringLiteral("default"));
-    const bool printable = object && !object->instances.empty()
-        && object->instances.front() && object->instances.front()->printable;
-    objectPrintableStates_.append(printable);
-    objectVisibleStates_.append(printable);
-  }
-  modelCount_ = objectNames_.size();
   targetPlate = m_plateList->plate(plateIndex);
   if (!targetPlate) {
     lastError_ = tr("Target plate was removed during replacement");
@@ -9011,16 +8867,6 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
       const int objectIndex = int(model_->objects.size()) - 1;
       if (addedObject->instances.empty())
         addedObject->add_instance();
-      objectNames_.append(addedObject->name.empty()
-                              ? tr("Object %1").arg(objectIndex + 1)
-                              : QString::fromStdString(addedObject->name));
-      objectModuleNames_.append(addedObject->module_name.empty()
-                                    ? QStringLiteral("default")
-                                    : QString::fromStdString(addedObject->module_name));
-      const bool printable = !addedObject->instances.empty()
-          && addedObject->instances.front() && addedObject->instances.front()->printable;
-      objectPrintableStates_.append(printable);
-      objectVisibleStates_.append(printable);
       for (int instanceIndex = 0; instanceIndex < int(addedObject->instances.size()); ++instanceIndex) {
         if (addedObject->instances[size_t(instanceIndex)])
           targetPlate->addInstance(objectIndex, instanceIndex);
@@ -9028,8 +8874,12 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
     }
   }
 
-  modelCount_ = objectNames_.size();
-  syncTransformsFromModel();
+  // S5: single converged mirror rebuild over the FINAL model (this site's
+  // old copy-paste variants used untranslated English fallback names
+  // ("Object %1"/"default"), defaulted printable to false for
+  // instance-less objects, and never seeded the transform mirrors -- the
+  // old syncTransformsFromModel() patched that up afterwards).
+  syncObjectMetadataMirrors();
   lastError_.clear();
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
@@ -9666,61 +9516,8 @@ int ProjectService::duplicateObject(int sourceIndex)
           inst->get_offset(Slic3r::Z)));
     }
 
-    // 重建元数据
-    objectNames_.clear();
-    objectNames_.reserve(int(model_->objects.size()));
-    objectModuleNames_.clear();
-    objectModuleNames_.reserve(int(model_->objects.size()));
-    objectPrintableStates_.clear();
-    objectVisibleStates_.clear();
-    objectPositions_.clear();
-    objectRotations_.clear();
-    objectScales_.clear();
-    objectPrintableStates_.reserve(int(model_->objects.size()));
-    objectVisibleStates_.reserve(int(model_->objects.size()));
-    for (size_t i = 0; i < model_->objects.size(); ++i)
-    {
-      const auto *obj = model_->objects[i];
-      if (obj && !obj->name.empty())
-        objectNames_ << QString::fromStdString(obj->name);
-      else
-        objectNames_ << tr("对象 %1").arg(int(i + 1));
-
-      if (obj && !obj->module_name.empty())
-        objectModuleNames_ << QString::fromStdString(obj->module_name);
-      else
-        objectModuleNames_ << tr("默认模块");
-
-      const bool printable = obj && !obj->instances.empty() ? obj->instances.front()->printable : true;
-      objectPrintableStates_.append(printable);
-
-      // R-P0.5: both mirrors describe ModelInstance::printable -- seed them
-      // from the SAME source (is_printable() previously let them diverge).
-      objectVisibleStates_.append(printable);
-
-      // P0.5.1: 从真实实例同步变换（slic3r → GL）
-      if (obj && !obj->instances.empty() && obj->instances.front())
-      {
-        const auto *inst = obj->instances.front();
-        const auto off = inst->get_offset();
-        objectPositions_.append(QVector3D(
-          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
-        const auto rot = inst->get_rotation();
-        objectRotations_.append(QVector3D(
-          qRadiansToDegrees(static_cast<float>(rot.x())),
-          qRadiansToDegrees(static_cast<float>(rot.y())),
-          qRadiansToDegrees(static_cast<float>(rot.z()))));
-        const auto sc = inst->get_scaling_factor();
-        objectScales_.append(QVector3D(
-          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
-      }
-      else
-      {
-        objectPositions_.append(QVector3D(0, 0, 0));
-        objectRotations_.append(QVector3D(0, 0, 0));
-        objectScales_.append(QVector3D(1, 1, 1));
-      }
-    }
+    // 重建元数据 -- S5: single converged mirror rebuild.
+    syncObjectMetadataMirrors();
 
     // Register the clone's instances on the current plate. Mirrors the
     // non-lib branch below and upstream paste_objects_from_clipboard: a
@@ -9920,34 +9717,10 @@ QList<int> ProjectService::splitObject(int objectIndex)
     // tempModel's destructor frees them. Do NOT delete them here (C2248 /
     // double-free); upstream relies on the clone's destructor the same way.
 
-    // 重建元数据
-    objectNames_.clear();
-    objectNames_.reserve(int(model_->objects.size()));
-    objectModuleNames_.clear();
-    objectModuleNames_.reserve(int(model_->objects.size()));
-    objectPrintableStates_.clear();
-    objectPrintableStates_.reserve(int(model_->objects.size()));
-    objectVisibleStates_.clear();
-    objectVisibleStates_.reserve(int(model_->objects.size()));
-    for (size_t i = 0; i < model_->objects.size(); ++i)
-    {
-      const auto *o = model_->objects[i];
-      if (o && !o->name.empty())
-        objectNames_ << QString::fromStdString(o->name);
-      else
-        objectNames_ << tr("对象 %1").arg(int(i + 1));
-
-      if (o && !o->module_name.empty())
-        objectModuleNames_ << QString::fromStdString(o->module_name);
-      else
-        objectModuleNames_ << tr("默认模块");
-
-      const bool printable = o && !o->instances.empty() ? o->instances.front()->printable : true;
-      objectPrintableStates_.append(printable);
-
-      // R-P0.5: same source as the printable mirror.
-      objectVisibleStates_.append(printable);
-    }
+    // 重建元数据 -- S5: single converged mirror rebuild (also seeds the
+    // transform mirrors; the old split copy never did and needed a
+    // syncTransformsFromModel() patch-up).
+    syncObjectMetadataMirrors();
 
     // R-P1.C: the split parts are APPENDED (upstream load_model_objects) --
     // they are the LAST `addedParts` objects, not everything from
@@ -9955,11 +9728,6 @@ QList<int> ProjectService::splitObject(int objectIndex)
     const int firstNew = int(model_->objects.size()) - addedParts;
     for (int i = firstNew; i < int(model_->objects.size()); ++i)
       newIndices.append(i);
-
-    // 同步变换数组
-    syncTransformsFromModel();
-
-    modelCount_ = objectNames_.size();
 #else
     Q_UNUSED(objectIndex);
 #endif
@@ -10006,48 +9774,12 @@ int ProjectService::addObject(const QString &name)
     auto *inst = obj->add_instance();
     inst->set_offset(Slic3r::Vec3d(0, 0, 0));
 
-    // 重建元数据
-    objectNames_.clear();
-    objectModuleNames_.clear();
-    objectPrintableStates_.clear();
-    objectVisibleStates_.clear();
-    objectPositions_.clear();
-    objectRotations_.clear();
-    objectScales_.clear();
-    for (size_t i = 0; i < model_->objects.size(); ++i)
-    {
-      const auto *o = model_->objects[i];
-      objectNames_ << (o ? QString::fromStdString(o->name) : tr("对象 %1").arg(int(i + 1)));
-      objectModuleNames_ << (o ? QString::fromStdString(o->module_name) : tr("默认模块"));
-      const bool pr = o && !o->instances.empty() ? o->instances.front()->printable : true;
-      objectPrintableStates_.append(pr);
-      objectVisibleStates_.append(true);
-      // P0.5.1: 从真实实例同步变换（slic3r → GL）
-      if (o && !o->instances.empty() && o->instances.front())
-      {
-        const auto *inst = o->instances.front();
-        const auto off = inst->get_offset();
-        objectPositions_.append(QVector3D(
-          static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
-        const auto rot = inst->get_rotation();
-        objectRotations_.append(QVector3D(
-          qRadiansToDegrees(static_cast<float>(rot.x())),
-          qRadiansToDegrees(static_cast<float>(rot.y())),
-          qRadiansToDegrees(static_cast<float>(rot.z()))));
-        const auto sc = inst->get_scaling_factor();
-        objectScales_.append(QVector3D(
-          static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
-      }
-      else
-      {
-        objectPositions_.append(QVector3D(0, 0, 0));
-        objectRotations_.append(QVector3D(0, 0, 0));
-        objectScales_.append(QVector3D(1, 1, 1));
-      }
-    }
+    // 重建元数据 -- S5: single converged mirror rebuild (this copy drifted:
+    // empty object names became "" instead of the "对象 %1" fallback, and
+    // the visible mirror was hardcoded true instead of tracking printable).
+    syncObjectMetadataMirrors();
 
     const int newIndex = int(model_->objects.size()) - 1;
-    modelCount_ = objectNames_.size();
     emit projectChanged();
     return newIndex;
   }
@@ -10436,13 +10168,8 @@ void ProjectService::clearProject()
   attachPlateInstanceBounds();
   m_plateList->setCurrentPlateIndex(-1);
   sourceFilePath_.clear();
-  objectNames_.clear();
-  objectModuleNames_.clear();
-  objectPrintableStates_.clear();
-  objectVisibleStates_.clear();
-  objectPositions_.clear();
-  objectRotations_.clear();
-  objectScales_.clear();
+  // S5: one clear helper for the seven per-object metadata mirrors.
+  clearObjectMetadataMirrors();
   m_mockVolumes.clear();
   // Phase 236 (DLG-03): a cleared workspace carries no project version.
   if (!m_projectVersionInfo.isEmpty())
@@ -12059,11 +11786,10 @@ bool ProjectService::loadProject(const QString &filePath)
 
       const bool canceled = cancelFlag && cancelFlag->load();
 
-      // Collect object/plate data from loaded model
-      QStringList names;
-      QStringList moduleNames;
-      QList<bool> printableStates;
-      QList<bool> visibleStates;
+      // Collect object/plate data from loaded model. S5: the object mirrors
+      // are rebuilt on the GUI thread by the converged
+      // syncObjectMetadataMirrors(); the worker no longer pre-builds
+      // name/module/printable/visible lists for the delivery.
       QString errorText;
       QString loadedProjectName;
       const QString loadedProjectVersion =
@@ -12072,20 +11798,6 @@ bool ProjectService::loadProject(const QString &filePath)
       if (ok && !canceled)
       {
         loadedProjectName = QFileInfo(localPath).completeBaseName();
-        const auto &objs = loadedModel->objects;
-        names.reserve(int(objs.size()));
-        moduleNames.reserve(int(objs.size()));
-        printableStates.reserve(int(objs.size()));
-        visibleStates.reserve(int(objs.size()));
-        for (size_t i = 0; i < objs.size(); ++i)
-        {
-          const auto *obj = objs[i];
-          names << ((obj && !obj->name.empty()) ? QString::fromStdString(obj->name) : QObject::tr("对象 %1").arg(int(i + 1)));
-          moduleNames << ((obj && !obj->module_name.empty()) ? QString::fromStdString(obj->module_name) : QObject::tr("默认模块"));
-          printableStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
-          // R-P0.5: same source as the printable mirror.
-          visibleStates.append(obj && !obj->instances.empty() ? obj->instances.front()->printable : true);
-        }
 
         if (loadedPlateNames.isEmpty())
         {
@@ -12145,7 +11857,7 @@ bool ProjectService::loadProject(const QString &filePath)
       }
 #endif
 
-      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, names, moduleNames, printableStates, visibleStates, errorText, loadedProjectName, loadedProjectVersion, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode, loadedBedWidthMm, loadedBedDepthMm, loadedBedHeightMm, loadedBedExcludeArea]() {
+      QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, errorText, loadedProjectName, loadedProjectVersion, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedConfigMap, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode, loadedBedWidthMm, loadedBedDepthMm, loadedBedHeightMm, loadedBedExcludeArea]() {
         if (!receiver) { delete loadedModel; return; }
 
         // Publish worker-local plate state only on the GUI thread. This also
@@ -12173,42 +11885,11 @@ bool ProjectService::loadProject(const QString &filePath)
           receiver->model_ = loadedModel;
           receiver->projectName_ = loadedProjectName;
           receiver->sourceFilePath_ = localPath;
-          receiver->objectNames_ = names;
-          receiver->objectModuleNames_ = moduleNames;
-          receiver->objectPrintableStates_ = printableStates;
-          receiver->objectVisibleStates_ = visibleStates;
-          receiver->modelCount_ = names.size();
-
-          // Sync transforms from model
-          receiver->objectPositions_.clear();
-          receiver->objectRotations_.clear();
-          receiver->objectScales_.clear();
-          const auto &objs = loadedModel->objects;
-          receiver->objectPositions_.reserve(int(objs.size()));
-          receiver->objectRotations_.reserve(int(objs.size()));
-          receiver->objectScales_.reserve(int(objs.size()));
-          for (const auto *obj : objs)
-          {
-            if (!obj || obj->instances.empty() || !obj->instances.front())
-            {
-              receiver->objectPositions_.append(QVector3D(0, 0, 0));
-              receiver->objectRotations_.append(QVector3D(0, 0, 0));
-              receiver->objectScales_.append(QVector3D(1, 1, 1));
-              continue;
-            }
-            const auto *inst = obj->instances.front();
-            const auto off = inst->get_offset();
-            receiver->objectPositions_.append(QVector3D(
-                static_cast<float>(off.x()), static_cast<float>(off.z()), static_cast<float>(off.y())));
-            const auto rot = inst->get_rotation();
-            receiver->objectRotations_.append(QVector3D(
-                qRadiansToDegrees(static_cast<float>(rot.x())),
-                qRadiansToDegrees(static_cast<float>(rot.y())),
-                qRadiansToDegrees(static_cast<float>(rot.z()))));
-            const auto sc = inst->get_scaling_factor();
-            receiver->objectScales_.append(QVector3D(
-                static_cast<float>(sc.x()), static_cast<float>(sc.y()), static_cast<float>(sc.z())));
-          }
+          // S5: the converged single mirror rebuild replaces both the
+          // worker-built name/module/printable/visible lists and the inline
+          // transform loop (whose copy wrote +off.y for GL.z -- the AXES-ROT
+          // sign drift the loader path did not have).
+          receiver->syncObjectMetadataMirrors();
 
           // v3.0 Phase 16 (D-05): rebuild m_plateList from loaded plate data.
           {
@@ -12387,10 +12068,9 @@ bool ProjectService::loadProject(const QString &filePath)
           receiver->attachPlateInstanceBounds();
           receiver->m_plateList->setCurrentPlateIndex(-1);
           receiver->sourceFilePath_.clear();
-          receiver->objectNames_.clear();
-          receiver->objectModuleNames_.clear();
-          receiver->objectPrintableStates_.clear();
-          receiver->objectVisibleStates_.clear();
+          // S5: clear ALL seven metadata mirrors (the old copy only cleared
+          // four and left stale positions/rotations/scales behind).
+          receiver->clearObjectMetadataMirrors();
           // Phase 236 (DLG-03): failed load leaves no version behind.
           if (!receiver->m_projectVersionInfo.isEmpty())
           {
@@ -12433,14 +12113,9 @@ bool ProjectService::loadProject(const QString &filePath)
 
   const QJsonObject root = doc.object();
 
-  // Clear existing state
-  objectNames_.clear();
-  objectModuleNames_.clear();
-  objectPrintableStates_.clear();
-  objectVisibleStates_.clear();
-  objectPositions_.clear();
-  objectRotations_.clear();
-  objectScales_.clear();
+  // Clear existing state -- S5: one clear helper for the seven per-object
+  // metadata mirrors.
+  clearObjectMetadataMirrors();
   m_mockObjectOverrides.clear();
   m_mockVolumeOverrides.clear();
   m_mockPlateOverrides.clear();
