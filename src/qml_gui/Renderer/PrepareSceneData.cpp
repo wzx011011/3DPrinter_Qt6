@@ -287,6 +287,63 @@ void PrepareSceneData::setMeshGeneration(qint64 generation)
   markDirty(DirtyMesh | DirtyGpu);
 }
 
+template <bool ComposeTranslate, bool ComposeFull>
+void PrepareSceneData::expandBatchWalk(const char *batchBase,
+                                       qsizetype vertexCount,
+                                       float tx, float ty, float tz,
+                                       const QMatrix4x4 &batchWorld,
+                                       bool active,
+                                       float r, float g, float b, float a,
+                                       PrepareSceneData *self,
+                                       ModelBatch *batch,
+                                       bool *batchHasBounds,
+                                       bool *valid)
+{
+  const char *vertexCursor = batchBase;
+  for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+    std::memcpy(&x, vertexCursor, sizeof(float));
+    std::memcpy(&y, vertexCursor + sizeof(float), sizeof(float));
+    std::memcpy(&z, vertexCursor + 2 * sizeof(float), sizeof(float));
+    vertexCursor += kPackedVertexBytes;
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+      *valid = false;
+      return;
+    }
+
+    if (!active)
+      continue;
+
+    if constexpr (ComposeTranslate) {
+      x += tx;
+      y += ty;
+      z += tz;
+    } else if constexpr (ComposeFull) {
+      const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
+      x = worldPoint.x();
+      y = worldPoint.y();
+      z = worldPoint.z();
+    }
+
+    const ModelVertex vertex{x, y, z, r, g, b, a};
+    self->m_modelVertices.append(vertex);
+    if (!*batchHasBounds) {
+      batch->bounds = ModelBounds{x, y, z, x, y, z};
+      *batchHasBounds = true;
+    } else {
+      batch->bounds.minX = std::min(batch->bounds.minX, x);
+      batch->bounds.minY = std::min(batch->bounds.minY, y);
+      batch->bounds.minZ = std::min(batch->bounds.minZ, z);
+      batch->bounds.maxX = std::max(batch->bounds.maxX, x);
+      batch->bounds.maxY = std::max(batch->bounds.maxY, y);
+      batch->bounds.maxZ = std::max(batch->bounds.maxZ, z);
+    }
+    self->updateModelBounds(vertex);
+  }
+}
+
 void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchSourceObjectIndices,
                                         const QList<int> &batchVolumeIndices,
@@ -479,29 +536,32 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     const float tx = batchWorld.constData()[12];
     const float ty = batchWorld.constData()[13];
     const float tz = batchWorld.constData()[14];
-    for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
-      // S3 winding: triangles append in source order (0,1,2); a left-handed
-      // world matrix appends (0,2,1) instead.
-      const int triLocal = int(vertexIndex % 3);
-      const int srcLocal = swapWinding ? ((triLocal == 0) ? 0 : 3 - triLocal)
-                                       : triLocal;
-      const char *vertexCursor = batchBase
-          + qsizetype(vertexIndex - triLocal + srcLocal) * kPackedVertexBytes;
-      float x = 0.0f;
-      float y = 0.0f;
-      float z = 0.0f;
-      std::memcpy(&x, vertexCursor, sizeof(float));
-      std::memcpy(&y, vertexCursor + sizeof(float), sizeof(float));
-      std::memcpy(&z, vertexCursor + 2 * sizeof(float), sizeof(float));
-      if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
-        valid = false;
-        break;
-      }
+    // PERF (scene_expand): dispatch the compose mode once per batch so the
+    // hot walk carries no per-vertex compose branching. The mirrored-instance
+    // (permuted) walk keeps the modular winding index math -- rare by
+    // contract, and its vertex ORDER (not the per-vertex cost) is its job.
+    if (swapWinding) {
+      for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+        // S3 winding: triangles append in source order (0,1,2); a left-handed
+        // world matrix appends (0,2,1) instead.
+        const int triLocal = int(vertexIndex % 3);
+        const int srcLocal = (triLocal == 0) ? 0 : 3 - triLocal;
+        const char *vertexCursor = batchBase
+            + qsizetype(vertexIndex - triLocal + srcLocal) * kPackedVertexBytes;
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+        std::memcpy(&x, vertexCursor, sizeof(float));
+        std::memcpy(&y, vertexCursor + sizeof(float), sizeof(float));
+        std::memcpy(&z, vertexCursor + 2 * sizeof(float), sizeof(float));
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+          valid = false;
+          break;
+        }
 
-      if (!active)
-        continue;
+        if (!active)
+          continue;
 
-      if (decomposed) {
         if (translateOnly) {
           x += tx;
           y += ty;
@@ -512,22 +572,34 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
           y = worldPoint.y();
           z = worldPoint.z();
         }
-      }
 
-      const ModelVertex vertex{x, y, z, r, g, b, a};
-      m_modelVertices.append(vertex);
-      if (!batchHasBounds) {
-        batch.bounds = ModelBounds{x, y, z, x, y, z};
-        batchHasBounds = true;
-      } else {
-        batch.bounds.minX = std::min(batch.bounds.minX, x);
-        batch.bounds.minY = std::min(batch.bounds.minY, y);
-        batch.bounds.minZ = std::min(batch.bounds.minZ, z);
-        batch.bounds.maxX = std::max(batch.bounds.maxX, x);
-        batch.bounds.maxY = std::max(batch.bounds.maxY, y);
-        batch.bounds.maxZ = std::max(batch.bounds.maxZ, z);
+        const ModelVertex vertex{x, y, z, r, g, b, a};
+        m_modelVertices.append(vertex);
+        if (!batchHasBounds) {
+          batch.bounds = ModelBounds{x, y, z, x, y, z};
+          batchHasBounds = true;
+        } else {
+          batch.bounds.minX = std::min(batch.bounds.minX, x);
+          batch.bounds.minY = std::min(batch.bounds.minY, y);
+          batch.bounds.minZ = std::min(batch.bounds.minZ, z);
+          batch.bounds.maxX = std::max(batch.bounds.maxX, x);
+          batch.bounds.maxY = std::max(batch.bounds.maxY, y);
+          batch.bounds.maxZ = std::max(batch.bounds.maxZ, z);
+        }
+        updateModelBounds(vertex);
       }
-      updateModelBounds(vertex);
+    } else if (translateOnly) {
+      expandBatchWalk<true, false>(batchBase, vertexCount, tx, ty, tz,
+                                   batchWorld, active, r, g, b, a,
+                                   this, &batch, &batchHasBounds, &valid);
+    } else if (decomposed) {
+      expandBatchWalk<false, true>(batchBase, vertexCount, tx, ty, tz,
+                                   batchWorld, active, r, g, b, a,
+                                   this, &batch, &batchHasBounds, &valid);
+    } else {
+      expandBatchWalk<false, false>(batchBase, vertexCount, tx, ty, tz,
+                                    batchWorld, active, r, g, b, a,
+                                    this, &batch, &batchHasBounds, &valid);
     }
     if (valid)
       offset = qsizetype(batchBase - meshDataBase) + vertexCount * kPackedVertexBytes;

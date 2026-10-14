@@ -538,6 +538,19 @@ private:
   void rebuildPlateGeometry(int plateRow, int plateCol, float left, float top, bool selected);
   void clearModelGeometry();
   void updateModelBounds(const ModelVertex &vertex);
+  // PERF (scene_expand): the per-batch vertex walk specialized on the compose
+  // mode so the hot loop carries no per-vertex compose branching (the S3
+  // decomposed compose dispatched translate-only adds through two runtime
+  // branches per vertex and regressed the stage-bench expand anchors). The
+  // mirrored-instance (permuted) walk stays on its own runtime path -- rare
+  // by contract. Defined in PrepareSceneData.cpp.
+  template <bool ComposeTranslate, bool ComposeFull>
+  static void expandBatchWalk(const char *batchBase, qsizetype vertexCount,
+                              float tx, float ty, float tz,
+                              const QMatrix4x4 &batchWorld, bool active,
+                              float r, float g, float b, float a,
+                              PrepareSceneData *self, ModelBatch *batch,
+                              bool *batchHasBounds, bool *valid);
   static bool activeSourceContains(const QList<int> &activeSourceObjectIndices, int sourceObjectIndex);
   static quint32 colorForSourceObject(int sourceObjectIndex, float &r, float &g, float &b);
   void appendLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a);

@@ -12583,7 +12583,13 @@ QByteArray ProjectService::meshData() const
       int32_t objectId;
       const ::indexed_triangle_set *its;
       const Slic3r::Transform3d *volMat;   // volume-local bake matrix
-      Slic3r::Transform3d conjGl;          // A * instMat * A^-1 (GL frame, no shift)
+      Slic3r::Transform3d worldMat;        // instMat * volMat (slic3r frame) --
+                                           // world-bbox only; see the bake pass
+      Slic3r::Vec3d instTranslation;       // valid when instTranslateOnly
+      bool instTranslateOnly;              // instMat is a pure translation:
+                                           // world box = local box + t (O(1)
+                                           // after the bake, no per-vertex
+                                           // second mat-vec)
       bool localLeftHanded;                // det(volMat) < 0: winding swap at bake
       int32_t faceCount;
     };
@@ -12612,8 +12618,9 @@ QByteArray ProjectService::meshData() const
       return id;
     };
 
-    static const Slic3r::Transform3d kAxes = axesRotSlic3rToGl();
-
+    // PERF (meshdata): the conjGl conjugate (A * instMat * A^-1) moved into
+    // the fused worldMat = instMat * volMat in the bake pass -- the axes map
+    // cancelled out of the per-vertex world box entirely.
     for (const auto *obj : model_->objects)
     {
       if (!obj)
@@ -12635,7 +12642,20 @@ QByteArray ProjectService::meshData() const
           // Only the volume's own transform is baked; the instance matrix is
           // conjugated into the GL frame and handed to the transform channel.
           const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
-          const Slic3r::Transform3d conjGl = kAxes * instMat * kAxes.inverse();
+          // PERF (meshdata): the world bbox needs A * instMat * volMat * v --
+          // the conjugation cancels exactly (A is the +-1 permutation axes map,
+          // so A^-1 * A == I in floating point), leaving the plain world-bake
+          // product. One mat-vec per vertex for the box instead of two
+          // (conjGl * (A * volMat * v)), which is what regressed meshdata_ms
+          // +60% on the 400k stage-bench anchor.
+          const Slic3r::Transform3d worldMat = instMat * volMat;
+          // Pure-translation instances (plate placement, gizmo drags -- the
+          // common case) keep the world box exact at O(1): world box =
+          // local box shifted by the translation, tracked during the bake.
+          const Slic3r::Vec3d instTranslation = instMat.translation();
+          const bool instTranslateOnly =
+              (instMat.matrix().block<3, 3>(0, 0) - Slic3r::Transform3d::Identity().linear())
+                  .cwiseAbs().maxCoeff() < 1e-12;
           const bool localLeftHanded =
               volMat.matrix().block<3, 3>(0, 0).determinant() < 0.0;
 
@@ -12661,7 +12681,9 @@ QByteArray ProjectService::meshData() const
             continue;
 
           jobs.push_back(VolumeJob{instanceObjectId, &its, &volMat,
-                                   conjGl, localLeftHanded, validFaces});
+                                   worldMat, instTranslation,
+                                   instTranslateOnly, localLeftHanded,
+                                   validFaces});
         }
       };
 
@@ -12762,6 +12784,10 @@ QByteArray ProjectService::meshData() const
       const int vcount = int(its.vertices.size());
       const int emitOrder[3] = {0, job.localLeftHanded ? 2 : 1, job.localLeftHanded ? 1 : 2};
       float *out = regions[jobIndex].first;
+      // Translate-only instance: exact world box from the slic3r-frame local
+      // box + translation (two corner points, no per-vertex second transform).
+      Slic3r::Vec3d lmin = Slic3r::Vec3d::Constant(std::numeric_limits<double>::max());
+      Slic3r::Vec3d lmax = Slic3r::Vec3d::Constant(-std::numeric_limits<double>::max());
 
       for (const auto &face : its.indices)
       {
@@ -12790,16 +12816,49 @@ QByteArray ProjectService::meshData() const
           *out++ = gy;
           *out++ = gz;
 
-          // Exact world box through the conjugated instance matrix (GL frame).
-          const Slic3r::Vec3d world = job.conjGl * Slic3r::Vec3d(
-              (double)gx, (double)gy, (double)gz);
-          bminX = std::min(bminX, (float)world.x());
-          bmaxX = std::max(bmaxX, (float)world.x());
-          bminY = std::min(bminY, (float)world.y());
-          bmaxY = std::max(bmaxY, (float)world.y());
-          bminZ = std::min(bminZ, (float)world.z());
-          bmaxZ = std::max(bmaxZ, (float)world.z());
+          if (job.instTranslateOnly)
+          {
+            // Exact world box deferred to the local box + t fold below.
+            lmin = lmin.cwiseMin(local);
+            lmax = lmax.cwiseMax(local);
+          }
+          else
+          {
+            // Exact world box, fused form: world_gl = conjGl * g with
+            // g = A * (volMat * v) and conjGl = A * instMat * A^-1 collapses
+            // to A * (instMat * volMat * v) (A^-1 * A == I exactly for the
+            // +-1 permutation axes map), so one double mat-vec on the raw
+            // vertex plus the free component swap keeps the per-vertex box
+            // cost at the retired v1 bake's level.
+            const Slic3r::Vec3d world = job.worldMat * Slic3r::Vec3d(
+                (double)lv.x(), (double)lv.y(), (double)lv.z());
+            bminX = std::min(bminX, (float)world.x());
+            bmaxX = std::max(bmaxX, (float)world.x());
+            bminY = std::min(bminY, (float)world.z());
+            bmaxY = std::max(bmaxY, (float)world.z());
+            bminZ = std::min(bminZ, (float)-world.y());
+            bmaxZ = std::max(bmaxZ, (float)-world.y());
+          }
         }
+      }
+
+      if (job.instTranslateOnly)
+      {
+        // A(x, y, z) = (x, z, -y) applied to (local + t); min/max commute
+        // with the pure +-1 permutation, so the two shifted box corners
+        // suffice and the box stays exact.
+        const double wx0 = lmin.x() + job.instTranslation.x();
+        const double wx1 = lmax.x() + job.instTranslation.x();
+        const double wy0 = lmin.z() + job.instTranslation.z();
+        const double wy1 = lmax.z() + job.instTranslation.z();
+        const double wz0 = -(lmax.y() + job.instTranslation.y());
+        const double wz1 = -(lmin.y() + job.instTranslation.y());
+        bminX = std::min(bminX, (float)wx0);
+        bmaxX = std::max(bmaxX, (float)wx1);
+        bminY = std::min(bminY, (float)wy0);
+        bmaxY = std::max(bmaxY, (float)wy1);
+        bminZ = std::min(bminZ, (float)wz0);
+        bmaxZ = std::max(bmaxZ, (float)wz1);
       }
     }
 
