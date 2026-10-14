@@ -17,9 +17,19 @@ pragma ComponentBehavior: Bound
 // are theme-independent; text/border/status tokens pick contrast-safe light
 // variants. Upstream-measured literals (e.g. topbar-13 AddSpacer(10)) live
 // at their call sites and are exempt.
+// S6 (2026-10-14): the theme-conditional VALUES moved to the C++
+// ThemeTokens constant tables (src/qml_gui/Renderer/RhiViewport.h) and reach
+// QML through Backend.themeTokens; `theme` itself is the projection of
+// Backend.qmlTheme and setTheme forwards into the merged single chain
+// (storage key "themeIndex" -> BackendContext::applyTheme). The C++/GL side
+// (plate icon atlas, AmsMaterials defaults) reads the same tables, so a
+// token can no longer drift between languages. Theme-independent tokens
+// that no C++ consumer needs (accentLight/accentDark, borderFocus,
+// chromeDanger*, statusErrorDark/Pressed, textOnAccent, overlayDim) stay as
+// local literals — they were already single-source in this file.
 //
 // Token groups:
-//   Theme mode          — theme/isDark/setTheme (Phase 171)
+//   Theme mode          — theme/isDark/setTheme (Phase 171; S6 projection)
 //   Background palette  — bg* (page/panel/card/elevated/inset/floating/hover/pressed/tooltip)
 //   Accent / Brand      — accent* (the OWzx green)
 //   Text                — text* (primary/secondary/tertiary/disabled/muted/onAccent)
@@ -36,16 +46,23 @@ pragma ComponentBehavior: Bound
 // =============================================================================
 
 QtObject {
-    // ── Theme mode (Phase 171, P1)
-    // Persisted via the `AppSettings` context property (QSettings "ui/theme");
-    // main.qml bridges the stored value in on startup, the topbar toggle
-    // writes it back. Dark remains the default and the design-referenceTruth.
-    property string theme: "dark"
+    // ── Theme mode (Phase 171, P1; S6 merged chain)
+    // `theme` is a READ-ONLY projection of the C++ chain: the storage key is
+    // SettingsViewModel's "themeIndex", the single dispatch point is
+    // BackendContext::applyTheme, and Backend.qmlTheme reflects its outcome.
+    // setTheme forwards into that chain (Backend.requestTheme persists and
+    // re-dispatches); it validates "dark"/"light" exactly as before, so the
+    // topbar toggle and command-palette call sites are unchanged.
+    readonly property string theme: Backend.qmlTheme
     readonly property bool isDark: theme !== "light"
     function setTheme(name) {
-        if (name === "dark" || name === "light")
-            theme = name
+        Backend.requestTheme(name)
     }
+
+    // ── S6: the active ThemeTokens palette, keyed by token name.
+    // Backend re-publishes the map on every theme flip (NOTIFY themeChanged),
+    // which re-evaluates every conditional token below in one shot.
+    readonly property var tokens: Backend.themeTokens
 
     // ── Density (Phase 173, P3)
     // "comfortable" preserves the measured/upstream control metrics; "compact"
@@ -63,86 +80,87 @@ QtObject {
     // a flat neutral gray scale -- sidebar/inputs #4B4B4D, viewport #363638,
     // left card #2F3034, topbar #010101 -- with no blue cast, so every bg*
     // token maps to an un-tinted gray at a comparable lift over its old role.
-    readonly property color bgBase:      isDark ? "#2f3034" : "#eef0f3"
-    readonly property color bgSurface:   isDark ? "#3a3a3c" : "#ffffff"
-    readonly property color bgPanel:     isDark ? "#4b4b4d" : "#f2f4f7"
-    // U01 fix: was "#3a3a3c00" -- 9-digit hex parses as #AARRGGBB, i.e.
-    // alpha 0x3a (~22.7%) over an olive RGB (58,60,0). That tint is what
-    // pixel-blended to the measured #47483b separator/border values in
-    // config-wizard (separator y=496), notification-center (#47483b stroke /
-    // #2a2b1f separator), cali-history and about-dialog.
-    readonly property color bgCard:      isDark ? "#3a3a3c" : "#ffffff"
+    readonly property color bgBase:      tokens.bgBase
+    readonly property color bgSurface:   tokens.bgSurface
+    readonly property color bgPanel:     tokens.bgPanel
+    // U01 fix: the dark bgCard value was "#3a3a3c00" -- 9-digit hex parses as
+    // #AARRGGBB, i.e. alpha 0x3a (~22.7%) over an olive RGB (58,60,0). That
+    // tint is what pixel-blended to the measured #47483b separator/border
+    // values in config-wizard (separator y=496), notification-center
+    // (#47483b stroke / #2a2b1f separator), cali-history and about-dialog.
+    // The corrected opaque value now lives in the ThemeTokens table.
+    readonly property color bgCard:      tokens.bgCard
 
     // ── Overlay / popup surfaces (U01: §2 & upstream-anchored literals).
     // These values are also the R1 global surface-convergence targets: the
     // deferred bgElevated/bgSurface stack must fold onto them without drift.
-    readonly property color surfaceDeep:   isDark ? "#2d2d31" : "#ffffff"  // §2 body base = upstream notification window bg (NotificationManager.cpp:239)
-    readonly property color bannerSurface: isDark ? "#36363b" : "#eef1f4"  // §2 banner band token
-    readonly property color overlayBorder: isDark ? "#3e3e45" : "#d8dbe0"  // upstream notification window border (NotificationManager.cpp:247)
-    readonly property color separator:     isDark ? "#000000" : "#d5d8dd"  // §2 dialog 1px separator line
-    readonly property color bgElevated:  isDark ? "#4b4b4d" : "#ffffff"
-    readonly property color bgInset:     isDark ? "#262628" : "#e3e6ea"
-    readonly property color bgFloating:  isDark ? "#4f4f51d9" : "#f5f7fad9"
-    readonly property color bgHover:     isDark ? "#555557" : "#e7eaee"
-    readonly property color bgPressed:   isDark ? "#5f5f61" : "#dde1e6"
-    readonly property color bgTooltip:   isDark ? "#343436" : "#fbfcfd"
+    readonly property color surfaceDeep:   tokens.surfaceDeep   // §2 body base = upstream notification window bg (NotificationManager.cpp:239)
+    readonly property color bannerSurface: tokens.bannerSurface // §2 banner band token
+    readonly property color overlayBorder: tokens.overlayBorder // upstream notification window border (NotificationManager.cpp:247)
+    readonly property color separator:     tokens.separator     // §2 dialog 1px separator line
+    readonly property color bgElevated:  tokens.bgElevated
+    readonly property color bgInset:     tokens.bgInset
+    readonly property color bgFloating:  tokens.bgFloating
+    readonly property color bgHover:     tokens.bgHover
+    readonly property color bgPressed:   tokens.bgPressed
+    readonly property color bgTooltip:   tokens.bgTooltip
 
     // ── Accent / Brand
     // Brand fills are theme-independent; only the subtle *tint* surface tier
     // flips (dark needs a deep green glass, light a pale mint wash).
-    readonly property color accent:           "#18c75e"
+    readonly property color accent:           tokens.accent
     readonly property color accentLight:      "#1ed36b"
     readonly property color accentDark:       "#14a34e"
-    readonly property color accentSubtle:     isDark ? "#0e6636" : "#dcf5e7"
+    readonly property color accentSubtle:     tokens.accentSubtle
     // Phase 160 (DS-01): pressed-state accent for use in CxIconButton/CxButton
     // (replaces Qt.darker(accentSubtle, 1.2) at CxIconButton.qml:48).
-    readonly property color accentSubtlePressed: isDark ? "#0a4d28" : "#c3ecd5"
+    readonly property color accentSubtlePressed: tokens.accentSubtlePressed
 
     // ── Text
     // ctl-1: near-white neutral grays (no blue cast).
-    readonly property color textPrimary:     isDark ? "#f5f5f5" : "#1b1d21"
-    readonly property color textSecondary:   isDark ? "#c9c9c9" : "#4d5157"
-    readonly property color textTertiary:    isDark ? "#a3a3a3" : "#797f87"
-    readonly property color textDisabled:    isDark ? "#6f6f6f" : "#a9adb4"
-    readonly property color textMuted:       isDark ? "#ababab" : "#8d939b"
+    readonly property color textPrimary:     tokens.textPrimary
+    readonly property color textSecondary:   tokens.textSecondary
+    readonly property color textTertiary:    tokens.textTertiary
+    readonly property color textDisabled:    tokens.textDisabled
+    readonly property color textMuted:       tokens.textMuted
     readonly property color textOnAccent:    "#ffffff"
 
     // ── Border
     // ctl-1: neutral #5a5a5c family; borderFocus keeps the brand green.
-    readonly property color borderDefault:   isDark ? "#5a5a5c" : "#c5c9d0"
-    readonly property color borderSubtle:    isDark ? "#525254" : "#d3d6db"
-    readonly property color borderStrong:    isDark ? "#666668" : "#b3b8c0"
+    readonly property color borderDefault:   tokens.borderDefault
+    readonly property color borderSubtle:    tokens.borderSubtle
+    readonly property color borderStrong:    tokens.borderStrong
     readonly property color borderFocus:     "#18c75e"
-    readonly property color borderInput:     isDark ? "#565658" : "#c8ccd2"
+    readonly property color borderInput:     tokens.borderInput
     // Phase 160 (DS-01): borderActive was referenced in QML but undefined
     // (silent undefined runtime). Sourced from the active-border usage in
     // PreparePage focus indicators — slightly brighter than borderStrong.
-    readonly property color borderActive:    isDark ? "#6e6e70" : "#a3a9b1"
+    readonly property color borderActive:    tokens.borderActive
 
     // ── Chrome / Title bar
     // topbar-1/ctl-2 (direction=ref): the reference topbar measures #010101
     // and its second toolbar band #27292C with white text; upstream's dark
     // map (BBLTopbar.cpp:106 rgb(38,46,48)) reads the same neutral way.
     // Light mode lifts the chrome bands (upstream light chrome is light too).
-    readonly property color chromeSurface:       isDark ? "#010101" : "#e9ebee"
-    readonly property color chromeSurfaceAlt:    isDark ? "#0f0f10" : "#f3f4f6"
-    readonly property color chromeHover:         isDark ? "#1f2124" : "#dcdfe3"
-    readonly property color chromePressed:       isDark ? "#27292c" : "#d3d6db"
-    readonly property color chromeBorder:        isDark ? "#262628" : "#d0d3d8"
-    readonly property color chromeText:          isDark ? "#fefefe" : "#1a1c1f"
-    readonly property color chromeTextMuted:     isDark ? "#b4b4b4" : "#6d7278"
+    readonly property color chromeSurface:       tokens.chromeSurface
+    readonly property color chromeSurfaceAlt:    tokens.chromeSurfaceAlt
+    readonly property color chromeHover:         tokens.chromeHover
+    readonly property color chromePressed:       tokens.chromePressed
+    readonly property color chromeBorder:        tokens.chromeBorder
+    readonly property color chromeText:          tokens.chromeText
+    readonly property color chromeTextMuted:     tokens.chromeTextMuted
     readonly property color chromeDangerHover:   "#d33241"
     readonly property color chromeDangerPressed: "#aa1f2d"
 
     // ── Status
     // Text-facing status tones darken in light mode for contrast on white;
     // fill-only tones (error dark/pressed) stay fixed.
-    readonly property color statusSuccess:   isDark ? "#18c75e" : "#0f9e48"
-    readonly property color statusWarning:   isDark ? "#f5a623" : "#b9790a"
-    readonly property color statusError:     isDark ? "#e04040" : "#d13a3a"
-    readonly property color statusInfo:      isDark ? "#3b9eff" : "#1e78d6"
-    readonly property color bgErrorSubtle:   isDark ? "#4a1c1c" : "#fbe9e9"
-    readonly property color bgWarningSubtle: isDark ? "#3a3420" : "#faf0da"
+    readonly property color statusSuccess:   tokens.statusSuccess
+    readonly property color statusWarning:   tokens.statusWarning
+    readonly property color statusError:     tokens.statusError
+    readonly property color statusInfo:      tokens.statusInfo
+    readonly property color bgErrorSubtle:   tokens.bgErrorSubtle
+    readonly property color bgWarningSubtle: tokens.bgWarningSubtle
     // Phase 160 (DS-01): error pressed/dark for CxButton danger variant
     // (replaces Qt.darker(statusError, 1.2) at CxButton.qml:31-32).
     readonly property color statusErrorDark:    "#b03333"
@@ -150,9 +168,9 @@ QtObject {
 
     // ── Scrollbar (Phase 160 DS-01: was hardcoded across CxScrollView)
     // R13 (restoration-map.md:43): slot #171717 / thumb #959595.
-    readonly property color scrollBarColor:       isDark ? "#959595" : "#a6abb3"
-    readonly property color scrollBarHoverColor:  isDark ? "#7e7e80" : "#8b9099"
-    readonly property color scrollBarTrackColor:  isDark ? "#171717" : "#ebecee"
+    readonly property color scrollBarColor:       tokens.scrollBarColor
+    readonly property color scrollBarHoverColor:  tokens.scrollBarHoverColor
+    readonly property color scrollBarTrackColor:  tokens.scrollBarTrackColor
 
     // ── Typography
     readonly property int fontSizeXS:   10
@@ -218,10 +236,10 @@ QtObject {
     readonly property int radiusHero: 24
 
     // ── Control tokens (aliases where colors match existing tokens)
-    readonly property color switchTrackOff:   isDark ? "#3f3f41" : "#c2c6cd"
+    readonly property color switchTrackOff:   tokens.switchTrackOff
     // Phase 171 (P1): explicit knob white in both themes (was aliased to
     // textPrimary, which would render a dark knob in light mode).
-    readonly property color switchKnob:       isDark ? "#f5f5f5" : "#ffffff"
+    readonly property color switchKnob:       tokens.switchKnob
     readonly property color progressTrack:    borderSubtle
     readonly property color progressFill:     accent
     readonly property color overlayDim:       "#80000000"    // black at 50%
@@ -229,7 +247,7 @@ QtObject {
     // §2 body base = upstream notification window dark bg
     // (NotificationManager.cpp:239). Popup-layer only -- not part of the
     // deferred bgElevated/bgSurface global stack.
-    readonly property color menuBackground:   isDark ? "#2d2d31" : "#ffffff"
+    readonly property color menuBackground:   tokens.menuBackground
     readonly property color selectionColor:   accent
     readonly property color selectionText:    isDark ? bgBase : "#ffffff"
 
@@ -237,8 +255,8 @@ QtObject {
     // prepare-page export capsule at (1200,58). U01 applies it to CxButton's
     // Primary disabled state, replacing the old accentSubtle + 0.45 opacity
     // overlay. Light mode lifts the pair to a matching neutral.
-    readonly property color controlDisabledBg:   isDark ? "#8e8e83" : "#c6c8c0"
-    readonly property color controlDisabledText: isDark ? "#56564f" : "#6e7068"
+    readonly property color controlDisabledBg:   tokens.controlDisabledBg
+    readonly property color controlDisabledText: tokens.controlDisabledText
 
     // ── Control sizing (height family is density-aware, Phase 173 P3)
     readonly property int controlHeightSM:  compactMode ? 24 : 28
@@ -325,29 +343,9 @@ QtObject {
     //   0=Info 1=Success 2=Warning 3=Error 4=SeriousWarning
     //   5=Hint 6=PrintInfo 7=PrintInfoShort 8=Progress 9=Other
     // Phase 171 (P1): light mode darkens the text-facing tones for contrast.
-    readonly property var severityColors: isDark ? [
-        "#18c75e",  // 0 Info (green)
-        "#18c75e",  // 1 Success (green)
-        "#c87840",  // 2 Warning (amber)
-        "#f05545",  // 3 Error (red)
-        "#e04848",  // 4 SeriousWarning (dark red)
-        "#58a6ff",  // 5 Hint (blue)
-        "#7c6aef",  // 6 PrintInfo (purple)
-        "#7c6aef",  // 7 PrintInfoShort (purple)
-        "#3b9cf0",  // 8 Progress (light blue)
-        "#18c75e"   // 9 Other (green)
-    ] : [
-        "#0f9e48",  // 0 Info (green)
-        "#0f9e48",  // 1 Success (green)
-        "#a05f28",  // 2 Warning (amber)
-        "#d63c2c",  // 3 Error (red)
-        "#c23a3a",  // 4 SeriousWarning (dark red)
-        "#2a7fd4",  // 5 Hint (blue)
-        "#6355d6",  // 6 PrintInfo (purple)
-        "#6355d6",  // 7 PrintInfoShort (purple)
-        "#2379cc",  // 8 Progress (light blue)
-        "#0f9e48"   // 9 Other (green)
-    ]
+    // S6: both tone rows live in the ThemeTokens table (Backend re-publishes
+    // the active row through themeTokens on every flip).
+    readonly property var severityColors: tokens.severityColors
     readonly property var severityIcons: [
         "i",  // 0 Info
         "✓",  // 1 Success

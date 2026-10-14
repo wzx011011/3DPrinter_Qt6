@@ -63,6 +63,16 @@ RhiViewport::RhiViewport(QQuickItem *parent)
   // P14 (CAM-PARITY): seed the camera scene box from the member defaults so
   // the zoom bounds and target validation hold before QML binds the bed.
   updateSceneExtent();
+  // S6: follow the process-wide theme flag (seeded by the merged chain's
+  // single dispatch point, BackendContext::applyTheme, before QML loads).
+  // A flip re-rasters the icon atlas with the other SVG variant set + label
+  // pen color (one 2048² raster + one re-upload, user-initiated cadence).
+  connect(&ThemeState::instance(), &ThemeState::darkChanged, this, [this]()
+          {
+            m_plateIconAtlasDirty = true;
+            rebuildPlateIcons();
+            emit darkThemeChanged();
+          });
 }
 
 QQuickRhiItemRenderer *RhiViewport::createRenderer()
@@ -1209,6 +1219,14 @@ constexpr int kNameFontPixelSize = 72;
 // (PartPlateList.h:32), so plate 17+ sampled outside the atlas. Badges now
 // flow onto extra rows, and the row budget is a compile-time contract
 // between the atlas geometry and kMaxPlateCount.
+//
+// S6: the atlas holds ONE theme variant set at a time (15 of 16 rows: 2
+// column + 1 extras + 3 badge + 9 name; upstream picks plate_X.svg vs
+// plate_X_dark.svg by color mode, PartPlate.cpp:4371-4380). The audit's
+// "rasterize both variants" sketch does NOT fit: 4 column + 2 extras + 3
+// badge + 9 name = 18 rows > 16, so a ThemeState flip re-rasters the whole
+// atlas into the same cells instead (one 2048² raster + one re-upload per
+// user-initiated flip; the static_assert below locks this row budget).
 constexpr int kAtlasCellsPerRow = kIconAtlasSize / kIconCell;
 constexpr int kBadgeRow0 = 3;
 constexpr int kBadgeRowCount =
@@ -1282,9 +1300,12 @@ PlateNameMetrics plateNameMetrics(const QVariantMap &plateState, float bedWidth)
                           qMin(aspect * kNameWorldHeight, bedWidth * 0.35f)};
 }
 
-QString iconSvgPath(const char *base)
+// S6: takes the full icon stem; buildPlateIconAtlas appends the theme
+// variant suffix ("_dark" / "") per ThemeState, mirroring upstream
+// PartPlate.cpp:4371-4380 (m_is_dark ? "plate_X_dark.svg" : "plate_X.svg").
+QString iconSvgPath(const QString &base)
 {
-  return QStringLiteral(":/qml/assets/icons/%1.svg").arg(QLatin1String(base));
+  return QStringLiteral(":/qml/assets/icons/%1.svg").arg(base);
 }
 
 void rasterSvgCell(QImage &atlas, int col, int row, const QString &path)
@@ -1473,25 +1494,36 @@ void RhiViewport::buildPlateIconAtlas()
                             QImage::Format_RGBA8888);
   m_plateIconAtlas.fill(Qt::transparent);
 
+  // S6: one variant set per raster (see the atlas layout note above). The
+  // cells are identical for both variants, so the quad UVs built in
+  // refreshPlateIconQuads never depend on the theme.
+  const bool dark = ThemeState::instance().isDark();
+  const QString variant = dark ? QStringLiteral("_dark") : QString();
+
   // Row 0: column icons, rest state; row 1: the same slots hovered.
-  const char *columnIcons[6] = {
-      "plate_close_dark",       "plate_orient_dark",   "plate_arrange_dark",
-      "plate_locked_dark",      "plate_settings_dark", "plate_move_front_dark"};
-  const char *columnIconsHover[6] = {
-      "plate_close_hover_dark", "plate_orient_hover_dark",
-      "plate_arrange_hover_dark", "plate_locked_hover_dark",
-      "plate_settings_hover_dark", "plate_move_front_hover_dark"};
+  static const char *columnIcons[6] = {
+      "plate_close", "plate_orient", "plate_arrange",
+      "plate_locked", "plate_settings", "plate_move_front"};
   for (int slot = 0; slot < 6; ++slot) {
-    rasterSvgCell(m_plateIconAtlas, slot, 0, iconSvgPath(columnIcons[slot]));
-    rasterSvgCell(m_plateIconAtlas, slot, 1, iconSvgPath(columnIconsHover[slot]));
+    rasterSvgCell(m_plateIconAtlas, slot, 0,
+                  iconSvgPath(columnIcons[slot] + variant));
+    rasterSvgCell(m_plateIconAtlas, slot, 1,
+                  iconSvgPath(QLatin1String(columnIcons[slot])
+                              + QStringLiteral("_hover") + variant));
   }
   // Row 2: two-state extras (unlocked lock, changed settings, pencil).
-  rasterSvgCell(m_plateIconAtlas, 0, 2, iconSvgPath("plate_unlocked_dark"));
-  rasterSvgCell(m_plateIconAtlas, 1, 2, iconSvgPath("plate_unlocked_hover_dark"));
-  rasterSvgCell(m_plateIconAtlas, 2, 2, iconSvgPath("plate_settings_changed_dark"));
-  rasterSvgCell(m_plateIconAtlas, 3, 2, iconSvgPath("plate_settings_changed_hover_dark"));
-  rasterSvgCell(m_plateIconAtlas, 4, 2, iconSvgPath("plate_name_edit_dark"));
-  rasterSvgCell(m_plateIconAtlas, 5, 2, iconSvgPath("plate_name_edit_hover_dark"));
+  static const char *extraIcons[6] = {
+      "plate_unlocked", "plate_unlocked_hover",
+      "plate_settings_changed", "plate_settings_changed_hover",
+      "plate_name_edit", "plate_name_edit_hover"};
+  for (int slot = 0; slot < 6; ++slot)
+    rasterSvgCell(m_plateIconAtlas, slot, 2, iconSvgPath(extraIcons[slot] + variant));
+
+  // Label pen for the index badge + plate name text: the brand token
+  // (upstream rasterizes both with #f2754e, PartPlate.cpp:2578/:4401;
+  // OWzx keeps the brand green via ThemeTokens, never a site literal).
+  const QColor labelColor(
+      QLatin1String(ThemeTokens::staticTokens().plateLabel));
 
   for (int p = 0; p < m_plateCount; ++p) {
     const QVariantMap state = m_plateIconStates.value(p).toMap();
@@ -1506,7 +1538,7 @@ void RhiViewport::buildPlateIconAtlas()
     idxFont.setBold(true);
     idxFont.setPixelSize(kNameFontPixelSize);
     idxPainter.setFont(idxFont);
-    idxPainter.setPen(QColor(QStringLiteral("#18c75e")));
+    idxPainter.setPen(labelColor);
     idxPainter.drawText(QRect(badge.col * kIconCell, badge.row * kIconCell,
                               kIconCell, kIconCell),
                         Qt::AlignCenter, idx);
@@ -1518,7 +1550,7 @@ void RhiViewport::buildPlateIconAtlas()
     QFont nameFont;
     nameFont.setPixelSize(kNameFontPixelSize);
     namePainter.setFont(nameFont);
-    namePainter.setPen(QColor(QStringLiteral("#18c75e")));
+    namePainter.setPen(labelColor);
     namePainter.drawText(QRect(nameCellCol(p) * kIconCell + kNameCellTextInset,
                                nameCellRow(p) * kIconCell + kNameCellTextInset,
                                kNameCellSpan * kIconCell - 2 * kNameCellTextInset,

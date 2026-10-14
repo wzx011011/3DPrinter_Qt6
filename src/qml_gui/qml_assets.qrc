@@ -163,6 +163,27 @@
         <file>assets/icons/plate_move_front_hover_dark.svg</file>
         <file>assets/icons/plate_name_edit_dark.svg</file>
         <file>assets/icons/plate_name_edit_hover_dark.svg</file>
+        <!-- S6: light atlas variants (upstream PartPlate.cpp:4371-4380 picks
+             plate_X.svg vs plate_X_dark.svg by color mode). The 9 hover files
+             are verbatim copies of upstream resources/images/. -->
+        <file>assets/icons/plate_close.svg</file>
+        <file>assets/icons/plate_close_hover.svg</file>
+        <file>assets/icons/plate_arrange.svg</file>
+        <file>assets/icons/plate_arrange_hover.svg</file>
+        <file>assets/icons/plate_orient.svg</file>
+        <file>assets/icons/plate_orient_hover.svg</file>
+        <file>assets/icons/plate_locked.svg</file>
+        <file>assets/icons/plate_locked_hover.svg</file>
+        <file>assets/icons/plate_unlocked.svg</file>
+        <file>assets/icons/plate_unlocked_hover.svg</file>
+        <file>assets/icons/plate_settings.svg</file>
+        <file>assets/icons/plate_settings_hover.svg</file>
+        <file>assets/icons/plate_settings_changed.svg</file>
+        <file>assets/icons/plate_settings_changed_hover.svg</file>
+        <file>assets/icons/plate_move_front.svg</file>
+        <file>assets/icons/plate_move_front_hover.svg</file>
+        <file>assets/icons/plate_name_edit.svg</file>
+        <file>assets/icons/plate_name_edit_hover.svg</file>
         <file>assets/icons/print-time.svg</file>
         <file>assets/icons/print-weight.svg</file>
         <file>assets/icons/completed.svg</file>

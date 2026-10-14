@@ -24,6 +24,9 @@
 #include "core/viewmodels/MultiMachineViewModel.h"
 #include "core/viewmodels/AmsMaterialsViewModel.h"
 #include "core/viewmodels/AiViewModel.h"
+// S6: ThemeTokens/ThemeState live in the renderer header (owzx_app_core side
+// of the one-way owzx_qml -> owzx_app_core target edge; see RhiViewport.h).
+#include "Renderer/RhiViewport.h"
 #include "AiChatBridge.h"
 #include "core/ai/AiAgentService.h"
 #include "core/ai/AppToolRegistry.h"
@@ -70,16 +73,9 @@
 #include <Windows.h>
 #endif /* Q_OS_WINDOWS */
 
-// 主题颜色预设
-struct ThemeColors
-{
-  QColor bg, surface, sidebar, border;
-};
-static const ThemeColors kThemes[] = {
-    {"#0d0f12", "#0f1217", "#0f1218", "#242a33"}, // 0 深色（默认）
-    {"#060d18", "#081020", "#061428", "#112244"}, // 1 深蓝
-    {"#050507", "#080809", "#070708", "#1a1a1e"}, // 2 极暗
-};
+// 主题：S6 起 C++ 侧不再私有调色板——kThemes 三档纯深色表已删，主题真值是
+// RhiViewport.h 的 ThemeTokens 明暗双档常量表，经 ThemeState 单例分发；
+// Backend 只负责把活动档投影成 themeTokens QVariantMap 给 QML（Theme.qml）。
 // uiScale 预设
 static const double kScales[] = {1.0, 1.25, 1.5, 1.75, 2.0};
 // 语言代码映射
@@ -557,6 +553,11 @@ BackendContext::BackendContext(QObject *parent)
   // applyLanguage 只连接到 languageIndexChanged 信号，而构造时 m_languageIndex
   // 默认已是 0 不会触发信号，导致程序以英文启动。此处补上初始调用。
   applyLanguage(settingsViewModel_->languageIndex());
+  // S6 初始同步：同一道理——构造期不发 themeIndexChanged，而 ThemeState /
+  // themeTokens 是 main.qml 加载前必须就位的（Theme.qml 的 token 绑定、
+  // RhiViewport 图集变体都从它取值），所以构造尾部先跑一次分发。旧 kThemes
+  // 链从未做过这次同步（壳层背景靠成员默认值），合并后这是唯一真值入口。
+  applyTheme(settingsViewModel_->themeIndex());
   // Q11-① 初始同步（迁移语义）：仅当 pre-launch 的 ui/scaleFactor 真键尚
   // 不存在时，才把持久化的 uiScaleIndex 镜像进去——旧版本只写过
   // SettingsViewModel 的 index，从未写真键，补一次迁移。绝不能无条件写：
@@ -2682,15 +2683,106 @@ void BackendContext::setShowProgressNotifications(bool v)
 
 // ------- 外观实现 -------
 
+// S6: the single theme dispatch (see BackendContext.h). The stored index is
+// a raw int (draft/commit transaction semantics in SettingsViewModel keep
+// out-of-range values round-trippable); consumption clamps onto the
+// two-value axis: <=0 dark, anything else light.
 void BackendContext::applyTheme(int idx)
 {
-  if (idx < 0 || idx >= static_cast<int>(std::size(kThemes)))
-    return;
-  m_bgColor = kThemes[idx].bg;
-  m_surfaceColor = kThemes[idx].surface;
-  m_sidebarColor = kThemes[idx].sidebar;
-  m_borderColor = kThemes[idx].border;
+  ThemeState::instance().setDark(idx <= 0);
   emit themeChanged();
+}
+
+QString BackendContext::qmlTheme() const
+{
+  return ThemeState::instance().isDark() ? QStringLiteral("dark")
+                                         : QStringLiteral("light");
+}
+
+QVariantMap BackendContext::themeTokens() const
+{
+  const auto &palette = ThemeTokens::palette(ThemeState::instance().isDark());
+  const auto &staticTokens = ThemeTokens::staticTokens();
+  const auto color = [](const char *hex) { return QColor(QLatin1String(hex)); };
+  QVariantList severity;
+  severity.reserve(10);
+  for (const char *hex : palette.severityColors)
+    severity.append(color(hex));
+  QVariantMap map;
+  map.insert(QStringLiteral("bgBase"), color(palette.bgBase));
+  map.insert(QStringLiteral("bgSurface"), color(palette.bgSurface));
+  map.insert(QStringLiteral("bgPanel"), color(palette.bgPanel));
+  map.insert(QStringLiteral("bgCard"), color(palette.bgCard));
+  map.insert(QStringLiteral("surfaceDeep"), color(palette.surfaceDeep));
+  map.insert(QStringLiteral("bannerSurface"), color(palette.bannerSurface));
+  map.insert(QStringLiteral("overlayBorder"), color(palette.overlayBorder));
+  map.insert(QStringLiteral("separator"), color(palette.separator));
+  map.insert(QStringLiteral("bgElevated"), color(palette.bgElevated));
+  map.insert(QStringLiteral("bgInset"), color(palette.bgInset));
+  map.insert(QStringLiteral("bgFloating"), color(palette.bgFloating));
+  map.insert(QStringLiteral("bgHover"), color(palette.bgHover));
+  map.insert(QStringLiteral("bgPressed"), color(palette.bgPressed));
+  map.insert(QStringLiteral("bgTooltip"), color(palette.bgTooltip));
+  map.insert(QStringLiteral("accentSubtle"), color(palette.accentSubtle));
+  map.insert(QStringLiteral("accentSubtlePressed"),
+             color(palette.accentSubtlePressed));
+  map.insert(QStringLiteral("textPrimary"), color(palette.textPrimary));
+  map.insert(QStringLiteral("textSecondary"), color(palette.textSecondary));
+  map.insert(QStringLiteral("textTertiary"), color(palette.textTertiary));
+  map.insert(QStringLiteral("textDisabled"), color(palette.textDisabled));
+  map.insert(QStringLiteral("textMuted"), color(palette.textMuted));
+  map.insert(QStringLiteral("borderDefault"), color(palette.borderDefault));
+  map.insert(QStringLiteral("borderSubtle"), color(palette.borderSubtle));
+  map.insert(QStringLiteral("borderStrong"), color(palette.borderStrong));
+  map.insert(QStringLiteral("borderInput"), color(palette.borderInput));
+  map.insert(QStringLiteral("borderActive"), color(palette.borderActive));
+  map.insert(QStringLiteral("chromeSurface"), color(palette.chromeSurface));
+  map.insert(QStringLiteral("chromeSurfaceAlt"), color(palette.chromeSurfaceAlt));
+  map.insert(QStringLiteral("chromeHover"), color(palette.chromeHover));
+  map.insert(QStringLiteral("chromePressed"), color(palette.chromePressed));
+  map.insert(QStringLiteral("chromeBorder"), color(palette.chromeBorder));
+  map.insert(QStringLiteral("chromeText"), color(palette.chromeText));
+  map.insert(QStringLiteral("chromeTextMuted"), color(palette.chromeTextMuted));
+  map.insert(QStringLiteral("statusSuccess"), color(palette.statusSuccess));
+  map.insert(QStringLiteral("statusWarning"), color(palette.statusWarning));
+  map.insert(QStringLiteral("statusError"), color(palette.statusError));
+  map.insert(QStringLiteral("statusInfo"), color(palette.statusInfo));
+  map.insert(QStringLiteral("bgErrorSubtle"), color(palette.bgErrorSubtle));
+  map.insert(QStringLiteral("bgWarningSubtle"), color(palette.bgWarningSubtle));
+  map.insert(QStringLiteral("scrollBarColor"), color(palette.scrollBarColor));
+  map.insert(QStringLiteral("scrollBarHoverColor"),
+             color(palette.scrollBarHoverColor));
+  map.insert(QStringLiteral("scrollBarTrackColor"),
+             color(palette.scrollBarTrackColor));
+  map.insert(QStringLiteral("switchTrackOff"), color(palette.switchTrackOff));
+  map.insert(QStringLiteral("switchKnob"), color(palette.switchKnob));
+  map.insert(QStringLiteral("menuBackground"), color(palette.menuBackground));
+  map.insert(QStringLiteral("controlDisabledBg"),
+             color(palette.controlDisabledBg));
+  map.insert(QStringLiteral("controlDisabledText"),
+             color(palette.controlDisabledText));
+  map.insert(QStringLiteral("severityColors"), severity);
+  map.insert(QStringLiteral("accent"), color(staticTokens.accent));
+  map.insert(QStringLiteral("plateLabel"), color(staticTokens.plateLabel));
+  return map;
+}
+
+void BackendContext::requestTheme(const QString &name)
+{
+  // Same validation Theme.setTheme always applied; unknown names are
+  // ignored so a stale caller cannot corrupt the stored key.
+  if (name != QLatin1String("dark") && name != QLatin1String("light"))
+    return;
+  const int idx = name == QLatin1String("light") ? 1 : 0;
+  // Persist the merged single storage key, then run the one dispatch
+  // through SettingsViewModel: setThemeIndex guards on a real draft change,
+  // so a redundant toggle is a no-op and the signal fires exactly when the
+  // theme actually flips. Persist-then-set keeps the store and the draft
+  // coherent for a later Preferences Cancel (which reloads from the store).
+  QSettings s;
+  s.setValue(QStringLiteral("themeIndex"), idx);
+  if (settingsViewModel_)
+    settingsViewModel_->setThemeIndex(idx);
 }
 
 QString BackendContext::displayProjectTitle() const

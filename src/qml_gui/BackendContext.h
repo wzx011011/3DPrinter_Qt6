@@ -206,14 +206,20 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QString latencyBrief READ latencyBrief NOTIFY latencyChanged)
   Q_PROPERTY(QString lastLatencyOperation READ lastLatencyOperation NOTIFY latencyChanged)
   Q_PROPERTY(int lastLatencyMs READ lastLatencyMs NOTIFY latencyChanged)
-  // Theme properties exposed to QML. (UI scaling is not a QML-readable
-  // property: QT_SCALE_FACTOR is consumed at QGuiApplication construction,
-  // so the preference persists the pre-launch ui/scaleFactor key instead —
-  // see applyUiScale.)
-  Q_PROPERTY(QColor bgColor READ bgColor NOTIFY themeChanged)
-  Q_PROPERTY(QColor surfaceColor READ surfaceColor NOTIFY themeChanged)
-  Q_PROPERTY(QColor sidebarColor READ sidebarColor NOTIFY themeChanged)
-  Q_PROPERTY(QColor borderColor READ borderColor NOTIFY themeChanged)
+  // Theme surface exposed to QML (S6). The four legacy Backend palette
+  // properties (bgColor/surfaceColor/sidebarColor/borderColor backed by the
+  // private kThemes 3-tier dark table) are gone: the shell now reads the
+  // Theme.qml tokens like every other surface, and those tokens hang off
+  // themeTokens below. (UI scaling is not a QML-readable property:
+  // QT_SCALE_FACTOR is consumed at QGuiApplication construction, so the
+  // preference persists the pre-launch ui/scaleFactor key instead — see
+  // applyUiScale.)
+  //   qmlTheme    — "dark" | "light", the projection of ThemeState.
+  //   themeTokens — the ThemeTokens palette for the active theme, keyed by
+  //                 the Theme.qml token names; every Theme.* conditional
+  //                 binding re-evaluates through themeChanged.
+  Q_PROPERTY(QString qmlTheme READ qmlTheme NOTIFY themeChanged)
+  Q_PROPERTY(QVariantMap themeTokens READ themeTokens NOTIFY themeChanged)
   /// Display title derived from project name/path state.
   Q_PROPERTY(QString displayProjectTitle READ displayProjectTitle NOTIFY displayProjectTitleChanged)
   /// Whether the first-run configuration wizard has completed.
@@ -418,10 +424,12 @@ public:
   QString saveActionHint() const;
   /// Set current Plater canvas mode and emit currentViewModeChanged.
   void setCurrentViewMode(int mode);
-  QColor bgColor() const { return m_bgColor; }
-  QColor surfaceColor() const { return m_surfaceColor; }
-  QColor sidebarColor() const { return m_sidebarColor; }
-  QColor borderColor() const { return m_borderColor; }
+  /// S6: "dark" | "light" projection of the shared ThemeState (see the
+  /// qmlTheme Q_PROPERTY).
+  QString qmlTheme() const;
+  /// S6: the active ThemeTokens palette as a name->QColor map (see the
+  /// themeTokens Q_PROPERTY). Rebuilt per theme flip.
+  QVariantMap themeTokens() const;
   QString displayProjectTitle() const;
 
   Q_INVOKABLE void setCurrentPage(int page);
@@ -438,6 +446,13 @@ public:
   /// Request a Plater canvas view-mode change.
   /// Emits viewModeChangeRequested before updating currentViewMode.
   Q_INVOKABLE void requestChangeViewMode(int mode);
+  /// S6: the single QML entry point for theme changes (Theme.setTheme and
+  /// the topbar/palette toggles all land here). Validates "dark"/"light",
+  /// persists the single storage key ("themeIndex" — the same key
+  /// SettingsViewModel owns; the former parallel "ui/theme" key is retired),
+  /// and lets the one dispatch point run: setThemeIndex -> themeIndexChanged
+  /// -> applyTheme -> ThemeState + themeChanged.
+  Q_INVOKABLE void requestTheme(const QString &name);
   // Phase 4: dockable sidebar state aligns with upstream collapsed sidebar behavior.
   Q_INVOKABLE void requestToggleSidebar();           ///< Toggle sidebar collapsed state.
   /// GAP-7: remember-the-choice persistence for the dirty-project guard
@@ -931,10 +946,10 @@ private:
 
   // Appearance state.
   QTranslator *m_translator = nullptr;
-  QColor m_bgColor{"#0d0f12"};
-  QColor m_surfaceColor{"#0f1217"};
-  QColor m_sidebarColor{"#0f1218"};
-  QColor m_borderColor{"#242a33"};
+  // S6: the legacy m_bgColor/m_surfaceColor/m_sidebarColor/m_borderColor
+  // members (fed by the kThemes table) are gone — the theme truth is the
+  // ThemeTokens palette reached through ThemeState (RhiViewport.h); Backend
+  // exposes it to QML as the themeTokens map instead of private copies.
 
   // Notification preferences.
   bool m_notificationsEnabled = true;
@@ -995,6 +1010,14 @@ private:
   bool handleSaveDispatchRejected(bool jsonTarget, const char *latencyName,
                                   qint64 start, const QString &detail);
 
+  /// S6: the single theme dispatch point. Connected to
+  /// SettingsViewModel::themeIndexChanged (the merged chain's only runtime
+  /// trigger) and called once from the constructor for the startup sync.
+  /// Maps the raw stored index onto the two-value theme axis (<=0 dark,
+  /// else light — the former 3-tier kThemes palettes are gone), flips
+  /// ThemeState (GL surfaces follow), and emits themeChanged (QML token
+  /// bindings re-evaluate). Persists nothing: storage is SettingsViewModel's
+  /// "themeIndex" key, written by its own apply path or requestTheme.
   void applyTheme(int idx);
   void applyLanguage(int idx);
   void applyFontSize(int size);

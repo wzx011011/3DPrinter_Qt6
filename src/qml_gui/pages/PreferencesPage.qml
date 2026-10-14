@@ -341,8 +341,13 @@ Item {
                     RowLayout {
                         spacing: 16
                         Text { text: qsTr("界面主题"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 140 }
+                        // S6: the theme axis is two-valued (0=dark, 1=light)
+                        // since the merged single chain retired Backend's
+                        // kThemes 3-tier palette (深蓝/极暗 were dark-shade
+                        // palettes with no light-mode story). themeIndex
+                        // highlight/set below is unchanged.
                         Repeater {
-                            model: [qsTr("深色 (默认)"), qsTr("深蓝"), qsTr("极暗")]
+                            model: [qsTr("深色 (默认)"), qsTr("浅色")]
                             delegate: Rectangle {
                                 required property var modelData
                                 required property int index

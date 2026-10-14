@@ -23,6 +23,175 @@ class QTimer;
 
 class RhiViewportRenderer;
 
+// ── S6: ThemeTokens — the C++ half of the design-token single source ───────
+// Theme.qml stays the QML-facing facade, but every theme-conditional color
+// VALUE now lives in exactly one place: the constant palettes below. Prior
+// state this collapses: BackendContext kept a private kThemes 3-tier dark
+// palette, Theme.qml carried the isDark ternaries, RhiViewport rasterized a
+// hardcoded #18c75e, and AmsMaterialsViewModel copied 4 token hexes behind a
+// "keep in sync" comment. Consumers:
+//   - BackendContext::themeTokens  (QVariantMap projection -> Theme.qml)
+//   - RhiViewport::buildPlateIconAtlas (icon variant + name/badge pen color)
+//   - AmsMaterialsViewModel default slot colors
+// Placement: THIS header, not BackendContext.h — the target graph is one-way
+// (owzx_qml -> owzx_app_core), so BackendContext.cpp may include an
+// owzx_app_core header but AmsMaterialsViewModel.cpp (a plain owzx_app_core
+// TU) can never reach a BackendContext-owned header. S6 approved
+// RhiViewport.h as the home (escalation dwfq-8f27f8f0-1).
+namespace ThemeTokens {
+
+// One theme's color values. Field names mirror the Theme.qml token names 1:1
+// (BackendContext::themeTokens projects them into a QVariantMap keyed by the
+// same names). Values are the exact hex literals Theme.qml carried before
+// S6 -- the source moves, the pixels do not.
+struct Palette
+{
+  // Background stack.
+  const char *bgBase;
+  const char *bgSurface;
+  const char *bgPanel;
+  const char *bgCard;
+  const char *surfaceDeep;
+  const char *bannerSurface;
+  const char *overlayBorder;
+  const char *separator;
+  const char *bgElevated;
+  const char *bgInset;
+  const char *bgFloating;   // #AARRGGBB (translucent popup layer)
+  const char *bgHover;
+  const char *bgPressed;
+  const char *bgTooltip;
+  // Accent tints (brand fills themselves are theme-independent, see accent).
+  const char *accentSubtle;
+  const char *accentSubtlePressed;
+  // Text.
+  const char *textPrimary;
+  const char *textSecondary;
+  const char *textTertiary;
+  const char *textDisabled;
+  const char *textMuted;
+  // Border.
+  const char *borderDefault;
+  const char *borderSubtle;
+  const char *borderStrong;
+  const char *borderInput;
+  const char *borderActive;
+  // Chrome / title bar.
+  const char *chromeSurface;
+  const char *chromeSurfaceAlt;
+  const char *chromeHover;
+  const char *chromePressed;
+  const char *chromeBorder;
+  const char *chromeText;
+  const char *chromeTextMuted;
+  // Status (text-facing tones; fill-only error dark/pressed stay static).
+  const char *statusSuccess;
+  const char *statusWarning;
+  const char *statusError;
+  const char *statusInfo;
+  const char *bgErrorSubtle;
+  const char *bgWarningSubtle;
+  // Scrollbar.
+  const char *scrollBarColor;
+  const char *scrollBarHoverColor;
+  const char *scrollBarTrackColor;
+  // Controls.
+  const char *switchTrackOff;
+  const char *switchKnob;
+  const char *menuBackground;
+  const char *controlDisabledBg;
+  const char *controlDisabledText;
+  // Notification severity palette, indexed by NotificationLevel
+  // (0=Info .. 9=Other; see BackendContext.h).
+  const char *severityColors[10];
+};
+
+// Theme-independent brand/data values shared by both palettes. accent is
+// read by Theme.qml through the same projection; plateLabel feeds the GL
+// plate-name / index-badge text. Upstream semantic reference: PartPlate.cpp
+// rasterizes both labels with wxColour(0xf2, 0x75, 0x4e) (#f2754e,
+// PartPlate.cpp:2578 and :4401). OWzx keeps the brand green for them
+// (colors are brand-owned, 2026-10-07 ruling) -- but routed through this
+// token, never as a raster-site literal.
+struct StaticTokens
+{
+  const char *accent;
+  const char *plateLabel;
+};
+inline const StaticTokens &staticTokens()
+{
+  static constexpr StaticTokens kStatic{"#18c75e", "#18c75e"};
+  return kStatic;
+}
+
+inline const Palette &palette(bool dark)
+{
+  static const Palette kDark{
+      "#2f3034", "#3a3a3c", "#4b4b4d", "#3a3a3c",
+      "#2d2d31", "#36363b", "#3e3e45", "#000000",
+      "#4b4b4d", "#262628", "#4f4f51d9", "#555557", "#5f5f61", "#343436",
+      "#0e6636", "#0a4d28",
+      "#f5f5f5", "#c9c9c9", "#a3a3a3", "#6f6f6f", "#ababab",
+      "#5a5a5c", "#525254", "#666668", "#565658", "#6e6e70",
+      "#010101", "#0f0f10", "#1f2124", "#27292c", "#262628", "#fefefe",
+      "#b4b4b4",
+      "#18c75e", "#f5a623", "#e04040", "#3b9eff", "#4a1c1c", "#3a3420",
+      "#959595", "#7e7e80", "#171717",
+      "#3f3f41", "#f5f5f5", "#2d2d31", "#8e8e83", "#56564f",
+      {"#18c75e", "#18c75e", "#c87840", "#f05545", "#e04848",
+       "#58a6ff", "#7c6aef", "#7c6aef", "#3b9cf0", "#18c75e"}};
+  static const Palette kLight{
+      "#eef0f3", "#ffffff", "#f2f4f7", "#ffffff",
+      "#ffffff", "#eef1f4", "#d8dbe0", "#d5d8dd",
+      "#ffffff", "#e3e6ea", "#f5f7fad9", "#e7eaee", "#dde1e6", "#fbfcfd",
+      "#dcf5e7", "#c3ecd5",
+      "#1b1d21", "#4d5157", "#797f87", "#a9adb4", "#8d939b",
+      "#c5c9d0", "#d3d6db", "#b3b8c0", "#c8ccd2", "#a3a9b1",
+      "#e9ebee", "#f3f4f6", "#dcdfe3", "#d3d6db", "#d0d3d8", "#1a1c1f",
+      "#6d7278",
+      "#0f9e48", "#b9790a", "#d13a3a", "#1e78d6", "#fbe9e9", "#faf0da",
+      "#a6abb3", "#8b9099", "#ebecee",
+      "#c2c6cd", "#ffffff", "#ffffff", "#c6c8c0", "#6e7068",
+      {"#0f9e48", "#0f9e48", "#a05f28", "#d63c2c", "#c23a3a",
+       "#2a7fd4", "#6355d6", "#6355d6", "#2379cc", "#0f9e48"}};
+  return dark ? kDark : kLight;
+}
+
+}  // namespace ThemeTokens
+
+// ── S6: process-wide theme state ────────────────────────────────────────────
+// BackendContext::applyTheme — the single dispatch point of the merged theme
+// chain (storage key "themeIndex" -> themeIndexChanged -> applyTheme) —
+// flips this flag. Every RhiViewport instance connects to darkChanged() and
+// re-rasters its atlas with the matching icon variant + label pen color.
+// A process singleton (rather than a per-page QML binding) because the
+// viewport instances live in three non-shared pages; the flip still reaches
+// Theme.qml, whose token bindings hang off BackendContext::themeChanged.
+class ThemeState : public QObject
+{
+  Q_OBJECT
+public:
+  static ThemeState &instance()
+  {
+    static ThemeState s_state;
+    return s_state;
+  }
+  bool isDark() const { return m_isDark; }
+  void setDark(bool dark)
+  {
+    if (m_isDark == dark)
+      return;
+    m_isDark = dark;
+    emit darkChanged();
+  }
+signals:
+  void darkChanged();
+
+private:
+  ThemeState() = default;
+  bool m_isDark = true;  // dark is the default theme (Theme.qml reference truth)
+};
+
 class RhiViewport : public QQuickRhiItem
 {
   Q_OBJECT
@@ -301,6 +470,14 @@ class RhiViewport : public QQuickRhiItem
   // the icon atlas + quad batch and owns picking.
   // Entries: {locked: bool, custom: bool, name: string} per plate.
   Q_PROPERTY(QVariantList plateIconStates READ plateIconStates WRITE setPlateIconStates NOTIFY plateIconStatesChanged)
+  // S6: theme input for the GL surfaces this item rasterizes (plate icon
+  // atlas picks the upstream dark/light SVG variant; plate name/badge pen
+  // color comes from ThemeTokens). Reads/writes the process-wide ThemeState;
+  // every instance re-rasters its atlas when the flag flips, so pages need
+  // no per-page binding to stay in sync -- the merged chain's single
+  // dispatch point (BackendContext::applyTheme) pushes to all instances
+  // through ThemeState::darkChanged.
+  Q_PROPERTY(bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged)
   // Hover payload for the QML tooltip: {plate, icon, x, y} in item pixels
   // (upstream show_tooltip, PartPlate.cpp:1141). Empty when not hovering.
   Q_PROPERTY(QVariantMap plateIconHover READ plateIconHover NOTIFY plateIconHoverChanged)
@@ -674,6 +851,9 @@ public:
   QVariantList plateIconStates() const { return m_plateIconStates; }
   void setPlateIconStates(const QVariantList &states);
   QVariantMap plateIconHover() const { return m_plateIconHover; }
+  // S6: darkTheme Q_PROPERTY accessors — window onto the shared ThemeState.
+  bool darkTheme() const { return ThemeState::instance().isDark(); }
+  void setDarkTheme(bool dark) { ThemeState::instance().setDark(dark); }
   // Rebuilds the icon atlas + ground quad batch from the current plate
   // states and bed layout (UI thread; the renderer pulls the results in
   // synchronize()).
@@ -753,6 +933,9 @@ signals:
   void plateIconStatesChanged();
   void plateIconHoverChanged();
   void plateIconActivated(int plateIndex, int iconId);
+  // S6: the darkTheme Q_PROPERTY NOTIFY — re-emitted per instance when the
+  // shared ThemeState flips (this item re-rasters its atlas in the handler).
+  void darkThemeChanged();
   void assemblyMeasureSelectionChanged();
   void gizmoModeChanged();
   void sidebarFieldChanged();

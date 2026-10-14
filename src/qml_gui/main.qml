@@ -775,8 +775,8 @@ ApplicationWindow {
         anchors.fill: parent
         anchors.margins: root.frameMargin
         radius: root.frameRadius
-        color: Backend ? Backend.bgColor : Theme.bgBase
-        border.color: Backend.borderColor
+        color: Theme.bgBase
+        border.color: Theme.borderDefault
         border.width: root.visibility === Window.Maximized ? 0 : 1
         clip: true
 
@@ -1427,8 +1427,10 @@ ApplicationWindow {
             }
             if (id === "theme-toggle") {
                 const nextTheme = Theme.isDark ? "light" : "dark"
+                // S6: Theme.setTheme forwards into the merged single chain
+                // (Backend.requestTheme persists the "themeIndex" key and
+                // re-dispatches); there is no second QML-side store anymore.
                 Theme.setTheme(nextTheme)
-                AppSettings.setValue("ui/theme", nextTheme)
                 return
             }
             if (id === "density-toggle") {
@@ -1474,9 +1476,9 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
-        // Phase 171 (P1): bridge the persisted theme into the Theme singleton
-        // (QML singletons cannot see root-context properties directly).
-        Theme.setTheme(AppSettings.value("ui/theme", "dark").toString())
+        // S6: the persisted theme is applied by BackendContext's constructor
+        // (initial applyTheme sync before QML loads) — Theme.qml projects
+        // Backend.qmlTheme, so there is no QML-side restore step anymore.
         // Phase 173 (P3): persisted density mode.
         Theme.setDensity(AppSettings.value("ui/density", "comfortable").toString())
         if (!Backend.startupSkipFirstRun && !Backend.configWizardCompleted) {

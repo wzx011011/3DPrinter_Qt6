@@ -40,6 +40,13 @@ void SettingsViewModel::loadFromSettings()
   // Missing keys fall back to the factory defaults (not the current draft
   // members): cancelPreferences() relies on this to restore the last
   // committed state when draft edits were never applied.
+  //
+  // S6 theme contract: "themeIndex" is THE single theme storage key of the
+  // merged chain (the parallel "ui/theme" key of the old QML-side chain was
+  // retired together with BackendContext's kThemes palette). Axis is now
+  // two-valued: 0 = dark, 1 = light; consumption clamps (<=0 dark, else
+  // light, see BackendContext::applyTheme), so this member keeps storing the
+  // raw index and the draft/commit transaction below is untouched.
   QSettings s;
   m_themeIndex       = s.value("themeIndex", 0).toInt();
   m_fontSize         = s.value("fontSize", 12).toInt();
@@ -134,6 +141,11 @@ void SettingsViewModel::setFontSize(int size)
 
 void SettingsViewModel::setThemeIndex(int idx)
 {
+  // S6: emits themeIndexChanged on every real draft change — that signal is
+  // the merged theme chain's single runtime dispatch trigger
+  // (BackendContext::applyTheme is its only consumer). Raw index storage
+  // keeps the setThemeIndex(2)-style out-of-range drafts round-trippable;
+  // the two-value clamp lives at consumption.
   if (m_themeIndex != idx)
   {
     m_themeIndex = idx;

@@ -1,5 +1,14 @@
 #include "AmsMaterialsViewModel.h"
 
+// S6: the default slot colors are the ThemeTokens values (status info /
+// error, accent, warning) — the former hex copies behind a "keep in sync"
+// comment are gone. The table lives in the renderer header because the
+// owzx_qml -> owzx_app_core target edge is one-way (see RhiViewport.h).
+// The DARK palette side is read deliberately: these are theme-independent
+// demo filament swatches anchored to the dark-side values, byte-identical
+// to pre-S6 behavior.
+#include "qml_gui/Renderer/RhiViewport.h"
+
 #include <QSettings>
 
 // P8.4 / Phase 201 (v5.6) -- AmsMaterialsViewModel implementation.
@@ -18,15 +27,21 @@ constexpr const char *kSettingsPrefix = "ams/materials";
 constexpr const char *kSettingsVersionKey = "ams/materials/version";
 constexpr int kSettingsVersion = 1;
 
-// Default mock colors mirror Theme.statusInfo / statusError / accent /
-// statusWarning hex tokens (Theme.qml). Kept in sync so the default visual
-// is byte-identical to pre-Phase-201.
-const QStringList kDefaultSlotColors = {
-    QStringLiteral("#3b9eff"),  // statusInfo   (blue)
-    QStringLiteral("#e04040"),  // statusError  (red)
-    QStringLiteral("#18c75e"),  // accent       (green)
-    QStringLiteral("#f5a623"),  // statusWarning (yellow)
-};
+// Default mock slot colors read straight from the ThemeTokens table (dark
+// palette): statusInfo / statusError / accent / statusWarning. S6 deleted
+// the four hex copies that relied on a comment to stay in sync with
+// Theme.qml — there is exactly one value source now.
+static QStringList defaultSlotColors()
+{
+  const auto &tokens = ThemeTokens::palette(true);
+  const QColor accent = QColor(QLatin1String(ThemeTokens::staticTokens().accent));
+  return {
+      QColor(QLatin1String(tokens.statusInfo)).name(QColor::HexRgb),
+      QColor(QLatin1String(tokens.statusError)).name(QColor::HexRgb),
+      accent.name(QColor::HexRgb),
+      QColor(QLatin1String(tokens.statusWarning)).name(QColor::HexRgb),
+  };
+}
 
 // Known material catalog (selectable in the material combo). Mirrors the
 // pre-Phase-201 QML materialTypes literal verbatim.
@@ -48,7 +63,7 @@ AmsMaterialsViewModel::~AmsMaterialsViewModel() = default;
 
 void AmsMaterialsViewModel::initDefaults()
 {
-  m_defaultSlotColors = kDefaultSlotColors;
+  m_defaultSlotColors = defaultSlotColors();
   m_materialTypes = kDefaultMaterialTypes;
 
   // Default mock slot names (aligned with upstream AMS slot model). Wrapped

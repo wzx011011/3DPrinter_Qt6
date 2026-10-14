@@ -510,6 +510,9 @@ Item {
 
             // Phase 171 (P1): dark/light theme toggle (OWzx extension --
             // upstream has no chrome toggle; Orca 2.3 dark_color_mode parity).
+            // S6: Theme.setTheme forwards into the merged single chain
+            // (Backend.requestTheme persists "themeIndex" and re-dispatches);
+            // the former parallel AppSettings "ui/theme" write is retired.
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
                 buttonSize: 30
@@ -519,7 +522,6 @@ Item {
                 onClicked: {
                     const next = Theme.isDark ? "light" : "dark"
                     Theme.setTheme(next)
-                    AppSettings.setValue("ui/theme", next)
                 }
             }
 
