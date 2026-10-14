@@ -932,6 +932,17 @@ CxDialog {
                         }
                     }
                 }
+
+                // S5 (services-status.md): AmsMaterialsViewModel has no
+                // device channel -- slot data, capability defaults and these
+                // session toggles are local demo state. Say so on the surface.
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("演示数据：AMS 槽位与设置为本地模拟（会话级，不连接真实设备）。")
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeXS
+                    wrapMode: Text.Wrap
+                }
             }
         }
     }

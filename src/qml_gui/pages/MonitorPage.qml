@@ -1921,11 +1921,22 @@ Item {
                                     anchors.margins: Theme.spacingLG
                                     spacing: Theme.spacingXL
 
-                                    // AMS label
-                                    Text {
-                                        text: qsTr("AMS 耗材")
-                                        color: Theme.textTertiary
-                                        font.pixelSize: Theme.fontSizeSM
+                                    // AMS label. S5 (services-status.md): the
+                                    // slot feed is DeviceServiceMock data -- the
+                                    // strip must say so explicitly.
+                                    Column {
+                                        spacing: 2
+
+                                        Text {
+                                            text: qsTr("AMS 耗材")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeSM
+                                        }
+                                        Text {
+                                            text: qsTr("演示数据")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeXS
+                                        }
                                     }
 
                                     // AMS slots
@@ -2424,6 +2435,19 @@ Item {
                                             onEditingFinished: root.monitorVm.setCameraUrl(text)
                                         }
                                     }
+                                }
+
+                                // S5 (services-status.md): the stream-status
+                                // timeline is CameraServiceMock simulation (the
+                                // RTSP frame decode underneath is real); this
+                                // panel must say "demo data" explicitly.
+                                Text {
+                                    anchors.top: parent.top
+                                    anchors.right: parent.right
+                                    anchors.margins: Theme.spacingSM
+                                    text: qsTr("演示数据")
+                                    color: Theme.textTertiary
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                             }
                         }

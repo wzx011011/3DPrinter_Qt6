@@ -11871,21 +11871,35 @@ void QmlUiAuditTests::platerHotkeysFollowCanvasFocus()
 // R-P1.E (fake-success disclosure, anti-revival): every surface backed by
 // mock device/cloud/fleet services must carry a user-visible
 // demo-mode disclosure so mock responses are never mistaken for real
-// device state.
+// device state. S5 (audit 2026-10-10 ch.4 / docs/services-status.md)
+// extends the same contract to the remaining registry-Mock surfaces:
+// the Monitor AMS slot strip, the Monitor camera panel, AMSSettingsDialog
+// and PluginManagerDialog.
 void QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure()
 {
   const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
   const QString monitorPage = readSource(QStringLiteral("src/qml_gui/pages/MonitorPage.qml"));
   const QString multiMachinePage = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
   const QString selectMachine = readSource(QStringLiteral("src/qml_gui/dialogs/SelectMachineDialog.qml"));
+  const QString amsSettings = readSource(QStringLiteral("src/qml_gui/dialogs/AMSSettingsDialog.qml"));
+  const QString pluginManager = readSource(QStringLiteral("src/qml_gui/dialogs/PluginManagerDialog.qml"));
   QVERIFY2(!homePage.isEmpty() && !monitorPage.isEmpty()
-               && !multiMachinePage.isEmpty() && !selectMachine.isEmpty(),
+               && !multiMachinePage.isEmpty() && !selectMachine.isEmpty()
+               && !amsSettings.isEmpty() && !pluginManager.isEmpty(),
            "Unable to read the mock-backed surfaces");
   QVERIFY2(homePage.contains(QStringLiteral("演示模式")),
            "R-P1.E: HomePage login/bind must disclose the local mock");
   QVERIFY2(monitorPage.contains(QStringLiteral("演示模式")),
            "R-P1.E: MonitorPage device/camera/print controls must disclose"
            " the local mock");
+  // S5: per-surface explicit demo-data state on the registry-Mock sources.
+  QVERIFY2(monitorPage.contains(QStringLiteral("演示数据")),
+           "S5: MonitorPage AMS slot strip / camera panel must carry the"
+           " explicit demo-data state (docs/services-status.md)");
+  QVERIFY2(amsSettings.contains(QStringLiteral("演示数据")),
+           "S5: AMSSettingsDialog slot/settings demo data must be disclosed");
+  QVERIFY2(pluginManager.contains(QStringLiteral("演示数据")),
+           "S5: PluginManagerDialog install mock must be disclosed");
   QVERIFY2(multiMachinePage.contains(QStringLiteral("演示模式"))
                && multiMachinePage.contains(QStringLiteral("任务发送")),
            "R-P1.E: MultiMachinePage fleet/send must disclose the local mock");

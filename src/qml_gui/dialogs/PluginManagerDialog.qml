@@ -674,6 +674,19 @@ CxDialog {
             anchors.fill: parent
             spacing: 8
 
+            // S5 (services-status.md): PluginService.installPlugin is a
+            // state-flipping mock (no real download source) -- the dialog
+            // must say so explicitly (R-P1.E disclosure pattern).
+            Text {
+                Layout.fillWidth: true
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+                text: qsTr("演示数据：插件安装/卸载为本地状态模拟，不下载真实插件（真实下载源为外部阻塞项）。")
+                color: Theme.textTertiary
+                font.pixelSize: Theme.fontSizeXS
+                wrapMode: Text.Wrap
+            }
+
             // ── Toolbar (index.html:26-67) ─────────────────────────────
             // Search pinned left (margin-right:auto), action cluster right.
             RowLayout {
