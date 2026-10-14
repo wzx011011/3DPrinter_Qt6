@@ -190,7 +190,12 @@ public:
       DirtyBed | DirtyPlate | DirtyMesh | DirtyVisibility | DirtyGpu
       | DirtySelection | DirtyCamera;
   // Payload bits whose change is reflected inside the camera UBO pack
-  // (mvp/gizmoCenter/view/printVolume — uploadCameraUniform's feed).
+  // (mvp/gizmoCenter/view/printVolume — uploadCameraUniform's feed). The
+  // routing projects these bits onto EVERY channel that consumes the camera
+  // state: the camera UBO AND the navigator cube (it re-projects its overlay
+  // pixels through the inverse MVP, so an orbit must rebuild it). The
+  // project-derived bits own no storage — the settle logic in render() keeps
+  // these feed bits armed until every routed consumer succeeded.
   static constexpr quint32 kCameraFeedMask =
       DirtyCamera | DirtyGpu | DirtySelection | DirtyBed;
   // Payload bits whose change re-anchors the cut plane on the selected

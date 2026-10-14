@@ -516,10 +516,12 @@ private:
   // v5.16 (NAVIGATOR): cube state mirrored from RhiViewport in synchronize().
   // S2: the DirtyNavigator registry bit replaces the former per-frame
   // rebuild cache (m_navigatorLast* members + m_navigatorBufferUploaded
-  // flag) — synchronize() compares the mirrored inputs and arms the bit; a
-  // dispatched upload rebuilds unconditionally. The render-target pixel size
-  // key is implied: a resize changes the aspect-corrected camera MVP, which
-  // re-arms the camera feed and the navigator with it.
+  // flag). It is armed from two sources: synchronize() compares the mirrored
+  // local inputs (rect/hover/enabled), and uploadChannelsForCanvas projects
+  // the camera feed (kCameraFeedMask — view/MVP/eye changes) onto the bit on
+  // BOTH canvases, because uploadNavigatorBuffer consumes m_cameraView and
+  // m_cameraMvp; a dispatched upload rebuilds unconditionally. A resize
+  // re-arms it through the aspect-corrected camera MVP (the feed projection).
   bool m_navigatorEnabled = true;
   NavigatorCube::RectF m_navigatorRect;
   int m_navigatorHoverBox = -1;

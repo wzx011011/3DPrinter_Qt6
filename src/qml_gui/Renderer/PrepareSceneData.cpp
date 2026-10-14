@@ -577,22 +577,33 @@ void PrepareSceneData::clearDirtyFlags(quint32 mask)
 quint32 PrepareSceneData::uploadChannelsForCanvas(int canvasType, quint32 dirtyFlags)
 {
   const quint32 payload = dirtyFlags & kScenePayloadMask;
+  // The camera feed (view/MVP/eye changes) is consumed by MORE channels than
+  // the camera UBO: the navigator cube re-projects its overlay pixels
+  // through the fresh inverse MVP (uploadNavigatorBuffer reads m_cameraView
+  // + m_cameraMvp), so the feed projects onto DirtyNavigator on BOTH
+  // canvases — otherwise an orbit would redraw the cube's stale world-space
+  // vertices through the new MVP (drift/deformation).
+  const bool cameraFeed = (payload & kCameraFeedMask) != 0;
   quint32 channels = dirtyFlags & kRendererChannelMask;
   if (canvasType == kCanvasPreview) {
     // Preview canvas: only its own channels route. Scene-canvas bits seeded
     // before the first synchronize (or set by shared mirror code) stay
     // stored but never route, so they cannot cause a per-frame batch.
     channels &= kPreviewCanvasChannelMask;
-    if ((payload & kCameraFeedMask) != 0)
+    if (cameraFeed) {
       channels |= DirtyCameraUniform;
+      channels |= DirtyNavigator;
+    }
   } else {
     channels &= kSceneCanvasChannelMask;
     // Any payload change opens the scene composite (the historical (a) gate:
     // bed/model/highlight/assembly re-check their own granularity inside).
     if (payload != DirtyNone)
       channels |= DirtySceneBuffers;
-    if ((payload & kCameraFeedMask) != 0)
+    if (cameraFeed) {
       channels |= DirtyCameraUniform;
+      channels |= DirtyNavigator;
+    }
     if ((payload & kCutPlaneFeedMask) != 0)
       channels |= DirtyCutPlane;
     if ((payload & kBedTextureFeedMask) != 0)

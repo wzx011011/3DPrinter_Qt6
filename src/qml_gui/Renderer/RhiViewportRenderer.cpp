@@ -854,11 +854,15 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // themselves are consumed by the upload functions' internal gates (which
   // rebuild from the changed inputs) and reset there on success — so a
   // failed upload retries with the flag still armed, and render()'s single
-  // rule reads only the registry.
-  if (m_cutPlaneDirty)
-    m_prepareScene.markDirty(PrepareSceneData::DirtyCutPlane);
-  if (m_wipeTowerDirty)
-    m_prepareScene.markDirty(PrepareSceneData::DirtyWipeTower);
+  // rule reads only the registry. On the preview canvas these channels never
+  // route (the upload functions never run, so the flags would never reset):
+  // skip the mark so the stored word cannot accumulate unroutable bits.
+  if (m_canvasType != RhiViewport::CanvasPreview) {
+    if (m_cutPlaneDirty)
+      m_prepareScene.markDirty(PrepareSceneData::DirtyCutPlane);
+    if (m_wipeTowerDirty)
+      m_prepareScene.markDirty(PrepareSceneData::DirtyWipeTower);
+  }
 }
 
 // ── S2: the single upload-channel dispatcher ────────────────────────────────
@@ -1065,10 +1069,31 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     quint32 settledPayload = 0;
     if (handled & PrepareSceneData::DirtySceneBuffers)
       settledPayload |= PrepareSceneData::kScenePayloadMask;
-    if ((handled & PrepareSceneData::DirtyCameraUniform) != 0
-        && m_canvasType == RhiViewport::CanvasPreview) {
-      // On the preview canvas the camera channel owns the feed bits (the
-      // scene composite never routes there to consume them).
+    // Feed ownership: the camera feed payload (Camera/Gpu/Selection/Bed) is
+    // consumed by the PROJECTED channels too — the camera UBO, the navigator
+    // cube (both canvases) and the cut plane (scene canvas). Those derived
+    // bits own no storage, so if ANY routed consumer failed this frame its
+    // feed bits must stay armed — clearing them with the scene settle would
+    // strand the channel until the next arbitrary payload change (worst
+    // case: the camera UBO never re-armed before the first SRB bind, the
+    // exact BUG-V31-1/D3D12 class). Once every routed consumer settled, the
+    // preview canvas clears the feed here (its scene composite never routes
+    // to consume it); the scene canvas' full-payload settle already covers
+    // it.
+    quint32 feedConsumers = 0;
+    if (channels & PrepareSceneData::DirtyCameraUniform)
+      feedConsumers |= PrepareSceneData::DirtyCameraUniform;
+    if (channels & PrepareSceneData::DirtyNavigator)
+      feedConsumers |= PrepareSceneData::DirtyNavigator;
+    if (channels & PrepareSceneData::DirtyCutPlane)
+      feedConsumers |= PrepareSceneData::DirtyCutPlane;
+    const bool feedSettled =
+        feedConsumers == 0 || (feedConsumers & handled) == feedConsumers;
+    if (!feedSettled) {
+      settledPayload &= ~PrepareSceneData::kCameraFeedMask;
+      settledPayload &= ~PrepareSceneData::kCutPlaneFeedMask;
+    } else if ((handled & PrepareSceneData::DirtyCameraUniform) != 0
+               && m_canvasType == RhiViewport::CanvasPreview) {
       settledPayload |= PrepareSceneData::kCameraFeedMask;
     }
     if (handled == channels)
@@ -5431,9 +5456,12 @@ bool RhiViewportRenderer::uploadNavigatorBuffer(QRhiResourceUpdateBatch *updates
 
   const QSize px = renderTarget()->pixelSize();
   const NavigatorCube::CameraBasis basis = NavigatorCube::cameraBasis(m_cameraView);
-  // S2: the DirtyNavigator bit is the rebuild key (synchronize compares the
-  // mirrored inputs — rect/hover/enabled — and the camera feed re-arms the
-  // bit on view/MVP changes); a dispatched upload always rebuilds. The
+  // S2: the DirtyNavigator bit is the rebuild key, armed from two sources —
+  // synchronize() compares the mirrored local inputs (rect/hover/enabled),
+  // and uploadChannelsForCanvas projects the camera feed (kCameraFeedMask:
+  // view/MVP/eye changes) onto the bit on BOTH canvases, because this
+  // function consumes m_cameraView (cameraBasis) and m_cameraMvp (the
+  // inverse projection below). A dispatched upload always rebuilds. The
   // former m_navigatorLast* per-frame cache is retired with it.
 
   const NavigatorCube::RectF rect = m_navigatorRect;

@@ -923,35 +923,48 @@ void PrepareSceneDataTests::previewCapUploadGateArmsOnRealChangeOnly()
 // S2: render()'s single upload rule reads the registry only through
 // uploadChannelsForCanvas. This locks the routing contract: payload bits
 // project onto their channel feeds per canvas, canvas-foreign stored bits
-// never route (no perma-batch), and the camera feed arms the camera UBO on
-// BOTH canvases (the print-volume/gizmoCenter pack rides it everywhere).
+// never route (no perma-batch), and the camera feed arms its consumers — the
+// camera UBO AND the navigator cube (which re-projects through the inverse
+// MVP) — on BOTH canvases. A camera payload that failed to arm the navigator
+// would let an orbit redraw the cube's stale world-space vertices through
+// the new MVP (drift/deformation): the regression that motivates these keys.
 void PrepareSceneDataTests::uploadRegistryRoutingFollowsCanvasAndPayload()
 {
   using P = PrepareSceneData;
 
   // A pure camera move on the scene canvas opens BOTH the scene composite
-  // (historical (a) gate — camera is a scene payload bit) and the camera UBO.
+  // (historical (a) gate — camera is a scene payload bit), the camera UBO,
+  // and the navigator cube.
   const quint32 sceneCamera = P::uploadChannelsForCanvas(P::kCanvasView3D, P::DirtyCamera);
   QVERIFY2(sceneCamera & P::DirtySceneBuffers, "camera payload must open the scene composite");
   QVERIFY2(sceneCamera & P::DirtyCameraUniform, "camera payload must arm the camera UBO");
-  QCOMPARE(sceneCamera & P::kPreviewCanvasChannelMask & ~P::DirtyNavigator,
+  QVERIFY2(sceneCamera & P::DirtyNavigator,
+           "camera payload must re-arm the navigator cube (it consumes the camera MVP/view)");
+  // ... and arm no preview-exclusive channel (segment/ghost-shell/tool
+  // marker/cap) — navigator rides both canvas masks, the other four do not.
+  QCOMPARE(sceneCamera & (P::kPreviewCanvasChannelMask & ~P::kSceneCanvasChannelMask),
            quint32(P::DirtyNone));
 
   // The cut-plane feed: mesh/selection/Gpu payload re-anchors the plane.
+  // A selection change also arms the navigator (gizmoCenter rides the camera
+  // feed: kCameraFeedMask includes DirtySelection).
   const quint32 cutFeed = P::uploadChannelsForCanvas(P::kCanvasAssembleView, P::DirtySelection);
   QVERIFY2(cutFeed & P::DirtyCutPlane, "selection change must re-anchor the cut plane");
   QVERIFY2(cutFeed & P::DirtySceneBuffers, "selection change must open the scene composite");
+  QVERIFY2(cutFeed & P::DirtyNavigator,
+           "selection change feeds gizmoCenter to the camera pack and the navigator");
 
   // A bed-rect change re-anchors the bed-texture quad on the scene canvas.
   QVERIFY2(P::uploadChannelsForCanvas(P::kCanvasView3D, P::DirtyBed) & P::DirtyBedTexture,
            "bed change must re-anchor the bed-texture quad");
 
-  // Preview canvas: the same camera payload arms ONLY the camera UBO.
+  // Preview canvas: the same camera payload arms exactly the camera UBO +
+  // the navigator, and nothing else.
   QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyCamera),
-           quint32(P::DirtyCameraUniform));
-  // ...and a bed change routes only the camera feed there (print volume).
+           quint32(P::DirtyCameraUniform | P::DirtyNavigator));
+  // ...and a bed change routes only that pair there (print volume + cube).
   QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyBed),
-           quint32(P::DirtyCameraUniform));
+           quint32(P::DirtyCameraUniform | P::DirtyNavigator));
 
   // Stored scene-canvas bits never route on preview and vice versa: a
   // seeded-but-unroutable bit cannot cause a per-frame batch.
