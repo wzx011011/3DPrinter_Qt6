@@ -33,6 +33,7 @@
 #include <libslic3r/TriangleSelector.hpp>  // EnforcerBlockerType + select_patch
 #include <libslic3r/TriangleMesh.hpp>  // v5.16 bed_model STL loader (ReadSTLFile)
 #include <libslic3r/Model.hpp>     // U13: export worker snapshot (Model deep copy)
+#include <libslic3r/PrintConfig.hpp>  // P3: print_config_def fuzzy_skin default (config-channel fallback)
 #endif
 #include <QFileInfo>
 #include <QFile>
@@ -110,6 +111,44 @@ constexpr bool kViewportTrianglePickingAvailable = true;
 // for CGAL 5.4 compat (corefinement.h is available in 5.4); MeshBoolean +
 // Drill are now compilable and activatable without upgrading CGAL.
 constexpr bool kCgalMeshBooleanAvailable = true;
+
+// ── P3: FuzzySkin gizmo backend helpers ─────────────────────────────────────
+// Upstream FuzzySkinType representation tables, mirrored verbatim from
+// PrintConfig.cpp:3906-3916 (enum_values / enum_labels; index == enum int).
+// The Qt config channel represents coEnum options as their upstream label
+// string (readConfigValue coEnum branch, ProjectService.cpp:322-331;
+// writeConfigValue maps the label back to the int, :390-406), so the
+// resolver below must accept the label, the upstream value token, and a
+// plain int (mock-mode overrides store raw values).
+constexpr int kFuzzySkinEnumCount = 6;
+constexpr const char *kFuzzySkinEnumValues[kFuzzySkinEnumCount] = {
+    "none", "external", "hole", "all", "allwalls", "disabled_fuzzy"};
+constexpr const char *kFuzzySkinEnumLabels[kFuzzySkinEnumCount] = {
+    "Painted only", "Contour", "Hole", "Contour and hole", "All walls",
+    "Disabled"};
+
+// Resolve any stored representation of a FuzzySkinType into the enum int.
+// Returns -1 for an invalid/unknown representation (the callers surface that
+// as "unknown mode" instead of guessing).
+int fuzzySkinStateFromVariant(const QVariant &value)
+{
+  if (!value.isValid())
+    return -1;
+  if (value.typeId() == QMetaType::Int || value.typeId() == QMetaType::LongLong)
+  {
+    bool ok = false;
+    const int v = value.toInt(&ok);
+    return (ok && v >= 0 && v < kFuzzySkinEnumCount) ? v : -1;
+  }
+  const QString text = value.toString();
+  for (int i = 0; i < kFuzzySkinEnumCount; ++i)
+  {
+    if (text.compare(QLatin1String(kFuzzySkinEnumValues[i]), Qt::CaseInsensitive) == 0
+        || text.compare(QLatin1String(kFuzzySkinEnumLabels[i]), Qt::CaseInsensitive) == 0)
+      return i;
+  }
+  return -1;
+}
 
 // Phase 93 (ASMROUTE-02): parse the cached mesh blob into a map of
 // sourceObjectIndex -> unioned AABB. Consumed by
@@ -6300,7 +6339,10 @@ int EditorViewModel::availableGizmoMask() const
   }
 
   int mask = 0;
-  for (int mode = 0; mode <= 18; ++mode)
+  // Prepare-path enumeration covers every GizmoMode the Prepare canvas
+  // advertises. Mode 19 (GizmoAssemblyMeasure) is AssembleView-routed (see
+  // the branch above); P3 added mode 20 (GizmoFuzzySkin) to this path.
+  for (int mode = 0; mode <= 20; ++mode)
   {
     if (canActivateGizmo(mode))
       mask |= (1 << mode);
@@ -11642,6 +11684,12 @@ bool EditorViewModel::canActivateGizmo(int gizmoMode) const
   case 6: // Support paint
   case 7: // Seam paint
     return kViewportTrianglePickingAvailable && hasSingleObject;
+  case 20: // FuzzySkin (P3): upstream painter-family activation gate — FFF +
+           // single full instance (GLGizmoPainterBase.cpp:1098-1102
+           // is_single_full_instance). The ported config channel needs no
+           // facet picking, so the paint-stack constant is deliberately NOT
+           // required here.
+    return hasSingleObject;
   case 11: // Drill
     return kCgalMeshBooleanAvailable && hasSingleObject;
   case 12: // Emboss
@@ -11701,6 +11749,8 @@ QString EditorViewModel::gizmoStatusText(int gizmoMode) const
   case 6:
   case 7:
     return QStringLiteral("Requires one selected object");
+  case 20: // FuzzySkin (P3) — same painter-family selection gate.
+    return QStringLiteral("Requires one selected object");
   case 11:
     // Phase 137: CGAL MeshBoolean is now available; gate on selection instead.
     return QStringLiteral("Requires two selected objects");
@@ -11722,6 +11772,125 @@ QString EditorViewModel::gizmoStatusText(int gizmoMode) const
   default:
     return QStringLiteral("Unsupported tool");
   }
+}
+
+// ── P3: FuzzySkin gizmo backend — per-object fuzzy_skin config channel ──────
+// Port of the upstream GLGizmoFuzzySkin config interactions
+// (Gizmos/GLGizmoFuzzySkin.cpp:326-359). The reads mirror
+// effective_fuzzy_skin_state (:328-330): an object override wins, otherwise
+// the global print preset decides. The single write is the gizmo's
+// "Enable painted fuzzy skin for this object" link (:350-354), which lands
+// fuzzy_skin=None ("Painted only") on the object config. The facet-painting
+// half of the upstream gizmo (:367-413) is not ported (dev plan §6 P3
+// config-only scope); isFuzzySkinPainted therefore reports the REAL
+// annotation and stays false until a 3MF with painted fuzzy skin loads.
+
+bool EditorViewModel::fuzzySkinHasObjectOverride(int objectIndex) const
+{
+  if (!projectService_)
+    return false;
+  // Upstream obj_cfg.option("fuzzy_skin") != nullptr (:328): the scoped
+  // read returns the fallback (invalid QVariant) when the object config
+  // holds no override, and the value when it does.
+  return projectService_->scopedOptionValue(objectIndex, -1,
+                                            QStringLiteral("fuzzy_skin"),
+                                            QVariant())
+      .isValid();
+}
+
+int EditorViewModel::fuzzySkinObjectOverrideMode(int objectIndex) const
+{
+  if (!projectService_)
+    return -1;
+  return fuzzySkinStateFromVariant(projectService_->scopedOptionValue(
+      objectIndex, -1, QStringLiteral("fuzzy_skin"), QVariant()));
+}
+
+int EditorViewModel::fuzzySkinEffectiveMode(int objectIndex) const
+{
+  if (!projectService_)
+    return -1;
+  if (fuzzySkinHasObjectOverride(objectIndex))
+    return fuzzySkinObjectOverrideMode(objectIndex);
+  // No override -> the global print preset's fuzzy_skin decides (upstream
+  // glb_cfg = preset_bundle->prints.get_edited_preset().config, :327/:330).
+  // mergedConfigValues() is that edited-preset value surface (ConfigViewModel
+  // globalOptionValues_, ConfigViewModel.cpp:3088).
+  if (configViewModel_)
+  {
+    const int resolved = fuzzySkinStateFromVariant(
+        configViewModel_->mergedConfigValues().value(QStringLiteral("fuzzy_skin")));
+    if (resolved >= 0)
+      return resolved;
+  }
+#ifdef HAS_LIBSLIC3R
+  // Standalone consumers (no ConfigViewModel wired) or a merged surface
+  // without the key: an un-edited upstream print preset carries the
+  // print_config_def default — Disabled_fuzzy (PrintConfig.cpp:3917) — which
+  // is exactly what glb_cfg resolves to before any user edit. Read the real
+  // default instead of guessing.
+  if (const auto *def = Slic3r::print_config_def.get("fuzzy_skin"))
+    return def->default_value.get()->getInt();
+#endif
+  return -1;
+}
+
+bool EditorViewModel::isFuzzySkinPainted(int objectIndex) const
+{
+#ifdef HAS_LIBSLIC3R
+  if (!projectService_ || !projectService_->rawModel() || objectIndex < 0
+      || size_t(objectIndex) >= projectService_->rawModel()->objects.size())
+    return false;
+  const Slic3r::ModelObject *mo =
+      projectService_->rawModel()->objects[size_t(objectIndex)];
+  if (!mo)
+    return false;
+  // Upstream ModelObject::is_fuzzy_skin_painted (Model.hpp:1032): the
+  // painted state lives on the part volumes' fuzzy_skin_facets annotation.
+  for (const Slic3r::ModelVolume *mv : mo->volumes)
+    if (mv && mv->is_model_part() && !mv->fuzzy_skin_facets.empty())
+      return true;
+  return false;
+#else
+  Q_UNUSED(objectIndex);
+  return false;
+#endif
+}
+
+bool EditorViewModel::enableFuzzySkinOnObject(int objectIndex)
+{
+  if (!projectService_)
+    return false;
+  if (objectIndex < 0 || objectIndex >= projectService_->objectNames().size())
+  {
+    statusText_ = tr("Select one object to enable painted fuzzy skin");
+    emit stateChanged();
+    return false;
+  }
+  // Upstream :350-354: new_conf = obj_cfg keeps every other override intact,
+  // set_key_value swaps only fuzzy_skin. setScopedOptionValue at
+  // volumeIndex -1 targets the object config (scopedConfigForWrite,
+  // ProjectService.cpp:244-261) and rewrites only this key — same contract.
+  // "Painted only" is print_config_def enum_labels[0] == FuzzySkinType::None
+  // (PrintConfig.cpp:3911), so the label write reproduces the upstream
+  // ConfigOptionEnum<FuzzySkinType>(FuzzySkinType::None) exactly.
+  const bool ok = projectService_->setScopedOptionValue(
+      objectIndex, -1, QStringLiteral("fuzzy_skin"),
+      QStringLiteral("Painted only"));
+  if (ok)
+  {
+    // Upstream update_model_object posts a background re-slice after a
+    // config-affecting gizmo write (:384); the Qt object-settings writes
+    // take the same invalidate pair (applyObjectSettings path).
+    invalidateSliceResultsForCurrentPlate();
+    statusText_ = tr("Painted fuzzy skin enabled for this object");
+  }
+  else
+  {
+    statusText_ = projectService_->lastError();
+  }
+  emit stateChanged();
+  return ok;
 }
 
 void EditorViewModel::switchToPreview()

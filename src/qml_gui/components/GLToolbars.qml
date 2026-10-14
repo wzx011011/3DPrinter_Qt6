@@ -65,7 +65,10 @@ Item {
     // selectable set keeps buttons (see the gizmo row below); the OWzx-only
     // modes (Hollow/FaceDetector/Drill/AdvancedCut) lost their toolbar
     // entries in the 2026-10-09 upstream alignment and no longer need
-    // toolbar icons here.
+    // toolbar icons here. MmuSegmentation and (since P3) FuzzySkin have no
+    // dedicated case and take the generic box.svg fallback below -- their
+    // upstream assets (toolbar_fuzzy_skin_paint.svg) are not embedded in
+    // qml_assets.qrc yet.
     function iconForTool(toolId) {
         switch (toolId) {
         case GLViewport.GizmoMove:
@@ -268,8 +271,12 @@ Item {
             // emboss-volume double-click (GLCanvas3D.cpp:4845-4880) and
             // Simplify from the object context menu (GUI_Factories.cpp:2105
             // -> GUI_ObjectList.cpp:6255) -- both carriers already exist in
-            // PrepareContextMenus.qml. FuzzySkin (hpp:82), Assembly
-            // (hpp:87) and BrimEars (hpp:89) have no Qt6 gizmo mode yet
+            // PrepareContextMenus.qml. P3 (2026-10-15) registered FuzzySkin
+            // (hpp:82): mode 20 routes to the per-object fuzzy_skin config
+            // channel (EditorViewModel fuzzySkin* API, upstream
+            // GLGizmoFuzzySkin.cpp:326-359); the facet-painting half is not
+            // ported, so the mode renders no overlay yet. Assembly (hpp:87)
+            // and BrimEars (hpp:89) still have no Qt6 gizmo mode
             // (RhiViewport.h) -- registered gap, no fabricated buttons. The
             // former separate Text button duplicated the single upstream
             // GLGizmoEmboss; the former Qt6-only Hollow/FaceDetector/Drill/
@@ -285,6 +292,10 @@ Item {
             GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean"); iconSource: iconForTool(toolId) }
             GizmoToolButton { toolId: GLViewport.GizmoSupportPaint; textTip: qsTr("Support painting"); iconSource: iconForTool(toolId) }
             GizmoToolButton { toolId: GLViewport.GizmoSeamPaint; textTip: qsTr("Seam painting"); iconSource: iconForTool(toolId) }
+            // Upstream EType order: Seam(7) -> FuzzySkin(8) -> MmSegmentation(9).
+            // Upstream name GLGizmoFuzzySkin::on_get_name
+            // (GLGizmoFuzzySkin.cpp:28) "Paint-on fuzzy skin".
+            GizmoToolButton { toolId: GLViewport.GizmoFuzzySkin; textTip: qsTr("Paint-on fuzzy skin"); iconSource: iconForTool(toolId) }
             GizmoToolButton { toolId: GLViewport.GizmoMmuSegmentation; textTip: qsTr("Multicolor painting"); iconSource: iconForTool(toolId) }
             GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss"); iconSource: iconForTool(toolId) }
             GizmoToolButton { toolId: GLViewport.GizmoMeasure; textTip: qsTr("Measure"); iconSource: iconForTool(toolId) }

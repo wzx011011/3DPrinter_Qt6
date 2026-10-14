@@ -212,6 +212,12 @@ private slots:
   // the overlay gated to gizmo mode 19 + CanvasAssembleView, and the
   // AssemblyMeasureGeometry helper exists. Prepare/Preview guards stay intact.
   void assembleViewMeasurementGizmoWiredAndOverlayRenders();
+  // P3 (dev plan 2026-10-10 §6): the FuzzySkin gizmo is registered instead of
+  // being an honest gap: GizmoFuzzySkin = 20 exists in RhiViewport.h, the
+  // GLToolbars gizmo row carries the button in upstream EType order, and
+  // EditorViewModel.h declares the per-object fuzzy_skin config channel
+  // (upstream GLGizmoFuzzySkin.cpp:326-359 port).
+  void p3FuzzySkinGizmoRegisteredWithConfigChannel();
   // Phase 93-01 (ASMVERIFY-01): consolidated AssembleView-restoration
   // milestone verification. Locks: placeholder removed, AssemblePage.qml
   // present + registered, CanvasAssembleView enum, explosion-ratio wiring,
@@ -5133,6 +5139,62 @@ void QmlUiAuditTests::assembleViewRestorationMilestoneHasFinalVerificationCovera
     QVERIFY2(audits.contains(anchor),
              qPrintable(QStringLiteral("AssembleView milestone missing audit anchor: %1").arg(anchor)));
   }
+}
+
+void QmlUiAuditTests::p3FuzzySkinGizmoRegisteredWithConfigChannel()
+{
+  // P3 (dev plan 2026-10-10 §6): the FuzzySkin gizmo flips from "registered
+  // gap, no fabricated buttons" to a real registration backed by the
+  // per-object fuzzy_skin config channel (upstream GLGizmoFuzzySkin.cpp:
+  // 326-359). Source-audit locks, same style as the ASMMEASURE audit above.
+  const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
+  const QString editorSource = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
+  const QString rhiViewportHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
+  const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
+  QVERIFY2(!editorHeader.isEmpty(), "Unable to read EditorViewModel.h");
+  QVERIFY2(!editorSource.isEmpty(), "Unable to read EditorViewModel.cpp");
+  QVERIFY2(!rhiViewportHeader.isEmpty(), "Unable to read RhiViewport.h");
+  QVERIFY2(!glToolbars.isEmpty(), "Unable to read GLToolbars.qml");
+
+  // (1) Gizmo enum value: GizmoFuzzySkin = 20 sits right after the pinned
+  // GizmoAssemblyMeasure = 19 (the X3 string lock must stay intact).
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("GizmoAssemblyMeasure = 19")),
+           "RhiViewport.h must keep the pinned GizmoAssemblyMeasure = 19");
+  QVERIFY2(rhiViewportHeader.contains(QStringLiteral("GizmoFuzzySkin = 20")),
+           "RhiViewport.h must declare GizmoFuzzySkin = 20");
+
+  // (2) Toolbar registration: the gizmo row carries the FuzzySkin button and
+  // no longer names FuzzySkin as a registered gap.
+  QVERIFY2(glToolbars.contains(QStringLiteral("toolId: GLViewport.GizmoFuzzySkin")),
+           "GLToolbars.qml must register the FuzzySkin gizmo button");
+  QVERIFY2(!glToolbars.contains(QStringLiteral("FuzzySkin (hpp:82), Assembly")),
+           "GLToolbars.qml must stop listing FuzzySkin as a registered gap");
+
+  // (3) EditorViewModel config channel: the upstream GLGizmoFuzzySkin config
+  // interactions (:326-359) surface as the fuzzySkin* API + the mirrored
+  // FuzzySkinState enum.
+  QVERIFY2(editorHeader.contains(QStringLiteral("enum FuzzySkinState")),
+           "EditorViewModel.h must mirror the upstream FuzzySkinType enum");
+  QVERIFY2(editorHeader.contains(QStringLiteral("fuzzySkinHasObjectOverride")),
+           "EditorViewModel.h must declare fuzzySkinHasObjectOverride()");
+  QVERIFY2(editorHeader.contains(QStringLiteral("fuzzySkinEffectiveMode")),
+           "EditorViewModel.h must declare fuzzySkinEffectiveMode()");
+  QVERIFY2(editorHeader.contains(QStringLiteral("isFuzzySkinPainted")),
+           "EditorViewModel.h must declare isFuzzySkinPainted()");
+  QVERIFY2(editorHeader.contains(QStringLiteral("enableFuzzySkinOnObject")),
+           "EditorViewModel.h must declare enableFuzzySkinOnObject()");
+  // The write lands the upstream None ("Painted only") value and the mode-20
+  // gate follows the painter family.
+  QVERIFY2(editorSource.contains(QStringLiteral("QStringLiteral(\"Painted only\")")),
+           "EditorViewModel.cpp must write the upstream 'Painted only' (None) label");
+  QVERIFY2(editorSource.contains(QStringLiteral("case 20: // FuzzySkin (P3)")),
+           "EditorViewModel.cpp canActivateGizmo must gate mode 20");
+
+  // (4) Config-only scope honesty: the gizmo row comment must keep stating
+  // that the facet-painting half is not ported (no overlay) — the comment is
+  // the carrier of that scope ruling.
+  QVERIFY2(glToolbars.contains(QStringLiteral("facet-painting half is not")),
+           "GLToolbars.qml must keep documenting the config-only P3 scope");
 }
 
 void QmlUiAuditTests::assembleViewPlaceholderArtifactsStayAbsent()

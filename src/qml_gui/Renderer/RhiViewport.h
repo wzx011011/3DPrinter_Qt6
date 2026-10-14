@@ -533,7 +533,17 @@ public:
     // Ctrl+U) — mirrors upstream GLGizmoAssembly being a separate class from
     // GLGizmoMeasure (GLGizmoAssembly.hpp:9). The AssembleView mask returns
     // (1 << 19); the renderer gates the overlay on m_gizmoMode == 19.
-    GizmoAssemblyMeasure = 19
+    GizmoAssemblyMeasure = 19,
+    // P3 (dev plan 2026-10-10 §6): FuzzySkin gizmo — upstream
+    // EType::FuzzySkin (GLGizmosManager.hpp:82, GLGizmoFuzzySkin). The Qt
+    // port carries the per-object fuzzy_skin config channel (EditorViewModel
+    // fuzzySkin* API) + the GLToolbars registration; the facet-painting half
+    // (TriangleSelector -> fuzzy_skin_facets, GLGizmoFuzzySkin.cpp:367-413)
+    // is not ported, so this mode renders no brush/facet overlay — there is
+    // no paint cursor to draw and no facets to show. Activation =
+    // single-object selection like the upstream painter family
+    // (GLGizmoPainterBase.cpp:1098-1102 is_single_full_instance).
+    GizmoFuzzySkin = 20
   };
   Q_ENUM(GizmoMode)
 

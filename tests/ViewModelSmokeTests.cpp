@@ -315,6 +315,12 @@ private slots:
   void dirtyProjectDiscardRememberPersists();
   void editor_import_model_updates_state();
   void editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid();
+  // P3 (dev plan 2026-10-10 §6): FuzzySkin gizmo backend — the per-object
+  // fuzzy_skin config channel (upstream GLGizmoFuzzySkin.cpp:326-359):
+  // effective state = object override else global preset, the enable link
+  // writes fuzzy_skin=None to the object config, and the gizmo-20 gate
+  // follows the painter-family single-object selection.
+  void p3FuzzySkinGizmoConfigChannelRoundTrips();
   // 260822-x4n B1 (upstream BackgroundSlicingProcess::can_switch_print,
   // BackgroundSlicingProcess.cpp:140-155): plate switches are refused while a
   // slice is RUNNING and allowed once it finishes.
@@ -757,6 +763,100 @@ void ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlate
   editor.switchToPreview();
   QVERIFY2(editor.statusText().contains(QStringLiteral("尚未切片")),
            qPrintable(editor.statusText()));
+}
+
+// ── P3: FuzzySkin gizmo backend — per-object fuzzy_skin config channel ──────
+// Upstream truth: GLGizmoFuzzySkin.cpp:326-359. The gizmo reads the effective
+// fuzzy_skin state as object-override-else-global-preset (:328-330) and its
+// "Enable painted fuzzy skin for this object" link writes fuzzy_skin=None
+// ("Painted only") onto the object config while every other override stays
+// intact (:350-354). Activation follows the painter family (single object,
+// GLGizmoPainterBase.cpp:1098-1102). The facet-painting half (:367-413) is
+// not ported, so isFuzzySkinPainted reports the real annotation and must stay
+// false here.
+void ViewModelSmokeTests::p3FuzzySkinGizmoConfigChannelRoundTrips()
+{
+  // Production wiring parity: BackendContext.cpp:209 injects the
+  // ConfigViewModel (the edited-print-preset value surface, the analog of
+  // upstream glb_cfg). The scoped settings snapshot keeps the selected-preset
+  // keys clean so the global default resolves deterministically.
+  ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
+                                        QStringLiteral("P3FuzzySkin"));
+  ScopedSettingsSnapshot snapshot({
+      QStringLiteral("presets/selectedPrint"),
+      QStringLiteral("presets/selectedFilament"),
+      QStringLiteral("presets/selectedPrinter")});
+  snapshot.clear();
+
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  editor.setConfigViewModel(&config);
+
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QCOMPARE(editor.objectCount(), 2);
+
+  // Gizmo-20 gate: painter-family activation semantics.
+  editor.clearObjectSelection();
+  QVERIFY(!editor.canActivateGizmo(20));
+  QCOMPARE(editor.availableGizmoMask() & (1 << 20), 0);
+  QCOMPARE(editor.gizmoStatusText(20), QStringLiteral("Requires one selected object"));
+  editor.selectObject(0);
+  QVERIFY(editor.canActivateGizmo(20));
+  QVERIFY((editor.availableGizmoMask() & (1 << 20)) != 0);
+  QCOMPARE(editor.gizmoStatusText(20), QStringLiteral("Ready"));
+
+  // Clean slate: no override, no painted facets, effective state falls back
+  // to the global print preset. The upstream global default is
+  // Disabled_fuzzy (PrintConfig.cpp:3917), which is exactly the state that
+  // makes the gizmo show its "Enable painted fuzzy skin" link.
+  QVERIFY(!editor.fuzzySkinHasObjectOverride(0));
+  QVERIFY(!editor.fuzzySkinHasObjectOverride(1));
+  QVERIFY(!editor.isFuzzySkinPainted(0));
+  QCOMPARE(editor.fuzzySkinObjectOverrideMode(0), -1);
+  const int effectiveBefore = editor.fuzzySkinEffectiveMode(0);
+  QVERIFY2(effectiveBefore == int(EditorViewModel::FuzzySkinDisabled),
+           qPrintable(QStringLiteral("global preset default should resolve to "
+                                     "FuzzySkinDisabled, got %1")
+                          .arg(effectiveBefore)));
+
+  // The enable write: fuzzy_skin=None lands on object 0's config only.
+  QVERIFY2(editor.enableFuzzySkinOnObject(0), qPrintable(editor.statusText()));
+  QVERIFY(editor.fuzzySkinHasObjectOverride(0));
+  QVERIFY(!editor.fuzzySkinHasObjectOverride(1));
+  QCOMPARE(editor.fuzzySkinObjectOverrideMode(0), int(EditorViewModel::FuzzySkinPaintedOnly));
+  // Override wins over the Disabled global — the exact read the upstream
+  // warning link exists to fix.
+  QCOMPARE(editor.fuzzySkinEffectiveMode(0), int(EditorViewModel::FuzzySkinPaintedOnly));
+  QCOMPARE(editor.fuzzySkinEffectiveMode(1), effectiveBefore);
+  // The raw stored representation is the upstream label for FuzzySkinType::
+  // None (readConfigValue coEnum branch, ProjectService.cpp:322-331), which
+  // writeConfigValue maps back to the enum int (:390-406) — the same
+  // value upstream assigns via ConfigOptionEnum<FuzzySkinType>(None).
+  QCOMPARE(project.scopedOptionValue(0, -1, QStringLiteral("fuzzy_skin")),
+           QVariant(QStringLiteral("Painted only")));
+  // Config-only port honesty: the write must not fabricate paint facets.
+  QVERIFY(!editor.isFuzzySkinPainted(0));
+
+  // Sibling overrides stay intact (upstream new_conf = obj_cfg keeps the
+  // rest of the object config). Seed one before enabling.
+  QVERIFY(project.setScopedOptionValue(1, -1, QStringLiteral("layer_height"), 0.24));
+  QVERIFY(editor.enableFuzzySkinOnObject(1));
+  QCOMPARE(project.scopedOptionValue(1, -1, QStringLiteral("layer_height")).toDouble(), 0.24);
+  QCOMPARE(editor.fuzzySkinObjectOverrideMode(1), int(EditorViewModel::FuzzySkinPaintedOnly));
+
+  // Reset path back to the global fallback (SelectionSettingsDialog's
+  // existing reset channel — upstream parity: object-list "reset override").
+  QVERIFY(project.resetScopedOptionValue(0, -1, QStringLiteral("fuzzy_skin")));
+  QVERIFY(!editor.fuzzySkinHasObjectOverride(0));
+  QCOMPARE(editor.fuzzySkinEffectiveMode(0), effectiveBefore);
+
+  // Out-of-range object index: honest rejection, no write.
+  QVERIFY(!editor.enableFuzzySkinOnObject(-1));
+  QVERIFY(!editor.enableFuzzySkinOnObject(99));
 }
 
 // ── 260822-x4n B1: plate switch guarded while slicing ──────────────────────

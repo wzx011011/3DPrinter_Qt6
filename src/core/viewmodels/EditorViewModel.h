@@ -1241,6 +1241,51 @@ public:
   Q_INVOKABLE int scopedOverrideCount(int objectIndex, int volumeIndex) const;
   Q_INVOKABLE QString scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const;
   Q_INVOKABLE bool resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key);
+  // ── P3: FuzzySkin gizmo backend — per-object fuzzy_skin config channel ──
+  // Port of the upstream GLGizmoFuzzySkin config interactions
+  // (Gizmos/GLGizmoFuzzySkin.cpp:326-359): the gizmo reads the effective
+  // fuzzy_skin state as object-override-else-global-preset
+  // (obj_cfg.option("fuzzy_skin") ? override : glb_cfg.opt_enum, :328-330)
+  // and its "Enable painted fuzzy skin for this object" link writes
+  // fuzzy_skin=None into the object config (:350-354). The facet-painting
+  // half of the upstream gizmo (TriangleSelector -> ModelVolume::
+  // fuzzy_skin_facets, :367-413) is NOT ported -- the Qt channel is
+  // config-only by milestone scope (dev plan 2026-10-10 §6 P3); the reads
+  // below report real annotation state and never fabricate paint.
+  // Distinct name from both upstream enums: Slic3r::FuzzySkinType is the
+  // value enum mirrored here (PrintConfig.hpp:58-66, "Painted only" ..
+  // "Disabled"); Slic3r::FuzzySkinMode is the unrelated generator-mode enum
+  // (fuzzy_skin_mode, PrintConfig.cpp:3946).
+  enum FuzzySkinState {
+    FuzzySkinPaintedOnly = 0,  // upstream FuzzySkinType::None ("Painted only")
+    FuzzySkinContour = 1,      // upstream External ("Contour")
+    FuzzySkinHole = 2,         // upstream Hole
+    FuzzySkinContourAndHole = 3, // upstream All ("Contour and hole")
+    FuzzySkinAllWalls = 4,     // upstream AllWalls
+    FuzzySkinDisabled = 5      // upstream Disabled_fuzzy -- global preset default (PrintConfig.cpp:3917)
+  };
+  Q_ENUM(FuzzySkinState)
+  /// true when the object carries its own fuzzy_skin override
+  /// (upstream obj_cfg.option("fuzzy_skin") != nullptr, :328).
+  Q_INVOKABLE bool fuzzySkinHasObjectOverride(int objectIndex) const;
+  /// The object's own override as a FuzzySkinState int; -1 = no override (or
+  /// an unresolvable stored representation).
+  Q_INVOKABLE int fuzzySkinObjectOverrideMode(int objectIndex) const;
+  /// Effective mode = object override else global print-preset value
+  /// (upstream effective_fuzzy_skin_state, :329-330); -1 when neither
+  /// resolves (no model / unknown representation).
+  Q_INVOKABLE int fuzzySkinEffectiveMode(int objectIndex) const;
+  /// Upstream ModelObject::is_fuzzy_skin_painted (Model.hpp:1032): any part
+  /// volume carries a non-empty fuzzy_skin_facets annotation. Config-only
+  /// port: this reads the REAL annotation (3MF-loaded paint round-trips),
+  /// it is always false until a painter writes facets.
+  Q_INVOKABLE bool isFuzzySkinPainted(int objectIndex) const;
+  /// The upstream "Enable painted fuzzy skin for this object" write
+  /// (:350-354): set fuzzy_skin=None on the object config while every other
+  /// override stays intact, then invalidate the current-plate slice results
+  /// (upstream posts EVT_GLCANVAS_SCHEDULE_BACKGROUND_PROCESS, :384). Returns
+  /// false with statusText on a rejected write.
+  Q_INVOKABLE bool enableFuzzySkinOnObject(int objectIndex);
   /// Phase 175 (FEAT-02): per-object layer-range editor API proxies.
   /// Forward to ProjectService so the ObjectLayersDialog QML can manage
   /// per-layer-height ranges (add/remove/set-value/get-value).
