@@ -645,6 +645,50 @@ if(BUILD_TESTING)
         TIMEOUT 300
     )
 
+    # X4 (audit 2026-10-10 ④): visual regression suite — the first automated
+    # visual-truth gate. Renders the key pages at a fixed 1440x900 viewport
+    # under offscreen QPA + Qt Quick software backend and compares each grab
+    # against the committed baselines in tests/visual_baseline/ (per-pixel
+    # tolerance + mismatch-fraction budget; stability hooks freeze timers/
+    # animations and require a byte-exact double grab). The long-dormant
+    # ENABLE_VISUAL_REGRESSION option finally gates something real: OFF
+    # removes the target, and the canonical verify script pins the option ON
+    # and runs the suite as a blocking stage. Baselines are written ONLY by an
+    # explicit developer run (OWZX_VISREG_UPDATE_BASELINE=1) — the gate never
+    # self-heals; see tests/visual_baseline/README.md for the update process.
+    if(ENABLE_VISUAL_REGRESSION)
+        qt_add_executable(VisualRegressionTests tests/VisualRegressionTests.cpp
+            # Same non-QML resource manifests the exe embeds (assets incl.
+            # fonts, the /qtquickcontrols2.conf pin, web chat) — the QML
+            # module tree itself comes from the shared owzx_qml target.
+            src/qml_gui/qml_assets.qrc
+            src/qml_gui/qml_web.qrc
+        )
+        target_link_libraries(VisualRegressionTests PRIVATE owzx_app_core
+            owzx_qml
+            Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent
+            Qt6::Network Qt6::Test
+        )
+        # Same shared-SHA1 duplicate definitions as OWzxSlicer/QmlSmokeTests.
+        if(MSVC)
+            target_link_options(VisualRegressionTests PRIVATE /FORCE:MULTIPLE)
+        else()
+            target_link_options(VisualRegressionTests PRIVATE -Wl,--allow-multiple-definition)
+        endif()
+        target_compile_definitions(VisualRegressionTests PRIVATE
+            # QPA plugin discovery beside the deployed build/ Qt6Core.dll
+            # (same mechanism as QmlSmokeTests above).
+            OWZX_QT_PLATFORM_PLUGIN_DIR="${_qt6_platform_plugin_dir}"
+            # Locates the committed tests/visual_baseline/ tree at runtime.
+            QT_TESTCASE_SOURCEDIR="${CMAKE_SOURCE_DIR}"
+        )
+        add_test(NAME VisualRegressionTests COMMAND VisualRegressionTests)
+        set_tests_properties(VisualRegressionTests PROPERTIES
+            ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+            TIMEOUT 600
+        )
+    endif()
+
     qt_add_executable(PrepareSceneDataTests
         tests/PrepareSceneDataTests.cpp
         src/qml_gui/Renderer/PrepareSceneData.cpp

@@ -211,7 +211,7 @@ Stop-Process -Name 'E2EWorkflowTests', 'ViewModelSmokeTests', 'PrepareSceneDataT
     'ObjectPickingTests', 'NavigatorCubeTests', 'CameraParityTests',
     'ViewportContextMenuTests', 'QmlUiAuditTests', 'PartPlateTests', 'AppToolTests',
     'PreviewParserTests', 'GizmoGeometryTests', 'CliTests', 'owzx-cli',
-    'owzx-render-bench', 'PerfBench', 'QmlSmokeTests' -Force -ErrorAction SilentlyContinue
+    'owzx-render-bench', 'PerfBench', 'QmlSmokeTests', 'VisualRegressionTests' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 
 $defaultUpstreamRoot = Join-Path $repoRoot 'third_party\OrcaSlicer'
@@ -292,6 +292,10 @@ $cmakeArgs = @(
   "-DCMAKE_CXX_COMPILER=$clPathCmake",
   "-DCMAKE_MAKE_PROGRAM=$ninjaPathCmake",
   "-DOWZX_RENDER_BENCH=$(if ($renderBenchEnabled) { 'ON' } else { 'OFF' })",
+  # X4: pin the visual regression option ON explicitly — the suite is part of
+  # the canonical gate (suite count 13 -> 14); a local flip of the CMake
+  # option default must not silently drop it.
+  '-DENABLE_VISUAL_REGRESSION=ON',
   '-DQT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT=3.21',
   "-DQt6_DIR=$qt6ConfigDirCmake"
 )
@@ -474,6 +478,10 @@ Invoke-NinjaTarget 'QmlUiAuditTests'
 # Q14: QML behavior smoke suite (engine-instantiated main.qml + 10 pages;
 # suite count 12 -> 13 in the canonical gate).
 Invoke-NinjaTarget 'QmlSmokeTests'
+# X4: visual regression suite (fixed-viewport software-rendered page grabs vs
+# committed baselines; suite count 13 -> 14 in the canonical gate). Target
+# exists only when ENABLE_VISUAL_REGRESSION=ON, which this script pins above.
+Invoke-NinjaTarget 'VisualRegressionTests'
 # Phase 66 GGEO: gizmo geometry snapshot tests + the P15.11 sidebar-hint
 # builders (buildSidebarHintVertices axis/regression coverage).
 Invoke-NinjaTarget 'GizmoGeometryTests'
@@ -716,6 +724,28 @@ if (Test-Path $qmlSmokeExe) {
   Write-Host "[QmlSmoke] QML behavior smoke tests passed" -ForegroundColor Green
 } else {
   Write-Host "[QmlSmoke] QmlSmokeTests.exe not found" -ForegroundColor Red
+  exit 1
+}
+
+# X4 (2026-10-15): visual regression suite, blocking from day one — the first
+# automated visual-truth gate for a screenshot-driven milestone project.
+# Fixed 1440x900 viewport, offscreen QPA + Qt Quick software backend (no GPU,
+# no driver in the comparison path); per-pixel channel tolerance 12 with a
+# 0.2% mismatch budget against the committed PNGs in tests/visual_baseline/.
+# The suite NEVER writes baselines (missing baseline = red; update mode is an
+# explicit developer run per tests/visual_baseline/README.md), so the gate
+# cannot self-heal. Suite count 13 -> 14 in the canonical gate.
+Write-Host "`n[VisualRegression] Running visual regression tests..." -ForegroundColor Cyan
+$visualRegressionExe = './VisualRegressionTests.exe'
+if (Test-Path $visualRegressionExe) {
+  $visualRegressionExitCode = Invoke-QtTestReport $visualRegressionExe 'VisualRegressionTests.verify.txt'
+  if ($visualRegressionExitCode -ne 0) {
+    Write-Host "[VisualRegression] Visual regression tests failed (diff artifacts in build\visual_failures\)" -ForegroundColor Red
+    exit $visualRegressionExitCode
+  }
+  Write-Host "[VisualRegression] Visual regression tests passed" -ForegroundColor Green
+} else {
+  Write-Host "[VisualRegression] VisualRegressionTests.exe not found (ENABLE_VISUAL_REGRESSION=ON is pinned by this script)" -ForegroundColor Red
   exit 1
 }
 
