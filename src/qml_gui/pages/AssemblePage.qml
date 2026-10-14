@@ -243,6 +243,9 @@ Item {
         plateCount: root.editorVm ? root.editorVm.plateCount : 0
         activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
         meshBatchSourceObjectIndices: root.editorVm ? root.editorVm.meshBatchSourceObjectIndices : []
+        // S3: per-batch instance->world transform channel (decomposed mesh blob
+        // composes transforms viewport-side; inert on legacy world-baked blobs).
+        meshBatchInstanceTransforms: root.editorVm ? root.editorVm.meshBatchInstanceTransforms : []
         // Phase 138 (ASM-01): bind the per-source-object assemble offset list so
         // the renderer applies the per-object translation on the CanvasAssembleView
         // path (Plan 138-03 task 2). Re-evaluates on stateChanged after every

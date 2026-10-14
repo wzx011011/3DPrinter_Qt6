@@ -13,6 +13,7 @@
 #include <QCursor>
 #include <QHoverEvent>
 #include <QImage>
+#include <QMatrix4x4>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QSvgRenderer>
@@ -466,6 +467,37 @@ void RhiViewport::setMeshBatchPrintableFlags(const QVariantList &value)
   m_meshBatchPrintableFlags = value;
   ++m_sceneGeneration;
   ++m_modelGeneration;
+  update();
+}
+
+// S3 (2026-10-14): per-batch instance->world transform channel. THE cheap
+// transform path: content-compare (protocol 2 -- 16 floats per batch, packed
+// as QMatrix4x4 variants, is far cheaper than any re-mirror it guards) and
+// bump ONLY the instance-transform generation. Deliberately NOT
+// m_modelGeneration: the decomposed blob is byte-stable under transform
+// edits, and a model-generation bump would re-parse the multi-megabyte
+// payload per drag frame -- exactly the cost S3 removes. Legacy world-baked
+// blobs ignore the channel scene-side (inert).
+namespace
+{
+  bool instanceTransformVariantsEqual(const QVariantList &left, const QVariantList &right)
+  {
+    if (left.size() != right.size())
+      return false;
+    for (int i = 0; i < left.size(); ++i) {
+      if (left.at(i).value<QMatrix4x4>() != right.at(i).value<QMatrix4x4>())
+        return false;
+    }
+    return true;
+  }
+}
+
+void RhiViewport::setMeshBatchInstanceTransforms(const QVariantList &value)
+{
+  if (instanceTransformVariantsEqual(m_meshBatchInstanceTransforms, value))
+    return;
+  m_meshBatchInstanceTransforms = value;
+  ++m_instanceTransformGeneration;
   update();
 }
 
@@ -2747,8 +2779,15 @@ void RhiViewport::fitPreviewCameraToData()
 
 void RhiViewport::updatePickingScene()
 {
-  if (m_pickModelGeneration == m_modelGeneration && m_pickSceneGeneration == m_sceneGeneration)
+  // S3: a transform-only edit bumps m_instanceTransformGeneration (the
+  // decomposed blob is byte-stable), so the picking scene must rebuild on it
+  // too -- otherwise facet hits stay at the pre-move world positions.
+  if (m_pickModelGeneration == m_modelGeneration
+      && m_pickSceneGeneration == m_sceneGeneration
+      && m_pickInstanceTransformGeneration == m_instanceTransformGeneration)
+  {
     return;
+  }
 
   QList<int> activeObjectIndices;
   activeObjectIndices.reserve(m_activePlateObjectIndices.size());
@@ -2770,15 +2809,27 @@ void RhiViewport::updatePickingScene()
   for (const QVariant &value : m_meshBatchInstanceIndices)
     batchInstanceIndices.append(value.toInt());
 
+  // S3: decomposed blobs carry the per-batch world transform channel so the
+  // pick scene composes volume-local geometry into world coordinates (a v2
+  // blob without the channel fails the parse by contract). Legacy blobs
+  // ignore it.
+  QList<QMatrix4x4> batchWorldTransforms;
+  batchWorldTransforms.reserve(m_meshBatchInstanceTransforms.size());
+  for (const QVariant &value : m_meshBatchInstanceTransforms)
+    batchWorldTransforms.append(value.value<QMatrix4x4>());
+
   m_pickScene.setPlateContext(m_currentPlateIndex, m_plateCount, activeObjectIndices);
   m_pickScene.setBed(m_bedWidth, m_bedDepth, m_bedOriginX, m_bedOriginY,
                      m_bedShapeType, m_bedDiameter);
   m_pickScene.setModelMeshData(m_meshData, batchSourceObjectIndices,
                                batchVolumeIndices, batchInstanceIndices,
-                               activeObjectIndices);
+                               activeObjectIndices, QList<int>(), QList<int>(),
+                               QList<int>(), QList<QVector4D>(),
+                               batchWorldTransforms);
   m_pickScene.clearDirtyFlags();
   m_pickModelGeneration = m_modelGeneration;
   m_pickSceneGeneration = m_sceneGeneration;
+  m_pickInstanceTransformGeneration = m_instanceTransformGeneration;
 }
 
 int RhiViewport::pickSourceObjectAt(const QPointF &position)

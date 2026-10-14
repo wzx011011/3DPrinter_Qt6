@@ -230,6 +230,16 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   batchInstanceIndices.reserve(viewport->m_meshBatchInstanceIndices.size());
   for (const QVariant &value : viewport->m_meshBatchInstanceIndices)
     batchInstanceIndices.append(value.toInt());
+  // S3 (2026-10-14): per-batch instance->world transform channel (one
+  // QMatrix4x4 per blob batch). Mirrored every synchronize() and pushed into
+  // the scene -- setInstanceTransforms self-guards (content compare,
+  // per-batch diff recompose, inert on legacy blobs), and the model
+  // re-upload below composes fresh transforms at parse when the generation
+  // also moved this frame.
+  QList<QMatrix4x4> batchWorldTransforms;
+  batchWorldTransforms.reserve(viewport->m_meshBatchInstanceTransforms.size());
+  for (const QVariant &value : viewport->m_meshBatchInstanceTransforms)
+    batchWorldTransforms.append(value.value<QMatrix4x4>());
   if (viewport->m_canvasType == RhiViewport::CanvasAssembleView
       && batchVolumeIndices.isEmpty() && batchInstanceIndices.isEmpty()) {
     batchVolumeIndices = QList<int>(batchSourceObjectIndices.size(), 0);
@@ -370,8 +380,15 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     batchVolumeTypes,
                                     batchExtruderIds,
                                     batchPrintableFlags,
-                                    extruderColors);
+                                    extruderColors,
+                                    batchWorldTransforms);
   }
+  // S3: transform-only revisions (no mesh-generation bump) flow through the
+  // scene's per-batch diff recompose; the S2 registry arms DirtyMesh|DirtyGpu
+  // and render()'s single rule re-uploads from the recomposed vertices. Must
+  // run AFTER the model gate above so a same-frame mesh+transform change
+  // parses once with the fresh channel and this call settles as a no-op.
+  m_prepareScene.setInstanceTransforms(batchWorldTransforms);
   // S2 (PREV-01): the ghost-shell buffer rebuilds with the model generation
   // (protocol 1) — arm its channel whenever the resident generation lags the
   // mirrored one (boot, object edits, extruder re-tint). The upload itself

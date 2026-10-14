@@ -1822,6 +1822,11 @@ Item {
                     meshBatchVolumeTypes: root.editorVm ? root.editorVm.meshBatchVolumeTypes : []
                     meshBatchExtruderIds: root.editorVm ? root.editorVm.meshBatchExtruderIds : []
                     meshBatchPrintableFlags: root.editorVm ? root.editorVm.meshBatchPrintableFlags : []
+                    // S3: per-batch instance->world transform channel -- the ONLY
+                    // payload that moves on a transform edit under the decomposed
+                    // mesh blob (the blob itself is byte-stable), so gizmo drags
+                    // reach the renderer without a mesh refresh.
+                    meshBatchInstanceTransforms: root.editorVm ? root.editorVm.meshBatchInstanceTransforms : []
                     selectedSourceObjectIndex: root.editorVm ? root.editorVm.selectedSourceObjectIndex : -1
                     // P15.11 (MULTICENTER): the gizmo pivot + white selection-center
                     // sphere + corner-tick highlight box anchor on the union AABB of

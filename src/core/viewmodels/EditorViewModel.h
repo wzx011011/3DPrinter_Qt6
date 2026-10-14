@@ -65,6 +65,14 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags NOTIFY stateChanged)
+  // S3 (2026-10-14): per-batch instance->world transform channel (one
+  // QMatrix4x4 per blob batch, ProjectServiceMock::meshBatchInstanceTransforms).
+  // Under the decomposed mesh blob this is the ONLY thing that moves on a
+  // transform edit -- the stateChanged umbrella (S1 will re-point this to the
+  // named transformChanged) re-evaluates the QML binding, the viewport setter
+  // content-compares, and the scene recomposes changed batches. Legacy
+  // world-baked blobs ignore the channel viewport-side (inert).
+  Q_PROPERTY(QVariantList meshBatchInstanceTransforms READ meshBatchInstanceTransforms NOTIFY stateChanged)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
   // per source object index, paralleling meshBatchSourceObjectIndices. Consumed
   // by RhiViewport on the CanvasAssembleView path so assembled volumes render at
@@ -278,6 +286,11 @@ public:
   QVariantList meshBatchVolumeTypes() const;
   QVariantList meshBatchExtruderIds() const;
   QVariantList meshBatchPrintableFlags() const;
+  // S3 (2026-10-14): per-batch instance->world transform channel (one
+  // QMatrix4x4 variant per blob batch). Lazy: served from the live model
+  // state through ProjectServiceMock::meshBatchInstanceTransforms on every
+  // read, so no transform-family refresh call is needed anywhere.
+  QVariantList meshBatchInstanceTransforms() const;
   // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
   // per source object index). Mirrors meshBatchSourceObjectIndices indexing.
   QVariantList assembleOffsets() const;

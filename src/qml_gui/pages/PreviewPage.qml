@@ -342,6 +342,10 @@ Item {
                     meshBatchVolumeTypes: root.editorVm ? root.editorVm.meshBatchVolumeTypes : []
                     meshBatchExtruderIds: root.editorVm ? root.editorVm.meshBatchExtruderIds : []
                     meshBatchPrintableFlags: root.editorVm ? root.editorVm.meshBatchPrintableFlags : []
+                    // S3: per-batch instance->world transform channel (decomposed
+                    // mesh blob composes transforms viewport-side; ghost shells
+                    // stay world-correct under transform edits).
+                    meshBatchInstanceTransforms: root.editorVm ? root.editorVm.meshBatchInstanceTransforms : []
                     activePlateObjectIndices: root.editorVm ? root.editorVm.activePlateObjectIndices : []
                     currentPlateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
                     plateCount: root.editorVm ? root.editorVm.plateCount : 1

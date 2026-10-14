@@ -92,6 +92,15 @@ class RhiViewport : public QQuickRhiItem
   Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes WRITE setMeshBatchVolumeTypes)
   Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds WRITE setMeshBatchExtruderIds)
   Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags WRITE setMeshBatchPrintableFlags)
+  // S3 (2026-10-14): per-batch instance->world transform channel -- one
+  // QMatrix4x4 variant per mesh blob batch, bound from editorVm.
+  // meshBatchInstanceTransforms. The setter content-compares (protocol 2:
+  // 16 floats per batch is cheaper than any re-mirror it guards) and bumps
+  // m_instanceTransformGeneration, so the renderer re-composes changed
+  // batches and the picking scene rebuilds WITHOUT a mesh-generation bump
+  // (the decomposed blob is byte-stable under transform edits). Inert on
+  // legacy world-baked blobs (PrepareSceneData ignores the channel there).
+  Q_PROPERTY(QVariantList meshBatchInstanceTransforms READ meshBatchInstanceTransforms WRITE setMeshBatchInstanceTransforms)
   Q_PROPERTY(bool layerEditingInputActive READ layerEditingInputActive WRITE setLayerEditingInputActive)
   Q_PROPERTY(bool contextToolInputCaptured READ contextToolInputCaptured WRITE setContextToolInputCaptured)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
@@ -467,6 +476,11 @@ public:
   QVariantList meshBatchVolumeTypes() const { return m_meshBatchVolumeTypes; }
   QVariantList meshBatchExtruderIds() const { return m_meshBatchExtruderIds; }
   QVariantList meshBatchPrintableFlags() const { return m_meshBatchPrintableFlags; }
+  // S3 (2026-10-14): per-batch instance->world transform channel (one
+  // QMatrix4x4 variant per blob batch). The setter is the generation bump
+  // point for transform-only edits.
+  QVariantList meshBatchInstanceTransforms() const { return m_meshBatchInstanceTransforms; }
+  void setMeshBatchInstanceTransforms(const QVariantList &value);
   void setMeshBatchInstanceIndices(const QVariantList &value);
   void setMeshBatchVolumeTypes(const QVariantList &value);
   void setMeshBatchExtruderIds(const QVariantList &value);
@@ -1080,6 +1094,12 @@ private:
   QVariantList m_meshBatchVolumeTypes;
   QVariantList m_meshBatchExtruderIds;
   QVariantList m_meshBatchPrintableFlags;
+  // S3 (2026-10-14): per-batch instance->world transform channel mirror.
+  QVariantList m_meshBatchInstanceTransforms;
+  // S3: bumped by setMeshBatchInstanceTransforms on a content change; gates
+  // the picking-scene rebuild alongside the mesh/scene generations (the
+  // decomposed blob no longer changes bytes on transform edits).
+  qint64 m_instanceTransformGeneration = 0;
   bool m_layerEditingInputActive = false;
   bool m_contextToolInputCaptured = false;
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z).
@@ -1222,6 +1242,8 @@ private:
   qint64 m_modelGeneration = 1;
   qint64 m_pickModelGeneration = 0;
   qint64 m_pickSceneGeneration = 0;
+  // S3: last instance-transform revision the picking scene reflects.
+  qint64 m_pickInstanceTransformGeneration = 0;
   CameraController m_camera;
   PrepareSceneData m_pickScene;
   // v5.16 (NAVIGATOR): bottom-left 3D navigator cube interaction state.

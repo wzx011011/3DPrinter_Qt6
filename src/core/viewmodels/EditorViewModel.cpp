@@ -6028,6 +6028,24 @@ QVariantList EditorViewModel::assembleScales() const
     scales.append(QVariant::fromValue(projectService_->assembleScale(objectIndex)));
   return scales;
 }
+// S3 (2026-10-14): per-batch instance->world transform channel (one QMatrix4x4
+// per blob batch, ProjectServiceMock::meshBatchInstanceTransforms). Deliberately
+// LAZY -- every read composes from the live model state, so the stateChanged
+// umbrella (projectChanged relay / gizmo drag emits) re-evaluating the QML
+// binding IS the transform-path refresh; refreshMeshCacheAndFitHint stays out
+// of the transform family by construction (S3 contract narrowing), and S1's
+// transformChanged will later own this NOTIFY re-point.
+QVariantList EditorViewModel::meshBatchInstanceTransforms() const
+{
+  QVariantList out;
+  if (!projectService_)
+    return out;
+  const QList<QMatrix4x4> transforms = projectService_->meshBatchInstanceTransforms();
+  out.reserve(transforms.size());
+  for (const QMatrix4x4 &transform : transforms)
+    out.append(QVariant::fromValue(transform));
+  return out;
+}
 QString EditorViewModel::statusText() const { return statusText_; }
 int EditorViewModel::loadProgress() const { return projectService_ ? projectService_->loadProgress() : 0; }
 bool EditorViewModel::loading() const { return projectService_ ? projectService_->loading() : false; }
