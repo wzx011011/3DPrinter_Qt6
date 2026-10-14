@@ -277,16 +277,30 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
                                         const QList<int> &batchVolumeTypes,
                                         const QList<int> &batchExtruderIds,
                                         const QList<int> &batchPrintableFlags,
-                                        const QList<QVector4D> &extruderColors)
+                                        const QList<QVector4D> &extruderColors,
+                                        const QList<QMatrix4x4> &batchWorldTransforms)
 {
+  // Blob v2 magic ('MDS2'): decomposed volume-local geometry. A v1 blob's
+  // first int32 is the batch count (>= 0), so a leading 0x3244534D can only
+  // be the S3 magic (that count would exceed kMaxPackedObjects anyway).
+  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D;
+
   clearModelGeometry();
 
   qint32 objectCount = 0;
   qsizetype offset = 0;
+  qint32 leading = 0;
+  bool valid = readValue(meshData, offset, leading)
+      && leading >= 0;
+  const bool decomposed = (leading == kMeshBlobMagicV2);
+  objectCount = leading;
+  if (decomposed)
+    valid = readValue(meshData, offset, objectCount)
+        && objectCount >= 0;
+
   // P15.1 (COLOR): the render-channel arrays are optional (the picking scene
   // passes none); when present they must cover every batch.
-  bool valid = readValue(meshData, offset, objectCount)
-      && objectCount >= 0
+  valid = valid
       && objectCount <= kMaxPackedObjects
       && batchSourceObjectIndices.size() == objectCount
       && batchVolumeIndices.size() == objectCount
@@ -299,7 +313,11 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       && (batchExtruderIds.isEmpty()
           || batchExtruderIds.size() == objectCount)
       && (batchPrintableFlags.isEmpty()
-          || batchPrintableFlags.size() == objectCount);
+          || batchPrintableFlags.size() == objectCount)
+      // S3: a decomposed blob without a covering transform list would parse
+      // into an identity-composed scene at the wrong place -- fail loud
+      // instead (clearModelGeometry above already dropped the old scene).
+      && (!decomposed || batchWorldTransforms.size() == objectCount);
 
   if (valid) {
     // PERF (scene_expand): exact-capacity pre-pass. Walk only the per-batch
@@ -429,15 +447,30 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     // mid-batch break on a non-finite vertex (offset is synced right after
     // the loop; the failed expansion clears the geometry either way).
     const char *const meshDataBase = meshData.constData();
-    const char *vertexCursor = meshDataBase + offset;
+    const char *const batchBase = meshDataBase + offset;
+    // S3: decomposed payloads compose through the batch's world transform as
+    // they append, so the resident scene keeps its world-space contract
+    // (bounds, contours, picking, outside state all read world coordinates
+    // unchanged). A mirrored instance (det<0) flips triangle winding at
+    // compose time -- the production-side swap only covered the volume's own
+    // left-handed transform.
+    const QMatrix4x4 batchWorld = decomposed
+        ? batchWorldTransforms.at(objectIndex) : QMatrix4x4();
+    const bool swapWinding = decomposed && batchWorld.determinant() < 0.0f;
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
+      // S3 winding: triangles append in source order (0,1,2); a left-handed
+      // world matrix appends (0,2,1) instead.
+      const int triLocal = int(vertexIndex % 3);
+      const int srcLocal = swapWinding ? ((triLocal == 0) ? 0 : 3 - triLocal)
+                                       : triLocal;
+      const char *vertexCursor = batchBase
+          + qsizetype(vertexIndex - triLocal + srcLocal) * kPackedVertexBytes;
       float x = 0.0f;
       float y = 0.0f;
       float z = 0.0f;
       std::memcpy(&x, vertexCursor, sizeof(float));
       std::memcpy(&y, vertexCursor + sizeof(float), sizeof(float));
       std::memcpy(&z, vertexCursor + 2 * sizeof(float), sizeof(float));
-      vertexCursor += kPackedVertexBytes;
       if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
         valid = false;
         break;
@@ -445,6 +478,13 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
 
       if (!active)
         continue;
+
+      if (decomposed) {
+        const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
+        x = worldPoint.x();
+        y = worldPoint.y();
+        z = worldPoint.z();
+      }
 
       const ModelVertex vertex{x, y, z, r, g, b, a};
       m_modelVertices.append(vertex);
@@ -461,7 +501,8 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
       }
       updateModelBounds(vertex);
     }
-    offset = vertexCursor - meshDataBase;
+    if (valid)
+      offset = qsizetype(batchBase - meshDataBase) + vertexCount * kPackedVertexBytes;
 
     if (valid && active) {
       batch.vertexCount = m_modelVertices.size() - batch.firstVertex;
@@ -481,15 +522,16 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
   // from a fully valid payload so a malformed stream cannot leave stale
   // outside flags behind.
   if (valid) {
+    // S3: the resident format + the transform channel the world-space
+    // vertices were composed with (index-aligned with m_modelBatches).
+    m_meshDecomposedFormat = decomposed;
+    m_batchWorldTransforms = decomposed ? batchWorldTransforms
+                                        : QList<QMatrix4x4>();
     // P15.5 (SINK): contour bands for sinking batches (bbox dips under the
     // bed plane without being fully below it — upstream is_sinking,
     // 3DScene.cpp:614-620 with SINKING_Z_THRESHOLD = -0.001,
     // Model.hpp:1709).
-    for (const ModelBatch &batch : m_modelBatches) {
-      if (batch.bounds.minY < kSinkingThreshold
-          && batch.bounds.maxY >= kSinkingThreshold)
-        appendSinkingContours(batch);
-    }
+    rebuildSinkingContours();
     updatePrintVolume();
     recomputeOutsideState();
   } else {
@@ -1175,10 +1217,136 @@ void PrepareSceneData::clearModelGeometry()
   m_modelBatches.clear();
   m_modelBounds = ModelBounds{};
   m_hasModelBounds = false;
+  // S3: the decomposed format + its transform channel describe the resident
+  // batches; with the batches gone they are meaningless.
+  m_meshDecomposedFormat = false;
+  m_batchWorldTransforms.clear();
   // P15.5 (SINK)/P15.3 (OUTOFBED): derived state follows the batches.
   m_sinkingContourVertices.clear();
   m_sinkingContourRanges.clear();
   m_anyVolumeOutside = false;
+}
+
+// S3: contour bands rebuilt from the resident world-space batches. Shared by
+// the parse path and the transform-only recompose (sinking contact bands
+// move with instance transforms).
+void PrepareSceneData::rebuildSinkingContours()
+{
+  m_sinkingContourVertices.clear();
+  m_sinkingContourRanges.clear();
+  for (const ModelBatch &batch : m_modelBatches) {
+    if (batch.bounds.minY < kSinkingThreshold
+        && batch.bounds.maxY >= kSinkingThreshold)
+      appendSinkingContours(batch);
+  }
+}
+
+// S3: recompose one batch's vertex range in place through a new world
+// matrix. World matrix with det<0 flips triangle winding per triple (the
+// same compose-time flip the parse path applies to decomposed payloads).
+void PrepareSceneData::recomposeBatchRange(ModelBatch &batch,
+                                           const QMatrix4x4 &world,
+                                           bool swapWinding)
+{
+  const int first = std::max(0, batch.firstVertex);
+  const int end = static_cast<int>(std::min<qsizetype>(
+      batch.firstVertex + batch.vertexCount, m_modelVertices.size()));
+  for (int i = first; i < end; i += 3) {
+    const int tripleEnd = std::min(i + 3, end);
+    if (swapWinding && tripleEnd - i == 3) {
+      // (0,1,2) -> (0,2,1): exchange the second and third vertex.
+      std::swap(m_modelVertices[i + 1], m_modelVertices[i + 2]);
+    }
+    for (int j = i; j < tripleEnd; ++j) {
+      ModelVertex &v = m_modelVertices[j];
+      const QVector3D p = world.map(QVector3D(v.x, v.y, v.z));
+      v.x = p.x();
+      v.y = p.y();
+      v.z = p.z();
+    }
+  }
+
+  bool batchHasBounds = false;
+  for (int i = first; i < end; ++i) {
+    const ModelVertex &v = m_modelVertices.at(i);
+    if (!batchHasBounds) {
+      batch.bounds = ModelBounds{v.x, v.y, v.z, v.x, v.y, v.z};
+      batchHasBounds = true;
+    } else {
+      batch.bounds.minX = std::min(batch.bounds.minX, v.x);
+      batch.bounds.minY = std::min(batch.bounds.minY, v.y);
+      batch.bounds.minZ = std::min(batch.bounds.minZ, v.z);
+      batch.bounds.maxX = std::max(batch.bounds.maxX, v.x);
+      batch.bounds.maxY = std::max(batch.bounds.maxY, v.y);
+      batch.bounds.maxZ = std::max(batch.bounds.maxZ, v.z);
+    }
+  }
+}
+
+void PrepareSceneData::setInstanceTransforms(
+    const QList<QMatrix4x4> &batchWorldTransforms)
+{
+  // Legacy world-baked blobs carry their transforms inside the vertices --
+  // a channel update must not compose a second time on top.
+  if (!m_meshDecomposedFormat)
+    return;
+  if (m_batchWorldTransforms == batchWorldTransforms)
+    return;
+
+  const int batchCount = m_modelBatches.size();
+  const bool fullRecompose = batchWorldTransforms.size() != batchCount;
+  bool anyChanged = false;
+  for (int batchIndex = 0; batchIndex < batchCount; ++batchIndex) {
+    const QMatrix4x4 &next = fullRecompose
+        ? batchWorldTransforms.value(batchIndex)
+        : batchWorldTransforms.at(batchIndex);
+    if (!fullRecompose && next == m_batchWorldTransforms.at(batchIndex))
+      continue; // untouched batch: no vertex recompose, no bounds rebuild
+    ModelBatch &batch = m_modelBatches[batchIndex];
+    const bool swapWinding = next.determinant() < 0.0f;
+    recomposeBatchRange(batch, next, swapWinding);
+    anyChanged = true;
+    m_batchWorldTransforms[batchIndex] = next;
+  }
+  // Full-recompose mode may also SHRINK the channel (protocol violation from
+  // the producer); keep the stored list aligned with what was applied.
+  if (fullRecompose) {
+    m_batchWorldTransforms = batchWorldTransforms;
+    anyChanged = true;
+  }
+  if (!anyChanged)
+    return;
+
+  // Scene bounds = union of the per-batch bounds (the batches tile the
+  // vertex list, so the union equals the per-vertex scan the parse does).
+  m_modelBounds = ModelBounds{};
+  m_hasModelBounds = false;
+  for (const ModelBatch &batch : m_modelBatches) {
+    if (batch.vertexCount <= 0)
+      continue;
+    if (!m_hasModelBounds) {
+      m_modelBounds = batch.bounds;
+      m_hasModelBounds = true;
+      continue;
+    }
+    m_modelBounds.minX = std::min(m_modelBounds.minX, batch.bounds.minX);
+    m_modelBounds.minY = std::min(m_modelBounds.minY, batch.bounds.minY);
+    m_modelBounds.minZ = std::min(m_modelBounds.minZ, batch.bounds.minZ);
+    m_modelBounds.maxX = std::max(m_modelBounds.maxX, batch.bounds.maxX);
+    m_modelBounds.maxY = std::max(m_modelBounds.maxY, batch.bounds.maxY);
+    m_modelBounds.maxZ = std::max(m_modelBounds.maxZ, batch.bounds.maxZ);
+  }
+  // Derived world-space state follows the moved batches. PICK-BVH: the tree
+  // spans world-space triangles, so a moved batch invalidates it.
+  m_pickingRaycaster.reset();
+  rebuildSinkingContours();
+  recomputeOutsideState();
+  ++m_instanceTransformGeneration;
+  // THE S3 cheap path ends here: the registry arms exactly what a mesh
+  // revision would arm, but no blob was re-produced and no payload
+  // re-parsed -- render()'s single rule re-uploads from the recomposed
+  // resident vertices.
+  markDirty(DirtyMesh | DirtyGpu);
 }
 
 void PrepareSceneData::updateModelBounds(const ModelVertex &vertex)

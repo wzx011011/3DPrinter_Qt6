@@ -40,6 +40,29 @@ namespace
     appendFloat(bytes, 60.0f);
     return bytes;
   }
+
+  // S3 (2026-10-14): decomposed blob v2 (magic 'MDS2') -- volume-LOCAL
+  // vertices + world bbox trailer at production time. Mirrors
+  // ProjectServiceMock::meshDataDecomposed's layout.
+  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D;
+
+  QByteArray packedDecomposedMesh(const QList<int> &objectIds,
+                                  const QList<QList<float>> &triangles)
+  {
+    QByteArray bytes;
+    appendInt32(bytes, kMeshBlobMagicV2);
+    appendInt32(bytes, objectIds.size());
+    for (int i = 0; i < objectIds.size(); ++i)
+      appendTriangle(bytes, objectIds.at(i), triangles.at(i));
+
+    appendFloat(bytes, -10.0f);
+    appendFloat(bytes, -20.0f);
+    appendFloat(bytes, -30.0f);
+    appendFloat(bytes, 40.0f);
+    appendFloat(bytes, 50.0f);
+    appendFloat(bytes, 60.0f);
+    return bytes;
+  }
 }
 
 class PrepareSceneDataTests final : public QObject
@@ -100,6 +123,15 @@ private slots:
   void uploadRegistryRoutingFollowsCanvasAndPayload();
   void seedMaskArmsEveryRoutableChannelForFirstFrame();
   void maskedClearKeepsFailedChannelsPending();
+  // S3 (2026-10-14): decomposed blob v2 + per-batch instance transform
+  // channel. These lock the parse/compose contract and the transform-only
+  // cheap path (recompose-changed-batches + generation bump + registry arm)
+  // without a GPU.
+  void decomposedBlobRequiresCoveringTransformChannel();
+  void decomposedBlobComposesInstanceTransformsAtParse();
+  void decomposedBlobMirrorMatrixFlipsTriangleWindingAtCompose();
+  void setInstanceTransformsRecomposesChangedBatchesAndBumpsGeneration();
+  void legacyBlobIgnoresInstanceTransformChannel();
 };
 
 // v5.16 (EXCLAREA): one rectangle polygon must fan-fill on every plate with
@@ -1046,6 +1078,189 @@ void PrepareSceneDataTests::maskedClearKeepsFailedChannelsPending()
   // The all-settled fast path still consumes everything.
   scene.takeDirtyFlags();
   QCOMPARE(scene.peekDirtyFlags(), quint32(PrepareSceneData::DirtyNone));
+}
+
+// ── S3 (2026-10-14): decomposed blob v2 + instance transform channel ────────
+
+// A decomposed blob without a covering per-batch transform list must fail the
+// parse (fail loud) -- an identity compose would silently place the scene at
+// the plate origin.
+void PrepareSceneDataTests::decomposedBlobRequiresCoveringTransformChannel()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  const QByteArray mesh = packedDecomposedMesh(
+      QList<int>{101},
+      QList<QList<float>>{QList<float>{0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 20.0f, 0.0f}});
+
+  // Legacy 3-arg overload passes no transforms: the v2 payload must be
+  // rejected, leaving an empty scene.
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0});
+  QVERIFY(scene.modelVertices().isEmpty());
+  QVERIFY(scene.modelBatches().isEmpty());
+  QVERIFY(!scene.meshDecomposed());
+
+  // A short transform list (protocol violation) is rejected too.
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>(), QList<int>(),
+                         QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>());
+  QVERIFY(scene.modelVertices().isEmpty());
+
+  // The covering list parses and records the decomposed format.
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>(), QList<int>(),
+                         QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>{QMatrix4x4()});
+  QCOMPARE(scene.modelBatches().size(), 1);
+  QVERIFY(scene.meshDecomposed());
+  QCOMPARE(scene.batchWorldTransforms().size(), 1);
+}
+
+// Decomposed payloads compose through the batch's world transform as they
+// append: vertices, per-batch bounds and scene bounds are WORLD coordinates
+// (the scene's world contract is unchanged for every consumer).
+void PrepareSceneDataTests::decomposedBlobComposesInstanceTransformsAtParse()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  const QByteArray mesh = packedDecomposedMesh(
+      QList<int>{101},
+      QList<QList<float>>{QList<float>{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f}});
+
+  QMatrix4x4 world;
+  world.translate(10.0f, 20.0f, 30.0f);
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>(), QList<int>(),
+                         QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>{world});
+
+  QCOMPARE(scene.modelVertices().size(), 3);
+  const auto &v0 = scene.modelVertices().at(0);
+  QCOMPARE(v0.x, 11.0f);
+  QCOMPARE(v0.y, 22.0f);
+  QCOMPARE(v0.z, 33.0f);
+  const auto &batch = scene.modelBatches().at(0);
+  QCOMPARE(batch.bounds.minX, 11.0f);
+  QCOMPARE(batch.bounds.minY, 22.0f);
+  QCOMPARE(batch.bounds.minZ, 33.0f);
+  QCOMPARE(batch.bounds.maxX, 17.0f);
+  QCOMPARE(batch.bounds.maxY, 28.0f);
+  QCOMPARE(batch.bounds.maxZ, 39.0f);
+  QVERIFY(scene.hasModelBounds());
+  QCOMPARE(scene.modelBounds().maxZ, 39.0f);
+}
+
+// A mirrored instance (det<0) flips triangle winding at compose time -- the
+// production-side swap only covers a left-handed VOLUME transform, so the
+// compose side must carry the instance's own mirror (P15.10 semantics split
+// across bake and compose; the composed triangle soup lights identically to
+// the legacy bake's combined-matrix swap).
+void PrepareSceneDataTests::decomposedBlobMirrorMatrixFlipsTriangleWindingAtCompose()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  const QByteArray mesh = packedDecomposedMesh(
+      QList<int>{101},
+      QList<QList<float>>{QList<float>{0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f}});
+
+  QMatrix4x4 mirror;
+  mirror.scale(-1.0f, 1.0f, 1.0f); // det = -1
+  QVERIFY(mirror.determinant() < 0.0f);
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>(), QList<int>(),
+                         QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>{mirror});
+
+  QCOMPARE(scene.modelVertices().size(), 3);
+  // Appended order is (0, 2, 1): v0 -> (0,0,0), then the mirrored v2
+  // (0,1,0)->(0,1,0) BEFORE the mirrored v1 (1,0,0)->(-1,0,0).
+  QCOMPARE(scene.modelVertices().at(0).x, 0.0f);
+  QCOMPARE(scene.modelVertices().at(1).y, 1.0f);
+  QCOMPARE(scene.modelVertices().at(1).x, 0.0f);
+  QCOMPARE(scene.modelVertices().at(2).x, -1.0f);
+  QCOMPARE(scene.modelVertices().at(2).y, 0.0f);
+}
+
+// THE S3 cheap path: setInstanceTransforms recomposes exactly the changed
+// batches, rebuilds the derived world state, bumps the transform generation
+// once and arms the registry; an unchanged list is a full no-op.
+void PrepareSceneDataTests::setInstanceTransformsRecomposesChangedBatchesAndBumpsGeneration()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  const QByteArray mesh = packedDecomposedMesh(
+      QList<int>{101, 202},
+      QList<QList<float>>{
+          QList<float>{0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 20.0f, 0.0f},
+          QList<float>{30.0f, 0.0f, 0.0f, 40.0f, 0.0f, 0.0f, 30.0f, 20.0f, 5.0f}});
+
+  scene.setModelMeshData(mesh, QList<int>{0, 1}, QList<int>{0, 1},
+                         QList<int>{0, 1}, QList<int>{0, 1}, QList<int>(),
+                         QList<int>(), QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>{QMatrix4x4(), QMatrix4x4()});
+  QCOMPARE(scene.instanceTransformGeneration(), qint64(0));
+  scene.takeDirtyFlags();
+
+  // Move ONLY batch 0 by +5 on X.
+  QMatrix4x4 moved;
+  moved.translate(5.0f, 0.0f, 0.0f);
+  scene.setInstanceTransforms(QList<QMatrix4x4>{moved, QMatrix4x4()});
+
+  QCOMPARE(scene.instanceTransformGeneration(), qint64(1));
+  QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh) != 0);
+  QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyGpu) != 0);
+  const auto &batch0 = scene.modelBatches().at(0);
+  const auto &batch1 = scene.modelBatches().at(1);
+  QCOMPARE(batch0.bounds.minX, 5.0f);
+  QCOMPARE(batch0.bounds.maxX, 15.0f);
+  QCOMPARE(batch1.bounds.minX, 30.0f); // untouched batch: unchanged bounds
+  QCOMPARE(scene.modelBounds().minX, 5.0f);
+  QCOMPARE(scene.modelBounds().maxX, 40.0f);
+  QCOMPARE(scene.modelVertices().at(0).x, 5.0f);
+  QCOMPARE(scene.modelVertices().at(3).x, 30.0f); // batch 1 vertices intact
+  scene.takeDirtyFlags();
+
+  // The SAME list again: no recompose, no generation bump, no dirty arm.
+  scene.setInstanceTransforms(QList<QMatrix4x4>{moved, QMatrix4x4()});
+  QCOMPARE(scene.instanceTransformGeneration(), qint64(1));
+  QCOMPARE(scene.peekDirtyFlags(), quint32(PrepareSceneData::DirtyNone));
+
+  // A size-mismatched channel is a protocol violation: full recompose with
+  // identity fallback keeps the scene defined but still counts as a change.
+  scene.setInstanceTransforms(QList<QMatrix4x4>{moved});
+  QCOMPARE(scene.instanceTransformGeneration(), qint64(2));
+  QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh) != 0);
+}
+
+// Legacy world-baked blobs carry their transforms inside the vertices: the
+// channel must be inert on them (no double transform, no generation bump).
+void PrepareSceneDataTests::legacyBlobIgnoresInstanceTransformChannel()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+
+  const QByteArray mesh = packedMeshWithBatches(
+      QList<int>{101},
+      QList<QList<float>>{QList<float>{1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f}});
+
+  QMatrix4x4 world;
+  world.translate(10.0f, 20.0f, 30.0f);
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>(), QList<int>(),
+                         QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>{world});
+  QVERIFY(!scene.meshDecomposed());
+  QCOMPARE(scene.modelVertices().at(0).x, 1.0f); // raw, NOT composed
+  QCOMPARE(scene.modelVertices().at(2).z, 9.0f);
+
+  scene.setInstanceTransforms(QList<QMatrix4x4>{world});
+  QCOMPARE(scene.instanceTransformGeneration(), qint64(0)); // inert
+  QCOMPARE(scene.modelVertices().at(0).x, 1.0f);
 }
 
 QTEST_MAIN(PrepareSceneDataTests)

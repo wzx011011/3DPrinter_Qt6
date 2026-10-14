@@ -21,7 +21,9 @@
 #include <QBuffer>
 #include <QImage>
 #include <QMatrix4x4> // Phase 240 (GIZ-03): flatten rotation math test
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <QtTest>
 
@@ -241,6 +243,11 @@ private slots:
   // v5.16 (PLATE-01/02/03): plate-level UI settings land in the plate's
   // DynamicPrintConfig so slicing consumes them.
   void plateSettingsSyncIntoPlateConfig();
+  // S3 (2026-10-14): the decomposed mesh blob is byte-stable under pure
+  // transform edits while the per-batch instance transform channel moves --
+  // the structural replacement for the refreshMeshCacheAndFitHint whitelist
+  // on the transform path.
+  void meshInstanceChannelKeepsBlobStableUnderTransforms();
   // v5.16 (PLATE-05): real edits mark the project dirty; load/save clear it.
   void projectEditsDriveDirtyState();
   // Phase 241 (PAGE-01): recent projects persist across viewmodel instances
@@ -3795,6 +3802,73 @@ void ViewModelSmokeTests::plateSettingsSyncIntoPlateConfig()
 #else
   QSKIP("This test requires libslic3r plate config plumbing");
 #endif
+}
+
+void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
+{
+  // S3 (2026-10-14): decomposed mode is selected per service instance at
+  // construction (OWZX_MESH_INSTANCE_CHANNEL=1), so flip the env before the
+  // fixture service exists and restore it before every return.
+  qputenv("OWZX_MESH_INSTANCE_CHANNEL", "1");
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+
+  const QByteArray blobA = project.meshData();
+  QVERIFY(!blobA.isEmpty());
+
+  // v2 magic sniff: the decomposed blob starts with 'MDS2', not a count.
+  qint32 magic = 0;
+  memcpy(&magic, blobA.constData(), sizeof(qint32));
+  QCOMPARE(magic, qint32(0x3244534D));
+
+  // Channel alignment: one transform per blob batch (object -> instance ->
+  // volume walk), non-identity overall (the frozen plate shift rides inside).
+  const QList<QMatrix4x4> transformsA = project.meshBatchInstanceTransforms();
+  QCOMPARE(transformsA.size(), project.meshBatchSourceObjectIndices().size());
+  QVERIFY(transformsA.size() >= 1);
+  QVERIFY(transformsA.at(0) != QMatrix4x4());
+
+  // THE S3 core regression lock: a pure position change must move the
+  // channel WITHOUT any mesh re-production (the transform path never calls
+  // meshData() again -- that is the retired whitelist). The channel serves
+  // LIVE instance matrices under the FROZEN production plate shift.
+  const QVector3D pos0 = project.objectPosition(0);
+  QVERIFY(project.setObjectPosition(0, pos0.x() + 17.0f, pos0.y(), pos0.z()));
+  const QList<QMatrix4x4> transformsB = project.meshBatchInstanceTransforms();
+  QCOMPARE(transformsB.size(), transformsA.size());
+  QVERIFY(transformsB.at(0) != transformsA.at(0));
+
+  // The channel carries the FULL world transform: mapping the blob's first
+  // batch (volume-local) through both revisions shifts the world X by
+  // exactly the +17mm edit, and the absolute position sits plate-centered
+  // (the frozen plate shift is inside the matrix).
+  auto worldMinX = [](const QList<QMatrix4x4> &transforms, const QByteArray &blob) {
+    // first batch payload starts after [magic][count][objectId][triCount]
+    const float *verts = reinterpret_cast<const float *>(
+        blob.constData() + 4 * sizeof(qint32));
+    float minX = std::numeric_limits<float>::max();
+    for (int v = 0; v < 3; ++v) {
+      const QVector3D p = transforms.at(0).map(
+          QVector3D(verts[v * 3 + 0], verts[v * 3 + 1], verts[v * 3 + 2]));
+      minX = std::min(minX, p.x());
+    }
+    return minX;
+  };
+  const float minXBefore = worldMinX(transformsA, blobA);
+  const float minXAfter = worldMinX(transformsB, blobA);
+  QVERIFY(std::abs(minXAfter - minXBefore - 17.0f) < 0.01f);
+  QVERIFY(minXAfter > 50.0f); // plate shift baked into the matrix (~110 center)
+
+  // The blob is transform-free: even an explicit re-production (topology
+  // refresh path) yields byte-identical volume-local geometry. (The legacy
+  // world-bake blob changed with every transform; v2 cannot go stale.)
+  QCOMPARE(project.meshData(), blobA);
+
+  // Rotation behaves the same way: channel moves, no re-production involved.
+  QVERIFY(project.setObjectRotation(0, 90.0f, 0.0f, 0.0f));
+  QVERIFY(project.meshBatchInstanceTransforms().at(0) != transformsB.at(0));
+
+  qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
 }
 
 void ViewModelSmokeTests::projectEditsDriveDirtyState()

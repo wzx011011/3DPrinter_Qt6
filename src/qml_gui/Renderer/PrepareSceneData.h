@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QList>
+#include <QMatrix4x4>
 #include <QSize>
 #include <QVariant>
 #include <QVector4D>
@@ -374,6 +375,12 @@ public:
   // ProjectVolumeType ints; extruderIds are upstream ModelVolume::extruder_id()
   // (1-based); extruderColors are the parsed filament_colour entries
   // (rgba 0..1, index 0 = extruder 1).
+  // S3 (2026-10-14): batchWorldTransforms is the per-batch instance->world
+  // transform channel (ProjectServiceMock::meshBatchInstanceTransforms, one
+  // entry per blob batch). It is REQUIRED for the decomposed blob v2
+  // (magic 'MDS2' -- volume-local geometry): a v2 blob without a covering
+  // transform list fails the parse (fail-loud, never a silent identity
+  // compose at the wrong place). Legacy world-baked blobs (v1) ignore it.
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
                         const QList<int> &batchVolumeIndices,
@@ -382,7 +389,9 @@ public:
                         const QList<int> &batchVolumeTypes,
                         const QList<int> &batchExtruderIds,
                         const QList<int> &batchPrintableFlags,
-                        const QList<QVector4D> &extruderColors);
+                        const QList<QVector4D> &extruderColors,
+                        const QList<QMatrix4x4> &batchWorldTransforms
+                            = QList<QMatrix4x4>());
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
                         const QList<int> &batchVolumeIndices,
@@ -394,6 +403,8 @@ public:
                      QList<int>(), QList<int>(), QList<int>(),
                      QList<QVector4D>());
   }
+  // Legacy v1 overload pair: hand-built world-baked blobs (tests, PerfBench).
+  // A decomposed v2 blob fed through these fails the parse by design.
   void setModelMeshData(const QByteArray &meshData,
                         const QList<int> &batchSourceObjectIndices,
                         const QList<int> &activeSourceObjectIndices)
@@ -403,6 +414,23 @@ public:
                      QList<int>(batchSourceObjectIndices.size(), 0),
                      activeSourceObjectIndices);
   }
+  // S3: transform-only refresh of the resident decomposed scene. Recomposes
+  // exactly the batches whose matrix changed (a one-object drag recomposes
+  // that object's vertex range, not the scene), rebuilds the derived
+  // world-space state (per-batch + scene bounds, sinking contours, outside
+  // state, picking tree) and bumps instanceTransformGeneration. Inert on a
+  // resident legacy blob (v1 bakes transforms into its vertices) and on an
+  // unchanged list. THE S3 cheap path: no blob re-production, no re-parse --
+  // the mesh blob itself is transform-free under the decomposed format.
+  void setInstanceTransforms(const QList<QMatrix4x4> &batchWorldTransforms);
+  // S3: how many accepted transform-channel revisions this scene reflects.
+  qint64 instanceTransformGeneration() const { return m_instanceTransformGeneration; }
+  // S3: true when the resident blob is decomposed (v2, volume-local +
+  // transform channel); false for legacy world-baked blobs (v1).
+  bool meshDecomposed() const { return m_meshDecomposedFormat; }
+  // S3: the per-batch world transforms the resident scene was last composed
+  // with (index-aligned with modelBatches()).
+  const QList<QMatrix4x4> &batchWorldTransforms() const { return m_batchWorldTransforms; }
   void setSelectedSourceObjectIndex(int sourceObjectIndex);
   // P15.11 (MULTICENTER): ALL selected source object indices (upstream
   // Selection::get_bounding_box() unions every selected volume's bounds).
@@ -529,6 +557,15 @@ private:
   void recomputeOutsideState();
   // P15.5 (SINK): bed-plane contour band of one sinking batch.
   void appendSinkingContours(const ModelBatch &batch);
+  // P15.5 (SINK) + S3: rebuild the full contour set from the resident
+  // batches. Shared by the parse path and the S3 transform-only recompose
+  // (sinking contact bands move with instance transforms).
+  void rebuildSinkingContours();
+  // S3: recompose one batch's vertex range in place into world coordinates
+  // (matrix map + winding swap per triangle when det<0) and rebuild the
+  // batch bounds. Returns the new bounds via outBounds.
+  void recomposeBatchRange(ModelBatch &batch, const QMatrix4x4 &world,
+                           bool swapWinding);
   // P15.7 (AXES): stilized arrow mesh along an axis (GLModel.cpp:850-932
   // stilized_arrow port), emitted as colored triangles.
   void appendArrow(const float origin[3], const float dir[3],
@@ -569,6 +606,15 @@ private:
   QList<ModelBatch> m_modelBatches;
   ModelBounds m_modelBounds;
   bool m_hasModelBounds = false;
+  // S3 (2026-10-14): decomposed-blob state. m_meshDecomposedFormat selects
+  // the parse semantics of the resident blob; m_batchWorldTransforms is the
+  // per-batch instance->world channel the world-space vertices were last
+  // composed with (index-aligned with m_modelBatches); the generation counts
+  // accepted transform-channel revisions ("transform 变更只 bump 变换通道
+  // generation" -- S3 acceptance wording).
+  bool m_meshDecomposedFormat = false;
+  QList<QMatrix4x4> m_batchWorldTransforms;
+  qint64 m_instanceTransformGeneration = 0;
   int m_selectedSourceObjectIndex = -1;
   // P15.11 (MULTICENTER): every selected source object (sorted ascending).
   QList<int> m_selectedSourceObjectIndices;

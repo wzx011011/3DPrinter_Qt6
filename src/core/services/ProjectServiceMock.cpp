@@ -495,6 +495,44 @@ namespace
     }
     return identities;
   }
+
+  // S3 (2026-10-14): the slic3r->GL AXES-ROT permutation (GL.x=x, GL.y=z,
+  // GL.z=-y; det=+1 -- a rotation, not a mirror; see meshData's mapping note).
+  Slic3r::Transform3d axesRotSlic3rToGl()
+  {
+    Slic3r::Transform3d a = Slic3r::Transform3d::Identity();
+    a.matrix() << 1.0, 0.0, 0.0, 0.0,
+                  0.0, 0.0, 1.0, 0.0,
+                  0.0, -1.0, 0.0, 0.0,
+                  0.0, 0.0, 0.0, 1.0;
+    return a;
+  }
+
+  // S3: the GL-frame instance matrix T(plateShift) * A * instanceMat * A^-1.
+  // The conjugation is what makes the volume-local GL geometry move under the
+  // instance transform: rotation/scale AND the mirror survive (det is
+  // preserved, so a mirrored instance still flips triangle winding at compose
+  // time), while translation rides through A unchanged in direction and lands
+  // in GL axes. plateShift (GL frame) is appended post-rotation exactly like
+  // the legacy bake's plate-normalization pass.
+  QMatrix4x4 glWorldInstanceMatrix(const Slic3r::Transform3d &instanceMat,
+                                   const QVector3D &plateShift)
+  {
+    static const Slic3r::Transform3d kAxes = axesRotSlic3rToGl();
+    const Slic3r::Transform3d conjugated = kAxes * instanceMat * kAxes.inverse();
+    const auto &e = conjugated.matrix();
+    // QMatrix4x4's array constructor is row-major; Eigen stores column-major.
+    const float values[16] = {
+      float(e(0, 0)), float(e(0, 1)), float(e(0, 2)), float(e(0, 3)),
+      float(e(1, 0)), float(e(1, 1)), float(e(1, 2)), float(e(1, 3)),
+      float(e(2, 0)), float(e(2, 1)), float(e(2, 2)), float(e(2, 3)),
+      float(e(3, 0)), float(e(3, 1)), float(e(3, 2)), float(e(3, 3)),
+    };
+    QMatrix4x4 world(values);
+    if (!plateShift.isNull())
+      world.translate(plateShift);
+    return world;
+  }
 }
 #endif
 
@@ -12596,6 +12634,13 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 QByteArray ProjectServiceMock::meshData() const
 {
 #ifdef HAS_LIBSLIC3R
+  // S3 parallel switch: the decomposed path bakes volume-local geometry only
+  // (instance transforms ride meshBatchInstanceTransforms) and keeps this
+  // byte-stable under pure transform edits. Default stays the legacy
+  // world-bake until the S3 parity double-run passes.
+  if (m_meshInstanceChannelEnabled && model_ && !model_->objects.empty())
+    return meshDataDecomposed();
+
   if (!model_ || model_->objects.empty())
     return {};
 
@@ -12921,4 +12966,340 @@ QByteArray ProjectServiceMock::meshData() const
 #else
   return {};
 #endif
+}
+
+// ── S3 (2026-10-14): decomposed mesh production ─────────────────────────────
+// Blob v2 (magic 'MDS2'): meshData() bakes ONLY volume-local geometry
+// (volMat applied, slic3r->GL AXES-ROT mapped, per-volume winding swap when
+// det(volMat)<0) -- the instance matrix is NOT baked. The instance/world part
+// of the old combined matrix travels through meshBatchInstanceTransforms()
+// instead, so pure transform edits change only that small channel and the
+// multi-megabyte blob (and the whole refreshMeshCacheAndFitHint whitelist)
+// drops out of the transform path entirely.
+//
+// Trailer: the WORLD bbox at production time (exact -- composed per vertex),
+// so the format tail stays parse-compatible with v1 and the production-time
+// fitHint numbers match the legacy bake. The plate-normalization shift is
+// derived from that box exactly like the legacy pass and FROZEN in
+// m_instanceChannelPlateShift: the channel matrices apply it, later transform
+// edits do not re-center the scene (upstream objects stay where placed).
+QByteArray ProjectServiceMock::meshDataDecomposed() const
+{
+  // Blob v2 layout:
+  // [int32 magic 0x3244534D ('MDS2')][int32 batchCount]
+  // per batch: [int32 renderObjectId][int32 triangleCount][float * tri*9]
+  //            (volume-LOCAL GL vertices, axes-rot mapped, volMat applied)
+  // trailer:   [float * 6] world bbox at production (GL frame)
+  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2' little-endian
+
+  if (!model_ || model_->objects.empty())
+    return {};
+
+  try
+  {
+    struct VolumeJob
+    {
+      int32_t objectId;
+      const ::indexed_triangle_set *its;
+      const Slic3r::Transform3d *volMat;   // volume-local bake matrix
+      Slic3r::Transform3d conjGl;          // A * instMat * A^-1 (GL frame, no shift)
+      bool localLeftHanded;                // det(volMat) < 0: winding swap at bake
+      int32_t faceCount;
+    };
+
+    std::vector<VolumeJob> jobs;
+    jobs.reserve(8);
+
+    std::unordered_set<int32_t> usedObjectIds;
+    usedObjectIds.reserve(model_->objects.size() * 2 + 1);
+
+    auto makeStableObjectId = [&usedObjectIds](const Slic3r::ModelObject *obj,
+                                               const Slic3r::ModelInstance *inst) -> int32_t
+    {
+      const auto objAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(obj));
+      const auto instAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(inst));
+      uint64_t mixed = objAddr ^ (instAddr + 0x9e3779b97f4a7c15ULL + (objAddr << 6) + (objAddr >> 2));
+
+      int32_t id = int32_t(mixed & 0x7fffffffULL);
+      if (id == 0)
+        id = 1;
+
+      while (usedObjectIds.find(id) != usedObjectIds.end())
+        id = (id == std::numeric_limits<int32_t>::max()) ? 1 : (id + 1);
+
+      usedObjectIds.insert(id);
+      return id;
+    };
+
+    static const Slic3r::Transform3d kAxes = axesRotSlic3rToGl();
+
+    for (const auto *obj : model_->objects)
+    {
+      if (!obj)
+        continue;
+
+      auto appendObjectByInstance = [&](const Slic3r::Transform3d &instMat,
+                                        const Slic3r::ModelInstance *inst)
+      {
+        // Same one-batch-per-volume identity scheme as the legacy bake (Phase
+        // 91 ASMEXPLODE-02 note there): siblings share the parent instance's
+        // stable objectId, so selection/highlight/picking keys are unchanged.
+        const int32_t instanceObjectId = makeStableObjectId(obj, inst);
+
+        for (const auto *vol : obj->volumes)
+        {
+          if (!vol)
+            continue;
+
+          // Only the volume's own transform is baked; the instance matrix is
+          // conjugated into the GL frame and handed to the transform channel.
+          const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
+          const Slic3r::Transform3d conjGl = kAxes * instMat * kAxes.inverse();
+          const bool localLeftHanded =
+              volMat.matrix().block<3, 3>(0, 0).determinant() < 0.0;
+
+          const auto &its = vol->mesh().its; // const ref — 零拷贝
+          if (its.vertices.empty() || its.indices.empty())
+            continue;
+
+          const int vcount = int(its.vertices.size());
+          int32_t validFaces = 0;
+          for (const auto &face : its.indices)
+          {
+            const int idx0 = face(0);
+            const int idx1 = face(1);
+            const int idx2 = face(2);
+            if (idx0 >= 0 && idx0 < vcount &&
+                idx1 >= 0 && idx1 < vcount &&
+                idx2 >= 0 && idx2 < vcount)
+            {
+              ++validFaces;
+            }
+          }
+          if (validFaces == 0)
+            continue;
+
+          jobs.push_back(VolumeJob{instanceObjectId, &its, &volMat,
+                                   conjGl, localLeftHanded, validFaces});
+        }
+      };
+
+      if (!obj->instances.empty())
+      {
+        for (const auto *inst : obj->instances)
+        {
+          if (!inst)
+            continue;
+          appendObjectByInstance(inst->get_transformation().get_matrix(), inst);
+        }
+      }
+      else
+      {
+        appendObjectByInstance(Slic3r::Transform3d::Identity(), nullptr);
+      }
+    }
+
+    if (jobs.empty())
+    {
+      m_instanceChannelShiftValid = false;
+      return {};
+    }
+
+    if (jobs.size() > size_t(std::numeric_limits<int32_t>::max()))
+    {
+      qWarning("[ProjectService] meshData(decomposed) aborted: too many batches (%zu)", jobs.size());
+      return {};
+    }
+
+    int32_t batchCount = static_cast<int32_t>(jobs.size());
+    qsizetype totalBytes = static_cast<qsizetype>(2 * sizeof(int32_t)); // magic + batchCount
+    for (const auto &job : jobs)
+    {
+      const qsizetype dataBytes = static_cast<qsizetype>(job.faceCount) * 9
+          * static_cast<qsizetype>(sizeof(float));
+      const qsizetype perObjBytes = static_cast<qsizetype>(2 * sizeof(int32_t));
+      if (dataBytes < 0 || perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - dataBytes)
+      {
+        qWarning("[ProjectService] meshData(decomposed) aborted: size overflow while packing batch header");
+        return {};
+      }
+      totalBytes += perObjBytes + dataBytes;
+    }
+    const qsizetype trailerBytes = static_cast<qsizetype>(6 * sizeof(float));
+    if (trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
+    {
+      qWarning("[ProjectService] meshData(decomposed) aborted: size overflow while packing bbox");
+      return {};
+    }
+    totalBytes += trailerBytes;
+
+    if (totalBytes <= 0 || totalBytes > (std::numeric_limits<int>::max)())
+    {
+      qWarning("[ProjectService] meshData(decomposed) aborted: invalid total buffer size (%lld)", static_cast<long long>(totalBytes));
+      return {};
+    }
+
+    QByteArray buf;
+    buf.resize(static_cast<int>(totalBytes));
+    char *p = buf.data();
+
+    memcpy(p, &kMeshBlobMagicV2, sizeof(int32_t));
+    p += sizeof(int32_t);
+    memcpy(p, &batchCount, sizeof(int32_t));
+    p += sizeof(int32_t);
+
+    struct VertexRegion
+    {
+      float *first;
+      int32_t faceCount;
+    };
+    std::vector<VertexRegion> regions;
+    regions.reserve(jobs.size());
+    for (const auto &job : jobs)
+    {
+      const int32_t triCount = job.faceCount;
+      memcpy(p, &job.objectId, sizeof(int32_t));
+      p += sizeof(int32_t);
+      memcpy(p, &triCount, sizeof(int32_t));
+      p += sizeof(int32_t);
+      regions.push_back(VertexRegion{
+          reinterpret_cast<float *>(p), triCount});
+      p += static_cast<ptrdiff_t>(triCount) * 9 * static_cast<ptrdiff_t>(sizeof(float));
+    }
+
+    // Bake pass: volume-LOCAL GL vertices into the buffer, exact world bbox
+    // through the conjugated instance matrix (unshifted -- the shift is a
+    // pure translation applied to the finished box below). Winding swap when
+    // the VOLUME transform is left-handed; the instance's own mirror flips
+    // winding at compose time (det(conjGl) = det(instMat)).
+    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
+    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
+    for (size_t jobIndex = 0; jobIndex < jobs.size(); ++jobIndex)
+    {
+      const VolumeJob &job = jobs[jobIndex];
+      const auto &its = *job.its;
+      const int vcount = int(its.vertices.size());
+      const int emitOrder[3] = {0, job.localLeftHanded ? 2 : 1, job.localLeftHanded ? 1 : 2};
+      float *out = regions[jobIndex].first;
+
+      for (const auto &face : its.indices)
+      {
+        const int idx0 = face(0);
+        const int idx1 = face(1);
+        const int idx2 = face(2);
+        if (idx0 < 0 || idx0 >= vcount ||
+            idx1 < 0 || idx1 >= vcount ||
+            idx2 < 0 || idx2 >= vcount)
+        {
+          continue;
+        }
+
+        for (int k = 0; k < 3; ++k)
+        {
+          const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
+          // Volume-local transform only (slic3r frame)...
+          const Slic3r::Vec3d local = (*job.volMat) * Slic3r::Vec3d(
+              (double)lv.x(), (double)lv.y(), (double)lv.z());
+          // ...then the slic3r->GL AXES-ROT (same mapping as the legacy bake).
+          const float gx = (float)local.x();
+          const float gy = (float)local.z();
+          const float gz = -(float)local.y();
+
+          *out++ = gx;
+          *out++ = gy;
+          *out++ = gz;
+
+          // Exact world box through the conjugated instance matrix (GL frame).
+          const Slic3r::Vec3d world = job.conjGl * Slic3r::Vec3d(
+              (double)gx, (double)gy, (double)gz);
+          bminX = std::min(bminX, (float)world.x());
+          bmaxX = std::max(bmaxX, (float)world.x());
+          bminY = std::min(bminY, (float)world.y());
+          bmaxY = std::max(bmaxY, (float)world.y());
+          bminZ = std::min(bminZ, (float)world.z());
+          bmaxZ = std::max(bmaxZ, (float)world.z());
+        }
+      }
+    }
+
+    // Plate normalization -- same formula as the legacy bake (keep relative
+    // arrangement, center at (110, *, -110), lowest Y on the plate). Frozen
+    // for the transform channel until the next production.
+    const float centerX = (bminX + bmaxX) * 0.5f;
+    const float centerZ = (bminZ + bmaxZ) * 0.5f;
+    const float offsetX = 110.0f - centerX;
+    const float offsetZ = -110.0f - centerZ;
+    const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
+
+    m_instanceChannelPlateShift = QVector3D(offsetX, offsetY, offsetZ);
+    m_instanceChannelShiftValid = true;
+
+    bminX += offsetX;
+    bmaxX += offsetX;
+    bminY += offsetY;
+    bmaxY += offsetY;
+    bminZ += offsetZ;
+    bmaxZ += offsetZ;
+
+    const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
+    memcpy(p, bbox, 6 * sizeof(float));
+
+    qInfo("[ProjectService] meshData(decomposed): %d batches, plateShift=(%.1f, %.1f, %.1f), bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
+          batchCount, offsetX, offsetY, offsetZ,
+          bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
+    return buf;
+  }
+  catch (const std::exception &ex)
+  {
+    qWarning("[ProjectService] meshData(decomposed) exception: %s", ex.what());
+    return {};
+  }
+  catch (...)
+  {
+    qWarning("[ProjectService] meshData(decomposed) exception: unknown");
+    return {};
+  }
+}
+
+QList<QMatrix4x4> ProjectServiceMock::meshBatchInstanceTransforms() const
+{
+  QList<QMatrix4x4> transforms;
+#ifdef HAS_LIBSLIC3R
+  if (!model_)
+    return transforms;
+  // The plate shift is frozen by the last decomposed production so the
+  // channel pairs with the resident blob. Before the first production the
+  // resident blob is empty anyway, so a zero shift cannot misplace anything
+  // that renders.
+  const QVector3D shift = m_instanceChannelShiftValid ? m_instanceChannelPlateShift
+                                                      : QVector3D(0.0f, 0.0f, 0.0f);
+  // Same walk and order as the meshData() production (collectMeshBatchIdentities:
+  // object -> instance -> volume, renderable volumes only), so batch i of the
+  // blob pairs with entry i here. LIVE instance matrices: transform edits are
+  // visible on the next channel read without any mesh re-production.
+  for (int objectIndex = 0; objectIndex < int(model_->objects.size()); ++objectIndex)
+  {
+    const Slic3r::ModelObject *object = model_->objects[size_t(objectIndex)];
+    if (!object)
+      continue;
+    const int instanceCount = object->instances.empty() ? 1 : int(object->instances.size());
+    for (int instanceIndex = 0; instanceIndex < instanceCount; ++instanceIndex)
+    {
+      Slic3r::Transform3d instMat = Slic3r::Transform3d::Identity();
+      if (!object->instances.empty())
+      {
+        const Slic3r::ModelInstance *inst = object->instances[size_t(instanceIndex)];
+        if (!inst)
+          continue;
+        instMat = inst->get_transformation().get_matrix();
+      }
+      for (int volumeIndex = 0; volumeIndex < int(object->volumes.size()); ++volumeIndex)
+      {
+        if (hasRenderableTriangle(object->volumes[size_t(volumeIndex)]))
+          transforms.append(glWorldInstanceMatrix(instMat, shift));
+      }
+    }
+  }
+#endif
+  return transforms;
 }

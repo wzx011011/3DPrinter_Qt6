@@ -121,14 +121,23 @@ constexpr bool kCgalMeshBooleanAvailable = true;
 // format mirrors PrepareSceneData::setModelMeshData: [objectCount int32] then
 // per-batch [renderObjectId int32][triangleCount int32][verts...], followed by
 // a 6-float global bbox trailer (skipped here).
+// S3 (2026-10-14): decomposed blobs (magic 'MDS2') carry VOLUME-LOCAL
+// vertices -- batchWorldTransforms (ProjectServiceMock::
+// meshBatchInstanceTransforms, one entry per blob batch) composes them into
+// world coordinates here so every consumer keeps its world-bounds contract.
+// A decomposed blob without a covering transform list is malformed (empty
+// map). Legacy world-baked blobs ignore the channel.
 QMap<int, PrepareSceneData::ModelBounds>
 parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
-                                       const QList<int> &batchSourceObjectIndices)
+                                       const QList<int> &batchSourceObjectIndices,
+                                       const QList<QMatrix4x4> &batchWorldTransforms
+                                           = QList<QMatrix4x4>())
 {
   QMap<int, PrepareSceneData::ModelBounds> result;
   constexpr qsizetype kFloatBytes = qsizetype(sizeof(float));
   constexpr qsizetype kIntBytes = qsizetype(sizeof(qint32));
   constexpr qsizetype kVertexBytes = 3 * kFloatBytes;
+  constexpr qint32 kMeshBlobMagicV2 = 0x3244534D; // 'MDS2'
 
   qsizetype offset = 0;
   qint32 objectCount = 0;
@@ -136,6 +145,16 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
     return result;
   memcpy(&objectCount, blob.constData() + offset, kIntBytes);
   offset += kIntBytes;
+  const bool decomposed = (objectCount == kMeshBlobMagicV2);
+  if (decomposed)
+  {
+    if (blob.size() < 2 * qsizetype(sizeof(qint32)))
+      return result;
+    memcpy(&objectCount, blob.constData() + offset, kIntBytes);
+    offset += kIntBytes;
+    if (batchWorldTransforms.size() != objectCount)
+      return result;
+  }
   if (objectCount < 0 || objectCount > batchSourceObjectIndices.size())
     return result;
 
@@ -161,6 +180,10 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
     const int sourceIndex = batchSourceObjectIndices.value(i, -1);
     if (sourceIndex >= 0)
     {
+      // S3: decomposed batches map their local vertices through the batch's
+      // world transform (exact per-vertex bounds, matching the scene path).
+      const QMatrix4x4 batchWorld = decomposed
+          ? batchWorldTransforms.at(i) : QMatrix4x4();
       PrepareSceneData::ModelBounds batchBounds{};
       bool first = true;
       for (qsizetype v = 0; v < vertexCount; ++v)
@@ -173,6 +196,13 @@ parseAllSourceObjectBoundsFromMeshBlob(const QByteArray &blob,
         {
           first = false;
           break;
+        }
+        if (decomposed)
+        {
+          const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
+          x = worldPoint.x();
+          y = worldPoint.y();
+          z = worldPoint.z();
         }
         if (first)
         {
@@ -415,9 +445,15 @@ QVector4D EditorViewModel::computeSelectedMeasureDimensions() const
   // Same per-object bounds source the AssembleView data pool uses: the cached
   // mesh blob parsed into sourceObjectIndex -> unioned AABB (GL coords,
   // matching the old trailer-bbox axis convention the QML consumers bind to).
+  // S3: the per-batch instance transforms compose decomposed (volume-local)
+  // blobs into world coordinates, so the measured size tracks live transforms
+  // instead of the production-time bake; legacy blobs ignore the channel.
   const QMap<int, PrepareSceneData::ModelBounds> bounds =
       parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
-                                             m_cachedMeshBatchSourceObjectIndices);
+                                             m_cachedMeshBatchSourceObjectIndices,
+                                             projectService_
+                                                 ? projectService_->meshBatchInstanceTransforms()
+                                                 : QList<QMatrix4x4>());
   bool valid = false;
   float minX = 0.f, minY = 0.f, minZ = 0.f;
   float maxX = 0.f, maxY = 0.f, maxZ = 0.f;
@@ -3987,9 +4023,14 @@ EditorViewModel::selectedVolumeBoundsForAssemblyMeasure() const
   // Fallback: inline parse (kept for the rare case where the pool is not yet
   // populated on AssembleView, e.g. before the first refresh). Shares the same
   // parseAllSourceObjectBoundsFromMeshBlob helper as refreshAssembleViewDataPool.
+  // S3: the per-batch instance transforms compose decomposed (volume-local)
+  // blobs into world coordinates; legacy blobs ignore the channel.
   const QMap<int, PrepareSceneData::ModelBounds> all =
       parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
-                                             m_cachedMeshBatchSourceObjectIndices);
+                                             m_cachedMeshBatchSourceObjectIndices,
+                                             projectService_
+                                                 ? projectService_->meshBatchInstanceTransforms()
+                                                 : QList<QMatrix4x4>());
   if (all.isEmpty())
     return {};
   const int targetA = selected.at(0);
@@ -4009,9 +4050,14 @@ void EditorViewModel::refreshAssembleViewDataPool()
   // source object (bounds unioned across its volume batches). Called only when
   // m_activeCanvasType == 2 (setActiveCanvasType / refreshMeshCacheAndFitHint
   // guard the entry points) — Prepare/Preview never reach here.
+  // S3: the per-batch instance transforms compose decomposed (volume-local)
+  // blobs into world coordinates; legacy blobs ignore the channel.
   const QMap<int, PrepareSceneData::ModelBounds> all =
       parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
-                                             m_cachedMeshBatchSourceObjectIndices);
+                                             m_cachedMeshBatchSourceObjectIndices,
+                                             projectService_
+                                                 ? projectService_->meshBatchInstanceTransforms()
+                                                 : QList<QMatrix4x4>());
   QList<AssembleViewObjectInfo> objects;
   objects.reserve(all.size());
   for (auto it = all.constBegin(); it != all.constEnd(); ++it)

@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QList>
 #include <QByteArray>
+#include <QMatrix4x4>
 #include <QVector3D>
 #include <atomic>
 #include <memory>
@@ -674,6 +675,24 @@ public:
   QList<int> meshBatchSourceObjectIndices() const;
   QList<int> meshBatchVolumeIndices() const;
   QList<int> meshBatchInstanceIndices() const;
+  // S3 (2026-10-14): per-batch instance->world transform channel, the
+  // decomposed-mesh counterpart of meshData(). One entry per mesh batch, in
+  // exactly the batch order meshData() emits (collectMeshBatchIdentities
+  // walk: object -> instance -> volume), so batch i of the blob pairs with
+  // entry i of this list. Each matrix is the FULL GL-frame instance transform
+  // T(plateShift) * A * instanceMatrix * A^-1 -- A is the slic3r->GL AXES-ROT
+  // (GL.x=x, GL.y=z, GL.z=-y), the conjugation carries rotation/scale AND the
+  // instance mirror (det<0 flips triangle winding, consumed by the scene
+  // compose), and plateShift is the production-time plate-normalization
+  // shift frozen by the last decomposed meshData() call (it translates
+  // nothing when the legacy path produced the resident blob). The blob under
+  // the decomposed mode bakes ONLY volume-local geometry (volMat, no
+  // instMat, no plate shift), so its bytes never change under pure
+  // instance-transform edits and this channel is the single thing that
+  // moves -- transform changes ride this list instead of re-running
+  // refreshMeshCacheAndFitHint (S3: change-driven instead of whitelist
+  // enumeration; S1's transformChanged will own the NOTIFY re-point).
+  QList<QMatrix4x4> meshBatchInstanceTransforms() const;
   // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
   // meshBatchSourceObjectIndices. volumeType = ProjectVolumeType int,
   // extruderId = upstream ModelVolume::extruder_id() (1-based),
@@ -1156,7 +1175,21 @@ private:
   // Forward-declared to keep libslic3r/Config.hpp out of the header (header pollution).
   class DynamicPrintConfig;
   Slic3r::Model *model_ = nullptr;
+  // S3 (2026-10-14): decomposed mesh production (OWZX_MESH_INSTANCE_CHANNEL=1).
+  // meshData() emits volume-local geometry (blob magic 'MDS2') and freezes the
+  // plate-normalization shift of that production so meshBatchInstanceTransforms()
+  // pairs with the resident blob. The legacy world-bake body stays byte-identical
+  // and remains the default until the S3 parity double-run passes.
+  QByteArray meshDataDecomposed() const;
+  mutable QVector3D m_instanceChannelPlateShift{0.0f, 0.0f, 0.0f};
+  mutable bool m_instanceChannelShiftValid = false;
 #endif
+  // S3 parallel switch: decomposed blob+channel when OWZX_MESH_INSTANCE_CHANNEL=1,
+  // legacy world-bake otherwise (unset/0). Read once per service instance so
+  // tests can flip it via qputenv before constructing their fixture service;
+  // the S3 parity gate runs the app once per mode before the default flips.
+  bool m_meshInstanceChannelEnabled =
+      qEnvironmentVariable("OWZX_MESH_INSTANCE_CHANNEL") == QLatin1String("1");
   /// Phase 222: active filament colours synced from PresetServiceMock.
   /// Read first by plateFilamentColours()/filamentCount() (plate config fallback).
   QStringList m_activeFilamentColours;
