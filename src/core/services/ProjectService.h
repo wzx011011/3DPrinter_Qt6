@@ -557,6 +557,18 @@ public:
   /// operation: 0=union(A+B), 1=difference(A-B), 2=intersection(A∩B)
   /// Replaces srcObject mesh with the result, deletes toolObject
   Q_INVOKABLE bool meshBoolean(int srcObjectIndex, int toolObjectIndex, int operation);
+  /// X3: part-menu "Mesh boolean" backend (对齐上游 ObjectList::boolean,
+  /// GUI_ObjectList.cpp:3294-3363) — combines ALL volumes of ONE object into
+  /// a single mesh via the real CSG union (Plater::combine_mesh_fff,
+  /// Plater.cpp:18461-18543: mcut over the csgmesh, positive/negative parts,
+  /// soup-merge fallback), creates a NEW single-part object carrying the old
+  /// object's name + config (ensure_on_bed + center_around_origin), and
+  /// replaces the old object (removed; result appended at the model tail like
+  /// upstream add_object_to_list). Returns the new object index (>=0) or -1.
+  Q_INVOKABLE int booleanCombineObjectVolumes(int objectIndex);
+  /// X3: upstream can_mesh_boolean gate (GUI_ObjectList.cpp:3595-3603) — the
+  /// object is multi-volume, or a single volume that is splittable.
+  bool canMeshBoolean(int objectIndex) const;
   /// 钻孔操作（对齐上游 GLGizmoDrill → sla::hollow_mesh_and_drill / MeshBoolean::cgal::minus）
   /// shape: 0=Circle(cylinder), 1=Triangle(triPrism), 2=Square(cube)
   /// direction: 0=Normal(top-down), 1=Bottom-up, 2=Both

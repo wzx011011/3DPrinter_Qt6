@@ -1877,6 +1877,12 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
     event->accept();
     return;
   }
+  // X3: the assembly-measure gizmo (mode 19) ALSO drives the picked-feature
+  // two-click measurement (its readouts re-route to MeasureEngine), but the
+  // click must NOT be swallowed: the same click still toggles the assembly
+  // two-volume selection the overlay anchors on. Emit without accept.
+  if (event->button() == Qt::LeftButton && m_gizmoMode == GizmoAssemblyMeasure)
+    emitMeasurePickIfActive(event->position(), event->modifiers());
 
   // Phase HOLLOW: a left click in the hollow gizmo places a drain hole at
   // the mesh surface under the cursor (对齐上游 GLGizmoHollow::on_mouse
@@ -2582,8 +2588,9 @@ void RhiViewport::hoverLeaveEvent(QHoverEvent *event)
   updatePlateIconHover(QPointF(-1e6, -1e6));
   setHoveredSourceObjectIndex(-1);
   // Phase 115 (MEASURE-04): clear the hovered feature when the cursor leaves
-  // the viewport so no stale highlight lingers off-mesh.
-  if (m_gizmoMode == GizmoMeasure)
+  // the viewport so no stale highlight lingers off-mesh. X3: the assembly
+  // measure gizmo shares the flow.
+  if (m_gizmoMode == GizmoMeasure || m_gizmoMode == GizmoAssemblyMeasure)
     emit measureHoverLeft();
   // Phase 240 (GIZ-03): clear the flatten hover highlight when the cursor
   // leaves the viewport (pickedSourceIndex -1 clears it in the ViewModel).
@@ -3115,9 +3122,11 @@ void RhiViewport::resetGizmoDragState()
 void RhiViewport::emitMeasurePickIfActive(const QPointF &position,
                                           Qt::KeyboardModifiers modifiers)
 {
-  // Only the measure gizmo drives this path. Other gizmos (move/rotate/scale/
-  // cut/flatten/...) keep their existing mouse handling untouched.
-  if (m_gizmoMode != GizmoMeasure)
+  // The measure gizmo (Prepare) and the assembly-measure gizmo (X3: the
+  // assembly readouts re-route to the same picked-feature flow) drive this
+  // path. Other gizmos (move/rotate/scale/cut/flatten/...) keep their
+  // existing mouse handling untouched.
+  if (m_gizmoMode != GizmoMeasure && m_gizmoMode != GizmoAssemblyMeasure)
     return;
 
   // Stage-1: cheap ray->AABB prefilter over the scene vertices. Returns -1

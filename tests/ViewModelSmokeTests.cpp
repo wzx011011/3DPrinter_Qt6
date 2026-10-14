@@ -7515,21 +7515,26 @@ void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
 
 void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
 {
-  // Phase 92-01 (ASMMEASURE-02): AssemblyMeasureGeometry::measure computes the
-  // correct center-to-center distance + per-axis XYZ delta + angle between the
-  // two volumes' longest-AABB-axis directions. Pure math -- no model needed.
-  // Box A: longest axis = X (extent 10). Box B: longest axis = Y (extent 10),
-  // offset +16 in X and +4 in Y from A's center.
+  // Phase 92-01 (ASMMEASURE-02), X3 (2026-10-14) migrated: the coarse
+  // AssemblyMeasureResult keeps ONLY the honest geometry (center-to-center
+  // distance + per-axis XYZ delta + validity) for the renderer's overlay
+  // anchor fallback. The invented longest-AABB-axis angle (axisA/axisB/
+  // angleDeg) is REMOVED — a world AABB loses object rotation, so that value
+  // was structurally confined to 0/90.000 regardless of true geometry. The
+  // angle truth lives in the picked-feature path (MeasureEngine::measure-
+  // Features = upstream Measure::get_measurement), proven at runtime by
+  // PartPlateTests::measureEngineProducesFeatureAndReadout. Pure math -- no
+  // model needed.
+  // Box A center = (5, 1, 1). Box B center = (21, 5, 1).
   PrepareSceneData::ModelBounds a;
-  a.minX = 0.0f;  a.maxX = 10.0f;   // extent 10 (longest)
+  a.minX = 0.0f;  a.maxX = 10.0f;
   a.minY = 0.0f;  a.maxY = 2.0f;
   a.minZ = 0.0f;  a.maxZ = 2.0f;
-  // A center = (5, 1, 1).
   PrepareSceneData::ModelBounds b;
   b.minX = 20.0f; b.maxX = 22.0f;
-  b.minY = 0.0f;  b.maxY = 10.0f;   // extent 10 (longest)
+  b.minY = 0.0f;  b.maxY = 10.0f;
   b.minZ = 0.0f;  b.maxZ = 2.0f;
-  // B center = (21, 5, 1). Delta A->B = (16, 4, 0). Distance = sqrt(272) ~= 16.49.
+  // Delta A->B = (16, 4, 0). Distance = sqrt(272) ~= 16.49.
 
   const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(a, b);
   QVERIFY2(r.valid, "measure() must return valid for two non-degenerate AABBs");
@@ -7543,14 +7548,6 @@ void ViewModelSmokeTests::assemblyMeasureGeometryComputesDistanceAndAngle()
   QVERIFY2(qFuzzyCompare(r.distanceXyz.x(), 16.0f), "distanceXyz.x must be 16");
   QVERIFY2(qFuzzyCompare(r.distanceXyz.y(), 4.0f), "distanceXyz.y must be 4");
   QVERIFY2(qFuzzyCompare(r.distanceXyz.z(), 0.0f), "distanceXyz.z must be 0");
-
-  // Longest axes: A -> X, B -> Y (perpendicular).
-  QVERIFY2(r.axisA == QVector3D(1, 0, 0), "axisA must be the X unit vector");
-  QVERIFY2(r.axisB == QVector3D(0, 1, 0), "axisB must be the Y unit vector");
-  // Angle between X and Y = 90 degrees.
-  QVERIFY2(std::abs(r.angleDeg - 90.0f) < 1e-3f,
-           qPrintable(QStringLiteral("angle expected ~90.000, got %1")
-                          .arg(r.angleDeg)));
 
   // Formatting: distance gets 3 decimals + ' mm'; angle gets 3 decimals + degree glyph.
   const QString distStr = AssemblyMeasureGeometry::formatDistance(r.distance);
@@ -7940,34 +7937,15 @@ void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
   QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() == 0,
            "pool must stay released on Preview");
 
-  // (e) Switch to AssembleView again: selectedVolumeBoundsForAssemblyMeasure()
-  //     returns the same bounds whether read directly or via the pool (the
-  //     refactor routes the existing computation through the cached resource).
+  // (e) Switch to AssembleView again: the pool repopulates from the same
+  //     bounds source. X3: selectedVolumeBoundsForAssemblyMeasure() was
+  //     REMOVED with the Phase 92 AABB measure approximation (the assembly
+  //     measure readouts re-route to the picked-feature MeasureEngine flow);
+  //     the pool itself and its bounds source are unchanged.
   editor.setActiveCanvasType(2);
   QCOMPARE(editor.activeCanvasType(), 2);
   QVERIFY2(editor.assembleViewDataPoolObjectCountForTest() >= 2,
            "pool must repopulate on returning to AssembleView");
-  // Select >=2 objects so the measure bounds path is exercised; the pool-fed
-  // read returns the same values the inline fallback would (same source).
-  editor.selectAllVisibleObjects();
-  if (editor.selectedObjectCount() >= 2)
-  {
-    const QList<PrepareSceneData::ModelBounds> bounds =
-        editor.selectedVolumeBoundsForAssemblyMeasure();
-    QVERIFY2(bounds.size() == 2,
-             qPrintable(QStringLiteral("selectedVolumeBoundsForAssemblyMeasure must "
-                                       "return 2 bounds when >=2 selected on "
-                                       "AssembleView, got %1")
-                            .arg(bounds.size())));
-    // The pool-fed bounds are non-degenerate for real primitives (extent > 0
-    // on at least one axis). Sanity-check the first bounds.
-    const bool nonDegenerate =
-        (bounds.at(0).maxX > bounds.at(0).minX) ||
-        (bounds.at(0).maxY > bounds.at(0).minY) ||
-        (bounds.at(0).maxZ > bounds.at(0).minZ);
-    QVERIFY2(nonDegenerate,
-             "pool-fed assembly-measure bounds must be non-degenerate for primitives");
-  }
 }
 
 void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidIndices()

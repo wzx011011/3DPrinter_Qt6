@@ -112,12 +112,14 @@ constexpr bool kViewportTrianglePickingAvailable = true;
 constexpr bool kCgalMeshBooleanAvailable = true;
 
 // Phase 93 (ASMROUTE-02): parse the cached mesh blob into a map of
-// sourceObjectIndex -> unioned AABB, the per-object bounds source Phase 92
-// encapsulated inline in selectedVolumeBoundsForAssemblyMeasure(). Shared by
-// refreshAssembleViewDataPool() (feeds the pool's ModelObjectsInfo) and
-// selectedVolumeBoundsForAssemblyMeasure() (reads the two selected bounds) so
-// the bounds source is single-sourced. Returns an empty map on a malformed
-// blob (same early-return contract as the Phase 92 inline parse). The blob
+// sourceObjectIndex -> unioned AABB. Consumed by
+// refreshAssembleViewDataPool() (feeds the pool's ModelObjectsInfo).
+// X3: the former second consumer selectedVolumeBoundsForAssemblyMeasure()
+// (Phase 92's two-selected-bounds read for the AABB measure approximation)
+// was removed with the approximation — the assembly measure readouts come
+// from the picked-feature flow (MeasureEngine). Returns an empty map on a
+// malformed blob (same early-return contract as the Phase 92 inline parse).
+// The blob
 // format mirrors PrepareSceneData::setModelMeshData: [objectCount int32] then
 // per-batch [renderObjectId int32][triangleCount int32][verts...], followed by
 // a 6-float global bbox trailer (skipped here).
@@ -4150,62 +4152,6 @@ bool EditorViewModel::isAssemblyMeasureActivable() const
       && m_selectedSourceIndices.size() >= 2;
 }
 
-QList<PrepareSceneData::ModelBounds>
-EditorViewModel::selectedVolumeBoundsForAssemblyMeasure() const
-{
-  // Phase 92 (ASMMEASURE-02) + Phase 93 (ASMROUTE-02): per-volume AABBs for the
-  // first two selected source indices. Phase 93 routes the bounds through the
-  // cached AssembleViewDataPool ModelObjectsInfo resource when on AssembleView
-  // + the pool is valid (the bounds source is unchanged — same mesh blob — now
-  // formalized as the cached pool resource). When not on AssembleView the pool
-  // is released and this returns empty (Phase 92 behavior) — Prepare/Preview
-  // never call it.
-  const QList<int> selected = assemblyMeasureSelectedSourceIndices();
-  if (selected.size() < 2)
-    return {};
-
-  // Phase 93 (ASMROUTE-02): prefer the cached pool resource when valid. The
-  // bounds values are byte-identical to the inline parse (same source) — this
-  // is a pure refactor that formalizes the per-object data the view needs.
-  if (const AssembleViewModelObjectsInfo *info = m_assembleViewDataPool.model_objects_info())
-  {
-    const QList<AssembleViewObjectInfo> &objects = info->objects();
-    const int targetA = selected.at(0);
-    const int targetB = selected.at(1);
-    const AssembleViewObjectInfo *a = nullptr;
-    const AssembleViewObjectInfo *b = nullptr;
-    for (const AssembleViewObjectInfo &o : objects)
-    {
-      if (o.sourceObjectIndex == targetA) a = &o;
-      else if (o.sourceObjectIndex == targetB) b = &o;
-    }
-    if (a && b)
-      return {a->bounds, b->bounds};
-    return {};
-  }
-
-  // Fallback: inline parse (kept for the rare case where the pool is not yet
-  // populated on AssembleView, e.g. before the first refresh). Shares the same
-  // parseAllSourceObjectBoundsFromMeshBlob helper as refreshAssembleViewDataPool.
-  // S3: the per-batch instance transforms compose decomposed (volume-local)
-  // blobs into world coordinates; legacy blobs ignore the channel.
-  const QMap<int, PrepareSceneData::ModelBounds> all =
-      parseAllSourceObjectBoundsFromMeshBlob(m_cachedMeshData,
-                                             m_cachedMeshBatchSourceObjectIndices,
-                                             projectService_
-                                                 ? projectService_->meshBatchInstanceTransforms()
-                                                 : QList<QMatrix4x4>());
-  if (all.isEmpty())
-    return {};
-  const int targetA = selected.at(0);
-  const int targetB = selected.at(1);
-  auto itA = all.constFind(targetA);
-  auto itB = all.constFind(targetB);
-  if (itA == all.constEnd() || itB == all.constEnd())
-    return {};
-  return {itA.value(), itB.value()};
-}
-
 void EditorViewModel::refreshAssembleViewDataPool()
 {
   // Phase 93 (ASMROUTE-02): populate the pool's ModelObjectsInfo resource from
@@ -4289,65 +4235,73 @@ QList<int> EditorViewModel::assemblyMeasureSelectedSourceIndices() const
 
 QString EditorViewModel::assemblyMeasureDistanceText() const
 {
-  // Phase 92 (ASMMEASURE-02): the center-to-center distance between the first
-  // two selected volumes, formatted to upstream precision (3 decimals + mm,
-  // GLGizmoMeasure.cpp:24,1250). Documented simplification: AABB-center
-  // distance, not picked-feature distance (full feature-picking is future).
-  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
+  // X3: the readout truth is the picked-feature flow (upstream GLGizmoMeasure
+  // two-click measure via MeasureEngine::measureFeatures =
+  // Measure::get_measurement): direct distance when the feature pair has one,
+  // else the perpendicular distance. With no picked features there is NO
+  // readout — the Phase 92 AABB-center approximation is retired (see
+  // AssemblyMeasureGeometry.h; the AABB centers only anchor the renderer's
+  // dimension leader line now).
+  if (!m_assemblyMeasureGizmoActive)
     return {};
-  const QList<PrepareSceneData::ModelBounds> bounds = selectedVolumeBoundsForAssemblyMeasure();
-  if (bounds.size() < 2)
-    return {};
-  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(bounds.at(0), bounds.at(1));
-  if (!r.valid)
-    return {};
-  return AssemblyMeasureGeometry::formatDistance(r.distance);
+  if (m_measureReadout.valid)
+  {
+    if (m_measureReadout.hasDirectDistance)
+      return AssemblyMeasureGeometry::formatDistance(m_measureReadout.directDistance);
+    if (m_measureReadout.hasPerpendicularDistance)
+      return AssemblyMeasureGeometry::formatDistance(m_measureReadout.perpendicularDistance);
+  }
+  return {};
 }
 
 QString EditorViewModel::assemblyMeasureAngleText() const
 {
-  // Phase 92 (ASMMEASURE-02): the angle between the two selected volumes'
-  // longest-AABB-axis directions, formatted as degrees (3 decimals + degree
-  // glyph, GLGizmoMeasure.cpp:1558). Documented simplification: longest-axis
-  // direction stands in for the upstream edge/plane feature direction.
-  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
+  // X3: real feature-to-feature angle from the picked-feature flow
+  // (Measure::AngleAndEdges via MeasureEngine). No picked features -> no
+  // readout. The Phase 92 longest-AABB-axis angle is retired: a world AABB
+  // loses object rotation, so that value was structurally confined to
+  // 0 deg / 90.000 deg regardless of the true geometry.
+  if (!m_assemblyMeasureGizmoActive)
     return {};
-  const QList<PrepareSceneData::ModelBounds> bounds = selectedVolumeBoundsForAssemblyMeasure();
-  if (bounds.size() < 2)
-    return {};
-  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(bounds.at(0), bounds.at(1));
-  if (!r.valid)
-    return {};
-  return AssemblyMeasureGeometry::formatAngle(r.angleDeg);
+  if (m_measureReadout.valid && m_measureReadout.hasAngle)
+    return AssemblyMeasureGeometry::formatAngle(m_measureReadout.angleDeg);
+  return {};
 }
 
 QVector3D EditorViewModel::assemblyMeasureDistanceXyz() const
 {
-  // Phase 92 (ASMMEASURE-02): the per-axis XYZ delta between the two selected
-  // volumes' AABB centers (mm). Distance-XYZ editing (moving volumes) is a
-  // deferred future enhancement (mutates the model).
-  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.size() < 2)
+  // X3: per-axis XYZ delta from the picked-feature readout
+  // (Measure::MeasurementResult.distance_xyz). No picked features -> zero
+  // vector (the QML binds on length/validity of the other readouts).
+  if (!m_assemblyMeasureGizmoActive)
     return {};
-  const QList<PrepareSceneData::ModelBounds> bounds = selectedVolumeBoundsForAssemblyMeasure();
-  if (bounds.size() < 2)
-    return {};
-  const AssemblyMeasureResult r = AssemblyMeasureGeometry::measure(bounds.at(0), bounds.at(1));
-  if (!r.valid)
-    return {};
-  return r.distanceXyz;
+  if (m_measureReadout.valid && m_measureReadout.hasDistanceXyz)
+    return m_measureReadout.distanceXyz;
+  return {};
 }
 
 QString EditorViewModel::assemblyMeasurePlaneText() const
 {
-  // Phase 92 (ASMMEASURE-02): plane-selection indicator mirroring 装配页_测量.png
-  // ("选中 N 平面"). Phase 92 approximates "plane" by the count of selected
-  // volumes (each volume contributes one longest-AABB-axis plane); full
-  // per-triangle plane picking is deferred (needs ITS + raycaster).
-  if (!m_assemblyMeasureGizmoActive || m_selectedSourceIndices.isEmpty())
+  // X3: the Phase 92 "plane count = selected volumes" approximation is
+  // retired. The text now counts PICKED FEATURES in the two-click flow (the
+  // stashed "from" feature + the current hover), mirroring the upstream
+  // selection counter. No QML consumer currently binds this property (it
+  // stays declared per the QmlUiAuditTests lock); without libslic3r the
+  // count falls back to 0.
+  if (!m_assemblyMeasureGizmoActive)
     return {};
+#ifdef HAS_LIBSLIC3R
+  int picked = 0;
+  if (m_measureFromFeatureValid)
+    ++picked;
+  if (m_measureHoverFeatureKind != 0)
+    ++picked;
   // "选中 N 平面" — emit as \uXXXX escapes (ASCII-only source per AGENTS.md).
-  return QString::fromUtf8(u8"\u9009\u4e2d ") + QString::number(m_selectedSourceIndices.size())
-       + QString::fromUtf8(u8" \u5e73\u9762");
+  return QString::fromUtf8(u8"\u9009\u4e2d ") + QString::number(picked)
+         + QString::fromUtf8(u8" \u5e73\u9762");
+#else
+  return QString::fromUtf8(u8"\u9009\u4e2d 0 \u5e73\u9762");
+#endif
 }
 
 // Phase 114 (MEASURE-03): real feature-picking measurement readout text
@@ -6726,6 +6680,13 @@ bool EditorViewModel::contextActionAvailable(const QString &action) const
   // the Qt6 backend contract of exactly two selected objects.
   if (normalized == QStringLiteral("meshBoolean"))
     return m_selectedSourceIndices.size() == 2 && hasObject;
+  // X3: part-menu "Mesh boolean" combine — upstream can_mesh_boolean
+  // (GUI_ObjectList.cpp:3595-3603) on the context object: multi-volume, or a
+  // single splittable volume. The part menu opens for multi-volume objects,
+  // so this is actionable exactly where the entry appears.
+  if (normalized == QStringLiteral("meshBooleanCombine"))
+    return hasObject && m_selectedSourceIndices.size() == 1
+        && projectService_->canMeshBoolean(m_contextSourceObjectIndex);
   // P16.4: Change Filament visibility (GUI_Factories.cpp:1879-1961):
   // dropped with <= 1 filament; dropped for a single non-part/modifier
   // volume selection (:1896-1901).
@@ -8406,6 +8367,59 @@ bool EditorViewModel::mergeSelectedPartsToSingleObject()
   statusText_ = tr("已合并部件为单一对象");
   emit stateChanged();
   return true;
+}
+
+int EditorViewModel::booleanCombineSelectedParts()
+{
+  // X3: part-menu "Mesh boolean" entry — upstream ObjectList::boolean
+  // (GUI_ObjectList.cpp:3294) with the can_mesh_boolean gate (:3595-3603).
+  // Mirrors the mergeSelectedPartsToSingleObject wiring: context object,
+  // SceneSnapshotCommand undo, mesh-cache/slice invalidation tail.
+  if (!projectService_)
+    return -1;
+
+  const int sourceIndex = m_contextSourceObjectIndex >= 0
+                              ? m_contextSourceObjectIndex
+                              : selectedSourceObjectIndex();
+  if (sourceIndex < 0 || !projectService_->canMeshBoolean(sourceIndex))
+  {
+    statusText_ = tr("网格布尔需要选中多部件或可分裂部件的对象");
+    emit stateChanged();
+    return -1;
+  }
+
+  auto *cmd = m_undoManager
+                  ? new SceneSnapshotCommand(tr("Mesh boolean"), projectService_)
+                  : nullptr;
+
+  const int newIndex = projectService_->booleanCombineObjectVolumes(sourceIndex);
+  if (newIndex < 0)
+  {
+    delete cmd;
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return -1;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
+  }
+
+  // The combined object replaces the source at the model tail (upstream
+  // remove() + add_object_to_list(...->size() - 1) + select_item) — the
+  // selection follows it there.
+  m_selectedSourceIndices.clear();
+  m_selectedSourceIndices.insert(newIndex);
+  m_primarySelectedSourceIndex = newIndex;
+  m_contextSourceObjectIndex = newIndex;
+
+  rebuildObjectEntriesFromService();
+  refreshMeshCacheAndFitHint();
+  invalidateSliceResultsForCurrentPlate();
+  statusText_ = tr("已合并对象为单一网格");
+  emit stateChanged();
+  return newIndex;
 }
 
 // ── P16.4: Change Filament (GUI_Factories.cpp:1879-1961) ───────────────────

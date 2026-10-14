@@ -10,25 +10,35 @@
 // pattern at src/core/rendering/GizmoCenter.h).
 #include "qml_gui/Renderer/PrepareSceneData.h"
 
-// AssemblyMeasureResult approximates upstream Measure::MeasurementResult
-// (third_party/OrcaSlicer/src/libslic3r/Measure.hpp:147-180) for the common
-// multi-volume Assembly-measure case: center-to-center distance + per-axis XYZ
-// delta + angle between the two volumes' longest-AABB-axis directions.
+// X3 (2026-10-14): the Phase 92 "screenshot-driven approximation" is retired.
+// The struct keeps ONLY the honest geometry — the world AABB centers, the
+// center-to-center distance and the per-axis deltas — as the COARSE fallback
+// that anchors the assembly overlay's dimension leader line
+// (RhiViewportRenderer uploadAssemblyMeasureBuffers consumes centerA/centerB).
+// The invented values are gone: angleDeg / axisA / axisB (the
+// longest-AABB-axis angle that structurally could only ever produce
+// 0°/90.000°, because a world AABB loses object rotation) no longer exist on
+// this struct.
 //
-// Full feature-picking (point/edge/circle/plane via ITS + scene raycaster) is
-// a documented Phase 92 simplification deferred to Phase 93 / future (needs the
-// per-volume indexed_triangle_set + the AssembleViewDataPool). This struct is
-// the load-bearing shape the screenshot-parity measurement produces: the
-// 装配页_测量.png distance value + the 90.000°-style angle box.
+// The measurement TRUTH is the upstream picked-feature path: user picks
+// feature A, then feature B; the readouts (angle / perpendicular distance /
+// direct distance / distance XYZ) come from MeasureEngine::measureFeatures —
+// a direct instantiation of upstream Measure::get_measurement (see
+// MeasureEngine.h, ME-01 "INSTANTIATE, NOT REIMPLEMENT" and the ME-05 note
+// about this file's fallback role). On the EditorViewModel the assembly
+// readout properties (assemblyMeasureDistanceText / assemblyMeasureAngleText /
+// assemblyMeasureDistanceXyz) re-route to that flow and stay EMPTY while no
+// feature has been picked — mirroring upstream GLGizmoMeasure, which shows no
+// measurement until two features are picked
+// (third_party/OrcaSlicer/src/slic3r/GUI/Gizmos/GLGizmoMeasure.cpp two-click
+// flow; math in third_party/OrcaSlicer/src/libslic3r/Measure.hpp
+// DistAndPoints / AngleAndEdges).
 struct AssemblyMeasureResult
 {
   QVector3D centerA;
   QVector3D centerB;
   float distance = 0.0f;       // Euclidean center-to-center (mm)
   QVector3D distanceXyz;       // per-axis delta A->B (mm)
-  float angleDeg = 0.0f;       // angle between longest axes (degrees)
-  QVector3D axisA;             // volume A longest-axis direction (unit)
-  QVector3D axisB;             // volume B longest-axis direction (unit)
   bool valid = false;          // false if either AABB is degenerate
 };
 
@@ -37,13 +47,10 @@ struct AssemblyMeasureResult
 // viewmodel and renderer forward to these (mirrors GizmoGeometry / GizmoCenter).
 namespace AssemblyMeasureGeometry
 {
-// Compute the measurement between two volume AABBs.
+// Compute the coarse center-to-center measurement between two volume AABBs
+// (overlay anchor fallback; the readout truth is the picked-feature path).
 AssemblyMeasureResult measure(const PrepareSceneData::ModelBounds &a,
                               const PrepareSceneData::ModelBounds &b);
-
-// Longest-axis unit direction of an AABB (the X/Y/Z whose extent is largest).
-// Returns the Z axis (arbitrary) when the AABB is degenerate (all extents ~0).
-QVector3D longestAxis(const PrepareSceneData::ModelBounds &b);
 
 // Center of an AABB.
 QVector3D center(const PrepareSceneData::ModelBounds &b);

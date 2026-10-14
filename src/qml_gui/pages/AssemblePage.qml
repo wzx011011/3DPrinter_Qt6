@@ -232,6 +232,22 @@ Item {
             const idx = root.editorVm.assemblyMeasureSelectedSourceIndices()
             return (idx && idx.length > 1) ? idx[1] : -1
         }
+        // X3: the assembly measure readouts are the upstream picked-feature
+        // measurement (EditorViewModel re-routes assemblyMeasure*Text to the
+        // MeasureEngine two-click flow), so the viewport's measure-pick signals
+        // are forwarded to the ViewModel exactly like PreparePage.qml:1950.
+        // No picking or geometry-hit logic lives in QML (the
+        // rhiViewportSelectionPickingBridgeStaysCppOwned audit enforces this);
+        // parameter names mirror the C++ signal. The same click also toggles
+        // the two-volume overlay selection (the renderer's leader-line anchor).
+        onMeasurePickRequested: function(worldOrigin, worldDirection, pickedSourceIndex, shiftHeld) {
+            if (root.editorVm)
+                root.editorVm.pickMeasureFeatureAt(worldOrigin, worldDirection, pickedSourceIndex, shiftHeld)
+        }
+        onMeasureHoverLeft: {
+            if (root.editorVm)
+                root.editorVm.clearMeasureReadout()
+        }
         meshData: root.editorVm ? root.editorVm.meshData : null
         bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
         bedDepth: root.editorVm ? root.editorVm.bedDepth : 220

@@ -631,9 +631,7 @@ Item {
         // selected object is multipart -- the Qt6 "mergeToSingle" gate
         // (EditorViewModel.cpp contextActionAvailable). Sits in the part menu
         // between Mirror and Split like upstream create_part_menu's
-        // merge-parts item (GUI_Factories.cpp:1562-1568). The full upstream
-        // "Mesh boolean" item registration (GUI_Factories.cpp:1563) is an X3
-        // migration task, not this entry.
+        // merge-parts item (GUI_Factories.cpp:1562-1568).
         CxMenuItem {
             text: qsTr("Assemble")
             enabled: {
@@ -645,6 +643,26 @@ Item {
             ToolTip.delay: 400
             ToolTip.text: qsTr("Assemble the selected objects into an object with single part")
             onTriggered: if (root.editorVm) root.editorVm.mergeSelectedPartsToSingleObject()
+        }
+        // X3: the full upstream "Mesh boolean" item registration
+        // (append_menu_item_merge_parts_to_single_part, GUI_Factories.cpp:
+        // 1268-1274, called from create_part_menu at :1563): label + tooltip
+        // verbatim, gated by can_mesh_boolean (GUI_ObjectList.cpp:3595-3603)
+        // via the "meshBooleanCombine" action, and backed by the real CSG
+        // combine (ObjectList::boolean -> combine_mesh_fff, ported as
+        // EditorViewModel::booleanCombineSelectedParts ->
+        // ProjectService::booleanCombineObjectVolumes).
+        CxMenuItem {
+            text: qsTr("Mesh boolean")
+            enabled: {
+                void root.menuRefreshTick  // G-07: re-evaluate per popup
+                return !!root.editorVm && root.editorVm.contextActionAvailable("meshBooleanCombine")
+            }
+            HoverHandler { id: meshBooleanHover }
+            ToolTip.visible: meshBooleanHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: qsTr("Mesh boolean operations including union and subtraction")
+            onTriggered: if (root.editorVm) root.editorVm.booleanCombineSelectedParts()
         }
         CxMenu {
             title: qsTr("Split")

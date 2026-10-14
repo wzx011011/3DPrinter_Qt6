@@ -922,6 +922,11 @@ public:
   /// P16.2: merge all parts of the selected object into one mesh object
   /// (对齐上游 ObjectList::merge(false), GUI_ObjectList.cpp:2792-2810).
   Q_INVOKABLE bool mergeSelectedPartsToSingleObject();
+  /// X3: part-menu "Mesh boolean" — real CSG combine of the context
+  /// object's volumes into a new single-part object (对齐上游
+  /// ObjectList::boolean, GUI_ObjectList.cpp:3294-3363; gate = can_mesh_
+  /// boolean :3595-3603). Returns the combined object's index or -1.
+  Q_INVOKABLE int booleanCombineSelectedParts();
   /// P16.4: Change Filament submenu (upstream MenuFactory::
   /// append_menu_item_change_filament GUI_Factories.cpp:1879-1961 +
   /// ObjectList::set_extruder_for_selected_items GUI_ObjectList.cpp:5622).
@@ -2113,9 +2118,11 @@ private:
   // PrepareSceneData::setModelMeshData (objectCount header + per-batch
   // [renderObjectId, triangleCount, verts...]); bounds are derived from the
   // vertices, matching the renderer's batch.bounds derivation.
-  QList<PrepareSceneData::ModelBounds> selectedVolumeBoundsForAssemblyMeasure() const;
-
-  // Phase 93 (ASMROUTE-02): refresh the AssembleView data pool's
+  // X3: selectedVolumeBoundsForAssemblyMeasure() is REMOVED — the assembly
+  // measure readouts re-route to the picked-feature flow (MeasureEngine =
+  // upstream Measure::get_measurement); the renderer's overlay anchors read
+  // the batch AABBs directly. Phase 93 (ASMROUTE-02): refresh the
+  // AssembleView data pool's
   // ModelObjectsInfo resource from the same bounds source Phase 92 used (the
   // cached mesh blob + m_cachedMeshBatchSourceObjectIndices). Called ONLY when
   // m_activeCanvasType == 2 (CanvasAssembleView), mirroring upstream

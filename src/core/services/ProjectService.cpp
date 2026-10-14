@@ -1,3 +1,15 @@
+// X3 (ObjectList::boolean combine): the CSGMesh headers pull oneTBB, whose
+// profiling.h uses `emit` as an identifier - Qt's empty `emit` macro (defined
+// by ProjectService.h -> QObject and every Qt header after it) breaks it
+// (C2059 inside tbb/profiling.h). This file cannot use the CameraStream.cpp-
+// style `#undef emit` (it writes `emit projectChanged()` throughout), so the
+// TBB-touching headers are included BEFORE any Qt-bearing header instead.
+#ifdef HAS_LIBSLIC3R
+#include <libslic3r/Point.hpp>                          // Transform3f/Eigen aliases
+#include <libslic3r/CSGMesh/ModelToCSGMesh.hpp>        // X3: model_to_csgmesh
+#include <libslic3r/CSGMesh/PerformCSGMeshBooleans.hpp> // X3: mcut CSG union
+#endif
+
 #include "ProjectService.h"
 
 #include "PresetService.h"  // G-13: project-embedded presets
@@ -5325,6 +5337,238 @@ bool ProjectService::meshBoolean(int srcObjectIndex, int toolObjectIndex, int op
   Q_UNUSED(toolObjectIndex);
   Q_UNUSED(operation);
   return false;
+#endif
+}
+
+bool ProjectService::canMeshBoolean(int objectIndex) const
+{
+  // X3: upstream can_mesh_boolean (GUI_ObjectList.cpp:3595-3603) — the
+  // selected object should be multi mesh: more than one volume, or a single
+  // volume that is splittable (is_splittable caches its expensive mesh scan
+  // on the ModelVolume, Model.cpp:2600-2607).
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  const auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || obj->volumes.empty())
+    return false;
+  if (obj->volumes.size() > 1)
+    return true;
+  const auto *vol = obj->volumes.front();
+  return vol && vol->is_splittable();
+#else
+  Q_UNUSED(objectIndex);
+  return false;
+#endif
+}
+
+int ProjectService::booleanCombineObjectVolumes(int objectIndex)
+{
+  // X3: port of the upstream part-menu "Mesh boolean" backend
+  // ObjectList::boolean (GUI_ObjectList.cpp:3294-3363): combine every volume
+  // of ONE object into a single mesh through the real CSG union
+  // (Plater::combine_mesh_fff, Plater.cpp:18461-18543), create a NEW
+  // single-part object with the old object's name + config, replace the old
+  // object with it (result appended at the model tail like the upstream
+  // add_object_to_list call). Snapshot/undo + selection tail live on the
+  // EditorViewModel side, mirroring the merge(false) wiring.
+  if (loading_)
+  {
+    lastError_ = tr("加载中，无法执行网格布尔");
+    emit projectChanged();
+    return -1;
+  }
+
+#ifdef HAS_LIBSLIC3R
+  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+  {
+    lastError_ = tr("网格布尔失败：对象索引无效");
+    emit projectChanged();
+    return -1;
+  }
+  auto *obj = model_->objects[size_t(objectIndex)];
+  if (!obj || !canMeshBoolean(objectIndex))
+  {
+    lastError_ = tr("网格布尔失败：对象不满足布尔条件（多部件或可分裂部件）");
+    emit projectChanged();
+    return -1;
+  }
+
+  try
+  {
+    // ── Plater::combine_mesh_fff(*object, -1) ──
+    Slic3r::TriangleMesh combined;
+    std::vector<Slic3r::csg::CSGPart> csgmesh;
+    csgmesh.reserve(2 * obj->volumes.size());
+    Slic3r::csg::model_to_csgmesh(*obj, Slic3r::Transform3d::Identity(),
+                                  std::back_inserter(csgmesh),
+                                  Slic3r::csg::mpartsPositive | Slic3r::csg::mpartsNegative);
+    const auto fail = Slic3r::csg::check_csgmesh_booleans(
+        Slic3r::Range{std::begin(csgmesh), std::end(csgmesh)});
+    if (std::get<0>(fail) == Slic3r::csg::BooleanFailReason::OK)
+    {
+      try
+      {
+        auto meshPtr = Slic3r::csg::perform_csgmesh_booleans_mcut(
+            Slic3r::Range{std::begin(csgmesh), std::end(csgmesh)});
+        if (meshPtr)
+          combined = Slic3r::MeshBoolean::mcut::mcut_to_triangle_mesh(*meshPtr);
+      }
+      catch (...)
+      {
+        // Upstream swallows mcut failures and falls back to the soup merge
+        // below (Plater.cpp:18497-18512; the CGAL retry is #if 0 upstream).
+      }
+    }
+    if (combined.empty())
+    {
+      // Upstream fallback: only positive parts kept as a plain merge
+      // (Plater.cpp:18520-18528).
+      for (const Slic3r::ModelVolume *v : obj->volumes)
+        if (v->is_model_part())
+        {
+          Slic3r::TriangleMesh volMesh(v->mesh());
+          volMesh.transform(v->get_matrix(), true);
+          combined.merge(volMesh);
+        }
+    }
+    if (combined.empty())
+    {
+      lastError_ = tr("网格布尔失败：合并网格为空");
+      emit projectChanged();
+      return -1;
+    }
+    if (obj->instances.empty())
+    {
+      lastError_ = tr("网格布尔失败：对象没有实例");
+      emit projectChanged();
+      return -1;
+    }
+    // instance_id == -1 branch: bake every instance transform into the mesh
+    // (Plater.cpp:18532-18539).
+    {
+      Slic3r::TriangleMesh volsMesh(std::move(combined));
+      combined = Slic3r::TriangleMesh();
+      for (const Slic3r::ModelInstance *i : obj->instances)
+      {
+        Slic3r::TriangleMesh m(volsMesh);
+        m.transform(i->get_matrix(), true);
+        combined.merge(m);
+      }
+    }
+
+    // ── New single-part object carrying the old object's name + config
+    // (GUI_ObjectList.cpp:3326-3333), re-anchored like upstream
+    // (:3355-3360). ──
+    const int oldCount = int(model_->objects.size());
+    Slic3r::ModelObject *newObj = model_->add_object();
+    newObj->name = obj->name;
+    newObj->config.assign_config(obj->config);
+    if (newObj->instances.empty())
+      newObj->add_instance();
+    newObj->add_volume(std::move(combined));
+    newObj->ensure_on_bed();
+    newObj->center_around_origin();
+    newObj->translate_instances(-newObj->origin_translation);
+    newObj->origin_translation = Slic3r::Vec3d::Zero();
+
+    // Object-scoped mirrors follow the real-Model removal exactly like
+    // ProjectService::deleteObject: save the OLD object-level entries first
+    // (they transfer to the combined object), shift the stores down over the
+    // removed index, then re-attach at the tail index. Per-volume overrides
+    // are dropped — per-part settings do not survive the upstream combine.
+    const int newCount = oldCount - 1;
+    QHash<QString, QVariant> oldOverrides = m_mockObjectOverrides.value(objectIndex);
+    QList<MockLayerRange> oldRanges = m_mockLayerRanges.value(objectIndex);
+
+    model_->delete_object(size_t(objectIndex));
+
+    {
+      QHash<int, QList<MockLayerRange>> shiftedRanges;
+      for (auto it = m_mockLayerRanges.constBegin(); it != m_mockLayerRanges.constEnd(); ++it)
+      {
+        if (it.key() == objectIndex) continue;
+        shiftedRanges[(it.key() > objectIndex) ? it.key() - 1 : it.key()] = it.value();
+      }
+      m_mockLayerRanges = shiftedRanges;
+
+      QHash<int, QHash<QString, QVariant>> shiftedOverrides;
+      for (auto it = m_mockObjectOverrides.constBegin(); it != m_mockObjectOverrides.constEnd(); ++it)
+      {
+        if (it.key() == objectIndex) continue;
+        shiftedOverrides[(it.key() > objectIndex) ? it.key() - 1 : it.key()] = it.value();
+      }
+      m_mockObjectOverrides = shiftedOverrides;
+
+      QHash<int, QHash<QString, QVariant>> shiftedVolOverrides;
+      for (auto it = m_mockVolumeOverrides.constBegin(); it != m_mockVolumeOverrides.constEnd(); ++it)
+      {
+        const int objKey = it.key() >> 16;
+        if (objKey == objectIndex) continue;
+        const int adjusted = (objKey > objectIndex) ? objKey - 1 : objKey;
+        shiftedVolOverrides[(adjusted << 16) | (it.key() & 0xFFFF)] = it.value();
+      }
+      m_mockVolumeOverrides = shiftedVolOverrides;
+    }
+
+    // Combined object sits at the model tail (upstream
+    // add_object_to_list(m_objects->size() - 1)). After add(N+1) + delete(N)
+    // the appended object rests at index oldCount - 1.
+    const int newIndex = newCount;
+    if (!oldOverrides.isEmpty())
+      m_mockObjectOverrides.insert(newIndex, oldOverrides);
+    if (!oldRanges.isEmpty())
+      m_mockLayerRanges.insert(newIndex, oldRanges);
+
+    // Plate instance membership follows the moved object index.
+    if (m_plateList)
+    {
+      for (int pi = 0; pi < m_plateList->plateCount(); ++pi)
+      {
+        OWzx::PartPlate *p = m_plateList->plate(pi);
+        if (!p) continue;
+        std::set<std::pair<int, int>> rebuilt;
+        bool touched = false;
+        for (const auto &pair : p->objToInstanceSet())
+        {
+          if (pair.first == objectIndex)
+          {
+            rebuilt.insert({newIndex, pair.second});
+            touched = true;
+            continue;
+          }
+          const int adj = pair.first > objectIndex ? pair.first - 1 : pair.first;
+          rebuilt.insert({adj, pair.second});
+        }
+        if (touched)
+        {
+          p->clearInstances();
+          for (const auto &pair : rebuilt)
+            p->addInstance(pair.first, pair.second);
+        }
+      }
+      emit plateDataLoaded(m_plateList->plateCount());
+    }
+
+    // S5: single converged mirror rebuild (names/positions/counts follow the
+    // real Model tail-append + removal).
+    syncTransformsFromModel();
+    syncObjectMetadataMirrors();
+    lastError_.clear();
+    emit projectChanged();
+    return newIndex;
+  }
+  catch (const std::exception &ex)
+  {
+    lastError_ = tr("网格布尔失败：%1").arg(QString::fromLatin1(ex.what()));
+    emit projectChanged();
+    return -1;
+  }
+#else
+  Q_UNUSED(objectIndex);
+  lastError_ = tr("网格布尔需要 libslic3r");
+  emit projectChanged();
+  return -1;
 #endif
 }
 
