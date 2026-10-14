@@ -51,8 +51,14 @@ public:
       const QVector3D &axisDir, const QVector3D &gizmoCenter);
 
   // Which move-arrow axis (1=X, 2=Y, 3=Z, 0=none) the cursor hits.
-  // hasSelection=false forces return 0 (mirrors the m_meshBatches.empty()
-  // early-return guard in the GL original).
+  // X3: exact grabber-body picking - the ray is intersected against the same
+  // cone triangles the renderer draws at the arrow tips (no proximity
+  // threshold), closest hit along the ray wins; hasSelection=false forces
+  // return 0 (mirrors the m_meshBatches.empty() early-return guard in the GL
+  // original). Upstream mechanism: every grabber body is a SceneRaycaster
+  // EType::Gizmo raycaster over its rendered mesh and hover resolves to the
+  // closest hit (GLGizmoBase.cpp Grabber::render -> add_raycaster_for_picking;
+  // GLGizmoMove.cpp cone grabbers at the arrow tips).
   static int pickMoveAxis(
       float sx, float sy, const QSize &viewSize,
       const QMatrix4x4 &projMatrix, const QMatrix4x4 &viewMatrix,
@@ -60,13 +66,17 @@ public:
       bool hasSelection);
 
   // Which rotate-ring axis (1=X, 2=Y, 3=Z, 0=none) the cursor hits.
+  // X3: exact ray vs the drawn torus ring bodies (closest hit wins, no
+  // threshold - see pickMoveAxis for the upstream mechanism reference).
   static int pickRotateAxis(
       float sx, float sy, const QSize &viewSize,
       const QMatrix4x4 &projMatrix, const QMatrix4x4 &viewMatrix,
       const QVector3D &gizmoCenter, const QVector3D &cameraEye,
       bool hasSelection);
 
-  // Which scale-shaft axis (1=X, 2=Y, 3=Z, 0=none) the cursor hits.
+  // Which scale box-handle axis (1=X, 2=Y, 3=Z, 0=none) the cursor hits.
+  // X3: exact ray vs the drawn box grabber at the end of each shaft (no
+  // threshold - see pickMoveAxis for the upstream mechanism reference).
   // (The GL original returns 1/2/3 only; uniform (4) is reserved for a
   // future center handle and not exercised by the current drag loop.)
   static int pickScaleAxis(

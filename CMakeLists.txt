@@ -675,6 +675,11 @@ if(BUILD_TESTING)
         tests/GizmoMathTests.cpp
         src/core/rendering/GizmoMath.cpp
         src/core/rendering/GizmoMath.h
+        # X3: the pick functions consume the same drawn-body vertex tables the
+        # renderer uploads (pick == render), so the GizmoGeometry builders
+        # must link into this target too.
+        src/core/rendering/GizmoGeometry.cpp
+        src/core/rendering/GizmoGeometry.h
     )
     target_include_directories(GizmoMathTests PRIVATE src)
     target_link_libraries(GizmoMathTests PRIVATE Qt6::Test Qt6::Core Qt6::Gui)
@@ -725,6 +730,10 @@ if(BUILD_TESTING)
         src/core/rendering/PickingPrimitives.h
         src/core/rendering/GizmoMath.cpp
         src/core/rendering/GizmoMath.h
+        # X3: GizmoMath grabber picking consumes the GizmoGeometry drawn-body
+        # vertex tables (pick == render).
+        src/core/rendering/GizmoGeometry.cpp
+        src/core/rendering/GizmoGeometry.h
         src/qml_gui/Renderer/PrepareSceneData.cpp
         src/qml_gui/Renderer/PrepareSceneData.h
         src/qml_gui/Renderer/ViewportContextHit.h

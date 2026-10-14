@@ -1,22 +1,142 @@
 #include "GizmoMath.h"
 
+#include "GizmoGeometry.h"
+
 #include <cfloat>
 #include <cmath>
 
-// GizmoMath implementation - math ported VERBATIM from GLViewportRenderer.cpp
-// (Phase 65 extraction). The only changes are the member->parameter
-// substitutions documented in 65-01-PLAN.md Task 1; the floating-point
+// GizmoMath implementation.
+//
+// computeRay / rayXZIntersect / rayToAxisT / computeRotateAngle were extracted
+// VERBATIM from GLViewportRenderer.cpp (Phase 65); the floating-point
 // operations, constants, and control flow are bit-identical so the GL path
 // retains its original behavior.
 //
-// Source locations in GLViewportRenderer.cpp at HEAD:
+// X3 (2026-10-14) - pickMoveAxis / pickRotateAxis / pickScaleAxis no longer use
+// the Phase 65 self-invented heuristic (ray-to-axis-line distance with a
+// world-unit threshold). They now port the upstream grabber precise picking:
+// the cursor ray is intersected EXACTLY against the same grabber-body
+// triangles the renderer draws (GizmoGeometry), and the closest hit along the
+// ray wins. This mirrors the upstream mechanism where every grabber body is
+// registered as a SceneRaycaster::EType::Gizmo raycaster backed by a
+// MeshRaycaster over its rendered mesh, and hover resolves to the closest hit
+// (third_party/OrcaSlicer/src/slic3r/GUI/Gizmos/GLGizmoBase.cpp:142-165
+// Grabber::render -> add_raycaster_for_picking; GLGizmoMove.cpp:153-157 cone
+// grabbers at the arrow tips, :275 gizmos-on-top). Because the pick consumes
+// the very vertex tables the RHI gizmo shader draws
+// (world = gizmoCenter + gizmoScale * local, shaders/rhi_gizmo.vert:29), what
+// you can grab is exactly what you can see - the property upstream gets from
+// raycasting the rendered PickingModel.
+//
+// Source locations in GLViewportRenderer.cpp at HEAD (pre-X3, for the
+// verbatim-extracted functions below):
 //   computeRay         lines 1250-1266
 //   rayXZIntersect     lines 1271-1278
 //   rayToAxisT         lines 1346-1359
-//   pickMoveAxis       lines 1364-1418
 //   computeRotateAngle lines 1491-1517
-//   pickRotateAxis     lines 1630-1670
-//   pickScaleAxis      lines 1899-1950
+
+namespace
+{
+// The gizmo world scale, single-sourced with the renderer's uniform
+// (RhiViewportRenderer.cpp uploadGizmoBuffer / renderSelectionCenter): the
+// gizmo shader maps gizmo-local units to world as
+//   world_pos = position * gizmoScale + gizmoCenter
+// (shaders/rhi_gizmo.vert:29). The pick must use the SAME mapping so the
+// tested bodies are the drawn bodies.
+float gizmoWorldScale(const QVector3D &gizmoCenter, const QVector3D &cameraEye)
+{
+  return std::max((gizmoCenter - cameraEye).length() * 0.15f, 5.0f);
+}
+
+// Two-sided Moller-Trumbore ray-triangle intersection. Returns the ray
+// parameter t (>= 0) of the hit, or -1 on miss. Two-sided like the upstream
+// MeshRaycaster, so a grabber body is hittable from either winding.
+float rayTriangleHit(const QVector3D &orig, const QVector3D &dir,
+                     const QVector3D &v0, const QVector3D &v1,
+                     const QVector3D &v2)
+{
+  const QVector3D e1 = v1 - v0;
+  const QVector3D e2 = v2 - v0;
+  const QVector3D p = QVector3D::crossProduct(dir, e2);
+  const float det = QVector3D::dotProduct(e1, p);
+  if (std::abs(det) < 1e-12f)
+    return -1.0f;  // ray parallel to the triangle plane
+  const float invDet = 1.0f / det;
+  const QVector3D tvec = orig - v0;
+  const float u = QVector3D::dotProduct(tvec, p) * invDet;
+  if (u < 0.0f || u > 1.0f)
+    return -1.0f;
+  const QVector3D q = QVector3D::crossProduct(tvec, e1);
+  const float v = QVector3D::dotProduct(dir, q) * invDet;
+  if (v < 0.0f || u + v > 1.0f)
+    return -1.0f;
+  const float t = QVector3D::dotProduct(e2, q) * invDet;
+  return (t >= 0.0f) ? t : -1.0f;
+}
+
+// The immutable grabber-body vertex tables shared with the renderer. Built
+// once; the pick and the RHI upload consume the SAME builders
+// (GizmoGeometry::build*GizmoVertices), which is what makes pick == render.
+struct GizmoBodyGeometry
+{
+  QVector<GizmoVertex> moveVerts;
+  QVector<GizmoVertex> rotateVerts;
+  QVector<GizmoVertex> scaleVerts;
+  GizmoGeometryOffsets moveOffsets;
+  GizmoGeometryOffsets rotateOffsets;
+  GizmoGeometryOffsets scaleOffsets;
+
+  static const GizmoBodyGeometry &instance()
+  {
+    static const GizmoBodyGeometry geometry = [] {
+      GizmoBodyGeometry g;
+      g.moveVerts = GizmoGeometry::buildMoveGizmoVertices(&g.moveOffsets);
+      g.rotateVerts = GizmoGeometry::buildRotateGizmoVertices(&g.rotateOffsets);
+      g.scaleVerts = GizmoGeometry::buildScaleGizmoVertices(&g.scaleOffsets);
+      return g;
+    }();
+    return geometry;
+  }
+};
+
+// Exact closest-hit pick across the three per-axis body meshes. `basePerAxis`
+// gives the first vertex of each axis' body (vertCountPerAxis / 3 triangles
+// each); vertices are mapped to world as gizmoCenter + scale * local exactly
+// like the gizmo vertex shader. Returns 1/2/3 for X/Y/Z, 0 when no body is
+// hit - there is no proximity threshold: the ray either crosses a drawn body
+// or it does not (upstream SceneRaycaster closest-hit semantics).
+int pickAxisBody(const QVector3D &orig, const QVector3D &dir,
+                 const QVector3D &gizmoCenter, float scale,
+                 const QVector<GizmoVertex> &verts,
+                 const int (&basePerAxis)[3], int vertCountPerAxis)
+{
+  const GizmoVertex *data = verts.constData();
+  const int triCount = vertCountPerAxis / 3;
+  float bestT = FLT_MAX;
+  int best = 0;
+  for (int ax = 0; ax < 3; ++ax)
+  {
+    const int base = basePerAxis[ax];
+    for (int tri = 0; tri < triCount; ++tri)
+    {
+      const GizmoVertex *a = data + base + tri * 3;
+      const GizmoVertex *b = a + 1;
+      const GizmoVertex *c = a + 2;
+      const float t = rayTriangleHit(
+          orig, dir,
+          gizmoCenter + scale * QVector3D(a->x, a->y, a->z),
+          gizmoCenter + scale * QVector3D(b->x, b->y, b->z),
+          gizmoCenter + scale * QVector3D(c->x, c->y, c->z));
+      if (t >= 0.0f && t < bestT)
+      {
+        bestT = t;
+        best = ax + 1;
+      }
+    }
+  }
+  return best;
+}
+}  // namespace
 
 // ===========================================================================
 // computeRay
@@ -73,6 +193,12 @@ float GizmoMath::rayToAxisT(const QVector3D &orig, const QVector3D &dir,
 
 // ===========================================================================
 // pickMoveAxis  -- returns 1/2/3 for X/Y/Z, 0 if no hit
+//
+// X3: exact ray vs the drawn CONE grabber body of each move arrow (local
+// axial span [0.78, 1.0], base radius 0.055, tip at 1.0 - the same triangles
+// the RHI gizmo path draws). The shaft is a dashed line primitive exactly
+// like the upstream grabber connection (GLGizmoMove.cpp render_grabber_
+// connection) and is not pickable upstream either - only grabber bodies are.
 // ===========================================================================
 int GizmoMath::pickMoveAxis(float sx, float sy, const QSize &viewSize,
                            const QMatrix4x4 &projMatrix,
@@ -83,55 +209,12 @@ int GizmoMath::pickMoveAxis(float sx, float sy, const QSize &viewSize,
   if (!hasSelection)
     return 0;
 
-  // Compute gizmo scale for proximity threshold
-  float dist = (gizmoCenter - cameraEye).length();
-  float scale = std::max(dist * 0.15f, 5.f);
-  // Threshold = 8% of arrow length in world units
-  float thresh = scale * 0.08f;
-
   auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
-
-  static const QVector3D kAxes[3] = {
-      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
-
-  float bestDist = FLT_MAX;
-  int best = 0;
-  for (int ax = 0; ax < 3; ax++)
-  {
-    // Closest distance from ray to axis line segment
-    QVector3D axDir = kAxes[ax];
-    QVector3D w = orig - gizmoCenter;
-    float b = QVector3D::dotProduct(dir, axDir);
-    float e = QVector3D::dotProduct(axDir, w);
-    float d = QVector3D::dotProduct(dir, w);
-    float denom = 1.f - b * b;
-    float t_ray, s_axis;
-    if (std::abs(denom) < 1e-8f)
-    {
-      t_ray = 0;
-      s_axis = e;
-    }
-    else
-    {
-      t_ray = (b * e - d) / denom;
-      s_axis = (e - b * d) / denom;
-    }
-    if (t_ray < 0)
-      continue;      // behind camera
-    s_axis /= scale; // normalise to [0..1] range
-    if (s_axis < 0 || s_axis > 1.0f)
-      continue; // outside arrow length
-
-    QVector3D p1 = orig + t_ray * dir;
-    QVector3D p2 = gizmoCenter + s_axis * scale * axDir;
-    float dist2 = (p1 - p2).length();
-    if (dist2 < thresh && dist2 < bestDist)
-    {
-      bestDist = dist2;
-      best = ax + 1;
-    }
-  }
-  return best;
+  const GizmoBodyGeometry &geometry = GizmoBodyGeometry::instance();
+  return pickAxisBody(orig, dir, gizmoCenter,
+                      gizmoWorldScale(gizmoCenter, cameraEye),
+                      geometry.moveVerts, geometry.moveOffsets.coneBase,
+                      geometry.moveOffsets.coneVertCount);
 }
 
 // ===========================================================================
@@ -172,6 +255,14 @@ float GizmoMath::computeRotateAngle(float sx, float sy, int axis,
 
 // ===========================================================================
 // pickRotateAxis  -- returns 1/2/3 for X/Y/Z ring, 0 if no hit
+//
+// X3: exact ray vs the drawn torus ring bodies (majorR 0.7, minorR 0.035 in
+// gizmo-local units). Upstream rides the same principle one level up: the
+// ring grabber elements are registered as SceneRaycaster bodies and the
+// closest hit along the ray wins (GLGizmoRotate.cpp grabber at
+// m_radius * (1 + GrabberOffset); GLGizmoBase.cpp Grabber::render). Testing
+// the drawn ring triangles keeps that closest-hit contract against exactly
+// the geometry the user sees.
 // ===========================================================================
 int GizmoMath::pickRotateAxis(float sx, float sy, const QSize &viewSize,
                              const QMatrix4x4 &projMatrix,
@@ -182,45 +273,22 @@ int GizmoMath::pickRotateAxis(float sx, float sy, const QSize &viewSize,
   if (!hasSelection)
     return 0;
 
-  float dist = (gizmoCenter - cameraEye).length();
-  float scale = std::max(dist * 0.15f, 5.f);
-  float thresh = scale * 0.10f; // picking tolerance
-
   auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
-
-  // For each ring, project ray onto ring plane and check distance to ring
-  static const QVector3D kNormals[3] = {
-      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
-
-  float bestDist = FLT_MAX;
-  int best = 0;
-
-  for (int ax = 0; ax < 3; ax++)
-  {
-    const QVector3D &n = kNormals[ax];
-    float denom = QVector3D::dotProduct(dir, n);
-    if (std::abs(denom) < 1e-6f)
-      continue; // ray parallel to plane
-
-    float t = QVector3D::dotProduct(gizmoCenter - orig, n) / denom;
-    if (t < 0)
-      continue; // behind camera
-
-    QVector3D hit = orig + t * dir;
-    float ringDist = (hit - gizmoCenter).length();
-    float tubeDist = std::abs(ringDist - scale * 0.7f); // 0.7 = majorR
-
-    if (tubeDist < thresh && tubeDist < bestDist)
-    {
-      bestDist = tubeDist;
-      best = ax + 1;
-    }
-  }
-  return best;
+  const GizmoBodyGeometry &geometry = GizmoBodyGeometry::instance();
+  return pickAxisBody(orig, dir, gizmoCenter,
+                      gizmoWorldScale(gizmoCenter, cameraEye),
+                      geometry.rotateVerts, geometry.rotateOffsets.ringBase,
+                      geometry.rotateOffsets.ringVertCount);
 }
 
 // ===========================================================================
 // pickScaleAxis  -- returns 1/2/3 for X/Y/Z, 0 if no hit
+//
+// X3: exact ray vs the drawn box grabber handle at the end of each scale
+// shaft (0.08 cubed centered at 0.78, gizmo-local). The scale grabber body
+// upstream is likewise a box registered for picking; the shaft line is not
+// pickable. (The GL original returned 1/2/3 only; uniform (4) is reserved for
+// a future center handle and not exercised by the current drag loop.)
 // ===========================================================================
 int GizmoMath::pickScaleAxis(float sx, float sy, const QSize &viewSize,
                             const QMatrix4x4 &projMatrix,
@@ -231,50 +299,10 @@ int GizmoMath::pickScaleAxis(float sx, float sy, const QSize &viewSize,
   if (!hasSelection)
     return 0;
 
-  float dist = (gizmoCenter - cameraEye).length();
-  float scale = std::max(dist * 0.15f, 5.f);
-  float thresh = scale * 0.10f;
-
   auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
-
-  static const QVector3D kAxes[3] = {
-      QVector3D(1, 0, 0), QVector3D(0, 1, 0), QVector3D(0, 0, 1)};
-
-  float bestDist = FLT_MAX;
-  int best = 0;
-  for (int ax = 0; ax < 3; ax++)
-  {
-    QVector3D axDir = kAxes[ax];
-    QVector3D w = orig - gizmoCenter;
-    float b = QVector3D::dotProduct(dir, axDir);
-    float e = QVector3D::dotProduct(axDir, w);
-    float d = QVector3D::dotProduct(dir, w);
-    float denom = 1.f - b * b;
-    float t_ray, s_axis;
-    if (std::abs(denom) < 1e-8f)
-    {
-      t_ray = 0;
-      s_axis = e;
-    }
-    else
-    {
-      t_ray = (b * e - d) / denom;
-      s_axis = (e - b * d) / denom;
-    }
-    if (t_ray < 0)
-      continue;
-    s_axis /= scale;
-    if (s_axis < 0 || s_axis > 1.0f)
-      continue;
-
-    QVector3D p1 = orig + t_ray * dir;
-    QVector3D p2 = gizmoCenter + s_axis * scale * axDir;
-    float d2 = (p1 - p2).length();
-    if (d2 < thresh && d2 < bestDist)
-    {
-      bestDist = d2;
-      best = ax + 1;
-    }
-  }
-  return best;
+  const GizmoBodyGeometry &geometry = GizmoBodyGeometry::instance();
+  return pickAxisBody(orig, dir, gizmoCenter,
+                      gizmoWorldScale(gizmoCenter, cameraEye),
+                      geometry.scaleVerts, geometry.scaleOffsets.boxBase,
+                      geometry.scaleOffsets.boxVertCount);
 }

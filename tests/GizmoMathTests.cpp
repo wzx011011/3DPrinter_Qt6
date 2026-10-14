@@ -74,6 +74,19 @@ namespace
     float sxCenter() const { return float(viewSize.width()) / 2.f; }
     float syCenter() const { return float(viewSize.height()) / 2.f; }
   };
+
+  // Projects a world point to widget pixel coordinates through the same
+  // proj*view chain computeRay inverts, so a pick test can aim the cursor at
+  // an exact world-space body point (X3 grabber-picking tests).
+  QPointF worldToScreen(const QVector3D &world, const QMatrix4x4 &proj,
+                        const QMatrix4x4 &view, const QSize &viewSize)
+  {
+    const QVector4D clip = proj * view * QVector4D(world, 1.0f);
+    const float ndcX = clip.x() / clip.w();
+    const float ndcY = clip.y() / clip.w();
+    return QPointF(float((ndcX + 1.0) * 0.5 * viewSize.width()),
+                   float((1.0 - ndcY) * 0.5 * viewSize.height()));
+  }
 }
 
 class GizmoMathTests final : public QObject
@@ -104,7 +117,7 @@ private slots:
 
   // ---- pickScaleAxis ----
   void testPickScaleAxisNoSelection();
-  void testPickScaleAxisHitsXShaft();
+  void testPickScaleAxisHitsXBoxHandle();
 
   // ---- computeRotateAngle ----
   void testComputeRotateAngleReferenceIsZero();
@@ -246,30 +259,27 @@ void GizmoMathTests::testPickMoveAxisNoSelection()
 
 void GizmoMathTests::testPickMoveAxisHitsXAxis()
 {
-  // Camera at eye=(0,0,5) looking down -Z, gizmo at origin.
-  // dist = length(origin - eye) = 5; scale = max(5*0.15, 5.0) = 5.0.
-  // The +X arrow runs from (0,0,0) to (5,0,0). A cursor whose ray passes
-  // through (2.5, 0, 0) (midway along the X arrow) should pick axis 1.
-  //
-  // To find the screen pixel for world (2.5, 0, 0), unproject it manually:
-  //   viewM * (2.5,0,0,1) = (2.5, 0, -5, 1)  [viewM = translate(0,0,-5)]
-  //   clip = proj * view = ...
-  // Easier: search the screen for the pixel whose ray hits nearest (2.5,0,0).
-  // Sweep sx from 400 (center) upward; pick the sx where pickMoveAxis first
-  // returns 1. That proves the X arrow is hittable.
+  // X3: exact grabber-body picking - only the drawn CONE at the arrow tip
+  // (local axial [0.78, 1.0], base radius 0.055) is hittable; the shaft line
+  // is a dashed-line primitive, not a grabber (upstream GLGizmoMove.cpp cone
+  // grabbers + render_grabber_connection). Rig: eyeZ=40 -> scale =
+  // max(40*0.15, 5) = 6.0, cone spans axial [4.68, 6.0] with radius 0.33 -> 0.
+  // The cursor aims at a point inside the X cone body (axial 5.34, radius
+  // there ~0.165), projected to screen through the same proj*view chain the
+  // pick ray inverts. (A sweep from the screen center would first cross the
+  // Z cone - the +Z body points at this camera - so the pick must be pinned
+  // to an exact body point instead.)
   LookDownZ cam;
+  cam.eyeZ = 40.f;
   QVector3D gizmoCenter{0, 0, 0};
-  int pickedAtSomeSx = 0;
-  // The X axis points to screen-+x in this camera. Scan sx from center toward
-  // the right edge; pickMoveAxis should return 1 somewhere in that range.
-  for (int sx = int(cam.sxCenter()); sx < cam.viewSize.width() && pickedAtSomeSx == 0; sx += 4)
-  {
-    pickedAtSomeSx = GizmoMath::pickMoveAxis(float(sx), cam.syCenter(),
-                                             cam.viewSize, cam.projMatrix(),
-                                             cam.viewMatrix(), gizmoCenter,
-                                             cam.eye(), /*hasSelection=*/true);
-  }
-  QCOMPARE(pickedAtSomeSx, 1);
+  const QPointF cursor = worldToScreen(QVector3D(5.34f, 0.05f, 0.0f),
+                                       cam.projMatrix(), cam.viewMatrix(),
+                                       cam.viewSize);
+  const int ax = GizmoMath::pickMoveAxis(float(cursor.x()), float(cursor.y()),
+                                         cam.viewSize, cam.projMatrix(),
+                                         cam.viewMatrix(), gizmoCenter,
+                                         cam.eye(), /*hasSelection=*/true);
+  QCOMPARE(ax, 1);
 }
 
 void GizmoMathTests::testPickMoveAxisMissesWhenFarOffAxis()
@@ -310,15 +320,17 @@ void GizmoMathTests::testPickRotateAxisNoSelection()
 void GizmoMathTests::testPickRotateAxisHitsXRing()
 {
   // Rotate rings: axis 1=X (YZ plane, normal +X), axis 2=Y (XZ plane),
-  // axis 3=Z (XY plane, normal +Z). With a camera looking down -Z, the Z
-  // ring (axis 3) is FACE-ON. The ring radius is scale*0.7 = 5.0*0.7 = 3.5
-  // (scale floored at 5.0 for dist<=33.3). To see radius 3.5 at z=0 with
-  // eyeZ=5, the camera half-extent must be >= 3.5: tan(fov/2)*5 >= 3.5 ->
-  // fov >= ~70 degrees. Use fov=90 so the +X tip of the Z ring at (3.5,0,0)
-  // is comfortably on-screen.
+  // axis 3=Z (XY plane, normal +Z). Ring geometry: majorR 0.7, minorR 0.035
+  // gizmo-local; with fov=90 and eyeZ=5 the scale is 5.0, so the Z ring
+  // center circle has radius 3.5 and tube radius 0.175, well inside the
+  // z=0-plane half-extent tan(45)*5 = 5.
   //
-  // A cursor over the +X tip of the Z ring should pick axis 3. Scan sx from
-  // center toward +X; pickRotateAxis should return 3.
+  // X3: exact body picking - the cursor aims at a point on the Z ring's
+  // center circle at 45 degrees (2.475, 2.475, 0), inside the tube and 3.5
+  // away from the X/Y ring circles, projected to screen through the same
+  // proj*view chain the pick ray inverts. (A sweep from the screen center
+  // would first run straight through the X ring tube at (0,0,3.5) - the ring
+  // crossing the view axis - so the pick is pinned to an exact body point.)
   QSize view{800, 600};
   QMatrix4x4 proj;
   proj.perspective(90.f, 800.f / 600.f, 0.1f, 100.f);
@@ -327,17 +339,12 @@ void GizmoMathTests::testPickRotateAxisHitsXRing()
   QVector3D eye{0.f, 0.f, 5.f};
   QVector3D gizmoCenter{0, 0, 0};
 
-  int pickedAtSomeSx = 0;
-  for (int sx = 400; sx < 800 && pickedAtSomeSx == 0; sx += 2)
-  {
-    pickedAtSomeSx = GizmoMath::pickRotateAxis(float(sx), 300.f, view, proj,
-                                               viewM, gizmoCenter, eye,
-                                               /*hasSelection=*/true);
-  }
-  QVERIFY2(pickedAtSomeSx != 0,
-           msg("pickRotateAxis returned 0 when scanning over the +X tip of the Z ring (fov=90); expected axis 3, got %f",
-               float(pickedAtSomeSx)));
-  QCOMPARE(pickedAtSomeSx, 3);
+  const QPointF cursor = worldToScreen(QVector3D(2.4749f, 2.4749f, 0.0f),
+                                       proj, viewM, view);
+  const int ax = GizmoMath::pickRotateAxis(float(cursor.x()), float(cursor.y()),
+                                           view, proj, viewM, gizmoCenter,
+                                           eye, /*hasSelection=*/true);
+  QCOMPARE(ax, 3);
 }
 
 // ===========================================================================
@@ -355,22 +362,26 @@ void GizmoMathTests::testPickScaleAxisNoSelection()
   QCOMPARE(ax, 0);
 }
 
-void GizmoMathTests::testPickScaleAxisHitsXShaft()
+void GizmoMathTests::testPickScaleAxisHitsXBoxHandle()
 {
-  // The scale shaft runs along each axis (same geometry as the move arrow
-  // for picking purposes). A cursor whose ray passes through (2.5, 0, 0)
-  // should pick axis 1. Scan sx from center toward +X.
+  // X3: exact grabber-body picking - the scale grabber is the drawn BOX at
+  // the end of each shaft (0.08 cubed centered at 0.78, gizmo-local); the
+  // shaft line is not pickable. Rig: eyeZ=40 -> scale 6.0, box centered at
+  // (4.68, 0, 0) with 0.24 half extents. The cursor aims at the box interior
+  // (4.68, 0.1, 0.1), projected to screen through the same proj*view chain
+  // the pick ray inverts. (A sweep from the screen center would first cross
+  // the Z box - the +Z body points at this camera.)
   LookDownZ cam;
+  cam.eyeZ = 40.f;
   QVector3D gizmoCenter{0, 0, 0};
-  int pickedAtSomeSx = 0;
-  for (int sx = int(cam.sxCenter()); sx < cam.viewSize.width() && pickedAtSomeSx == 0; sx += 4)
-  {
-    pickedAtSomeSx = GizmoMath::pickScaleAxis(float(sx), cam.syCenter(),
-                                              cam.viewSize, cam.projMatrix(),
-                                              cam.viewMatrix(), gizmoCenter,
-                                              cam.eye(), /*hasSelection=*/true);
-  }
-  QCOMPARE(pickedAtSomeSx, 1);
+  const QPointF cursor = worldToScreen(QVector3D(4.68f, 0.10f, 0.10f),
+                                       cam.projMatrix(), cam.viewMatrix(),
+                                       cam.viewSize);
+  const int ax = GizmoMath::pickScaleAxis(float(cursor.x()), float(cursor.y()),
+                                          cam.viewSize, cam.projMatrix(),
+                                          cam.viewMatrix(), gizmoCenter,
+                                          cam.eye(), /*hasSelection=*/true);
+  QCOMPARE(ax, 1);
 }
 
 // ===========================================================================

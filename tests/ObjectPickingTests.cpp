@@ -32,6 +32,19 @@ namespace
     bytes.append(reinterpret_cast<const char *>(&value), sizeof(value));
   }
 
+  // Projects a world point to widget pixel coordinates through the same
+  // proj*view chain GizmoMath::computeRay inverts, so tests can aim the pick
+  // cursor at an exact world-space body point (X3 grabber-picking tests).
+  QPointF worldToScreen(const QVector3D &world, const QMatrix4x4 &proj,
+                        const QMatrix4x4 &view, const QSize &viewSize)
+  {
+    const QVector4D clip = proj * view * QVector4D(world, 1.0f);
+    const float ndcX = clip.x() / clip.w();
+    const float ndcY = clip.y() / clip.w();
+    return QPointF(float((ndcX + 1.0) * 0.5 * viewSize.width()),
+                   float((1.0 - ndcY) * 0.5 * viewSize.height()));
+  }
+
   void appendFloat(QByteArray &bytes, float value)
   {
     bytes.append(reinterpret_cast<const char *>(&value), sizeof(value));
@@ -205,6 +218,12 @@ private slots:
   void raycasterMatchesBruteForceOnRandomScene();
   void raycasterNeverHitsInvalidBatchTriangles();
   void sceneRaycasterRebuildsAfterMeshChange();
+  // X3: gizmo grabber bodies are picked exactly (ray vs drawn triangles,
+  // closest hit wins, no world-unit proximity threshold).
+  void gizmoMovePickHitsDrawnConeBody();
+  void gizmoMovePickMissesRadialGapThatOldThresholdAccepted();
+  void gizmoScalePickHitsBoxHandleAndMissesRadialGap();
+  void gizmoRotatePickHitsRingTubeAndMissesBeyondTube();
 };
 
 void ObjectPickingTests::aabbHitTriangleMissDoesNotPickObject()
@@ -462,6 +481,118 @@ void ObjectPickingTests::sceneRaycasterRebuildsAfterMeshChange()
                       scene.modelVertices(), scene.modelBatches())
                .sourceObjectIndex,
            13);
+}
+
+// ===========================================================================
+// X3: gizmo grabber precise picking (exact body hit, no proximity threshold)
+//
+// Camera rig: eye (0,0,40) looking at the origin, so gizmoWorldScale =
+// max(40*0.15, 5) = 6.0 and every drawn body is comfortably inside the
+// 45-degree frustum (half-extent at z=0 is tan(22.5)*40 = 16.57). Body
+// geometry in world units at scale 6.0 (gizmo-local * 6.0):
+//   move cone   axial [4.68, 6.0], base radius 0.33 -> apex 0
+//   scale box   center (4.68,0,0), half extents 0.24
+//   rings       center-circle radius 4.2, tube radius 0.21
+// Old heuristic thresholds for comparison: move 6*0.08 = 0.48, rotate/scale
+// 6*0.10 = 0.60 world units - the negative cases below sit inside those old
+// thresholds but outside the drawn bodies, pinning that the threshold
+// heuristic is gone.
+// ===========================================================================
+
+void ObjectPickingTests::gizmoMovePickHitsDrawnConeBody()
+{
+  LookDownZ cam;
+  cam.eyeZ = 40.0f;
+  const QMatrix4x4 proj = cam.projMatrix();
+  const QMatrix4x4 view = cam.viewMatrix();
+  const QVector3D gizmoCenter{0, 0, 0};
+
+  // Halfway up the X cone, 0.05 from the axis: strictly inside the body
+  // (cone radius there is ~0.165).
+  const QPointF cursor = worldToScreen(QVector3D(5.34f, 0.05f, 0.0f),
+                                       proj, view, cam.viewSize);
+  const int ax = GizmoMath::pickMoveAxis(float(cursor.x()), float(cursor.y()),
+                                         cam.viewSize, proj, view,
+                                         gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
+                                         /*hasSelection=*/true);
+  QCOMPARE(ax, 1);
+}
+
+void ObjectPickingTests::gizmoMovePickMissesRadialGapThatOldThresholdAccepted()
+{
+  LookDownZ cam;
+  cam.eyeZ = 40.0f;
+  const QMatrix4x4 proj = cam.projMatrix();
+  const QMatrix4x4 view = cam.viewMatrix();
+  const QVector3D gizmoCenter{0, 0, 0};
+
+  // Same axial position but 0.3 off the X axis: outside the drawn cone
+  // (~0.165 there) yet inside the old 0.48 world-unit threshold, which used
+  // to report a hit. The ray must now miss everything -> 0.
+  const QPointF cursor = worldToScreen(QVector3D(5.34f, 0.30f, 0.0f),
+                                       proj, view, cam.viewSize);
+  const int ax = GizmoMath::pickMoveAxis(float(cursor.x()), float(cursor.y()),
+                                         cam.viewSize, proj, view,
+                                         gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
+                                         /*hasSelection=*/true);
+  QCOMPARE(ax, 0);
+}
+
+void ObjectPickingTests::gizmoScalePickHitsBoxHandleAndMissesRadialGap()
+{
+  LookDownZ cam;
+  cam.eyeZ = 40.0f;
+  const QMatrix4x4 proj = cam.projMatrix();
+  const QMatrix4x4 view = cam.viewMatrix();
+  const QVector3D gizmoCenter{0, 0, 0};
+
+  // Inside the X box handle (|y|,|z| <= 0.24): hit -> axis 1.
+  QPointF cursor = worldToScreen(QVector3D(4.68f, 0.10f, 0.10f),
+                                 proj, view, cam.viewSize);
+  int ax = GizmoMath::pickScaleAxis(float(cursor.x()), float(cursor.y()),
+                                    cam.viewSize, proj, view,
+                                    gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
+                                    /*hasSelection=*/true);
+  QCOMPARE(ax, 1);
+
+  // 0.4 off the axis at the box's axial position: outside the 0.24 half
+  // extent but inside the old 0.60 threshold -> must miss now.
+  cursor = worldToScreen(QVector3D(4.68f, 0.40f, 0.0f), proj, view,
+                         cam.viewSize);
+  ax = GizmoMath::pickScaleAxis(float(cursor.x()), float(cursor.y()),
+                                cam.viewSize, proj, view,
+                                gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
+                                /*hasSelection=*/true);
+  QCOMPARE(ax, 0);
+}
+
+void ObjectPickingTests::gizmoRotatePickHitsRingTubeAndMissesBeyondTube()
+{
+  LookDownZ cam;
+  cam.eyeZ = 40.0f;
+  const QMatrix4x4 proj = cam.projMatrix();
+  const QMatrix4x4 view = cam.viewMatrix();
+  const QVector3D gizmoCenter{0, 0, 0};
+
+  // On the Z ring's center circle at 45 degrees: inside the tube (radius
+  // 0.21) and clear of the X/Y rings (1.23 from their circles) -> axis 3.
+  QPointF cursor = worldToScreen(QVector3D(2.97f, 2.97f, 0.0f),
+                                 proj, view, cam.viewSize);
+  int ax = GizmoMath::pickRotateAxis(float(cursor.x()), float(cursor.y()),
+                                     cam.viewSize, proj, view,
+                                     gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
+                                     /*hasSelection=*/true);
+  QCOMPARE(ax, 3);
+
+  // 0.35 beyond the center circle (radially outward at 45 degrees): outside
+  // the 0.21 tube but inside the old 0.60 threshold -> must miss now.
+  cursor = worldToScreen(QVector3D(3.2244f, 3.2244f, 0.0f), proj, view,
+                         cam.viewSize);
+  ax = GizmoMath::pickRotateAxis(float(cursor.x()), float(cursor.y()),
+                                 cam.viewSize, proj, view,
+                                 gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
+                                 /*hasSelection=*/true);
+  QCOMPARE(ax, 0);
 }
 
 QTEST_MAIN(ObjectPickingTests)
