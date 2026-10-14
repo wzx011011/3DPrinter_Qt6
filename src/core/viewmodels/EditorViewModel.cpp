@@ -475,12 +475,11 @@ QVariantMap EditorViewModel::arrangeWipeTowerContext() const
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
   // S3 (2026-10-14) contract: this refresh is for MODEL TOPOLOGY changes
-  // only. Under the decomposed blob (OWZX_MESH_INSTANCE_CHANNEL=1) the mesh
-  // payload is volume-local and transform-free -- the transform family
-  // (gizmo drags, sidebar position/rotation/scale writes, undo/redo, nudge)
-  // flows through the meshBatchInstanceTransforms channel instead and never
-  // reaches here; the transform-derived readouts (fitHint, measure) derive
-  // live from the channel.
+  // only. The mesh payload is volume-local and transform-free -- the
+  // transform family (gizmo drags, sidebar position/rotation/scale writes,
+  // undo/redo, nudge) flows through the meshBatchInstanceTransforms channel
+  // instead and never reaches here; the transform-derived readouts (fitHint,
+  // measure) derive live from the channel.
   m_cachedMeshData = projectService_->meshData();
   // S3: ONE walk for all six per-batch tables (was six full model walks).
   const ProjectServiceMock::MeshBatchRenderTables tables = projectService_->meshBatchRenderTables();
@@ -8049,7 +8048,9 @@ void EditorViewModel::autoOrientSelected()
 
   statusText_ = anyOriented ? tr("自动朝向完成") : tr("自动朝向完成（无变更）");
   rebuildObjectEntriesFromService();
-  refreshMeshCacheAndFitHint();
+  // S3: orient is a pure rotation transform -- the meshBatchInstanceTransforms
+  // channel carries it to the renderer; refreshMeshCacheAndFitHint is
+  // topology-only by contract.
   emit stateChanged();
 
 #else
@@ -8058,7 +8059,7 @@ void EditorViewModel::autoOrientSelected()
   {
     statusText_ = tr("自动朝向完成（Mock）");
     rebuildObjectEntriesFromService();
-    refreshMeshCacheAndFitHint();
+    // S3: pure transform (see the real-path note above).
     emit stateChanged();
   });
 #endif
@@ -8999,7 +9000,9 @@ bool EditorViewModel::dropSelectedObjectsToBed()
       }
       m_undoManager->endMacro();
     }
-    refreshMeshCacheAndFitHint();
+    // S3: drop-to-bed is a pure translation transform -- the
+    // meshBatchInstanceTransforms channel carries it; the refresh is
+    // topology-only by contract.
     invalidateSliceResultsForCurrentPlate();
   }
   emit stateChanged();
@@ -9396,7 +9399,9 @@ bool EditorViewModel::setCurrentPlateIndex(int i)
     return false;
 
   ensureValidObjectSelection(true);
-  refreshMeshCacheAndFitHint();
+  // S3: plate context is not topology -- the mesh blob and per-batch tables
+  // are plate-independent (all-objects), and the viewport re-parses through
+  // the activePlateObjectIndices generation bump on the stateChanged emit.
   emit stateChanged();
   return true;
 }
@@ -9408,7 +9413,9 @@ void EditorViewModel::setShowAllObjects(bool showAll)
   m_showAllObjects = showAll;
 
   ensureValidObjectSelection(true);
-  refreshMeshCacheAndFitHint();
+  // S3: the show-all toggle is a UI-side object-list filter -- neither the
+  // mesh blob nor the per-batch tables nor the viewport active set depend on
+  // it; refreshMeshCacheAndFitHint is topology-only by contract.
   emit stateChanged();
 }
 
@@ -9758,7 +9765,9 @@ bool EditorViewModel::moveSelectedObjectToPlate(int targetPlateIndex)
   invalidateSliceResultsForPlate(targetPlateIndex);
   rebuildObjectEntriesFromService();
   ensureValidObjectSelection(true);
-  refreshMeshCacheAndFitHint();
+  // S3: moving objects BETWEEN plates is plate membership, not mesh
+  // topology -- the blob and per-batch tables are plate-independent and the
+  // viewport re-parses through the activePlateObjectIndices generation bump.
   emit stateChanged();
   return true;
 }
@@ -10121,7 +10130,9 @@ void EditorViewModel::centerSelectedObjects()
   }
 
   rebuildObjectEntriesFromService();
-  refreshMeshCacheAndFitHint();
+  // S3: centering is a pure translation transform -- the
+  // meshBatchInstanceTransforms channel carries it; the refresh is
+  // topology-only by contract.
   invalidateSliceResultsForCurrentPlate();
   emit stateChanged();
 }
@@ -11001,7 +11012,9 @@ double EditorViewModel::scaleSelectionToFitBed()
   }
 
   rebuildObjectEntriesFromService();
-  refreshMeshCacheAndFitHint();
+  // S3: scale-to-fit is a pure scale transform -- the
+  // meshBatchInstanceTransforms channel carries it; the refresh is
+  // topology-only by contract.
   invalidateSliceResultsForCurrentPlate();
   statusText_ = tr("Selection scaled to fit (x%1)").arg(s, 0, 'f', 3);
   emit stateChanged();

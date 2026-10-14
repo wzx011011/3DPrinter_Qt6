@@ -3813,10 +3813,8 @@ void ViewModelSmokeTests::plateSettingsSyncIntoPlateConfig()
 
 void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
 {
-  // S3 (2026-10-14): decomposed mode is selected per service instance at
-  // construction (OWZX_MESH_INSTANCE_CHANNEL=1), so flip the env before the
-  // fixture service exists and restore it before every return.
-  qputenv("OWZX_MESH_INSTANCE_CHANNEL", "1");
+  // S3 (2026-10-14): meshData() bakes volume-local geometry (blob v2) and
+  // the per-batch instance transform channel carries ALL world placement.
   ProjectServiceMock project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
 
@@ -3874,8 +3872,6 @@ void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
   // Rotation behaves the same way: channel moves, no re-production involved.
   QVERIFY(project.setObjectRotation(0, 90.0f, 0.0f, 0.0f));
   QVERIFY(project.meshBatchInstanceTransforms().at(0) != transformsB.at(0));
-
-  qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
 }
 
 void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
@@ -3885,7 +3881,6 @@ void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
   // object moves the whole-plate fit center WITHOUT any mesh refresh (the
   // legacy trailer-derived hint went stale here -- the stale-transform
   // defect S3 removes).
-  qputenv("OWZX_MESH_INSTANCE_CHANNEL", "1");
   ProjectServiceMock project;
   SliceService slice(&project);
   EditorViewModel vm(&project, &slice);
@@ -3902,8 +3897,6 @@ void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
   const QVector4D hintAfter = vm.fitHint();
   QVERIFY(std::abs(hintAfter.x() - hintBefore.x() - 17.0f) < 0.5f);
   QVERIFY(std::abs(hintAfter.z() - hintBefore.z()) < 0.5f);
-
-  qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
 }
 
 void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()
@@ -3911,7 +3904,6 @@ void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()
   // S3 C4: ONE collectMeshBatchIdentities walk fills all six per-batch lists
   // plus the transform channel. The permanent alignment lock: every table has
   // exactly one entry per blob batch, in blob order.
-  qputenv("OWZX_MESH_INSTANCE_CHANNEL", "1");
   ProjectServiceMock project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
   QVERIFY(project.addPrimitiveToPlate(0) >= 1); // second object: multi-batch
@@ -3935,8 +3927,6 @@ void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()
   // the same walk).
   QCOMPARE(project.meshBatchSourceObjectIndices().size(), batchCount);
   QCOMPARE(project.meshBatchVolumeTypes().size(), batchCount);
-
-  qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
 }
 
 void ViewModelSmokeTests::projectEditsDriveDirtyState()

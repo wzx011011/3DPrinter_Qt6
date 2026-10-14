@@ -12625,359 +12625,27 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
   return true;
 }
 
-QByteArray ProjectServiceMock::meshData() const
-{
-#ifdef HAS_LIBSLIC3R
-  // S3 parallel switch: the decomposed path bakes volume-local geometry only
-  // (instance transforms ride meshBatchInstanceTransforms) and keeps this
-  // byte-stable under pure transform edits. Default stays the legacy
-  // world-bake until the S3 parity double-run passes.
-  if (m_meshInstanceChannelEnabled && model_ && !model_->objects.empty())
-    return meshDataDecomposed();
-
-  if (!model_ || model_->objects.empty())
-    return {};
-
-  try
-  {
-
-    // ── TLV 格式 ─────────────────────────────────────────────────────────────
-    // [int32 objectCount]
-    // per object: [int32 objectId][int32 triangleCount][float * triangleCount*9]
-    // trailer:    [float * 6] bbox (minGLx, minGLy, minGLz, maxGLx, maxGLy, maxGLz)
-    //
-    // 坐标转换: slic3r(X=right, Y=forward, Z=up) → GL(X=right, Y=up, Z=away)
-    //   GL.x = slic3r.x,  GL.y = slic3r.z,  GL.z = -slic3r.y
-    // (AXES-ROT 2026-10-10: Z 取负 = 旋转而非镜像，见 transform pass 注释)
-    // ──────────────────────────────────────────────────────────────────────────
-
-    // PERF (meshdata): the pack pass writes each transformed triangle straight
-    // into the final buffer instead of staging it in a growable per-volume
-    // std::vector<float> and memcpying the (tens of MB) result a second time.
-    // Volume geometry is described up front in one cheap validation sweep
-    // (index bounds only), which also yields the exact triangle counts the
-    // buffer sizing needs.
-    struct VolumeJob
-    {
-      int32_t objectId;
-      const ::indexed_triangle_set *its; // TriangleMesh::its (global-ns admesh type)
-      Slic3r::Transform3d combined;
-      bool leftHanded;
-      int32_t faceCount; // indices that pass the same bounds guard as before
-    };
-
-    std::vector<VolumeJob> jobs;
-    jobs.reserve(8);
-
-    std::unordered_set<int32_t> usedObjectIds;
-    usedObjectIds.reserve(model_->objects.size() * 2 + 1);
-
-    auto makeStableObjectId = [&usedObjectIds](const Slic3r::ModelObject *obj,
-                                               const Slic3r::ModelInstance *inst) -> int32_t
-    {
-      const auto objAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(obj));
-      const auto instAddr = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(inst));
-      uint64_t mixed = objAddr ^ (instAddr + 0x9e3779b97f4a7c15ULL + (objAddr << 6) + (objAddr >> 2));
-
-      int32_t id = int32_t(mixed & 0x7fffffffULL);
-      if (id == 0)
-        id = 1;
-
-      while (usedObjectIds.find(id) != usedObjectIds.end())
-        id = (id == std::numeric_limits<int32_t>::max()) ? 1 : (id + 1);
-
-      usedObjectIds.insert(id);
-      return id;
-    };
-
-    for (const auto *obj : model_->objects)
-    {
-      if (!obj)
-        continue;
-
-      auto appendObjectByInstance = [&](const Slic3r::Transform3d &instMat,
-                                        const Slic3r::ModelInstance *inst)
-      {
-        // Phase 91 (ASMEXPLODE-02): emit one ObjBatch per VOLUME (not one per
-        // instance) so the CanvasAssembleView renderer can offset each volume
-        // independently for the explosion view. Each per-volume batch keeps its
-        // parent instance's stable objectId (siblings share the id), so Prepare's
-        // selection highlight is byte-for-byte identical: uploadHighlightBuffer
-        // unions the bounds of ALL batches matching a sourceObjectIndex
-        // (RhiViewportRenderer.cpp uploadHighlightBuffer loop), and picking keys
-        // on batch.sourceObjectIndex (the parallel array below), not on
-        // renderObjectId uniqueness. Upstream GLVolumeCollection stores one
-        // GLVolume per volume and m_explosion_ratio offsets each independently.
-        const int32_t instanceObjectId = makeStableObjectId(obj, inst);
-
-        for (const auto *vol : obj->volumes)
-        {
-          if (!vol)
-            continue;
-
-          // volume 自身的局部变换
-          const Slic3r::Transform3d &volMat = vol->get_transformation().get_matrix();
-          const Slic3r::Transform3d combined = instMat * volMat;
-
-          // P15.10 (MIRROR): mirrored instances flip the triangle winding.
-          // Upstream detects left-handed volumes via the mirror-sign product
-          // (GLVolume::is_left_handed, 3DScene.cpp:335-340) and renders them
-          // with glFrontFace(GL_CW) (3DScene.cpp:520-521/:607-608); the
-          // equivalent CPU-bake transform is swapping two vertices of every
-          // triangle of that batch. The renderer recomputes per-face normals
-          // from the triangle winding, so the swap flips the normals the
-          // same way -- matching upstream mirrored lighting.
-          const bool leftHanded =
-              combined.matrix().block<3, 3>(0, 0).determinant() < 0.0;
-
-          const auto &its = vol->mesh().its; // const ref — 零拷贝
-          if (its.vertices.empty() || its.indices.empty())
-            continue;
-
-          // Validation sweep: exact face count for the buffer sizing. The
-          // guard is the same per-face bounds test the emit loop below (and
-          // the old push_back loop) applies, so the emitted triangle set is
-          // identical.
-          const int vcount = int(its.vertices.size());
-          int32_t validFaces = 0;
-          for (const auto &face : its.indices)
-          {
-            const int idx0 = face(0);
-            const int idx1 = face(1);
-            const int idx2 = face(2);
-            if (idx0 >= 0 && idx0 < vcount &&
-                idx1 >= 0 && idx1 < vcount &&
-                idx2 >= 0 && idx2 < vcount)
-            {
-              ++validFaces;
-            }
-          }
-          if (validFaces == 0)
-            continue; // one batch per volume — empty volumes emit nothing
-
-          jobs.push_back(VolumeJob{instanceObjectId, &its, combined,
-                                   leftHanded, validFaces});
-        }
-      };
-
-      if (!obj->instances.empty())
-      {
-        for (const auto *inst : obj->instances)
-        {
-          if (!inst)
-            continue;
-          appendObjectByInstance(inst->get_transformation().get_matrix(), inst);
-        }
-      }
-      else
-      {
-        appendObjectByInstance(Slic3r::Transform3d::Identity(), nullptr);
-      }
-    }
-
-    if (jobs.empty())
-      return {};
-
-    // ── 计算缓冲区大小并写入 ──────────────────────────────────────────────────
-    if (jobs.size() > size_t(std::numeric_limits<int32_t>::max()))
-    {
-      qWarning("[ProjectService] meshData aborted: too many batches (%zu)", jobs.size());
-      return {};
-    }
-
-    int32_t objCount = static_cast<int32_t>(jobs.size());
-    qsizetype totalBytes = static_cast<qsizetype>(sizeof(int32_t)); // objectCount header
-    for (const auto &job : jobs)
-    {
-      const qsizetype dataBytes = static_cast<qsizetype>(job.faceCount) * 9
-          * static_cast<qsizetype>(sizeof(float));
-      if (dataBytes < 0 || dataBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
-      {
-        qWarning("[ProjectService] meshData aborted: size overflow while packing vertices");
-        return {};
-      }
-      const qsizetype perObjBytes = static_cast<qsizetype>(2 * sizeof(int32_t));
-      if (perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - dataBytes)
-      {
-        qWarning("[ProjectService] meshData aborted: size overflow while packing object header");
-        return {};
-      }
-      totalBytes += perObjBytes + dataBytes;
-    }
-    const qsizetype trailerBytes = static_cast<qsizetype>(6 * sizeof(float));
-    if (trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
-    {
-      qWarning("[ProjectService] meshData aborted: size overflow while packing bbox");
-      return {};
-    }
-    totalBytes += trailerBytes;
-
-    if (totalBytes <= 0 || totalBytes > (std::numeric_limits<int>::max)())
-    {
-      qWarning("[ProjectService] meshData aborted: invalid total buffer size (%lld)", static_cast<long long>(totalBytes));
-      return {};
-    }
-
-    QByteArray buf;
-    buf.resize(static_cast<int>(totalBytes));
-    char *p = buf.data();
-
-    // objectCount
-    memcpy(p, &objCount, sizeof(int32_t));
-    p += sizeof(int32_t);
-
-    // Reserve the per-batch vertex regions while writing the headers, so the
-    // transform pass can emit straight into their final byte positions.
-    struct VertexRegion
-    {
-      float *first;
-      int32_t faceCount;
-    };
-    std::vector<VertexRegion> regions;
-    regions.reserve(jobs.size());
-    for (const auto &job : jobs)
-    {
-      const int32_t triCount = job.faceCount;
-      memcpy(p, &job.objectId, sizeof(int32_t));
-      p += sizeof(int32_t);
-      memcpy(p, &triCount, sizeof(int32_t));
-      p += sizeof(int32_t);
-      regions.push_back(VertexRegion{
-          reinterpret_cast<float *>(p), triCount});
-      p += static_cast<ptrdiff_t>(triCount) * 9 * static_cast<ptrdiff_t>(sizeof(float));
-    }
-
-    // Transform pass: instance+volume matrix, slic3r → GL axis mapping,
-    // P15.10 winding swap, scene bbox union — the exact operations (and
-    // order) of the previous push_back loop.
-    float bminX = 1e30f, bminY = 1e30f, bminZ = 1e30f;
-    float bmaxX = -1e30f, bmaxY = -1e30f, bmaxZ = -1e30f;
-    for (size_t jobIndex = 0; jobIndex < jobs.size(); ++jobIndex)
-    {
-      const VolumeJob &job = jobs[jobIndex];
-      const auto &its = *job.its;
-      const int vcount = int(its.vertices.size());
-      // P15.10 (MIRROR): emit order (0, 2, 1) reverses the winding for
-      // left-handed batches; (0, 1, 2) otherwise.
-      const int emitOrder[3] = {0, job.leftHanded ? 2 : 1, job.leftHanded ? 1 : 2};
-      float *out = regions[jobIndex].first;
-
-      for (const auto &face : its.indices)
-      {
-        const int idx0 = face(0);
-        const int idx1 = face(1);
-        const int idx2 = face(2);
-        if (idx0 < 0 || idx0 >= vcount ||
-            idx1 < 0 || idx1 >= vcount ||
-            idx2 < 0 || idx2 >= vcount)
-        {
-          continue;
-        }
-
-        for (int k = 0; k < 3; ++k)
-        {
-          const Slic3r::Vec3f &lv = its.vertices[face(emitOrder[k])];
-          // 应用实例+Volume 变换到世界坐标 (slic3r)
-          // Transform3d * Vec3d 直接应用仿射变换（含平移）
-          const Slic3r::Vec3d hw = job.combined * Slic3r::Vec3d(
-                                                      (double)lv.x(), (double)lv.y(), (double)lv.z());
-
-          // slic3r → GL 坐标系。2026-10-10 (AXES-ROT): GL.z 取负——旧映射
-          // GL.z=+slic3r.y 是一次镜像（det=-1），默认对角视角下原点角落在
-          // 屏幕远端、与上游参考（原点近角、X 朝右、Y 入屏）左右互映。
-          // GL.z=-slic3r.y 是真旋转（det=+1），旋转/叉积与上游一致。
-          const float gx = (float)hw.x();
-          const float gy = (float)hw.z(); // slic3r Z → GL Y (高度)
-          const float gz = -(float)hw.y(); // slic3r Y → GL Z（取负=旋转而非镜像）
-
-          *out++ = gx;
-          *out++ = gy;
-          *out++ = gz;
-
-          bminX = std::min(bminX, gx);
-          bmaxX = std::max(bmaxX, gx);
-          bminY = std::min(bminY, gy);
-          bmaxY = std::max(bmaxY, gy);
-          bminZ = std::min(bminZ, gz);
-          bmaxZ = std::max(bmaxZ, gz);
-        }
-      }
-    }
-
-    // Auto-normalize model placement onto build plate:
-    // keep relative arrangement, move global center to (110, *, -110)
-    // and make lowest Y rest on the plate (Y=0). The shift lands in place on
-    // the already-packed vertex regions (same float adds as the old
-    // per-volume second pass).
-    const float centerX = (bminX + bmaxX) * 0.5f;
-    const float centerZ = (bminZ + bmaxZ) * 0.5f;
-    const float offsetX = 110.0f - centerX;
-    // AXES-ROT: the 220mm bed center sits at scene Z = -110 (rotation
-    // mapping; slic3r bed center Y=110 negates).
-    const float offsetZ = -110.0f - centerZ;
-    const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
-
-    if (offsetX != 0.0f || offsetY != 0.0f || offsetZ != 0.0f)
-    {
-      for (const VertexRegion &region : regions)
-      {
-        float *verts = region.first;
-        const size_t floatCount = size_t(region.faceCount) * 9;
-        for (size_t vi = 0; vi + 2 < floatCount; vi += 3)
-        {
-          verts[vi + 0] += offsetX;
-          verts[vi + 1] += offsetY;
-          verts[vi + 2] += offsetZ;
-        }
-      }
-
-      bminX += offsetX;
-      bmaxX += offsetX;
-      bminY += offsetY;
-      bmaxY += offsetY;
-      bminZ += offsetZ;
-      bmaxZ += offsetZ;
-    }
-
-    // bbox trailer
-    const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
-    memcpy(p, bbox, 6 * sizeof(float));
-
-    qInfo("[ProjectService] meshData: %d batches, bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
-          objCount, bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
-    return buf;
-  }
-  catch (const std::exception &ex)
-  {
-    qWarning("[ProjectService] meshData exception: %s", ex.what());
-    return {};
-  }
-  catch (...)
-  {
-    qWarning("[ProjectService] meshData exception: unknown");
-    return {};
-  }
-#else
-  return {};
-#endif
-}
-
-// ── S3 (2026-10-14): decomposed mesh production ─────────────────────────────
+// ── S3 (2026-10-14): decomposed mesh production (the only path) ─────────────
 // Blob v2 (magic 'MDS2'): meshData() bakes ONLY volume-local geometry
 // (volMat applied, slic3r->GL AXES-ROT mapped, per-volume winding swap when
 // det(volMat)<0) -- the instance matrix is NOT baked. The instance/world part
-// of the old combined matrix travels through meshBatchInstanceTransforms()
-// instead, so pure transform edits change only that small channel and the
-// multi-megabyte blob (and the whole refreshMeshCacheAndFitHint whitelist)
-// drops out of the transform path entirely.
+// of the retired world-bake's combined matrix travels through
+// meshBatchInstanceTransforms() instead, so pure transform edits change only
+// that small channel and the multi-megabyte blob (and the whole
+// refreshMeshCacheAndFitHint whitelist) drops out of the transform path
+// entirely. The legacy world-bake body was deleted after the S3 parallel
+// double-run verified render parity (legacy env=0 vs decomposed env=1,
+// tests/data/test_model.stl + multi_material_fixture.3mf, diff at
+// run-to-run noise level); the hand-built legacy v1 blobs in tests/PerfBench
+// still parse through the v1 reader in PrepareSceneData.
 //
 // Trailer: the WORLD bbox at production time (exact -- composed per vertex),
 // so the format tail stays parse-compatible with v1 and the production-time
-// fitHint numbers match the legacy bake. The plate-normalization shift is
-// derived from that box exactly like the legacy pass and FROZEN in
-// m_instanceChannelPlateShift: the channel matrices apply it, later transform
-// edits do not re-center the scene (upstream objects stay where placed).
-QByteArray ProjectServiceMock::meshDataDecomposed() const
+// fitHint numbers match the retired bake. The plate-normalization shift is
+// derived from that box and FROZEN in m_instanceChannelPlateShift: the
+// channel matrices apply it, later transform edits do not re-center the
+// scene (upstream objects stay where placed).
+QByteArray ProjectServiceMock::meshData() const
 {
   // Blob v2 layout:
   // [int32 magic 0x3244534D ('MDS2')][int32 batchCount]
@@ -13101,7 +12769,7 @@ QByteArray ProjectServiceMock::meshDataDecomposed() const
 
     if (jobs.size() > size_t(std::numeric_limits<int32_t>::max()))
     {
-      qWarning("[ProjectService] meshData(decomposed) aborted: too many batches (%zu)", jobs.size());
+      qWarning("[ProjectService] meshData aborted: too many batches (%zu)", jobs.size());
       return {};
     }
 
@@ -13114,7 +12782,7 @@ QByteArray ProjectServiceMock::meshDataDecomposed() const
       const qsizetype perObjBytes = static_cast<qsizetype>(2 * sizeof(int32_t));
       if (dataBytes < 0 || perObjBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes - dataBytes)
       {
-        qWarning("[ProjectService] meshData(decomposed) aborted: size overflow while packing batch header");
+        qWarning("[ProjectService] meshData aborted: size overflow while packing batch header");
         return {};
       }
       totalBytes += perObjBytes + dataBytes;
@@ -13122,14 +12790,14 @@ QByteArray ProjectServiceMock::meshDataDecomposed() const
     const qsizetype trailerBytes = static_cast<qsizetype>(6 * sizeof(float));
     if (trailerBytes > (std::numeric_limits<qsizetype>::max)() - totalBytes)
     {
-      qWarning("[ProjectService] meshData(decomposed) aborted: size overflow while packing bbox");
+      qWarning("[ProjectService] meshData aborted: size overflow while packing bbox");
       return {};
     }
     totalBytes += trailerBytes;
 
     if (totalBytes <= 0 || totalBytes > (std::numeric_limits<int>::max)())
     {
-      qWarning("[ProjectService] meshData(decomposed) aborted: invalid total buffer size (%lld)", static_cast<long long>(totalBytes));
+      qWarning("[ProjectService] meshData aborted: invalid total buffer size (%lld)", static_cast<long long>(totalBytes));
       return {};
     }
 
@@ -13238,19 +12906,19 @@ QByteArray ProjectServiceMock::meshDataDecomposed() const
     const float bbox[6] = {bminX, bminY, bminZ, bmaxX, bmaxY, bmaxZ};
     memcpy(p, bbox, 6 * sizeof(float));
 
-    qInfo("[ProjectService] meshData(decomposed): %d batches, plateShift=(%.1f, %.1f, %.1f), bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
+    qInfo("[ProjectService] meshData: %d batches, plateShift=(%.1f, %.1f, %.1f), bbox=[%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]",
           batchCount, offsetX, offsetY, offsetZ,
           bminX, bmaxX, bminY, bmaxY, bminZ, bmaxZ);
     return buf;
   }
   catch (const std::exception &ex)
   {
-    qWarning("[ProjectService] meshData(decomposed) exception: %s", ex.what());
+    qWarning("[ProjectService] meshData exception: %s", ex.what());
     return {};
   }
   catch (...)
   {
-    qWarning("[ProjectService] meshData(decomposed) exception: unknown");
+    qWarning("[ProjectService] meshData exception: unknown");
     return {};
   }
 }
