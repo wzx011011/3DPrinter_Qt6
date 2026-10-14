@@ -19,6 +19,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMatrix4x4>
 #include <QSignalSpy>
 #include <QtTest>
 
@@ -54,13 +55,25 @@ double processMemoryMiB()
 
 int batchCountFromMeshData(const QByteArray &meshData)
 {
-  // Real meshData layout (ProjectServiceMock::meshData): int32 batchCount,
-  // then per batch { int32 objectId, int32 triCount, triCount*9 floats },
-  // then a 6-float scene bbox trailer.
+  // Real meshData layout (ProjectServiceMock::meshData):
+  //   S3 decomposed (the only produced format): int32 magic 'MDS2'
+  //     (0x3244534D), int32 batchCount, then per batch
+  //     { int32 objectId, int32 triCount, triCount*9 floats }, then the
+  //     6-float world-bbox trailer;
+  //   legacy v1 (hand-built blobs only): int32 batchCount, then the same
+  //     per-batch records and trailer.
   if (meshData.size() < static_cast<qsizetype>(sizeof(int32_t)))
     return 0;
+  int header = 0;
+  std::memcpy(&header, meshData.constData(), sizeof(header));
+  qsizetype countOffset = 0;
+  if (header == 0x3244534D) { // 'MDS2': count lives behind the magic
+    if (meshData.size() < 2 * static_cast<qsizetype>(sizeof(int32_t)))
+      return 0;
+    countOffset = sizeof(int32_t);
+  }
   int count = 0;
-  std::memcpy(&count, meshData.constData(), sizeof(count));
+  std::memcpy(&count, meshData.constData() + countOffset, sizeof(count));
   return count;
 }
 
@@ -107,7 +120,8 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
   qInfo("[BENCH] %-24s %8.1f ms | mem=%8.1f MiB", "load", double(loadMs),
         memAfterLoad);
 
-  // ── Stage 2: meshData TLV blob build (de-indexed, transform baked) ─────
+  // ── Stage 2: meshData blob build (S3 decomposed: volume-local geometry;
+  // instance transforms ride the transform channel, not the blob) ─────────
   timer.start();
   PerfLog::memory("before meshData");
   const QByteArray meshData = projectService.meshData();
@@ -126,7 +140,19 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
   for (int i = 0; i < batchCount; ++i)
     sourceIndices.append(i);
   timer.start();
-  scene.setModelMeshData(meshData, sourceIndices, sourceIndices);
+  // S3: the decomposed blob carries VOLUME-LOCAL vertices; the per-batch
+  // instance transform channel (live from the service) composes them into
+  // world coordinates at parse -- that compose IS the production scene path
+  // this stage measures. A v2 blob without the covering channel fails the
+  // parse by contract, so the pre-S3-aim form of this call (3-arg, no
+  // channel) measured a rejected parse: empty geometry, dead pick anchors.
+  const QList<QMatrix4x4> batchWorldTransforms =
+      projectService.meshBatchInstanceTransforms();
+  scene.setModelMeshData(meshData, sourceIndices,
+                         QList<int>(batchCount, 0),
+                         QList<int>(batchCount, 0), sourceIndices,
+                         QList<int>(), QList<int>(), QList<int>(),
+                         QList<QVector4D>(), batchWorldTransforms);
   const qint64 expandMs = timer.elapsed();
   const double memAfterExpand = processMemoryMiB();
   modelReport[QStringLiteral("scene_expand_ms")] = double(expandMs);

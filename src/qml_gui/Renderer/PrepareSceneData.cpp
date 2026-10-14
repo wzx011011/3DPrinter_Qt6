@@ -121,6 +121,24 @@ namespace
     offset += sizeof(T);
     return true;
   }
+
+  // S3: exact translate-only detection for a batch world matrix. The check is
+  // deliberately EXACT float equality: untransformed instances produce their
+  // conjugated AXES-ROT matrix through integer-valued Eigen arithmetic (a
+  // permutation conjugated by its exact inverse), so the linear part is
+  // float-exactly the identity and the matrix is exactly T(shift) -- the
+  // dominant scene shape (fresh imports, translate gizmo drags) composes as
+  // three float adds per vertex, float-identical to the general 4x4 map
+  // (0*x==0, 1*x==x exactly). Anything rotated/scaled/mirrored fails the
+  // exact compare and takes the general path.
+  bool isTranslateOnlyMatrix(const QMatrix4x4 &world)
+  {
+    const float *d = world.constData(); // column-major
+    return d[0] == 1.0f && d[1] == 0.0f && d[2] == 0.0f && d[3] == 0.0f
+        && d[4] == 0.0f && d[5] == 1.0f && d[6] == 0.0f && d[7] == 0.0f
+        && d[8] == 0.0f && d[9] == 0.0f && d[10] == 1.0f && d[11] == 0.0f
+        && d[15] == 1.0f;
+  }
 }
 
 bool PrepareSceneData::Vertex::operator==(const Vertex &other) const
@@ -457,6 +475,10 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
     const QMatrix4x4 batchWorld = decomposed
         ? batchWorldTransforms.at(objectIndex) : QMatrix4x4();
     const bool swapWinding = decomposed && batchWorld.determinant() < 0.0f;
+    const bool translateOnly = decomposed && isTranslateOnlyMatrix(batchWorld);
+    const float tx = batchWorld.constData()[12];
+    const float ty = batchWorld.constData()[13];
+    const float tz = batchWorld.constData()[14];
     for (qsizetype vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex) {
       // S3 winding: triangles append in source order (0,1,2); a left-handed
       // world matrix appends (0,2,1) instead.
@@ -480,10 +502,16 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
         continue;
 
       if (decomposed) {
-        const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
-        x = worldPoint.x();
-        y = worldPoint.y();
-        z = worldPoint.z();
+        if (translateOnly) {
+          x += tx;
+          y += ty;
+          z += tz;
+        } else {
+          const QVector3D worldPoint = batchWorld.map(QVector3D(x, y, z));
+          x = worldPoint.x();
+          y = worldPoint.y();
+          z = worldPoint.z();
+        }
       }
 
       const ModelVertex vertex{x, y, z, r, g, b, a};
@@ -1244,10 +1272,16 @@ void PrepareSceneData::rebuildSinkingContours()
 // S3: recompose one batch's vertex range in place through a new world
 // matrix. World matrix with det<0 flips triangle winding per triple (the
 // same compose-time flip the parse path applies to decomposed payloads).
+// Translate-only matrices (the gizmo-drag dominant case) take the exact
+// float-add fast path -- see isTranslateOnlyMatrix.
 void PrepareSceneData::recomposeBatchRange(ModelBatch &batch,
                                            const QMatrix4x4 &world,
                                            bool swapWinding)
 {
+  const bool translateOnly = isTranslateOnlyMatrix(world);
+  const float tx = world.constData()[12];
+  const float ty = world.constData()[13];
+  const float tz = world.constData()[14];
   const int first = std::max(0, batch.firstVertex);
   const int end = static_cast<int>(std::min<qsizetype>(
       batch.firstVertex + batch.vertexCount, m_modelVertices.size()));
@@ -1259,10 +1293,16 @@ void PrepareSceneData::recomposeBatchRange(ModelBatch &batch,
     }
     for (int j = i; j < tripleEnd; ++j) {
       ModelVertex &v = m_modelVertices[j];
-      const QVector3D p = world.map(QVector3D(v.x, v.y, v.z));
-      v.x = p.x();
-      v.y = p.y();
-      v.z = p.z();
+      if (translateOnly) {
+        v.x += tx;
+        v.y += ty;
+        v.z += tz;
+      } else {
+        const QVector3D p = world.map(QVector3D(v.x, v.y, v.z));
+        v.x = p.x();
+        v.y = p.y();
+        v.z = p.z();
+      }
     }
   }
 
