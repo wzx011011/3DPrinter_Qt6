@@ -474,13 +474,22 @@ QVariantMap EditorViewModel::arrangeWipeTowerContext() const
 
 void EditorViewModel::refreshMeshCacheAndFitHint()
 {
+  // S3 (2026-10-14) contract: this refresh is for MODEL TOPOLOGY changes
+  // only. Under the decomposed blob (OWZX_MESH_INSTANCE_CHANNEL=1) the mesh
+  // payload is volume-local and transform-free -- the transform family
+  // (gizmo drags, sidebar position/rotation/scale writes, undo/redo, nudge)
+  // flows through the meshBatchInstanceTransforms channel instead and never
+  // reaches here; the transform-derived readouts (fitHint, measure) derive
+  // live from the channel.
   m_cachedMeshData = projectService_->meshData();
-  m_cachedMeshBatchSourceObjectIndices = projectService_->meshBatchSourceObjectIndices();
-  m_cachedMeshBatchVolumeIndices = projectService_->meshBatchVolumeIndices();
-  m_cachedMeshBatchInstanceIndices = projectService_->meshBatchInstanceIndices();
-  m_cachedMeshBatchVolumeTypes = projectService_->meshBatchVolumeTypes();
-  m_cachedMeshBatchExtruderIds = projectService_->meshBatchExtruderIds();
-  m_cachedMeshBatchPrintableFlags = projectService_->meshBatchPrintableFlags();
+  // S3: ONE walk for all six per-batch tables (was six full model walks).
+  const ProjectServiceMock::MeshBatchRenderTables tables = projectService_->meshBatchRenderTables();
+  m_cachedMeshBatchSourceObjectIndices = tables.sourceObjectIndices;
+  m_cachedMeshBatchVolumeIndices = tables.volumeIndices;
+  m_cachedMeshBatchInstanceIndices = tables.instanceIndices;
+  m_cachedMeshBatchVolumeTypes = tables.volumeTypes;
+  m_cachedMeshBatchExtruderIds = tables.extruderIds;
+  m_cachedMeshBatchPrintableFlags = tables.printableFlags;
   // S3: exact per-batch bounds cache for the live fitHint derivation --
   // VOLUME-LOCAL under the decomposed format, world for legacy. One vertex
   // scan at the topology cadence of this refresh.
@@ -5803,6 +5812,15 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   // rebuilds once on the next read instead of serving a stale value.
   connect(this, &EditorViewModel::stateChanged, this, [this]()
           { m_measureDimensionsDirty = true; });
+
+  // S3 (2026-10-14): the viewport warning scan (upstream check_outside_state)
+  // is position-live (objectPosition reads), so it re-runs on every
+  // stateChanged instead of only inside refreshMeshCacheAndFitHint -- under
+  // the S3 contract narrowing that refresh is topology-only, and the
+  // out-of-bed/over-height banner must still track transform edits live.
+  // Re-entrancy safe: the scan writes plain members and emits nothing.
+  connect(this, &EditorViewModel::stateChanged, this, [this]()
+          { checkViewportWarnings(); });
 
   connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
           {

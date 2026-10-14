@@ -693,6 +693,23 @@ public:
   // refreshMeshCacheAndFitHint (S3: change-driven instead of whitelist
   // enumeration; S1's transformChanged will own the NOTIFY re-point).
   QList<QMatrix4x4> meshBatchInstanceTransforms() const;
+  // S3 (2026-10-14): single-walk snapshot of ALL per-batch render tables
+  // (the six meshBatch* lists in blob batch order + the instance transform
+  // channel). The old contract ran one full model walk PER GETTER -- a mesh
+  // refresh walked the scene six times; refreshMeshCacheAndFitHint now takes
+  // ONE snapshot. The individual getters remain for ad-hoc reads (each still
+  // walks on demand).
+  struct MeshBatchRenderTables
+  {
+    QList<int> sourceObjectIndices;
+    QList<int> volumeIndices;
+    QList<int> instanceIndices;
+    QList<int> volumeTypes;
+    QList<int> extruderIds;
+    QList<int> printableFlags;
+    QList<QMatrix4x4> instanceTransforms;
+  };
+  MeshBatchRenderTables meshBatchRenderTables() const;
   // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
   // meshBatchSourceObjectIndices. volumeType = ProjectVolumeType int,
   // extruderId = upstream ModelVolume::extruder_id() (1-based),

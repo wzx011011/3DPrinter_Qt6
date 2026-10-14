@@ -252,6 +252,9 @@ private slots:
   // live channel) so the camera-fit hint tracks transform edits without any
   // whitelist refresh.
   void fitHintTracksInstanceTransformsWithoutMeshRefresh();
+  // S3 C4: the single-walk render-table snapshot stays index-aligned with the
+  // blob batches (the old contract walked the model once PER GETTER).
+  void meshBatchRenderTablesStayAlignedWithBlobBatches();
   // v5.16 (PLATE-05): real edits mark the project dirty; load/save clear it.
   void projectEditsDriveDirtyState();
   // Phase 241 (PAGE-01): recent projects persist across viewmodel instances
@@ -3899,6 +3902,39 @@ void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
   const QVector4D hintAfter = vm.fitHint();
   QVERIFY(std::abs(hintAfter.x() - hintBefore.x() - 17.0f) < 0.5f);
   QVERIFY(std::abs(hintAfter.z() - hintBefore.z()) < 0.5f);
+
+  qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
+}
+
+void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()
+{
+  // S3 C4: ONE collectMeshBatchIdentities walk fills all six per-batch lists
+  // plus the transform channel. The permanent alignment lock: every table has
+  // exactly one entry per blob batch, in blob order.
+  qputenv("OWZX_MESH_INSTANCE_CHANNEL", "1");
+  ProjectServiceMock project;
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 1); // second object: multi-batch
+
+  const QByteArray blob = project.meshData();
+  QVERIFY(!blob.isEmpty());
+  qint32 batchCount = 0;
+  memcpy(&batchCount, blob.constData() + sizeof(qint32), sizeof(qint32));
+  QVERIFY(batchCount >= 2);
+
+  const ProjectServiceMock::MeshBatchRenderTables tables = project.meshBatchRenderTables();
+  QCOMPARE(tables.sourceObjectIndices.size(), batchCount);
+  QCOMPARE(tables.volumeIndices.size(), batchCount);
+  QCOMPARE(tables.instanceIndices.size(), batchCount);
+  QCOMPARE(tables.volumeTypes.size(), batchCount);
+  QCOMPARE(tables.extruderIds.size(), batchCount);
+  QCOMPARE(tables.printableFlags.size(), batchCount);
+  QCOMPARE(tables.instanceTransforms.size(), batchCount);
+
+  // The legacy per-getter path stays consistent with the snapshot (it wraps
+  // the same walk).
+  QCOMPARE(project.meshBatchSourceObjectIndices().size(), batchCount);
+  QCOMPARE(project.meshBatchVolumeTypes().size(), batchCount);
 
   qunsetenv("OWZX_MESH_INSTANCE_CHANNEL");
 }

@@ -536,91 +536,85 @@ namespace
 }
 #endif
 
+// S3 (2026-10-14): single-walk snapshot -- ONE collectMeshBatchIdentities
+// walk fills all six per-batch lists plus the instance transform channel.
+// The historical contract ran this walk once PER GETTER (a mesh refresh
+// traversed the scene six times).
+ProjectServiceMock::MeshBatchRenderTables ProjectServiceMock::meshBatchRenderTables() const
+{
+  MeshBatchRenderTables tables;
+#ifdef HAS_LIBSLIC3R
+  const QVector3D shift = m_instanceChannelShiftValid ? m_instanceChannelPlateShift
+                                                      : QVector3D(0.0f, 0.0f, 0.0f);
+  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
+  const int count = identities.size();
+  tables.sourceObjectIndices.reserve(count);
+  tables.volumeIndices.reserve(count);
+  tables.instanceIndices.reserve(count);
+  tables.volumeTypes.reserve(count);
+  tables.extruderIds.reserve(count);
+  tables.printableFlags.reserve(count);
+  tables.instanceTransforms.reserve(count);
+  for (const MeshBatchIdentity &identity : identities)
+  {
+    tables.sourceObjectIndices.append(identity.objectIndex);
+    tables.volumeIndices.append(identity.volumeIndex);
+    tables.instanceIndices.append(identity.instanceIndex);
+    tables.volumeTypes.append(identity.volumeType);
+    tables.extruderIds.append(identity.extruderId);
+    tables.printableFlags.append(identity.printable ? 1 : 0);
+    // Same live-matrix + frozen-shift channel semantics as
+    // meshBatchInstanceTransforms (index-aligned: batch i of the blob pairs
+    // with entry i).
+    Slic3r::Transform3d instMat = Slic3r::Transform3d::Identity();
+    if (model_)
+    {
+      const Slic3r::ModelObject *object = model_->objects[size_t(identity.objectIndex)];
+      if (object && !object->instances.empty()
+          && identity.instanceIndex >= 0
+          && identity.instanceIndex < int(object->instances.size()))
+      {
+        if (const Slic3r::ModelInstance *inst =
+                object->instances[size_t(identity.instanceIndex)])
+          instMat = inst->get_transformation().get_matrix();
+      }
+    }
+    tables.instanceTransforms.append(glWorldInstanceMatrix(instMat, shift));
+  }
+#endif
+  return tables;
+}
+
 QList<int> ProjectServiceMock::meshBatchSourceObjectIndices() const
 {
-#ifdef HAS_LIBSLIC3R
-  QList<int> indices;
-  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
-  indices.reserve(identities.size());
-  for (const MeshBatchIdentity &identity : identities)
-    indices.append(identity.objectIndex);
-
-  return indices;
-#else
-  return {};
-#endif
+  return meshBatchRenderTables().sourceObjectIndices;
 }
 
 QList<int> ProjectServiceMock::meshBatchVolumeIndices() const
 {
-#ifdef HAS_LIBSLIC3R
-  QList<int> indices;
-  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
-  indices.reserve(identities.size());
-  for (const MeshBatchIdentity &identity : identities)
-    indices.append(identity.volumeIndex);
-  return indices;
-#else
-  return {};
-#endif
+  return meshBatchRenderTables().volumeIndices;
 }
 
 QList<int> ProjectServiceMock::meshBatchInstanceIndices() const
 {
-#ifdef HAS_LIBSLIC3R
-  QList<int> indices;
-  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
-  indices.reserve(identities.size());
-  for (const MeshBatchIdentity &identity : identities)
-    indices.append(identity.instanceIndex);
-  return indices;
-#else
-  return {};
-#endif
+  return meshBatchRenderTables().instanceIndices;
 }
 
 // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
 // meshBatchSourceObjectIndices (same collectMeshBatchIdentities walk).
 QList<int> ProjectServiceMock::meshBatchVolumeTypes() const
 {
-#ifdef HAS_LIBSLIC3R
-  QList<int> values;
-  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
-  values.reserve(identities.size());
-  for (const MeshBatchIdentity &identity : identities)
-    values.append(identity.volumeType);
-  return values;
-#else
-  return {};
-#endif
+  return meshBatchRenderTables().volumeTypes;
 }
 
 QList<int> ProjectServiceMock::meshBatchExtruderIds() const
 {
-#ifdef HAS_LIBSLIC3R
-  QList<int> values;
-  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
-  values.reserve(identities.size());
-  for (const MeshBatchIdentity &identity : identities)
-    values.append(identity.extruderId);
-  return values;
-#else
-  return {};
-#endif
+  return meshBatchRenderTables().extruderIds;
 }
 
 QList<int> ProjectServiceMock::meshBatchPrintableFlags() const
 {
-#ifdef HAS_LIBSLIC3R
-  QList<int> values;
-  const QList<MeshBatchIdentity> identities = collectMeshBatchIdentities(model_);
-  values.reserve(identities.size());
-  for (const MeshBatchIdentity &identity : identities)
-    values.append(identity.printable ? 1 : 0);
-  return values;
-#else
-  return {};
-#endif
+  return meshBatchRenderTables().printableFlags;
 }
 
 ProjectServiceMock::~ProjectServiceMock()
