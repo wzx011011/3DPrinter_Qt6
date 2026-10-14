@@ -120,7 +120,7 @@ Item {
         // "Progress bar with cancel button", NotificationManager.hpp:107).
         // Click routes to Backend.cancelNotificationAction(id), which
         // dispatches to SliceService::cancelSlice/cancelExport or
-        // ProjectServiceMock::cancelLoad by entry type.
+        // ProjectService::cancelLoad by entry type.
         readonly property bool cancellable: modelData.cancellable === true
         readonly property int progressValue: modelData.progressValue !== undefined ? modelData.progressValue : 0
         readonly property int repeatCount: modelData.repeatCount !== undefined ? modelData.repeatCount : 1

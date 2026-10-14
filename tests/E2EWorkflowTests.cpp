@@ -15,8 +15,8 @@
 #include <QtTest>
 #include <cstring>
 
-#include "core/services/PresetServiceMock.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/PresetService.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
@@ -146,14 +146,14 @@ private:
   ///
   /// Historical E2E failure mode:
   ///   1) SliceService::startSlice can start with an empty printable_area.
-  ///   2) ProjectServiceMock::loadFile() arranges after load without a printable area.
+  ///   2) ProjectService::loadFile() arranges after load without a printable area.
   /// Both can leave the model outside a valid bed and make the slicing worker hang.
   ///
   /// The test injects a 220x220 bed matching the CLI bed_shape before slicing.
-  void applyMinimalPrinterConfig(SliceService &slice, ProjectServiceMock &project) const;
+  void applyMinimalPrinterConfig(SliceService &slice, ProjectService &project) const;
   /// Return whether the model was successfully arranged into the valid bed area.
   /// Upstream multi-plate arrange can still report bed_idx==-1, so callers may skip.
-  bool ensureModelOnBed(ProjectServiceMock &project) const;
+  bool ensureModelOnBed(ProjectService &project) const;
   /// Q12 environment probe: the ONLY legitimate skip reason in this suite is a
   /// missing *static* slicing prerequisite. Returns a non-empty problem
   /// description when the environment cannot host slicing at all (engine not
@@ -219,7 +219,7 @@ void E2EWorkflowTests::cleanupTestCase()
         m_environmentSkips);
 }
 
-void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectServiceMock &project) const
+void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectService &project) const
 {
   Q_UNUSED(project)
   // Inject bed_shape directly through setBedShape, mirroring the successful CLI path.
@@ -234,7 +234,7 @@ void E2EWorkflowTests::applyMinimalPrinterConfig(SliceService &slice, ProjectSer
   slice.setMergedPresetConfig(cfg);
 }
 
-bool E2EWorkflowTests::ensureModelOnBed(ProjectServiceMock &project) const
+bool E2EWorkflowTests::ensureModelOnBed(ProjectService &project) const
 {
   // Position every object's instance directly inside the 220x220 test bed
   // (Qt x/y/z maps to the slic3r instance offset (x, z, y), so (110, 0, 110)
@@ -256,8 +256,8 @@ bool E2EWorkflowTests::ensureModelOnBed(ProjectServiceMock &project) const
 void E2EWorkflowTests::test_config_injection_applies_preset_values()
 {
   // Verify that merged config values from ConfigViewModel are applied to SliceService
-  PresetServiceMock presetService;
-  ProjectServiceMock projectService;
+  PresetService presetService;
+  ProjectService projectService;
   SliceService slice(&projectService);
   ConfigViewModel config(&presetService, &projectService);
 
@@ -312,11 +312,11 @@ void E2EWorkflowTests::test_import_format_coverage_matrix_real_fixtures()
              qPrintable(QStringLiteral("%1 fixture must exist: %2")
                             .arg(QString::fromLatin1(format.label), format.path)));
 
-    ProjectServiceMock project;
-    QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+    ProjectService project;
+    QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
     QVERIFY(loadSpy.isValid());
     QVERIFY2(project.loadFile(format.path),
-             qPrintable(QStringLiteral("%1 import should start through ProjectServiceMock::loadFile")
+             qPrintable(QStringLiteral("%1 import should start through ProjectService::loadFile")
                             .arg(QString::fromLatin1(format.label))));
     QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 20000);
 
@@ -357,14 +357,14 @@ void E2EWorkflowTests::test_import_format_coverage_matrix_real_fixtures()
 
 void E2EWorkflowTests::test_slice_produces_gcode_file()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
   // Load model
   QVERIFY(project.loadFile(kStlPath));
 
   // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
-  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy _loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(_loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
@@ -412,7 +412,7 @@ void E2EWorkflowTests::test_slice_produces_gcode_file()
 
 void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -420,7 +420,7 @@ void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
   QVERIFY(project.loadFile(kStlPath));
 
   // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
-  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy _loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(_loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
@@ -453,14 +453,14 @@ void E2EWorkflowTests::test_slice_results_propagate_to_editor_vm()
 
 void E2EWorkflowTests::test_export_gcode_to_path()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
   // Load model
   QVERIFY(project.loadFile(kStlPath));
 
   // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
-  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy _loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(_loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
@@ -503,11 +503,11 @@ void E2EWorkflowTests::test_export_gcode_to_path()
 
 void E2EWorkflowTests::test_export_gcode_rejects_unsafe_targets()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
   QVERIFY(project.loadFile(kStlPath));
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
 
@@ -572,12 +572,12 @@ void E2EWorkflowTests::test_export_gcode_rejects_unsafe_targets()
 
 void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -664,7 +664,7 @@ void E2EWorkflowTests::test_local_import_slice_preview_export_workflow()
 
 void E2EWorkflowTests::test_preview_receives_gcode_data()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -672,7 +672,7 @@ void E2EWorkflowTests::test_preview_receives_gcode_data()
   QVERIFY(project.loadFile(kStlPath));
 
   // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
-  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy _loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(_loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
@@ -761,7 +761,7 @@ void E2EWorkflowTests::test_backend_switches_to_preview_after_slice()
 
 void E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -861,7 +861,7 @@ G1 X50 Y20 E0.60
 
 void E2EWorkflowTests::test_preview_parser_handles_orca_metadata_view_modes_and_ticks()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -977,7 +977,7 @@ G1 X30 Y10 E0.10 F1800
 
 void E2EWorkflowTests::test_preview_parser_ignores_z_hop_travel_as_layer()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -1017,7 +1017,7 @@ G1 X30 Y10 E1.50 F1200
 
 void E2EWorkflowTests::test_model_change_invalidates_slice_result()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -1025,7 +1025,7 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
   QVERIFY(project.loadFile(kStlPath));
 
   // v2.7 P0: wait for async loadFile to finish (queued model/plate assignment)
-  QSignalSpy _loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy _loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(_loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(_loadSpy.count() > 0, 10000);
 
@@ -1065,11 +1065,11 @@ void E2EWorkflowTests::test_model_change_invalidates_slice_result()
 
 void E2EWorkflowTests::test_slice_affecting_bed_change_marks_current_result_stale()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1140,12 +1140,12 @@ void E2EWorkflowTests::test_slice_affecting_bed_change_marks_current_result_stal
 
 void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1170,7 +1170,7 @@ void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload(
   QVERIFY2(preview.moveCount() > 0, "preview should contain parsed moves before import");
   QVERIFY2(preview.layerCount() > 0, "preview should contain parsed layers before import");
 
-  QSignalSpy reloadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy reloadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(reloadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "reimporting a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
@@ -1188,12 +1188,12 @@ void E2EWorkflowTests::test_import_invalidates_slice_output_and_preview_payload(
 
 void E2EWorkflowTests::test_previous_gcode_reuse_marks_reused_result_and_refreshes_preview()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1250,12 +1250,12 @@ void E2EWorkflowTests::test_previous_gcode_reuse_marks_reused_result_and_refresh
 
 void E2EWorkflowTests::test_preview_rebuilds_on_active_result_switch_without_slice_finished()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model through EditorViewModel should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1337,11 +1337,11 @@ G1 X1 Y0 E0.10 F1200
 
 void E2EWorkflowTests::test_cancelled_slice_clears_active_result_and_blocks_preview_export()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1384,10 +1384,10 @@ void E2EWorkflowTests::test_cancelled_slice_clears_active_result_and_blocks_prev
 // fresh, valid ModelSlice result.
 void E2EWorkflowTests::test_persistent_print_reused_on_same_plate_reslice()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(project.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1444,10 +1444,10 @@ void E2EWorkflowTests::test_persistent_print_reused_on_same_plate_reslice()
 // slot exists after slicing, zero right after the plate is deleted.
 void E2EWorkflowTests::test_plate_deletion_releases_persistent_print_entry()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(project.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1487,10 +1487,10 @@ void E2EWorkflowTests::test_plate_deletion_releases_persistent_print_entry()
 // from scratch and still produce a fully consistent result.
 void E2EWorkflowTests::test_cancelled_slice_restart_rebuilds_persistent_print()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(project.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1545,11 +1545,11 @@ void E2EWorkflowTests::test_cancelled_slice_restart_rebuilds_persistent_print()
 
 void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plates_only()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1607,7 +1607,7 @@ void E2EWorkflowTests::test_slice_all_stores_outputs_for_printable_unlocked_plat
            "an unsliced loaded plate must block all-plate export");
 
   // Per-plate activation checks must run BEFORE plate 2 is emptied below:
-  // ProjectServiceMock::deleteObject prunes emptied plates (keep >= 1), so
+  // ProjectService::deleteObject prunes emptied plates (keep >= 1), so
   // removing plate 2's objects deletes the plate itself.
   QVERIFY(editor.setCurrentPlateIndex(0));
   QCOMPARE(editor.sliceOutputPath(), slice.plateOutputPath(0));
@@ -1731,14 +1731,14 @@ void E2EWorkflowTests::previewReceivesRealGcodeAfterLiveSliceNoPlaceholder()
 // resetPreviewState.
 void E2EWorkflowTests::sliceFailedClearsPreviewState()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   // Seed a valid preview via a real live slice so we can observe the cleared state.
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
@@ -1775,13 +1775,13 @@ void E2EWorkflowTests::sliceFailedClearsPreviewState()
 // preview, then call SliceService::clearResults() which emits sliceResultCleared.
 void E2EWorkflowTests::sliceResultClearedClearsPreviewState()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
 
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
@@ -1814,13 +1814,13 @@ void E2EWorkflowTests::sliceResultClearedClearsPreviewState()
 // sliceResultCleared, triggering resetPreviewState.
 void E2EWorkflowTests::plateSwitchToInvalidClearsPreviewState()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
 
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
@@ -1857,13 +1857,13 @@ void E2EWorkflowTests::plateSwitchToInvalidClearsPreviewState()
 // path so the second GCV1 payload packs different segment data.
 void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "model import should complete successfully");
@@ -1887,7 +1887,7 @@ void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
   // is reset (matches the import-invalidates contract).
   slice.clearResults();
   QVERIFY2(slice.outputPath().isEmpty(), "clearResults must drop the first slice output path");
-  QSignalSpy reloadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy reloadSpy(&project, &ProjectService::loadFinished);
   QVERIFY2(editor.loadFile(kStlPath), "reimporting the model should start");
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
   QVERIFY2(reloadSpy.takeFirst().at(0).toBool(), "model reimport should complete successfully");
@@ -1933,13 +1933,13 @@ void E2EWorkflowTests::resliceRebuildsGcodePreviewDataWithDifferentBytes()
 // gcodePreviewData intact (the export path must not touch the live payload).
 void E2EWorkflowTests::exportWhilePreviewVisibleLeavesGcodePreviewDataIntact()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   EditorViewModel editor(&project, &slice);
 
   QVERIFY2(editor.loadFile(kStlPath), "import through EditorViewModel should start");
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
 
   QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
@@ -2070,8 +2070,8 @@ void E2EWorkflowTests::testDirtyOverridesPersistAcrossProjectSaveRestore()
   // mergedConfigValues() and restored by applyProjectConfig() on a fresh
   // viewmodel (the in-memory capture+restore contract that project save/load
   // relies on). Asserts the ConfigViewModel persistence contract end-to-end.
-  PresetServiceMock presetService;
-  ProjectServiceMock projectService;
+  PresetService presetService;
+  ProjectService projectService;
   ConfigViewModel config(&presetService, &projectService);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -2095,8 +2095,8 @@ void E2EWorkflowTests::testDirtyOverridesPersistAcrossProjectSaveRestore()
   QCOMPARE(merged.value(key), mutated);
 
   // Restore into a fresh viewmodel and confirm the override survives.
-  PresetServiceMock presetService2;
-  ProjectServiceMock projectService2;
+  PresetService presetService2;
+  ProjectService projectService2;
   ConfigViewModel config2(&presetService2, &projectService2);
   config2.applyProjectConfig(merged);
   const QHash<QString, QVariant> restored = config2.mergedConfigValues();

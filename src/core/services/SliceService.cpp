@@ -1,6 +1,6 @@
 #include "SliceService.h"
 
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/AppSettingsService.h"
 
 #include <QMetaObject>
@@ -352,7 +352,7 @@ namespace
   }
 }
 
-SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
+SliceService::SliceService(ProjectService *projectService, QObject *parent)
     : QObject(parent), projectService_(projectService)
 {
   // PLATE-PRINT-LIFECYCLE (batch 2): a deleted plate releases its persistent
@@ -362,7 +362,7 @@ SliceService::SliceService(ProjectServiceMock *projectService, QObject *parent)
   // the rest of the result store in sync.
   if (projectService_)
   {
-    connect(projectService_, &ProjectServiceMock::plateRemoved, this, [this](int printIndex) {
+    connect(projectService_, &ProjectService::plateRemoved, this, [this](int printIndex) {
 #ifdef HAS_LIBSLIC3R
       releasePersistentSlice(printIndex);
 #endif
@@ -396,7 +396,7 @@ SliceService::~SliceService()
   //     joins below. No worker class relies on call-site discipline.
   //  Review P1-2 (BackendContext): the context destructor deletes the slice
   //  service FIRST so the joined worker cannot touch an already-destroyed
-  //  ProjectServiceMock (Qt would otherwise destroy children in creation
+  //  ProjectService (Qt would otherwise destroy children in creation
   //  order).
   if (activeCancelFlag_)
     activeCancelFlag_->store(true);

@@ -97,7 +97,7 @@ Item {
     // Phase 174 (FEAT-01): per-object settings override dialog. Opens when
     // selectionSettingsRequested fires (right-click Settings, GLToolbars
     // settings button, ObjectList menu). Reads/writes via the scopedOption*
-    // VM proxies; Backend lives on ProjectServiceMock.
+    // VM proxies; Backend lives on ProjectService.
     SelectionSettingsDialog {
         id: selectionSettingsDialog
         editorVm: root.editorVm
@@ -2272,7 +2272,7 @@ Item {
                 // Upstream delta (documented, not faked): upstream exposes a
                 // World/Local coordinate selector (GizmoObjectManipulation
                 // ECoordinatesType, GizmoObjectManipulation.hpp:114). The Qt6
-                // transform API (ProjectServiceMock::setObjectPosition/
+                // transform API (ProjectService::setObjectPosition/
                 // Rotation/Scale) stores a single instance-space transform,
                 // so the world/local distinction is not representable here
                 // and the panel intentionally stays single-space.
@@ -4564,7 +4564,7 @@ Item {
             function onThumbnailCaptured() { /* per-plate path below does the routing */ }
             // Phase 156 (CLOS-03): per-plate capture delivery. Routes the
             // captured bytes back into PartPlate::setThumbnail via the
-            // ProjectServiceMock write path so non-current plates retain real
+            // ProjectService write path so non-current plates retain real
             // thumbnails within the session (the gap that forced Phase 151 to
             // ship persisted-only).
             // G-04: variant-aware routing -- 0=main (writes the main AND

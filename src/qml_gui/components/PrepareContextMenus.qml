@@ -199,7 +199,7 @@ Item {
     // GUI_Factories.cpp:1197-1251; call sites :1853/:1875/:1959) instead of a
     // submenu. Upstream appends each entry only while the selection's volume
     // conversion state allows it; the Qt6 service exposes no per-volume
-    // conversion state (ProjectServiceMock keeps none outside
+    // conversion state (ProjectService keeps none outside
     // convertObjectUnits), so all four stay listed.
     component ConvertUnitsItems: Repeater {
         model: [
@@ -240,7 +240,7 @@ Item {
         MenuSeparator { }
         // Upstream primitive order Cube/Cylinder/Sphere/Cone/Disc/Torus
         // (:556-572). The Qt6 in-object primitive Backend only covers
-        // cube/sphere/cylinder/torus (ProjectServiceMock::addPrimitive), so
+        // cube/sphere/cylinder/torus (ProjectService::addPrimitive), so
         // Cone and Disc stay honestly disabled with a tooltip.
         CxMenuItem { text: qsTr("Cube"); onTriggered: root.editorVm.addPrimitive(root.editorVm.selectedObjectIndex, 0, addVolMenu.volumeType) }
         CxMenuItem { text: qsTr("Cylinder"); onTriggered: root.editorVm.addPrimitive(root.editorVm.selectedObjectIndex, 2, addVolMenu.volumeType) }

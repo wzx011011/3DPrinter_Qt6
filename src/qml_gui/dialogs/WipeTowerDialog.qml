@@ -15,7 +15,7 @@ import OWzx
 //    500px max viewport and sticky header row + row badges
 //    (WipeTowerDialog.cpp:431-451, WipingDialog.html:84-96);
 //  - badges render the real filament colours (ConfigViewModel::
-//    wizardFilamentColours -> PresetServiceMock::activeFilamentColours) with
+//    wizardFilamentColours -> PresetService::activeFilamentColours) with
 //    the badge text colour picked by luminance (WipingDialog.html:446-452,
 //    532-534);
 //  - flush multiplier persists through ConfigViewModel::setFlushMultiplier
@@ -76,7 +76,7 @@ CxDialog {
     readonly property int maxFlushVolume: 20000
 
     // v5.12 gap-closure: flush volume matrix computed from filament colours
-    // via PresetServiceMock::calculateFlushMatrix (FlushVolCalculator). Falls
+    // via PresetService::calculateFlushMatrix (FlushVolCalculator). Falls
     // back to a flat default when no preset service is available.
     readonly property var configVm: typeof Backend !== "undefined" && Backend
         ? Backend.configViewModel : null
@@ -580,7 +580,7 @@ CxDialog {
                 text: qsTr("确定")
                 cxStyle: CxButton.Style.Primary
                 // Phase 236 (DLG-02): OK persists the edited flush matrix via
-                // PresetServiceMock::saveFlushVolumes (upstream writes
+                // PresetService::saveFlushVolumes (upstream writes
                 // flush_volumes_matrix on the project config at
                 // Plater.cpp:2125). The saved matrix wins over the derived
                 // one on the next open (calculateFlushMatrix reads it back).

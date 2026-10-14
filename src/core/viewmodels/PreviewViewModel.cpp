@@ -1,7 +1,7 @@
 #include "PreviewViewModel.h"
 
 #include "core/services/SliceService.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #ifdef HAS_LIBSLIC3R
 // Phase 118 (TICK-02/TICK-03): libslic3r custom-g-code write-back path.
 #include <libslic3r/CustomGCode.hpp>
@@ -751,7 +751,7 @@ namespace
 #endif // HAS_LIBSLIC3R
 }
 
-PreviewViewModel::PreviewViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent)
+PreviewViewModel::PreviewViewModel(ProjectService *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
   // All extrusion roles visible by default, matching upstream extrusion_roles_visibility
@@ -3716,7 +3716,7 @@ QString PreviewViewModel::extruderColor(int extruderId) const
 QStringList PreviewViewModel::configuredExtruderColors() const
 {
   // The configured per-filament colors live on the project service
-  // (PresetServiceMock default_filament_colour sync -> plateFilamentColours,
+  // (PresetService default_filament_colour sync -> plateFilamentColours,
   // the Qt6 equivalent of upstream get_extruder_colors_from_plater_config).
   return projectService_ ? projectService_->plateFilamentColours() : QStringList{};
 }

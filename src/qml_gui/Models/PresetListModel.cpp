@@ -1,5 +1,5 @@
 #include "PresetListModel.h"
-#include "core/services/PresetServiceMock.h"
+#include "core/services/PresetService.h"
 
 PresetListModel::PresetListModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -7,7 +7,7 @@ PresetListModel::PresetListModel(QObject *parent)
   // Q11-②: no constructor seed. The 13 hand-written fake presets used to be
   // built here, but ConfigViewModel calls refreshFromService() immediately
   // after construction (and on every preset-list mutation), which clears
-  // m_presets and rebuilds from PresetServiceMock. The seed was a second
+  // m_presets and rebuilds from PresetService. The seed was a second
   // source of truth that could never survive the first reset — the service
   // (loaded vendor profiles + user presets) is the single source.
 }
@@ -80,12 +80,12 @@ int PresetListModel::globalIndex(const QString &category, int localIndex) const
   return -1;
 }
 
-void PresetListModel::refreshFromService(PresetServiceMock *service)
+void PresetListModel::refreshFromService(PresetService *service)
 {
   refreshFromService(service, QString());
 }
 
-void PresetListModel::refreshFromService(PresetServiceMock *service, const QString &printerName)
+void PresetListModel::refreshFromService(PresetService *service, const QString &printerName)
 {
   if (!service)
     return;
@@ -96,19 +96,19 @@ void PresetListModel::refreshFromService(PresetServiceMock *service, const QStri
   static const auto catLabels = [](int cat) -> QString {
     switch (cat)
     {
-    case PresetServiceMock::PrintCat: return tr("打印质量");
-    case PresetServiceMock::FilamentCat: return tr("耗材");
-    case PresetServiceMock::PrinterCat: return tr("打印机");
+    case PresetService::PrintCat: return tr("打印质量");
+    case PresetService::FilamentCat: return tr("耗材");
+    case PresetService::PrinterCat: return tr("打印机");
     default: return tr("其他");
     }
   };
 
-  const QString defaultPrint = service->defaultPresetForCategory(PresetServiceMock::PrintCat);
-  const QString defaultFilament = service->defaultPresetForCategory(PresetServiceMock::FilamentCat);
-  const QString defaultPrinter = service->defaultPresetForCategory(PresetServiceMock::PrinterCat);
+  const QString defaultPrint = service->defaultPresetForCategory(PresetService::PrintCat);
+  const QString defaultFilament = service->defaultPresetForCategory(PresetService::FilamentCat);
+  const QString defaultPrinter = service->defaultPresetForCategory(PresetService::PrinterCat);
 
   // Populate in order: printer, filament, print (对齐上游 Tab 页签顺序)
-  const int categories[] = {PresetServiceMock::PrinterCat, PresetServiceMock::FilamentCat, PresetServiceMock::PrintCat};
+  const int categories[] = {PresetService::PrinterCat, PresetService::FilamentCat, PresetService::PrintCat};
   const QString defaults[] = {defaultPrinter, defaultFilament, defaultPrint};
 
   for (int ci = 0; ci < 3; ++ci)
@@ -125,7 +125,7 @@ void PresetListModel::refreshFromService(PresetServiceMock *service, const QStri
       // combos never gray (upstream update_compatible only filters
       // filament/process presets against the active printer).
       entry.section = service->isUserPreset(name) ? tr("用户预设") : tr("系统预设");
-      if (!printerName.isEmpty() && categories[ci] != PresetServiceMock::PrinterCat)
+      if (!printerName.isEmpty() && categories[ci] != PresetService::PrinterCat)
         entry.incompatible = !service->isPresetCompatibleWithPrinter(categories[ci], name, printerName);
       m_presets.append(entry);
     }

@@ -32,7 +32,7 @@
 // CACHE (MR-02):
 //   The per-volume MeshRaycaster instances are cached here, keyed by
 //   (objectIndex, volumeIndex). They are populated lazily from the Phase 112
-//   ProjectServiceMock::volumeMeshIts accessor (the ITS source) and
+//   ProjectService::volumeMeshIts accessor (the ITS source) and
 //   reconstructed ONLY when invalidate() is called (the model change signal).
 //   No reconstruction happens on cursor move.
 // ===========================================================================
@@ -102,7 +102,7 @@ struct SceneRaycasterCandidate
 // stage-2 per-triangle raycast on candidate volumes only (MR-02/MR-03).
 //
 // The ITS source is an injected callable (VolumeMeshItsFn) so this class has
-// no hard dependency on ProjectServiceMock -- it just needs something that
+// no hard dependency on ProjectService -- it just needs something that
 // returns shared_ptr<const indexed_triangle_set> for (object, volume). In
 // production this is `projectServiceMock->volumeMeshIts`; in tests it can be
 // a lambda over a synthetic ITS.
@@ -110,7 +110,7 @@ class SceneRaycaster
 {
 public:
   // Callable: (objectIndex, volumeIndex) -> shared_ptr<const ITS> (nullptr if
-  // invalid / no mesh). Modeled on ProjectServiceMock::volumeMeshIts (Phase 112).
+  // invalid / no mesh). Modeled on ProjectService::volumeMeshIts (Phase 112).
   using VolumeMeshItsFn =
       std::function<std::shared_ptr<const indexed_triangle_set>(int, int)>;
 

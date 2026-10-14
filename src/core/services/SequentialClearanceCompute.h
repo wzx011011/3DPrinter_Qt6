@@ -21,7 +21,7 @@
 #include <QVariant>
 #include <vector>
 
-class ProjectServiceMock;
+class ProjectService;
 
 namespace SequentialClearanceCompute
 {
@@ -86,7 +86,7 @@ struct InstancePose
 // GUI-thread capture of the resolved config values (merged preset + plate
 // overrides through the SAME SliceService merge path the slice worker uses).
 // The bed rectangle arrives in world millimeters.
-ConfigValues resolveConfigValues(ProjectServiceMock *projectService,
+ConfigValues resolveConfigValues(ProjectService *projectService,
                                  int plateIndex,
                                  const QHash<QString, QVariant> &mergedPreset,
                                  double bedMinX, double bedMinY,
@@ -96,10 +96,10 @@ ConfigValues resolveConfigValues(ProjectServiceMock *projectService,
 // sequence (upstream m_sequential_print_clearance_first_displacement set at
 // LeftDown, GLCanvas3D.cpp:4197). Applies the exact shrink rule of
 // Print::sequential_print_horizontal_clearance_valid (Print.cpp:593).
-HullCache captureHullCache(ProjectServiceMock *projectService, const ConfigValues &config);
+HullCache captureHullCache(ProjectService *projectService, const ConfigValues &config);
 
 // GUI-thread capture of the CURRENT instance poses of the current plate.
-std::vector<std::vector<InstancePose>> collectInstancePoses(ProjectServiceMock *projectService);
+std::vector<std::vector<InstancePose>> collectInstancePoses(ProjectService *projectService);
 
 // Pure value computation (QtConcurrent worker): transforms the cached hulls
 // by the current poses, sorts the print order (y-band then x, upstream

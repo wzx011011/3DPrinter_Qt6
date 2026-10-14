@@ -15,7 +15,7 @@
 class QTimer;
 
 class SliceService;
-class ProjectServiceMock;
+class ProjectService;
 
 #ifdef HAS_LIBSLIC3R
 // P1 (preview direct hand-off): the structured slice result delivered by
@@ -220,7 +220,7 @@ public:
   // Phase 118 (TICK-02/TICK-03): projectService_ injected so tick CRUD can
   // write back into libslic3r's model->plates_custom_gcodes (BBS path) and
   // trigger a re-slice. Mirrors EditorViewModel's injection.
-  explicit PreviewViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
+  explicit PreviewViewModel(ProjectService *projectService, SliceService *sliceService, QObject *parent = nullptr);
 
   int progress() const;
   bool slicing() const;
@@ -299,7 +299,7 @@ public:
   Q_INVOKABLE int toolChangeExtruderIdAt(int i) const; // extruder ID at that point
   /// Extruder colors aligned with upstream extruder_colors. Phase 238
   /// (PREV-06): sourced from the CONFIGURED filament colors
-  /// (ProjectServiceMock::plateFilamentColours, i.e. the filament_colour /
+  /// (ProjectService::plateFilamentColours, i.e. the filament_colour /
   /// default_filament_colour presets -- upstream plater
   /// get_extruder_colors_from_plater_config, GCodeViewer.cpp:1109-1127).
   /// Falls back to the legacy fixed 8-color cycle only when the config has
@@ -561,7 +561,7 @@ private:
   // Phase 117 in-memory behavior when libslic3r is absent).
   void writeTicksToModel();
 
-  ProjectServiceMock *projectService_ = nullptr;
+  ProjectService *projectService_ = nullptr;
   SliceService *sliceService_ = nullptr;
   QString estimatedTime_ = QStringLiteral("--:--:--");
   int layerCount_ = 0;

@@ -7,7 +7,7 @@
 #include <QMap>
 #include <QSet>
 
-class PresetServiceMock final : public QObject
+class PresetService final : public QObject
 {
   Q_OBJECT
 
@@ -17,7 +17,7 @@ signals:
   void projectEmbeddedPresetsAdopted();
 
 public:
-  explicit PresetServiceMock(QObject *parent = nullptr);
+  explicit PresetService(QObject *parent = nullptr);
 
   /// Preset categories (对齐上游 PresetBundle: print/filament/printer)
   enum Category { PrintCat = 0, FilamentCat = 1, PrinterCat = 2 };

@@ -7,8 +7,8 @@
 #include <QRegularExpression>
 #include <QSettings>
 
-#include "core/services/PresetServiceMock.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/PresetService.h"
+#include "core/services/ProjectService.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
 #include "qml_gui/Models/PresetListModel.h"
 
@@ -17,7 +17,7 @@
 #include <libslic3r/Preset.hpp>
 #endif
 
-ConfigViewModel::ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent)
+ConfigViewModel::ConfigViewModel(PresetService *presetService, ProjectService *projectService, QObject *parent)
     : QObject(parent), presetService_(presetService), projectService_(projectService)
 {
   printOptions_ = new ConfigOptionModel(this);
@@ -250,36 +250,36 @@ void ConfigViewModel::setCurrentPresetTierValue(const QString &tier, const QStri
   const QString normalized = normalizedTier(tier);
   if (normalized == QStringLiteral("printer"))
   {
-    if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrinterCat, presetName))
+    if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetService::PrinterCat, presetName))
       return;
     currentPrinterPreset_ = presetName;
     if (presetService_) {
-      if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+      if (!presetService_->isPresetCompatibleWithPrinter(PresetService::FilamentCat,
                                                          currentFilamentPreset_,
                                                          currentPrinterPreset_)) {
         const QString compatibleFilament =
-            presetService_->findCompatiblePresetForCategory(PresetServiceMock::FilamentCat,
+            presetService_->findCompatiblePresetForCategory(PresetService::FilamentCat,
                                                             currentPrinterPreset_);
         if (!compatibleFilament.isEmpty()) {
           currentFilamentPreset_ = compatibleFilament;
-          presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, compatibleFilament);
+          presetService_->setSelectedPresetForCategory(PresetService::FilamentCat, compatibleFilament);
           filamentPresetValues_ = presetService_->presetValues(currentFilamentPreset_);
         }
       }
 
-      if (!presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+      if (!presetService_->isPresetCompatibleWithPrinter(PresetService::PrintCat,
                                                          currentPrintPreset_,
                                                          currentPrinterPreset_)) {
         const QString compatiblePrint =
-            presetService_->findCompatiblePresetForCategory(PresetServiceMock::PrintCat,
+            presetService_->findCompatiblePresetForCategory(PresetService::PrintCat,
                                                             currentPrinterPreset_);
         QString nextPrint = compatiblePrint;
         if (nextPrint.isEmpty())
-          nextPrint = presetService_->defaultPresetForCategory(PresetServiceMock::PrintCat);
+          nextPrint = presetService_->defaultPresetForCategory(PresetService::PrintCat);
         if (!nextPrint.isEmpty() && nextPrint != currentPrintPreset_) {
           currentPrintPreset_ = nextPrint;
           currentPreset_ = nextPrint;
-          presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, nextPrint);
+          presetService_->setSelectedPresetForCategory(PresetService::PrintCat, nextPrint);
           printPresetValues_ = presetService_->presetValues(currentPrintPreset_);
         }
       }
@@ -291,7 +291,7 @@ void ConfigViewModel::setCurrentPresetTierValue(const QString &tier, const QStri
 
   if (normalized == QStringLiteral("filament"))
   {
-    if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, presetName))
+    if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetService::FilamentCat, presetName))
       return;
     currentFilamentPreset_ = presetName;
     filamentPresetValues_ = presetService_ ? presetService_->presetValues(currentFilamentPreset_)
@@ -299,7 +299,7 @@ void ConfigViewModel::setCurrentPresetTierValue(const QString &tier, const QStri
     return;
   }
 
-  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, presetName))
+  if (presetService_ && !presetService_->setSelectedPresetForCategory(PresetService::PrintCat, presetName))
     return;
   currentPrintPreset_ = presetName;
   currentPreset_ = presetName;
@@ -487,9 +487,9 @@ double ConfigViewModel::layerHeight() const
 void ConfigViewModel::loadDefault()
 {
   if (presetService_) {
-    currentPrinterPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::PrinterCat);
-    currentFilamentPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::FilamentCat);
-    currentPrintPreset_ = presetService_->selectedPresetForCategory(PresetServiceMock::PrintCat);
+    currentPrinterPreset_ = presetService_->selectedPresetForCategory(PresetService::PrinterCat);
+    currentFilamentPreset_ = presetService_->selectedPresetForCategory(PresetService::FilamentCat);
+    currentPrintPreset_ = presetService_->selectedPresetForCategory(PresetService::PrintCat);
     currentPreset_ = currentPrintPreset_;
     layerHeight_ = presetService_->defaultLayerHeight();
     printerPresetValues_ = presetService_->presetValues(currentPrinterPreset_);
@@ -535,9 +535,9 @@ void ConfigViewModel::setCurrentPreset(const QString &presetName)
     return;
   }
 
-  if (presetService_->presetCategory(presetName) != PresetServiceMock::PrintCat)
+  if (presetService_->presetCategory(presetName) != PresetService::PrintCat)
     return;
-  if (!presetService_->setSelectedPresetForCategory(PresetServiceMock::PrintCat, presetName))
+  if (!presetService_->setSelectedPresetForCategory(PresetService::PrintCat, presetName))
     return;
 
   setCurrentPresetTierValue(QStringLiteral("print"), presetName);
@@ -642,17 +642,17 @@ bool ConfigViewModel::isPresetDirty() const
 
 QStringList ConfigViewModel::printerPresetNames() const
 {
-  return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::PrinterCat) : QStringList{};
+  return presetService_ ? presetService_->presetNamesForCategory(PresetService::PrinterCat) : QStringList{};
 }
 
 QStringList ConfigViewModel::filamentPresetNames() const
 {
-  return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::FilamentCat) : QStringList{};
+  return presetService_ ? presetService_->presetNamesForCategory(PresetService::FilamentCat) : QStringList{};
 }
 
 QStringList ConfigViewModel::printPresetNames() const
 {
-  return presetService_ ? presetService_->presetNamesForCategory(PresetServiceMock::PrintCat) : QStringList{};
+  return presetService_ ? presetService_->presetNamesForCategory(PresetService::PrintCat) : QStringList{};
 }
 
 QStringList ConfigViewModel::userPresetNamesForCategory(int category) const
@@ -665,7 +665,7 @@ QStringList ConfigViewModel::compatibleFilamentPresetNames() const
   if (!presetService_)
     return {};
   QStringList names =
-      presetService_->compatiblePresetNamesForCategory(PresetServiceMock::FilamentCat, currentPrinterPreset_);
+      presetService_->compatiblePresetNamesForCategory(PresetService::FilamentCat, currentPrinterPreset_);
   if (!currentFilamentPreset_.isEmpty() && !names.contains(currentFilamentPreset_))
     names.prepend(currentFilamentPreset_);
   return names;
@@ -676,7 +676,7 @@ QStringList ConfigViewModel::compatiblePrintPresetNames() const
   if (!presetService_)
     return {};
   QStringList names =
-      presetService_->compatiblePresetNamesForCategory(PresetServiceMock::PrintCat, currentPrinterPreset_);
+      presetService_->compatiblePresetNamesForCategory(PresetService::PrintCat, currentPrinterPreset_);
   if (!currentPrintPreset_.isEmpty() && !names.contains(currentPrintPreset_))
     names.prepend(currentPrintPreset_);
   return names;
@@ -709,37 +709,37 @@ QString ConfigViewModel::plainPresetName(const QString &displayName) const
 
 QStringList ConfigViewModel::decoratedPrinterPresetNames() const
 {
-  return decoratedPresetNamesForCategory(PresetServiceMock::PrinterCat);
+  return decoratedPresetNamesForCategory(PresetService::PrinterCat);
 }
 
 QStringList ConfigViewModel::decoratedFilamentPresetNames() const
 {
-  return decoratedPresetNamesForCategory(PresetServiceMock::FilamentCat);
+  return decoratedPresetNamesForCategory(PresetService::FilamentCat);
 }
 
 QStringList ConfigViewModel::decoratedPrintPresetNames() const
 {
-  return decoratedPresetNamesForCategory(PresetServiceMock::PrintCat);
+  return decoratedPresetNamesForCategory(PresetService::PrintCat);
 }
 
 QStringList ConfigViewModel::decoratedPresetNamesForCategory(int category) const
 {
-  if (!presetService_ || category < PresetServiceMock::PrintCat ||
-      category > PresetServiceMock::PrinterCat)
+  if (!presetService_ || category < PresetService::PrintCat ||
+      category > PresetService::PrinterCat)
     return {};
 
   const QStringList names = presetService_->presetNamesForCategory(category);
   QString current;
-  if (category == PresetServiceMock::PrinterCat)
+  if (category == PresetService::PrinterCat)
     current = currentPrinterPreset_;
-  else if (category == PresetServiceMock::FilamentCat)
+  else if (category == PresetService::FilamentCat)
     current = currentFilamentPreset_;
   else
     current = currentPrintPreset_;
 
   // Compatibility graying applies to filament/process presets against the
   // active printer (upstream update_compatible); printer combos never gray.
-  const bool compatibilityRelevant = category != PresetServiceMock::PrinterCat;
+  const bool compatibilityRelevant = category != PresetService::PrinterCat;
 
   QStringList userEntries, systemEntries;
   for (const QString &name : names)
@@ -801,7 +801,7 @@ void ConfigViewModel::setCurrentPrinterPreset(const QString &name)
 
 QString ConfigViewModel::bedTextureFile() const
 {
-  // v5.15 (BEDTEX): PresetServiceMock resolves the machine_model JSON's
+  // v5.15 (BEDTEX): PresetService resolves the machine_model JSON's
   // bed_texture against the vendor profile dir (upstream
   // PresetUtils::system_printer_bed_texture mapping).
   if (presetService_ == nullptr || currentPrinterPreset_.isEmpty())
@@ -1029,7 +1029,7 @@ QStringList ConfigViewModel::wizardCompatiblePrinters(const QString &vendor, con
   const QStringList printers = presetService_->printerModelsForVendor(vendor);
   for (const QString &printer : printers)
   {
-    if (presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat, filamentName, printer))
+    if (presetService_->isPresetCompatibleWithPrinter(PresetService::FilamentCat, filamentName, printer))
       result.append(printer);
   }
   return result;
@@ -1051,7 +1051,7 @@ bool ConfigViewModel::wizardCreateCustomPrinterPreset(const QString &name, const
   QHash<QString, QVariant> hash;
   for (auto it = values.constBegin(); it != values.constEnd(); ++it)
     hash.insert(it.key(), it.value());
-  const bool ok = presetService_->createCustomPreset(PresetServiceMock::PrinterCat, name, hash);
+  const bool ok = presetService_->createCustomPreset(PresetService::PrinterCat, name, hash);
   if (!ok)
   {
     lastPresetError_ = tr("Failed to create custom printer preset \"%1\".").arg(name);
@@ -1114,11 +1114,11 @@ bool ConfigViewModel::createCustomPreset(int category, const QString &name, cons
   }
 
   QString tier;
-  if (category == PresetServiceMock::PrinterCat)
+  if (category == PresetService::PrinterCat)
     tier = QStringLiteral("printer");
-  else if (category == PresetServiceMock::FilamentCat)
+  else if (category == PresetService::FilamentCat)
     tier = QStringLiteral("filament");
-  else if (category == PresetServiceMock::PrintCat)
+  else if (category == PresetService::PrintCat)
     tier = QStringLiteral("print");
   else {
     lastPresetError_ = tr("Unsupported preset category.");
@@ -1235,11 +1235,11 @@ QString ConfigViewModel::presetInheritsParent(const QString &name) const
 
 QString ConfigViewModel::currentPresetNameForCategory(int category) const
 {
-  if (category == PresetServiceMock::PrinterCat)
+  if (category == PresetService::PrinterCat)
     return currentPrinterPreset_;
-  if (category == PresetServiceMock::FilamentCat)
+  if (category == PresetService::FilamentCat)
     return currentFilamentPreset_;
-  if (category == PresetServiceMock::PrintCat)
+  if (category == PresetService::PrintCat)
     return currentPrintPreset_.isEmpty() ? currentPreset_ : currentPrintPreset_;
   return QString();
 }
@@ -1424,11 +1424,11 @@ bool ConfigViewModel::overwriteUserPreset(int category, const QString &name)
   }
 
   QString tier;
-  if (category == PresetServiceMock::PrinterCat)
+  if (category == PresetService::PrinterCat)
     tier = QStringLiteral("printer");
-  else if (category == PresetServiceMock::FilamentCat)
+  else if (category == PresetService::FilamentCat)
     tier = QStringLiteral("filament");
-  else if (category == PresetServiceMock::PrintCat)
+  else if (category == PresetService::PrintCat)
     tier = QStringLiteral("print");
   else {
     lastPresetError_ = tr("Unsupported preset category.");
@@ -1475,11 +1475,11 @@ bool ConfigViewModel::detachPresetFromParent(int category, const QString &name)
   }
 
   QString tier;
-  if (category == PresetServiceMock::PrinterCat)
+  if (category == PresetService::PrinterCat)
     tier = QStringLiteral("printer");
-  else if (category == PresetServiceMock::FilamentCat)
+  else if (category == PresetService::FilamentCat)
     tier = QStringLiteral("filament");
-  else if (category == PresetServiceMock::PrintCat)
+  else if (category == PresetService::PrintCat)
     tier = QStringLiteral("print");
   else {
     lastPresetError_ = tr("Unsupported preset category.");
@@ -1546,11 +1546,11 @@ bool ConfigViewModel::deletePreset(int category, const QString &name)
     // If the deleted preset was the tier's active selection, fall back to
     // the category default.
     if (name == currentPrintPreset_)
-      setCurrentPrintPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrintCat));
+      setCurrentPrintPreset(presetService_->defaultPresetForCategory(PresetService::PrintCat));
     if (name == currentFilamentPreset_)
-      setCurrentFilamentPreset(presetService_->defaultPresetForCategory(PresetServiceMock::FilamentCat));
+      setCurrentFilamentPreset(presetService_->defaultPresetForCategory(PresetService::FilamentCat));
     if (name == currentPrinterPreset_)
-      setCurrentPrinterPreset(presetService_->defaultPresetForCategory(PresetServiceMock::PrinterCat));
+      setCurrentPrinterPreset(presetService_->defaultPresetForCategory(PresetService::PrinterCat));
     // Per-extruder slots referencing the deleted preset fall back to the
     // (already repaired) global selection.
     bool slotsChanged = false;
@@ -1730,7 +1730,7 @@ DiffOptionMeta diffOptionMeta(ConfigOptionModel *model, const QString &key)
 } // namespace
 
 // Phase 154 (CLOS-01): structured diff variant — proxies to
-// PresetServiceMock::comparePresets (the Phase 149 primitive) and enriches
+// PresetService::comparePresets (the Phase 149 primitive) and enriches
 // each {key, valueA, valueB, status} row with the presentation data the
 // PresetDiffDialog tree groups by (upstream DiffViewCtrl::Append input):
 //   category/group/label   — searcher-equivalent metadata (diffOptionMeta)
@@ -1750,10 +1750,10 @@ QVariantList ConfigViewModel::comparePresetsDetailed(const QString &presetA, con
   ConfigOptionModel *metaModel = printOptions_;
   switch (presetService_->presetCategory(presetA))
   {
-  case PresetServiceMock::PrinterCat:
+  case PresetService::PrinterCat:
     metaModel = machineOptions_;
     break;
-  case PresetServiceMock::FilamentCat:
+  case PresetService::FilamentCat:
     metaModel = filamentOptions_;
     break;
   default:
@@ -1842,7 +1842,7 @@ void ConfigViewModel::autoMatchFilament()
   if (!compatible.isEmpty() && compatible != currentFilamentPreset_)
   {
     currentFilamentPreset_ = compatible;
-    presetService_->setSelectedPresetForCategory(PresetServiceMock::FilamentCat, compatible);
+    presetService_->setSelectedPresetForCategory(PresetService::FilamentCat, compatible);
     mergePresetHierarchy();
   }
   emit stateChanged();
@@ -1852,7 +1852,7 @@ bool ConfigViewModel::isCurrentFilamentCompatible() const
 {
   if (!presetService_)
     return true;
-  return presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+  return presetService_->isPresetCompatibleWithPrinter(PresetService::FilamentCat,
                                                        currentFilamentPreset_,
                                                        currentPrinterPreset_);
 }
@@ -1861,7 +1861,7 @@ bool ConfigViewModel::isFilamentCompatible(const QString &filamentName) const
 {
   if (!presetService_)
     return true;
-  return presetService_->isPresetCompatibleWithPrinter(PresetServiceMock::FilamentCat,
+  return presetService_->isPresetCompatibleWithPrinter(PresetService::FilamentCat,
                                                        filamentName,
                                                        currentPrinterPreset_);
 }
@@ -1984,7 +1984,7 @@ bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
 {
   // v5.16 (PSET2-05): accept both plain and decorated (combo display) names.
   const QString plain = plainPresetName(name);
-  if (presetService_ && presetService_->presetCategory(plain) != PresetServiceMock::PrinterCat) {
+  if (presetService_ && presetService_->presetCategory(plain) != PresetService::PrinterCat) {
     lastPresetError_ = tr("The selected printer preset is unavailable.");
     emit stateChanged();
     return false;
@@ -2000,7 +2000,7 @@ bool ConfigViewModel::requestCurrentPrinterPreset(const QString &name)
 bool ConfigViewModel::requestCurrentFilamentPreset(const QString &name)
 {
   const QString plain = plainPresetName(name);
-  if (presetService_ && presetService_->presetCategory(plain) != PresetServiceMock::FilamentCat) {
+  if (presetService_ && presetService_->presetCategory(plain) != PresetService::FilamentCat) {
     lastPresetError_ = tr("The selected filament preset is unavailable.");
     emit stateChanged();
     return false;
@@ -2088,7 +2088,7 @@ QVariantMap ConfigViewModel::projectPresetConfigOverlay() const
 bool ConfigViewModel::requestCurrentPrintPreset(const QString &name)
 {
   const QString plain = plainPresetName(name);
-  if (presetService_ && presetService_->presetCategory(plain) != PresetServiceMock::PrintCat) {
+  if (presetService_ && presetService_->presetCategory(plain) != PresetService::PrintCat) {
     lastPresetError_ = tr("The selected print preset is unavailable.");
     emit stateChanged();
     return false;

@@ -1,5 +1,5 @@
 #include "ProjectViewModel.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 
 #include <QFileInfo>
 #include <QSettings>
@@ -29,7 +29,7 @@ ProjectViewModel::ProjectViewModel(QObject *parent) : QObject(parent)
                          .toStringList();
 }
 
-void ProjectViewModel::setProjectService(ProjectServiceMock *projectService)
+void ProjectViewModel::setProjectService(ProjectService *projectService)
 {
   m_projectService = projectService;
   refreshFileTree();

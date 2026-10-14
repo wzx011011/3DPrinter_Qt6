@@ -25,7 +25,7 @@
 #include <functional>
 #include <vector>
 
-class ProjectServiceMock;
+class ProjectService;
 class SliceService;
 class ConfigViewModel;
 class EditorViewModel;
@@ -78,7 +78,7 @@ struct AppTool {
 
 class AppToolRegistry final {
  public:
-  AppToolRegistry(ProjectServiceMock *project, SliceService *slice,
+  AppToolRegistry(ProjectService *project, SliceService *slice,
                   ConfigViewModel *config, EditorViewModel *editor,
                   AppToolUiProvider *ui = nullptr);
 
@@ -96,7 +96,7 @@ class AppToolRegistry final {
  private:
   void buildTools();
 
-  ProjectServiceMock *project_ = nullptr;
+  ProjectService *project_ = nullptr;
   SliceService *slice_ = nullptr;
   ConfigViewModel *config_ = nullptr;
   EditorViewModel *editor_ = nullptr;

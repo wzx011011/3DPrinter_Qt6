@@ -1,7 +1,7 @@
 ﻿#include "CliRunner.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
-#include "core/services/PresetServiceMock.h"
+#include "core/services/PresetService.h"
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QTextStream>
@@ -35,7 +35,7 @@ namespace {
 // so the arrange bed can no longer disagree with the bed the slice uses.
 // Silent on purpose -- callers own their user-facing output.
 QHash<QString, QVariant> buildMergedPresetConfig(
-    PresetServiceMock *presetService,
+    PresetService *presetService,
     const QHash<QString, QVariant> &settingsOverlay,
     const QHash<QString, QString> &configOverrides)
 {
@@ -43,7 +43,7 @@ QHash<QString, QVariant> buildMergedPresetConfig(
 
     // Tier 1: Printer preset
     const QString printerPreset = presetService->defaultPresetForCategory(
-        static_cast<int>(PresetServiceMock::PrinterCat));
+        static_cast<int>(PresetService::PrinterCat));
     if (!printerPreset.isEmpty()) {
         const auto vals = presetService->presetValues(printerPreset);
         for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
@@ -52,7 +52,7 @@ QHash<QString, QVariant> buildMergedPresetConfig(
 
     // Tier 2: Filament preset
     const QString filamentPreset = presetService->defaultPresetForCategory(
-        static_cast<int>(PresetServiceMock::FilamentCat));
+        static_cast<int>(PresetService::FilamentCat));
     if (!filamentPreset.isEmpty()) {
         const auto vals = presetService->presetValues(filamentPreset);
         for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
@@ -61,7 +61,7 @@ QHash<QString, QVariant> buildMergedPresetConfig(
 
     // Tier 3: Print preset
     const QString printPreset = presetService->defaultPresetForCategory(
-        static_cast<int>(PresetServiceMock::PrintCat));
+        static_cast<int>(PresetService::PrintCat));
     if (!printPreset.isEmpty()) {
         const auto vals = presetService->presetValues(printPreset);
         for (auto it = vals.constBegin(); it != vals.constEnd(); ++it)
@@ -373,12 +373,12 @@ int CliRunner::run()
     }
 
     // Instantiate services
-    projectService_ = new ProjectServiceMock(this);
-    presetService_ = new PresetServiceMock(this);
+    projectService_ = new ProjectService(this);
+    presetService_ = new PresetService(this);
     sliceService_ = new SliceService(projectService_, this);
 
     // Connect loadFinished to track async load results
-    connect(projectService_, &ProjectServiceMock::loadFinished,
+    connect(projectService_, &ProjectService::loadFinished,
             this, [this](bool success, const QString &message) {
         if (!success) {
             QTextStream err(stderr);
@@ -542,7 +542,7 @@ int CliRunner::applyTransforms()
 
     // Cut (upstream REJECTS --cut: "Cut operation is not supported yet",
     // OrcaSlicer.cpp:3599-3600. OWzx has a real cut service
-    // (ProjectServiceMock::cutObject), so --cut is wired here — documented
+    // (ProjectService::cutObject), so --cut is wired here — documented
     // superset of upstream).
     if (cut_) {
         int count = projectService_->modelCount();
@@ -699,7 +699,7 @@ int CliRunner::runExports(const QHash<int, QString> &slicedGcodes)
     // --export-slicedata: per-plate .gcode.3mf (upstream export_slicedata
     // stores the sliced plate data into a directory; OWzx writes the
     // upstream GCODE_FILE_FORMAT pair: <name>_plate<N>.gcode.3mf per sliced
-    // plate via ProjectServiceMock::exportGcode3mf).
+    // plate via ProjectService::exportGcode3mf).
     if (!exportSlicedataDir_.isEmpty()) {
         QDir().mkpath(exportSlicedataDir_);
         if (slicedGcodes.isEmpty()) {
@@ -748,7 +748,7 @@ int CliRunner::loadAndPrintInfo()
         // loadFile() is async under HAS_LIBSLIC3R — wait for loadFinished
         bool loadOk = false;
         QEventLoop loop;
-        connect(projectService_, &ProjectServiceMock::loadFinished,
+        connect(projectService_, &ProjectService::loadFinished,
                 &loop, [&](bool ok, const QString &) {
             loadOk = ok;
             loop.quit();

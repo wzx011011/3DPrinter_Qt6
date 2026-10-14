@@ -10,7 +10,7 @@
 // light uses the same direction, GLCanvas3D.cpp:8008).
 // The world-space position is forwarded to the fragment stage for the
 // upstream print-volume boundary test (gouraud.fs:250-263). The CPU bake in
-// ProjectServiceMock::meshData stores world coordinates in the vertex buffer,
+// ProjectService::meshData stores world coordinates in the vertex buffer,
 // so `position` IS the upstream world_pos (gouraud.vs:72 computes world_pos =
 // volume_world_matrix * position; here the matrix is already applied on the
 // CPU -- no second Z-up/Y-up transform here, that swap happened at upload).
@@ -21,7 +21,7 @@
 // Tracked deviation (port spec 1.3-3/1.5): upstream gouraud_light is
 // single-sided (gouraud_light.vs:34), but the CPU bake applies a pure Y/Z
 // axis swap (a reflection) to every vertex and only rewinds mirrored batches
-// (ProjectServiceMock.cpp:12415-12417), so the recomputed per-face normals
+// (ProjectService.cpp:12415-12417), so the recomputed per-face normals
 // cannot guarantee upstream-consistent outward orientation. The two-sided
 // max(+dot, -dot) is kept; note it is invariant under a global normal flip
 // (and reflect() is too), so the deviation is limited to faces whose true

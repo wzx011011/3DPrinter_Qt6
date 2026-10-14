@@ -59,7 +59,7 @@ bool PartPlateList::deletePlate(int index) {
   // -- instances sitting at the off-grid dock virtually never intersect it,
   // so the NET behavior is: the deleted plate's objects keep their geometry
   // but leave EVERY printable plate. Qt6 mirror: clear the memberships here
-  // (the ProjectServiceMock wrapper physically moves the orphaned objects to
+  // (the ProjectService wrapper physically moves the orphaned objects to
   // the dock slot); no unconditional neighbor merge.
   const std::set<std::pair<int, int>> orphans =
       m_plate_list[index]->objToInstanceSet();

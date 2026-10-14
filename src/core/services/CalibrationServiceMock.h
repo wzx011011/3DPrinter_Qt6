@@ -7,7 +7,7 @@
 
 class QTimer;
 class SliceService;
-class ProjectServiceMock;
+class ProjectService;
 
 // Calibration step in a wizard flow
 struct CalibrationStep
@@ -84,14 +84,14 @@ public:
     /// Inject SliceService for real calibration slices.
     /// It sets calib_params and runs the slice/export pipeline for PA, Flow Rate, and Temp Tower.
     void setSliceService(SliceService *slice);
-    /// Phase 197: inject ProjectServiceMock so the four tower modes
+    /// Phase 197: inject ProjectService so the four tower modes
     /// (TempTower/Vol_speed/VFA/Retraction) can load a dedicated tower model
     /// from the bundled qrc:/qml/assets/calib/ resources onto the current plate
     /// before slicing -- mirroring upstream Plater::calib_temp/vol_speed/VFA/
     /// retraction (Plater.cpp:9797+), which call add_model() with
     /// resources/calib/<mode>/<tower>.stl. Optional: when null, the tower modes
     /// fall back to the legacy cloneCurrentPlateModel() geometry path.
-    void setProjectService(ProjectServiceMock *project);
+    void setProjectService(ProjectService *project);
 
     // Calibration type list
     Q_INVOKABLE int calibTypeCount() const;
@@ -255,11 +255,11 @@ private:
     QTimer *m_timer = nullptr;
     /// SliceService reference injected by setSliceService for calibration slices.
     SliceService *m_sliceService = nullptr;
-    /// Phase 197: ProjectServiceMock reference injected by setProjectService.
+    /// Phase 197: ProjectService reference injected by setProjectService.
     /// Used by the tower modes to loadFile() a dedicated tower model before the
     /// slice starts (mirrors upstream Plater::add_model). Null when not injected
     /// (tower modes then fall back to the legacy current-plate geometry path).
-    ProjectServiceMock *m_projectService = nullptr;
+    ProjectService *m_projectService = nullptr;
     /// Phase 197: true while a dedicated tower-model loadFile() is in flight.
     /// Gates the one-shot loadFinished connection in startCalibration so a
     /// later user-initiated loadFile is not mistaken for the calibration load.

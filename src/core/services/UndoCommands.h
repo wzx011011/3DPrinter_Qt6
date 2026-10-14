@@ -6,7 +6,7 @@
 #include <QSet>
 #include <QString>
 
-class ProjectServiceMock;
+class ProjectService;
 class EditorViewModel;
 
 // ── TransformCommand ────────────────────────────────────────────────────────
@@ -18,7 +18,7 @@ public:
   /// Stores the old transform in constructor; call setNewTransform() before push().
   TransformCommand(int objectIndex,
                    const QVector3D &oldPos, const QVector3D &oldRot, const QVector3D &oldScale,
-                   ProjectServiceMock *service,
+                   ProjectService *service,
                    QUndoCommand *parent = nullptr);
 
   void setNewTransform(const QVector3D &newPos, const QVector3D &newRot, const QVector3D &newScale);
@@ -32,7 +32,7 @@ private:
   int m_objectIndex;
   QVector3D m_oldPos, m_oldRot, m_oldScale;
   QVector3D m_newPos, m_newRot, m_newScale;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── AssembleTransformCommand ───────────────────────────────────────────────
@@ -48,7 +48,7 @@ public:
   /// Stores the old assemble transform in constructor; call setNewTransform() before push().
   AssembleTransformCommand(int objectIndex,
                            const QVector3D &oldPos, const QVector3D &oldRot, const QVector3D &oldScale,
-                           ProjectServiceMock *service,
+                           ProjectService *service,
                            QUndoCommand *parent = nullptr);
 
   void setNewTransform(const QVector3D &newPos, const QVector3D &newRot, const QVector3D &newScale);
@@ -62,7 +62,7 @@ private:
   int m_objectIndex;
   QVector3D m_oldPos, m_oldRot, m_oldScale;
   QVector3D m_newPos, m_newRot, m_newScale;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── MultiTransformCommand ───────────────────────────────────────────────────
@@ -70,7 +70,7 @@ private:
 class MultiTransformCommand : public QUndoCommand
 {
 public:
-  MultiTransformCommand(ProjectServiceMock *service,
+  MultiTransformCommand(ProjectService *service,
                         QUndoCommand *parent = nullptr);
 
   /// Add an object transform pair. Must be called before push().
@@ -88,7 +88,7 @@ private:
     QVector3D newPos, newRot, newScale;
   };
   QList<Entry> m_entries;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── DeleteObjectsCommand ────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ public:
   /// Takes ownership of deletion logic. The objects at indicesToDelete are
   /// captured before the actual deletion happens.
   DeleteObjectsCommand(const QList<int> &indicesToDelete,
-                       ProjectServiceMock *service,
+                       ProjectService *service,
                        EditorViewModel *viewModel,
                        QUndoCommand *parent = nullptr);
 
@@ -129,7 +129,7 @@ private:
   /// deleted — skip that first call (otherwise a duplicate name still present
   /// in the scene would be mis-deleted by the name fallback).
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -145,11 +145,11 @@ private:
 class AddObjectCommand : public QUndoCommand
 {
 public:
-  /// objectIndex is the index returned by ProjectServiceMock::addObject() /
+  /// objectIndex is the index returned by ProjectService::addObject() /
   /// restoreFullObjectSnapshot(). Must be constructed while the object still
   /// exists so the snapshot can be captured.
   AddObjectCommand(int objectIndex, const QString &objectName,
-                   ProjectServiceMock *service,
+                   ProjectService *service,
                    QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -158,7 +158,7 @@ public:
 private:
   int m_objectIndex;
   QString m_objectName;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   QByteArray m_full3mf;          ///< v5.16: single-object 3MF snapshot for redo
   QVector3D m_pos, m_rot, m_scale;
   bool m_printable = true;
@@ -194,7 +194,7 @@ class RenameCommand : public QUndoCommand
 {
 public:
   RenameCommand(int objectIndex, const QString &oldName, const QString &newName,
-                ProjectServiceMock *service,
+                ProjectService *service,
                 QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -204,7 +204,7 @@ private:
   int m_objectIndex;
   QString m_oldName;
   QString m_newName;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── MoveObjectCommand ───────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ class MoveObjectCommand : public QUndoCommand
 {
 public:
   MoveObjectCommand(int fromIndex, int toIndex,
-                    ProjectServiceMock *service,
+                    ProjectService *service,
                     QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -222,7 +222,7 @@ public:
 private:
   int m_fromIndex;
   int m_toIndex;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── CloneCommand ────────────────────────────────────────────────────────────
@@ -232,7 +232,7 @@ class CloneCommand : public QUndoCommand
 {
 public:
   CloneCommand(int sourceIndex, int clonedIndex,
-               ProjectServiceMock *service,
+               ProjectService *service,
                QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -241,7 +241,7 @@ public:
 private:
   int m_sourceIndex;
   int m_clonedIndex;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   /// Skip-first-redo flag: the clone ran before push() (see redo()).
   bool m_firstRedoDone = false;
 };
@@ -256,7 +256,7 @@ class VolumeDeleteCommand : public QUndoCommand
 {
 public:
   VolumeDeleteCommand(int objectIndex, int volumeIndex,
-                      ProjectServiceMock *service,
+                      ProjectService *service,
                       EditorViewModel *viewModel = nullptr,
                       QUndoCommand *parent = nullptr);
 
@@ -274,7 +274,7 @@ private:
   /// deleted at that point, so the first redo is a no-op (Qt skip-first
   /// pattern) — otherwise the push would delete the WRONG successor volume.
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -290,7 +290,7 @@ public:
   /// \a adjustedSrcIndex is the source index AFTER the tool is deleted
   /// (may differ from original if toolIndex < srcIndex).
   BooleanCommand(int srcObjectIndex, int toolObjectIndex, int operation,
-                 ProjectServiceMock *service, EditorViewModel *viewModel,
+                 ProjectService *service, EditorViewModel *viewModel,
                  QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -300,7 +300,7 @@ private:
   int m_srcObjectIndex;   ///< original source index before any deletion
   int m_toolObjectIndex;  ///< original tool index before deletion
   int m_operation;        ///< 0=union, 1=diff, 2=intersect
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
   // Tool object snapshot (for re-insertion on undo)
   struct ObjectSnapshot {
@@ -325,7 +325,7 @@ public:
   /// Captures the object mesh snapshot before drilling.
   DrillCommand(int objectIndex, float radius, float depth,
                int shape, int direction, bool oneLayerOnly,
-               ProjectServiceMock *service, EditorViewModel *viewModel,
+               ProjectService *service, EditorViewModel *viewModel,
                QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -338,7 +338,7 @@ private:
   int m_shape;
   int m_direction;
   bool m_oneLayerOnly;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
   QByteArray m_meshSnapshot;
 };
@@ -351,7 +351,7 @@ class CutCommand : public QUndoCommand
 public:
   /// Captures source mesh snapshot and object count before the cut.
   CutCommand(int srcObjectIndex, int axis, double position, int keepMode,
-             ProjectServiceMock *service, EditorViewModel *viewModel,
+             ProjectService *service, EditorViewModel *viewModel,
              QUndoCommand *parent = nullptr);
 
   /// Call after cut succeeds to record the new object index and its name.
@@ -369,7 +369,7 @@ private:
   QByteArray m_srcMeshSnapshot;
   // Cut result object snapshot (for re-insertion on redo)
   QString m_newObjectName;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -381,7 +381,7 @@ class SimplifyCommand : public QUndoCommand
 public:
   /// Captures the object mesh snapshot before simplification.
   SimplifyCommand(int objectIndex, int wantedCount, float maxError,
-                  ProjectServiceMock *service, EditorViewModel *viewModel,
+                  ProjectService *service, EditorViewModel *viewModel,
                   QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -391,7 +391,7 @@ private:
   int m_objectIndex;
   int m_wantedCount;
   float m_maxError;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
   QByteArray m_meshSnapshot;
 };
@@ -410,7 +410,7 @@ class UpdateVolumeMeshCommand : public QUndoCommand
 public:
   UpdateVolumeMeshCommand(int objectIndex, int volumeIndex,
                           const QString &volumeName,
-                          ProjectServiceMock *service,
+                          ProjectService *service,
                           EditorViewModel *viewModel,
                           QUndoCommand *parent = nullptr);
 
@@ -430,7 +430,7 @@ private:
   QByteArray m_before;
   QByteArray m_after;
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -439,7 +439,7 @@ class AddVolumeCommand : public QUndoCommand
 public:
   /// operationType: 0=text, 1=svg, 2=emboss
   AddVolumeCommand(int objectIndex, int operationType, const QString &param,
-                   ProjectServiceMock *service, EditorViewModel *viewModel,
+                   ProjectService *service, EditorViewModel *viewModel,
                    QUndoCommand *parent = nullptr);
 
   /// Call after add succeeds to record the volume count before add (for undo).
@@ -453,7 +453,7 @@ private:
   int m_operationType;  ///< 0=text, 1=svg, 2=emboss
   QString m_param;       ///< text string, svg file path, or emboss text
   int m_volumeCountBefore;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -481,7 +481,7 @@ public:
   /// Captures the BEFORE snapshot (deep object blobs for DeletePlate — its
   /// members must be restorable with mesh fidelity). Construct BEFORE the
   /// plate operation runs.
-  PlateCommand(Action action, ProjectServiceMock *service,
+  PlateCommand(Action action, ProjectService *service,
                EditorViewModel *viewModel, QUndoCommand *parent = nullptr);
 
   /// Captures the AFTER snapshot. Call after the operation succeeded and
@@ -499,7 +499,7 @@ private:
   /// already applied — skip that first call (Qt skip-first pattern, same as
   /// DeleteObjectsCommand / VolumeDeleteCommand).
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -519,7 +519,7 @@ public:
   /// `before` is captured before the stroke modifies the FacetsAnnotation;
   /// call setNewResult() with the post-stroke capture before push().
   PaintCommand(int objectIndex, int volumeIndex, int kind,
-               const QByteArray &before, ProjectServiceMock *service,
+               const QByteArray &before, ProjectService *service,
                EditorViewModel *viewModel, QUndoCommand *parent = nullptr);
 
   void setNewResult(const QByteArray &after);
@@ -538,7 +538,7 @@ private:
   /// QUndoStack::push() invokes redo() once while the paint is already
   /// applied — skip that first call (Qt skip-first pattern).
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
   EditorViewModel *m_viewModel;
 };
 
@@ -553,7 +553,7 @@ public:
   /// Captures old/new mirror vectors; push after the mirror was applied.
   MirrorCommand(int objectIndex,
                 const QVector3D &oldMirror, const QVector3D &newMirror,
-                ProjectServiceMock *service,
+                ProjectService *service,
                 QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -564,7 +564,7 @@ private:
   int m_objectIndex;
   QVector3D m_oldMirror;
   QVector3D m_newMirror;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── SceneSnapshotCommand (P16.8) ───────────────────────────────────────────
@@ -581,7 +581,7 @@ class SceneSnapshotCommand : public QUndoCommand
 public:
   /// Captures the BEFORE deep snapshot. Construct BEFORE the structural
   /// operation runs. \a text is the undo history label ("Assemble", ...).
-  SceneSnapshotCommand(const QString &text, ProjectServiceMock *service,
+  SceneSnapshotCommand(const QString &text, ProjectService *service,
                        QUndoCommand *parent = nullptr);
 
   /// Captures the AFTER snapshot. Call after the operation succeeded, before
@@ -597,7 +597,7 @@ private:
   /// QUndoStack::push() invokes redo() once while the operation result is
   /// already applied — skip that first call (Qt skip-first pattern).
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── PrintableCommand (P16.8 / P16.11) ──────────────────────────────────────
@@ -611,7 +611,7 @@ class PrintableCommand : public QUndoCommand
 public:
   PrintableCommand(int objectIndex, int instanceIndex,
                    bool oldPrintable, bool newPrintable,
-                   ProjectServiceMock *service,
+                   ProjectService *service,
                    QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -622,7 +622,7 @@ private:
   int m_instanceIndex;  ///< -1 = whole object (all instances)
   bool m_oldPrintable;
   bool m_newPrintable;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── ObjectSnapshotCommand (P16.8) ──────────────────────────────────────────
@@ -637,7 +637,7 @@ class ObjectSnapshotCommand : public QUndoCommand
 public:
   /// Captures the BEFORE snapshot. Construct BEFORE the replacement runs.
   ObjectSnapshotCommand(int objectIndex, const QString &text,
-                        ProjectServiceMock *service,
+                        ProjectService *service,
                         QUndoCommand *parent = nullptr);
 
   /// Captures the AFTER snapshot. Call after the replacement succeeded,
@@ -662,7 +662,7 @@ private:
   /// QUndoStack::push() invokes redo() once while the replacement is already
   /// applied — skip that first call (Qt skip-first pattern).
   bool m_firstRedoDone = false;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };
 
 // ── InstanceCountCommand (P16.8) ───────────────────────────────────────────
@@ -675,7 +675,7 @@ class InstanceCountCommand : public QUndoCommand
 {
 public:
   InstanceCountCommand(int objectIndex, int oldCount, int newCount,
-                       ProjectServiceMock *service,
+                       ProjectService *service,
                        QUndoCommand *parent = nullptr);
 
   void undo() override;
@@ -685,5 +685,5 @@ private:
   int m_objectIndex;
   int m_oldCount;
   int m_newCount;
-  ProjectServiceMock *m_service;
+  ProjectService *m_service;
 };

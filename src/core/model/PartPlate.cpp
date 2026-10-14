@@ -102,7 +102,7 @@ std::pair<int, int> PartPlate::findInstance(
 
 FilamentMapMode migrateLegacyFilamentMapMode(int legacyRawInt) {
   // Phase 111 (FMAP-04 / Phase 107 REVIEW R-01): the FM-03 legacy raw-int ->
-  // widened-enum migration predicate. Factored out of ProjectServiceMock's two
+  // widened-enum migration predicate. Factored out of ProjectService's two
   // read sites (loadFile ~646, loadProject ~5526) so the legacy branch is unit-
   // testable in isolation -- R-01 observed the round-trip test always took the
   // trusted coEnum branch (the write side produces typed values), so the legacy

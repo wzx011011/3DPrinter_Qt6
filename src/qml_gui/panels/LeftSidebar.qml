@@ -203,7 +203,7 @@ Rectangle {
         // plate's curr_bed_type through the same EditorViewModel accessors
         // the plate-settings dialog uses: setPlateBedType syncs the plate
         // DynamicPrintConfig the slicer consumes
-        // (ProjectServiceMock::setPlateBedType) and invalidates the plate's
+        // (ProjectService::setPlateBedType) and invalidates the plate's
         // slice result. Indices are the libslic3r BedType enum values
         // (PrintConfig.hpp:404-412; 0 = btDefault = follow the project/
         // preset default); the labels come from editorVm.bedTypeLabels —

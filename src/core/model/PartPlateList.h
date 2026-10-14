@@ -11,7 +11,7 @@
 //   - Bed geometry (m_plate_width/depth/height, m_shape, m_extruder_areas → list-level config, future)
 //
 // This container owns the PartPlate objects and is the single source of truth that
-// ProjectServiceMock re-backs its plate Q_PROPERTY/Q_INVOKABLE API onto (D-05 big-bang).
+// ProjectService re-backs its plate Q_PROPERTY/Q_INVOKABLE API onto (D-05 big-bang).
 
 #include <cmath>
 #include <functional>
@@ -90,7 +90,7 @@ class PartPlateList {
   PartPlateList();
   ~PartPlateList() = default;
 
-  // Non-copyable (owns unique_ptrs); the owner (ProjectServiceMock) holds it by value/unique_ptr.
+  // Non-copyable (owns unique_ptrs); the owner (ProjectService) holds it by value/unique_ptr.
   PartPlateList(const PartPlateList&) = delete;
   PartPlateList& operator=(const PartPlateList&) = delete;
 
@@ -166,7 +166,7 @@ class PartPlateList {
   void setModel(Slic3r::Model* model) { m_model = model; }
 #endif
 
-  // ── Lifecycle (re-backing targets for ProjectServiceMock, PLATE-06) ────
+  // ── Lifecycle (re-backing targets for ProjectService, PLATE-06) ────
   /// Creates a new plate with an auto-incremented index and stable print identity.
   /// Returns nullptr if kMaxPlateCount would be exceeded (mirrors upstream
   /// create_plate guard). The print identity is never reused or changed by
@@ -262,7 +262,7 @@ class PartPlateList {
 
   /// Distinct object indices on a plate (collapses instance pairs to object indices).
   /// Bridges the instance-level truth to the existing per-object API surface that
-  /// ProjectServiceMock exposes (plateObjectIndices).
+  /// ProjectService exposes (plateObjectIndices).
   QList<int> objectIndicesOnPlate(int plateIndex) const;
 
   // ── Reset (used by 3MF load path before rebuilding from PlateData) ─────

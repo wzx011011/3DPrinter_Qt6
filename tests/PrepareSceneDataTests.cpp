@@ -43,7 +43,7 @@ namespace
 
   // S3 (2026-10-14): decomposed blob v2 (magic 'MDS2') -- volume-LOCAL
   // vertices + world bbox trailer at production time. Mirrors
-  // ProjectServiceMock::meshDataDecomposed's layout.
+  // ProjectService::meshDataDecomposed's layout.
   constexpr qint32 kMeshBlobMagicV2 = 0x3244534D;
 
   QByteArray packedDecomposedMesh(const QList<int> &objectIds,

@@ -42,10 +42,10 @@ CxDialog {
     property var configVm: null
 
     // v5.16 (PSET2-02): the UI scope order is 打印机/耗材/工艺, which maps to
-    // PresetServiceMock::Category PrinterCat=2 / FilamentCat=1 / PrintCat=0
-    // (PresetServiceMock.h:18). Test-locked mapping (QmlUiAuditTests:3397).
+    // PresetService::Category PrinterCat=2 / FilamentCat=1 / PrintCat=0
+    // (PresetService.h:18). Test-locked mapping (QmlUiAuditTests:3397).
     readonly property var scopeCategories: [2, 1, 0]
-    // Selected category (PresetServiceMock::Category int). Default: process.
+    // Selected category (PresetService::Category int). Default: process.
     property int selectedCategory: 0
 
     // Per-scope window titles: upstream "Create Printer/Nozzle" (@1575) and

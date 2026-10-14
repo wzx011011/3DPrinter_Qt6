@@ -32,7 +32,7 @@
 // plain-value structs (no libslic3r types) -- safe to include unconditionally.
 #include "core/services/SequentialClearanceCompute.h"
 
-class ProjectServiceMock;
+class ProjectService;
 class UndoRedoManager;
 class ConfigViewModel;
 class QTimer;
@@ -66,7 +66,7 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags NOTIFY stateChanged)
   // S3 (2026-10-14): per-batch instance->world transform channel (one
-  // QMatrix4x4 per blob batch, ProjectServiceMock::meshBatchInstanceTransforms).
+  // QMatrix4x4 per blob batch, ProjectService::meshBatchInstanceTransforms).
   // Under the decomposed mesh blob this is the ONLY thing that moves on a
   // transform edit -- the stateChanged umbrella (S1 will re-point this to the
   // named transformChanged) re-evaluates the QML binding, the viewport setter
@@ -77,10 +77,10 @@ class EditorViewModel final : public QObject
   // per source object index, paralleling meshBatchSourceObjectIndices. Consumed
   // by RhiViewport on the CanvasAssembleView path so assembled volumes render at
   // their moved pose. Source: ModelInstance::m_assemble_transformation offset
-  // (Model.hpp:1289) via ProjectServiceMock::assembleOffset.
+  // (Model.hpp:1289) via ProjectService::assembleOffset.
   Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets NOTIFY stateChanged)
   // Phase 141 (DEBT-04): per-source-object assemble rotation (Euler XYZ, radians)
-  // and scale (XYZ), parallel to assembleOffsets. Read via ProjectServiceMock
+  // and scale (XYZ), parallel to assembleOffsets. Read via ProjectService
   // assembleRotation/assembleScale (ModelInstance::m_assemble_transformation).
   // Bound to RhiViewport on CanvasAssembleView; the renderer composes the full
   // transform matrix (translate * rotate * scale) in buildModelVertices so
@@ -267,7 +267,7 @@ public:
   };
   Q_ENUM(SliceResultStatus)
 
-  explicit EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent = nullptr);
+  explicit EditorViewModel(ProjectService *projectService, SliceService *sliceService, QObject *parent = nullptr);
   // Phase 114 (MEASURE-03): destructor defined out-of-line in the .cpp so the
   // unique_ptr<MeasureEngine> member (forward-declared here) can be destroyed
   // where MeasureEngine is a complete type.
@@ -288,7 +288,7 @@ public:
   QVariantList meshBatchPrintableFlags() const;
   // S3 (2026-10-14): per-batch instance->world transform channel (one
   // QMatrix4x4 variant per blob batch). Lazy: served from the live model
-  // state through ProjectServiceMock::meshBatchInstanceTransforms on every
+  // state through ProjectService::meshBatchInstanceTransforms on every
   // read, so no transform-family refresh call is needed anywhere.
   QVariantList meshBatchInstanceTransforms() const;
   // Phase 138 (ASM-01): per-source-object assemble offset list (one QVector3D
@@ -604,7 +604,7 @@ public:
   /// Place a drain hole at the mesh surface hit by the given world ray
   /// (对齐上游 GLGizmoHollow::on_mouse → unproject_on_mesh). Reuses the
   /// shared SceneRaycaster to find the mesh-local intersection, then appends
-  /// a sla::DrainHole to ModelObject::sla_drain_holes via ProjectServiceMock.
+  /// a sla::DrainHole to ModelObject::sla_drain_holes via ProjectService.
   /// Returns true if a hole was placed.
   Q_INVOKABLE bool placeHollowPoint(int pickedSourceIndex, QVector3D rayOrigin, QVector3D rayDir);
   // Simplify gizmo (对齐上游 GLGizmoSimplify)
@@ -673,11 +673,11 @@ public:
   /// Phase 158 (EMBO-F02): SVG depth-modifier (Z-scale; 1.0 = no change).
   float svgDepthModifier() const;
   void setSvgDepthModifier(float m);
-  /// Phase 144 (EMB-01): enumerate system fonts (proxies ProjectServiceMock).
+  /// Phase 144 (EMB-01): enumerate system fonts (proxies ProjectService).
   Q_INVOKABLE QVariantList embossFontList() const;
   Q_INVOKABLE bool embossSelected();
   /// Phase 145 (EMB-03): async variant of embossSelected. Forwards inputs to
-  /// ProjectServiceMock::addTextVolumeAsync. The result arrives via the
+  /// ProjectService::addTextVolumeAsync. The result arrives via the
   /// embossVolumeAdded / embossVolumeFailed signals (which QML binds to).
   /// A second invocation auto-cancels the prior job.
   Q_INVOKABLE void embossSelectedAsync();
@@ -908,7 +908,7 @@ public:
   Q_INVOKABLE bool simplifyMeshSelected();
   // Phase 141 / DEBT-02: meshBooleanSelected() removed — was a no-op stub called only
   // by the orphaned "网格布尔运算" CxMenuItem. The real boolean path is the boolean
-  // dialog → booleanExecute → ProjectServiceMock::meshBoolean.
+  // dialog → booleanExecute → ProjectService::meshBoolean.
   /// 按显式索引修改 volume 类型（对齐上游 GUI_ObjectList::load_generic_subobject）
   Q_INVOKABLE bool changeVolumeTypeByIndex(int objIdx, int volIdx, int newType);
   /// 重新从磁盘加载选中对象源文件（对齐上游 Plater::reload_from_disk）
@@ -1152,7 +1152,7 @@ public:
   Q_PROPERTY(int mmuSelectedExtruder READ mmuSelectedExtruder WRITE setMmuSelectedExtruder NOTIFY stateChanged)
   Q_PROPERTY(int mmuExtruderCount READ mmuExtruderCount NOTIFY stateChanged)
   /// Configured filament colours for the MMU swatches (对齐上游
-  /// m_extruders_colors). Bound from ProjectServiceMock::plateFilamentColours
+  /// m_extruders_colors). Bound from ProjectService::plateFilamentColours
   /// instead of hard-coded Theme constants.
   Q_PROPERTY(QStringList mmuExtruderColors READ mmuExtruderColors NOTIFY stateChanged)
   /// Drill 设置（对齐上游 GLGizmoDrill）
@@ -1228,7 +1228,7 @@ public:
   Q_INVOKABLE void centerCutPlane();
   Q_INVOKABLE void requestSelectionSettings();
   /// Phase 174 (FEAT-01): per-object/volume scoped option API proxies.
-  /// These forward to ProjectServiceMock so QML (SelectionSettingsDialog) can
+  /// These forward to ProjectService so QML (SelectionSettingsDialog) can
   /// read/write per-object print/filament parameter overrides without holding
   /// a direct service reference (QML boundary rule).
   Q_INVOKABLE QVariant scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallback = QVariant()) const;
@@ -1237,7 +1237,7 @@ public:
   Q_INVOKABLE QString scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const;
   Q_INVOKABLE bool resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key);
   /// Phase 175 (FEAT-02): per-object layer-range editor API proxies.
-  /// Forward to ProjectServiceMock so the ObjectLayersDialog QML can manage
+  /// Forward to ProjectService so the ObjectLayersDialog QML can manage
   /// per-layer-height ranges (add/remove/set-value/get-value).
   Q_INVOKABLE int objectLayerRangeCount(int objectIndex) const;
   Q_INVOKABLE double layerRangeMinZ(int objectIndex, int rangeIndex) const;
@@ -1286,7 +1286,7 @@ public:
   /// "Select All Plates" entry (GUI_Factories.cpp:1721-1727).
   Q_INVOKABLE bool hasAnyModelObjects() const;
   // Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup.
-  // Delegates to ProjectServiceMock::setPlateFilamentMapMode, which reuses the
+  // Delegates to ProjectService::setPlateFilamentMapMode, which reuses the
   // existing plate-write plumbing and is guarded by the R-02 / FP-04 clamp at
   // PartPlate::setFilamentMapMode(int). Emits stateChanged so the preview
   // surface refreshes; the popup reads the Phase 108 auto* Q_PROPERTYs for the
@@ -1318,7 +1318,7 @@ public:
   // when no thumbnail is cached (plate-card renders nothing, not a mock).
   Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;
   /// Phase 156 (CLOS-03): runtime thumbnail WRITE proxy — forwards to
-  /// ProjectServiceMock::setPlateThumbnailFromBase64. QML calls this from the
+  /// ProjectService::setPlateThumbnailFromBase64. QML calls this from the
   /// per-plate capture handler so non-current plates get real thumbnails.
   Q_INVOKABLE bool setPlateThumbnailFromBase64(int plateIndex, const QString &base64);
   /// 重命名对象（对齐上游 Plater::rename_object）
@@ -1407,7 +1407,7 @@ public:
   Q_PROPERTY(float bedDiameter READ bedDiameter WRITE setBedDiameter NOTIFY bedShapeChanged)
   /// v5.15 (BEDTEX): printer-profile bed texture image (upstream PartPlate
   /// m_logo_texture_filename). READ-only + NOTIFY: the path flows from the
-  /// selected printer preset via ConfigViewModel/PresetServiceMock.
+  /// selected printer preset via ConfigViewModel/PresetService.
   Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl NOTIFY bedShapeChanged)
   /// U02 (BEDSHAPE-DLG): the printer's bed_model STL path, parallel to
   /// bedTextureUrl (upstream bed_custom_model / machine_model asset seeded
@@ -1595,7 +1595,7 @@ public:
   /// the whole dialog state through the bed_* setters (viewport bed_shape
   /// analog + QSettings persistence + refresh notifications) and the
   /// rectangle footprint into the plate-list geometry — the fork's
-  /// printable_area analog (ProjectServiceMock embeds it as printable_area
+  /// printable_area analog (ProjectService embeds it as printable_area
   /// on save, :11001-11013, and arrange reads the same bbox, :4790-4797).
   Q_INVOKABLE void commitBedShape(double widthMm, double depthMm,
                                   double originXMm, double originYMm,
@@ -1681,7 +1681,7 @@ public:
   /// U13: the model export no longer blocks the GUI thread. STL/OBJ run on a
   /// QtConcurrent worker against a GUI-thread deep-copy of the project model
   /// (same clone-then-handoff idiom as SliceService::startSlice), 3MF rides
-  /// ProjectServiceMock::writeProjectSnapshotAsync (the U8 async snapshot
+  /// ProjectService::writeProjectSnapshotAsync (the U8 async snapshot
   /// engine). Returns true = the export was dispatched; the outcome arrives
   /// through modelExportFinished (BackendContext posts the toast). Returns
   /// false = rejected up front (no model / busy / unsupported format) with
@@ -1706,11 +1706,11 @@ public:
   /// looks_like_imperial_units checks). conversionType is the upstream
   /// Slic3r::ConversionType int (1 = CONV_FROM_INCH x25.4,
   /// 3 = CONV_FROM_METER x1000) forwarded to
-  /// ProjectServiceMock::convertObjectUnits -> ModelObject::convert_units.
+  /// ProjectService::convertObjectUnits -> ModelObject::convert_units.
   Q_INVOKABLE bool applyUnitConversion(int objectIndex, int conversionType);
   /// Phase 237 (VIEW-04): unit-inference hint for one object (0 = none,
   /// 1 = meters, 2 = imperial); proxies
-  /// ProjectServiceMock::loadedObjectUnitHint.
+  /// ProjectService::loadedObjectUnitHint.
   Q_INVOKABLE int loadedObjectUnitHint(int objectIndex) const;
   /// Phase 237 (VIEW-06): uniform-scale the current selection so it fits the
   /// printable bed bbox, preserving proportions (port of upstream
@@ -1735,7 +1735,7 @@ public:
   /// Returns the number of moved objects; invalidates slice results.
   Q_INVOKABLE int recenterObjectsOutsideBed();
   /// Phase 236 (DLG-03): list the importable model entries of a zip archive
-  /// (FileArchiveDialog data source; proxies ProjectServiceMock).
+  /// (FileArchiveDialog data source; proxies ProjectService).
   Q_INVOKABLE QStringList listArchiveEntries(const QString &archivePath) const;
   /// Phase 236 (DLG-03): extract the selected entries of a zip archive into a
   /// per-import temp directory and load each through the normal loadFile()
@@ -1761,7 +1761,7 @@ public:
   void refreshAfterLoad();
   /// AI/automation refresh hook (OWzx-only, docs/ai-control.md): rebuild the
   /// VM mirrors (object entries, mesh cache, slice-result staleness) after a
-  /// scene mutation performed directly on ProjectServiceMock by an external
+  /// scene mutation performed directly on ProjectService by an external
   /// actor (AI tools / scripts). Mirrors the refresh sequence the in-VM
   /// mutation flows run (e.g. duplicateSelectedObjects).
   void refreshAfterExternalSceneChange();
@@ -1914,7 +1914,7 @@ public:
   /// object's cut_connectors（同 hollow 标记打包格式）。
   void rebuildAdvancedCutConnectorMarkers();
   /// Phase 222 (FIL-COLOUR): sync the active filament colours from
-  /// PresetServiceMock (via ConfigViewModel) into ProjectServiceMock so
+  /// PresetService (via ConfigViewModel) into ProjectService so
   /// plateFilamentColours()/filamentCount() reflect the configured filaments.
   void syncFilamentColours();
   /// Phase 114 (MEASURE-03): test accessor exposing the cached Measuring
@@ -1983,7 +1983,7 @@ signals:
   /// Plater.cpp:4231-4233 info dialog; OWzx surfaces a notification).
   void zeroVolumeObjectsRemoved(int removedCount);
   /// Phase 145 (EMB-03): async emboss result delivery. Re-emitted from
-  /// ProjectServiceMock's embossVolumeAdded/Failed so QML binds to a single
+  /// ProjectService's embossVolumeAdded/Failed so QML binds to a single
   /// EditorViewModel signal source.
   void embossVolumeAdded(int objectIndex, const QString &volumeName);
   void embossVolumeFailed(const QString &reason);
@@ -2021,7 +2021,7 @@ private:
   /// Review P1-5: the wipe-tower arrange obstacle reads the GLOBAL merged
   /// preset config (upstream ArrangeJob reads preset_bundle::full_config,
   /// not the per-plate config). Built once per arrange call and handed to
-  /// ProjectServiceMock::arrangeObjects as the wipeTowerContext map.
+  /// ProjectService::arrangeObjects as the wipeTowerContext map.
   QVariantMap arrangeWipeTowerContext() const;
   // P15.11: drag-time sequential clearance preview (upstream
   // GLCanvas3D::update_sequential_clearance + reset_sequential_print_clearance).
@@ -2135,7 +2135,7 @@ private:
     bool printable = true;
   };
 
-  ProjectServiceMock *projectService_ = nullptr;
+  ProjectService *projectService_ = nullptr;
   SliceService *sliceService_ = nullptr;
   ConfigViewModel *configViewModel_ = nullptr;
   UndoRedoManager *m_undoManager = nullptr;
@@ -2285,7 +2285,7 @@ private:
   bool m_exporting = false;
   // ── U13: GUI-freeze removal ──────────────────────────────────────────────
   /// Target path of the 3MF model export dispatched through
-  /// ProjectServiceMock::writeProjectSnapshotAsync; consumed by
+  /// ProjectService::writeProjectSnapshotAsync; consumed by
   /// consumePendingExportSnapshot when snapshotFinished delivers.
   QString m_pendingExportSnapshotPath;
   /// Zip-archive import sequence state (signal-continued since U13).
@@ -2496,11 +2496,11 @@ private:
   int m_measureFromFacetIdx = -1;
   // Phase 115 (MEASURE-04): two-stage pick stage-2 raycaster. Lazily built on
   // the first pickMeasureFeatureAt call from the SAME ITS source MeasureEngine
-  // uses (ProjectServiceMock::volumeMeshIts, Phase 112). invalidateMeasureEngine
+  // uses (ProjectService::volumeMeshIts, Phase 112). invalidateMeasureEngine
   // drops both caches so a mesh change refreshes them together (pitfall 6/7).
   std::unique_ptr<OWzx::SceneRaycaster> m_sceneRaycaster;
   // Phase 120 (PAINT-01): per-volume TriangleSelector owner. Lazily built on
-  // the first paintAtFacet call from ProjectServiceMock::volumeMeshTriangleMesh
+  // the first paintAtFacet call from ProjectService::volumeMeshTriangleMesh
   // (TS-01 aliasing shared_ptr -- keeps the TriangleMesh alive for the
   // selector's lifetime). Reuses m_sceneRaycaster for the stage-2 hit so the
   // raycaster + paint engine share the same ITS identity + cache invalidation

@@ -4,7 +4,7 @@
 #include <QString>
 #include <QStringList>
 
-class ProjectServiceMock;
+class ProjectService;
 
 class ProjectViewModel : public QObject
 {
@@ -22,7 +22,7 @@ public:
   /// details read the REAL loaded project (plates + object source modules)
   /// instead of a hardcoded list. Without a service the tree renders the
   /// honest empty state when no project path is set.
-  void setProjectService(ProjectServiceMock *projectService);
+  void setProjectService(ProjectService *projectService);
 
   QString currentProjectPath() const { return m_currentProjectPath; }
   bool isDirty() const { return m_isDirty; }
@@ -57,7 +57,7 @@ public slots:
   void selectFile(const QString &path);
   void clearRecentProjects();
   /// v5.16 (PLATE-05): real edit flows (object/plate/config mutations via
-  /// ProjectServiceMock::projectChanged) mark the project dirty; the guard
+  /// ProjectService::projectChanged) mark the project dirty; the guard
   /// dialogs and title indicator consume it. Loading does NOT mark dirty.
   void markDirty()
   {
@@ -85,5 +85,5 @@ private:
   bool m_isDirty = false;
   QString m_selectedFile;
   QStringList m_recentProjects;
-  ProjectServiceMock *m_projectService = nullptr;
+  ProjectService *m_projectService = nullptr;
 };

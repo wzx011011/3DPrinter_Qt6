@@ -18,7 +18,7 @@
 // Pure-CPU guarantee (MR-01): this header pulls in ONLY libslic3r math headers
 // (AABBMesh + TriangleMesh) plus <memory>/<optional>. It must NOT include any
 // GL / wxWidgets / Qt RHI header. It is built under #ifdef HAS_LIBSLIC3R (the
-// ITS input only exists there -- Phase 112 ProjectServiceMock::volumeMeshIts
+// ITS input only exists there -- Phase 112 ProjectService::volumeMeshIts
 // returns shared_ptr<const indexed_triangle_set>).
 //
 // Cache contract (MR-02): MeshRaycaster constructs the AABBMesh (BVH) ONCE in
@@ -57,7 +57,7 @@ struct MeshRaycasterHit
 // MeshRaycaster -- Qt6 pure-CPU port of upstream MeshUtils.hpp:159+.
 //
 // Wraps a shared_ptr<const indexed_triangle_set> (the Phase 112
-// ProjectServiceMock::volumeMeshIts output) and exposes a rayCast() query in
+// ProjectService::volumeMeshIts output) and exposes a rayCast() query in
 // MESH-LOCAL coordinates. The caller is responsible for transforming the ray
 // from world to mesh-local before calling rayCast() (mirror of upstream
 // unproject_on_mesh lines 432-434: `Transform3d inv = trafo.inverse();
@@ -75,7 +75,7 @@ class MeshRaycaster
 public:
   // Constructs a raycaster over the given ITS. The ITS is held by shared_ptr
   // (shallow-share -- the Phase 112 accessor returns an aliasing shared_ptr
-  // that keeps the TriangleMesh alive, see ProjectServiceMock.h ownership
+  // that keeps the TriangleMesh alive, see ProjectService.h ownership
   // contract). The AABBMesh BVH + face normals are precomputed here so
   // rayCast() is a pure traversal.
   //

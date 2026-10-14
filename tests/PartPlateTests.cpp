@@ -5,7 +5,7 @@
 //   (Y sign-flip decode + round() boundary characterization),
 //   updatePlateOrigins writes real origins to plates.
 // ARRANGE-02/03 (added by Plan 29-05): integration tests through
-//   ProjectServiceMock::arrangeObjects.
+//   ProjectService::arrangeObjects.
 //
 // AUTOMOC note: single-file cpp-internal Q_OBJECT has weak moc dependency
 // tracking. The canonical verify script re-runs cmake configure after slot
@@ -22,7 +22,7 @@
 
 #include "core/model/PartPlate.h"
 #include "core/model/PartPlateList.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 
 #ifdef HAS_LIBSLIC3R
@@ -434,7 +434,7 @@ void PartPlateTests::updatePlateOriginsWritesToPlates() {
 }
 #endif  // HAS_LIBSLIC3R
 
-// ── ARRANGE-02/03 integration tests (through ProjectServiceMock::arrangeObjects) ─
+// ── ARRANGE-02/03 integration tests (through ProjectService::arrangeObjects) ─
 #ifdef HAS_LIBSLIC3R
 void PartPlateTests::arrangeDistributesAcrossPlates() {
   // ARRANGE-02: rebuildPlatesAfterArrangement decodes each instance's world
@@ -450,8 +450,8 @@ void PartPlateTests::arrangeDistributesAcrossPlates() {
   // produces cross-plate placements on its own. The rebuild's value is
   // preserving cross-plate state for 3MF-loaded projects (which already span
   // plates) — this test exercises that path.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -475,7 +475,7 @@ void PartPlateTests::arrangeDistributesAcrossPlates() {
   QVERIFY(service.setObjectPosition(1, 120.0f, 0.0f, 0.0f));
   QVERIFY(service.setObjectPosition(2, 240.0f, 0.0f, 0.0f));
 
-  QSignalSpy spy(&service, &ProjectServiceMock::plateDataLoaded);
+  QSignalSpy spy(&service, &ProjectService::plateDataLoaded);
   service.rebuildPlateMembership(/*exceptLocked=*/true);
 
   QVERIFY2(service.plateCount() >= 3,
@@ -496,8 +496,8 @@ void PartPlateTests::arrangeAvoidsWipeTowerAndExcludeAreas() {
   // object centers off the fixed wipe-tower rectangle (smooth timelapse
   // forces the tower, ArrangeJob.cpp:287-292; geometry PartPlate.cpp:1739-
   // 1777) and off the bed_exclude_area rectangles (PartPlate.cpp:4586-4623).
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   // 12 sizeable objects so the packed rows sweep across the bed middle,
@@ -556,8 +556,8 @@ void PartPlateTests::arrangeWipeTowerBedTempGateTruthTable() {
   // (upstream ArrangeJob.cpp:279-319). The extruderBedTemps list implements
   // the bedTemp2extruderIds grouping: with allow_multi the tower is needed
   // only when several extruders SHARE one bed temperature.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(service.duplicateObject(0) >= 0);  // two objects on plate 0
@@ -619,8 +619,8 @@ void PartPlateTests::rebuildParksOffGridInstancesOnUnprintableDock() {
   // out of m_plate_list (PartPlate.hpp:541), so the dock equivalent is "no
   // membership". The old code clamped negatives onto plate 0 and fabricated
   // a 36-plate grid before silently dropping overflows.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
@@ -650,8 +650,8 @@ void PartPlateTests::rebuildRecyclesTrailingUnprintablePlates() {
   // trailing plates are deleted when `empty() || !has_printable_instances()`.
   // The old Qt copy recycled only EMPTY trailing plates, so a trailing plate
   // holding exclusively unprintable instances survived every arrange.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   while (service.modelCount() < 3)
@@ -695,8 +695,8 @@ void PartPlateTests::lockedPlateExclusion() {
   // re-distributed. We verify the locked plate's pre-rebuild membership
   // survives the rebuild even when a movable object's world offset is
   // re-decoded onto a different plate.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -723,8 +723,8 @@ void PartPlateTests::allLockedReturnsFalse() {
   // D-29-12 edge case: with ALL plates locked, arrangeObjects returns false
   // (apply_arrange_polys sees bed_idx!=0 on all items under tolerant vfn) and
   // no rebuild runs — no membership changes, no crash.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -837,7 +837,7 @@ void PartPlateTests::jsonPersistenceRoundTripGeometryAndOutsideState() {
   QVERIFY(tempDir.isValid());
   const QString path = tempDir.filePath(QStringLiteral("geometry.json"));
 
-  ProjectServiceMock saved;
+  ProjectService saved;
   saved.setPlateSize(220, 220, 0);
   auto *list = saved.plateListMut();
   QVERIFY(list != nullptr);
@@ -847,7 +847,7 @@ void PartPlateTests::jsonPersistenceRoundTripGeometryAndOutsideState() {
   QVERIFY(plate != nullptr);
   QVERIFY(saved.saveProject(path));
 
-  ProjectServiceMock loaded;
+  ProjectService loaded;
   QVERIFY2(loaded.loadProject(path), qPrintable(loaded.lastError()));
   const auto *loadedList = loaded.plateListConst();
   QVERIFY(loadedList != nullptr);
@@ -861,7 +861,7 @@ void PartPlateTests::jsonPersistenceRoundTripGeometryAndOutsideState() {
   QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
   file.write("{\"name\":\"legacy\",\"plates\":[{\"objects\":[{\"name\":\"fixture\"}],\"outsideInstances\":[[0,0]]}]}");
   file.close();
-  ProjectServiceMock legacy;
+  ProjectService legacy;
   QVERIFY(legacy.loadProject(path));
   QCOMPARE(legacy.plateListConst()->plateWidth(), 0);
   QCOMPARE(legacy.plateListConst()->plateDepth(), 0);
@@ -882,8 +882,8 @@ void PartPlateTests::plateBedShapeRoundTripsThroughProject() {
       {5.0, 5.0}, {25.0, 5.0}, {25.0, 25.0}, {5.0, 25.0}};
 
   // -- ARRANGE: a real model is required for the 3MF save branch.
-  ProjectServiceMock saved;
-  QSignalSpy loadSpy(&saved, &ProjectServiceMock::loadFinished);
+  ProjectService saved;
+  QSignalSpy loadSpy(&saved, &ProjectService::loadFinished);
   QVERIFY(saved.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   saved.setPlateSize(300, 300, 310);
@@ -894,8 +894,8 @@ void PartPlateTests::plateBedShapeRoundTripsThroughProject() {
   // -- ACT + ASSERT: 3MF round-trip restores width/depth/height + exclude.
   QVERIFY2(saved.saveProject(path3mf),
            qPrintable(QStringLiteral("3mf save must succeed: %1").arg(path3mf)));
-  ProjectServiceMock reloaded3mf;
-  QSignalSpy reloadSpy(&reloaded3mf, &ProjectServiceMock::loadFinished);
+  ProjectService reloaded3mf;
+  QSignalSpy reloadSpy(&reloaded3mf, &ProjectService::loadFinished);
   QVERIFY(reloaded3mf.loadProject(path3mf));
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 20000);
   QCOMPARE(reloaded3mf.plateListConst()->plateWidth(), 300);
@@ -915,14 +915,14 @@ void PartPlateTests::plateBedShapeRoundTripsThroughProject() {
   // -- ACT + ASSERT: JSON fallback mirrors the same contract. The fallback
   // only fires for a model-less service (an empty model keeps the JSON writer
   // usable for plate-only state), and its load is synchronous.
-  ProjectServiceMock jsonSaved;
+  ProjectService jsonSaved;
   jsonSaved.setPlateSize(300, 300, 310);
 #ifdef HAS_LIBSLIC3R
   jsonSaved.plateListMut()->setExcludeAreas(excludeRect);
 #endif
   QVERIFY2(jsonSaved.saveProject(pathJson),
            qPrintable(QStringLiteral("json save must succeed: %1").arg(pathJson)));
-  ProjectServiceMock reloadedJson;
+  ProjectService reloadedJson;
   QVERIFY2(reloadedJson.loadProject(pathJson),
            qPrintable(reloadedJson.lastError()));
   QCOMPARE(reloadedJson.plateListConst()->plateWidth(), 300);
@@ -946,7 +946,7 @@ void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
   // teleports them to the unprintable slot (:3761) before the
   // move_instances_to intersect test (:2483-2497, :3810), so they virtually
   // never join a neighbor. Surviving plates keep their own memberships; the
-  // dock move of the orphaned OBJECTS happens in the ProjectServiceMock
+  // dock move of the orphaned OBJECTS happens in the ProjectService
   // wrapper (service owns the Model), so at the pure-list level the orphaned
   // instances are simply no longer members anywhere.
   OWzx::PartPlateList list;
@@ -1317,15 +1317,15 @@ void PartPlateTests::servicePlateIndexAtPointUsesInstanceBounds() {
   // Service-level wiring: the provider resolves REAL ModelObject bounds
   // (ModelObject::instance_bounding_box, the source upstream uses at
   // PartPlate.cpp:4198-4250), so plateIndexAtPoint works on loaded projects.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(service.modelCount() >= 1);
 
   // The world bbox of object 0 (GL coords: x = slic3r X, z = slic3r Y per the
-  // ProjectServiceMock GL<->slic3r swap). Its CENTER is inside the instance
+  // ProjectService GL<->slic3r swap). Its CENTER is inside the instance
   // box by construction, so the point must resolve to plate 0.
   const QVariantMap box = service.selectionWorldBoundingBox({0});
   QVERIFY2(!box.isEmpty(), "loaded object must expose a world bounding box");
@@ -1347,8 +1347,8 @@ void PartPlateTests::servicePlateIndexAtPointUsesInstanceBounds() {
 
 #ifdef HAS_LIBSLIC3R
 void PartPlateTests::sliceServiceRejectsNotReadyPlate() {
-  ProjectServiceMock project;
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  ProjectService project;
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(project.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(project.plateListMut()->plate(0) != nullptr);
@@ -1446,8 +1446,8 @@ void PartPlateTests::thumbnailRoundTrip() {
   // What this test verifies (THUMB-02's in-memory persistence contract):
   //   - A plate thumbnail set via setThumbnail survives until a content change.
   //   - A content change (addInstance) invalidates the cache.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1480,7 +1480,7 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
   // in-memory cache contract and explicitly deferred the 3MF pixel round-trip
   // to THUMB-03. Phase 96 closed the write side (PlateData::plate_thumbnail +
   // StoreParams::thumbnail_data via qimageToThumbnailData); the read side
-  // (ProjectServiceMock.cpp:5518-5529 -> applied at 5721-5723) has been complete
+  // (ProjectService.cpp:5518-5529 -> applied at 5721-5723) has been complete
   // since v3.2. This test proves the two halves meet end-to-end.
   //
   // ISOLATION: uses a KNOWN synthesized QImage (NOT RHI capture, NOT the
@@ -1488,8 +1488,8 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
   // (Phase 97) is verified independently of CAPTURE (Phase 95).
 
   // -- ARRANGE: load a real model (saveProject's real-3MF branch needs it).
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1498,7 +1498,7 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
 
   // -- ARRANGE: synthesize a KNOWN recognizable thumbnail (RGBA8888 so the
   // round-trip is byte-symmetric: write convertToFormat(RGBA8888) at
-  // ProjectServiceMock.cpp:5061 <-> read Format_RGBA8888 at :5526).
+  // ProjectService.cpp:5061 <-> read Format_RGBA8888 at :5526).
   const int thumbW = 32;
   const int thumbH = 32;
   const QRgb knownColor = qRgba(123, 45, 67, 255);  // recognizable, non-gray
@@ -1510,7 +1510,7 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
   // pixels actually hold R=123,G=45,B=67 and knownColor matches on reload.
   savedThumb.fill(QColor(123, 45, 67, 255));
   QVERIFY2(!savedThumb.isNull(), "synthesized thumbnail must be non-null");
-  // Install on plate 0 via the sanctioned test seam (ProjectServiceMock.h:80).
+  // Install on plate 0 via the sanctioned test seam (ProjectService.h:80).
   service.plateListMut()->plate(0)->setThumbnail(savedThumb);
   QVERIFY2(service.plateListConst()->plate(0)->hasThumbnail(),
            "plate 0 must hold the synthesized thumbnail after setThumbnail");
@@ -1524,8 +1524,8 @@ void PartPlateTests::thumbnailSaveReloadRoundTrip() {
            "the saved .3mf file must exist on disk");
 
   // -- ACT: reload into a FRESH service (exercises the read side in isolation).
-  ProjectServiceMock reloaded;
-  QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+  ProjectService reloaded;
+  QSignalSpy reloadSpy(&reloaded, &ProjectService::loadFinished);
   QVERIFY(reloaded.loadFile(tempPath));
   QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
@@ -1578,8 +1578,8 @@ void PartPlateTests::thumbnailMultiPlateSaveReloadRoundTrip() {
   // plate-index swap or a single-entry regression is detectable.
 
   // -- ARRANGE: load a real model, add a second plate, set distinct thumbnails.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1612,8 +1612,8 @@ void PartPlateTests::thumbnailMultiPlateSaveReloadRoundTrip() {
            qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
   QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
 
-  ProjectServiceMock reloaded;
-  QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+  ProjectService reloaded;
+  QSignalSpy reloadSpy(&reloaded, &ProjectService::loadFinished);
   QVERIFY(reloaded.loadFile(tempPath));
   QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
@@ -1664,7 +1664,7 @@ void PartPlateTests::thumbnailMultiPlateSaveReloadRoundTrip() {
 
 void PartPlateTests::filamentMapManualAssignment() {
   // FMAP-01: PartPlate has filament_maps + filament_map_mode fields.
-  // FMAP-03: ProjectServiceMock exposes setPlateFilamentMap / plateFilamentMaps.
+  // FMAP-03: ProjectService exposes setPlateFilamentMap / plateFilamentMaps.
   // v4.5 Phase 107 (FMAP-02): the mode is now the 4-value FilamentMapMode.
   //   default = fmmAutoForFlush (0); Manual = fmmManual (2) -- NOT the old raw
   //   int 1 (which is now fmmAutoForMatch).
@@ -1683,7 +1683,7 @@ void PartPlateTests::filamentMapManualAssignment() {
 
   // FMAP-03 via the service (needs a constructed PartPlateList). The int mode
   // passed at the Q_INVOKABLE boundary is the enum value (fmmManual == 2).
-  ProjectServiceMock service;
+  ProjectService service;
   QVERIFY(service.plateCount() >= 1);
   QVERIFY2(service.setPlateFilamentMap(
                0, int(OWzx::FilamentMapMode::fmmManual), QList<int>{2, 1, 3}),
@@ -1715,7 +1715,7 @@ void PartPlateTests::filamentMapModeEnumWidenedAnd3MFMigrates() {
            int(OWzx::FilamentMapMode::fmmAutoForFlush));
 
   // FM-03 (legacy raw-int-1 migration contract): the read-side migration in
-  // ProjectServiceMock MUST map a legacy raw-int 1 (pre-v4.5 "Manual") to
+  // ProjectService MUST map a legacy raw-int 1 (pre-v4.5 "Manual") to
   // fmmManual(2), NOT fmmAutoForMatch(1). This is a PURE-LOGIC assertion of
   // the documented migration map (it does not need a 3MF file); the actual
   // save/reload round-trip is in filamentMapModeRoundTripManualPreserved.
@@ -1749,8 +1749,8 @@ void PartPlateTests::filamentMapModeRoundTripManualPreserved() {
   // active bbs_3mf writer branch reads pd->config["filament_map"]
   // ConfigOptionInts, which the Qt6 layer does not populate); closing it is
   // FMAP-03/04 scope (Phase 110/111), not FMAP-02.
-  ProjectServiceMock service;
-  QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1770,8 +1770,8 @@ void PartPlateTests::filamentMapModeRoundTripManualPreserved() {
            qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
   QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
 
-  ProjectServiceMock reloaded;
-  QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+  ProjectService reloaded;
+  QSignalSpy reloadSpy(&reloaded, &ProjectService::loadFinished);
   QVERIFY(reloaded.loadFile(tempPath));
   QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
@@ -1861,16 +1861,16 @@ void PartPlateTests::filamentMapSaveReloadRoundTrip() {
   // _add_model_config_file_to_archive block at bbs_3mf.cpp:8207-8212 prefers
   // pd->filament_maps and emits the <metadata key="filament_maps"> entry; the
   // reader (bbs_3mf.cpp:4450-4459) parses it back into both plate->filament_maps
-  // and config["filament_map"]. ProjectServiceMock reads plate->filament_maps
-  // (ProjectServiceMock.cpp:636-637, 5515-5516), so the array survives when the
+  // and config["filament_map"]. ProjectService reads plate->filament_maps
+  // (ProjectService.cpp:636-637, 5515-5516), so the array survives when the
   // writer runs that branch. fmmAutoForFlush has no meaningful per-extruder map
   // (the array is unused in auto mode), so the array assertion is scoped to the
   // fmmManual leg.
 
   // ── LEG 1: fmmManual (mode + maps both asserted) ──────────────────────────
   {
-    ProjectServiceMock service;
-    QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+    ProjectService service;
+    QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
     QVERIFY(service.loadFile(kStlPath));
     QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
     QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1893,8 +1893,8 @@ void PartPlateTests::filamentMapSaveReloadRoundTrip() {
              qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
     QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
 
-    ProjectServiceMock reloaded;
-    QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+    ProjectService reloaded;
+    QSignalSpy reloadSpy(&reloaded, &ProjectService::loadFinished);
     QVERIFY(reloaded.loadFile(tempPath));
     QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
     QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
@@ -1913,8 +1913,8 @@ void PartPlateTests::filamentMapSaveReloadRoundTrip() {
   // proves the concrete auto mode round-trips (not just the Manual leg). The
   // maps array is unused in auto mode, so only the mode is asserted here.
   {
-    ProjectServiceMock service;
-    QSignalSpy loadSpy(&service, &ProjectServiceMock::loadFinished);
+    ProjectService service;
+    QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
     QVERIFY(service.loadFile(kStlPath));
     QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
     QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -1934,8 +1934,8 @@ void PartPlateTests::filamentMapSaveReloadRoundTrip() {
              qPrintable(QStringLiteral("saveProject must succeed: %1").arg(tempPath)));
     QVERIFY2(QFileInfo::exists(tempPath), "the saved .3mf file must exist on disk");
 
-    ProjectServiceMock reloaded;
-    QSignalSpy reloadSpy(&reloaded, &ProjectServiceMock::loadFinished);
+    ProjectService reloaded;
+    QSignalSpy reloadSpy(&reloaded, &ProjectService::loadFinished);
     QVERIFY(reloaded.loadFile(tempPath));
     QVERIFY2(reloadSpy.isValid(), "loadFinished signal spy must be valid");
     QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);

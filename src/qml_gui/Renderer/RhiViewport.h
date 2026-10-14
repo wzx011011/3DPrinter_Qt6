@@ -764,7 +764,7 @@ signals:
   void thumbnailCaptured();
   /// Phase 156 (CLOS-03): per-plate capture delivery signal. Carries the
   /// plateIndex so the QML consumer can route the bytes back into
-  /// PartPlate::setThumbnail via ProjectServiceMock::setPlateThumbnailFromBase64.
+  /// PartPlate::setThumbnail via ProjectService::setPlateThumbnailFromBase64.
   /// The legacy no-arg thumbnailCaptured() above stays for back-compat with
   /// QML bindings reading lastThumbnailData for the current plate's live preview.
   // G-04: variant rides the delivery (0=main, 1=picking) so the QML

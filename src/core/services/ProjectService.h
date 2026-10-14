@@ -58,7 +58,7 @@ struct MockLayerRange {
   QHash<QString, QVariant> overrides;
 };
 
-class ProjectServiceMock final : public QObject
+class ProjectService final : public QObject
 {
   Q_OBJECT
   Q_PROPERTY(QString projectName READ projectName NOTIFY projectChanged)
@@ -81,8 +81,8 @@ class ProjectServiceMock final : public QObject
   Q_PROPERTY(QString projectVersionInfo READ projectVersionInfo NOTIFY projectVersionInfoChanged)
 
 public:
-  explicit ProjectServiceMock(QObject *parent = nullptr);
-  ~ProjectServiceMock();
+  explicit ProjectService(QObject *parent = nullptr);
+  ~ProjectService();
 
   QString projectName() const;
   int modelCount() const;
@@ -216,7 +216,7 @@ public:
   // GUI 线程调用方（Ctrl+S / File 菜单 / autoSave 定时器）使用。3MF 写盘
   // （store_bbs_3mf + OWzx sidecar）在 QtConcurrent worker 上针对一份
   // GUI 线程快照执行（深拷贝 Model + PlateData + 缩略图字节 + 预置对象，
-  // 见 ProjectServiceMock.cpp 的 ProjectSavePayload），调用线程只承担
+  // 见 ProjectService.cpp 的 ProjectSavePayload），调用线程只承担
   // memcpy 级快照成本，不再冻结在 XML 序列化 + zip 压缩上。
   // 返回 true = 任务已派发（JSON 分支为廉价写，同步完成后立即回报）；
   // 返回 false = 拒绝派发（已有保存任务在飞 / 加载中 / 无模型），
@@ -327,7 +327,7 @@ public:
   /// "requires multi-material" notice when <= 1.
   Q_INVOKABLE int filamentCount() const;
   /// Phase 222 (FIL-COLOUR): the active filament colour list, synced from
-  /// PresetServiceMock by EditorViewModel. plateFilamentColours()/filamentCount()
+  /// PresetService by EditorViewModel. plateFilamentColours()/filamentCount()
   /// read this first (falls back to plate config when empty).
   void setActiveFilamentColours(const QStringList &colours) { m_activeFilamentColours = colours; }
   QStringList activeFilamentColours() const { return m_activeFilamentColours; }
@@ -433,7 +433,7 @@ public:
   /// before invoking. cancelEmbossVolume() cancels the in-flight job (a second
   /// invocation auto-cancels the prior — typing fast does not pile up stale
   /// jobs). Mirrors the codebase's QtConcurrent::run + atomic-cancel pattern
-  /// used by loadModelFromPath (ProjectServiceMock.cpp:540+) and SliceService.
+  /// used by loadModelFromPath (ProjectService.cpp:540+) and SliceService.
   Q_INVOKABLE void addTextVolumeAsync(int objectIndex, const QString &text);
   Q_INVOKABLE void cancelEmbossVolume();
   /// Synchronous helper (worker-thread side) that performs the actual
@@ -947,7 +947,7 @@ public:
   // approach.
   //
   // == CACHE DECISION (MI-04) =================================================
-  // NO separate mesh cache is added on ProjectServiceMock. Rationale: the
+  // NO separate mesh cache is added on ProjectService. Rationale: the
   // ModelVolume's shared_ptr<const TriangleMesh> m_mesh IS the cache -- it is
   // the in-memory source of truth, it is already reference-counted, and
   // set_mesh/reset_mesh atomically swap it. A parallel cache keyed by
@@ -1122,7 +1122,7 @@ private:
   QHash<int, QHash<QString, QVariant>> m_mockVolumeOverrides;
   /// QVariant adaptation layer for per-plate scoped overrides (plateIndex → key→value).
   /// The plate config truth (D-04) is the native DynamicPrintConfig on PartPlate; this map
-  /// is the QML/QVariant-facing view ProjectServiceMock exposes (setPlateScopedOptionValue etc.).
+  /// is the QML/QVariant-facing view ProjectService exposes (setPlateScopedOptionValue etc.).
   /// Phase 18 (3MF persistence) and Phase 19 (slice merge) bridge this with PartPlate::config().
   QHash<int, QHash<QString, QVariant>> m_mockPlateOverrides;
   /// Mock-mode per-object volume data (objectIndex → list of MockVolumeEntry)
@@ -1162,7 +1162,7 @@ private:
   QVariantList m_projectEmbeddedPresets;
   /// G-13: embedded presets read back from the 3MF being loaded (worker
   /// publishes them through the load-delivery lambda; BackendContext takes
-  /// and adopts them into the PresetServiceMock on loadFinished).
+  /// and adopts them into the PresetService on loadFinished).
   QVariantList m_projectEmbeddedPresetsFromLoad;
   int loadProgress_ = 0;
   bool loading_ = false;
@@ -1200,7 +1200,7 @@ private:
   mutable QVector3D m_instanceChannelPlateShift{0.0f, 0.0f, 0.0f};
   mutable bool m_instanceChannelShiftValid = false;
 #endif
-  /// Phase 222: active filament colours synced from PresetServiceMock.
+  /// Phase 222: active filament colours synced from PresetService.
   /// Read first by plateFilamentColours()/filamentCount() (plate config fallback).
   QStringList m_activeFilamentColours;
 };

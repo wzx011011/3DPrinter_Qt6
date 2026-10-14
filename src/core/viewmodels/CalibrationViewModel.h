@@ -4,7 +4,7 @@
 #include <QStringList>
 
 class CalibrationServiceMock;
-class PresetServiceMock;
+class PresetService;
 
 class CalibrationViewModel : public QObject
 {
@@ -74,7 +74,7 @@ public:
     explicit CalibrationViewModel(CalibrationServiceMock *service, QObject *parent = nullptr);
 
     /// Set the preset service for filament preset access
-    void setPresetService(PresetServiceMock *service);
+    void setPresetService(PresetService *service);
 
     // Individual item accessors - use these from QML to avoid Qt6 V4 VariantAssociationObject crash
     Q_INVOKABLE int calibItemCount() const;
@@ -185,7 +185,7 @@ public:
     /// OWzx history stores filament preset names (the writer passes
     /// m_selectedFilamentPreset); the literal "default" resolves to the
     /// service's default filament preset name. Read-only reuse of
-    /// PresetServiceMock queries.
+    /// PresetService queries.
     Q_INVOKABLE QString historyFilamentName(int index) const;
 
     /// 保存校准结果到历史（对齐上游 CalibrationWizardSavePage save）
@@ -234,7 +234,7 @@ public slots:
 private:
     int m_selectedIndex = -1;
     CalibrationServiceMock *m_service = nullptr;
-    PresetServiceMock *m_presetService = nullptr;
+    PresetService *m_presetService = nullptr;
     QString m_selectedFilamentPreset;
     float m_currentKValue = 0.0f;
     float m_currentFlowRate = 1.0f;

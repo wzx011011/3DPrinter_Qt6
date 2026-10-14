@@ -27,7 +27,7 @@
 //   reimplement the adaptive subdivision, the cursor containment tests, or
 //   the serialize/deserialize bitstream. The selector is constructed lazily
 //   per (objectIndex, volumeIndex) from the Phase 120 TriangleMesh source
-//   (ProjectServiceMock::volumeMeshTriangleMesh), cached, and invalidated on
+//   (ProjectService::volumeMeshTriangleMesh), cached, and invalidated on
 //   model change. The TriangleMesh shared_ptr is held alongside the selector
 //   so the reference TriangleSelector stores (TriangleSelector.hpp:477 m_mesh)
 //   stays valid for the selector's whole lifetime (TS-01 ownership contract).
@@ -98,9 +98,9 @@ enum class PaintCursorType : int
 // PaintEngine -- per-volume TriangleSelector owner + select_patch driver.
 //
 // The TriangleMesh source is an injected callable (VolumeMeshFn) so this class
-// has no hard dependency on ProjectServiceMock -- it just needs something that
+// has no hard dependency on ProjectService -- it just needs something that
 // returns shared_ptr<const TriangleMesh> for (object, volume). In production
-// this is ProjectServiceMock::volumeMeshTriangleMesh (Phase 120 TS-01). The
+// this is ProjectService::volumeMeshTriangleMesh (Phase 120 TS-01). The
 // callable is the SAME mesh the ModelVolume owns (aliasing shared_ptr), so the
 // TriangleMesh outlives every selector that references it.
 //
@@ -115,7 +115,7 @@ class PaintEngine
 public:
   // Callable: (objectIndex, volumeIndex) -> shared_ptr<const TriangleMesh>
   // (nullptr if invalid / no mesh). The Phase 120 accessor
-  // ProjectServiceMock::volumeMeshTriangleMesh returns exactly this type.
+  // ProjectService::volumeMeshTriangleMesh returns exactly this type.
   using VolumeMeshFn =
       std::function<std::shared_ptr<const Slic3r::TriangleMesh>(int, int)>;
 

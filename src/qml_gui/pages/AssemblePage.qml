@@ -94,11 +94,11 @@ Item {
     // Filament family token for the top-center plate badge. Upstream shows the
     // active plate chip with its filament material
     // (_render_imgui_select_plate_toolbar, GLCanvas3D.cpp:8909). Qt6 reads the
-    // selected filament preset (PresetServiceMock::FilamentCat = 1) and
+    // selected filament preset (PresetService::FilamentCat = 1) and
     // extracts the material family; empty when no preset service/family is
     // available (the badge then shows the plate number only).
     function plateFilamentAbbrev() {
-        const service = (typeof Backend !== "undefined") ? Backend.presetServiceMock : null
+        const service = (typeof Backend !== "undefined") ? Backend.presetService : null
         if (!service)
             return ""
         const name = String(service.selectedPresetForCategory(1))

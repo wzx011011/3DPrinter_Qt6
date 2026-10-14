@@ -19,7 +19,7 @@
 // complete type on every consumer of this header (EditorViewModel, tests).
 #include "core/model/PartPlate.h"
 
-class ProjectServiceMock;
+class ProjectService;
 class AppSettingsService;
 
 #ifdef HAS_LIBSLIC3R
@@ -225,7 +225,7 @@ struct PersistentSlice
   /// The model clone Print::apply consumed for the stored geometrySignature.
   std::unique_ptr<Slic3r::Model> model;
   /// Plate geometry fingerprint captured on the GUI thread when the slot was
-  /// built (ProjectServiceMock::currentPlateGeometrySignature).
+  /// built (ProjectService::currentPlateGeometrySignature).
   quint64 geometrySignature = 0;
   /// True when the slice that built this Print ran with calibration params
   /// (set_calib_params). A slot with calibration state is never reused
@@ -265,7 +265,7 @@ public:
   Q_ENUM(ResultSource)
 
   State sliceState() const { return sliceState_; }
-  explicit SliceService(ProjectServiceMock *projectService, QObject *parent = nullptr);
+  explicit SliceService(ProjectService *projectService, QObject *parent = nullptr);
   /// PLATE-PRINT-LIFECYCLE (batch 2): cancels an in-flight slice (flag +
   /// activePrint) then JOINS the slice worker via its QFuture before members
   /// die; see the PersistentSlice ownership/thread-model note above.
@@ -451,13 +451,13 @@ signals:
   void exportFailed(const QString &message);
 
 private:
-  ProjectServiceMock *projectService_ = nullptr;
+  ProjectService *projectService_ = nullptr;
 #ifdef HAS_LIBSLIC3R
   /// PLATE-PRINT-LIFECYCLE (batch 2): GUI-thread-exclusive container of IDLE
   /// persistent slots keyed by the plate's stable printIndex. A slot being
   /// processed by a slice worker is NOT in this map (single-ownership
   /// handoff -- see the PersistentSlice note above). Released per plate when
-  /// ProjectServiceMock::plateRemoved fires, reconciled against the live
+  /// ProjectService::plateRemoved fires, reconciled against the live
   /// plate set at each startSlice, and dropped wholesale by clearResults /
   /// clearPlateResults (project-scoped resets are conservative full rebuilds).
   std::map<int, std::shared_ptr<PersistentSlice>> persistentSlices_;

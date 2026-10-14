@@ -1,5 +1,5 @@
 #include "UndoCommands.h"
-#include "ProjectServiceMock.h"
+#include "ProjectService.h"
 #include "core/viewmodels/EditorViewModel.h"
 
 #include <QDebug>
@@ -8,7 +8,7 @@
 
 TransformCommand::TransformCommand(int objectIndex,
                                    const QVector3D &oldPos, const QVector3D &oldRot, const QVector3D &oldScale,
-                                   ProjectServiceMock *service,
+                                   ProjectService *service,
                                    QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Transform")), m_objectIndex(objectIndex),
       m_oldPos(oldPos), m_oldRot(oldRot), m_oldScale(oldScale),
@@ -66,7 +66,7 @@ bool TransformCommand::mergeWith(const QUndoCommand *other)
 
 AssembleTransformCommand::AssembleTransformCommand(int objectIndex,
                                                    const QVector3D &oldPos, const QVector3D &oldRot, const QVector3D &oldScale,
-                                                   ProjectServiceMock *service,
+                                                   ProjectService *service,
                                                    QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Assemble Transform")), m_objectIndex(objectIndex),
       m_oldPos(oldPos), m_oldRot(oldRot), m_oldScale(oldScale),
@@ -117,7 +117,7 @@ bool AssembleTransformCommand::mergeWith(const QUndoCommand *other)
 
 // ── MultiTransformCommand ───────────────────────────────────────────────────
 
-MultiTransformCommand::MultiTransformCommand(ProjectServiceMock *service,
+MultiTransformCommand::MultiTransformCommand(ProjectService *service,
                                              QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Transform")), m_service(service)
 {
@@ -158,7 +158,7 @@ void MultiTransformCommand::redo()
 // ── DeleteObjectsCommand ────────────────────────────────────────────────────
 
 DeleteObjectsCommand::DeleteObjectsCommand(const QList<int> &indicesToDelete,
-                                           ProjectServiceMock *service,
+                                           ProjectService *service,
                                            EditorViewModel *viewModel,
                                            QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Delete Objects")), m_service(service), m_viewModel(viewModel)
@@ -303,7 +303,7 @@ void DeleteObjectsCommand::redo()
 // ── AddObjectCommand ────────────────────────────────────────────────────────
 
 AddObjectCommand::AddObjectCommand(int objectIndex, const QString &objectName,
-                                   ProjectServiceMock *service,
+                                   ProjectService *service,
                                    QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Add Object")), m_objectIndex(objectIndex),
       m_objectName(objectName), m_service(service)
@@ -402,7 +402,7 @@ void SelectionCommand::redo()
 // ── RenameCommand ───────────────────────────────────────────────────────────
 
 RenameCommand::RenameCommand(int objectIndex, const QString &oldName, const QString &newName,
-                             ProjectServiceMock *service,
+                             ProjectService *service,
                              QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Rename")), m_objectIndex(objectIndex),
       m_oldName(oldName), m_newName(newName), m_service(service)
@@ -425,7 +425,7 @@ void RenameCommand::redo()
 // ── MoveObjectCommand ───────────────────────────────────────────────────────
 
 MoveObjectCommand::MoveObjectCommand(int fromIndex, int toIndex,
-                                     ProjectServiceMock *service,
+                                     ProjectService *service,
                                      QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Move Object")), m_fromIndex(fromIndex),
       m_toIndex(toIndex), m_service(service)
@@ -448,7 +448,7 @@ void MoveObjectCommand::redo()
 // ── CloneCommand ────────────────────────────────────────────────────────────
 
 CloneCommand::CloneCommand(int sourceIndex, int clonedIndex,
-                           ProjectServiceMock *service,
+                           ProjectService *service,
                            QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Clone")), m_sourceIndex(sourceIndex),
       m_clonedIndex(clonedIndex), m_service(service)
@@ -482,7 +482,7 @@ void CloneCommand::redo()
 // ── VolumeDeleteCommand ─────────────────────────────────────────────────────
 
 VolumeDeleteCommand::VolumeDeleteCommand(int objectIndex, int volumeIndex,
-                                         ProjectServiceMock *service,
+                                         ProjectService *service,
                                          EditorViewModel *viewModel,
                                          QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Delete Volume")), m_objectIndex(objectIndex),
@@ -554,7 +554,7 @@ void VolumeDeleteCommand::redo()
 // ── BooleanCommand ──────────────────────────────────────────────────────────
 
 BooleanCommand::BooleanCommand(int srcObjectIndex, int toolObjectIndex, int operation,
-                               ProjectServiceMock *service, EditorViewModel *viewModel,
+                               ProjectService *service, EditorViewModel *viewModel,
                                QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Boolean Operation")),
       m_srcObjectIndex(srcObjectIndex), m_toolObjectIndex(toolObjectIndex),
@@ -645,7 +645,7 @@ void BooleanCommand::redo()
 
 DrillCommand::DrillCommand(int objectIndex, float radius, float depth,
                            int shape, int direction, bool oneLayerOnly,
-                           ProjectServiceMock *service, EditorViewModel *viewModel,
+                           ProjectService *service, EditorViewModel *viewModel,
                            QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Drill")),
       m_objectIndex(objectIndex), m_radius(radius), m_depth(depth),
@@ -680,7 +680,7 @@ void DrillCommand::redo()
 // ── CutCommand ────────────────────────────────────────────────────────────
 
 CutCommand::CutCommand(int srcObjectIndex, int axis, double position, int keepMode,
-                       ProjectServiceMock *service, EditorViewModel *viewModel,
+                       ProjectService *service, EditorViewModel *viewModel,
                        QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Cut")),
       m_srcObjectIndex(srcObjectIndex), m_axis(axis), m_position(position),
@@ -737,7 +737,7 @@ void CutCommand::redo()
 // ── SimplifyCommand ───────────────────────────────────────────────────────
 
 SimplifyCommand::SimplifyCommand(int objectIndex, int wantedCount, float maxError,
-                                 ProjectServiceMock *service, EditorViewModel *viewModel,
+                                 ProjectService *service, EditorViewModel *viewModel,
                                  QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Simplify")),
       m_objectIndex(objectIndex), m_wantedCount(wantedCount), m_maxError(maxError),
@@ -771,7 +771,7 @@ void SimplifyCommand::redo()
 // ── AddVolumeCommand ──────────────────────────────────────────────────────
 
 AddVolumeCommand::AddVolumeCommand(int objectIndex, int operationType, const QString &param,
-                                   ProjectServiceMock *service, EditorViewModel *viewModel,
+                                   ProjectService *service, EditorViewModel *viewModel,
                                    QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Add Volume")),
       m_objectIndex(objectIndex), m_operationType(operationType), m_param(param),
@@ -811,7 +811,7 @@ void AddVolumeCommand::undo()
 // records the post-update mesh so redo reproduces the regenerated volume.
 UpdateVolumeMeshCommand::UpdateVolumeMeshCommand(int objectIndex, int volumeIndex,
                                                  const QString &volumeName,
-                                                 ProjectServiceMock *service,
+                                                 ProjectService *service,
                                                  EditorViewModel *viewModel,
                                                  QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Update Text Volume")),
@@ -892,7 +892,7 @@ void AddVolumeCommand::redo()
 // snapshots captured around the operation, so every plate action (add /
 // delete / move / clone / lock / printable) round-trips through the stack.
 
-PlateCommand::PlateCommand(Action action, ProjectServiceMock *service,
+PlateCommand::PlateCommand(Action action, ProjectService *service,
                            EditorViewModel *viewModel, QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Plate Operation")), m_action(action),
       m_service(service), m_viewModel(viewModel)
@@ -955,7 +955,7 @@ void PlateCommand::redo()
 // (object, volume, kind) so one drag collapses into one undo step.
 
 PaintCommand::PaintCommand(int objectIndex, int volumeIndex, int kind,
-                           const QByteArray &before, ProjectServiceMock *service,
+                           const QByteArray &before, ProjectService *service,
                            EditorViewModel *viewModel, QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Paint")), m_objectIndex(objectIndex),
       m_volumeIndex(volumeIndex), m_kind(kind), m_before(before),
@@ -1014,7 +1014,7 @@ bool PaintCommand::mergeWith(const QUndoCommand *other)
 
 MirrorCommand::MirrorCommand(int objectIndex,
                              const QVector3D &oldMirror, const QVector3D &newMirror,
-                             ProjectServiceMock *service,
+                             ProjectService *service,
                              QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Mirror")), m_objectIndex(objectIndex),
       m_oldMirror(oldMirror), m_newMirror(newMirror), m_service(service)
@@ -1037,7 +1037,7 @@ void MirrorCommand::redo()
 // ── SceneSnapshotCommand (P16.8) ───────────────────────────────────────────
 
 SceneSnapshotCommand::SceneSnapshotCommand(const QString &text,
-                                           ProjectServiceMock *service,
+                                           ProjectService *service,
                                            QUndoCommand *parent)
     : QUndoCommand(text), m_service(service)
 {
@@ -1076,7 +1076,7 @@ void SceneSnapshotCommand::redo()
 
 PrintableCommand::PrintableCommand(int objectIndex, int instanceIndex,
                                    bool oldPrintable, bool newPrintable,
-                                   ProjectServiceMock *service,
+                                   ProjectService *service,
                                    QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Set Printable")), m_objectIndex(objectIndex),
       m_instanceIndex(instanceIndex), m_oldPrintable(oldPrintable),
@@ -1108,7 +1108,7 @@ void PrintableCommand::redo()
 // ── ObjectSnapshotCommand (P16.8) ──────────────────────────────────────────
 
 ObjectSnapshotCommand::ObjectSnapshotCommand(int objectIndex, const QString &text,
-                                             ProjectServiceMock *service,
+                                             ProjectService *service,
                                              QUndoCommand *parent)
     : QUndoCommand(text), m_objectIndex(objectIndex), m_service(service)
 {
@@ -1176,7 +1176,7 @@ void ObjectSnapshotCommand::redo()
 // ── InstanceCountCommand (P16.8) ───────────────────────────────────────────
 
 InstanceCountCommand::InstanceCountCommand(int objectIndex, int oldCount, int newCount,
-                                           ProjectServiceMock *service,
+                                           ProjectService *service,
                                            QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Set Number of Instances")), m_objectIndex(objectIndex),
       m_oldCount(oldCount), m_newCount(newCount), m_service(service)

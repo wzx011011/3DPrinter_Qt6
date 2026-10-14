@@ -1,6 +1,6 @@
 // AppToolTests — AI control surface regression (OWzx-only, docs/ai-control.md).
 //
-// Exercises the full headless stack: real ProjectServiceMock/SliceService/
+// Exercises the full headless stack: real ProjectService/SliceService/
 // ConfigViewModel/EditorViewModel + AppToolRegistry + McpHttpServer over a
 // loopback socket. No GPU, no sidecar, no network beyond 127.0.0.1.
 //
@@ -21,8 +21,8 @@
 #include "core/ai/AppToolRegistry.h"
 #include "core/ai/McpHttpServer.h"
 #include "core/debug/CrashHandlerWin.h"
-#include "core/services/PresetServiceMock.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/PresetService.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/viewmodels/ConfigViewModel.h"
@@ -115,8 +115,8 @@ class AppToolTests final : public QObject {
   void mcpServerAuthAndErrorRouting();
 
  private:
-  std::unique_ptr<PresetServiceMock> preset_;
-  std::unique_ptr<ProjectServiceMock> project_;
+  std::unique_ptr<PresetService> preset_;
+  std::unique_ptr<ProjectService> project_;
   std::unique_ptr<SliceService> slice_;
   std::unique_ptr<ConfigViewModel> config_;
   std::unique_ptr<EditorViewModel> editor_;
@@ -139,8 +139,8 @@ void AppToolTests::initTestCase() {
   QVERIFY2(QFileInfo::exists(kStlPath),
            qPrintable(QStringLiteral("Test STL not found: %1").arg(kStlPath)));
 
-  preset_ = std::make_unique<PresetServiceMock>();
-  project_ = std::make_unique<ProjectServiceMock>();
+  preset_ = std::make_unique<PresetService>();
+  project_ = std::make_unique<ProjectService>();
   slice_ = std::make_unique<SliceService>(project_.get());
   config_ = std::make_unique<ConfigViewModel>(preset_.get(), project_.get());
   editor_ = std::make_unique<EditorViewModel>(project_.get(), slice_.get());
@@ -152,7 +152,7 @@ void AppToolTests::initTestCase() {
       project_.get(), slice_.get(), config_.get(), editor_.get());
 
   // Load one real model so the scene/config tools have live state.
-  QSignalSpy loadSpy(project_.get(), &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(project_.get(), &ProjectService::loadFinished);
   QVERIFY(project_->loadFile(kStlPath));
   QVERIFY2(loadSpy.isValid(), "loadFinished spy must be valid");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);

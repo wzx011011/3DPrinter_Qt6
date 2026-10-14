@@ -400,7 +400,7 @@ CxDialog {
         title: qsTr("导出预设包")
         onAccepted: {
             // v5.16 (PSET2-04): per-preset upstream-shape JSON export
-            // (configVm.exportBundleIni → PresetServiceMock::exportBundleIni).
+            // (configVm.exportBundleIni → PresetService::exportBundleIni).
             var path = selectedFolder.toString().replace("file:///", "")
             if (root.configVm && path.length > 0) {
                 var selected = []

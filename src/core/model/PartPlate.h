@@ -37,7 +37,7 @@
 namespace OWzx {
 
 /// Layer-sequence entry (aligns with upstream LayerPrintSequence + Qt6 MockLayerSeqEntry).
-/// Moved here from ProjectServiceMock so plate state lives with the domain model.
+/// Moved here from ProjectService so plate state lives with the domain model.
 struct LayerSeqEntry {
   int beginLayer = 2;
   int endLayer = 100;
@@ -93,7 +93,7 @@ enum class LayerSeqChoice : int {
 /// radio button (anti-feature per FEATURES.md -- upstream FilamentGroupPopup
 /// mode_list is {fmmAutoForFlush, fmmAutoForMatch, fmmManual} only). The
 /// resolution to a concrete mode belongs to a future Phase 108+ readback layer;
-/// persistence resolves fmmDefault before writing (see ProjectServiceMock write
+/// persistence resolves fmmDefault before writing (see ProjectService write
 /// site) so the on-disk value is always one of the three concrete modes.
 enum class FilamentMapMode : int {
   fmmAutoForFlush = 0,  // "Filament-Saving Mode" -- minimize flush volume.
@@ -103,13 +103,13 @@ enum class FilamentMapMode : int {
 };
 
 /// Phase 111 (FMAP-04 / Phase 107 REVIEW R-01): the FM-03 read-side migration
-/// predicate, factored out of ProjectServiceMock so it is unit-testable in
+/// predicate, factored out of ProjectService so it is unit-testable in
 /// isolation (R-01: the legacy raw-int-1 -> fmmManual branch was correct by
 /// inspection but never executed at runtime -- the round-trip test always took
 /// the trusted coEnum branch because the write side produces typed values).
 ///
 /// This function mirrors ONLY the legacy raw-int branch of the read-side
-/// discriminator in ProjectServiceMock.cpp (the branch taken when the option
+/// discriminator in ProjectService.cpp (the branch taken when the option
 /// is a NON-coEnum int, i.e. a pre-v4.5 Qt6 file that bypassed enum typing).
 /// The mapping preserves pre-v4.5 user intent:
 ///   raw 0 (old "Auto")   -> fmmAutoForFlush (0)
@@ -400,7 +400,7 @@ class PartPlate {
 
   // ── Per-plate settings (align with upstream PlateSettingsDialog) ───────
   // Bed type / print sequence / spiral mode / layer sequences.
-  // These were previously scattered parallel QLists on ProjectServiceMock;
+  // These were previously scattered parallel QLists on ProjectService;
   // Phase 16 (D-05) consolidates them here.
   int bedType() const { return m_bed_type; }
   void setBedType(int bedType) { m_bed_type = bedType; }
@@ -510,7 +510,7 @@ class PartPlate {
   Slic3r::DynamicPrintConfig m_config;
 #endif
 
-  // Per-plate settings (previously parallel QLists on ProjectServiceMock).
+  // Per-plate settings (previously parallel QLists on ProjectService).
   int m_bed_type = 0;                  // PlateBedType
   int m_print_sequence = 0;            // PlatePrintSequence
   int m_spiral_mode = 0;               // PlateSpiralMode

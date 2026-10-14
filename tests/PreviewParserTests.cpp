@@ -31,7 +31,7 @@
 #include <QtTest>
 #include <cstring>
 
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/viewmodels/PreviewViewModel.h"
 
@@ -159,7 +159,7 @@ void PreviewParserTests::test_fixture_has_expected_role_coverage()
 // Bottom surface->15, etc.) are asserted explicitly as the regression guard.
 void PreviewParserTests::test_role_string_mapping_covers_upstream_enum()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -195,7 +195,7 @@ void PreviewParserTests::test_role_string_mapping_covers_upstream_enum()
 // get_view_type_string (GCodeViewer.cpp:59-84).
 void PreviewParserTests::test_view_modes_match_upstream_ten()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -244,7 +244,7 @@ void PreviewParserTests::test_view_modes_match_upstream_ten()
 // capability modes stay out of the dropdown.
 void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -283,7 +283,7 @@ void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available
 // legendItems() is empty when viewModeIndex maps to Summary.
 void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -307,7 +307,7 @@ void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
 // (the bug), Ironing would render purple and Bottom surface orange.
 void PreviewParserTests::test_divergent_role_colors_correct()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -332,7 +332,7 @@ void PreviewParserTests::test_divergent_role_colors_correct()
 
 void PreviewParserTests::test_all_view_modes_keep_valid_gcv1_payload()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -398,7 +398,7 @@ void PreviewParserTests::test_prev03_move_kind_classification()
       "; WIPE_END\n"
 "G1 X30 Y10 E1.5 F1800\n"  // Extrude again
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(!tmp.path.isEmpty(), "temp gcode file should be writable");
@@ -435,7 +435,7 @@ void PreviewParserTests::test_prev03_seam_detected_on_closed_outer_wall_loop()
       ";TYPE:Sparse infill\n"
 "G1 X15 Y15 E4.5 F1800\n"  // non-wall extrusion starts AT the first vertex
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(closed.path),
@@ -456,7 +456,7 @@ void PreviewParserTests::test_prev03_seam_detected_on_closed_outer_wall_loop()
       ";TYPE:Sparse infill\n"
 "G1 X15 Y15 E3.5 F1800\n"  // starts 10mm away from (10,10)
       ));
-  ProjectServiceMock project2;
+  ProjectService project2;
   SliceService slice2(&project2);
   PreviewViewModel preview2(&project2, &slice2);
   QVERIFY2(preview2.loadGCodeForPreview(open.path),
@@ -467,7 +467,7 @@ void PreviewParserTests::test_prev03_seam_detected_on_closed_outer_wall_loop()
   // start (55,55) and the following travel departs from that exact point,
   // so exactly one seam is expected (upstream records the seam at the close
   // even when the loop-ending move is a travel).
-  ProjectServiceMock project3;
+  ProjectService project3;
   SliceService slice3(&project3);
   PreviewViewModel preview3(&project3, &slice3);
   QVERIFY2(preview3.loadGCodeForPreview(fixturePath()), "fixture should parse");
@@ -490,7 +490,7 @@ void PreviewParserTests::test_prev03_move_kind_toggles_repack_payload()
       "G1 E1.0 F2400\n"   // unretract
       "G1 X30 Y10 E1.5 F1800\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "synthetic gcode should parse");
@@ -535,7 +535,7 @@ void PreviewParserTests::test_prev05_filament_split_model_support_flushed_tower(
 "G1 E2.4 F2400\n"            // unretract while flushing: +0.4mm flushed
       "; FLUSH_END\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "split gcode should parse");
@@ -585,7 +585,7 @@ void PreviewParserTests::test_prev05_stealth_time_comment_and_estimate_flag()
 "G1 X10 Y10 F3000\n"
 "G1 X20 Y10 E1.0 F1800\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(withSilent.path), "silent gcode should parse");
@@ -609,7 +609,7 @@ void PreviewParserTests::test_prev05_stealth_time_comment_and_estimate_flag()
 "G1 X10 Y10 F3000\n"
 "G1 X20 Y10 E1.0 F1800\n"
       ));
-  ProjectServiceMock project2;
+  ProjectService project2;
   SliceService slice2(&project2);
   PreviewViewModel preview2(&project2, &slice2);
   QVERIFY2(preview2.loadGCodeForPreview(noSilent.path), "no-silent gcode should parse");
@@ -629,7 +629,7 @@ void PreviewParserTests::test_prev05_stealth_time_comment_and_estimate_flag()
 void PreviewParserTests::test_prev05_filament_price_from_config_block()
 {
   // Fresh viewmodel without a parse: no price known at all.
-  ProjectServiceMock project0;
+  ProjectService project0;
   SliceService slice0(&project0);
   PreviewViewModel preview0(&project0, &slice0);
   QCOMPARE(preview0.filamentPricePerKg(), 0.0);
@@ -643,7 +643,7 @@ void PreviewParserTests::test_prev05_filament_price_from_config_block()
 "G1 X10 Y10 F3000\n"
 "G1 X20 Y10 E1.0 F1800\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(priced.path), "priced gcode should parse");
@@ -662,7 +662,7 @@ void PreviewParserTests::test_prev05_filament_price_from_config_block()
 "G1 X10 Y10 F3000\n"
 "G1 X20 Y10 E1.0 F1800\n"
       ));
-  ProjectServiceMock project2;
+  ProjectService project2;
   SliceService slice2(&project2);
   PreviewViewModel preview2(&project2, &slice2);
   QVERIFY2(preview2.loadGCodeForPreview(unpriced.path), "unpriced gcode should parse");
@@ -689,7 +689,7 @@ void PreviewParserTests::test_prev06_configured_extruder_colors_override_fixed_c
 "G1 X40 Y10 E3.0 F1800\n"
       ));
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   project.setActiveFilamentColours({QStringLiteral("#FF0000"), QStringLiteral("#00FF00")});
@@ -717,7 +717,7 @@ void PreviewParserTests::test_prev06_configured_extruder_colors_override_fixed_c
   // proving the configured list actually overrides the fallback when valid.
   // (With HAS_LIBSLIC3R the plate config supplies a valid default colour, so
   // the fallback is exercised via the invalid-entry path.)
-  ProjectServiceMock project2;
+  ProjectService project2;
   SliceService slice2(&project2);
   PreviewViewModel preview2(&project2, &slice2);
   project2.setActiveFilamentColours({QStringLiteral("not-a-colour")});
@@ -743,7 +743,7 @@ void PreviewParserTests::test_prev06_extruder_visibility_gates_filament_payload(
 "G1 X30 Y10 E2.0 F1800\n"
 "G1 X40 Y10 E3.0 F1800\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "two-extruder gcode should parse");
@@ -776,7 +776,7 @@ void PreviewParserTests::test_wave5_layer_slider_semantics()
       "T0\nG28\n;LAYER:0\n;TYPE:Outer wall\nG1 X10 Y10 Z0.2 E1 F1800\n"
       ";LAYER:1\n;TYPE:Outer wall\nG1 X20 Y10 Z0.4 E2 F1800\n"
       ";LAYER:2\n;TYPE:Outer wall\nG1 X30 Y10 Z0.6 E3 F1800\n"));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "three-layer gcode should parse");
@@ -819,7 +819,7 @@ void PreviewParserTests::test_prev09_g91_relative_positioning_seam()
       "G90\n"
       "G1 X12 Y10 F3000\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "gcode should parse");
@@ -840,7 +840,7 @@ void PreviewParserTests::test_prev09_g2_arc_segments_into_chords()
       "G1 X10 Y10 F3000\n"
       "G2 X30 Y10 I10 J0 E2.0 F1800\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "gcode should parse");
@@ -862,7 +862,7 @@ void PreviewParserTests::test_prev09_g4_dwell_adds_time()
       "G1 X20 Y10 E1.0 F1800\n"
       "G4 S30\n"
       ));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(tmp.path), "gcode should parse");
@@ -878,7 +878,7 @@ void PreviewParserTests::test_prev09_g4_dwell_adds_time()
 // Wave 5: update_by_mode exposes visibility controls conditionally by view.
 void PreviewParserTests::test_wave5_marker_and_tick_payloads_are_data_backed()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY(!preview.hasToolPosition());
@@ -902,7 +902,7 @@ void PreviewParserTests::test_wave5_marker_and_tick_payloads_are_data_backed()
 
 void PreviewParserTests::test_wave5_preview_visibility_gates()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   const QStringList modes = preview.viewModes();
@@ -943,7 +943,7 @@ void PreviewParserTests::test_wave5_preview_visibility_gates()
 // valid payload and recolors segments with the {id, role, id} pseudo-color.
 void PreviewParserTests::test_prev01_filamentid_mode_hidden_and_pseudo_color()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
@@ -962,7 +962,7 @@ void PreviewParserTests::test_prev01_filamentid_mode_hidden_and_pseudo_color()
 // (GCodeViewer.hpp:324, only Extrude + Seam visible by default).
 void PreviewParserTests::test_prev04_retract_unretract_default_hidden()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QCOMPARE(preview.showRetractMoves(), false);
@@ -976,7 +976,7 @@ void PreviewParserTests::test_prev04_retract_unretract_default_hidden()
 // gradient min label formatting.
 void PreviewParserTests::test_prev03_gradient_stops_ten_rows()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
   QVERIFY2(preview.loadGCodeForPreview(fixturePath()),
@@ -1107,9 +1107,9 @@ namespace
   // Returns an empty string when the environment cannot slice (caller skips).
   // NOTE: plain code only -- QTest macros cannot early-return from a helper
   // with a non-void return type.
-  QString slicePrusaFixture(ProjectServiceMock &project, SliceService &slice)
+  QString slicePrusaFixture(ProjectService &project, SliceService &slice)
   {
-    QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+    QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
     if (!project.loadFile(prusaStlPath()) && loadSpy.isEmpty())
       return {};
     if (!loadSpy.wait(30000) && loadSpy.isEmpty())
@@ -1145,7 +1145,7 @@ void PreviewParserTests::test_p1_direct_result_matches_text_parse()
 #ifdef HAS_LIBSLIC3R
   ScopedAppIdentity identity(QStringLiteral("P1DirectAlignment"));
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -1287,7 +1287,7 @@ void PreviewParserTests::test_p1_direct_handoff_releases_and_defers_source_windo
 #ifdef HAS_LIBSLIC3R
   ScopedAppIdentity identity(QStringLiteral("P1DirectLifecycle"));
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 

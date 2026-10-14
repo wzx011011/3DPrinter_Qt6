@@ -1,6 +1,6 @@
 #include "CalibrationViewModel.h"
 #include "../services/CalibrationServiceMock.h"
-#include "../services/PresetServiceMock.h"
+#include "../services/PresetService.h"
 #include <QDateTime>
 
 CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObject *parent)
@@ -29,10 +29,10 @@ CalibrationViewModel::CalibrationViewModel(CalibrationServiceMock *service, QObj
     }
 }
 
-void CalibrationViewModel::setPresetService(PresetServiceMock *service)
+void CalibrationViewModel::setPresetService(PresetService *service)
 {
     m_presetService = service;
-    m_selectedFilamentPreset = service ? service->defaultPresetForCategory(PresetServiceMock::FilamentCat) : QString{};
+    m_selectedFilamentPreset = service ? service->defaultPresetForCategory(PresetService::FilamentCat) : QString{};
     emit stateChanged();
 }
 
@@ -208,7 +208,7 @@ int CalibrationViewModel::selectedStatus() const
 
 QStringList CalibrationViewModel::filamentPresetNames() const
 {
-    return m_presetService ? m_presetService->presetNamesForCategory(PresetServiceMock::FilamentCat) : QStringList{};
+    return m_presetService ? m_presetService->presetNamesForCategory(PresetService::FilamentCat) : QStringList{};
 }
 
 void CalibrationViewModel::setSelectedFilamentPreset(const QString &name)
@@ -438,7 +438,7 @@ bool CalibrationViewModel::saveCalibrationResultToPreset()
 
     const QString presetName = m_selectedFilamentPreset.isEmpty()
                                    ? m_presetService->defaultPresetForCategory(
-                                         PresetServiceMock::FilamentCat)
+                                         PresetService::FilamentCat)
                                    : m_selectedFilamentPreset;
     if (presetName.isEmpty() || !m_presetService->hasPreset(presetName))
         return false;
@@ -641,13 +641,13 @@ QString CalibrationViewModel::historyFilamentName(int index) const
     // OWzx history writers store the filament preset name itself; the
     // literal "default" (written when no preset was selected) resolves to
     // the service's current default filament preset. Read-only reuse of the
-    // existing PresetServiceMock queries.
+    // existing PresetService queries.
     if (!m_service || index < 0 || index >= m_service->historyCount())
         return QString{};
     const QString id = m_service->historyFilamentId(index);
     if (id.isEmpty())
         return QString{};
     if (id == QStringLiteral("default") && m_presetService)
-        return m_presetService->defaultPresetForCategory(PresetServiceMock::FilamentCat);
+        return m_presetService->defaultPresetForCategory(PresetService::FilamentCat);
     return id;
 }

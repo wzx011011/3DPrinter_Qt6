@@ -6,7 +6,7 @@
 #include <QString>
 #include <QSet>
 
-class ProjectServiceMock;
+class ProjectService;
 
 /// Central undo/redo manager wrapping QUndoStack (对齐上游 UndoRedo 框架).
 /// Owned by BackendContext, shared with EditorViewModel via pointer injection.

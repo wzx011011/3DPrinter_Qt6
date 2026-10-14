@@ -376,7 +376,7 @@ public:
   // (1-based); extruderColors are the parsed filament_colour entries
   // (rgba 0..1, index 0 = extruder 1).
   // S3 (2026-10-14): batchWorldTransforms is the per-batch instance->world
-  // transform channel (ProjectServiceMock::meshBatchInstanceTransforms, one
+  // transform channel (ProjectService::meshBatchInstanceTransforms, one
   // entry per blob batch). It is REQUIRED for the decomposed blob v2
   // (magic 'MDS2' -- volume-local geometry): a v2 blob without a covering
   // transform list fails the parse (fail-loud, never a silent identity

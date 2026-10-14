@@ -177,7 +177,7 @@ ApplicationWindow {
 
     // Phase 237 (VIEW-02): Import Configs file dialog (upstream MainFrame::
     // load_config_file, MainFrame.cpp:3209-3211). Only *.json has a real Qt6
-    // importer (PresetServiceMock::importBundle).
+    // importer (PresetService::importBundle).
     FileDialog {
         id: importConfigsDialog
         title: qsTr("导入配置")

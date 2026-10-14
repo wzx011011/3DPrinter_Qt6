@@ -17,7 +17,7 @@ Item {
     id: root
     required property var calibrationVm
     // Q11-⑥: machine-scoped preset source (ConfigViewModel exposes the
-    // PresetServiceMock compatibility-filtered lists for the active printer).
+    // PresetService compatibility-filtered lists for the active printer).
     readonly property var configVm: (typeof Backend !== "undefined" && Backend)
                                     ? Backend.configViewModel : null
     property var _calibItems: []
@@ -943,7 +943,7 @@ Item {
                                             // — a hard truncation that made 500+
                                             // vendor presets unreachable. The machine-
                                             // scoped compatible list (ConfigViewModel
-                                            // -> PresetServiceMock compatibility
+                                            // -> PresetService compatibility
                                             // filter against the active printer, the
                                             // same source the preset combos use) is
                                             // the comment-acknowledged real fix; the

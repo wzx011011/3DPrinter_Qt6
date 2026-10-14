@@ -100,7 +100,7 @@ $objFiles = @(
     "EditorViewModel.cpp.obj",
     "PreviewViewModel.cpp.obj",
     "ConfigViewModel.cpp.obj",
-    "ProjectServiceMock.cpp.obj",
+    "ProjectService.cpp.obj",
     "RhiViewportRenderer.cpp.obj",
     "SoftwareViewport.cpp.obj",
     "MonitorViewModel.cpp.obj",
@@ -118,7 +118,7 @@ $objFiles = @(
     "BackendContext.cpp.obj",
     "UndoCommands.cpp.obj",
     "CliRunner.cpp.obj",
-    "PresetServiceMock.cpp.obj",
+    "PresetService.cpp.obj",
     "UndoRedoManager.cpp.obj"
 )
 foreach ($obj in $objFiles) {

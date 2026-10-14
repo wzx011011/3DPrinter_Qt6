@@ -1,4 +1,4 @@
-#include "PresetServiceMock.h"
+#include "PresetService.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -144,7 +144,7 @@ constexpr const char *kExportSensitivePrinterKeys[] = {
 
 QHash<QString, QVariant> valuesForExportBundle(int category, const QHash<QString, QVariant> &values)
 {
-  if (category != PresetServiceMock::PrinterCat)
+  if (category != PresetService::PrinterCat)
     return values;
   QHash<QString, QVariant> scrubbed = values;
   for (const char *key : kExportSensitivePrinterKeys)
@@ -153,7 +153,7 @@ QHash<QString, QVariant> valuesForExportBundle(int category, const QHash<QString
 }
 }
 
-PresetServiceMock::PresetServiceMock(QObject *parent)
+PresetService::PresetService(QObject *parent)
     : QObject(parent)
 {
 #ifdef HAS_LIBSLIC3R
@@ -169,12 +169,12 @@ PresetServiceMock::PresetServiceMock(QObject *parent)
   loadSelectedPresets();
 }
 
-bool PresetServiceMock::isValidCategory(int category) const
+bool PresetService::isValidCategory(int category) const
 {
   return category == PrintCat || category == FilamentCat || category == PrinterCat;
 }
 
-void PresetServiceMock::registerPresetMetadata(const QString &name, int category, bool builtin,
+void PresetService::registerPresetMetadata(const QString &name, int category, bool builtin,
                                                bool readOnly, const QString &vendor,
                                                const QString &settingId)
 {
@@ -199,7 +199,7 @@ void PresetServiceMock::registerPresetMetadata(const QString &name, int category
     names.append(name);
 }
 
-QString PresetServiceMock::selectionSettingsKey(int category)
+QString PresetService::selectionSettingsKey(int category)
 {
   switch (category)
   {
@@ -210,7 +210,7 @@ QString PresetServiceMock::selectionSettingsKey(int category)
   }
 }
 
-QString PresetServiceMock::bundleCategoryName(int category)
+QString PresetService::bundleCategoryName(int category)
 {
   switch (category)
   {
@@ -221,7 +221,7 @@ QString PresetServiceMock::bundleCategoryName(int category)
   }
 }
 
-void PresetServiceMock::loadSelectedPresets()
+void PresetService::loadSelectedPresets()
 {
   QSettings settings;
   for (int category : {PrintCat, FilamentCat, PrinterCat})
@@ -234,7 +234,7 @@ void PresetServiceMock::loadSelectedPresets()
   }
 }
 
-void PresetServiceMock::updateSelectedPresetFallback(int category)
+void PresetService::updateSelectedPresetFallback(int category)
 {
   if (!isValidCategory(category))
     return;
@@ -258,7 +258,7 @@ void PresetServiceMock::updateSelectedPresetFallback(int category)
 // data_dir/user/<category>; PresetBundle::load_user_presets
 // (PresetBundle.cpp:565-602) reloads that tree at startup.
 
-QString PresetServiceMock::userPresetDirResolved() const
+QString PresetService::userPresetDirResolved() const
 {
   if (!m_userPresetDir.isEmpty())
     return m_userPresetDir;
@@ -266,12 +266,12 @@ QString PresetServiceMock::userPresetDirResolved() const
              + QStringLiteral("/user/presets");
 }
 
-QString PresetServiceMock::userPresetDir() const
+QString PresetService::userPresetDir() const
 {
   return userPresetDirResolved();
 }
 
-void PresetServiceMock::setUserPresetDir(const QString &dir)
+void PresetService::setUserPresetDir(const QString &dir)
 {
   if (m_userPresetDir == dir)
     return;
@@ -281,7 +281,7 @@ void PresetServiceMock::setUserPresetDir(const QString &dir)
   loadUserPresets();
 }
 
-QString PresetServiceMock::userPresetCategoryDir(int category)
+QString PresetService::userPresetCategoryDir(int category)
 {
   switch (category)
   {
@@ -292,7 +292,7 @@ QString PresetServiceMock::userPresetCategoryDir(int category)
   }
 }
 
-QString PresetServiceMock::safePresetFileName(const QString &name)
+QString PresetService::safePresetFileName(const QString &name)
 {
   // Preserve a readable prefix while the hash keeps every legal preset name
   // distinct on Windows, including names that differ only by path separators.
@@ -312,13 +312,13 @@ QString PresetServiceMock::safePresetFileName(const QString &name)
   return safe.left(80) + QStringLiteral("--") + QString::fromLatin1(digest);
 }
 
-QString PresetServiceMock::presetJsonFilePath(const QString &baseDir, int category, const QString &name)
+QString PresetService::presetJsonFilePath(const QString &baseDir, int category, const QString &name)
 {
   return baseDir + QStringLiteral("/") + userPresetCategoryDir(category) + QStringLiteral("/")
              + safePresetFileName(name) + QStringLiteral(".json");
 }
 
-bool PresetServiceMock::writePresetJsonFile(const QString &baseDir, int category, const QString &name,
+bool PresetService::writePresetJsonFile(const QString &baseDir, int category, const QString &name,
                                             const QHash<QString, QVariant> &values, const QString &inherits)
 {
   const QString dir = baseDir + QStringLiteral("/") + userPresetCategoryDir(category);
@@ -361,7 +361,7 @@ bool PresetServiceMock::writePresetJsonFile(const QString &baseDir, int category
   return true;
 }
 
-bool PresetServiceMock::writeUserPresetFile(int category, const QString &name,
+bool PresetService::writeUserPresetFile(int category, const QString &name,
                                             const QHash<QString, QVariant> &values) const
 {
   if (!isValidCategory(category))
@@ -370,7 +370,7 @@ bool PresetServiceMock::writeUserPresetFile(int category, const QString &name,
                              m_presetInherits.value(name));
 }
 
-bool PresetServiceMock::removeUserPresetFile(int category, const QString &name) const
+bool PresetService::removeUserPresetFile(int category, const QString &name) const
 {
   if (!isValidCategory(category))
     return false;
@@ -393,7 +393,7 @@ bool PresetServiceMock::removeUserPresetFile(int category, const QString &name) 
   return legacyPath == path || !QFile::exists(legacyPath) || QFile::remove(legacyPath);
 }
 
-bool PresetServiceMock::loadUserPresetJson(const QString &filePath, int category)
+bool PresetService::loadUserPresetJson(const QString &filePath, int category)
 {
   QFile f(filePath);
   if (!f.open(QIODevice::ReadOnly))
@@ -425,7 +425,7 @@ bool PresetServiceMock::loadUserPresetJson(const QString &filePath, int category
   return true;
 }
 
-void PresetServiceMock::loadUserPresets()
+void PresetService::loadUserPresets()
 {
   const QString base = userPresetDirResolved();
   for (int category : {PrintCat, FilamentCat, PrinterCat})
@@ -455,7 +455,7 @@ void PresetServiceMock::loadUserPresets()
   }
 }
 
-void PresetServiceMock::initBuiltinDefaults()
+void PresetService::initBuiltinDefaults()
 {
   // --- Printer presets (对齐上游 printer preset) ---
   {
@@ -627,7 +627,7 @@ void PresetServiceMock::initBuiltinDefaults()
 
 #ifdef HAS_LIBSLIC3R
 
-bool PresetServiceMock::loadVendorPresets()
+bool PresetService::loadVendorPresets()
 {
   // Phase 216 (WIZ-03): load the default vendor (Creality) on startup for
   // single-vendor parity. Additional vendors are loaded on demand via
@@ -638,7 +638,7 @@ bool PresetServiceMock::loadVendorPresets()
   return loadSingleVendor(profilesDir, QStringLiteral("Creality")) > 0;
 }
 
-QString PresetServiceMock::resolveProfilesDir() const
+QString PresetService::resolveProfilesDir() const
 {
   // Locate vendor profile directory (对齐上游 PresetBundle data_dir / resource_dir).
   // Three probes so the tree resolves regardless of the process working
@@ -660,7 +660,7 @@ QString PresetServiceMock::resolveProfilesDir() const
   return {};
 }
 
-int PresetServiceMock::loadSingleVendor(const QString &profilesDir, const QString &vendorFileName)
+int PresetService::loadSingleVendor(const QString &profilesDir, const QString &vendorFileName)
 {
   // Phase 216 (WIZ-03): vendor-agnostic single-vendor loader. Reads
   // `<profilesDir>/<vendorFileName>.json` + parses `<profilesDir>/<vendorName>/`
@@ -767,7 +767,7 @@ int PresetServiceMock::loadSingleVendor(const QString &profilesDir, const QStrin
   return registered;
 }
 
-QStringList PresetServiceMock::availableVendorNames() const
+QStringList PresetService::availableVendorNames() const
 {
   // Scan the profiles dir for *.json vendor index files. Returns vendor file
   // names (without .json) for the ConfigWizard vendor picker. Does NOT load
@@ -789,7 +789,7 @@ QStringList PresetServiceMock::availableVendorNames() const
   return names;
 }
 
-bool PresetServiceMock::loadVendor(const QString &vendorName)
+bool PresetService::loadVendor(const QString &vendorName)
 {
   // Phase 216 (WIZ-03): on-demand vendor load from the ConfigWizard. Idempotent
   // -- returns true when the vendor is already loaded or loads now.
@@ -802,26 +802,26 @@ bool PresetServiceMock::loadVendor(const QString &vendorName)
   return loadSingleVendor(profilesDir, key) > 0;
 }
 
-QString PresetServiceMock::selectedVendor() const
+QString PresetService::selectedVendor() const
 {
   // AppConfig-lite (对齐 upstream AppConfig wizard/selected_vendor).
   QSettings settings;
   return settings.value(QStringLiteral("wizard/selectedVendor")).toString();
 }
 
-void PresetServiceMock::setSelectedVendor(const QString &vendor)
+void PresetService::setSelectedVendor(const QString &vendor)
 {
   QSettings settings;
   settings.setValue(QStringLiteral("wizard/selectedVendor"), vendor);
 }
 
-QString PresetServiceMock::selectedPrinterModel() const
+QString PresetService::selectedPrinterModel() const
 {
   QSettings settings;
   return settings.value(QStringLiteral("wizard/selectedPrinterModel")).toString();
 }
 
-QString PresetServiceMock::bedTextureFileForPreset(const QString &presetName) const
+QString PresetService::bedTextureFileForPreset(const QString &presetName) const
 {
   // v5.15 (BEDTEX): mirrors upstream Plater::set_bed_shape ->
   // PresetUtils::system_printer_bed_texture (Preset.cpp:3561-3571). The
@@ -855,7 +855,7 @@ QString PresetServiceMock::bedTextureFileForPreset(const QString &presetName) co
   return validatedTexturePath(vendorDir, bedTexture);
 }
 
-QString PresetServiceMock::bedModelFileForPreset(const QString &presetName) const
+QString PresetService::bedModelFileForPreset(const QString &presetName) const
 {
   // v5.16 (BEDMODEL): mirrors the bed_texture resolution but for the
   // machine_model JSON's bed_model STL (upstream Bed3D::detect_type ->
@@ -880,7 +880,7 @@ QString PresetServiceMock::bedModelFileForPreset(const QString &presetName) cons
   return QFileInfo::exists(path) ? path : QString();
 }
 
-bool PresetServiceMock::isBblVendorPreset(const QString &presetName) const
+bool PresetService::isBblVendorPreset(const QString &presetName) const
 {
   // Upstream Tab.cpp:1817 gate: bed-type textures render only for the BBL
   // vendor; every other vendor uses the printer's own bed_texture image.
@@ -891,7 +891,7 @@ bool PresetServiceMock::isBblVendorPreset(const QString &presetName) const
   return key.compare(QStringLiteral("BBL"), Qt::CaseInsensitive) == 0;
 }
 
-bool PresetServiceMock::presetHasCaliLines(const QString &presetName) const
+bool PresetService::presetHasCaliLines(const QString &presetName) const
 {
   // Upstream Preset::has_cali_lines (Preset.cpp:754-761): only specific BBL
   // machine model ids carry the calibration-line bed overlay.
@@ -902,7 +902,7 @@ bool PresetServiceMock::presetHasCaliLines(const QString &presetName) const
       || printerModel == QStringLiteral("C13");
 }
 
-QString PresetServiceMock::resourcesImagesDir() const
+QString PresetService::resourcesImagesDir() const
 {
   // The shared image assets (bbl_bed_*.svg / bbl_cali_lines.svg) live in the
   // upstream resources tree next to the profiles dir.
@@ -912,7 +912,7 @@ QString PresetServiceMock::resourcesImagesDir() const
   return QFileInfo(profiles).absolutePath() + QStringLiteral("/images");
 }
 
-QString PresetServiceMock::validatedTexturePath(const QString &vendorDir,
+QString PresetService::validatedTexturePath(const QString &vendorDir,
                                                 const QString &bedTexture) const
 {
   if (vendorDir.isEmpty())
@@ -924,13 +924,13 @@ QString PresetServiceMock::validatedTexturePath(const QString &vendorDir,
   return QFileInfo::exists(path) ? path : QString();
 }
 
-void PresetServiceMock::setSelectedPrinterModel(const QString &model)
+void PresetService::setSelectedPrinterModel(const QString &model)
 {
   QSettings settings;
   settings.setValue(QStringLiteral("wizard/selectedPrinterModel"), model);
 }
 
-void PresetServiceMock::loadUpstreamSchemaDefaults()
+void PresetService::loadUpstreamSchemaDefaults()
 {
   const auto &def = Slic3r::print_config_def;
   QHash<QString, QVariant> upstreamDefaults;
@@ -994,7 +994,7 @@ void PresetServiceMock::loadUpstreamSchemaDefaults()
     case Slic3r::coPoints:
     {
       // Serialize as "x1,y1,x2,y2,..." — the single format consumed by
-      // EditorViewModel bed-sync and ProjectServiceMock::arrangeObjects
+      // EditorViewModel bed-sync and ProjectService::arrangeObjects
       // printableArea parsing (the former "0x0,300x0" style was unparseable
       // by those sites, leaving arrange without a bed shape).
       const auto *v = static_cast<const Slic3r::ConfigOptionPoints *>(optDef.default_value.get());
@@ -1030,7 +1030,7 @@ void PresetServiceMock::loadUpstreamSchemaDefaults()
   m_presetStore[QStringLiteral("__upstream_defaults__")] = upstreamDefaults;
 }
 
-QHash<QString, QVariant> PresetServiceMock::resolveInheritance(
+QHash<QString, QVariant> PresetService::resolveInheritance(
     const QString &presetName, const QString &filePath,
     QMap<QString, QHash<QString, QVariant>> &resolvedConfigs,
     QMap<QString, QString> &inheritMap)
@@ -1141,28 +1141,28 @@ QHash<QString, QVariant> PresetServiceMock::resolveInheritance(
 
 #endif // HAS_LIBSLIC3R
 
-QStringList PresetServiceMock::presetNames() const
+QStringList PresetService::presetNames() const
 {
   // Legacy: return print category presets
   return m_categoryPresets.value(PrintCat);
 }
 
-QString PresetServiceMock::defaultPreset() const
+QString PresetService::defaultPreset() const
 {
   return defaultPresetForCategory(PrintCat);
 }
 
-double PresetServiceMock::defaultLayerHeight() const
+double PresetService::defaultLayerHeight() const
 {
   return 0.2;
 }
 
-QStringList PresetServiceMock::presetNamesForCategory(int category) const
+QStringList PresetService::presetNamesForCategory(int category) const
 {
   return isValidCategory(category) ? m_categoryPresets.value(category) : QStringList{};
 }
 
-QStringList PresetServiceMock::userPresetNamesForCategory(int category) const
+QStringList PresetService::userPresetNamesForCategory(int category) const
 {
   if (!isValidCategory(category))
     return {};
@@ -1177,7 +1177,7 @@ QStringList PresetServiceMock::userPresetNamesForCategory(int category) const
   return names;
 }
 
-QString PresetServiceMock::defaultPresetForCategory(int category) const
+QString PresetService::defaultPresetForCategory(int category) const
 {
   if (!isValidCategory(category))
     return {};
@@ -1188,7 +1188,7 @@ QString PresetServiceMock::defaultPresetForCategory(int category) const
   return names.first();
 }
 
-int PresetServiceMock::presetCategory(const QString &presetName) const
+int PresetService::presetCategory(const QString &presetName) const
 {
   const auto it = m_presetMetadata.constFind(presetName);
   if (it != m_presetMetadata.constEnd())
@@ -1202,7 +1202,7 @@ int PresetServiceMock::presetCategory(const QString &presetName) const
   return -1;
 }
 
-bool PresetServiceMock::isReadOnlyPreset(const QString &presetName) const
+bool PresetService::isReadOnlyPreset(const QString &presetName) const
 {
   const auto it = m_presetMetadata.constFind(presetName);
   if (it != m_presetMetadata.constEnd())
@@ -1210,30 +1210,30 @@ bool PresetServiceMock::isReadOnlyPreset(const QString &presetName) const
   return m_builtinPresetNames.contains(presetName);
 }
 
-bool PresetServiceMock::isUserPreset(const QString &presetName) const
+bool PresetService::isUserPreset(const QString &presetName) const
 {
   const auto it = m_presetMetadata.constFind(presetName);
   return it != m_presetMetadata.constEnd() && !it->builtin && !it->readOnly;
 }
 
-int PresetServiceMock::presetValueCount(const QString &presetName) const
+int PresetService::presetValueCount(const QString &presetName) const
 {
   return m_presetStore.value(presetName).size();
 }
 
-QString PresetServiceMock::presetVendor(const QString &presetName) const
+QString PresetService::presetVendor(const QString &presetName) const
 {
   const auto it = m_presetMetadata.constFind(presetName);
   return it == m_presetMetadata.constEnd() ? QString() : it->vendor;
 }
 
-QString PresetServiceMock::presetSettingId(const QString &presetName) const
+QString PresetService::presetSettingId(const QString &presetName) const
 {
   const auto it = m_presetMetadata.constFind(presetName);
   return it == m_presetMetadata.constEnd() ? QString() : it->settingId;
 }
 
-bool PresetServiceMock::setSelectedPresetForCategory(int category, const QString &presetName)
+bool PresetService::setSelectedPresetForCategory(int category, const QString &presetName)
 {
   if (!isValidCategory(category) || presetCategory(presetName) != category)
     return false;
@@ -1245,7 +1245,7 @@ bool PresetServiceMock::setSelectedPresetForCategory(int category, const QString
   return true;
 }
 
-QString PresetServiceMock::selectedPresetForCategory(int category) const
+QString PresetService::selectedPresetForCategory(int category) const
 {
   if (!isValidCategory(category))
     return {};
@@ -1261,7 +1261,7 @@ QString PresetServiceMock::selectedPresetForCategory(int category) const
 // real presets. The "__upstream_defaults__" sink lives solely in
 // m_presetStore and is never registered via registerPresetMetadata, so it is
 // naturally excluded from every enumeration below.
-QStringList PresetServiceMock::vendors() const
+QStringList PresetService::vendors() const
 {
   QStringList result;
   for (auto it = m_presetMetadata.constBegin(); it != m_presetMetadata.constEnd(); ++it)
@@ -1275,7 +1275,7 @@ QStringList PresetServiceMock::vendors() const
   return result;
 }
 
-QStringList PresetServiceMock::printerModelsForVendor(const QString &vendor) const
+QStringList PresetService::printerModelsForVendor(const QString &vendor) const
 {
   QStringList result;
   const QString normalized = vendor.trimmed();
@@ -1291,7 +1291,7 @@ QStringList PresetServiceMock::printerModelsForVendor(const QString &vendor) con
   return result;
 }
 
-QStringList PresetServiceMock::materialsForVendor(const QString &vendor) const
+QStringList PresetService::materialsForVendor(const QString &vendor) const
 {
   QStringList result;
   const QString normalized = vendor.trimmed();
@@ -1307,7 +1307,7 @@ QStringList PresetServiceMock::materialsForVendor(const QString &vendor) const
   return result;
 }
 
-QStringList PresetServiceMock::activeFilamentColours() const
+QStringList PresetService::activeFilamentColours() const
 {
   // Phase 222 (FIL-COLOUR): enumerate all loaded filament presets and read
   // each one's default_filament_colour (对齐 upstream Preset filament_colour /
@@ -1347,7 +1347,7 @@ QStringList PresetServiceMock::activeFilamentColours() const
   return colours;
 }
 
-QVariantList PresetServiceMock::calculateFlushMatrix() const
+QVariantList PresetService::calculateFlushMatrix() const
 {
   // Phase 236 (DLG-02): a saved flush_volumes_matrix wins over the derived
   // one so the WipeTowerDialog round-trips (upstream keeps the matrix on the
@@ -1409,7 +1409,7 @@ QVariantList PresetServiceMock::calculateFlushMatrix() const
   return matrix;
 }
 
-bool PresetServiceMock::saveFlushVolumes(const QVariantList &rows)
+bool PresetService::saveFlushVolumes(const QVariantList &rows)
 {
   // QML path: nested JS arrays arrive as QVariantList of QVariantList rows.
   QList<QList<double>> matrix;
@@ -1425,7 +1425,7 @@ bool PresetServiceMock::saveFlushVolumes(const QVariantList &rows)
   return saveFlushVolumes(matrix);
 }
 
-bool PresetServiceMock::saveFlushVolumes(const QList<QList<double>> &rows)
+bool PresetService::saveFlushVolumes(const QList<QList<double>> &rows)
 {
   // Phase 236 (DLG-02): persist the WipeTowerDialog matrix under the upstream
   // key "flush_volumes_matrix" (coFloats, row-major flat — PrintConfig.cpp
@@ -1463,7 +1463,7 @@ bool PresetServiceMock::saveFlushVolumes(const QList<QList<double>> &rows)
   return wroteAny;
 }
 
-QStringList PresetServiceMock::materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const
+QStringList PresetService::materialsForVendorAndPrinter(const QString &vendor, const QString &printerModel) const
 {
   // Phase 224 (WIZ-04): filament presets of the given vendor that are
   // compatible with the given printer model (对齐上游 ConfigWizard
@@ -1489,7 +1489,7 @@ QStringList PresetServiceMock::materialsForVendorAndPrinter(const QString &vendo
   return result;
 }
 
-QStringList PresetServiceMock::defaultBedTypes() const
+QStringList PresetService::defaultBedTypes() const
 {
   // Four standard bed surfaces, matching the prior mock wizard. The upstream
   // vendor bundle does not yet carry per-model bed-surface metadata, so this
@@ -1503,7 +1503,7 @@ QStringList PresetServiceMock::defaultBedTypes() const
   };
 }
 
-QStringList PresetServiceMock::bedTypesForPrinterModel(const QString &model) const
+QStringList PresetService::bedTypesForPrinterModel(const QString &model) const
 {
   // The machineEntries payload has no bed-surface field today, so we always
   // fall back to the canonical 4-surface list. The `model` parameter is
@@ -1515,18 +1515,18 @@ QStringList PresetServiceMock::bedTypesForPrinterModel(const QString &model) con
   return defaultBedTypes();
 }
 
-QHash<QString, QVariant> PresetServiceMock::presetValues(const QString &presetName) const
+QHash<QString, QVariant> PresetService::presetValues(const QString &presetName) const
 {
   return m_presetStore.value(presetName);
 }
 
-QVariant PresetServiceMock::presetValue(const QString &presetName, const QString &key) const
+QVariant PresetService::presetValue(const QString &presetName, const QString &key) const
 {
   const auto &vals = m_presetStore.value(presetName);
   return vals.value(key);
 }
 
-bool PresetServiceMock::savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
+bool PresetService::savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
   if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName))
     return false;
@@ -1538,13 +1538,13 @@ bool PresetServiceMock::savePresetValues(const QString &presetName, const QHash<
   return true;
 }
 
-bool PresetServiceMock::hasPreset(const QString &presetName) const
+bool PresetService::hasPreset(const QString &presetName) const
 {
   return m_presetStore.contains(presetName);
 }
 
 // v2.4 IO-04: 导出预设包（JSON 格式，简化版）
-bool PresetServiceMock::exportBundle(const QString &filePath) const
+bool PresetService::exportBundle(const QString &filePath) const
 {
   QJsonObject root;
   QJsonArray presets;
@@ -1596,7 +1596,7 @@ bool PresetServiceMock::exportBundle(const QString &filePath) const
 }
 
 // v2.4 IO-05: 导入预设包（JSON 格式）
-bool PresetServiceMock::importBundle(const QString &filePath)
+bool PresetService::importBundle(const QString &filePath)
 {
   QFile f(filePath);
   if (!f.open(QIODevice::ReadOnly))
@@ -1709,22 +1709,22 @@ bool PresetServiceMock::importBundle(const QString &filePath)
   return true;
 }
 
-bool PresetServiceMock::isBuiltinPreset(const QString &presetName) const
+bool PresetService::isBuiltinPreset(const QString &presetName) const
 {
   return m_builtinPresetNames.contains(presetName);
 }
 
-bool PresetServiceMock::isFilamentCompatibleWithPrinter(const QString &filamentName, const QString &printerName) const
+bool PresetService::isFilamentCompatibleWithPrinter(const QString &filamentName, const QString &printerName) const
 {
   return isPresetCompatibleWithPrinter(FilamentCat, filamentName, printerName);
 }
 
-QString PresetServiceMock::findCompatibleFilament(const QString &printerName) const
+QString PresetService::findCompatibleFilament(const QString &printerName) const
 {
   return findCompatiblePresetForCategory(FilamentCat, printerName);
 }
 
-QStringList PresetServiceMock::compatiblePresetNamesForCategory(int category, const QString &printerName) const
+QStringList PresetService::compatiblePresetNamesForCategory(int category, const QString &printerName) const
 {
   if (!isValidCategory(category))
     return {};
@@ -1739,12 +1739,12 @@ QStringList PresetServiceMock::compatiblePresetNamesForCategory(int category, co
   return result;
 }
 
-bool PresetServiceMock::isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const
+bool PresetService::isPresetCompatibleWithPrinter(int category, const QString &presetName, const QString &printerName) const
 {
   return presetCompatibilityMessage(category, presetName, printerName).isEmpty();
 }
 
-QString PresetServiceMock::presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const
+QString PresetService::presetCompatibilityMessage(int category, const QString &presetName, const QString &printerName) const
 {
   if (!isValidCategory(category))
     return tr("Unknown preset category.");
@@ -1807,12 +1807,12 @@ QString PresetServiceMock::presetCompatibilityMessage(int category, const QStrin
   return {};
 }
 
-bool PresetServiceMock::isCurrentSelectionCompatible(const QString &printerName, const QString &filamentName, const QString &printName) const
+bool PresetService::isCurrentSelectionCompatible(const QString &printerName, const QString &filamentName, const QString &printName) const
 {
   return currentSelectionCompatibilityMessage(printerName, filamentName, printName).isEmpty();
 }
 
-QString PresetServiceMock::currentSelectionCompatibilityMessage(const QString &printerName, const QString &filamentName, const QString &printName) const
+QString PresetService::currentSelectionCompatibilityMessage(const QString &printerName, const QString &filamentName, const QString &printName) const
 {
   const QString printerMessage = presetCompatibilityMessage(PrinterCat, printerName, printerName);
   if (!printerMessage.isEmpty())
@@ -1829,7 +1829,7 @@ QString PresetServiceMock::currentSelectionCompatibilityMessage(const QString &p
   return {};
 }
 
-QString PresetServiceMock::presetActionBlocker(int category, const QString &presetName, const QString &action) const
+QString PresetService::presetActionBlocker(int category, const QString &presetName, const QString &action) const
 {
   if (!isValidCategory(category))
     return tr("Unknown preset category.");
@@ -1842,7 +1842,7 @@ QString PresetServiceMock::presetActionBlocker(int category, const QString &pres
   return {};
 }
 
-QString PresetServiceMock::findCompatiblePresetForCategory(int category, const QString &printerName) const
+QString PresetService::findCompatiblePresetForCategory(int category, const QString &printerName) const
 {
   if (!isValidCategory(category))
     return {};
@@ -1873,7 +1873,7 @@ QString PresetServiceMock::findCompatiblePresetForCategory(int category, const Q
 // Upstream ExportPresetBundleDialog packs the per-preset JSON tree into a
 // .zip; zip packaging is deferred here — the directory tree + manifest is
 // the interop unit (importBundleIni reads either).
-int PresetServiceMock::exportBundleIni(const QString &dirPath) const
+int PresetService::exportBundleIni(const QString &dirPath) const
 {
   QStringList allUserPresetNames;
   for (auto it = m_presetMetadata.constBegin(); it != m_presetMetadata.constEnd(); ++it)
@@ -1884,7 +1884,7 @@ int PresetServiceMock::exportBundleIni(const QString &dirPath) const
   return exportBundleIni(dirPath, allUserPresetNames);
 }
 
-int PresetServiceMock::exportBundleIni(const QString &dirPath, const QStringList &selectedNames) const
+int PresetService::exportBundleIni(const QString &dirPath, const QStringList &selectedNames) const
 {
   QDir dir(dirPath);
   if (!dir.exists() && !dir.mkpath(QStringLiteral(".")))
@@ -1951,7 +1951,7 @@ int PresetServiceMock::exportBundleIni(const QString &dirPath, const QStringList
 // tree: index.json manifest first, then per-category subdirs of
 // upstream-shaped JSON, then legacy flat `.ini` files (category header with
 // the corrected enum mapping — the previous code swapped printer/print).
-int PresetServiceMock::importBundleIni(const QString &dirPath)
+int PresetService::importBundleIni(const QString &dirPath)
 {
   QDir dir(dirPath);
   if (!dir.exists())
@@ -2103,7 +2103,7 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
         else if (key == QLatin1String("category"))
         {
           // v5.16 (PSET2-04) fix: enum is Print=0/Filament=1/Printer=2
-          // (PresetServiceMock.h). The previous mapping swapped
+          // (PresetService.h). The previous mapping swapped
           // printer<->print so imported printers landed as process presets.
           if (val == QLatin1String("printer")) category = PrinterCat;
           else if (val == QLatin1String("filament")) category = FilamentCat;
@@ -2159,7 +2159,7 @@ int PresetServiceMock::importBundleIni(const QString &dirPath)
 // of {key, valueA, valueB} maps for differing keys. Mirrors upstream
 // UnsavedChangesDialog diff-view mode (single-direction A vs B; 3-way is a UI
 // layer concern built on top of this primitive).
-QVariantList PresetServiceMock::comparePresets(const QString &presetA, const QString &presetB) const
+QVariantList PresetService::comparePresets(const QString &presetA, const QString &presetB) const
 {
   QVariantList result;
   const auto itA = m_presetStore.constFind(presetA);
@@ -2209,12 +2209,12 @@ QVariantList PresetServiceMock::comparePresets(const QString &presetA, const QSt
   return result;
 }
 
-bool PresetServiceMock::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)
+bool PresetService::createCustomPreset(int category, const QString &name, const QHash<QString, QVariant> &values)
 {
   return createCustomPreset(category, name, values, QString());
 }
 
-bool PresetServiceMock::createCustomPreset(int category, const QString &name,
+bool PresetService::createCustomPreset(int category, const QString &name,
                                            const QHash<QString, QVariant> &values, const QString &inherits)
 {
   const QString trimmedName = name.trimmed();
@@ -2260,7 +2260,7 @@ bool PresetServiceMock::createCustomPreset(int category, const QString &name,
   return true;
 }
 
-bool PresetServiceMock::overwriteUserPreset(int category, const QString &name,
+bool PresetService::overwriteUserPreset(int category, const QString &name,
                                             const QHash<QString, QVariant> &values)
 {
   // G-01: replace an existing USER preset in place. Unlike createCustomPreset
@@ -2285,7 +2285,7 @@ bool PresetServiceMock::overwriteUserPreset(int category, const QString &name,
   return true;
 }
 
-bool PresetServiceMock::createPresetFromBase(int category, const QString &name,
+bool PresetService::createPresetFromBase(int category, const QString &name,
                                              const QString &baseName,
                                              const QVariantMap &overrides,
                                              bool overwrite)
@@ -2315,7 +2315,7 @@ bool PresetServiceMock::createPresetFromBase(int category, const QString &name,
   return createCustomPreset(category, trimmedName, values, baseName.trimmed());
 }
 
-bool PresetServiceMock::detachPresetFromParent(int category, const QString &name,
+bool PresetService::detachPresetFromParent(int category, const QString &name,
                                                const QHash<QString, QVariant> &values)
 {
   // G-13 (upstream "detach from system preset"): flatten an inherited USER
@@ -2350,7 +2350,7 @@ bool PresetServiceMock::detachPresetFromParent(int category, const QString &name
   return true;
 }
 
-bool PresetServiceMock::adoptProjectEmbeddedPreset(int category, const QString &name,
+bool PresetService::adoptProjectEmbeddedPreset(int category, const QString &name,
                                                    const QHash<QString, QVariant> &values,
                                                    const QString &inherits)
 {
@@ -2372,7 +2372,7 @@ bool PresetServiceMock::adoptProjectEmbeddedPreset(int category, const QString &
   return true;
 }
 
-bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
+bool PresetService::mergePresetValues(const QString &presetName, const QHash<QString, QVariant> &values)
 {
   // v5.16 (PSET2-03): Transfer primitive — selected keys land on the target
   // user preset (and disk) while every other key is kept; the source preset
@@ -2389,7 +2389,7 @@ bool PresetServiceMock::mergePresetValues(const QString &presetName, const QHash
   return true;
 }
 
-bool PresetServiceMock::deletePreset(const QString &presetName)
+bool PresetService::deletePreset(const QString &presetName)
 {
   if (!m_presetStore.contains(presetName) || isReadOnlyPreset(presetName))
     return false;
@@ -2416,7 +2416,7 @@ bool PresetServiceMock::deletePreset(const QString &presetName)
   return true;
 }
 
-bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newName)
+bool PresetService::renamePreset(const QString &oldName, const QString &newName)
 {
   // 内置预设和不存在预设不可重命名
   if (!m_presetStore.contains(oldName) || isReadOnlyPreset(oldName))
@@ -2462,12 +2462,12 @@ bool PresetServiceMock::renamePreset(const QString &oldName, const QString &newN
   return true;
 }
 
-QString PresetServiceMock::presetInherits(const QString &presetName) const
+QString PresetService::presetInherits(const QString &presetName) const
 {
   return m_presetInherits.value(presetName);
 }
 
-QHash<QString, QVariant> PresetServiceMock::presetSystemValues(const QString &presetName) const
+QHash<QString, QVariant> PresetService::presetSystemValues(const QString &presetName) const
 {
   const int category = presetCategory(presetName);
   if (!isValidCategory(category))
@@ -2479,7 +2479,7 @@ QHash<QString, QVariant> PresetServiceMock::presetSystemValues(const QString &pr
   return m_presetStore.value(defaultPresetForCategory(category));
 }
 
-bool PresetServiceMock::hasPresetChildren(const QString &presetName) const
+bool PresetService::hasPresetChildren(const QString &presetName) const
 {
   if (presetName.isEmpty())
     return false;

@@ -7,7 +7,7 @@
 #include <QFileInfo>
 #include <QVector3D>
 
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
@@ -107,7 +107,7 @@ QString normalizePrintableArea(const QVariant &value) {
 
 }  // namespace
 
-AppToolRegistry::AppToolRegistry(ProjectServiceMock *project, SliceService *slice,
+AppToolRegistry::AppToolRegistry(ProjectService *project, SliceService *slice,
                                  ConfigViewModel *config, EditorViewModel *editor,
                                  AppToolUiProvider *ui)
     : project_(project), slice_(slice), config_(config), editor_(editor), ui_(ui) {
@@ -494,8 +494,8 @@ void AppToolRegistry::buildTools() {
           return AppToolResult::failure(QStringLiteral("index out of range"));
 
         auto applyVec = [this, index, &args](const char *key,
-                                      bool (ProjectServiceMock::*setter)(int, float, float, float),
-                                      QVector3D (ProjectServiceMock::*getter)(int) const) {
+                                      bool (ProjectService::*setter)(int, float, float, float),
+                                      QVector3D (ProjectService::*getter)(int) const) {
           const QJsonObject v = args.value(QLatin1String(key)).toObject();
           if (v.isEmpty())
             return;
@@ -504,12 +504,12 @@ void AppToolRegistry::buildTools() {
                               float(v.value(QStringLiteral("y")).toDouble()),
                               float(v.value(QStringLiteral("z")).toDouble()));
         };
-        applyVec("position", &ProjectServiceMock::setObjectPosition,
-                 &ProjectServiceMock::objectPosition);
-        applyVec("rotationDeg", &ProjectServiceMock::setObjectRotation,
-                 &ProjectServiceMock::objectRotation);
-        applyVec("scale", &ProjectServiceMock::setObjectScale,
-                 &ProjectServiceMock::objectScale);
+        applyVec("position", &ProjectService::setObjectPosition,
+                 &ProjectService::objectPosition);
+        applyVec("rotationDeg", &ProjectService::setObjectRotation,
+                 &ProjectService::objectRotation);
+        applyVec("scale", &ProjectService::setObjectScale,
+                 &ProjectService::objectScale);
         editor_->refreshAfterExternalSceneChange();
 
         QJsonObject d;

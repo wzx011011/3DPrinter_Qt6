@@ -27,10 +27,10 @@ import OWzx
 //   - Non-modal CxDialog (dialog container kept: FEAT-01 locks tests:4454/
 //     :10368 — registered deviation from the upstream settings side-panel).
 //   - Overridden rows driven by scopedOverrideCount/scopedOverriddenKey
-//     (ProjectServiceMock scoped-config keys()).
+//     (ProjectService scoped-config keys()).
 //   - "添加覆盖参数" entry: category combo → option combo → 添加；the add
 //     writes an empty value, which seeds the override through the Backend
-//     default-clone channel (writeConfigValue, ProjectServiceMock.cpp:367-413)
+//     default-clone channel (writeConfigValue, ProjectService.cpp:367-413)
 //     — the user then edits the seeded row (no inherited-preset read channel
 //     exists on the current VM surface).
 //   - Row remove (x.svg): resetScopedOptionValue (= config->erase) and the
@@ -132,7 +132,7 @@ CxDialog {
         if (!option)
             return
         // Empty-value write seeds the override via the Backend default-clone
-        // channel (writeConfigValue, ProjectServiceMock.cpp:367-413); the
+        // channel (writeConfigValue, ProjectService.cpp:367-413); the
         // seeded row then shows up in the list for editing.
         root.editorVm.setScopedOptionValue(root.objectIndex, root.volumeIndex, option.key, "")
         root.refreshModel()
@@ -192,7 +192,7 @@ CxDialog {
 
                     // Value editor — CxCheckBox for bool keys, CxTextField
                     // otherwise. Enum keys carry the upstream label string
-                    // (readConfigValue coEnum branch, ProjectServiceMock.cpp:
+                    // (readConfigValue coEnum branch, ProjectService.cpp:
                     // 310-318) and accept it back (label→index map :381-393).
                     Loader {
                         Layout.preferredWidth: 119

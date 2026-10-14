@@ -31,7 +31,7 @@ import OWzx
 //   - Geometry (init_dialog_size :1803-1824): width = index panel + 90*em
 //     (em fixed 10, hpp:616), clamped to 9/10 of the screen client area; the
 //     height fits the content instead of being fixed.
-// Data comes from Backend.configViewModel (PresetServiceMock enumeration;
+// Data comes from Backend.configViewModel (PresetService enumeration;
 // the vendor/model/variant persistence is AppConfig-lite QSettings). The
 // network PresetUpdater remains deferred.
 //

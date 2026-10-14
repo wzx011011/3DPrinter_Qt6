@@ -7,8 +7,8 @@
 #include <QList>
 #include <QVariant>
 
-class PresetServiceMock;
-class ProjectServiceMock;
+class PresetService;
+class ProjectService;
 class ConfigOptionModel;
 class PresetListModel;
 
@@ -83,11 +83,11 @@ class ConfigViewModel final : public QObject
   Q_PROPERTY(QList<int> filamentSlotCompatibility READ filamentSlotCompatibility NOTIFY filamentSlotCompatibilityChanged)
 
 public:
-  explicit ConfigViewModel(PresetServiceMock *presetService, ProjectServiceMock *projectService, QObject *parent = nullptr);
+  explicit ConfigViewModel(PresetService *presetService, ProjectService *projectService, QObject *parent = nullptr);
 
-  /// Phase 222 (FIL-COLOUR): expose the PresetServiceMock so EditorViewModel
-  /// can sync active filament colours into ProjectServiceMock.
-  PresetServiceMock *presetService() const { return presetService_; }
+  /// Phase 222 (FIL-COLOUR): expose the PresetService so EditorViewModel
+  /// can sync active filament colours into ProjectService.
+  PresetService *presetService() const { return presetService_; }
 
   QStringList presetNames() const;
   QString currentPreset() const;
@@ -245,7 +245,7 @@ public:
   Q_INVOKABLE bool exportBundle(const QString &filePath) const;
   Q_INVOKABLE bool importBundle(const QString &filePath);
   /// v5.16 (PSET2-04): per-preset upstream-shape JSON bundle export/import
-  /// (directory tree + index.json manifest). Proxies PresetServiceMock.
+  /// (directory tree + index.json manifest). Proxies PresetService.
   Q_INVOKABLE int exportBundleIni(const QString &dirPath) const;
   Q_INVOKABLE int exportBundleIni(const QString &dirPath, const QStringList &presetNames) const;
   Q_INVOKABLE int importBundleIni(const QString &dirPath);
@@ -255,7 +255,7 @@ public:
   // ── R-P1.J layering governance: wizard / wipe-tower preset proxies ──
   // ConfigWizardDialog / WipeTowerDialog must not touch the service
   // directly (qml-boundaries rule); these thin wrappers keep the QML on
-  // the viewmodel layer. Pure pass-throughs to PresetServiceMock.
+  // the viewmodel layer. Pure pass-throughs to PresetService.
   Q_INVOKABLE QStringList wizardVendors() const;
   Q_INVOKABLE QStringList wizardAvailableVendorNames() const;
   Q_INVOKABLE QString wizardSelectedVendor() const;
@@ -304,13 +304,13 @@ public:
   /// U05 (WipeTowerDialog): real filament colours for the flush-matrix
   /// badges (upstream feeds filament_colour into the web table and derives
   /// the matrix from it; WipingDialog.html:532-534 also picks the badge text
-  /// colour by luminance). Proxy to PresetServiceMock::activeFilamentColours.
+  /// colour by luminance). Proxy to PresetService::activeFilamentColours.
   Q_INVOKABLE QStringList wizardFilamentColours() const;
   /// U05 (WipeTowerDialog): flush_multiplier persistence. Upstream writes it
   /// onto the project config next to flush_volumes_matrix
   /// (WipeTowerDialog.cpp:245-246) with the valid range [0, 3]
   /// (g_min/g_max_flush_multiplier, WipeTowerDialog.cpp:199-200). The OWzx
-  /// service sink (PresetServiceMock::saveFlushVolumes) only accommodates the
+  /// service sink (PresetService::saveFlushVolumes) only accommodates the
   /// matrix, so the multiplier persists beside it in QSettings
   /// ("flush/multiplier") and is read back when the dialog opens.
   Q_INVOKABLE double flushMultiplier() const;
@@ -339,7 +339,7 @@ public:
   /// Preset lists for an arbitrary base printer (printer-wizard template
   /// panel, upstream update_presets_list filters by the selected printer,
   /// not only the current one). Proxies
-  /// PresetServiceMock::compatiblePresetNamesForCategory.
+  /// PresetService::compatiblePresetNamesForCategory.
   Q_INVOKABLE QStringList compatiblePresetsForPrinter(int category, const QString &printerName) const;
   /// G-01: replace an existing USER preset with the current tier edits
   /// (upstream SavePresetDialog replace path). Keeps the current selection;
@@ -365,7 +365,7 @@ public:
   Q_INVOKABLE QString plainPresetName(const QString &displayName) const;
   Q_INVOKABLE QStringList comparePresets(const QString &presetA, const QString &presetB) const;
   /// Phase 154 (CLOS-01): structured diff variant — proxies to
-  /// PresetServiceMock::comparePresets(A, B) which returns a QVariantList of
+  /// PresetService::comparePresets(A, B) which returns a QVariantList of
   /// {key, valueA, valueB, status} entries (status ∈ added/removed/changed).
   /// Each row is additionally enriched with the presentation data the
   /// PresetDiffDialog tree groups by (upstream DiffViewCtrl::Append input):
@@ -378,7 +378,7 @@ public:
   /// the selected option values from the left preset onto the right preset
   /// (upstream Tab::transfer_options via UnsavedChangesDialog
   /// Action::Transfer). The source preset is never written; read-only
-  /// targets are refused by PresetServiceMock::mergePresetValues. Returns
+  /// targets are refused by PresetService::mergePresetValues. Returns
   /// the number of keys written.
   Q_INVOKABLE int transferPresetValues(const QString &leftPreset, const QString &rightPreset, const QStringList &keys);
   /// True when the preset is read-only (system/builtin). PresetDiffDialog
@@ -525,8 +525,8 @@ signals:
   void filamentSlotCompatibilityChanged();
 
 private:
-  PresetServiceMock *presetService_ = nullptr;
-  ProjectServiceMock *projectService_ = nullptr;
+  PresetService *presetService_ = nullptr;
+  ProjectService *projectService_ = nullptr;
   ConfigOptionModel *printOptions_ = nullptr;
   ConfigOptionModel *machineOptions_ = nullptr;
   ConfigOptionModel *filamentOptions_ = nullptr;

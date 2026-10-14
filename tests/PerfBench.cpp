@@ -1,6 +1,6 @@
 // PerfBench — stage-level headless benchmark for the OWzx perf evaluation
 // (docs/perf-baseline.md, scripts/perf/). Runs the REAL service pipeline
-// (ProjectServiceMock -> meshData -> PrepareSceneData -> ObjectPicking,
+// (ProjectService -> meshData -> PrepareSceneData -> ObjectPicking,
 // SliceService, PreviewViewModel gcode parse) against the synthetic
 // benchmark models and reports per-stage wall time + process memory.
 //
@@ -28,8 +28,8 @@
 
 #include "core/rendering/ObjectPicking.h"
 #include "core/rendering/PickingRaycaster.h"
-#include "core/services/PresetServiceMock.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/PresetService.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/util/PerfLog.h"
 #include "core/viewmodels/PreviewViewModel.h"
@@ -55,7 +55,7 @@ double processMemoryMiB()
 
 int batchCountFromMeshData(const QByteArray &meshData)
 {
-  // Real meshData layout (ProjectServiceMock::meshData):
+  // Real meshData layout (ProjectService::meshData):
   //   S3 decomposed (the only produced format): int32 magic 'MDS2'
   //     (0x3244534D), int32 batchCount, then per batch
   //     { int32 objectId, int32 triCount, triCount*9 floats }, then the
@@ -100,15 +100,15 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
   qInfo("[BENCH] ==== %s ====", qPrintable(modelName));
 
   // ── Stage 1: model load (real import path) ─────────────────────────────
-  ProjectServiceMock projectService;
-  QSignalSpy loadSpy(&projectService, &ProjectServiceMock::loadFinished);
+  ProjectService projectService;
+  QSignalSpy loadSpy(&projectService, &ProjectService::loadFinished);
   QElapsedTimer timer;
   timer.start();
   QVERIFY2(projectService.loadFile(modelPath), "loadFile failed");
   {
     QEventLoop loop;
     QTimer::singleShot(120000, &loop, &QEventLoop::quit);
-    QObject::connect(&projectService, &ProjectServiceMock::loadFinished,
+    QObject::connect(&projectService, &ProjectService::loadFinished,
                      &loop, &QEventLoop::quit);
     if (loadSpy.isEmpty())
       loop.exec();
@@ -275,7 +275,7 @@ void PerfBench::benchModel(const QString &modelPath, bool includeSlice,
 
   // ── Stage 5: slice + preview parse (400k tier only by default) ─────────
   if (includeSlice) {
-    PresetServiceMock presetService;
+    PresetService presetService;
     SliceService sliceService(&projectService);
     QHash<QString, QVariant> merged;
     // Same fairness pins as scripts/perf/run_owzx_bench.ps1: layer 0.2 with

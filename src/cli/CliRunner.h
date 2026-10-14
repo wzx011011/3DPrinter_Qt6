@@ -6,9 +6,9 @@
 #include <QStringList>
 #include <QVariant>
 
-class ProjectServiceMock;
+class ProjectService;
 class SliceService;
-class PresetServiceMock;
+class PresetService;
 
 /// CLI orchestrator — wires services and runs the headless pipeline.
 /// Aligns with upstream CLI::run() in OrcaSlicer.cpp (BBS CLI surface):
@@ -36,7 +36,7 @@ private:
 
     /// Phase 241 (CLI-01): pre-slice transforms over every loaded object
     /// (upstream transform loop, OrcaSlicer.cpp:3397+). Each flag maps to a
-    /// real ProjectServiceMock call; failures return a CLI_* error code.
+    /// real ProjectService call; failures return a CLI_* error code.
     int applyTransforms();
     /// Phase 241 (CLI-02): post-load/post-slice exports. slicedGcodes maps
     /// plate index -> exported .gcode path (drives --export-slicedata).
@@ -50,9 +50,9 @@ private:
     bool extractConfigOverrides(const QStringList &rawArgs,
                                  const QStringList &knownOptions);
 
-    ProjectServiceMock *projectService_ = nullptr;
+    ProjectService *projectService_ = nullptr;
     SliceService *sliceService_ = nullptr;
-    PresetServiceMock *presetService_ = nullptr;
+    PresetService *presetService_ = nullptr;
 
     QStringList loadFiles_;
     QString loadSettingsPath_;

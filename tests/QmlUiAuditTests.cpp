@@ -298,7 +298,7 @@ private slots:
   // Pitfall 2 read-side migration so pre-v4.5 "Manual"=1 plates do NOT silently
   // reload as the new fmmAutoForMatch=1. Source-audit locks: (a) all 4 enum
   // names appear in PartPlate.h; (b) the upstream PrintConfig.hpp:424-429
-  // anchor citation is present; (c) ProjectServiceMock.cpp writes via the
+  // anchor citation is present; (c) ProjectService.cpp writes via the
   // def-respecting option("filament_map_mode", true)->setInt() accessor (the
   // option def declares coEnum, so DynamicConfig makes
   // ConfigOptionEnumGeneric -- a set_key_value with a raw
@@ -350,16 +350,16 @@ private slots:
   // (legacy-int-1 -> fmmManual, NOT fmmAutoForMatch); (c) the factored
   // OWzx::migrateLegacyFilamentMapMode helper exists in PartPlate.h +
   // PartPlate.cpp (R-01 closure: the legacy branch is now unit-testable in
-  // isolation); (d) both ProjectServiceMock read sites use the factored helper.
+  // isolation); (d) both ProjectService read sites use the factored helper.
   // Mirrors the Phase 102/107/108/110 source-audit pattern (QFile +
   // QT_TESTCASE_SOURCEDIR + QString::contains + QVERIFY2 with FMAP-04/R-01-
   // named messages). Source-level only; runs in the regression ctest.
   void filamentMapSaveReloadRoundTripCoversModesAndLegacyMigration();
   // Phase 112-01 (MEASURE-01): source-audit lock proving the per-volume ITS
-  // accessor exists on ProjectServiceMock WITH the ownership contract
+  // accessor exists on ProjectService WITH the ownership contract
   // documented at the declaration. Locks: (a) the accessor signature
   // `std::shared_ptr<const indexed_triangle_set> volumeMeshIts(int, int)
-  // const` is declared in ProjectServiceMock.h (MI-01); (b) the ownership-
+  // const` is declared in ProjectService.h (MI-01); (b) the ownership-
   // contract section headers are present so a future edit cannot silently
   // drop the shallow-share / cache / null-return / SurfaceFeature-boundary
   // documentation (MI-02/MI-03/MI-04/MI-05/MI-06); (c) the .cpp defines the
@@ -475,7 +475,7 @@ private slots:
   // Phase 120-01 (PAINT-01): source-audit lock proving the TriangleSelector
   // triangle-pick + adaptive-subdivide + paint-state pipeline is ported to the
   // Qt6 C++ layer via REUSE (libslic3r's TriangleSelector is compiled in and
-  // wrapped by PaintEngine, NOT reimplemented). Locks: (a) ProjectServiceMock
+  // wrapped by PaintEngine, NOT reimplemented). Locks: (a) ProjectService
   // exposes volumeMeshTriangleMesh (TS-01 aliasing shared_ptr); (b)
   // SceneRaycasterHit carries meshLocalPosition (TS-02 -- the mesh-local hit
   // select_patch needs); (c) PaintEngine.{h,cpp} exist, reference
@@ -605,9 +605,9 @@ private slots:
   // is documented as refined scope (persisted-plate thumbnails already work).
   void v50PartPlateUiImplementationWired();
   // Phase 152 (PLATE-06): multi-plate save/reload regression gate. Locks the
-  // full plate-state round-trip via the staging buffers in ProjectServiceMock
+  // full plate-state round-trip via the staging buffers in ProjectService
   // (pendingPlate* fields rebuilt from 3MF after load). A live ctest is gated
-  // on a full ProjectServiceMock context; this slot anchors the source-level
+  // on a full ProjectService context; this slot anchors the source-level
   // contract that all plate fields have a round-trip staging path.
   void v50PartPlateSaveReloadRegressionWired();
   // Phase 153 (REGRESS-04): v5.0 cross-workstream regression gate. Consolidates
@@ -619,7 +619,7 @@ private slots:
   // Phase 154 (CLOS-01): QML Preset Diff-View Dialog wiring gate. Locks the
   // ConfigViewModel.comparePresetsDetailed proxy + the PresetDiffDialog
   // consumer + the SettingsDialog toolbar entry that opens it. The underlying
-  // PresetServiceMock::comparePresets primitive (Phase 149) is separately
+  // PresetService::comparePresets primitive (Phase 149) is separately
   // anchored by v50CompareDiffAndRoundTripWired.
   void v51PresetDiffDialogWired();
   // Phase 155 (CLOS-02): Emboss 3MF text metadata round-trip gate. Locks the
@@ -629,7 +629,7 @@ private slots:
   // TextEmboss tag.
   void v51EmbossTextMetadataRoundTripWired();
   // Phase 156 (CLOS-03): runtime plate thumbnail capture scheduler gate. Locks
-  // the setPlateThumbnailFromBase64 write path on ProjectServiceMock +
+  // the setPlateThumbnailFromBase64 write path on ProjectService +
   // EditorViewModel + the per-plate thumbnailCapturedForPlate signal on
   // RhiViewport + the PreparePage session-capture scheduler.
   void v51PartPlateSessionThumbnailWired();
@@ -1344,12 +1344,12 @@ void QmlUiAuditTests::prepareViewportBindsBedAndPlateContext()
   const QString rendererHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.h"));
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString sceneHeader = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.h"));
-  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   const QString previewPage = readSource(QStringLiteral("src/qml_gui/pages/PreviewPage.qml"));
   QVERIFY2(serviceHeader.contains(QStringLiteral("meshBatchVolumeTypes"))
                && serviceHeader.contains(QStringLiteral("meshBatchExtruderIds"))
                && serviceHeader.contains(QStringLiteral("meshBatchPrintableFlags")),
-           "ProjectServiceMock must expose the per-batch render-channel metadata");
+           "ProjectService must expose the per-batch render-channel metadata");
   QVERIFY2(editorHeader.contains(QStringLiteral("meshBatchVolumeTypes"))
                && editorHeader.contains(QStringLiteral("meshBatchExtruderIds")),
            "EditorViewModel must expose the per-batch render-channel metadata");
@@ -1817,7 +1817,7 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
   const QString selectorSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiBackendSelector.cpp"));
   const QString viewportSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
   const QString rendererSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
-  const QString projectSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projectSource = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString sliceSource = readSource(QStringLiteral("src/core/services/SliceService.cpp"));
   const QString previewVmSource = readSource(QStringLiteral("src/core/viewmodels/PreviewViewModel.cpp"));
   QVERIFY2(!previewPage.isEmpty(), "Unable to read PreviewPage.qml");
@@ -1825,7 +1825,7 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
   QVERIFY2(!selectorSource.isEmpty(), "Unable to read RhiBackendSelector.cpp");
   QVERIFY2(!viewportSource.isEmpty(), "Unable to read RhiViewport.cpp");
   QVERIFY2(!rendererSource.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
-  QVERIFY2(!projectSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projectSource.isEmpty(), "Unable to read ProjectService.cpp");
   QVERIFY2(!sliceSource.isEmpty(), "Unable to read SliceService.cpp");
   QVERIFY2(!previewVmSource.isEmpty(), "Unable to read PreviewViewModel.cpp");
 
@@ -1896,7 +1896,7 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
            "RhiViewportRenderer must log Preview payload and draw-range diagnostics");
   QVERIFY2(projectSource.contains(QStringLiteral("[ProjectService] import"))
                && projectSource.contains(QStringLiteral("sourceFilePath_ = localPath")),
-           "ProjectServiceMock must log import path/status and preserve source path diagnostics");
+           "ProjectService must log import path/status and preserve source path diagnostics");
   QVERIFY2(sliceSource.contains(QStringLiteral("[SliceService] slice"))
                && sliceSource.contains(QStringLiteral("[SliceService] slice failed"))
                && sliceSource.contains(QStringLiteral("[SliceService] slice cancelled"))
@@ -2236,7 +2236,7 @@ void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString menuComponent = readSource(QStringLiteral("src/qml_gui/components/PrepareContextMenus.qml"));
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
-  const QString projectService = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projectService = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString rhiHeader = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString softwareHeader = readSource(QStringLiteral("src/qml_gui/Renderer/SoftwareViewport.h"));
   const QString rhiSource = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
@@ -2315,10 +2315,10 @@ void QmlUiAuditTests::prepareViewportContextMenuWorkflowIsCppOwned()
                && rhiSource.contains(QStringLiteral("return m_contextToolInputCaptured || m_gizmoDragging"))
                && softwareSource.contains(QStringLiteral("return m_contextToolInputCaptured")),
            "Both renderers must suppress only a captured input gesture, not a selected transform mode");
-  const int replaceStart = projectService.indexOf(QStringLiteral("bool ProjectServiceMock::replaceAllOnPlateWithFiles"));
-  QVERIFY2(replaceStart >= 0, "ProjectServiceMock must expose the plate replacement implementation");
+  const int replaceStart = projectService.indexOf(QStringLiteral("bool ProjectService::replaceAllOnPlateWithFiles"));
+  QVERIFY2(replaceStart >= 0, "ProjectService must expose the plate replacement implementation");
   const QString replaceImplementation = projectService.mid(replaceStart,
-      projectService.indexOf(QStringLiteral("int ProjectServiceMock::addPrimitiveToPlate"), replaceStart) - replaceStart);
+      projectService.indexOf(QStringLiteral("int ProjectService::addPrimitiveToPlate"), replaceStart) - replaceStart);
   QVERIFY2(!replaceImplementation.contains(QStringLiteral("loadFile("))
                && replaceImplementation.contains(QStringLiteral("targetPlate->addInstance")),
            "Plate replacement must not reload the project and must assign imported instances to the target plate");
@@ -2804,7 +2804,7 @@ void QmlUiAuditTests::rhiSelectionCenterMatchesUpstreamMarkerContract()
            "P15.11: PreparePage must bind the viewport hint rotation to the viewmodel");
   QVERIFY2(editorHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList selectedHintLocalRotation")),
            "P15.11: EditorViewModel must expose the selected hint local rotation");
-  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   QVERIFY2(serviceHeader.contains(QStringLiteral("objectInstanceRotationDegrees"))
                && serviceHeader.contains(QStringLiteral("objectVolumeRotationDegrees")),
            "P15.11: service must expose the instance/volume rotation accessors");
@@ -3340,7 +3340,7 @@ void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
   const QString vmCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString paintEngineHeader = readSource(QStringLiteral("src/core/rendering/PaintEngine.h"));
   const QString paintEngineCpp = readSource(QStringLiteral("src/core/rendering/PaintEngine.cpp"));
-  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString serviceHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   QVERIFY2(!backendHeader.isEmpty(), "Unable to read BackendContext.h");
   QVERIFY2(!backendCpp.isEmpty(), "Unable to read BackendContext.cpp");
   QVERIFY2(!errorToast.isEmpty(), "Unable to read ErrorToast.qml");
@@ -3351,7 +3351,7 @@ void QmlUiAuditTests::gizmoDepthAndNotificationSourceAudit()
   QVERIFY2(!vmCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
   QVERIFY2(!paintEngineHeader.isEmpty(), "Unable to read PaintEngine.h");
   QVERIFY2(!paintEngineCpp.isEmpty(), "Unable to read PaintEngine.cpp");
-  QVERIFY2(!serviceHeader.isEmpty(), "Unable to read ProjectServiceMock.h");
+  QVERIFY2(!serviceHeader.isEmpty(), "Unable to read ProjectService.h");
 
   // ── NOTI-01: stacked notification surface ────────────────────────────
   QVERIFY2(backendHeader.contains(QStringLiteral("Q_PROPERTY(QVariantList notificationStack")),
@@ -3504,7 +3504,7 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
     const QString evmHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
     const QString evmImpl = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
     const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
     QVERIFY2(!evmHeader.isEmpty() && !evmImpl.isEmpty() && !preparePage.isEmpty() && !projSvc.isEmpty(),
              "Q11-④: unable to read the bed-type single-source carriers");
     QVERIFY2(evmHeader.contains(QStringLiteral("Q_PROPERTY(QStringList bedTypeLabels"))
@@ -5269,19 +5269,19 @@ void QmlUiAuditTests::projectServiceWrites3mfThumbnails()
   // Phase 96-01 (THUMBWRITE-01/02/03): source-audit guard proving the 3MF
   // write-side thumbnail hooks are populated with real captured pixels.
   // Mirrors the rhiViewportThumbnailCaptureUsesRealReadback pattern
-  // (Phase 95): reads ProjectServiceMock.cpp and asserts the replacement is
+  // (Phase 95): reads ProjectService.cpp and asserts the replacement is
   // real. Source-level only -- no 3MF save runtime dependency -- so this runs
   // in the regression ctest. Runtime save-reload round-trip proof is routed
   // to Phase 97.
-  const QString src = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  QVERIFY2(!src.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString src = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  QVERIFY2(!src.isEmpty(), "Unable to read ProjectService.cpp");
 
   // (1) qimageToThumbnailData helper exists (THUMBWRITE-01/02 enabler):
   //     file-local, Format_RGBA8888 conversion for read-side symmetry.
   QVERIFY2(src.contains(QStringLiteral("qimageToThumbnailData")),
-           "ProjectServiceMock.cpp must define a qimageToThumbnailData helper");
+           "ProjectService.cpp must define a qimageToThumbnailData helper");
   QVERIFY2(src.contains(QStringLiteral("convertToFormat(QImage::Format_RGBA8888")),
-           "qimageToThumbnailData must convertToFormat(Format_RGBA8888) for read-side symmetry (ProjectServiceMock.cpp:5455)");
+           "qimageToThumbnailData must convertToFormat(Format_RGBA8888) for read-side symmetry (ProjectService.cpp:5455)");
 
   // (2) buildPlateDataList populates PlateData::plate_thumbnail (THUMBWRITE-01):
   //     the per-plate populate guarded by !thumbnail().isNull().
@@ -5300,15 +5300,15 @@ void QmlUiAuditTests::projectServiceWrites3mfThumbnails()
   //     comments that documented the omitted write side must no longer be
   //     present at the populate sites.
   QVERIFY2(!src.contains(QStringLiteral("throws a non-std exception on the Qt6 mock pipeline")),
-           "ProjectServiceMock.cpp must not retain the 'throws a non-std exception' deferred-write marker (THUMBWRITE-03: real pixels make the PNG path complete)");
+           "ProjectService.cpp must not retain the 'throws a non-std exception' deferred-write marker (THUMBWRITE-03: real pixels make the PNG path complete)");
   QVERIFY2(!src.contains(QStringLiteral("deferred to THUMB-03")),
-           "ProjectServiceMock.cpp must not retain the 'deferred to THUMB-03' marker at the thumbnail populate sites");
+           "ProjectService.cpp must not retain the 'deferred to THUMB-03' marker at the thumbnail populate sites");
 
   // (5) HAS_LIBSLIC3R guard present around the write-side code (the store
-  //     call is guarded at ProjectServiceMock.cpp:5109; the thumbnail
+  //     call is guarded at ProjectService.cpp:5109; the thumbnail
   //     populate must inherit the same guard).
   QVERIFY2(src.contains(QStringLiteral("#ifdef HAS_LIBSLIC3R")),
-           "ProjectServiceMock.cpp must guard the libslic3r write-side under #ifdef HAS_LIBSLIC3R");
+           "ProjectService.cpp must guard the libslic3r write-side under #ifdef HAS_LIBSLIC3R");
 }
 
 void QmlUiAuditTests::wipeTowerReadbackAndRenderAnchorsPresent()
@@ -5835,8 +5835,8 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
 
   const QString partPlateHeader = readSource(QStringLiteral("src/core/model/PartPlate.h"));
   QVERIFY2(!partPlateHeader.isEmpty(), "Unable to read PartPlate.h");
-  const QString serviceSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  QVERIFY2(!serviceSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString serviceSource = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  QVERIFY2(!serviceSource.isEmpty(), "Unable to read ProjectService.cpp");
 
   // FMAP-02 / FM-01 (4-value enum present): all 4 upstream enum names must
   // appear in PartPlate.h. A re-collapse to the old 2-value model drops at
@@ -5874,14 +5874,14 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
   // crashed _add_project_config_file_to_archive; that pattern must stay gone.
   QVERIFY2(serviceSource.contains(QStringLiteral(
                "pd->config.option(\"filament_map_mode\", true)")),
-           "FMAP-02/FM-02: ProjectServiceMock must write filament_map_mode via the def-respecting option(...,true) accessor");
+           "FMAP-02/FM-02: ProjectService must write filament_map_mode via the def-respecting option(...,true) accessor");
   QVERIFY2(serviceSource.contains(QStringLiteral("opt->setInt(static_cast<int>(writeMode))")),
-           "FMAP-02/FM-02: ProjectServiceMock must write filament_map_mode via setInt(int(writeMode)) (ConfigOptionEnumGeneric-respecting)");
+           "FMAP-02/FM-02: ProjectService must write filament_map_mode via setInt(int(writeMode)) (ConfigOptionEnumGeneric-respecting)");
   // fmmDefault MUST be resolved before persistence (writer's names vector has
   // no "Default" entry, so names[3] is OOB -- bbs_3mf.cpp:7964-7967). The
   // switch must keep resolving fmmDefault -> a concrete mode.
   QVERIFY2(serviceSource.contains(QStringLiteral("case OWzx::FilamentMapMode::fmmDefault:")),
-           "FMAP-02/FM-02: ProjectServiceMock write site must resolve fmmDefault to a concrete mode before persistence (writer OOB guard)");
+           "FMAP-02/FM-02: ProjectService write site must resolve fmmDefault to a concrete mode before persistence (writer OOB guard)");
 
   // FMAP-02 / FM-03 (read-side migration present): the read site must keep the
   // coEnum-vs-legacy migration. The legacy raw-int-1 -> fmmManual mapping is
@@ -5895,9 +5895,9 @@ void QmlUiAuditTests::filamentMapModeEnumWidenedToUpstream4Value()
   // mapping). The helper declaration + definition are locked by the Phase 111
   // filamentMapSaveReloadRoundTripCoversModesAndLegacyMigration slot.
   QVERIFY2(serviceSource.contains(QStringLiteral("opt->type() == Slic3r::coEnum")),
-           "FMAP-02/FM-03: ProjectServiceMock read site must discriminate typed coEnum from legacy raw int");
+           "FMAP-02/FM-03: ProjectService read site must discriminate typed coEnum from legacy raw int");
   QVERIFY2(serviceSource.contains(QStringLiteral("OWzx::migrateLegacyFilamentMapMode(int(opt->getInt()))")),
-           "FMAP-02/FM-03: ProjectServiceMock read site must delegate the legacy raw-int branch to OWzx::migrateLegacyFilamentMapMode (the factored legacy-int-1 -> fmmManual migration)");
+           "FMAP-02/FM-03: ProjectService read site must delegate the legacy raw-int branch to OWzx::migrateLegacyFilamentMapMode (the factored legacy-int-1 -> fmmManual migration)");
 }
 
 void QmlUiAuditTests::filamentMapAutoRecommendationReadbackPresent()
@@ -6047,28 +6047,28 @@ void QmlUiAuditTests::filamentMapSaveReloadRoundTripCoversModesAndLegacyMigratio
   QVERIFY2(!partPlateHeader.isEmpty(), "Unable to read PartPlate.h");
   const QString partPlateSource = readSource(QStringLiteral("src/core/model/PartPlate.cpp"));
   QVERIFY2(!partPlateSource.isEmpty(), "Unable to read PartPlate.cpp");
-  const QString serviceSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  QVERIFY2(!serviceSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString serviceSource = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  QVERIFY2(!serviceSource.isEmpty(), "Unable to read ProjectService.cpp");
   const QString partPlateTests = readSource(QStringLiteral("tests/PartPlateTests.cpp"));
   QVERIFY2(!partPlateTests.isEmpty(), "Unable to read PartPlateTests.cpp");
 
   // FMAP-04 / R-01 (factored helper declared + defined): the migration
   // predicate must exist as a free function so the legacy branch is unit-
-  // testable in isolation. A removal (or re-inlining back into ProjectServiceMock)
+  // testable in isolation. A removal (or re-inlining back into ProjectService)
   // drops both anchors and fails here.
   QVERIFY2(partPlateHeader.contains(QStringLiteral("FilamentMapMode migrateLegacyFilamentMapMode(int legacyRawInt);")),
            "FMAP-04/R-01: PartPlate.h must declare OWzx::migrateLegacyFilamentMapMode(int) (the factored migration predicate)");
   QVERIFY2(partPlateSource.contains(QStringLiteral("FilamentMapMode migrateLegacyFilamentMapMode(int legacyRawInt)")),
            "FMAP-04/R-01: PartPlate.cpp must define OWzx::migrateLegacyFilamentMapMode(int) (the factored migration predicate)");
 
-  // FMAP-04 / R-01 (both read sites use the factored helper): ProjectServiceMock
+  // FMAP-04 / R-01 (both read sites use the factored helper): ProjectService
   // must call migrateLegacyFilamentMapMode at BOTH read sites (loadFile +
   // loadProject) so the legacy branch is reached via the same predicate the
   // unit test exercises. There are 2 occurrences (one per read path).
   const int helperCallCount = serviceSource.count(
       QStringLiteral("OWzx::migrateLegacyFilamentMapMode(int(opt->getInt()))"));
   QVERIFY2(helperCallCount >= 2,
-           qPrintable(QStringLiteral("FMAP-04/R-01: ProjectServiceMock must call "
+           qPrintable(QStringLiteral("FMAP-04/R-01: ProjectService must call "
                                      "OWzx::migrateLegacyFilamentMapMode at both read sites "
                                      "(loadFile + loadProject); found %1").arg(helperCallCount)));
 
@@ -6111,10 +6111,10 @@ void QmlUiAuditTests::perVolumeItsAccessorPresent()
   // ownership / SurfaceFeature-boundary documentation fails here. Mirrors the
   // Phase 102/111 source-audit pattern.
 
-  const QString header = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  QVERIFY2(!header.isEmpty(), "Unable to read ProjectServiceMock.h");
-  const QString source = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  QVERIFY2(!source.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString header = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  QVERIFY2(!header.isEmpty(), "Unable to read ProjectService.h");
+  const QString source = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  QVERIFY2(!source.isEmpty(), "Unable to read ProjectService.cpp");
   const QString smokeTests = readSource(QStringLiteral("tests/ViewModelSmokeTests.cpp"));
   QVERIFY2(!smokeTests.isEmpty(), "Unable to read ViewModelSmokeTests.cpp");
 
@@ -6123,14 +6123,14 @@ void QmlUiAuditTests::perVolumeItsAccessorPresent()
   // Measure.hpp:9); the plan's prose wrote Slic3r::indexed_triangle_set but
   // the upstream type is global, so the audit locks the global-scope form.
   QVERIFY2(header.contains(QStringLiteral("std::shared_ptr<const indexed_triangle_set> volumeMeshIts(int objectIndex, int volumeIndex) const;")),
-           "MEASURE-01/MI-01: ProjectServiceMock.h must declare volumeMeshIts(int, int) returning shared_ptr<const indexed_triangle_set>");
+           "MEASURE-01/MI-01: ProjectService.h must declare volumeMeshIts(int, int) returning shared_ptr<const indexed_triangle_set>");
 
   // MI-02: the OWNERSHIP CONTRACT section must be present at the declaration
   // so a future edit cannot silently drop the lifetime documentation (the
   // shallow-share aliasing pointer + the cross-boundary UAF closure from
   // pitfall 6).
   QVERIFY2(header.contains(QStringLiteral("OWNERSHIP CONTRACT")),
-           "MEASURE-01/MI-02: ProjectServiceMock.h must document the ITS ownership contract (shallow-share aliasing pointer + pitfall 6 UAF closure)");
+           "MEASURE-01/MI-02: ProjectService.h must document the ITS ownership contract (shallow-share aliasing pointer + pitfall 6 UAF closure)");
   QVERIFY2(header.contains(QStringLiteral("aliasing pointer")),
            "MEASURE-01/MI-02: the ownership contract must name the aliasing-pointer shallow-share mechanism");
 
@@ -6138,22 +6138,22 @@ void QmlUiAuditTests::perVolumeItsAccessorPresent()
   // copy-vs-share choice is documented at the source (the executor's
   // decision: share because set_mesh/reset_mesh always make a NEW shared_ptr).
   QVERIFY2(header.contains(QStringLiteral("SHALLOW-SHARE DECISION")),
-           "MEASURE-01/MI-03: ProjectServiceMock.h must document the shallow-share-vs-copy decision");
+           "MEASURE-01/MI-03: ProjectService.h must document the shallow-share-vs-copy decision");
 
   // MI-04: the CACHE DECISION section must be present so the no-cache choice
   // (ModelVolume::m_mesh IS the cache) is documented.
   QVERIFY2(header.contains(QStringLiteral("CACHE DECISION")),
-           "MEASURE-01/MI-04: ProjectServiceMock.h must document the mesh-cache decision");
+           "MEASURE-01/MI-04: ProjectService.h must document the mesh-cache decision");
 
   // MI-05: the DEFENSIVE NULL RETURN section must be present so the
   // null-return contract is documented at the declaration.
   QVERIFY2(header.contains(QStringLiteral("DEFENSIVE NULL RETURN")),
-           "MEASURE-01/MI-05: ProjectServiceMock.h must document the defensive nullptr-return contract");
+           "MEASURE-01/MI-05: ProjectService.h must document the defensive nullptr-return contract");
 
   // MI-06: the SURFACE FEATURE BOUNDARY section must be present, flagging the
   // raw void*/vector* scrubbing that Phase 113/114 enforce.
   QVERIFY2(header.contains(QStringLiteral("SURFACE FEATURE BOUNDARY")),
-           "MEASURE-01/MI-06: ProjectServiceMock.h must flag the SurfaceFeature raw-pointer boundary concern for Phase 113/114");
+           "MEASURE-01/MI-06: ProjectService.h must flag the SurfaceFeature raw-pointer boundary concern for Phase 113/114");
   QVERIFY2(header.contains(QStringLiteral("void* volume")),
            "MEASURE-01/MI-06: the SurfaceFeature boundary section must name the raw void* volume pointer (Measure.hpp:95) that must not escape into Qt");
 
@@ -6162,8 +6162,8 @@ void QmlUiAuditTests::perVolumeItsAccessorPresent()
   // copy). Locking the aliasing constructor presence keeps a future edit from
   // silently switching to a deep copy (which would be correct but wasteful)
   // or a raw pointer (which would re-open the UAF).
-  QVERIFY2(source.contains(QStringLiteral("ProjectServiceMock::volumeMeshIts")),
-           "MEASURE-01/MI-03: ProjectServiceMock.cpp must define volumeMeshIts");
+  QVERIFY2(source.contains(QStringLiteral("ProjectService::volumeMeshIts")),
+           "MEASURE-01/MI-03: ProjectService.cpp must define volumeMeshIts");
   QVERIFY2(source.contains(QStringLiteral("return std::shared_ptr<const indexed_triangle_set>(meshPtr, &its);")),
            "MEASURE-01/MI-03: volumeMeshIts must return via the shared_ptr aliasing constructor (shallow-share, zero copy)");
 
@@ -6643,10 +6643,10 @@ void QmlUiAuditTests::v45CrossWorkstreamRegressionLocked()
   // WS5: GLGizmoMeasure engine (per-volume ITS + raycaster + Measuring +
   // snap UX). Phases 112/113/114/115. This is the measure chain VV-01b
   // builds on; the anchors confirm the full chain is wired end-to-end.
-  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  QVERIFY2(!projectHeader.isEmpty(), "Unable to read ProjectServiceMock.h");
+  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  QVERIFY2(!projectHeader.isEmpty(), "Unable to read ProjectService.h");
   QVERIFY2(projectHeader.contains(QStringLiteral("volumeMeshIts")),
-           "VV-01c/WS5: ProjectServiceMock.h must declare volumeMeshIts (per-volume ITS accessor, Phase 112 MEASURE-01 -- unblocks raycaster + Measuring)");
+           "VV-01c/WS5: ProjectService.h must declare volumeMeshIts (per-volume ITS accessor, Phase 112 MEASURE-01 -- unblocks raycaster + Measuring)");
   QVERIFY2(QFile::exists(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR))
                              .filePath(QStringLiteral("src/core/rendering/MeshRaycaster.h"))),
            "VV-01c/WS5: MeshRaycaster.h must exist (pure-CPU raycaster port, Phase 113 MEASURE-02)");
@@ -6786,10 +6786,10 @@ void QmlUiAuditTests::customGcodeWritebackAndResliceWired()
            "TICK-03: PreviewViewModel.cpp must trigger a re-slice via startSlice after write-back");
 
   // TICK-02 (dependency injection): PreviewViewModel ctor must take
-  // ProjectServiceMock* so it can reach rawModel()->plates_custom_gcodes, and
+  // ProjectService* so it can reach rawModel()->plates_custom_gcodes, and
   // BackendContext must pass projectService_ at assembly.
-  QVERIFY2(pvmHeader.contains(QStringLiteral("ProjectServiceMock *projectService")),
-           "TICK-02: PreviewViewModel ctor must inject ProjectServiceMock* (projectService_ reach-through to rawModel)");
+  QVERIFY2(pvmHeader.contains(QStringLiteral("ProjectService *projectService")),
+           "TICK-02: PreviewViewModel ctor must inject ProjectService* (projectService_ reach-through to rawModel)");
   QVERIFY2(ctx.contains(QStringLiteral("new PreviewViewModel(projectService_, sliceService_, this)")),
            "TICK-02: BackendContext must assemble PreviewViewModel with projectService_ as the first ctor arg");
 }
@@ -6868,10 +6868,10 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
   // meshAndSceneRaycasterPorted pattern (readSource + QVERIFY2 with PAINT-01-
   // named messages). Source-level only; runs in the regression ctest.
 
-  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  QVERIFY2(!projectHeader.isEmpty(), "Unable to read ProjectServiceMock.h");
-  const QString projectSource = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  QVERIFY2(!projectSource.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  QVERIFY2(!projectHeader.isEmpty(), "Unable to read ProjectService.h");
+  const QString projectSource = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  QVERIFY2(!projectSource.isEmpty(), "Unable to read ProjectService.cpp");
   const QString sceneHeader = readSource(QStringLiteral("src/core/rendering/SceneRaycaster.h"));
   QVERIFY2(!sceneHeader.isEmpty(), "Unable to read SceneRaycaster.h");
   const QString paintHeader = readSource(QStringLiteral("src/core/rendering/PaintEngine.h"));
@@ -6889,16 +6889,16 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
   const QString cmakeLists = readSource(QStringLiteral("CMakeLists.txt"));
   QVERIFY2(!cmakeLists.isEmpty(), "Unable to read CMakeLists.txt");
 
-  // TS-01 (a): ProjectServiceMock must declare + implement volumeMeshTriangleMesh
+  // TS-01 (a): ProjectService must declare + implement volumeMeshTriangleMesh
   // returning shared_ptr<const TriangleMesh> (the aliasing shared_ptr that
   // keeps the TriangleMesh alive for TriangleSelector's `const TriangleMesh&`
   // reference ctor).
   QVERIFY2(projectHeader.contains(QStringLiteral("volumeMeshTriangleMesh")),
-           "PAINT-01/TS-01: ProjectServiceMock.h must declare volumeMeshTriangleMesh");
+           "PAINT-01/TS-01: ProjectService.h must declare volumeMeshTriangleMesh");
   QVERIFY2(projectHeader.contains(QStringLiteral("shared_ptr<const Slic3r::TriangleMesh>")),
            "PAINT-01/TS-01: volumeMeshTriangleMesh must return shared_ptr<const Slic3r::TriangleMesh>");
-  QVERIFY2(projectSource.contains(QStringLiteral("ProjectServiceMock::volumeMeshTriangleMesh")),
-           "PAINT-01/TS-01: ProjectServiceMock.cpp must implement volumeMeshTriangleMesh");
+  QVERIFY2(projectSource.contains(QStringLiteral("ProjectService::volumeMeshTriangleMesh")),
+           "PAINT-01/TS-01: ProjectService.cpp must implement volumeMeshTriangleMesh");
   // The TriangleMesh source is mesh_ptr() (Model.hpp:856), NOT a fresh copy.
   QVERIFY2(projectSource.contains(QStringLiteral("mesh_ptr()")),
            "PAINT-01/TS-01: volumeMeshTriangleMesh must reuse ModelVolume::mesh_ptr() (shallow-share, not a copy)");
@@ -7514,27 +7514,27 @@ void QmlUiAuditTests::paintedFacetOverlayAndBrushInteraction()
 void QmlUiAuditTests::supportAndSeamPaintFeedsSlice()
 {
   // Phase 122 (PAINT-04): Support/Seam painted facets must write to ModelVolume
-  // FacetsAnnotation (supported_facets/seam_facets) via the ProjectServiceMock
+  // FacetsAnnotation (supported_facets/seam_facets) via the ProjectService
   // bridge, so the slice consumes them (cloneCurrentPlateModel deep-copies
   // FacetsAnnotation -> PrintObject::project_and_append_custom_facets).
-  const QString svcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString svcCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString svcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString svcCpp = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  QVERIFY2(!svcH.isEmpty(), "Unable to read ProjectServiceMock.h");
-  QVERIFY2(!svcCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!svcH.isEmpty(), "Unable to read ProjectService.h");
+  QVERIFY2(!svcCpp.isEmpty(), "Unable to read ProjectService.cpp");
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
 
   // PAINT-04/SS-01: bridge API present.
   QVERIFY2(svcH.contains(QStringLiteral("writePaintToModelVolume")),
-           "PAINT-04/SS-01: ProjectServiceMock.h must declare writePaintToModelVolume");
+           "PAINT-04/SS-01: ProjectService.h must declare writePaintToModelVolume");
   QVERIFY2(svcH.contains(QStringLiteral("PaintKind")),
-           "PAINT-04/SS-01: ProjectServiceMock.h must define PaintKind enum");
+           "PAINT-04/SS-01: ProjectService.h must define PaintKind enum");
 
   // PAINT-04/SS-01: writes supported_facets + seam_facets.
   QVERIFY2(svcCpp.contains(QStringLiteral("supported_facets")),
-           "PAINT-04/SS-01: ProjectServiceMock.cpp must write mv->supported_facets (Support paint)");
+           "PAINT-04/SS-01: ProjectService.cpp must write mv->supported_facets (Support paint)");
   QVERIFY2(svcCpp.contains(QStringLiteral("seam_facets")),
-           "PAINT-04/SS-01: ProjectServiceMock.cpp must write mv->seam_facets (Seam paint)");
+           "PAINT-04/SS-01: ProjectService.cpp must write mv->seam_facets (Seam paint)");
 
   // PAINT-04/SS-02: EditorViewModel calls the bridge.
   QVERIFY2(evm.contains(QStringLiteral("writePaintToModelVolume")),
@@ -7549,14 +7549,14 @@ void QmlUiAuditTests::mmuSegmentationPaintFeedsSlice()
 {
   // Phase 123 (PAINT-05): MMU segmentation paint writes to
   // mmu_segmentation_facets + clearMmuSegmentation implemented.
-  const QString svcCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString svcCpp = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  QVERIFY2(!svcCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!svcCpp.isEmpty(), "Unable to read ProjectService.cpp");
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
 
   // PAINT-05/MM-01: mmu_segmentation_facets bridge present.
   QVERIFY2(svcCpp.contains(QStringLiteral("mmu_segmentation_facets")),
-           "PAINT-05/MM-01: ProjectServiceMock.cpp must write mv->mmu_segmentation_facets (MMU paint)");
+           "PAINT-05/MM-01: ProjectService.cpp must write mv->mmu_segmentation_facets (MMU paint)");
 
   // PAINT-05/MM-02: clearMmuSegmentation no longer a TODO stub returning false.
   QVERIFY2(!evm.contains(QStringLiteral("TODO: Clear per-triangle MMU facet data")),
@@ -7634,9 +7634,9 @@ void QmlUiAuditTests::paintGizmoGateFlattenedAndFlattenFixMeshReal()
 {
   // Phase 129 (POLISH-01/02/03): three bug fixes from the v4.6 gap analysis.
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  const QString svc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString svc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
-  QVERIFY2(!svc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!svc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // POLISH-01: kViewportTrianglePickingAvailable must be true (Phase 121-123
   // shipped real PaintEngine; the stale false caused false "unavailable").
@@ -7687,7 +7687,7 @@ void QmlUiAuditTests::v47CrossWorkstreamRegressionLocked()
   // paint/calibration/tick anchors still hold. CGAL (WS3) is blocked by
   // dependency (deferred); ASM-01 (WS4) is deferred.
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
   const QString enTs = readSource(QStringLiteral("i18n/en.ts"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
@@ -7720,12 +7720,12 @@ void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
   // WS3 i18n en.ts completion) AND re-asserts the v4.7/v4.6 anchors still hold
   // so the v4.8 work did not regress them.
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString rhiViewport = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
   const QString enTs = readSource(QStringLiteral("i18n/en.ts"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // WS1 (CGAL): MeshBoolean + Drill activated (Phase 137).
   QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
@@ -7736,11 +7736,11 @@ void QmlUiAuditTests::v48CrossWorkstreamRegressionLocked()
   // WS2 (Assembly ASM-01): per-instance assemble-transform accessors + routing +
   // renderer thread-through (Phase 138).
   QVERIFY2(projSvc.contains(QStringLiteral("setAssembleOffset")),
-           "REGRESS-03/WS2: ProjectServiceMock must expose setAssembleOffset (ASM-01)");
+           "REGRESS-03/WS2: ProjectService must expose setAssembleOffset (ASM-01)");
   QVERIFY2(projSvc.contains(QStringLiteral("setAssembleRotation")),
-           "REGRESS-03/WS2: ProjectServiceMock must expose setAssembleRotation (ASM-01)");
+           "REGRESS-03/WS2: ProjectService must expose setAssembleRotation (ASM-01)");
   QVERIFY2(projSvc.contains(QStringLiteral("setAssembleScale")),
-           "REGRESS-03/WS2: ProjectServiceMock must expose setAssembleScale (ASM-01)");
+           "REGRESS-03/WS2: ProjectService must expose setAssembleScale (ASM-01)");
   QVERIFY2(evm.contains(QStringLiteral("m_activeCanvasType == 2")),
            "REGRESS-03/WS2: EditorViewModel must route gizmo slots on AssembleView (ASM-01)");
   QVERIFY2(evm.contains(QStringLiteral("AssembleTransformCommand")),
@@ -7779,13 +7779,13 @@ void QmlUiAuditTests::v50TechDebtRegressionLocked()
   // regress the v4.8 contract.
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString rhiRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString rhiViewport = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // DEBT-01: intersection op==2 must call MeshBoolean::cgal::intersect (not minus).
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
@@ -7952,16 +7952,16 @@ void QmlUiAuditTests::v50EmbossParameterized()
   // Q_PROPERTYs. This slot anchors the parameterization surface.
   const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // EMB-01: font enumeration + selection surface.
   QVERIFY2(projSvcH.contains(QStringLiteral("setEmbossFont")),
-           "EMB-01: ProjectServiceMock must expose setEmbossFont");
+           "EMB-01: ProjectService must expose setEmbossFont");
   QVERIFY2(projSvcH.contains(QStringLiteral("embossFontList")),
-           "EMB-01: ProjectServiceMock must expose embossFontList for system font enumeration");
+           "EMB-01: ProjectService must expose embossFontList for system font enumeration");
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::get_font_list")),
            "EMB-01: embossFontList must call upstream Slic3r::Emboss::get_font_list");
   QVERIFY2(evmH.contains(QStringLiteral("Q_PROPERTY(QString embossFontPath")),
@@ -7971,20 +7971,20 @@ void QmlUiAuditTests::v50EmbossParameterized()
 
   // EMB-02: parameterize the pipeline from Q_PROPERTYs (was hardcoded).
   QVERIFY2(projSvc.contains(QStringLiteral("m_embossFontPath")),
-           "EMB-02: ProjectServiceMock must use m_embossFontPath (not hardcoded arial)");
+           "EMB-02: ProjectService must use m_embossFontPath (not hardcoded arial)");
   QVERIFY2(projSvc.contains(QStringLiteral("m_embossHeight > 0.0f")),
-           "EMB-02: ProjectServiceMock must use m_embossHeight to drive FontProp.size_in_mm");
+           "EMB-02: ProjectService must use m_embossHeight to drive FontProp.size_in_mm");
   QVERIFY2(projSvc.contains(QStringLiteral("m_embossDepth > 0.0f")),
-           "EMB-02: ProjectServiceMock must use m_embossDepth to drive ProjectZ depth");
+           "EMB-02: ProjectService must use m_embossDepth to drive ProjectZ depth");
 
   // EMB-01/02: EditorViewModel must forward font + height + depth before invoking
   // addTextVolume (both embossSelected and addTextObject paths).
   QVERIFY2(evm.contains(QStringLiteral("projectService_->setEmbossFont(m_embossFontPath)")),
-           "EMB-01: EditorViewModel must forward embossFontPath to ProjectServiceMock");
+           "EMB-01: EditorViewModel must forward embossFontPath to ProjectService");
   QVERIFY2(evm.contains(QStringLiteral("projectService_->setEmbossHeight(m_embossHeight)")),
-           "EMB-02: EditorViewModel must forward embossHeight to ProjectServiceMock");
+           "EMB-02: EditorViewModel must forward embossHeight to ProjectService");
   QVERIFY2(evm.contains(QStringLiteral("projectService_->setEmbossDepth(m_embossDepth)")),
-           "EMB-02: EditorViewModel must forward embossDepth to ProjectServiceMock");
+           "EMB-02: EditorViewModel must forward embossDepth to ProjectService");
 
   // The pipeline itself (text2shapes + polygons2model) must still be wired
   // (these come from the earlier phase that introduced addTextVolume).
@@ -7999,27 +7999,27 @@ void QmlUiAuditTests::v50EmbossAsyncAndPanelWired()
   // Phase 145 (EMB-03/04): async emboss via Qt Concurrent + Emboss panel
   // (font selector + async-execute button + result feedback). The slot anchors
   // the worker pattern, signal forwarding, and panel wiring.
-  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
 
   // EMB-03: async API exists.
   QVERIFY2(projSvcH.contains(QStringLiteral("addTextVolumeAsync")),
-           "EMB-03: ProjectServiceMock must expose addTextVolumeAsync");
+           "EMB-03: ProjectService must expose addTextVolumeAsync");
   QVERIFY2(projSvcH.contains(QStringLiteral("cancelEmbossVolume")),
-           "EMB-03: ProjectServiceMock must expose cancelEmbossVolume");
+           "EMB-03: ProjectService must expose cancelEmbossVolume");
   QVERIFY2(projSvcH.contains(QStringLiteral("performEmbossVolumeAdd")),
-           "EMB-03: ProjectServiceMock must factor out performEmbossVolumeAdd (shared by sync+async)");
+           "EMB-03: ProjectService must factor out performEmbossVolumeAdd (shared by sync+async)");
 
   // EMB-03: signals for async result delivery.
   QVERIFY2(projSvcH.contains(QStringLiteral("embossVolumeAdded")),
-           "EMB-03: ProjectServiceMock must emit embossVolumeAdded");
+           "EMB-03: ProjectService must emit embossVolumeAdded");
   QVERIFY2(projSvcH.contains(QStringLiteral("embossVolumeFailed")),
-           "EMB-03: ProjectServiceMock must emit embossVolumeFailed");
+           "EMB-03: ProjectService must emit embossVolumeFailed");
 
   // EMB-03: async worker uses Qt Concurrent + atomic cancel + GUI-thread delivery.
   QVERIFY2(projSvc.contains(QStringLiteral("QtConcurrent::run")),
@@ -8059,11 +8059,11 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
   // round-trip contract (geometry), and SVG emboss path.
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   const QString glToolbars = readSource(QStringLiteral("src/qml_gui/components/GLToolbars.qml"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // EMB-05: the upstream Emboss gizmo keeps its toolbar button (T icon,
   // toolbar_text.svg, GLGizmosManager.cpp:216); since 2026-10-09 it sits in
@@ -8104,7 +8104,7 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
 
   // EMB-07: SVG emboss path must use the real libslic3r loader.
   QVERIFY2(projSvcH.contains(QStringLiteral("addSvgVolume")),
-           "EMB-07: ProjectServiceMock must expose addSvgVolume");
+           "EMB-07: ProjectService must expose addSvgVolume");
   QVERIFY2(projSvc.contains(QStringLiteral("svgModel.read_from_file")),
            "EMB-07: addSvgVolume must call Model::read_from_file (real libslic3r SVG loader)");
   QVERIFY2(projSvc.contains(QStringLiteral("MockVolumeType::SvgEmboss")),
@@ -8114,13 +8114,13 @@ void QmlUiAuditTests::v50EmbossWiringAndSvgWired()
 void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
 {
   // Phase 147 (PSET-01/02): upstream-compatible .ini bundle + CreatePresetsDialog.
-  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
-  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetService.h"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
   const QString createDialog = readSource(QStringLiteral("src/qml_gui/dialogs/CreatePresetsDialog.qml"));
   const QString qrc = qmlQrcSources();
-  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
+  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetService.cpp");
   QVERIFY2(!createDialog.isEmpty(), "Unable to read CreatePresetsDialog.qml");
 
   // PSET-01 / v5.16 (PSET2-04): per-preset upstream-shape JSON bundle
@@ -8132,9 +8132,9 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
   // .ini READER stays (import compatibility with previously exported
   // bundles, category mapping corrected).
   QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundleIni")),
-           "PSET-01: PresetServiceMock must expose exportBundleIni");
+           "PSET-01: PresetService must expose exportBundleIni");
   QVERIFY2(presetSvcH.contains(QStringLiteral("importBundleIni")),
-           "PSET-01: PresetServiceMock must expose importBundleIni");
+           "PSET-01: PresetService must expose importBundleIni");
   QVERIFY2(presetSvc.contains(QStringLiteral("writePresetJsonFile")),
            "PSET2-04: bundle export must write per-preset upstream-shape JSON files");
   QVERIFY2(presetSvc.contains(QStringLiteral("is_custom")),
@@ -8162,7 +8162,7 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
   QVERIFY2(createDialog.contains(QStringLiteral("root.configVm.lastPresetError")),
            "PSET2-W6: CreatePresetsDialog must surface the real ConfigViewModel failure");
   QVERIFY2(presetSvc.contains(QStringLiteral("hasPresetChildren")),
-           "PSET2-W6: PresetServiceMock must protect inherited preset trees");
+           "PSET2-W6: PresetService must protect inherited preset trees");
 
   // PSET-02: ConfigViewModel exposes the request/signal pair.
   QVERIFY2(configVmH.contains(QStringLiteral("requestCreatePreset")),
@@ -8174,7 +8174,7 @@ void QmlUiAuditTests::v50PresetIniAndCreateDialogWired()
 void QmlUiAuditTests::exportPresetBundleUsesSupportedFormatAndSelection()
 {
   const QString dialog = readSource(QStringLiteral("src/qml_gui/dialogs/ExportPresetBundleDialog.qml"));
-  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetService.h"));
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
   QVERIFY2(!dialog.isEmpty(), "Unable to read ExportPresetBundleDialog.qml");
   QVERIFY2(dialog.contains(QStringLiteral("selectedPresets")),
@@ -8188,9 +8188,9 @@ void QmlUiAuditTests::exportPresetBundleUsesSupportedFormatAndSelection()
   QVERIFY2(dialog.contains(QStringLiteral("分类 JSON 文件 + index.json")),
            "Wave 6: dialog must name the supported local directory format");
   QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundleIni(const QString &dirPath, const QStringList &presetNames)")),
-           "Wave 6: PresetServiceMock must support selected-content export");
+           "Wave 6: PresetService must support selected-content export");
   QVERIFY2(presetSvcH.contains(QStringLiteral("userPresetNamesForCategory")),
-           "Wave 6: PresetServiceMock must expose exportable user presets");
+           "Wave 6: PresetService must expose exportable user presets");
   QVERIFY2(configVmH.contains(QStringLiteral("exportBundleIni(const QString &dirPath, const QStringList &presetNames)")),
            "Wave 6: ConfigViewModel must expose selected-content export to QML");
 }
@@ -8245,16 +8245,16 @@ void QmlUiAuditTests::v50CompareDiffAndRoundTripWired()
   // PSET-05 (comparePresets primitive) is new in Phase 149; PSET-07 (dirty
   // propagation) and PSET-06 (round-trip contract) build on existing
   // infrastructure that this slot locks in place.
-  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
-  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString presetSvcH = readSource(QStringLiteral("src/core/services/PresetService.h"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
-  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
+  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetService.cpp");
   QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
 
   // PSET-05: comparePresets C++ primitive.
   QVERIFY2(presetSvcH.contains(QStringLiteral("comparePresets")),
-           "PSET-05: PresetServiceMock must expose comparePresets(A, B)");
-  QVERIFY2(presetSvc.contains(QStringLiteral("QVariantList PresetServiceMock::comparePresets")),
+           "PSET-05: PresetService must expose comparePresets(A, B)");
+  QVERIFY2(presetSvc.contains(QStringLiteral("QVariantList PresetService::comparePresets")),
            "PSET-05: comparePresets must be implemented (returns QVariantList of {key, valueA, valueB})");
   QVERIFY2(presetSvc.contains(QStringLiteral("\"added\"")),
            "PSET-05: comparePresets must classify added keys");
@@ -8266,7 +8266,7 @@ void QmlUiAuditTests::v50CompareDiffAndRoundTripWired()
   // PSET-06: bundle round-trip contract. The exportBundle/importBundle pair
   // (JSON) + the new exportBundleIni/importBundleIni pair (.ini) round-trip
   // user presets. This slot anchors that both paths exist; the live round-trip
-  // ctest is gated on a PresetServiceMock context the unit tests don't have.
+  // ctest is gated on a PresetService context the unit tests don't have.
   QVERIFY2(presetSvcH.contains(QStringLiteral("exportBundle")) &&
            presetSvcH.contains(QStringLiteral("importBundle")),
            "PSET-06: JSON bundle round-trip pair must exist");
@@ -8297,7 +8297,7 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString evmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
 
@@ -8312,9 +8312,9 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
   QVERIFY2(evmH.contains(QStringLiteral("Q_INVOKABLE bool movePlate(int oldIndex, int newIndex)")),
            "PLATE-02: EditorViewModel must expose movePlate Q_INVOKABLE");
   QVERIFY2(evm.contains(QStringLiteral("projectService_->movePlate(oldIndex, newIndex)")),
-           "PLATE-02: EditorViewModel movePlate must proxy to ProjectServiceMock");
+           "PLATE-02: EditorViewModel movePlate must proxy to ProjectService");
   QVERIFY2(projSvcH.contains(QStringLiteral("movePlate")),
-           "PLATE-02: ProjectServiceMock must expose movePlate (delegates to PartPlateList)");
+           "PLATE-02: ProjectService must expose movePlate (delegates to PartPlateList)");
 
   // PLATE-03: per-plate print sequence dialog (pre-existing -- verify still present).
   QVERIFY2(preparePage.contains(QStringLiteral("platePrintSequence")),
@@ -8333,7 +8333,7 @@ void QmlUiAuditTests::v50PartPlateUiImplementationWired()
   QVERIFY2(preparePage.contains(QStringLiteral("plateThumbnailBase64")),
            "PLATE-05: PreparePage must read plateThumbnailBase64 for non-current-plate thumbnails");
   QVERIFY2(projSvcH.contains(QStringLiteral("plateThumbnailBase64")),
-           "PLATE-05: ProjectServiceMock must expose plateThumbnailBase64");
+           "PLATE-05: ProjectService must expose plateThumbnailBase64");
 }
 
 void QmlUiAuditTests::v50PartPlateSaveReloadRegressionWired()
@@ -8341,27 +8341,27 @@ void QmlUiAuditTests::v50PartPlateSaveReloadRegressionWired()
   // Phase 152 (PLATE-06): multi-plate save/reload regression. The full plate
   // state -- count, names, per-plate config overrides, print sequence, bed type,
   // locked/printable flags, filament maps, thumbnails -- round-trips through 3MF
-  // via the pendingPlate* staging buffers in ProjectServiceMock. This slot
+  // via the pendingPlate* staging buffers in ProjectService. This slot
   // anchors that all staging paths exist. A live ctest is gated on a
-  // ProjectServiceMock context the unit tests don't have.
-  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  // ProjectService context the unit tests don't have.
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // Each plate field that must round-trip has a corresponding pendingPlate*
   // staging buffer that is populated on 3MF load + applied to PartPlateList.
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateLocked_")),
-           "PLATE-06: ProjectServiceMock must stage pendingPlateLocked_ for 3MF round-trip");
+           "PLATE-06: ProjectService must stage pendingPlateLocked_ for 3MF round-trip");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateBedType_")),
-           "PLATE-06: ProjectServiceMock must stage pendingPlateBedType_");
+           "PLATE-06: ProjectService must stage pendingPlateBedType_");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlatePrintSeq_")),
-           "PLATE-06: ProjectServiceMock must stage pendingPlatePrintSeq_");
+           "PLATE-06: ProjectService must stage pendingPlatePrintSeq_");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateSpiral_")),
-           "PLATE-06: ProjectServiceMock must stage pendingPlateSpiral_");
+           "PLATE-06: ProjectService must stage pendingPlateSpiral_");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateFilamentMaps_")),
-           "PLATE-06: ProjectServiceMock must stage pendingPlateFilamentMaps_");
+           "PLATE-06: ProjectService must stage pendingPlateFilamentMaps_");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateThumbnails_")),
-           "PLATE-06: ProjectServiceMock must stage pendingPlateThumbnails_");
+           "PLATE-06: ProjectService must stage pendingPlateThumbnails_");
 
   // PartPlate + PartPlateList must be the source of truth (with the
   // DynamicPrintConfig m_config per-plate override).
@@ -8371,11 +8371,11 @@ void QmlUiAuditTests::v50PartPlateSaveReloadRegressionWired()
   // The existing Phase 97 (v4.3) thumbnailSaveReloadRoundTrip test already
   // covers a portion of this contract; Phase 152 extends the anchor coverage
   // to ALL plate state fields via this source-audit slot. A live multi-plate
-  // round-trip ctest would require a ProjectServiceMock fixture the unit-test
+  // round-trip ctest would require a ProjectService fixture the unit-test
   // harness doesn't have (the existing PartPlateTests QSKIP when HAS_LIBSLIC3R
   // is not in scope).
   QVERIFY2(projSvc.contains(QStringLiteral("pendingPlate")),
-           "PLATE-06: ProjectServiceMock must rebuild pending plate state from 3MF load");
+           "PLATE-06: ProjectService must rebuild pending plate state from 3MF load");
 }
 
 void QmlUiAuditTests::v50RegressionLocked()
@@ -8392,13 +8392,13 @@ void QmlUiAuditTests::v50RegressionLocked()
   // is the cross-workstream rollup that protects against a regression slipping
   // through if a per-workstream slot is later removed or weakened.
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // -- v5.0 WS1 (tech-debt) anchor: CGAL-02 true intersection.
   QVERIFY2(projSvc.contains(QStringLiteral("MeshBoolean::cgal::intersect")),
@@ -8428,15 +8428,15 @@ void QmlUiAuditTests::v50RegressionLocked()
 
   // -- v5.0 WS4 (Preset) anchor: .ini bundle + comparePresets.
   QVERIFY2(presetSvc.contains(QStringLiteral("exportBundleIni")),
-           "REGRESS-04/WS4: PresetServiceMock must keep exportBundleIni (.ini interop)");
+           "REGRESS-04/WS4: PresetService must keep exportBundleIni (.ini interop)");
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
            "REGRESS-04/WS4: comparePresets primitive must stay present");
 
   // -- v5.0 WS5 (PartPlate) anchor: staging buffers. (Q11-⑦ removed the
   // bottom plate bar whose card DropAreas carried the plate-drag reorder;
   // the movePlate surface lives on the plate context menus now.)
-  QVERIFY2(readSource(QStringLiteral("src/core/services/ProjectServiceMock.h")).contains(QStringLiteral("pendingPlateThumbnails_")),
-           "REGRESS-04/WS5: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
+  QVERIFY2(readSource(QStringLiteral("src/core/services/ProjectService.h")).contains(QStringLiteral("pendingPlateThumbnails_")),
+           "REGRESS-04/WS5: ProjectService must keep pendingPlateThumbnails_ (3MF round-trip)");
 
   // -- v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
   QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
@@ -8489,11 +8489,11 @@ void QmlUiAuditTests::v51PresetDiffDialogWired()
   QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsRequired")),
            "CLOS-01: ConfigViewModel must emit comparePresetsRequired signal");
 
-  // (1b) Implementation proxies to PresetServiceMock::comparePresets (Phase 149).
+  // (1b) Implementation proxies to PresetService::comparePresets (Phase 149).
   QVERIFY2(configVmCpp.contains(QStringLiteral("ConfigViewModel::comparePresetsDetailed")),
            "CLOS-01: comparePresetsDetailed must be implemented in ConfigViewModel.cpp");
   QVERIFY2(configVmCpp.contains(QStringLiteral("presetService_->comparePresets")),
-           "CLOS-01: comparePresetsDetailed must proxy to PresetServiceMock::comparePresets");
+           "CLOS-01: comparePresetsDetailed must proxy to PresetService::comparePresets");
 
   // (2) PresetDiffDialog.qml exists and consumes the model roles produced by
   //     comparePresetsDetailed: key / valueA / valueB / status (added/removed/changed).
@@ -8538,19 +8538,19 @@ void QmlUiAuditTests::v51PresetDiffDialogWired()
 // `ModelVolume::is_text()` semantics (`Model.hpp:911`).
 void QmlUiAuditTests::v51EmbossTextMetadataRoundTripWired()
 {
-  const QString projH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
 
-  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectServiceMock.h");
-  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectService.h");
+  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectService.cpp");
 
   // (1) TextConfiguration.hpp is included (struct definitions available).
   QVERIFY2(projCpp.contains(QStringLiteral("<libslic3r/TextConfiguration.hpp>")),
-           "CLOS-02: ProjectServiceMock.cpp must include libslic3r/TextConfiguration.hpp");
+           "CLOS-02: ProjectService.cpp must include libslic3r/TextConfiguration.hpp");
 
   // (2) attachEmbossMetadata helper exists and is declared in the header.
   QVERIFY2(projH.contains(QStringLiteral("attachEmbossMetadata")),
-           "CLOS-02: ProjectServiceMock.h must declare attachEmbossMetadata helper");
+           "CLOS-02: ProjectService.h must declare attachEmbossMetadata helper");
 
   // (3) Save side: the helper builds and assigns a TextConfiguration. Asserts
   //     the key struct field assignments -- these are what upstream
@@ -8596,27 +8596,27 @@ void QmlUiAuditTests::v51EmbossTextMetadataRoundTripWired()
 // phase closes the in-session capture gap.
 void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
 {
-  const QString projH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString editorH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString editorCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString rhiH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString rhiCpp = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.cpp"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
 
-  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectServiceMock.h");
-  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectService.h");
+  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectService.cpp");
   QVERIFY2(!editorH.isEmpty(), "Unable to read EditorViewModel.h");
   QVERIFY2(!editorCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
   QVERIFY2(!rhiH.isEmpty(), "Unable to read RhiViewport.h");
   QVERIFY2(!rhiCpp.isEmpty(), "Unable to read RhiViewport.cpp");
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
 
-  // (1) Write path on ProjectServiceMock (the missing primitive).
+  // (1) Write path on ProjectService (the missing primitive).
   QVERIFY2(projH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
-           "CLOS-03: ProjectServiceMock.h must declare setPlateThumbnailFromBase64 write path");
-  QVERIFY2(projCpp.contains(QStringLiteral("ProjectServiceMock::setPlateThumbnailFromBase64")),
-           "CLOS-03: setPlateThumbnailFromBase64 must be implemented in ProjectServiceMock.cpp");
+           "CLOS-03: ProjectService.h must declare setPlateThumbnailFromBase64 write path");
+  QVERIFY2(projCpp.contains(QStringLiteral("ProjectService::setPlateThumbnailFromBase64")),
+           "CLOS-03: setPlateThumbnailFromBase64 must be implemented in ProjectService.cpp");
   QVERIFY2(projCpp.contains(QStringLiteral("QByteArray::fromBase64")),
            "CLOS-03: setPlateThumbnailFromBase64 must base64-decode the input");
   QVERIFY2(projCpp.contains(QStringLiteral("loadFromData")),
@@ -8655,7 +8655,7 @@ void QmlUiAuditTests::v51PartPlateSessionThumbnailWired()
 // Phase 157 (CLOS-04): live multi-plate full-state round-trip ctest anchor.
 // Phase 152 could only source-audit-lock PLATE-06 because no live ctest
 // existed. Phase 157 ships multiPlateFullStateRoundTrip in ViewModelSmokeTests
-// (real store_bbs_3mf + read_from_archive on a stack ProjectServiceMock); this
+// (real store_bbs_3mf + read_from_archive on a stack ProjectService); this
 // slot locks its existence + coverage breadth across all 5 CLOS-04 dimensions.
 void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
 {
@@ -8711,19 +8711,19 @@ void QmlUiAuditTests::v51MultiPlateRoundTripLiveCtest()
 
 // Phase 158 (EMBO-F01/F02): Emboss style controls + SVG depth-modifier wiring
 // gate. Locks the 4 new style axes (boldness/italic/use-surface/curve-projection)
-// from Q_PROPERTY through viewmodel forwarding to ProjectServiceMock FontProp
+// from Q_PROPERTY through viewmodel forwarding to ProjectService FontProp
 // population + TextConfiguration persistence, plus the addSvgVolume
 // depth-modifier extension.
 void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
 {
-  const QString projH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString projCpp = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString editorH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   const QString editorCpp = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
 
-  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectServiceMock.h");
-  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projH.isEmpty(), "Unable to read ProjectService.h");
+  QVERIFY2(!projCpp.isEmpty(), "Unable to read ProjectService.cpp");
   QVERIFY2(!editorH.isEmpty(), "Unable to read EditorViewModel.h");
   QVERIFY2(!editorCpp.isEmpty(), "Unable to read EditorViewModel.cpp");
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
@@ -8740,19 +8740,19 @@ void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
   QVERIFY2(editorH.contains(QStringLiteral("Q_PROPERTY(float svgDepthModifier")),
            "EMBO-F02: EditorViewModel.h must expose svgDepthModifier Q_PROPERTY");
 
-  // (2) ProjectServiceMock has the 4 setters + member fields.
+  // (2) ProjectService has the 4 setters + member fields.
   QVERIFY2(projH.contains(QStringLiteral("setEmbossBoldness")),
-           "EMBO-F01: ProjectServiceMock.h must declare setEmbossBoldness");
+           "EMBO-F01: ProjectService.h must declare setEmbossBoldness");
   QVERIFY2(projH.contains(QStringLiteral("setEmbossItalic")),
-           "EMBO-F01: ProjectServiceMock.h must declare setEmbossItalic");
+           "EMBO-F01: ProjectService.h must declare setEmbossItalic");
   QVERIFY2(projH.contains(QStringLiteral("setEmbossUseSurface")),
-           "EMBO-F01: ProjectServiceMock.h must declare setEmbossUseSurface");
+           "EMBO-F01: ProjectService.h must declare setEmbossUseSurface");
   QVERIFY2(projH.contains(QStringLiteral("setEmbossCurveProjection")),
-           "EMBO-F01: ProjectServiceMock.h must declare setEmbossCurveProjection");
+           "EMBO-F01: ProjectService.h must declare setEmbossCurveProjection");
   QVERIFY2(projH.contains(QStringLiteral("m_embossBoldness")),
-           "EMBO-F01: ProjectServiceMock.h must declare m_embossBoldness member field");
+           "EMBO-F01: ProjectService.h must declare m_embossBoldness member field");
   QVERIFY2(projH.contains(QStringLiteral("m_embossItalic")),
-           "EMBO-F01: ProjectServiceMock.h must declare m_embossItalic member field");
+           "EMBO-F01: ProjectService.h must declare m_embossItalic member field");
 
   // (3) FontProp is populated from the new fields in performEmbossVolumeAdd +
   //     the async worker (no longer hardcoded 0.0f).
@@ -8783,7 +8783,7 @@ void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
 
   // (7) addSvgVolume accepts the depth-modifier param + applies it.
   QVERIFY2(projH.contains(QStringLiteral("addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier = 1.0f)")),
-           "EMBO-F02: ProjectServiceMock::addSvgVolume must accept the depthModifier param");
+           "EMBO-F02: ProjectService::addSvgVolume must accept the depthModifier param");
   QVERIFY2(projCpp.contains(QStringLiteral("set_scaling_factor")),
            "EMBO-F02: addSvgVolume must apply the modifier via the volume's Z scaling factor");
   QVERIFY2(editorCpp.contains(QStringLiteral("addSvgVolume(idx, m_svgFilePath, m_svgDepthModifier)")),
@@ -8812,9 +8812,9 @@ void QmlUiAuditTests::v51EmbossStyleControlsAndSvgAdvancedWired()
 void QmlUiAuditTests::v51RegressionLocked()
 {
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
-  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  const QString projSvcH = readSource(QStringLiteral("src/core/services/ProjectService.h"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
   const QString evm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
@@ -8822,7 +8822,7 @@ void QmlUiAuditTests::v51RegressionLocked()
   const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
 
   QVERIFY2(!configVmH.isEmpty(), "Unable to read ConfigViewModel.h");
-  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectServiceMock.cpp");
+  QVERIFY2(!projSvc.isEmpty(), "Unable to read ProjectService.cpp");
 
   // -- v5.1 CLOS-01 (Phase 154) anchor: QML Preset Diff-View Dialog.
   QVERIFY2(configVmH.contains(QStringLiteral("comparePresetsDetailed")),
@@ -8834,7 +8834,7 @@ void QmlUiAuditTests::v51RegressionLocked()
 
   // -- v5.1 CLOS-03 (Phase 156) anchor: runtime plate thumbnail write path.
   QVERIFY2(projSvcH.contains(QStringLiteral("setPlateThumbnailFromBase64")),
-           "REGRESS-05/CLOS-03: ProjectServiceMock must keep the setPlateThumbnailFromBase64 write path");
+           "REGRESS-05/CLOS-03: ProjectService must keep the setPlateThumbnailFromBase64 write path");
 
   // -- v5.1 CLOS-04 (Phase 157) anchor: live multi-plate full-state round-trip ctest.
   QVERIFY2(vmTests.contains(QStringLiteral("multiPlateFullStateRoundTrip")),
@@ -8857,11 +8857,11 @@ void QmlUiAuditTests::v51RegressionLocked()
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
            "REGRESS-05/v5.0: text2shapes pipeline must stay wired");
   QVERIFY2(presetSvc.contains(QStringLiteral("exportBundleIni")),
-           "REGRESS-05/v5.0: PresetServiceMock must keep exportBundleIni (.ini interop)");
+           "REGRESS-05/v5.0: PresetService must keep exportBundleIni (.ini interop)");
   QVERIFY2(presetSvc.contains(QStringLiteral("comparePresets")),
            "REGRESS-05/v5.0: comparePresets primitive must stay present");
   QVERIFY2(projSvcH.contains(QStringLiteral("pendingPlateThumbnails_")),
-           "REGRESS-05/v5.0: ProjectServiceMock must keep pendingPlateThumbnails_ (3MF round-trip)");
+           "REGRESS-05/v5.0: ProjectService must keep pendingPlateThumbnails_ (3MF round-trip)");
 
   // -- v4.8 re-assertion: CGAL MeshBoolean + Drill + Assembly ASM-01.
   QVERIFY2(evm.contains(QStringLiteral("kCgalMeshBooleanAvailable = true")),
@@ -9291,8 +9291,8 @@ void QmlUiAuditTests::v52RegressionLocked()
   const QString qrc = qmlQrcSources();
   // v5.1/v5.0 anchors
   const QString configVmH = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
-  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   const QString vmTests = readSource(QStringLiteral("tests/ViewModelSmokeTests.cpp"));
   const QString rootCmake = readSource(QStringLiteral("CMakeLists.txt"));
   const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
@@ -9457,7 +9457,7 @@ void QmlUiAuditTests::v53PseudoButtonSwept()
 
 // Phase 174 (FEAT-01): per-object settings override dialog gate.
 // Phase 174 ships a SelectionSettingsDialog QML consumer for the existing
-// ProjectServiceMock scoped-option API + adds VM proxies. Wired via the
+// ProjectService scoped-option API + adds VM proxies. Wired via the
 // selectionSettingsRequested signal that was firing but had no consumer.
 void QmlUiAuditTests::v53PerObjectSettingsDialog()
 {
@@ -9514,7 +9514,7 @@ void QmlUiAuditTests::v53PerObjectSettingsDialog()
 
 // Phase 175 (FEAT-02): object layer-range editor gate.
 // Phase 175 ships the ObjectLayersDialog QML consumer for the existing
-// ProjectServiceMock layer-range API + adds VM proxies. Reachable via a new
+// ProjectService layer-range API + adds VM proxies. Reachable via a new
 // "层高范围..." menu item.
 void QmlUiAuditTests::v53LayerRangeEditor()
 {
@@ -9566,7 +9566,7 @@ void QmlUiAuditTests::v53LayerRangeEditor()
 // Phase 176 (FEAT-03): Simplify mesh gizmo gate.
 // Phase 176 replaces the v3.x stub at EditorViewModel::simplifyMeshSelected
 // (was logging "not yet implemented") with a delegation to the real
-// simplifySelected implementation (which forwards to ProjectServiceMock::
+// simplifySelected implementation (which forwards to ProjectService::
 // simplifyObject → libslic3r its_quadric_edge_collapse).
 //
 // Investigation revealed the real simplify pipeline already existed:
@@ -9590,9 +9590,9 @@ void QmlUiAuditTests::v53SimplifyGizmoReal()
 
   // (3) The real simplifyObject Backend exists (this was already there but
   //     audit missed it -- Phase 176 confirms the full chain works).
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::its_quadric_edge_collapse")),
-           "FEAT-03: ProjectServiceMock::simplifyObject must call Slic3r::its_quadric_edge_collapse (the real simplify math)");
+           "FEAT-03: ProjectService::simplifyObject must call Slic3r::its_quadric_edge_collapse (the real simplify math)");
 }
 
 // Phase 177/178 (I18N-06): i18n long-tail gate.
@@ -9649,7 +9649,7 @@ void QmlUiAuditTests::v53RegressionLocked()
   const QString multiMachine = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
   const QString theme = readSource(QStringLiteral("src/qml_gui/Theme.qml"));
   const QString backendH = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
-  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+  const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
   const QString calibSvc = readSource(QStringLiteral("src/core/services/CalibrationServiceMock.cpp"));
   const QString deTs = readSource(QStringLiteral("i18n/de.ts"));
 
@@ -9741,9 +9741,9 @@ void QmlUiAuditTests::v54RegressionLocked()
   }
   // A8: Qt6 export uses flat-array "presets" JSON schema (not upstream three-category).
   {
-    const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+    const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
     QVERIFY2(presetSvc.contains(QStringLiteral("\"presets\"")) || presetSvc.contains(QStringLiteral("QStringLiteral(\"presets\")")),
-             "REGRESS-08/CRASH-02: PresetServiceMock must keep its flat-array presets JSON key "
+             "REGRESS-08/CRASH-02: PresetService must keep its flat-array presets JSON key "
              "(A8 immunity -- Qt6 schema is intentionally different from upstream)");
   }
   // A9: NotificationCenter uses QML native wrapping.
@@ -9758,12 +9758,12 @@ void QmlUiAuditTests::v54RegressionLocked()
   // Anchor the resolveSourcePath lambda so a future refactor can't silently drop
   // the project-relative fallback (which would re-introduce the bare-filename bug).
   {
-    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
     QVERIFY2(projSvc.contains(QStringLiteral("resolveSourcePath")),
-             "REGRESS-08/CRASH-03: ProjectServiceMock::reloadFromDisk must keep resolveSourcePath "
+             "REGRESS-08/CRASH-03: ProjectService::reloadFromDisk must keep resolveSourcePath "
              "(A7 fix -- project-relative fallback for bare-filename input_file after 3MF reload)");
     QVERIFY2(projSvc.contains(QStringLiteral("currentProjectPath")),
-             "REGRESS-08/CRASH-03: ProjectServiceMock reloadFromDisk must reference currentProjectPath "
+             "REGRESS-08/CRASH-03: ProjectService reloadFromDisk must reference currentProjectPath "
              "(A7 fix -- needs project dir for same-folder fallback)");
   }
 
@@ -9804,7 +9804,7 @@ void QmlUiAuditTests::v54RegressionLocked()
 
   // -- v5.0 re-assertion.
   {
-    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
     QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
              "REGRESS-08/v5.0: Emboss text2shapes integration must remain");
   }
@@ -9946,38 +9946,38 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
   }
 
   // -- v5.6 DLG-01 (Phase 199): ConfigWizard vendor/model enumeration layer.
-  // PresetServiceMock must expose the enumeration Q_INVOKABLEs the wizard reads.
+  // PresetService must expose the enumeration Q_INVOKABLEs the wizard reads.
   {
-    const QString presetH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
-    QVERIFY2(!presetH.isEmpty(), "GATE-01/DLG-01: Unable to read PresetServiceMock.h");
+    const QString presetH = readSource(QStringLiteral("src/core/services/PresetService.h"));
+    QVERIFY2(!presetH.isEmpty(), "GATE-01/DLG-01: Unable to read PresetService.h");
     QVERIFY2(presetH.contains(QStringLiteral("Q_INVOKABLE QStringList vendors() const")),
-             "GATE-01/DLG-01: PresetServiceMock must keep vendors() enumeration");
+             "GATE-01/DLG-01: PresetService must keep vendors() enumeration");
     QVERIFY2(presetH.contains(QStringLiteral("printerModelsForVendor")),
-             "GATE-01/DLG-01: PresetServiceMock must keep printerModelsForVendor() enumeration");
+             "GATE-01/DLG-01: PresetService must keep printerModelsForVendor() enumeration");
     QVERIFY2(presetH.contains(QStringLiteral("materialsForVendor")),
-             "GATE-01/DLG-01: PresetServiceMock must keep materialsForVendor() enumeration");
+             "GATE-01/DLG-01: PresetService must keep materialsForVendor() enumeration");
     QVERIFY2(presetH.contains(QStringLiteral("bedTypes")),
-             "GATE-01/DLG-01: PresetServiceMock must keep bedTypes*() enumeration");
+             "GATE-01/DLG-01: PresetService must keep bedTypes*() enumeration");
   }
 
   // -- v5.9 WIZ-03 (Phase 216/217/218): ConfigWizard multi-vendor selection.
-  // PresetServiceMock must expose the on-demand vendor load + AppConfig-lite
+  // PresetService must expose the on-demand vendor load + AppConfig-lite
   // persistence surface the wizard's vendor picker reads.
   {
-    const QString presetH = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
-    QVERIFY2(!presetH.isEmpty(), "GATE-01/WIZ-03: Unable to read PresetServiceMock.h");
+    const QString presetH = readSource(QStringLiteral("src/core/services/PresetService.h"));
+    QVERIFY2(!presetH.isEmpty(), "GATE-01/WIZ-03: Unable to read PresetService.h");
     QVERIFY2(presetH.contains(QStringLiteral("availableVendorNames()")),
-             "GATE-01/WIZ-03: PresetServiceMock must expose availableVendorNames() for the vendor picker");
+             "GATE-01/WIZ-03: PresetService must expose availableVendorNames() for the vendor picker");
     QVERIFY2(presetH.contains(QStringLiteral("Q_INVOKABLE bool loadVendor(")),
-             "GATE-01/WIZ-03: PresetServiceMock must expose loadVendor() for on-demand vendor load");
+             "GATE-01/WIZ-03: PresetService must expose loadVendor() for on-demand vendor load");
     QVERIFY2(presetH.contains(QStringLiteral("selectedVendor()")),
-             "GATE-01/WIZ-03: PresetServiceMock must expose selectedVendor() (AppConfig-lite)");
+             "GATE-01/WIZ-03: PresetService must expose selectedVendor() (AppConfig-lite)");
     QVERIFY2(presetH.contains(QStringLiteral("selectedPrinterModel()")),
-             "GATE-01/WIZ-03: PresetServiceMock must expose selectedPrinterModel() (AppConfig-lite)");
+             "GATE-01/WIZ-03: PresetService must expose selectedPrinterModel() (AppConfig-lite)");
     QVERIFY2(presetH.contains(QStringLiteral("loadSingleVendor(")),
-             "GATE-01/WIZ-03: PresetServiceMock must keep the vendor-agnostic loadSingleVendor() helper");
+             "GATE-01/WIZ-03: PresetService must keep the vendor-agnostic loadSingleVendor() helper");
     QVERIFY2(presetH.contains(QStringLiteral("m_loadedVendors")),
-             "GATE-01/WIZ-03: PresetServiceMock must keep the m_loadedVendors dedup set");
+             "GATE-01/WIZ-03: PresetService must keep the m_loadedVendors dedup set");
 
     const QString wizardQml = readSource(QStringLiteral("src/qml_gui/dialogs/ConfigWizardDialog.qml"));
     QVERIFY2(!wizardQml.isEmpty(), "GATE-01/WIZ-03: Unable to read ConfigWizardDialog.qml");
@@ -10072,7 +10072,7 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
 
   // -- v5.0 re-assertion.
   {
-    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectServiceMock.cpp"));
+    const QString projSvc = readSource(QStringLiteral("src/core/services/ProjectService.cpp"));
     QVERIFY2(projSvc.contains(QStringLiteral("Slic3r::Emboss::text2shapes")),
              "GATE-01/v5.0: Emboss text2shapes integration must remain");
   }
@@ -10374,7 +10374,7 @@ QTEST_MAIN(QmlUiAuditTests)
 // 1. Bed texture: the printer profile's bed_texture image (PNG/SVG) drawn as
 //    a textured quad over the plate background/grid (upstream
 //    PartPlate::render_logo_texture), with the data chain
-//    PresetServiceMock -> ConfigViewModel -> EditorViewModel -> RhiViewport ->
+//    PresetService -> ConfigViewModel -> EditorViewModel -> RhiViewport ->
 //    RhiViewportRenderer wired end to end.
 // 2. Model lighting: two-light gouraud shading with upstream gouraud.vs
 //    constants and the upstream GLVolume::NEUTRAL_COLOR default object color.
@@ -10383,7 +10383,7 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
   const QString renderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
   const QString viewportH = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewport.h"));
   const QString sceneData = readSource(QStringLiteral("src/qml_gui/Renderer/PrepareSceneData.cpp"));
-  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+  const QString presetSvc = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   const QString configVm = readSource(QStringLiteral("src/core/viewmodels/ConfigViewModel.cpp"));
   const QString editorVm = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.cpp"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
@@ -10391,7 +10391,7 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
   QVERIFY2(!renderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
   QVERIFY2(!viewportH.isEmpty(), "Unable to read RhiViewport.h");
   QVERIFY2(!sceneData.isEmpty(), "Unable to read PrepareSceneData.cpp");
-  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetServiceMock.cpp");
+  QVERIFY2(!presetSvc.isEmpty(), "Unable to read PresetService.cpp");
   QVERIFY2(!configVm.isEmpty(), "Unable to read ConfigViewModel.cpp");
   QVERIFY2(!editorVm.isEmpty(), "Unable to read EditorViewModel.cpp");
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
@@ -10435,7 +10435,7 @@ void QmlUiAuditTests::v515BedTextureAndModelLitWired()
 
   // Data chain: preset -> config VM -> editor VM -> viewport -> QML.
   QVERIFY2(presetSvc.contains(QStringLiteral("bedTextureFileForPreset")),
-           "BEDTEX: PresetServiceMock must resolve the bed texture file");
+           "BEDTEX: PresetService must resolve the bed texture file");
   QVERIFY2(configVm.contains(QStringLiteral("bedTextureFileForPreset")),
            "BEDTEX: ConfigViewModel must expose the selected preset's texture");
   QVERIFY2(editorVm.contains(QStringLiteral("syncBedFromPrinterPreset")),
@@ -10537,7 +10537,7 @@ void QmlUiAuditTests::v516BedExcludeAndHeightLimitWired()
 //   3. Task-specific locks: AboutDialog carries the upstream AGPL-3.0
 //      license (AboutDialog.cpp:148-156), EditGCodeDialog saves back through
 //      ConfigViewModel::setValue, WipeTowerDialog persists via
-//      PresetServiceMock::saveFlushVolumes.
+//      PresetService::saveFlushVolumes.
 void QmlUiAuditTests::dialogReachabilitySourceAudit()
 {
   const QDir qmlRoot(QStringLiteral(QT_TESTCASE_SOURCEDIR) + QStringLiteral("/src/qml_gui"));
@@ -10707,10 +10707,10 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
            "DLG-02: WipeTowerDialog edits must write back to the matrix");
   QVERIFY2(wipeTower.contains(QStringLiteral("wizardSaveFlushVolumes(root.copyMatrix(flushMatrix))")),
            "DLG-02: WipeTowerDialog OK must persist the edited matrix copy");
-  const QString presetSvcHeader = readSource(QStringLiteral("src/core/services/PresetServiceMock.h"));
+  const QString presetSvcHeader = readSource(QStringLiteral("src/core/services/PresetService.h"));
   QVERIFY2(presetSvcHeader.contains(QStringLiteral("saveFlushVolumes")),
-           "DLG-02: PresetServiceMock must declare saveFlushVolumes");
-  const QString presetSvcImpl = readSource(QStringLiteral("src/core/services/PresetServiceMock.cpp"));
+           "DLG-02: PresetService must declare saveFlushVolumes");
+  const QString presetSvcImpl = readSource(QStringLiteral("src/core/services/PresetService.cpp"));
   QVERIFY2(presetSvcImpl.contains(QStringLiteral("\"flush_volumes_matrix\"")),
            "DLG-02: saveFlushVolumes must write the upstream flush_volumes_matrix key");
 
@@ -10723,11 +10723,11 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
            "DLG-03: EditorViewModel must proxy listArchiveEntries");
   QVERIFY2(editorVmHeader.contains(QStringLiteral("applyPendingObjColors")),
            "DLG-03: EditorViewModel must expose applyPendingObjColors");
-  const QString projectSvcHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projectSvcHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   QVERIFY2(projectSvcHeader.contains(QStringLiteral("objMtlColors")),
-           "DLG-03: ProjectServiceMock must expose objMtlColors");
+           "DLG-03: ProjectService must expose objMtlColors");
   QVERIFY2(projectSvcHeader.contains(QStringLiteral("projectVersionInfo")),
-           "DLG-03: ProjectServiceMock must expose projectVersionInfo");
+           "DLG-03: ProjectService must expose projectVersionInfo");
   QVERIFY2(backendHeader.contains(QStringLiteral("systemInfo")),
            "DLG-03: BackendContext must expose systemInfo for SysInfoDialog");
 }
@@ -10916,7 +10916,7 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
   QVERIFY2(backendHeader.contains(QStringLiteral("topbarImportConfigs")),
            "VIEW-02: BackendContext must declare topbarImportConfigs");
   QVERIFY2(backendImpl.contains(QStringLiteral("importBundle")),
-           "VIEW-02: topbarImportConfigs must route through PresetServiceMock::importBundle");
+           "VIEW-02: topbarImportConfigs must route through PresetService::importBundle");
 
   // ── VIEW-03: window-level DropArea wired to the import surface ────────
   QVERIFY2(mainQml.contains(QStringLiteral("DropArea {")),
@@ -10930,13 +10930,13 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
 
   // ── VIEW-04/05/06: service + viewmodel plumbing exists ────────────────
   const QString editorHeader = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
-  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectServiceMock.h"));
+  const QString projectHeader = readSource(QStringLiteral("src/core/services/ProjectService.h"));
   QVERIFY2(!editorHeader.isEmpty() && !projectHeader.isEmpty(),
-           "Unable to read EditorViewModel/ProjectServiceMock headers");
+           "Unable to read EditorViewModel/ProjectService headers");
   QVERIFY2(projectHeader.contains(QStringLiteral("loadedObjectUnitHint")),
-           "VIEW-04: ProjectServiceMock must expose loadedObjectUnitHint");
+           "VIEW-04: ProjectService must expose loadedObjectUnitHint");
   QVERIFY2(projectHeader.contains(QStringLiteral("removeObjectsWithZeroVolume")),
-           "VIEW-04: ProjectServiceMock must expose removeObjectsWithZeroVolume");
+           "VIEW-04: ProjectService must expose removeObjectsWithZeroVolume");
   QVERIFY2(editorHeader.contains(QStringLiteral("applyUnitConversion")),
            "VIEW-04: EditorViewModel must expose applyUnitConversion");
   QVERIFY2(editorHeader.contains(QStringLiteral("unitConversionPromptRequested")),
@@ -10944,11 +10944,11 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
   QVERIFY2(backendImpl.contains(QStringLiteral("loadProject(localPath)")),
            "VIEW-05: topbarOpenProject must route .3mf opens through loadProject");
   QVERIFY2(projectHeader.contains(QStringLiteral("exportGcode3mf")),
-           "VIEW-06: ProjectServiceMock must expose exportGcode3mf");
+           "VIEW-06: ProjectService must expose exportGcode3mf");
   QVERIFY2(editorHeader.contains(QStringLiteral("scaleSelectionToFitBed")),
            "VIEW-06: EditorViewModel must expose scaleSelectionToFitBed");
   QVERIFY2(projectHeader.contains(QStringLiteral("selectionWorldBoundingBox")),
-           "VIEW-06: ProjectServiceMock must expose selectionWorldBoundingBox");
+           "VIEW-06: ProjectService must expose selectionWorldBoundingBox");
 }
 
 // GAP-4 (HOTKEYS-UPSTREAM-ALIGN): the Prepare canvas keys must mirror the
@@ -11894,7 +11894,7 @@ void QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure()
 }
 
 // Layering anti-revival: the wizard/wipe-tower dialogs once carried an
-// orphaned "? Backend.presetServiceMock : null" continuation line that made
+// orphaned "? Backend.presetService : null" continuation line that made
 // their configVm property evaluate to the SERVICE (runtime TypeErrors on
 // every wizard* call). Pin both dialogs to the viewmodel-only contract.
 void QmlUiAuditTests::wizardAndWipeTowerBindConfigViewModelOnly()
@@ -11903,8 +11903,8 @@ void QmlUiAuditTests::wizardAndWipeTowerBindConfigViewModelOnly()
   const QString wipeTower = readSource(QStringLiteral("src/qml_gui/dialogs/WipeTowerDialog.qml"));
   QVERIFY2(!wizard.isEmpty() && !wipeTower.isEmpty(),
            "Unable to read ConfigWizardDialog.qml / WipeTowerDialog.qml");
-  QVERIFY2(!wizard.contains(QStringLiteral("presetServiceMock"))
-               && !wipeTower.contains(QStringLiteral("presetServiceMock")),
+  QVERIFY2(!wizard.contains(QStringLiteral("presetService"))
+               && !wipeTower.contains(QStringLiteral("presetService")),
            "LAYERING: wizard/wipe-tower dialogs must not reference the preset"
            " service directly");
   QVERIFY2(wizard.contains(QStringLiteral("Backend.configViewModel"))

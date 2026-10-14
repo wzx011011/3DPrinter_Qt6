@@ -12,7 +12,7 @@ import OWzx
 // extruder; the chosen extruder is applied to the new object.
 //
 // OWzx data flow:
-//   ProjectServiceMock::objMtlColors parses the sibling .mtl (Kd lines) ->
+//   ProjectService::objMtlColors parses the sibling .mtl (Kd lines) ->
 //   EditorViewModel::pendingObjColors + objColorMappingRequested ->
 //   this dialog -> applyPendingObjColors(extruderId) sets every volume of the
 //   pending object to the chosen extruder.

@@ -1,16 +1,16 @@
 #include "EditorViewModel.h"
 
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
 #include "core/model/PartPlateList.h"
 #include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/viewmodels/ConfigViewModel.h"
-#include "core/services/PresetServiceMock.h" // Phase 222: activeFilamentColours()
+#include "core/services/PresetService.h" // Phase 222: activeFilamentColours()
 #ifdef HAS_LIBSLIC3R
 // Phase 114 (MEASURE-03): MeasureEngine instantiates Measure::Measuring per
-// volume from ProjectServiceMock::volumeMeshIts (Phase 112 ITS accessor) and
+// volume from ProjectService::volumeMeshIts (Phase 112 ITS accessor) and
 // scrubs the SurfaceFeature back-pointers at the boundary (pitfall 6). The
 // SceneRaycaster (Phase 113) produces the hit that feeds getFeature.
 #include "core/rendering/MeasureEngine.h"
@@ -23,7 +23,7 @@
 #include "core/rendering/GizmoVertex.h" // canonical 7-float vertex layout (shared with renderer)
 // Phase 120 (PAINT-01): PaintEngine owns per-volume TriangleSelector instances
 // (reused libslic3r code -- TriangleSelector.hpp, NOT reimplemented) and drives
-// select_patch from the stage-2 hit. Built from the same ProjectServiceMock
+// select_patch from the stage-2 hit. Built from the same ProjectService
 // mesh source (volumeMeshTriangleMesh, the aliasing shared_ptr that keeps the
 // TriangleMesh alive for the selector's reference).
 #include "core/rendering/PaintEngine.h"
@@ -122,7 +122,7 @@ constexpr bool kCgalMeshBooleanAvailable = true;
 // per-batch [renderObjectId int32][triangleCount int32][verts...], followed by
 // a 6-float global bbox trailer (skipped here).
 // S3 (2026-10-14): decomposed blobs (magic 'MDS2') carry VOLUME-LOCAL
-// vertices -- batchWorldTransforms (ProjectServiceMock::
+// vertices -- batchWorldTransforms (ProjectService::
 // meshBatchInstanceTransforms, one entry per blob batch) composes them into
 // world coordinates here so every consumer keeps its world-bounds contract.
 // A decomposed blob without a covering transform list is malformed (empty
@@ -482,7 +482,7 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   // measure) derive live from the channel.
   m_cachedMeshData = projectService_->meshData();
   // S3: ONE walk for all six per-batch tables (was six full model walks).
-  const ProjectServiceMock::MeshBatchRenderTables tables = projectService_->meshBatchRenderTables();
+  const ProjectService::MeshBatchRenderTables tables = projectService_->meshBatchRenderTables();
   m_cachedMeshBatchSourceObjectIndices = tables.sourceObjectIndices;
   m_cachedMeshBatchVolumeIndices = tables.volumeIndices;
   m_cachedMeshBatchInstanceIndices = tables.instanceIndices;
@@ -2541,7 +2541,7 @@ void EditorViewModel::embossSelectedAsync()
   projectService_->setEmbossUseSurface(m_embossUseSurface);
   projectService_->setEmbossCurveProjection(m_embossCurveProjection);
   // Wire service signals → viewmodel signals (idempotent — UniqueConnection).
-  connect(projectService_, &ProjectServiceMock::embossVolumeAdded,
+  connect(projectService_, &ProjectService::embossVolumeAdded,
           this, [this](int objectIndex, const QString &volumeName) {
             // Refresh the volume entries + mesh cache so the new volume shows
             // up in the UI, then re-emit the signal for QML.
@@ -2555,7 +2555,7 @@ void EditorViewModel::embossSelectedAsync()
               emit embossRunningChanged();
             }
           }, Qt::UniqueConnection);
-  connect(projectService_, &ProjectServiceMock::embossVolumeFailed,
+  connect(projectService_, &ProjectService::embossVolumeFailed,
           this, [this](const QString &reason) {
             qWarning("[EditorViewModel] async emboss failed: %s", qUtf8Printable(reason));
             emit embossVolumeFailed(reason);
@@ -3304,7 +3304,7 @@ void EditorViewModel::flattenSelected()
     return;
 
   // Phase 129 (POLISH-02): real flatten via orientObject, which calls
-  // Slic3r::orientation::orient(ModelObject*) (ProjectServiceMock.cpp:2664-2675).
+  // Slic3r::orientation::orient(ModelObject*) (ProjectService.cpp:2664-2675).
   // This computes the best orientation (largest flat face down) upstream-style,
   // replacing the former mock that hardcoded 6 candidate faces + reset rotation.
   statusText_ = tr("Computing best flat orientation...");
@@ -3345,7 +3345,7 @@ QVector3D EditorViewModel::flattenRotationForNormal(const QVector3D &oldRotation
   //
   // Euler convention: libslic3r Geometry::assemble_transform composes
   // rotate X, then Y, then Z (Geometry.hpp:347-353), i.e. R = Rz*Ry*Rx --
-  // the same convention ProjectServiceMock::setObjectRotation rebuilds the
+  // the same convention ProjectService::setObjectRotation rebuilds the
   // instance transform with, so the returned angles round-trip through the
   // service byte-for-byte.
   const QVector3D n = worldNormal.normalized();
@@ -3406,7 +3406,7 @@ struct FlattenPickResult
 };
 } // namespace
 
-static FlattenPickResult flattenRaycast(ProjectServiceMock *service,
+static FlattenPickResult flattenRaycast(ProjectService *service,
                                         OWzx::SceneRaycaster *raycaster,
                                         int pickedSourceIndex,
                                         QVector3D rayOrigin, QVector3D rayDir)
@@ -3860,7 +3860,7 @@ int EditorViewModel::mapFilteredToSourceIndex(int filteredIndex) const
 void EditorViewModel::setConfigViewModel(ConfigViewModel *vm)
 {
   configViewModel_ = vm;
-  // Phase 222 (FIL-COLOUR): once the ConfigViewModel (and its PresetServiceMock)
+  // Phase 222 (FIL-COLOUR): once the ConfigViewModel (and its PresetService)
   // is wired, sync the active filament colours so the MMU gizmo and renderer
   // reflect the configured filaments immediately.
   syncFilamentColours();
@@ -4023,7 +4023,7 @@ QByteArray EditorViewModel::loadBedModelMesh(const QString &stlPath) const
 {
   // v5.16 (BEDMODEL): loads the printer frame STL and packs a triangle
   // stream in scene coordinates (x, height=z_stl, depth=y_stl — the same
-  // slic3r->GL mapping ProjectServiceMock::meshData applies). Offsets stay
+  // slic3r->GL mapping ProjectService::meshData applies). Offsets stay
   // renderer-side (upstream Bed3D::update_model_offset shifts by the plate
   // position and -0.44 on Z).
   if (stlPath.isEmpty())
@@ -4060,14 +4060,14 @@ QByteArray EditorViewModel::loadBedModelMesh(const QString &stlPath) const
 void EditorViewModel::syncFilamentColours()
 {
   // Phase 222 (FIL-COLOUR): read the active filament colours from
-  // PresetServiceMock (via ConfigViewModel) and push them into
-  // ProjectServiceMock so plateFilamentColours()/filamentCount() return the
+  // PresetService (via ConfigViewModel) and push them into
+  // ProjectService so plateFilamentColours()/filamentCount() return the
   // configured filament set instead of the plate-config fallback (which is
   // almost always empty). The ConfigViewModel must expose presetService();
   // if not yet wired, this is a no-op.
   if (!configViewModel_ || !projectService_)
     return;
-  PresetServiceMock *presetSvc = configViewModel_->presetService();
+  PresetService *presetSvc = configViewModel_->presetService();
   if (!presetSvc)
     return;
   const QStringList colours = presetSvc->activeFilamentColours();
@@ -4580,7 +4580,7 @@ bool EditorViewModel::computeMeasureReadoutFromHit(int objectIndex,
   // between them (Measure::get_measurement). Mirrors the upstream two-click
   // measure flow (GLGizmoMeasure.cpp m_selected_features first/second).
   //
-  // ProjectServiceMock is required for the ITS source. Without it (or
+  // ProjectService is required for the ITS source. Without it (or
   // without HAS_LIBSLIC3R), the readout stays invalid.
   if (!projectService_)
     return false;
@@ -4716,7 +4716,7 @@ bool EditorViewModel::pickMeasureFeatureAt(QVector3D rayOrigin,
   //      as a Point feature (no feature snapping); false keeps the default
   //      FeatureSelection (snap to nearest edge/circle/plane).
   //
-  // ProjectServiceMock is required for the ITS source. Without it (or without
+  // ProjectService is required for the ITS source. Without it (or without
   // HAS_LIBSLIC3R), no pick happens.
   if (!projectService_ || pickedSourceIndex < 0)
   {
@@ -4727,7 +4727,7 @@ bool EditorViewModel::pickMeasureFeatureAt(QVector3D rayOrigin,
   }
 
   // Lazy-construct the SceneRaycaster from the SAME ITS source MeasureEngine
-  // uses (ProjectServiceMock::volumeMeshIts, Phase 112). Reusing one accessor
+  // uses (ProjectService::volumeMeshIts, Phase 112). Reusing one accessor
   // keeps per-volume ITS identity consistent across the raycaster + engine.
   if (!m_sceneRaycaster) {
     m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
@@ -4740,7 +4740,7 @@ bool EditorViewModel::pickMeasureFeatureAt(QVector3D rayOrigin,
   // Reconstruct the candidate volume's world transform from the object's
   // translation/rotation/scale (Eigen types cannot cross QML). The candidate
   // list is the SINGLE stage-1 survivor -- SceneRaycaster never loops the
-  // whole scene. Volume 0 is the primary mesh volume per ProjectServiceMock
+  // whole scene. Volume 0 is the primary mesh volume per ProjectService
   // convention (objectVolumeCount >= 1 for any loaded object).
   const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
   const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
@@ -5801,7 +5801,7 @@ void EditorViewModel::rebuildAndNotify()
   emit stateChanged();
 }
 
-EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceService *sliceService, QObject *parent)
+EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
   // Q8(1): measureDimensions tracks the selection ("随 selection 更新"). Until
@@ -5821,7 +5821,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   connect(this, &EditorViewModel::stateChanged, this, [this]()
           { checkViewportWarnings(); });
 
-  connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
+  connect(projectService_, &ProjectService::projectChanged, this, [this]()
           {
         simplifyPreviewCancel();
         statusText_ = QStringLiteral("已更新项目对象");
@@ -5837,7 +5837,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
         } catch (...) { /* model mid-mutation: skip this refresh */ }
         emit stateChanged(); });
 
-  connect(projectService_, &ProjectServiceMock::plateSelectionChanged, this, [this]()
+  connect(projectService_, &ProjectService::plateSelectionChanged, this, [this]()
           {
         if (sliceService_ && projectService_)
           sliceService_->activatePlateResult(projectService_->currentPlateIndex());
@@ -5960,16 +5960,16 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   m_dragClearanceTimer->setInterval(150);
   connect(m_dragClearanceTimer, &QTimer::timeout,
           this, &EditorViewModel::dispatchDragSequentialClearanceCompute);
-  connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this, [this](int progress, const QString &stageText)
+  connect(projectService_, &ProjectService::loadProgressUpdated, this, [this](int progress, const QString &stageText)
           {
     if (projectService_->loading())
       statusText_ = QStringLiteral("%1... %2%").arg(stageText).arg(progress);
     emit stateChanged(); });
-  connect(projectService_, &ProjectServiceMock::loadingChanged, this, [this]()
+  connect(projectService_, &ProjectService::loadingChanged, this, [this]()
           {
     if (!projectService_->loading())
       emit stateChanged(); });
-  connect(projectService_, &ProjectServiceMock::loadFinished, this, [this](bool success, const QString &message)
+  connect(projectService_, &ProjectService::loadFinished, this, [this](bool success, const QString &message)
           {
             if (success)
     {
@@ -6066,7 +6066,7 @@ EditorViewModel::EditorViewModel(ProjectServiceMock *projectService, SliceServic
   // before the next entry is dispatched. Both outcomes (success and the
   // failure/cancel delivery of loadFinished(false, ...)) advance the queue,
   // matching the old bounded-wait behavior of moving on either way.
-  connect(projectService_, &ProjectServiceMock::loadFinished, this,
+  connect(projectService_, &ProjectService::loadFinished, this,
           [this](bool success, const QString &message)
           {
             Q_UNUSED(message)
@@ -6166,7 +6166,7 @@ QVariantList EditorViewModel::meshBatchPrintableFlags() const
 
 // Phase 138 (ASM-01): per-source-object assemble offset list (GL X,Y,Z). One
 // entry per source object index, matching meshBatchSourceObjectIndices ordering.
-// Read via ProjectServiceMock::assembleOffset (ModelInstance::m_assemble_transformation
+// Read via ProjectService::assembleOffset (ModelInstance::m_assemble_transformation
 // offset, Model.hpp:1289). Consumed by RhiViewport on CanvasAssembleView.
 QVariantList EditorViewModel::assembleOffsets() const
 {
@@ -6202,7 +6202,7 @@ QVariantList EditorViewModel::assembleScales() const
   return scales;
 }
 // S3 (2026-10-14): per-batch instance->world transform channel (one QMatrix4x4
-// per blob batch, ProjectServiceMock::meshBatchInstanceTransforms). Deliberately
+// per blob batch, ProjectService::meshBatchInstanceTransforms). Deliberately
 // LAZY -- every read composes from the live model state, so the stateChanged
 // umbrella (projectChanged relay / gizmo drag emits) re-evaluating the QML
 // binding IS the transform-path refresh; refreshMeshCacheAndFitHint stays out
@@ -7482,7 +7482,7 @@ bool EditorViewModel::selectSourceObject(int sourceIndex)
     return false;
 
   // Phase 90 (ASMROUTE-01): selection on the AssembleView canvas routes through
-  // the same shared ProjectServiceMock model (90-CONTEXT.md decision 2 — no
+  // the same shared ProjectService model (90-CONTEXT.md decision 2 — no
   // separate scene copy). This mirrors upstream Plater.cpp:11601 (snapshot
   // selection routing) and Plater.cpp:11635 (gizmos manager selection on
   // CanvasAssembleView), where the selection state is shared and not
@@ -8177,7 +8177,7 @@ bool EditorViewModel::fixMeshSelected()
 bool EditorViewModel::simplifyMeshSelected()
 {
   // Phase 176 (FEAT-03): delegate to the real simplifySelected()
-  // implementation (which forwards to ProjectServiceMock::simplifyObject,
+  // implementation (which forwards to ProjectService::simplifyObject,
   // which calls libslic3r its_quadric_edge_collapse). Was a v3.x stub that
   // logged "not yet implemented" — PreparePage.qml:447 and ObjectList.qml:928
   // call this method but it was a no-op.
@@ -9257,7 +9257,7 @@ void EditorViewModel::requestObjectLayerRanges()
 }
 
 // Phase 174 (FEAT-01): per-object/volume scoped option API proxies. Forward
-// to ProjectServiceMock so the SelectionSettingsDialog QML can read/write
+// to ProjectService so the SelectionSettingsDialog QML can read/write
 // per-object print/filament overrides via the viewmodel (QML boundary rule —
 // QML never holds direct service references).
 QVariant EditorViewModel::scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallback) const
@@ -9296,7 +9296,7 @@ bool EditorViewModel::resetScopedOptionValue(int objectIndex, int volumeIndex, c
 }
 
 // Phase 175 (FEAT-02): per-object layer-range editor API proxies. Forward to
-// ProjectServiceMock so ObjectLayersDialog QML can manage per-layer-height
+// ProjectService so ObjectLayersDialog QML can manage per-layer-height
 // ranges (add/remove/set-value/get-value).
 int EditorViewModel::objectLayerRangeCount(int objectIndex) const
 {
@@ -9386,7 +9386,7 @@ bool EditorViewModel::setCurrentPlateIndex(int i)
   // B1 (upstream BackgroundSlicingProcess::can_switch_print,
   // BackgroundSlicingProcess.cpp:140-155): refuse plate switches while a slice
   // is RUNNING. This is the single QML entry point; the programmatic
-  // ProjectServiceMock::setCurrentPlateIndex call sites stay unguarded so
+  // ProjectService::setCurrentPlateIndex call sites stay unguarded so
   // mid/post-slice flows keep working.
   if (sliceService_ && !sliceService_->canSwitchPlate())
   {
@@ -9666,7 +9666,7 @@ bool EditorViewModel::hasAnyModelObjects() const
 }
 
 // Phase 110 (FMAP-03): mode-only write path for the FilamentGroupPopup.
-// Delegates to ProjectServiceMock::setPlateFilamentMapMode; the clamp at
+// Delegates to ProjectService::setPlateFilamentMapMode; the clamp at
 // PartPlate::setFilamentMapMode(int) (R-02 / FP-04) guards the int boundary.
 bool EditorViewModel::setPlateFilamentMapMode(int plateIndex, int mode)
 {
@@ -10055,7 +10055,7 @@ QString EditorViewModel::plateThumbnailBase64(int plateIndex) const
 }
 
 // Phase 156 (CLOS-03): runtime thumbnail WRITE proxy — forwards to
-// ProjectServiceMock::setPlateThumbnailFromBase64. Called from PreparePage.qml's
+// ProjectService::setPlateThumbnailFromBase64. Called from PreparePage.qml's
 // per-plate capture handler so non-current plates persist captured bytes into
 // PartPlate::setThumbnail (the gap that forced Phase 151 to ship persisted-only).
 bool EditorViewModel::setPlateThumbnailFromBase64(int plateIndex, const QString &base64)
@@ -10625,7 +10625,7 @@ bool EditorViewModel::exportModel(const QString &filePath, const QString &format
     // U13: the model export no longer freezes the window. The old path ran
     // the whole write inline on the GUI thread (mesh merge + STL/OBJ disk
     // write, or the 3MF zip+XML snapshot) under the U4 busy scope. Now:
-    //  - 3MF rides ProjectServiceMock::writeProjectSnapshotAsync (the U8
+    //  - 3MF rides ProjectService::writeProjectSnapshotAsync (the U8
     //    async snapshot engine — same writer as before, still WITHOUT
     //    project bookkeeping), outcome via consumePendingExportSnapshot;
     //  - STL/OBJ run the merge+write on a QtConcurrent worker against a
@@ -10682,7 +10682,7 @@ bool EditorViewModel::exportModel(const QString &filePath, const QString &format
       auto snapshot = std::make_shared<Slic3r::Model>(*liveModel);
       const QPointer<EditorViewModel> receiver(this);
       (void)QtConcurrent::run([receiver, snapshot, filePath, ext]() {
-        // Merge loop mirrors ProjectServiceMock::exportModel's STL branch
+        // Merge loop mirrors ProjectService::exportModel's STL branch
         // (upstream export_stl as_one semantics: every object's model-part
         // volumes with volume + instance transforms applied).
         Slic3r::TriangleMesh combined;
@@ -10881,9 +10881,9 @@ bool EditorViewModel::loadFile(const QString &filePath)
 }
 
 // Phase 237 (VIEW-04): unit-inference proxy + conversion application.
-// Detection: ProjectServiceMock::loadedObjectUnitHint (ported upstream
+// Detection: ProjectService::loadedObjectUnitHint (ported upstream
 // thresholds, Model.cpp:763-815). Application: the existing
-// ProjectServiceMock::convertObjectUnits path (ModelObject::convert_units),
+// ProjectService::convertObjectUnits path (ModelObject::convert_units),
 // which is the OWzx equivalent of upstream convert_from_meters(true) /
 // convert_from_imperial_units(true) (Plater.cpp:4244/4252).
 int EditorViewModel::loadedObjectUnitHint(int objectIndex) const
@@ -11866,7 +11866,7 @@ void EditorViewModel::commitBedShape(double widthMm, double depthMm,
   setBedDiameter(float(diameterMm));
   setBedMaxHeight(float(maxHeightMm));
   // printable_area write-back analog: the rectangle footprint lands in the
-  // plate-list geometry, which ProjectServiceMock embeds as printable_area
+  // plate-list geometry, which ProjectService embeds as printable_area
   // on project save (:11001-11013) and arrange reads as its bed bbox
   // (:4790-4797). Circle/custom shapes keep the previous plate footprint
   // (the viewport is driven by bedDiameter / the imported outline instead) —

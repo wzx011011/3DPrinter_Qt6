@@ -44,8 +44,8 @@
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
-#include "core/services/PresetServiceMock.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/PresetService.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/services/PluginService.h"
 #include "core/services/UndoRedoManager.h"
@@ -163,7 +163,7 @@ namespace
     {
       QCoreApplication::setOrganizationName(org);
       QCoreApplication::setApplicationName(app);
-      // v5.16 (PSET2-01): PresetServiceMock now persists user presets under
+      // v5.16 (PSET2-01): PresetService now persists user presets under
       // AppDataLocation/user/presets, which is keyed by the org/app identity.
       // Wipe that tree on entry so every run starts from the same on-disk
       // state (QSettings itself lives in the Windows registry, not here).
@@ -186,7 +186,7 @@ namespace
   // sharing one throwaway directory across two service instances).
   struct ScopedUserPresetDir
   {
-    explicit ScopedUserPresetDir(PresetServiceMock &service)
+    explicit ScopedUserPresetDir(PresetService &service)
     {
       temp.reset(new QTemporaryDir(
           QDir::temp().filePath(QStringLiteral("owzx-user-presets-XXXXXX"))));
@@ -397,7 +397,7 @@ private slots:
   void partPlateListCreateDeleteRenameLockReindexesAndKeepsAtLeastOne();
   void partPlateListInstanceMembershipDerivesObjectIndices();
   void partPlateListRefusesExceedMaxPlateCount();
-  // v3.0 Phase 16-02: ProjectServiceMock plate ops backed by PartPlateList (PLATE-06 regression)
+  // v3.0 Phase 16-02: ProjectService plate ops backed by PartPlateList (PLATE-06 regression)
   void projectServicePlateOpsBackedByPartPlateList();
   // v3.0 Phase 17: plate lifecycle completion (clone/reorder/printable)
   void partPlateListMovePlateReindexesAndAdjustsCurrent();
@@ -536,7 +536,7 @@ private slots:
   // or its*), so the test confirms the field type via the readback round-trip.
   void wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallback();
   // Phase 112-01 (MEASURE-01): per-volume ITS accessor regression lock.
-  // Loads a real model (kStlPath) and asserts ProjectServiceMock::volumeMeshIts
+  // Loads a real model (kStlPath) and asserts ProjectService::volumeMeshIts
   // returns (a) a non-null ITS for a valid (objectIndex=0, volumeIndex=0) with
   // a non-empty vertex/triangle count that matches the loaded model's
   // objectTriangleCount; (b) nullptr for an invalid objectIndex and an invalid
@@ -584,7 +584,7 @@ private slots:
   // Phase 205 (GATE-01): v5.6 cross-workstream ViewModel smoke gate. Verifies
   // the key viewmodel/service APIs landed by Phases 196-202 are callable at
   // the C++ boundary: EditorViewModel::embossRunning, SliceService::sliceState,
-  // PresetServiceMock vendor/model enumeration, AmsMaterialsViewModel slot
+  // PresetService vendor/model enumeration, AmsMaterialsViewModel slot
   // data, and PluginService local registry. Source-audit siblings live in
   // QmlUiAuditTests::v56CrossWorkstreamRegressionLocked. Headless-only: no
   // device, no network, no Python.
@@ -718,7 +718,7 @@ void ViewModelSmokeTests::initTestCase()
 
 void ViewModelSmokeTests::editor_import_model_updates_state()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -733,11 +733,11 @@ void ViewModelSmokeTests::editor_import_model_updates_state()
 
 void ViewModelSmokeTests::editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -769,11 +769,11 @@ void ViewModelSmokeTests::editorPlateSwitchRefusedWhileSlicing()
 #ifndef HAS_LIBSLIC3R
   QSKIP("Requires HAS_LIBSLIC3R");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(kStlPath), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -815,11 +815,11 @@ void ViewModelSmokeTests::editorSwitchToPreviewStaleAutoReslicesThenSwitches()
 {
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("Engn01StaleReslice"));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(prusaStlPath()), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -888,11 +888,11 @@ void ViewModelSmokeTests::editorPreviewSwitchReusesValidPreviousGcodeAndInvalida
 {
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("Engn02ReuseGcode"));
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QVERIFY2(editor.loadFile(prusaStlPath()), "importing a model should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -968,7 +968,7 @@ void ViewModelSmokeTests::editorPreviewSwitchReusesValidPreviousGcodeAndInvalida
 // slice.
 void ViewModelSmokeTests::sliceServiceExportRunsOnWorkerWithProgressAndWritesFile()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
   QTemporaryDir tempDir(QDir::tempPath() + QStringLiteral("/owzx_engn03_export_XXXXXX"));
@@ -1120,8 +1120,8 @@ void ViewModelSmokeTests::config_default_and_switch_preset()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   QSignalSpy spy(&config, &ConfigViewModel::stateChanged);
@@ -1130,7 +1130,7 @@ void ViewModelSmokeTests::config_default_and_switch_preset()
 
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("layer_height"), 0.16);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Switch Print Preset"),
                                     values));
   config.setCurrentPreset(QStringLiteral("Unit Test Switch Print Preset"));
@@ -1157,7 +1157,7 @@ void ViewModelSmokeTests::configEnumNullKeysMapGuards()
 
 void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
 {
-  PresetServiceMock preset;
+  PresetService preset;
   auto defaults = preset.presetValues(QStringLiteral("__upstream_defaults__"));
 
   // coFloats type -- previously skipped by extraction
@@ -1176,7 +1176,7 @@ void ViewModelSmokeTests::testUpstreamDefaultsContainVectorKeys()
 }
 
 // v5.16 Phase 236 (DLG-02): WipeTowerDialog OK persists the flush matrix via
-// PresetServiceMock::saveFlushVolumes under the upstream key
+// PresetService::saveFlushVolumes under the upstream key
 // "flush_volumes_matrix" (PrintConfig.cpp:5049, row-major flat); the next
 // calculateFlushMatrix returns the saved values instead of re-deriving from
 // filament colours.
@@ -1184,10 +1184,10 @@ void ViewModelSmokeTests::wipeTowerSaveFlushVolumesRoundTrip()
 {
   QTemporaryDir userDir;
   QVERIFY(userDir.isValid());
-  PresetServiceMock preset;
+  PresetService preset;
   preset.setUserPresetDir(userDir.path());
 
-  const QStringList filamentNames = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+  const QStringList filamentNames = preset.presetNamesForCategory(PresetService::FilamentCat);
   QVERIFY2(!filamentNames.isEmpty(), "expected at least one built-in filament preset");
 
   QList<QList<double>> matrix;
@@ -1238,7 +1238,7 @@ void ViewModelSmokeTests::editorCheckObjectsOutsideBedDetectsOutsideObject()
   });
   bedKeys.clear();
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   QCOMPARE(editor.bedWidth(), 220.0f);
@@ -1268,8 +1268,8 @@ void ViewModelSmokeTests::editorCheckObjectsOutsideBedDetectsOutsideObject()
 
 void ViewModelSmokeTests::testMachineOptionsLoaded()
 {
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
@@ -1291,8 +1291,8 @@ void ViewModelSmokeTests::testMachineOptionsLoaded()
 
 void ViewModelSmokeTests::testFilamentOptionsLoaded()
 {
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
@@ -1308,10 +1308,10 @@ void ViewModelSmokeTests::testFilamentOptionsLoaded()
 }
 
 // Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
-// These mirror how the QML wizard consumes PresetServiceMock enumeration.
+// These mirror how the QML wizard consumes PresetService enumeration.
 void ViewModelSmokeTests::testVendorEnumeration()
 {
-  PresetServiceMock preset;
+  PresetService preset;
   const QStringList vendors = preset.vendors();
   QVERIFY2(!vendors.isEmpty(), "vendors() must return at least one vendor");
   // __upstream_defaults__ is never registered in m_presetMetadata, so it must
@@ -1327,7 +1327,7 @@ void ViewModelSmokeTests::testVendorEnumeration()
 
 void ViewModelSmokeTests::testPrinterModelsForVendor()
 {
-  PresetServiceMock preset;
+  PresetService preset;
   const QStringList vendors = preset.vendors();
   QVERIFY(!vendors.isEmpty());
 
@@ -1350,7 +1350,7 @@ void ViewModelSmokeTests::testPrinterModelsForVendor()
 
 void ViewModelSmokeTests::testMaterialsForVendor()
 {
-  PresetServiceMock preset;
+  PresetService preset;
   const QStringList vendors = preset.vendors();
   QVERIFY(!vendors.isEmpty());
 
@@ -1370,7 +1370,7 @@ void ViewModelSmokeTests::testMaterialsForVendor()
 
 void ViewModelSmokeTests::testBedTypesForPrinterModel()
 {
-  PresetServiceMock preset;
+  PresetService preset;
   const QStringList defaults = preset.defaultBedTypes();
   QVERIFY2(defaults.size() == 4, "default bed-type list must have 4 entries");
 
@@ -1396,7 +1396,7 @@ void ViewModelSmokeTests::testBedTextureFileForPreset()
   // The default ctor already loads upstream vendors from the repo profiles
   // (loadVendorPresets -> resolveProfilesDir); running from the source tree,
   // Creality is registered without an explicit dir argument.
-  PresetServiceMock preset;
+  PresetService preset;
   const QStringList models = preset.printerModelsForVendor(QStringLiteral("Creality"));
   if (models.isEmpty())
     QSKIP("Creality vendor presets not registered from cwd");
@@ -1419,11 +1419,11 @@ void ViewModelSmokeTests::testBedTextureFileForPreset()
 
 void ViewModelSmokeTests::testEnumerationExcludesUpstreamDefaults()
 {
-  PresetServiceMock preset;
+  PresetService preset;
   // Defensive: the pollution sink must not be enumerable via the category
   // lists either, since those drive the vendor/model/material enumerations.
-  const auto printerNames = preset.presetNamesForCategory(PresetServiceMock::PrinterCat);
-  const auto filamentNames = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+  const auto printerNames = preset.presetNamesForCategory(PresetService::PrinterCat);
+  const auto filamentNames = preset.presetNamesForCategory(PresetService::FilamentCat);
   QVERIFY2(!printerNames.contains(QStringLiteral("__upstream_defaults__")),
            "__upstream_defaults__ leaked into PrinterCat list");
   QVERIFY2(!filamentNames.contains(QStringLiteral("__upstream_defaults__")),
@@ -1434,8 +1434,8 @@ void ViewModelSmokeTests::testEnumerationExcludesUpstreamDefaults()
 
 void ViewModelSmokeTests::testMachineEditFlowsToGlobal()
 {
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *machineOpts = qobject_cast<ConfigOptionModel *>(config.machineOptions());
@@ -1459,8 +1459,8 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -1483,7 +1483,7 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
   config.saveCurrentPreset();
   QCOMPARE(preset.presetValues(builtinPrint), builtinBefore);
 
-  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat, QStringLiteral("Unit Test Save Print Preset")));
+  QVERIFY(config.createCustomPreset(PresetService::PrintCat, QStringLiteral("Unit Test Save Print Preset")));
   config.setCurrentPrintPreset(QStringLiteral("Unit Test Save Print Preset"));
   printOpts->setValue(printIdx, 0.35);
 
@@ -1499,7 +1499,7 @@ void ViewModelSmokeTests::testTierAwareSaveFiltersByTier()
            "layer_height should be in print preset after save");
   QCOMPARE(saved[QStringLiteral("layer_height")].toDouble(), 0.35);
 
-  QVERIFY(config.createCustomPreset(PresetServiceMock::PrinterCat, QStringLiteral("Unit Test Save Printer Preset")));
+  QVERIFY(config.createCustomPreset(PresetService::PrinterCat, QStringLiteral("Unit Test Save Printer Preset")));
   config.setCurrentPrinterPreset(QStringLiteral("Unit Test Save Printer Preset"));
   machineOpts->setValue(machineIdx, 999.0);
 
@@ -1526,14 +1526,14 @@ void ViewModelSmokeTests::configPresetDirtyTracksActiveTierAgainstSelectedPreset
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Dirty Print A"),
                                     {{QStringLiteral("layer_height"), 0.16},
                                      {QStringLiteral("top_shell_layers"), 5}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("UT Dirty Printer A"),
                                     {{QStringLiteral("machine_max_speed_x"), 333.0}}));
 
@@ -1585,10 +1585,10 @@ void ViewModelSmokeTests::configResetRestoresSelectedPresetValues()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Reset Print A"),
                                     {{QStringLiteral("layer_height"), 0.16},
                                      {QStringLiteral("top_shell_layers"), 5}}));
@@ -1624,10 +1624,10 @@ void ViewModelSmokeTests::configOptionModelDirtyUsesPresetReferenceValues()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Dirty Marker Print A"),
                                     {{QStringLiteral("layer_height"), 0.16}}));
   ConfigViewModel config(&preset, &project);
@@ -1653,8 +1653,8 @@ void ViewModelSmokeTests::configOptionModelDirtyUsesPresetReferenceValues()
 
 void ViewModelSmokeTests::configScopeResetRevealsInheritedValue()
 {
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -1683,13 +1683,13 @@ void ViewModelSmokeTests::configUnsavedTransitionsQueueAndCancelPendingChanges()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Guard Print A"),
                                     {{QStringLiteral("layer_height"), 0.16}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Guard Print B"),
                                     {{QStringLiteral("layer_height"), 0.28}}));
 
@@ -1734,13 +1734,13 @@ void ViewModelSmokeTests::configDiscardAppliesPendingTransitionAndRestoresValues
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Discard Print A"),
                                     {{QStringLiteral("layer_height"), 0.16}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Discard Print B"),
                                     {{QStringLiteral("layer_height"), 0.28}}));
 
@@ -1791,13 +1791,13 @@ void ViewModelSmokeTests::configWritableSaveAppliesPendingTransition()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Writable Save Print A"),
                                     {{QStringLiteral("layer_height"), 0.18}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Writable Save Print B"),
                                     {{QStringLiteral("layer_height"), 0.30}}));
 
@@ -1838,13 +1838,13 @@ void ViewModelSmokeTests::configFailedSaveRetainsDirtyPendingTransition()
   ScopedSettingsSnapshot snapshot({QStringLiteral("presets/selectedPrint")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   ScopedUserPresetDir presetDir(preset);
-  ProjectServiceMock project;
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  ProjectService project;
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Failed Save A"),
                                     {{QStringLiteral("layer_height"), 0.18}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Failed Save B"),
                                     {{QStringLiteral("layer_height"), 0.30}}));
 
@@ -1879,8 +1879,8 @@ void ViewModelSmokeTests::configReadOnlySaveAsAppliesPendingTransition()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   config.setActivePresetTier(QStringLiteral("print"));
@@ -1894,7 +1894,7 @@ void ViewModelSmokeTests::configReadOnlySaveAsAppliesPendingTransition()
   QVERIFY(!builtinPreset.isEmpty());
   QVERIFY(preset.isReadOnlyPreset(builtinPreset));
   QString targetPreset;
-  const QStringList printPresets = preset.presetNamesForCategory(PresetServiceMock::PrintCat);
+  const QStringList printPresets = preset.presetNamesForCategory(PresetService::PrintCat);
   for (const QString &candidate : printPresets)
   {
     if (candidate != builtinPreset)
@@ -1928,7 +1928,7 @@ void ViewModelSmokeTests::configReadOnlySaveAsAppliesPendingTransition()
   QCOMPARE(config.currentPrintPreset(), builtinPreset);
   QVERIFY(config.property("hasPendingUnsavedChanges").toBool());
 
-  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(config.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT SaveAs Pending Print")));
   QCOMPARE(config.currentPrintPreset(), targetPreset);
   QVERIFY(!config.property("hasPendingUnsavedChanges").toBool());
@@ -1948,15 +1948,15 @@ void ViewModelSmokeTests::configPresetCategoryMappingUsesServiceEnums()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
-  QVERIFY2(preset.presetNamesForCategory(PresetServiceMock::PrinterCat).contains(config.currentPrinterPreset()),
+  QVERIFY2(preset.presetNamesForCategory(PresetService::PrinterCat).contains(config.currentPrinterPreset()),
            qPrintable(QStringLiteral("currentPrinterPreset has wrong category: %1").arg(config.currentPrinterPreset())));
-  QVERIFY2(preset.presetNamesForCategory(PresetServiceMock::FilamentCat).contains(config.currentFilamentPreset()),
+  QVERIFY2(preset.presetNamesForCategory(PresetService::FilamentCat).contains(config.currentFilamentPreset()),
            qPrintable(QStringLiteral("currentFilamentPreset has wrong category: %1").arg(config.currentFilamentPreset())));
-  QVERIFY2(preset.presetNamesForCategory(PresetServiceMock::PrintCat).contains(config.currentPrintPreset()),
+  QVERIFY2(preset.presetNamesForCategory(PresetService::PrintCat).contains(config.currentPrintPreset()),
            qPrintable(QStringLiteral("currentPrintPreset has wrong category: %1").arg(config.currentPrintPreset())));
 
   QVERIFY2(preset.presetValues(config.currentPrinterPreset()).contains(QStringLiteral("nozzle_diameter")),
@@ -1987,25 +1987,25 @@ void ViewModelSmokeTests::configPresetMutationsRejectWrongCategory()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("layer_height"), 0.21);
   const QString printName = QStringLiteral("Unit Test Mutation Print Preset");
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, printName, values));
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat, printName, values));
 
-  QVERIFY(!config.renamePreset(PresetServiceMock::FilamentCat,
+  QVERIFY(!config.renamePreset(PresetService::FilamentCat,
                                printName,
                                QStringLiteral("Unit Test Mutation Renamed")));
   QVERIFY(preset.hasPreset(printName));
   QVERIFY(!preset.hasPreset(QStringLiteral("Unit Test Mutation Renamed")));
 
-  QVERIFY(!config.deletePreset(PresetServiceMock::FilamentCat, printName));
+  QVERIFY(!config.deletePreset(PresetService::FilamentCat, printName));
   QVERIFY(preset.hasPreset(printName));
 
-  QVERIFY(config.renamePreset(PresetServiceMock::PrintCat,
+  QVERIFY(config.renamePreset(PresetService::PrintCat,
                               printName,
                               QStringLiteral("Unit Test Mutation Renamed")));
   QVERIFY(!preset.hasPreset(printName));
@@ -2024,11 +2024,11 @@ void ViewModelSmokeTests::presetServiceMetadataClassifiesBuiltinAndCustomPresets
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
 
-  const QString builtin = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
+  const QString builtin = preset.defaultPresetForCategory(PresetService::PrintCat);
   QVERIFY(!builtin.isEmpty());
-  QCOMPARE(preset.presetCategory(builtin), int(PresetServiceMock::PrintCat));
+  QCOMPARE(preset.presetCategory(builtin), int(PresetService::PrintCat));
   QVERIFY(preset.isBuiltinPreset(builtin));
   QVERIFY(preset.isReadOnlyPreset(builtin));
   QVERIFY(!preset.isUserPreset(builtin));
@@ -2036,8 +2036,8 @@ void ViewModelSmokeTests::presetServiceMetadataClassifiesBuiltinAndCustomPresets
 
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("layer_height"), 0.23);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, QStringLiteral("Unit Test Print Preset"), values));
-  QCOMPARE(preset.presetCategory(QStringLiteral("Unit Test Print Preset")), int(PresetServiceMock::PrintCat));
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat, QStringLiteral("Unit Test Print Preset"), values));
+  QCOMPARE(preset.presetCategory(QStringLiteral("Unit Test Print Preset")), int(PresetService::PrintCat));
   QVERIFY(!preset.isBuiltinPreset(QStringLiteral("Unit Test Print Preset")));
   QVERIFY(!preset.isReadOnlyPreset(QStringLiteral("Unit Test Print Preset")));
   QVERIFY(preset.isUserPreset(QStringLiteral("Unit Test Print Preset")));
@@ -2058,33 +2058,33 @@ void ViewModelSmokeTests::presetServiceSelectionPersistsAcrossInstances()
   QString filamentName;
   QString printerName;
   {
-    PresetServiceMock preset;
-    const auto printPresets = preset.presetNamesForCategory(PresetServiceMock::PrintCat);
-    const auto filamentPresets = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
-    const auto printerPresets = preset.presetNamesForCategory(PresetServiceMock::PrinterCat);
+    PresetService preset;
+    const auto printPresets = preset.presetNamesForCategory(PresetService::PrintCat);
+    const auto filamentPresets = preset.presetNamesForCategory(PresetService::FilamentCat);
+    const auto printerPresets = preset.presetNamesForCategory(PresetService::PrinterCat);
     QVERIFY(printPresets.size() >= 1);
     QVERIFY(filamentPresets.size() >= 1);
     QVERIFY(printerPresets.size() >= 1);
     printName = printPresets.last();
     filamentName = filamentPresets.last();
     printerName = printerPresets.last();
-    QVERIFY(preset.setSelectedPresetForCategory(PresetServiceMock::PrintCat, printName));
-    QVERIFY(preset.setSelectedPresetForCategory(PresetServiceMock::FilamentCat, filamentName));
-    QVERIFY(preset.setSelectedPresetForCategory(PresetServiceMock::PrinterCat, printerName));
+    QVERIFY(preset.setSelectedPresetForCategory(PresetService::PrintCat, printName));
+    QVERIFY(preset.setSelectedPresetForCategory(PresetService::FilamentCat, filamentName));
+    QVERIFY(preset.setSelectedPresetForCategory(PresetService::PrinterCat, printerName));
   }
 
-  PresetServiceMock reloaded;
-  QCOMPARE(reloaded.selectedPresetForCategory(PresetServiceMock::PrintCat), printName);
-  QCOMPARE(reloaded.selectedPresetForCategory(PresetServiceMock::FilamentCat), filamentName);
-  QCOMPARE(reloaded.selectedPresetForCategory(PresetServiceMock::PrinterCat), printerName);
+  PresetService reloaded;
+  QCOMPARE(reloaded.selectedPresetForCategory(PresetService::PrintCat), printName);
+  QCOMPARE(reloaded.selectedPresetForCategory(PresetService::FilamentCat), filamentName);
+  QCOMPARE(reloaded.selectedPresetForCategory(PresetService::PrinterCat), printerName);
 }
 
 void ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutation()
 {
-  PresetServiceMock preset;
-  const int beforeCount = preset.presetNamesForCategory(PresetServiceMock::PrintCat).size() +
-                          preset.presetNamesForCategory(PresetServiceMock::FilamentCat).size() +
-                          preset.presetNamesForCategory(PresetServiceMock::PrinterCat).size();
+  PresetService preset;
+  const int beforeCount = preset.presetNamesForCategory(PresetService::PrintCat).size() +
+                          preset.presetNamesForCategory(PresetService::FilamentCat).size() +
+                          preset.presetNamesForCategory(PresetService::PrinterCat).size();
 
   const QString tempPath = QDir::temp().filePath(QStringLiteral("owzx_bad_preset_bundle.json"));
   QFile f(tempPath);
@@ -2093,18 +2093,18 @@ void ViewModelSmokeTests::presetServiceImportRejectsMalformedBundleWithoutMutati
   f.close();
 
   QVERIFY(!preset.importBundle(tempPath));
-  const int afterCount = preset.presetNamesForCategory(PresetServiceMock::PrintCat).size() +
-                         preset.presetNamesForCategory(PresetServiceMock::FilamentCat).size() +
-                         preset.presetNamesForCategory(PresetServiceMock::PrinterCat).size();
+  const int afterCount = preset.presetNamesForCategory(PresetService::PrintCat).size() +
+                         preset.presetNamesForCategory(PresetService::FilamentCat).size() +
+                         preset.presetNamesForCategory(PresetService::PrinterCat).size();
   QCOMPARE(afterCount, beforeCount);
 
   QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
   f.write(R"({"kind":"owzx-preset-bundle","version":"999.0","presets":[]})");
   f.close();
   QVERIFY(!preset.importBundle(tempPath));
-  const int incompatibleVersionCount = preset.presetNamesForCategory(PresetServiceMock::PrintCat).size() +
-                                       preset.presetNamesForCategory(PresetServiceMock::FilamentCat).size() +
-                                       preset.presetNamesForCategory(PresetServiceMock::PrinterCat).size();
+  const int incompatibleVersionCount = preset.presetNamesForCategory(PresetService::PrintCat).size() +
+                                       preset.presetNamesForCategory(PresetService::FilamentCat).size() +
+                                       preset.presetNamesForCategory(PresetService::PrinterCat).size();
   QCOMPARE(incompatibleVersionCount, beforeCount);
   QFile::remove(tempPath);
 }
@@ -2121,11 +2121,11 @@ void ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock source;
+  PresetService source;
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("layer_height"), 0.24);
   values.insert(QStringLiteral("wall_loops"), 4);
-  QVERIFY(source.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(source.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Exported Print Preset"),
                                     values));
 
@@ -2139,11 +2139,11 @@ void ViewModelSmokeTests::presetServiceExportsAndImportsUserBundleWithMetadata()
   // Give the target its own (wiped) identity so the import path stays real.
   ScopedApplicationIdentity targetIdentity(QStringLiteral("OWzxTests"),
                                            QStringLiteral("PresetBundleRoundTripTarget"));
-  PresetServiceMock target;
-  QVERIFY(!target.presetNamesForCategory(PresetServiceMock::PrintCat)
+  PresetService target;
+  QVERIFY(!target.presetNamesForCategory(PresetService::PrintCat)
                .contains(QStringLiteral("Unit Test Exported Print Preset")));
   QVERIFY(target.importBundle(tempPath));
-  QCOMPARE(target.presetCategory(QStringLiteral("Unit Test Exported Print Preset")), int(PresetServiceMock::PrintCat));
+  QCOMPARE(target.presetCategory(QStringLiteral("Unit Test Exported Print Preset")), int(PresetService::PrintCat));
   QVERIFY(target.isUserPreset(QStringLiteral("Unit Test Exported Print Preset")));
   QCOMPARE(target.presetValue(QStringLiteral("Unit Test Exported Print Preset"),
                               QStringLiteral("layer_height")).toDouble(), 0.24);
@@ -2162,17 +2162,17 @@ void ViewModelSmokeTests::presetCompatibilityFiltersFilamentsAndProcessesForPrin
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   QHash<QString, QVariant> printerA;
   printerA.insert(QStringLiteral("nozzle_diameter"), 0.4);
   printerA.insert(QStringLiteral("max_nozzle_temp"), 300);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Unit Test Compat Printer A"),
                                     printerA));
   QHash<QString, QVariant> printerB;
   printerB.insert(QStringLiteral("nozzle_diameter"), 0.4);
   printerB.insert(QStringLiteral("max_nozzle_temp"), 300);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Unit Test Compat Printer B"),
                                     printerB));
 
@@ -2182,7 +2182,7 @@ void ViewModelSmokeTests::presetCompatibilityFiltersFilamentsAndProcessesForPrin
   filamentA.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
   filamentA.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
   filamentA.insert(QStringLiteral("nozzle_temp_range_max"), 260);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(preset.createCustomPreset(PresetService::FilamentCat,
                                     QStringLiteral("Unit Test Compat Filament A"),
                                     filamentA));
   QHash<QString, QVariant> filamentB;
@@ -2191,42 +2191,42 @@ void ViewModelSmokeTests::presetCompatibilityFiltersFilamentsAndProcessesForPrin
   filamentB.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
   filamentB.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
   filamentB.insert(QStringLiteral("nozzle_temp_range_max"), 260);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(preset.createCustomPreset(PresetService::FilamentCat,
                                     QStringLiteral("Unit Test Compat Filament B"),
                                     filamentB));
 
   QHash<QString, QVariant> processA;
   processA.insert(QStringLiteral("layer_height"), 0.2);
   processA.insert(QStringLiteral("compatible_printers"), QStringLiteral("Unit Test Compat Printer A"));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Compat Process A"),
                                     processA));
   QHash<QString, QVariant> processB;
   processB.insert(QStringLiteral("layer_height"), 0.28);
   processB.insert(QStringLiteral("compatible_printers"),
                   QStringList{QStringLiteral("Unit Test Compat Printer B")});
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Compat Process B"),
                                     processB));
 
   const QStringList filamentForA =
-      preset.compatiblePresetNamesForCategory(PresetServiceMock::FilamentCat,
+      preset.compatiblePresetNamesForCategory(PresetService::FilamentCat,
                                               QStringLiteral("Unit Test Compat Printer A"));
   QVERIFY(filamentForA.contains(QStringLiteral("Unit Test Compat Filament A")));
   QVERIFY(!filamentForA.contains(QStringLiteral("Unit Test Compat Filament B")));
 
   const QStringList processForA =
-      preset.compatiblePresetNamesForCategory(PresetServiceMock::PrintCat,
+      preset.compatiblePresetNamesForCategory(PresetService::PrintCat,
                                               QStringLiteral("Unit Test Compat Printer A"));
   QVERIFY(processForA.contains(QStringLiteral("Unit Test Compat Process A")));
   QVERIFY(!processForA.contains(QStringLiteral("Unit Test Compat Process B")));
-  QVERIFY(preset.isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+  QVERIFY(preset.isPresetCompatibleWithPrinter(PresetService::PrintCat,
                                                QStringLiteral("Unit Test Compat Process A"),
                                                QStringLiteral("Unit Test Compat Printer A")));
-  QVERIFY(!preset.isPresetCompatibleWithPrinter(PresetServiceMock::PrintCat,
+  QVERIFY(!preset.isPresetCompatibleWithPrinter(PresetService::PrintCat,
                                                 QStringLiteral("Unit Test Compat Process A"),
                                                 QStringLiteral("Unit Test Compat Printer B")));
-  QVERIFY(!preset.presetCompatibilityMessage(PresetServiceMock::PrintCat,
+  QVERIFY(!preset.presetCompatibilityMessage(PresetService::PrintCat,
                                              QStringLiteral("Unit Test Compat Process A"),
                                              QStringLiteral("Unit Test Compat Printer B")).isEmpty());
 }
@@ -2241,19 +2241,19 @@ void ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
   QHash<QString, QVariant> printerA;
   printerA.insert(QStringLiteral("nozzle_diameter"), 0.4);
   printerA.insert(QStringLiteral("max_nozzle_temp"), 300);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Unit Test Repair Printer A"),
                                     printerA));
   QHash<QString, QVariant> printerB;
   printerB.insert(QStringLiteral("nozzle_diameter"), 0.4);
   printerB.insert(QStringLiteral("max_nozzle_temp"), 300);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Unit Test Repair Printer B"),
                                     printerB));
 
@@ -2263,7 +2263,7 @@ void ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
   filamentA.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
   filamentA.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
   filamentA.insert(QStringLiteral("nozzle_temp_range_max"), 260);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(preset.createCustomPreset(PresetService::FilamentCat,
                                     QStringLiteral("Unit Test Repair Filament A"),
                                     filamentA));
   QHash<QString, QVariant> filamentB;
@@ -2272,7 +2272,7 @@ void ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
   filamentB.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
   filamentB.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
   filamentB.insert(QStringLiteral("nozzle_temp_range_max"), 260);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(preset.createCustomPreset(PresetService::FilamentCat,
                                     QStringLiteral("Unit Test Repair Filament B"),
                                     filamentB));
 
@@ -2280,14 +2280,14 @@ void ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
   processA.insert(QStringLiteral("layer_height"), 0.2);
   processA.insert(QStringLiteral("compatible_printers"),
                   QStringList{QStringLiteral("Unit Test Repair Printer A")});
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Repair Process A"),
                                     processA));
   QHash<QString, QVariant> processB;
   processB.insert(QStringLiteral("layer_height"), 0.28);
   processB.insert(QStringLiteral("compatible_printers"),
                   QStringList{QStringLiteral("Unit Test Repair Printer B")});
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Repair Process B"),
                                     processB));
 
@@ -2303,9 +2303,9 @@ void ViewModelSmokeTests::configPrinterChangeRepairsIncompatibleSelections()
   QCOMPARE(config.currentPrintPreset(), QStringLiteral("Unit Test Repair Process B"));
   QVERIFY(config.currentPresetCombinationValid());
   QVERIFY(config.currentPresetCompatibilityMessage().isEmpty());
-  QCOMPARE(preset.selectedPresetForCategory(PresetServiceMock::FilamentCat),
+  QCOMPARE(preset.selectedPresetForCategory(PresetService::FilamentCat),
            QStringLiteral("Unit Test Repair Filament B"));
-  QCOMPARE(preset.selectedPresetForCategory(PresetServiceMock::PrintCat),
+  QCOMPARE(preset.selectedPresetForCategory(PresetService::PrintCat),
            QStringLiteral("Unit Test Repair Process B"));
 }
 
@@ -2319,19 +2319,19 @@ void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
 
   QHash<QString, QVariant> printerA;
   printerA.insert(QStringLiteral("nozzle_diameter"), 0.4);
   printerA.insert(QStringLiteral("max_nozzle_temp"), 300);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Unit Test Invalid Printer A"),
                                     printerA));
   QHash<QString, QVariant> printerNoFallback;
   printerNoFallback.insert(QStringLiteral("nozzle_diameter"), 2.0);
   printerNoFallback.insert(QStringLiteral("max_nozzle_temp"), 300);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Unit Test Invalid Printer 2.0"),
                                     printerNoFallback));
 
@@ -2341,7 +2341,7 @@ void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
   filamentA.insert(QStringLiteral("compatible_nozzle_min"), 0.2);
   filamentA.insert(QStringLiteral("compatible_nozzle_max"), 0.8);
   filamentA.insert(QStringLiteral("nozzle_temp_range_max"), 260);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(preset.createCustomPreset(PresetService::FilamentCat,
                                     QStringLiteral("Unit Test Invalid Filament A"),
                                     filamentA));
 
@@ -2349,7 +2349,7 @@ void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
   processA.insert(QStringLiteral("layer_height"), 0.2);
   processA.insert(QStringLiteral("compatible_printers"),
                   QStringList{QStringLiteral("Unit Test Invalid Printer A")});
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Invalid Process A"),
                                     processA));
 
@@ -2362,7 +2362,7 @@ void ViewModelSmokeTests::configKeepsInvalidSelectionWhenNoCompatibleFallback()
   config.setCurrentPrinterPreset(QStringLiteral("Unit Test Invalid Printer 2.0"));
   QCOMPARE(config.currentPrinterPreset(), QStringLiteral("Unit Test Invalid Printer 2.0"));
   QCOMPARE(config.currentFilamentPreset(), QStringLiteral("Unit Test Invalid Filament A"));
-  QVERIFY(!preset.compatiblePresetNamesForCategory(PresetServiceMock::FilamentCat,
+  QVERIFY(!preset.compatiblePresetNamesForCategory(PresetService::FilamentCat,
                                                    QStringLiteral("Unit Test Invalid Printer 2.0"))
               .contains(QStringLiteral("Unit Test Invalid Filament A")));
   QVERIFY(config.compatibleFilamentPresetNames().contains(QStringLiteral("Unit Test Invalid Filament A")));
@@ -2383,26 +2383,26 @@ void ViewModelSmokeTests::presetReadOnlyActionBlockerReasons()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  const QString builtinPrint = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
+  PresetService preset;
+  const QString builtinPrint = preset.defaultPresetForCategory(PresetService::PrintCat);
   QVERIFY(!builtinPrint.isEmpty());
 
   const QString deleteBlocker =
-      preset.presetActionBlocker(PresetServiceMock::PrintCat, builtinPrint, QStringLiteral("delete"));
+      preset.presetActionBlocker(PresetService::PrintCat, builtinPrint, QStringLiteral("delete"));
   const QString renameBlocker =
-      preset.presetActionBlocker(PresetServiceMock::PrintCat, builtinPrint, QStringLiteral("rename"));
+      preset.presetActionBlocker(PresetService::PrintCat, builtinPrint, QStringLiteral("rename"));
   QVERIFY(!deleteBlocker.isEmpty());
   QVERIFY(!renameBlocker.isEmpty());
 
   QHash<QString, QVariant> customValues;
   customValues.insert(QStringLiteral("layer_height"), 0.22);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("Unit Test Action User Print"),
                                     customValues));
-  QVERIFY(preset.presetActionBlocker(PresetServiceMock::PrintCat,
+  QVERIFY(preset.presetActionBlocker(PresetService::PrintCat,
                                      QStringLiteral("Unit Test Action User Print"),
                                      QStringLiteral("delete")).isEmpty());
-  QVERIFY(!preset.presetActionBlocker(PresetServiceMock::FilamentCat,
+  QVERIFY(!preset.presetActionBlocker(PresetService::FilamentCat,
                                       QStringLiteral("Unit Test Action User Print"),
                                       QStringLiteral("delete")).isEmpty());
 }
@@ -2436,10 +2436,10 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
   userTemp.setAutoRemove(true);
   const QString userDir = userTemp.path();
   {
-    PresetServiceMock first;
+    PresetService first;
     first.setUserPresetDir(userDir);
-    QVERIFY(first.createCustomPreset(PresetServiceMock::PrintCat, presetName, values));
-    QVERIFY(first.createCustomPreset(PresetServiceMock::PrinterCat, printerPresetName,
+    QVERIFY(first.createCustomPreset(PresetService::PrintCat, presetName, values));
+    QVERIFY(first.createCustomPreset(PresetService::PrinterCat, printerPresetName,
                                      {{QStringLiteral("nozzle_diameter"), 0.6}}));
     QCOMPARE(QDir(userDir + QStringLiteral("/process"))
                  .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 1);
@@ -2448,10 +2448,10 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
   }
 
   // "Restart": a new instance pointed at the same directory loads both.
-  PresetServiceMock second;
+  PresetService second;
   second.setUserPresetDir(userDir);
-  QVERIFY(second.presetNamesForCategory(PresetServiceMock::PrintCat).contains(presetName));
-  QVERIFY(second.presetNamesForCategory(PresetServiceMock::PrinterCat).contains(printerPresetName));
+  QVERIFY(second.presetNamesForCategory(PresetService::PrintCat).contains(presetName));
+  QVERIFY(second.presetNamesForCategory(PresetService::PrinterCat).contains(printerPresetName));
   QVERIFY(second.isUserPreset(presetName));
   const auto restored = second.presetValues(presetName);
   QCOMPARE(restored.value(QStringLiteral("layer_height")).toDouble(), 0.21);
@@ -2460,7 +2460,7 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
 
   // User presets list ahead of system presets (upstream combo layout:
   // User section before System, PresetComboBoxes.cpp:1289-1317).
-  const QStringList printNames = second.presetNamesForCategory(PresetServiceMock::PrintCat);
+  const QStringList printNames = second.presetNamesForCategory(PresetService::PrintCat);
   int systemIdx = -1;
   for (const QString &name : printNames)
   {
@@ -2483,14 +2483,14 @@ void ViewModelSmokeTests::userPresetPersistsAcrossRestart()
   QCOMPARE(QDir(userDir + QStringLiteral("/process"))
                .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 0);
 
-  PresetServiceMock third;
+  PresetService third;
   third.setUserPresetDir(userDir);
-  QVERIFY(!third.presetNamesForCategory(PresetServiceMock::PrintCat).contains(presetName));
-  QVERIFY(!third.presetNamesForCategory(PresetServiceMock::PrintCat).contains(renamed));
+  QVERIFY(!third.presetNamesForCategory(PresetService::PrintCat).contains(presetName));
+  QVERIFY(!third.presetNamesForCategory(PresetService::PrintCat).contains(renamed));
 }
 
 // v5.16 (PSET2-02): the CreatePresetsDialog scope mapping — UI "打印机"
-// (combo index 0) maps to PresetServiceMock::PrinterCat (2), and the
+// (combo index 0) maps to PresetService::PrinterCat (2), and the
 // inherits selection seeds the new preset from the parent's resolved chain
 // (upstream CreatePresetsDialog "Inherits from").
 void ViewModelSmokeTests::userPresetNamesDoNotCollideOnDisk()
@@ -2498,19 +2498,19 @@ void ViewModelSmokeTests::userPresetNamesDoNotCollideOnDisk()
   QTemporaryDir userTemp(QDir::temp().filePath(QStringLiteral("owzx-user-presets-XXXXXX")));
   QVERIFY(userTemp.isValid());
   {
-    PresetServiceMock preset;
+    PresetService preset;
     preset.setUserPresetDir(userTemp.path());
-    QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+    QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                       QStringLiteral("A/B"),
                                       {{QStringLiteral("wall_loops"), 2}}));
-    QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+    QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                       QStringLiteral("A\\B"),
                                       {{QStringLiteral("wall_loops"), 5}}));
     QCOMPARE(QDir(userTemp.path() + QStringLiteral("/process"))
                  .entryList({QStringLiteral("*.json")}, QDir::Files).size(), 2);
   }
 
-  PresetServiceMock restored;
+  PresetService restored;
   restored.setUserPresetDir(userTemp.path());
   QCOMPARE(restored.presetValue(QStringLiteral("A/B"), QStringLiteral("wall_loops")).toInt(), 2);
   QCOMPARE(restored.presetValue(QStringLiteral("A\\B"), QStringLiteral("wall_loops")).toInt(), 5);
@@ -2521,9 +2521,9 @@ void ViewModelSmokeTests::userPresetWriteFailureLeavesMemoryUnchanged()
   QTemporaryFile notDirectory;
   QVERIFY(notDirectory.open());
 
-  PresetServiceMock preset;
+  PresetService preset;
   preset.setUserPresetDir(notDirectory.fileName());
-  QVERIFY(!preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(!preset.createCustomPreset(PresetService::PrintCat,
                                      QStringLiteral("Cannot Persist"),
                                      {{QStringLiteral("wall_loops"), 7}}));
   QVERIFY(!preset.hasPreset(QStringLiteral("Cannot Persist")));
@@ -2539,18 +2539,18 @@ void ViewModelSmokeTests::createPresetHonorsScopeAndInherits()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
-  const QString parentPrinter = preset.selectedPresetForCategory(PresetServiceMock::PrinterCat);
+  const QString parentPrinter = preset.selectedPresetForCategory(PresetService::PrinterCat);
   QVERIFY(!parentPrinter.isEmpty());
   const auto parentValues = preset.presetValues(parentPrinter);
   QVERIFY(!parentValues.isEmpty());
 
   // UI scope "打印机" → category 2 (PrinterCat), inheriting the parent.
   QVERIFY(config.createCustomPreset(2, QStringLiteral("UT Scope Printer"), parentPrinter));
-  QCOMPARE(preset.presetCategory(QStringLiteral("UT Scope Printer")), int(PresetServiceMock::PrinterCat));
+  QCOMPARE(preset.presetCategory(QStringLiteral("UT Scope Printer")), int(PresetService::PrinterCat));
   QCOMPARE(preset.presetInherits(QStringLiteral("UT Scope Printer")), parentPrinter);
   // Inheritance resolution: the child carries the parent's resolved keys.
   const auto childValues = preset.presetValues(QStringLiteral("UT Scope Printer"));
@@ -2575,25 +2575,25 @@ void ViewModelSmokeTests::presetTreeRejectsCrossCategoryParentAndChildCrud()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   ScopedUserPresetDir presetDir(preset);
-  ProjectServiceMock project;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
-  const QString printerParent = preset.defaultPresetForCategory(PresetServiceMock::PrinterCat);
-  QVERIFY(!config.createCustomPreset(PresetServiceMock::PrintCat,
+  const QString printerParent = preset.defaultPresetForCategory(PresetService::PrinterCat);
+  QVERIFY(!config.createCustomPreset(PresetService::PrintCat,
                                      QStringLiteral("UT Cross Category Parent"), printerParent));
   QVERIFY(config.lastPresetError().contains(QStringLiteral("another preset category")));
 
   const QString parent = QStringLiteral("UT Tree Parent");
   const QString child = QStringLiteral("UT Tree Child");
-  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat, parent));
-  QVERIFY(config.createCustomPreset(PresetServiceMock::PrintCat, child, parent));
+  QVERIFY(config.createCustomPreset(PresetService::PrintCat, parent));
+  QVERIFY(config.createCustomPreset(PresetService::PrintCat, child, parent));
   QVERIFY(preset.hasPresetChildren(parent));
-  QVERIFY(!config.renamePreset(PresetServiceMock::PrintCat, parent,
+  QVERIFY(!config.renamePreset(PresetService::PrintCat, parent,
                                QStringLiteral("UT Tree Parent Renamed")));
   QVERIFY(config.lastPresetError().contains(QStringLiteral("cannot be renamed")));
-  QVERIFY(!config.deletePreset(PresetServiceMock::PrintCat, parent));
+  QVERIFY(!config.deletePreset(PresetService::PrintCat, parent));
   QVERIFY(config.lastPresetError().contains(QStringLiteral("cannot be deleted")));
   QVERIFY(preset.hasPreset(parent));
   QCOMPARE(preset.presetInherits(child), parent);
@@ -2609,16 +2609,16 @@ void ViewModelSmokeTests::configRestoreAllSystemValuesUsesParentValues()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   ScopedUserPresetDir presetDir(preset);
-  ProjectServiceMock project;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   const QString parent = QStringLiteral("UT Restore Parent");
   const QString child = QStringLiteral("UT Restore Child");
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, parent,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat, parent,
                                     {{QStringLiteral("layer_height"), 0.16}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, child,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat, child,
                                     {{QStringLiteral("layer_height"), 0.20}}, parent));
   config.setCurrentPrintPreset(child);
   config.setActivePresetTier(QStringLiteral("print"));
@@ -2656,15 +2656,15 @@ void ViewModelSmokeTests::bundleImportCategoriesRoundTrip()
   QDir(exportDir).removeRecursively();
 
   {
-    PresetServiceMock source;
+    PresetService source;
     ScopedUserPresetDir dir(source);
-    QVERIFY(source.createCustomPreset(PresetServiceMock::PrinterCat,
+    QVERIFY(source.createCustomPreset(PresetService::PrinterCat,
                                       QStringLiteral("UT Bundle Printer"),
                                       {{QStringLiteral("nozzle_diameter"), 0.6}}));
-    QVERIFY(source.createCustomPreset(PresetServiceMock::FilamentCat,
+    QVERIFY(source.createCustomPreset(PresetService::FilamentCat,
                                       QStringLiteral("UT Bundle Filament"),
                                       {{QStringLiteral("nozzle_temp"), 230}}));
-    QVERIFY(source.createCustomPreset(PresetServiceMock::PrintCat,
+    QVERIFY(source.createCustomPreset(PresetService::PrintCat,
                                       QStringLiteral("UT Bundle Process"),
                                       {{QStringLiteral("layer_height"), 0.24}}));
     QCOMPARE(source.exportBundleIni(exportDir), 3);
@@ -2693,12 +2693,12 @@ void ViewModelSmokeTests::bundleImportCategoriesRoundTrip()
   }
 
   // Fresh instance (own wiped AppData tree) imports the directory bundle.
-  PresetServiceMock target;
+  PresetService target;
   ScopedUserPresetDir dir(target);
   QCOMPARE(target.importBundleIni(exportDir), 3);
-  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Printer")), int(PresetServiceMock::PrinterCat));
-  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Filament")), int(PresetServiceMock::FilamentCat));
-  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Process")), int(PresetServiceMock::PrintCat));
+  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Printer")), int(PresetService::PrinterCat));
+  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Filament")), int(PresetService::FilamentCat));
+  QCOMPARE(target.presetCategory(QStringLiteral("UT Bundle Process")), int(PresetService::PrintCat));
   QCOMPARE(target.presetValue(QStringLiteral("UT Bundle Printer"),
                               QStringLiteral("nozzle_diameter")).toDouble(), 0.6);
   QCOMPARE(target.presetValue(QStringLiteral("UT Bundle Process"),
@@ -2714,12 +2714,12 @@ void ViewModelSmokeTests::bundleExportHonorsSelectedContents()
   const QString exportDir = QDir::temp().filePath(QStringLiteral("owzx_pset2_bundle_selection"));
   QDir(exportDir).removeRecursively();
 
-  PresetServiceMock source;
+  PresetService source;
   ScopedUserPresetDir dir(source);
-  QVERIFY(source.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(source.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("UT Selected Printer"),
                                     {{QStringLiteral("nozzle_diameter"), 0.6}}));
-  QVERIFY(source.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(source.createCustomPreset(PresetService::FilamentCat,
                                     QStringLiteral("UT Unselected Filament"),
                                     {{QStringLiteral("nozzle_temp"), 230}}));
   QCOMPARE(source.exportBundleIni(exportDir, {QStringLiteral("UT Selected Printer")}), 1);
@@ -2735,7 +2735,7 @@ void ViewModelSmokeTests::bundleExportHonorsSelectedContents()
       entries.at(0).toObject().value(QStringLiteral("file")).toString())));
   QVERIFY(!QFile::exists(QDir(exportDir).filePath(QStringLiteral("filament/UT Unselected Filament.json"))));
 
-  PresetServiceMock target;
+  PresetService target;
   ScopedUserPresetDir targetDir(target);
   QCOMPARE(target.importBundleIni(exportDir), 1);
   QVERIFY(target.hasPreset(QStringLiteral("UT Selected Printer")));
@@ -2756,14 +2756,14 @@ void ViewModelSmokeTests::configTransferPendingChangesAndDialogGate()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   ScopedUserPresetDir presetDir(preset);
-  ProjectServiceMock project;
+  ProjectService project;
 
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Transfer Print A"),
                                     {{QStringLiteral("layer_height"), 0.16}}));
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat,
                                     QStringLiteral("UT Transfer Print B"),
                                     {{QStringLiteral("layer_height"), 0.28},
                                      {QStringLiteral("top_shell_layers"), 3}}));
@@ -2833,28 +2833,28 @@ void ViewModelSmokeTests::configDeleteCurrentPresetFallsBackToDefault()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   ScopedUserPresetDir presetDir(preset);
-  ProjectServiceMock project;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   const QString doomed = QStringLiteral("UT Delete Print");
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrintCat, doomed,
+  QVERIFY(preset.createCustomPreset(PresetService::PrintCat, doomed,
                                      {{QStringLiteral("layer_height"), 0.19}}));
   config.setCurrentPrintPreset(doomed);
   QCOMPARE(config.currentPrintPreset(), doomed);
   QVERIFY(config.isPresetInUse(doomed));
 
-  QVERIFY(config.deletePreset(int(PresetServiceMock::PrintCat), doomed));
+  QVERIFY(config.deletePreset(int(PresetService::PrintCat), doomed));
   QVERIFY(!preset.hasPreset(doomed));
   QCOMPARE(config.currentPrintPreset(),
-           preset.defaultPresetForCategory(PresetServiceMock::PrintCat));
+           preset.defaultPresetForCategory(PresetService::PrintCat));
 
   // Built-in presets stay undeletable through the same path.
-  const QString builtin = preset.defaultPresetForCategory(PresetServiceMock::PrintCat);
+  const QString builtin = preset.defaultPresetForCategory(PresetService::PrintCat);
   QVERIFY(!builtin.isEmpty());
   QVERIFY(preset.isBuiltinPreset(builtin));
-  QVERIFY(!config.deletePreset(int(PresetServiceMock::PrintCat), builtin));
+  QVERIFY(!config.deletePreset(int(PresetService::PrintCat), builtin));
 }
 
 // v5.16 (PSET2-06): the per-extruder filament preset slot vector resizes
@@ -2870,15 +2870,15 @@ void ViewModelSmokeTests::filamentSlotVectorResizesAndPersistsWithProject()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   config.setExtruderCount(3);
   QCOMPARE(config.filamentPresetForSlot(0), config.currentFilamentPreset());
   QCOMPARE(config.filamentPresetForSlot(2), config.currentFilamentPreset());
 
-  const QStringList filamentNames = preset.presetNamesForCategory(PresetServiceMock::FilamentCat);
+  const QStringList filamentNames = preset.presetNamesForCategory(PresetService::FilamentCat);
   QVERIFY(filamentNames.size() >= 2);
   QString other = filamentNames.first();
   if (other == config.currentFilamentPreset())
@@ -3576,7 +3576,7 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
 //   - 普通 mode=0 切片不含 calib token（对照组）
 void ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
 
   // 加载测试模型（复用 E2E 的 Prusa.stl 路径）
@@ -3587,7 +3587,7 @@ void ViewModelSmokeTests::int02_CalibrationGeneratesCalibGcode()
   QVERIFY(project.loadFile(stlPath));
 
   // 等待异步加载完成
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(loadSpy.isValid());
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
 
@@ -3683,7 +3683,7 @@ void ViewModelSmokeTests::calibrationImplementedModesExposeStableRouting()
 
 void ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   CalibrationServiceMock service;
   service.setSliceService(&slice);
@@ -3722,8 +3722,8 @@ void ViewModelSmokeTests::calibrationImplementedModesEmitSliceRequests()
 
 void ViewModelSmokeTests::filamentSlotPresetsAreIndependent()
 {
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   // v5.16 (CIRC-04): slot 0 mirrors the global selection; slots 1..N hold
@@ -3772,7 +3772,7 @@ void ViewModelSmokeTests::filamentSlotPresetsAreIndependent()
 void ViewModelSmokeTests::plateSettingsSyncIntoPlateConfig()
 {
 #ifdef HAS_LIBSLIC3R
-  ProjectServiceMock service;
+  ProjectService service;
   QVERIFY(service.plateCount() > 0);
 
   // PLATE-01: bed type reaches curr_bed_type in the plate config.
@@ -3815,7 +3815,7 @@ void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
 {
   // S3 (2026-10-14): meshData() bakes volume-local geometry (blob v2) and
   // the per-batch instance transform channel carries ALL world placement.
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
 
   const QByteArray blobA = project.meshData();
@@ -3881,7 +3881,7 @@ void ViewModelSmokeTests::fitHintTracksInstanceTransformsWithoutMeshRefresh()
   // object moves the whole-plate fit center WITHOUT any mesh refresh (the
   // legacy trailer-derived hint went stale here -- the stale-transform
   // defect S3 removes).
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel vm(&project, &slice);
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
@@ -3904,7 +3904,7 @@ void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()
   // S3 C4: ONE collectMeshBatchIdentities walk fills all six per-batch lists
   // plus the transform channel. The permanent alignment lock: every table has
   // exactly one entry per blob batch, in blob order.
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
   QVERIFY(project.addPrimitiveToPlate(0) >= 1); // second object: multi-batch
 
@@ -3914,7 +3914,7 @@ void ViewModelSmokeTests::meshBatchRenderTablesStayAlignedWithBlobBatches()
   memcpy(&batchCount, blob.constData() + sizeof(qint32), sizeof(qint32));
   QVERIFY(batchCount >= 2);
 
-  const ProjectServiceMock::MeshBatchRenderTables tables = project.meshBatchRenderTables();
+  const ProjectService::MeshBatchRenderTables tables = project.meshBatchRenderTables();
   QCOMPARE(tables.sourceObjectIndices.size(), batchCount);
   QCOMPARE(tables.volumeIndices.size(), batchCount);
   QCOMPARE(tables.instanceIndices.size(), batchCount);
@@ -3936,10 +3936,10 @@ void ViewModelSmokeTests::projectEditsDriveDirtyState()
   ScopedSettingsSnapshot snapshot({QStringLiteral("recentProjects")});
   snapshot.clear();
 
-  ProjectServiceMock service;
+  ProjectService service;
   ProjectViewModel project;
   // v5.16 (PLATE-05): markDirty is the slot the composition root wires to
-  // ProjectServiceMock::projectChanged (loads excluded upstream-side).
+  // ProjectService::projectChanged (loads excluded upstream-side).
   QVERIFY(!project.isDirty());
   project.markDirty();
   QVERIFY(project.isDirty());
@@ -3997,7 +3997,7 @@ void ViewModelSmokeTests::homeRecentProjectsPersistAndCardsRouteThroughSignal()
 void ViewModelSmokeTests::calibrationSaveToPresetWritesPresetValues()
 {
   // Phase 241 (PAGE-03): "save to preset" writes the measured value into the
-  // filament preset through PresetServiceMock::savePresetValues (upstream
+  // filament preset through PresetService::savePresetValues (upstream
   // CalibrationWizardSavePage on_save): PA modes -> pressure_advance,
   // FlowRate -> filament_flow_ratio.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
@@ -4008,7 +4008,7 @@ void ViewModelSmokeTests::calibrationSaveToPresetWritesPresetValues()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
+  PresetService preset;
   CalibrationServiceMock calib;
   CalibrationViewModel vm(&calib);
   vm.setPresetService(&preset);
@@ -4016,7 +4016,7 @@ void ViewModelSmokeTests::calibrationSaveToPresetWritesPresetValues()
   const QString presetName = QStringLiteral("Unit Test Calib Filament");
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("filament_flow_ratio"), 0.98);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::FilamentCat, presetName, values));
+  QVERIFY(preset.createCustomPreset(PresetService::FilamentCat, presetName, values));
 
   // PA mode writes pressure_advance. Complete the local fallback sweep first
   // so the ViewModel has a measured result to save.
@@ -4233,8 +4233,8 @@ void ViewModelSmokeTests::projectBackupWritesSnapshotFile()
   // snapshot WITHOUT hijacking currentProjectPath_ (a backup must never
   // become the user's project file). Nothing to back up -> honest empty
   // response from the composition root.
-  ProjectServiceMock project;
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  ProjectService project;
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(project.loadFile(kStlPath));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(loadSpy.takeFirst().at(0).toBool());
@@ -4269,7 +4269,7 @@ void ViewModelSmokeTests::deletePlateUndoReconcilesDuplicateNamesByStableId()
   // deleted object's recorded (index, name) as "survived" — the same-named
   // survivor occupied that index after the delete — and skipped its deep
   // restore, silently dropping the object.
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 0 "立方体"
   QVERIFY(project.addPrimitiveToPlate(0) >= 1);   // object 1 "立方体" (same name)
   QCOMPARE(project.objectNames().value(0), project.objectNames().value(1));
@@ -4303,7 +4303,7 @@ void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
   // Plater.cpp:12136-12143). The saved archive must round-trip: a fresh load
   // restores both plates with thumbnails and meshes (the production strategy
   // stays self-compatible with our reader).
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
   QVERIFY(project.addPlate());
   QVERIFY(project.setCurrentPlateIndex(1));
@@ -4330,8 +4330,8 @@ void ViewModelSmokeTests::projectStoreWritesThumbnailFamily()
   QVERIFY(project.saveProject(path));
   QVERIFY(QFileInfo(path).size() > 0);
 
-  ProjectServiceMock reload;
-  QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+  ProjectService reload;
+  QSignalSpy loadSpy(&reload, &ProjectService::loadFinished);
   QVERIFY(reload.loadFile(path));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(loadSpy.takeFirst().at(0).toBool());
@@ -4357,7 +4357,7 @@ void ViewModelSmokeTests::emptyModelSaveTo3mfWritesRealContainer()
   // via its parse-fail fallback. Both empty-model variants must now produce a
   // genuine archive: a fresh service (empty Slic3r::Model) and a JSON-format
   // project (model_ reset to null by the JSON loader).
-  ProjectServiceMock project;
+  ProjectService project;
   QCOMPARE(project.modelCount(), 0);
 
   QTemporaryDir dir;
@@ -4373,8 +4373,8 @@ void ViewModelSmokeTests::emptyModelSaveTo3mfWritesRealContainer()
     QCOMPARE(saved.read(2), QByteArrayLiteral("PK"));
   }
   {
-    ProjectServiceMock reload;
-    QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+    ProjectService reload;
+    QSignalSpy loadSpy(&reload, &ProjectService::loadFinished);
     QVERIFY(reload.loadProject(fresh3mf));
     QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
     QVERIFY(loadSpy.takeFirst().at(0).toBool());
@@ -4403,8 +4403,8 @@ void ViewModelSmokeTests::emptyModelSaveTo3mfWritesRealContainer()
     QCOMPARE(saved.read(2), QByteArrayLiteral("PK"));
   }
   {
-    ProjectServiceMock reload;
-    QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+    ProjectService reload;
+    QSignalSpy loadSpy(&reload, &ProjectService::loadFinished);
     QVERIFY(reload.loadProject(jsonTo3mf));
     QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
     QVERIFY(loadSpy.takeFirst().at(0).toBool());
@@ -4416,7 +4416,7 @@ void ViewModelSmokeTests::emptyModelSaveTo3mfWritesRealContainer()
 {
   // No libslic3r writer in this build: a .3mf destination must be refused
   // outright -- JSON bytes must never land in a .3mf name.
-  ProjectServiceMock project;
+  ProjectService project;
   QTemporaryDir dir;
   QVERIFY(dir.isValid());
   const QString blocked3mf = dir.path() + QStringLiteral("/blocked.3mf");
@@ -4441,28 +4441,28 @@ void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
 
   QTemporaryDir presetDir;
   QVERIFY(presetDir.isValid());
-  PresetServiceMock presets;
+  PresetService presets;
   presets.setUserPresetDir(presetDir.path());
   // Base parent first: a bare service instance carries no bundled presets.
   QHash<QString, QVariant> base;
   base.insert(QStringLiteral("layer_height"), 0.2);
-  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(presets.createCustomPreset(PresetService::PrintCat,
                                      QStringLiteral("BaseProfile"), base));
   QHash<QString, QVariant> values;
   values.insert(QStringLiteral("layer_height"), 0.3);
-  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(presets.createCustomPreset(PresetService::PrintCat,
                                      QStringLiteral("MyProfile"), values,
                                      QStringLiteral("BaseProfile")));
   QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")),
            QStringLiteral("BaseProfile"));
 
-  QVERIFY(presets.detachPresetFromParent(PresetServiceMock::PrintCat,
+  QVERIFY(presets.detachPresetFromParent(PresetService::PrintCat,
                                          QStringLiteral("MyProfile"), values));
   QCOMPARE(presets.presetInherits(QStringLiteral("MyProfile")), QString());
   // The preset and its values survive the flatten.
   QVERIFY(presets.hasPreset(QStringLiteral("MyProfile")));
   QCOMPARE(presets.presetCategory(QStringLiteral("MyProfile")),
-           PresetServiceMock::PrintCat);
+           PresetService::PrintCat);
 }
 #else
 void ViewModelSmokeTests::detachFlattensInheritedUserPreset()
@@ -4481,29 +4481,29 @@ void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
                                         QStringLiteral("G13Embed"));
   QTemporaryDir presetDir;
   QVERIFY(presetDir.isValid());
-  PresetServiceMock presets;
+  PresetService presets;
   presets.setUserPresetDir(presetDir.path());
-  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrintCat,
+  QVERIFY(presets.createCustomPreset(PresetService::PrintCat,
                                      QStringLiteral("EmbPrint"),
                                      {{QStringLiteral("layer_height"), 0.3}}));
-  QVERIFY(presets.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(presets.createCustomPreset(PresetService::PrinterCat,
                                      QStringLiteral("EmbPrinter"),
                                      {{QStringLiteral("bed_shape"), QStringLiteral("0,0,200,0,200,200,0,200")}}));
-  QVERIFY(presets.createCustomPreset(PresetServiceMock::FilamentCat,
+  QVERIFY(presets.createCustomPreset(PresetService::FilamentCat,
                                      QStringLiteral("EmbFilament"),
                                      {{QStringLiteral("filament_type"), QStringLiteral("PLA")}}));
-  presets.setSelectedPresetForCategory(PresetServiceMock::PrintCat, QStringLiteral("EmbPrint"));
-  presets.setSelectedPresetForCategory(PresetServiceMock::PrinterCat, QStringLiteral("EmbPrinter"));
-  presets.setSelectedPresetForCategory(PresetServiceMock::FilamentCat, QStringLiteral("EmbFilament"));
+  presets.setSelectedPresetForCategory(PresetService::PrintCat, QStringLiteral("EmbPrint"));
+  presets.setSelectedPresetForCategory(PresetService::PrinterCat, QStringLiteral("EmbPrinter"));
+  presets.setSelectedPresetForCategory(PresetService::FilamentCat, QStringLiteral("EmbFilament"));
 
   // Mirror BackendContext::collectProjectEmbeddedPresets (it cannot run here:
   // no full BackendContext needed for the service round-trip).
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
   QVariantList embed;
-  const int categories[] = {PresetServiceMock::PrintCat,
-                            PresetServiceMock::FilamentCat,
-                            PresetServiceMock::PrinterCat};
+  const int categories[] = {PresetService::PrintCat,
+                            PresetService::FilamentCat,
+                            PresetService::PrinterCat};
   for (int category : categories) {
     const QString name = presets.selectedPresetForCategory(category);
     QVERIFY(!name.isEmpty());
@@ -4524,8 +4524,8 @@ void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
   const QString path = dir.path() + QStringLiteral("/embed.3mf");
   QVERIFY(project.saveProject(path));
 
-  ProjectServiceMock reload;
-  QSignalSpy loadSpy(&reload, &ProjectServiceMock::loadFinished);
+  ProjectService reload;
+  QSignalSpy loadSpy(&reload, &ProjectService::loadFinished);
   QVERIFY(reload.loadFile(path));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(loadSpy.takeFirst().at(0).toBool());
@@ -4543,7 +4543,7 @@ void ViewModelSmokeTests::projectEmbedsAndReloadsSelectedPresets()
   // Adopt as BackendContext does on loadFinished.
   QTemporaryDir adoptDir;
   QVERIFY(adoptDir.isValid());
-  PresetServiceMock adopted;
+  PresetService adopted;
   adopted.setUserPresetDir(adoptDir.path());
   for (const QVariant &entryVar : payload) {
     const QVariantMap entry = entryVar.toMap();
@@ -4610,7 +4610,7 @@ void ViewModelSmokeTests::calibrationUnsupportedModesAreExplicitlyUnavailable()
 
 void ViewModelSmokeTests::calibrationTowerPreservesLiveProject()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   const int objectIndex = project.addObject(QStringLiteral("User Model"));
   QVERIFY(objectIndex >= 0);
   const QStringList before = project.objectNames();
@@ -5158,8 +5158,8 @@ void ViewModelSmokeTests::extruderCountReadsPrinterPresetNozzleEntries()
       QStringLiteral("presets/selectedPrinter")});
   snapshot.clear();
 
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   ConfigViewModel config(&preset, &project);
@@ -5171,7 +5171,7 @@ void ViewModelSmokeTests::extruderCountReadsPrinterPresetNozzleEntries()
   // A printer preset with two nozzle_diameter entries -> two extruders.
   QHash<QString, QVariant> dual;
   dual.insert(QStringLiteral("nozzle_diameter"), QVariantList{0.4, 0.4});
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Q10 Dual Nozzle Printer"), dual));
   config.setCurrentPrinterPreset(QStringLiteral("Q10 Dual Nozzle Printer"));
   QCOMPARE(config.currentPrinterPreset(), QStringLiteral("Q10 Dual Nozzle Printer"));
@@ -5180,7 +5180,7 @@ void ViewModelSmokeTests::extruderCountReadsPrinterPresetNozzleEntries()
   // Switching back to a single-nozzle preset restores 1.
   QHash<QString, QVariant> single;
   single.insert(QStringLiteral("nozzle_diameter"), 0.4);
-  QVERIFY(preset.createCustomPreset(PresetServiceMock::PrinterCat,
+  QVERIFY(preset.createCustomPreset(PresetService::PrinterCat,
                                     QStringLiteral("Q10 Single Nozzle Printer"), single));
   config.setCurrentPrinterPreset(QStringLiteral("Q10 Single Nozzle Printer"));
   QCOMPARE(editor.extruderCount(), 1);
@@ -5223,7 +5223,7 @@ void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
   editorBedKeys.clear();
 
   {
-    ProjectServiceMock project;
+    ProjectService project;
     SliceService slice(&project);
     EditorViewModel editor(&project, &slice);
     editor.setBedWidth(333.0f);
@@ -5235,7 +5235,7 @@ void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
     editor.setBedDiameter(222.0f);
   }
   {
-    ProjectServiceMock project;
+    ProjectService project;
     SliceService slice(&project);
     EditorViewModel editor(&project, &slice);
     QCOMPARE(editor.bedWidth(), 333.0f);
@@ -5249,7 +5249,7 @@ void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()
 }
 
 // -- v3.0 Phase 16-01: PartPlate/PartPlateList domain-model unit tests --
-// Pure-domain tests (no libslic3r dependency, no ProjectServiceMock). They exercise
+// Pure-domain tests (no libslic3r dependency, no ProjectService). They exercise
 // the new src/core/model/ classes directly to lock in the data structure before the
 // big-bang migration in plan 16-02.
 
@@ -5346,7 +5346,7 @@ void ViewModelSmokeTests::projectServicePlateOpsBackedByPartPlateList()
 {
   // PLATE-06 regression: after the big-bang migration to PartPlateList, the existing
   // plate Q_INVOKABLE surface (add/delete/rename/lock/select) must still work.
-  ProjectServiceMock project;
+  ProjectService project;
   // A freshly-constructed service has one plate (the PartPlateList invariant).
   QCOMPARE(project.plateCount(), 1);
 
@@ -5409,7 +5409,7 @@ void ViewModelSmokeTests::partPlateListMovePlateReindexesAndAdjustsCurrent()
 void ViewModelSmokeTests::projectServiceClonePlateDeepCopiesObjects()
 {
   // D-06: clonePlate deep-copies objects onto the new plate.
-  ProjectServiceMock project;
+  ProjectService project;
   QCOMPARE(project.plateCount(), 1);
   // Add a primitive to plate 0 (current plate). addPrimitiveToPlate returns the
   // new object index (>=0) on success.
@@ -5446,7 +5446,7 @@ void ViewModelSmokeTests::projectServiceClonePlateDeepCopiesObjects()
 void ViewModelSmokeTests::projectServicePerPlatePrintableRoundTrip()
 {
   // D-08: per-plate printable flag round-trip + default.
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.isPlatePrintable(0));  // default printable
   QVERIFY(project.setPlatePrintable(0, false));
   QVERIFY(!project.isPlatePrintable(0));
@@ -5458,7 +5458,7 @@ void ViewModelSmokeTests::projectServicePerPlatePrintableRoundTrip()
 
 void ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallback()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5484,7 +5484,7 @@ void ViewModelSmokeTests::activePlateObjectIndicesFollowCurrentPlateWithoutFallb
 void ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate()
 {
 #ifdef HAS_LIBSLIC3R
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5515,7 +5515,7 @@ void ViewModelSmokeTests::prepareContextPlateReplacementIsScopedToTargetPlate()
 
 void ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5549,7 +5549,7 @@ void ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting(
 void ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped()
 {
 #ifdef HAS_LIBSLIC3R
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5604,7 +5604,7 @@ void ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped()
 void ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate()
 {
 #ifdef HAS_LIBSLIC3R
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5633,7 +5633,7 @@ void ViewModelSmokeTests::prepareContextTargetedImportAndHandyModelsStayOnPlate(
 void ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperations()
 {
 #ifdef HAS_LIBSLIC3R
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5663,7 +5663,7 @@ void ViewModelSmokeTests::prepareContextMeshAndUnitActionsUseUpstreamModelOperat
 void ViewModelSmokeTests::prepareContextProcessSettingsCopyPasteUsesScopedConfig()
 {
 #ifdef HAS_LIBSLIC3R
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5683,7 +5683,7 @@ void ViewModelSmokeTests::prepareContextProcessSettingsCopyPasteUsesScopedConfig
 
 void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewModel()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5718,7 +5718,7 @@ void ViewModelSmokeTests::rendererPickingSelectsSourceObjectThroughEditorViewMod
 // removes it (Selection::remove); Alt+click selects the volume (part) scope.
 void ViewModelSmokeTests::selectionModifierClicksRouteThroughBackendToggleAndVolumePick()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5768,7 +5768,7 @@ void ViewModelSmokeTests::selectionModifierClicksRouteThroughBackendToggleAndVol
 // (:9588-9589) and an empty Alt rect is a no-op.
 void ViewModelSmokeTests::selectionRectBackendReplacesAddsDeselectsAndClears()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5920,7 +5920,7 @@ void ViewModelSmokeTests::rectangleSelectionProjectsSyntheticMeshBatchesForConta
   QCOMPARE(contained.size(), 1);
   QCOMPARE(contained.first().toInt(), 0);
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   QVERIFY(editor.addPrimitiveToPlate(0));
@@ -5945,7 +5945,7 @@ void ViewModelSmokeTests::rectangleSelectionProjectsSyntheticMeshBatchesForConta
 // {0, 0, 0} with no selection so the hints keep the world-axis layout.
 void ViewModelSmokeTests::selectedHintLocalRotationMirrorsSelectionRotation()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -5977,7 +5977,7 @@ void ViewModelSmokeTests::selectedHintLocalRotationMirrorsSelectionRotation()
 
 void ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -6013,7 +6013,7 @@ void ViewModelSmokeTests::gizmoMoveDragCoalescesIntoSingleUndoCommand()
 
 void ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -6058,7 +6058,7 @@ void ViewModelSmokeTests::gizmoRotateDragCoalescesIntoSingleUndoCommand()
 
 void ViewModelSmokeTests::gizmoScaleDragCoalescesIntoSingleUndoCommand()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -6098,7 +6098,7 @@ void ViewModelSmokeTests::gizmoScaleDragCoalescesIntoSingleUndoCommand()
 
 void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -6179,7 +6179,7 @@ void ViewModelSmokeTests::prepareWorkflowGatesExposeSourceTruthState()
 
 void ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -6219,7 +6219,7 @@ void ViewModelSmokeTests::prepareMoveSelectionToPlateUsesSourceSelection()
 
 void ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -6292,8 +6292,8 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
   QVERIFY2(QFileInfo::exists(fixturePath),
            "FIXTURE-01 test_model.stl must exist under tests/data/");
 
-  ProjectServiceMock saver;
-  QSignalSpy saverSpy(&saver, &ProjectServiceMock::loadFinished);
+  ProjectService saver;
+  QSignalSpy saverSpy(&saver, &ProjectService::loadFinished);
   QVERIFY2(saver.loadFile(fixturePath),
            "FIXTURE-01 must load via loadFile");
   QTRY_VERIFY_WITH_TIMEOUT(saverSpy.count() > 0, 10000);
@@ -6324,8 +6324,8 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
   }
 
   // Load into a fresh service.
-  ProjectServiceMock loader;
-  QSignalSpy loaderSpy(&loader, &ProjectServiceMock::loadFinished);
+  ProjectService loader;
+  QSignalSpy loaderSpy(&loader, &ProjectService::loadFinished);
   bool loaded = false;
   try {
     loaded = loader.loadProject(path);
@@ -6360,8 +6360,8 @@ void ViewModelSmokeTests::loadProjectReplacesPlateSequenceState()
   QFile::remove(firstPath);
   QFile::remove(secondPath);
 
-  ProjectServiceMock first;
-  QSignalSpy firstLoad(&first, &ProjectServiceMock::loadFinished);
+  ProjectService first;
+  QSignalSpy firstLoad(&first, &ProjectService::loadFinished);
   QVERIFY(first.loadFile(fixturePath));
   QTRY_VERIFY_WITH_TIMEOUT(firstLoad.count() > 0, 10000);
   QVERIFY(first.setPlateFirstLayerSeqChoice(0, 1));
@@ -6370,14 +6370,14 @@ void ViewModelSmokeTests::loadProjectReplacesPlateSequenceState()
   QVERIFY(first.addPlateOtherLayersSeqEntry(0, 2, 50));
   QVERIFY(first.saveProject(firstPath));
 
-  ProjectServiceMock second;
-  QSignalSpy secondLoad(&second, &ProjectServiceMock::loadFinished);
+  ProjectService second;
+  QSignalSpy secondLoad(&second, &ProjectService::loadFinished);
   QVERIFY(second.loadFile(fixturePath));
   QTRY_VERIFY_WITH_TIMEOUT(secondLoad.count() > 0, 10000);
   QVERIFY(second.saveProject(secondPath));
 
-  ProjectServiceMock loader;
-  QSignalSpy loaderSignals(&loader, &ProjectServiceMock::loadFinished);
+  ProjectService loader;
+  QSignalSpy loaderSignals(&loader, &ProjectService::loadFinished);
   QVERIFY(loader.loadProject(firstPath));
   QTRY_VERIFY_WITH_TIMEOUT(loaderSignals.count() > 0, 10000);
   QVERIFY(loaderSignals.last().at(0).toBool());
@@ -6405,7 +6405,7 @@ void ViewModelSmokeTests::multiPlateFullStateRoundTrip()
   // Phase 157 (CLOS-04): the full-state multi-plate round-trip that Phase 152
   // could only source-audit-lock. The harness gap was closed by the existing
   // multiPlate3mfRoundTripPreservesState test above (real store_bbs_3mf +
-  // read_from_archive on a stack ProjectServiceMock + QSignalSpy +
+  // read_from_archive on a stack ProjectService + QSignalSpy +
   // QTRY_VERIFY_WITH_TIMEOUT); this sibling extends coverage breadth to all
   // 5 CLOS-04 dimensions + per-plate thumbnails.
 #ifndef HAS_LIBSLIC3R
@@ -6418,8 +6418,8 @@ void ViewModelSmokeTests::multiPlateFullStateRoundTrip()
   QVERIFY2(QFileInfo::exists(fixturePath),
            "FIXTURE-01 test_model.stl must exist under tests/data/");
 
-  ProjectServiceMock saver;
-  QSignalSpy saverSpy(&saver, &ProjectServiceMock::loadFinished);
+  ProjectService saver;
+  QSignalSpy saverSpy(&saver, &ProjectService::loadFinished);
   QVERIFY2(saver.loadFile(fixturePath), "FIXTURE-01 must load via loadFile");
   QTRY_VERIFY_WITH_TIMEOUT(saverSpy.count() > 0, 10000);
   QVERIFY2(saver.modelCount() >= 1, "fixture must load >= 1 object");
@@ -6482,8 +6482,8 @@ void ViewModelSmokeTests::multiPlateFullStateRoundTrip()
   }
 
   // Reload into a fresh service.
-  ProjectServiceMock loader;
-  QSignalSpy loaderSpy(&loader, &ProjectServiceMock::loadFinished);
+  ProjectService loader;
+  QSignalSpy loaderSpy(&loader, &ProjectService::loadFinished);
   bool loaded = false;
   try {
     loaded = loader.loadProject(path);
@@ -6557,8 +6557,8 @@ void ViewModelSmokeTests::testAssembleTransformRoundTrip()
   QVERIFY2(QFileInfo::exists(fixturePath),
            "FIXTURE-01 test_model.stl must exist under tests/data/");
 
-  ProjectServiceMock saver;
-  QSignalSpy saverSpy(&saver, &ProjectServiceMock::loadFinished);
+  ProjectService saver;
+  QSignalSpy saverSpy(&saver, &ProjectService::loadFinished);
   QVERIFY2(saver.loadFile(fixturePath), "FIXTURE-01 must load via loadFile");
   QTRY_VERIFY_WITH_TIMEOUT(saverSpy.count() > 0, 10000);
   QVERIFY2(saver.modelCount() >= 1, "fixture must load >= 1 object");
@@ -6592,8 +6592,8 @@ void ViewModelSmokeTests::testAssembleTransformRoundTrip()
   }
 
   // Load into a fresh service through the real reader path.
-  ProjectServiceMock loader;
-  QSignalSpy loaderSpy(&loader, &ProjectServiceMock::loadFinished);
+  ProjectService loader;
+  QSignalSpy loaderSpy(&loader, &ProjectService::loadFinished);
   bool loaded = false;
   try {
     loaded = loader.loadProject(path);
@@ -6636,7 +6636,7 @@ void ViewModelSmokeTests::projectServicePerPlateConfigOverrideRoundTrips()
 #ifndef HAS_LIBSLIC3R
   QSKIP("per-plate config round-trip requires libslic3r (DynamicPrintConfig)");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   // Write a float override on a real config key, read it back.
   QVERIFY(project.setPlateScopedOptionValue(0, QStringLiteral("layer_height"), 0.25));
   QCOMPARE(project.plateScopedOptionValue(0, QStringLiteral("layer_height"), 0.0).toDouble(), 0.25);
@@ -6654,7 +6654,7 @@ void ViewModelSmokeTests::sliceServicePerPlateConfigMergeHonorsOverrides()
 #ifndef HAS_LIBSLIC3R
   QSKIP("per-plate config merge source check requires libslic3r");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.setPlateScopedOptionValue(0, QStringLiteral("layer_height"), 0.3));
   const Slic3r::DynamicPrintConfig *cfg = project.plateDynamicConfig(0);
   QVERIFY2(cfg != nullptr, "plateDynamicConfig must return the plate's config");
@@ -6707,7 +6707,7 @@ void ViewModelSmokeTests::sliceServiceConfigMergeDirectionPlateWins()
 // only) and must never repack the payload.
 void ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -6739,7 +6739,7 @@ void ViewModelSmokeTests::roleVisibilityToggleDoesNotRepackGcodePreviewData()
 // the dead-path class of regression cannot recur.
 void ViewModelSmokeTests::roleVisibilityMaskFeedsRendererShapeAndTogglesPropagate()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -6785,7 +6785,7 @@ void ViewModelSmokeTests::roleVisibilityMaskFeedsRendererShapeAndTogglesPropagat
 // recompute on slider interaction -- only on a recolor (view-mode change).
 void ViewModelSmokeTests::legendGradientBoundsStableAcrossLayerMoveDrag()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -6821,7 +6821,7 @@ void ViewModelSmokeTests::legendGradientBoundsStableAcrossLayerMoveDrag()
 // update + window rebuild happen as one observable transition.
 void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -6851,7 +6851,7 @@ void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
 // get_view_type_string display names (GCodeViewer.cpp:892-901 + :59-84).
 void ViewModelSmokeTests::viewModesExposeUpstreamTenModes()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -6914,8 +6914,8 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
   // SETTINGS-02: page/group navigation per tier, derived from upstream Tab.cpp
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56GroupNav"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   // Printer tier: page names from TabPrinter::build_fff
@@ -6968,8 +6968,8 @@ void ViewModelSmokeTests::testConfigOptionModelSevenTypes()
   // SETTINGS-03: ConfigOptionModel exposes all 7 typed option kinds via optType.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SevenTypes"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -7004,8 +7004,8 @@ void ViewModelSmokeTests::testVectorFieldsHaveNonEmptyDefaults()
   // This test asserts that vector fields now have non-empty defaults.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("V54VectorDefaults"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
@@ -7044,8 +7044,8 @@ void ViewModelSmokeTests::testPerOptionDirtyAndValueSource()
   // SETTINGS-04: per-option dirty tracking and valueSourceForKey
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56DirtyValue"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -7083,8 +7083,8 @@ void ViewModelSmokeTests::testReadonlyBuiltinGating()
   // must refuse to save and emit saveAsRequired instead of overwriting.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56Readonly"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   // Ensure we are on a builtin preset
@@ -7095,7 +7095,7 @@ void ViewModelSmokeTests::testReadonlyBuiltinGating()
   bool isBuiltin = preset.isBuiltinPreset(currentPreset);
   if (!isBuiltin) {
     // Find any builtin preset and switch to it
-    QStringList allPresets = preset.presetNamesForCategory(PresetServiceMock::PrintCat);
+    QStringList allPresets = preset.presetNamesForCategory(PresetService::PrintCat);
     for (const QString &name : allPresets) {
       if (preset.isBuiltinPreset(name)) {
         config.setCurrentPreset(name);
@@ -7132,8 +7132,8 @@ void ViewModelSmokeTests::testSaveSaveAsResetOptionResetGroupResetAll()
   // SETTINGS-05: resetGroup resets all options in a named group to reference values.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SaveReset"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -7172,8 +7172,8 @@ void ViewModelSmokeTests::testUnsavedChangesGuardOnDirtyClose()
   // false after a full reset.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56UnsavedGuard"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   QVERIFY2(!config.isPresetDirty(),
@@ -7217,8 +7217,8 @@ void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
   // are excluded when advancedMode=false.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56SearchMode"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -7299,7 +7299,7 @@ void ViewModelSmokeTests::testPerDialogSearchAndFourLevelMode()
 
 void ViewModelSmokeTests::stepCurrentMoveClampsAndUpdatesGcodeLineWindow()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -7336,7 +7336,7 @@ void ViewModelSmokeTests::gcodeLineWindowTokenizesAndTruncatesLikeUpstream()
   // window row carries the command / parameters / comment split; lines longer
   // than 55 characters truncate to 52 + "..."; a row whose source has a ';'
   // reports the comment part starting with ';'.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);
 
@@ -7383,8 +7383,8 @@ void ViewModelSmokeTests::testNullableAndVectorOptions()
   // must exist in the loaded schema.
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("56NullableVector"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
 
   // Nullable / vector options are tier-dependent (e.g. per-extruder filament
@@ -7416,7 +7416,7 @@ void ViewModelSmokeTests::editorExplosionRatioDefaultsAndResetMirrorsUpstream()
   // Phase 91-01 (ASMEXPLODE-01): explosionRatio mirrors upstream m_explosion_ratio
   // (GLCanvas3D.hpp:596, default 1.0) and reset mirrors reset_explosion_ratio()
   // (GLCanvas3D.hpp:770-771). The property is pure state -- no model load needed.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -7457,7 +7457,7 @@ void ViewModelSmokeTests::assemblyMeasureGizmoActivabilityMirrorsUpstream()
   // parts (d)-(e) add two primitives via addPrimitiveToPlate (synchronous +
   // additive -- loadFile replaces rather than appends, so it cannot reach the
   // >=2 count) so >=2 volumes can be selected.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -7592,7 +7592,7 @@ static const int kWipeTowerGeometryMetaTypeId = []() {
 void ViewModelSmokeTests::wipeTowerGeometryReadbackAppliesValidAndInvalidGate()
 {
   Q_UNUSED(kWipeTowerGeometryMetaTypeId); // registration side-effect only
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -7679,7 +7679,7 @@ static const int kFilamentMapResultMetaTypeId = []() {
 void ViewModelSmokeTests::filamentMapAutoRecommendationReadbackWired()
 {
   Q_UNUSED(kFilamentMapResultMetaTypeId); // registration side-effect only
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -7828,7 +7828,7 @@ void ViewModelSmokeTests::wipeTowerRealMeshReadbackGatesOptionBAndOptionAFallbac
   // InvalidGate pattern (QMetaObject::invokeMethod on the signal).
   Q_UNUSED(kWipeTowerGeometryMetaTypeId); // registration side-effect only
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -7904,7 +7904,7 @@ void ViewModelSmokeTests::assembleViewDataPoolIsolatedFromPrepareAndPreview()
   // never populate or read it. The pool's test accessor returns 0 when the
   // ModelObjectsInfo resource is not valid, which is itself the isolation
   // assertion.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -7980,11 +7980,11 @@ void ViewModelSmokeTests::perVolumeItsAccessorReturnsValidMeshAndNullForInvalidI
   // test proves (a) the valid path returns a non-null ITS with the expected
   // vertex/triangle counts and (b) the MI-05 defensive null return fires for
   // out-of-range indices.
-  ProjectServiceMock project;
+  ProjectService project;
 
   // Load the real STL fixture (kStlPath, hotend.stl) and wait for completion
   // -- mirrors editorReadinessBlocksPreviewAndExportUntilCurrentPlateResultIsValid.
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY2(loadSpy.isValid(), "loadFinished signal spy must be valid");
   QVERIFY2(project.loadFile(kStlPath), "importing the test STL should start");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
@@ -8038,7 +8038,7 @@ void ViewModelSmokeTests::arrowNudgeTranslatesSelectionWithCoalescedUndo()
   // relative bed-plane translation to the selection; repeated nudges collapse
   // into one coalesced TransformCommand (mergeWith) so a single undo
   // restores the original placement.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -8068,7 +8068,7 @@ void ViewModelSmokeTests::paintAxisLockClampsAndRoundTrips()
   // P11.B2.3 (upstream GLGizmoPainterBase m_vertical_only/m_horizontal_only):
   // the axis lock is a single 0/1/2 value so Vertical and Horizontal stay
   // mutually exclusive, and out-of-range writes fall back to off.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);  EditorViewModel vm(&project, &slice);
   QCOMPARE(vm.paintLockAxis(), 0);
 
@@ -8415,7 +8415,7 @@ void ViewModelSmokeTests::v56CrossWorkstreamViewModelsCallable()
   // embossRunning defaults false (no async emboss in flight); sliceState defaults
   // Idle (the Q_PROPERTY the SliceProgress Cancelled/Error banner binds to).
   {
-    ProjectServiceMock project;
+    ProjectService project;
     SliceService slice(&project);
     EditorViewModel editor(&project, &slice);
 
@@ -8429,7 +8429,7 @@ void ViewModelSmokeTests::v56CrossWorkstreamViewModelsCallable()
   // Defaults -1 (no volume selected), the contract the deepened ObjectList tree
   // binds to via editorVm.selectedVolumeIndex.
   {
-    ProjectServiceMock project;
+    ProjectService project;
     SliceService slice(&project);
     EditorViewModel editor(&project, &slice);
 
@@ -8437,25 +8437,25 @@ void ViewModelSmokeTests::v56CrossWorkstreamViewModelsCallable()
              "GATE-01/FEAT-03: EditorViewModel::selectedVolumeIndex must be callable and default -1");
   }
 
-  // -- DLG-01 (Phase 199): PresetServiceMock vendor/model enumeration.
+  // -- DLG-01 (Phase 199): PresetService vendor/model enumeration.
   // vendors() must be non-empty; printerModelsForVendor/materialsForVendor/
   // bedTypesForPrinterModel must be callable and return lists (possibly empty
   // for unknown keys, but never crash).
   {
-    PresetServiceMock preset;
+    PresetService preset;
     const QStringList vendors = preset.vendors();
     QVERIFY2(!vendors.isEmpty(),
-             "GATE-01/DLG-01: PresetServiceMock::vendors() must enumerate at least the builtin vendor");
+             "GATE-01/DLG-01: PresetService::vendors() must enumerate at least the builtin vendor");
     const QStringList models = preset.printerModelsForVendor(vendors.first());
     QVERIFY2(models.size() >= 0,
-             "GATE-01/DLG-01: PresetServiceMock::printerModelsForVendor() must be callable for a known vendor");
+             "GATE-01/DLG-01: PresetService::printerModelsForVendor() must be callable for a known vendor");
     const QStringList materials = preset.materialsForVendor(vendors.first());
     QVERIFY2(materials.size() >= 0,
-             "GATE-01/DLG-01: PresetServiceMock::materialsForVendor() must be callable for a known vendor");
+             "GATE-01/DLG-01: PresetService::materialsForVendor() must be callable for a known vendor");
     const QStringList bedTypes = preset.bedTypesForPrinterModel(
         models.isEmpty() ? QStringLiteral("__unknown__") : models.first());
     QVERIFY2(!bedTypes.isEmpty(),
-             "GATE-01/DLG-01: PresetServiceMock::bedTypesForPrinterModel() must return the default bed-surface list");
+             "GATE-01/DLG-01: PresetService::bedTypesForPrinterModel() must return the default bed-surface list");
   }
 
   // -- DLG-03 (Phase 201): AmsMaterialsViewModel slot data.
@@ -8560,8 +8560,8 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
 
   ScopedApplicationIdentity appIdentity(QStringLiteral("OWzxTests"),
                                         QStringLiteral("SourceMappedProcessHierarchy"));
-  PresetServiceMock preset;
-  ProjectServiceMock project;
+  PresetService preset;
+  ProjectService project;
   ConfigViewModel config(&preset, &project);
   auto *model = qobject_cast<ConfigOptionModel *>(config.printOptions());
   QVERIFY(model);
@@ -8641,7 +8641,7 @@ void ViewModelSmokeTests::deleteUndoRestoresFullObject()
 #ifndef HAS_LIBSLIC3R
   QSKIP("UNDO-01 full-object snapshot requires libslic3r (store_3mf + read_from_file)");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -8718,7 +8718,7 @@ void ViewModelSmokeTests::pasteSnapshotRestoresMeshFidelity()
 #ifndef HAS_LIBSLIC3R
   QSKIP("UNDO-05 paste fidelity requires libslic3r (store_3mf + read_from_file)");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -8773,7 +8773,7 @@ void ViewModelSmokeTests::volumeDeleteUndoRestoresMesh()
 #ifndef HAS_LIBSLIC3R
   QSKIP("UNDO-02 volume snapshot requires libslic3r");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
 
   // Build a 2-volume object directly: a cube object + a sphere volume added
   // into it via addPrimitive(objectIndex, type). (assembleObjects was tried
@@ -8820,7 +8820,7 @@ void ViewModelSmokeTests::layerRangesReachModelConfig()
 #ifndef HAS_LIBSLIC3R
   QSKIP("UNDO-06 layer_config_ranges bridge requires libslic3r");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);
 
   const Slic3r::Model *model = project.rawModel();
@@ -8884,7 +8884,7 @@ void ViewModelSmokeTests::assembleShiftsScopedConfigStores()
 #ifndef HAS_LIBSLIC3R
   QSKIP("assemble scoped-store shift requires libslic3r");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 0
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 1
   QVERIFY(project.addPrimitiveToPlate(0) >= 0);   // object 2
@@ -8918,7 +8918,7 @@ void ViewModelSmokeTests::plateOperationsUndoRestoresState()
 #ifndef HAS_LIBSLIC3R
   QSKIP("UNDO-03 plate snapshot requires libslic3r (store_3mf + read_from_file)");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -8989,7 +8989,7 @@ void ViewModelSmokeTests::paintStrokeUndoRestoresFacets()
 #ifndef HAS_LIBSLIC3R
   QSKIP("UNDO-04 paint snapshot requires libslic3r (FacetsAnnotation + TriangleSelector)");
 #else
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -9095,11 +9095,11 @@ void ViewModelSmokeTests::editorUnitInferenceDetectsSavedUnits()
   QVERIFY2(!metersStl.isEmpty() && !imperialStl.isEmpty() && !normalStl.isEmpty(),
            "Unable to write the synthetic unit cubes");
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QSignalSpy promptSpy(&editor, &EditorViewModel::unitConversionPromptRequested);
 
   QVERIFY(editor.loadFile(metersStl));
@@ -9135,11 +9135,11 @@ void ViewModelSmokeTests::editorApplyUnitConversionScalesObjectToMillimeters()
   const QString metersStl = writeCubeStl(QStringLiteral("owzx_unit_convert.stl"), 0.1);
   QVERIFY(!metersStl.isEmpty());
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(editor.loadFile(metersStl));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "meters cube must import");
@@ -9164,11 +9164,11 @@ void ViewModelSmokeTests::editorScaleSelectionToFitBedShrinksOversizedObject()
   const QString normalStl = writeCubeStl(QStringLiteral("owzx_fit_cube.stl"), 20.0);
   QVERIFY(!normalStl.isEmpty());
 
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(editor.loadFile(normalStl));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "fit cube must import");
@@ -9218,8 +9218,8 @@ void ViewModelSmokeTests::projectServiceExportGcode3mfProducesArchive()
   if (!QFileInfo::exists(fixturePath))
     QSKIP("tests/data/test_model.stl fixture missing");
 
-  ProjectServiceMock project;
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  ProjectService project;
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY2(project.loadFile(fixturePath), "fixture must load via loadFile");
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(project.modelCount() >= 1, "fixture must load >= 1 object");
@@ -9310,8 +9310,8 @@ void ViewModelSmokeTests::loadProjectAppliesEmbeddedProjectConfig()
   if (!QFileInfo::exists(fixturePath))
     QSKIP("tests/data/test_model.stl fixture missing");
 
-  ProjectServiceMock saver;
-  QSignalSpy saverSpy(&saver, &ProjectServiceMock::loadFinished);
+  ProjectService saver;
+  QSignalSpy saverSpy(&saver, &ProjectService::loadFinished);
   QVERIFY2(saver.loadFile(fixturePath), "fixture must load via loadFile");
   QTRY_VERIFY_WITH_TIMEOUT(saverSpy.count() > 0, 10000);
 
@@ -9360,10 +9360,10 @@ void ViewModelSmokeTests::loadProjectAppliesEmbeddedProjectConfig()
     QVERIFY2(ok, "config entry injection must succeed");
   }
 
-  ProjectServiceMock loader;
-  PresetServiceMock preset;
-  QSignalSpy configSpy(&loader, &ProjectServiceMock::projectConfigLoaded);
-  QSignalSpy loaderSpy(&loader, &ProjectServiceMock::loadFinished);
+  ProjectService loader;
+  PresetService preset;
+  QSignalSpy configSpy(&loader, &ProjectService::projectConfigLoaded);
+  QSignalSpy loaderSpy(&loader, &ProjectService::loadFinished);
   bool loaded = false;
   try {
     loaded = loader.loadProject(injectedPath);
@@ -9717,7 +9717,7 @@ void ViewModelSmokeTests::flattenRotationForNormalPicksNormalDown()
     const QVector3D newRot = EditorViewModel::flattenRotationForNormal(
         cases[i].oldRot, cases[i].normal);
     // Verify the composition property with the SAME Euler convention the
-    // helper + ProjectServiceMock rebuild use (libslic3r assemble_transform:
+    // helper + ProjectService rebuild use (libslic3r assemble_transform:
     // R = Rz*Ry*Rx, Geometry.hpp:347-353). R_new = R_align * R_old, so
     // R_align = R_new * R_old^-1 must map the world normal to -Z (upstream
     // Selection.cpp:1299-1305).
@@ -9750,7 +9750,7 @@ void ViewModelSmokeTests::flattenRotationForNormalPicksNormalDown()
 // ===========================================================================
 void ViewModelSmokeTests::embossInPlaceRegeneratesTextVolume()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addObject(QStringLiteral("EmbossHost")) >= 0);
 
   const QString text1 = QStringLiteral("Alpha");
@@ -9800,8 +9800,8 @@ void ViewModelSmokeTests::embossInPlaceRegeneratesTextVolume()
 // ===========================================================================
 void ViewModelSmokeTests::simplifyPreviewDecimatesWithoutMutation()
 {
-  ProjectServiceMock project;
-  QSignalSpy loadSpy(&project, &ProjectServiceMock::loadFinished);
+  ProjectService project;
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
   QVERIFY(project.loadFile(prusaStlPath()));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 30000);
 
@@ -9825,7 +9825,7 @@ void ViewModelSmokeTests::simplifyPreviewDecimatesWithoutMutation()
 
 void ViewModelSmokeTests::simplifyPreviewRejectsStaleWrongSelectionResult()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -9869,7 +9869,7 @@ void ViewModelSmokeTests::simplifyPreviewRejectsStaleWrongSelectionResult()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::assembleBakesVolumeWorldTransforms()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -9920,7 +9920,7 @@ void ViewModelSmokeTests::assembleBakesVolumeWorldTransforms()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::assembleMergesConfigsAndSinksExtruder()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -9969,7 +9969,7 @@ void ViewModelSmokeTests::assembleMergesConfigsAndSinksExtruder()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::mergePartsToSingleObjectCollapsesVolumes()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -9999,7 +9999,7 @@ void ViewModelSmokeTests::mergePartsToSingleObjectCollapsesVolumes()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::changeFilamentAssignmentFollowsUpstreamSemantics()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
@@ -10047,7 +10047,7 @@ void ViewModelSmokeTests::changeFilamentAssignmentFollowsUpstreamSemantics()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::centerAlignsSelectionToBedCenter()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10095,7 +10095,7 @@ void ViewModelSmokeTests::centerAlignsSelectionToBedCenter()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::assembleUndoRestoresSources()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10137,7 +10137,7 @@ void ViewModelSmokeTests::assembleUndoRestoresSources()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10172,7 +10172,7 @@ void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 #ifdef HAS_LIBSLIC3R
 void ViewModelSmokeTests::arrangeUndoRestoresLayout()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10207,7 +10207,7 @@ void ViewModelSmokeTests::arrangeUndoRestoresLayout()
 
 void ViewModelSmokeTests::autoOrientUndoRestoresRotation()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10236,7 +10236,7 @@ void ViewModelSmokeTests::autoOrientUndoRestoresRotation()
 
 void ViewModelSmokeTests::splitUndoRestoresMergedObject()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10273,7 +10273,7 @@ void ViewModelSmokeTests::splitUndoRestoresMergedObject()
 
 void ViewModelSmokeTests::importAndDropRideUndoStack()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
   UndoRedoManager undoManager;
@@ -10335,14 +10335,14 @@ void ViewModelSmokeTests::platerHotkeysBackendAnchorsPresent()
   // The QML wiring is asserted in QmlUiAuditTests; this test pins the
   // backend halves the keys call into: arrange, auto-orient, and the
   // extruder setter must exist and actually run.
-  ProjectServiceMock project;
+  ProjectService project;
   SliceService slice(&project);
   EditorViewModel editor(&project, &slice);
 
   editor.addPrimitiveToPlate(0);
   editor.selectSourceObject(0);
 
-  // Upstream "A": arrange all objects (ProjectServiceMock::arrangeObjects
+  // Upstream "A": arrange all objects (ProjectService::arrangeObjects
   // needs a printable area string; EditorViewModel::arrangeAllObjects
   // derives it from the merged config -- here a default preset is absent,
   // so call the service-level path the QML key ultimately drives).
@@ -10410,7 +10410,7 @@ void ViewModelSmokeTests::openExternalGcodeOpensPreviewOnlyProject()
 // ── GAP-7: new plates are unnamed (upstream leaves m_name empty) ────────
 void ViewModelSmokeTests::addPlateLeavesDefaultNameEmpty()
 {
-  ProjectServiceMock project;
+  ProjectService project;
   QVERIFY(project.addPlate());
   QVERIFY(project.addPlate());
   // The UI falls back to a positional "Plate N" label; the stored name

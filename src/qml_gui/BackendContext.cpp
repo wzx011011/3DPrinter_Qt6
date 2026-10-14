@@ -7,8 +7,8 @@
 #include "core/services/CameraServiceMock.h"
 #include "core/services/CloudServiceMock.h"
 #include "core/services/CalibrationServiceMock.h"
-#include "core/services/PresetServiceMock.h"
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/PresetService.h"
+#include "core/services/ProjectService.h"
 #include "core/services/PluginService.h"
 #include "core/services/SliceService.h"
 #include "core/services/UndoRedoManager.h"
@@ -93,13 +93,13 @@ BackendContext::BackendContext(QObject *parent)
   visualCompareMode_ = (compareMode == "1" || compareMode.compare("true", Qt::CaseInsensitive) == 0);
 
   calibrationService_ = new CalibrationServiceMock(this);
-  presetService_ = new PresetServiceMock(this);
+  presetService_ = new PresetService(this);
   deviceService_ = new DeviceServiceMock(this);
-  projectService_ = new ProjectServiceMock(this);
+  projectService_ = new ProjectService(this);
   sliceService_ = new SliceService(projectService_, this);
   // v2.7 P1：注入 SliceService 到 CalibrationService（校准时触发 calib slice）
   calibrationService_->setSliceService(sliceService_);
-  // Phase 197: inject ProjectServiceMock so the tower modes can load a
+  // Phase 197: inject ProjectService so the tower modes can load a
   // dedicated tower model (qrc:/qml/assets/calib/*.stl/.step) before slicing.
   calibrationService_->setProjectService(projectService_);
   networkService_ = new NetworkServiceMock(this);
@@ -187,7 +187,7 @@ BackendContext::BackendContext(QObject *parent)
   // loadFinished success or failure) always flip the observed state back.
   connect(editorViewModel_, &EditorViewModel::stateChanged, this,
           &BackendContext::updateGuiBusyCursor);
-  connect(projectService_, &ProjectServiceMock::loadingChanged, this,
+  connect(projectService_, &ProjectService::loadingChanged, this,
           &BackendContext::updateGuiBusyCursor);
   connect(sliceService_, &SliceService::slicingChanged, this,
           &BackendContext::updateGuiBusyCursor);
@@ -298,7 +298,7 @@ BackendContext::BackendContext(QObject *parent)
   });
   m_backupTimer->start();
 
-  connect(projectService_, &ProjectServiceMock::loadFinished, this,
+  connect(projectService_, &ProjectService::loadFinished, this,
           [this](bool success, const QString &message)
           {
             // U3: the import progress toast retires on EVERY terminal state
@@ -334,14 +334,14 @@ BackendContext::BackendContext(QObject *parent)
                 configViewModel_->refreshPresetLists();
             }
           });
-  // U8: the 3MF write runs on the ProjectServiceMock save worker, so the
+  // U8: the 3MF write runs on the ProjectService save worker, so the
   // terminal outcomes land here. Project-save success applies the
   // ProjectViewModel bookkeeping that used to run inline in
   // topbarSaveProject(As) (dirty clear + recent projects; SaveAs to a NEW
   // path moves the current project identity), and both outcomes surface with
   // their real reason — a failed write is reported as a failure, never as
   // success (U1 severity discipline).
-  connect(projectService_, &ProjectServiceMock::saveFinished, this,
+  connect(projectService_, &ProjectService::saveFinished, this,
           [this](bool success, const QString &filePath, const QString &error)
           {
             if (!projectViewModel_)
@@ -365,7 +365,7 @@ BackendContext::BackendContext(QObject *parent)
   // completion that belongs to an async 3MF model export is consumed by the
   // EditorViewModel first (it owns the dispatch attribution and the export
   // status/report) so an explicit export never surfaces as "Project backup".
-  connect(projectService_, &ProjectServiceMock::snapshotFinished, this,
+  connect(projectService_, &ProjectService::snapshotFinished, this,
           [this](bool success, const QString &filePath, const QString &error)
           {
             if (editorViewModel_
@@ -403,7 +403,7 @@ BackendContext::BackendContext(QObject *parent)
   // Ctrl+S during a background write is a silent no-op — with the gate open,
   // main.qml's `backend.canSave && !backend.topbarSaveProject()` fallback
   // would open the Save-As dialog on the busy rejection.
-  connect(projectService_, &ProjectServiceMock::savingChanged, this,
+  connect(projectService_, &ProjectService::savingChanged, this,
           &BackendContext::stateChanged);
 
   // Phase 237 (VIEW-04): forward the editor viewmodel's post-import prompts.
@@ -501,20 +501,20 @@ BackendContext::BackendContext(QObject *parent)
     // loadProgressUpdated 是它唯一的 GUI 线程进度通道；此前只喂
     // EditorViewModel::statusText，而 StatusBar 已随 layout-1 移除——大文件
     // 导入因此"白等"（UX 报告 U3 根因）。取消按钮经 cancelNotificationAction
-    // 落到 ProjectServiceMock::cancelLoad 的取消标志。
-    connect(projectService_, &ProjectServiceMock::loadProgressUpdated, this,
+    // 落到 ProjectService::cancelLoad 的取消标志。
+    connect(projectService_, &ProjectService::loadProgressUpdated, this,
             [this](int progress, const QString &stage)
             { postImportProgress(progress, stage); });
 
     // Propagate 3MF embedded config to ConfigViewModel on project load
-    connect(projectService_, &ProjectServiceMock::projectConfigLoaded,
+    connect(projectService_, &ProjectService::projectConfigLoaded,
             configViewModel_, &ConfigViewModel::applyProjectConfig);
     // Phase 236 (DLG-03): 3MF generator-version notice (upstream
     // Newer3mfVersion / MsgDataIncompatible warning family). projectVersionInfo
     // is parsed on the load worker, so the check is signal-driven; the notice
     // is a non-modal plater warning + log line rather than upstream's modal
     // (no update server — out of scope).
-    connect(projectService_, &ProjectServiceMock::projectVersionInfoChanged, this, [this]()
+    connect(projectService_, &ProjectService::projectVersionInfoChanged, this, [this]()
             {
       if (!projectService_)
         return;
@@ -530,7 +530,7 @@ BackendContext::BackendContext(QObject *parent)
     // openProject/newProject clear the flag after loadFinished anyway.
     // Phase 241 (PAGE-02): the same edits refresh the ProjectPage resource
     // tree so object add/delete/rename show up without a page re-entry.
-    connect(projectService_, &ProjectServiceMock::projectChanged, this, [this]()
+    connect(projectService_, &ProjectService::projectChanged, this, [this]()
             {
               if (projectService_ && !projectService_->loading() && projectViewModel_)
               {
@@ -645,7 +645,7 @@ BackendContext::~BackendContext()
     QGuiApplication::restoreOverrideCursor();
     guiBusyActive_ = false;
   }
-  // Review P1-2: Qt deletes children in creation order, so ProjectServiceMock
+  // Review P1-2: Qt deletes children in creation order, so ProjectService
   // (created first) would die before SliceService (created second) -- but
   // ~SliceService joins the slice worker, and that worker dereferences
   // projectService_. Delete the slice service (and its in-flight worker join)
@@ -801,7 +801,7 @@ QObject *BackendContext::pluginService() const { return pluginService_; }
 
 // Phase 199 (WIZ-01): expose the preset data service so the ConfigWizard can
 // enumerate vendors / printer models / materials / bed surfaces.
-QObject *BackendContext::presetServiceMock() const { return presetService_; }
+QObject *BackendContext::presetService() const { return presetService_; }
 
 bool BackendContext::visualCompareMode() const
 {
@@ -1386,7 +1386,7 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
   }
 
   // Phase 237 (VIEW-05): .3mf/.cxprj project opens route through
-  // ProjectServiceMock::loadProject, which loads with LoadModel|LoadConfig
+  // ProjectService::loadProject, which loads with LoadModel|LoadConfig
   // and emits projectConfigLoaded so the embedded config/presets apply
   // (upstream Plater::load_project / load_files is_project_file path;
   // the wiring above forwards projectConfigLoaded to
@@ -1431,7 +1431,7 @@ bool BackendContext::topbarOpenProject(const QString &filePath)
 // Phase 237 (VIEW-02): Import Configs (upstream MainFrame::load_config_file,
 // MainFrame.cpp:3204-3247). The upstream file dialog accepts
 // *.json/zip/orca_* files; the OWzx import surface with a real consumer is
-// the .json bundle (PresetServiceMock::importBundle), so the QML dialog
+// the .json bundle (PresetService::importBundle), so the QML dialog
 // filters .json and this entry routes there. The import result surfaces as
 // a notification (upstream shows a summary dialog).
 bool BackendContext::topbarImportConfigs(const QString &filePath)
@@ -1492,9 +1492,9 @@ QVariantList BackendContext::collectProjectEmbeddedPresets() const
     QString (ConfigViewModel::*nameFn)() const;
   };
   const Tier tiers[] = {
-      {PresetServiceMock::PrinterCat, &ConfigViewModel::currentPrinterPreset},
-      {PresetServiceMock::FilamentCat, &ConfigViewModel::currentFilamentPreset},
-      {PresetServiceMock::PrintCat, &ConfigViewModel::currentPrintPreset},
+      {PresetService::PrinterCat, &ConfigViewModel::currentPrinterPreset},
+      {PresetService::FilamentCat, &ConfigViewModel::currentFilamentPreset},
+      {PresetService::PrintCat, &ConfigViewModel::currentPrintPreset},
   };
   for (const Tier &tier : tiers) {
     const QString name = (configViewModel_->*tier.nameFn)();

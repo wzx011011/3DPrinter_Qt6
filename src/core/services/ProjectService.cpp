@@ -1,6 +1,6 @@
-#include "ProjectServiceMock.h"
+#include "ProjectService.h"
 
-#include "PresetServiceMock.h"  // G-13: project-embedded presets
+#include "PresetService.h"  // G-13: project-embedded presets
 
 #include <QFileInfo>
 #include <QFile>
@@ -416,7 +416,7 @@ namespace
 } // namespace
 #endif
 
-ProjectServiceMock::ProjectServiceMock(QObject *parent)
+ProjectService::ProjectService(QObject *parent)
     : QObject(parent)
     , m_plateList(std::make_unique<OWzx::PartPlateList>())
 {
@@ -540,7 +540,7 @@ namespace
 // walk fills all six per-batch lists plus the instance transform channel.
 // The historical contract ran this walk once PER GETTER (a mesh refresh
 // traversed the scene six times).
-ProjectServiceMock::MeshBatchRenderTables ProjectServiceMock::meshBatchRenderTables() const
+ProjectService::MeshBatchRenderTables ProjectService::meshBatchRenderTables() const
 {
   MeshBatchRenderTables tables;
 #ifdef HAS_LIBSLIC3R
@@ -585,81 +585,81 @@ ProjectServiceMock::MeshBatchRenderTables ProjectServiceMock::meshBatchRenderTab
   return tables;
 }
 
-QList<int> ProjectServiceMock::meshBatchSourceObjectIndices() const
+QList<int> ProjectService::meshBatchSourceObjectIndices() const
 {
   return meshBatchRenderTables().sourceObjectIndices;
 }
 
-QList<int> ProjectServiceMock::meshBatchVolumeIndices() const
+QList<int> ProjectService::meshBatchVolumeIndices() const
 {
   return meshBatchRenderTables().volumeIndices;
 }
 
-QList<int> ProjectServiceMock::meshBatchInstanceIndices() const
+QList<int> ProjectService::meshBatchInstanceIndices() const
 {
   return meshBatchRenderTables().instanceIndices;
 }
 
 // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
 // meshBatchSourceObjectIndices (same collectMeshBatchIdentities walk).
-QList<int> ProjectServiceMock::meshBatchVolumeTypes() const
+QList<int> ProjectService::meshBatchVolumeTypes() const
 {
   return meshBatchRenderTables().volumeTypes;
 }
 
-QList<int> ProjectServiceMock::meshBatchExtruderIds() const
+QList<int> ProjectService::meshBatchExtruderIds() const
 {
   return meshBatchRenderTables().extruderIds;
 }
 
-QList<int> ProjectServiceMock::meshBatchPrintableFlags() const
+QList<int> ProjectService::meshBatchPrintableFlags() const
 {
   return meshBatchRenderTables().printableFlags;
 }
 
-ProjectServiceMock::~ProjectServiceMock()
+ProjectService::~ProjectService()
 {
 #ifdef HAS_LIBSLIC3R
   delete model_;
 #endif
 }
 
-QString ProjectServiceMock::projectName() const
+QString ProjectService::projectName() const
 {
   return projectName_;
 }
 
-int ProjectServiceMock::modelCount() const
+int ProjectService::modelCount() const
 {
   return modelCount_;
 }
 
-int ProjectServiceMock::plateCount() const
+int ProjectService::plateCount() const
 {
   return m_plateList ? m_plateList->plateCount() : 0;
 }
 
-int ProjectServiceMock::currentPlateIndex() const
+int ProjectService::currentPlateIndex() const
 {
   return m_plateList ? m_plateList->currentPlateIndex() : -1;
 }
 
-QString ProjectServiceMock::lastError() const
+QString ProjectService::lastError() const
 {
   return lastError_;
 }
 
-int ProjectServiceMock::loadProgress() const
+int ProjectService::loadProgress() const
 {
   return loadProgress_;
 }
 
-bool ProjectServiceMock::loading() const
+bool ProjectService::loading() const
 {
   return loading_;
 }
 
-QString ProjectServiceMock::sourceFilePath() const
+QString ProjectService::sourceFilePath() const
 {
   return sourceFilePath_;
 }
@@ -724,7 +724,7 @@ namespace
   }
 } // namespace
 
-QStringList ProjectServiceMock::listArchiveEntries(const QString &archivePath)
+QStringList ProjectService::listArchiveEntries(const QString &archivePath)
 {
   // Phase 236 (DLG-03): upstream FileArchiveDialog enumerates the archive's
   // importable models for its tree view. Central-directory only — no
@@ -755,7 +755,7 @@ QStringList ProjectServiceMock::listArchiveEntries(const QString &archivePath)
   return entries;
 }
 
-QString ProjectServiceMock::extractArchiveEntry(const QString &archivePath, const QString &entryName,
+QString ProjectService::extractArchiveEntry(const QString &archivePath, const QString &entryName,
                                                 const QString &destDir)
 {
   // Phase 236 (DLG-03): extract one selected model file so loadFile() can
@@ -785,7 +785,7 @@ QString ProjectServiceMock::extractArchiveEntry(const QString &archivePath, cons
   return result;
 }
 
-QStringList ProjectServiceMock::objMtlColors(const QString &objPath) const
+QStringList ProjectService::objMtlColors(const QString &objPath) const
 {
   // Phase 236 (DLG-03): parse the .mtl library that sits next to an .obj
   // (the OBJ loader's default mtl_ref search path) and collect the diffuse
@@ -846,7 +846,7 @@ QStringList ProjectServiceMock::objMtlColors(const QString &objPath) const
 namespace
 {
   // PLATE-PRINT-LIFECYCLE (batch 2): FNV-1a helpers for the plate geometry
-  // fingerprint (ProjectServiceMock::currentPlateGeometrySignature).
+  // fingerprint (ProjectService::currentPlateGeometrySignature).
   constexpr quint64 kFnvOffsetBasis = 0xcbf29ce484222325ULL;
   constexpr quint64 kFnvPrime = 0x00000100000001b3ULL;
 
@@ -865,7 +865,7 @@ namespace
   }
 } // namespace
 
-quint64 ProjectServiceMock::currentPlateGeometrySignature() const
+quint64 ProjectService::currentPlateGeometrySignature() const
 {
   // Conservative fingerprint of everything that changes how the plate slices,
   // mirroring the upstream PrintObject identity inputs (Print.cpp:1852-1902
@@ -957,7 +957,7 @@ quint64 ProjectServiceMock::currentPlateGeometrySignature() const
   return h;
 }
 
-std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() const
+std::unique_ptr<Slic3r::Model> ProjectService::cloneCurrentPlateModel() const
 {
   if (!model_ || !m_plateList || m_plateList->currentPlateIndex() < 0 ||
       m_plateList->currentPlateIndex() >= m_plateList->plateCount())
@@ -989,7 +989,7 @@ std::unique_ptr<Slic3r::Model> ProjectServiceMock::cloneCurrentPlateModel() cons
 // GLGizmoMmuSegmentation.cpp:700 writes mmu_segmentation_facets. The FacetsAnnotation
 // is a member of ModelVolume (Model.hpp:870/873/876); cloneCurrentPlateModel
 // deep-copies it (Model.hpp:1111) so print.apply flows the paint to the slice.
-bool ProjectServiceMock::writePaintToModelVolume(int objectIndex, int volumeIndex,
+bool ProjectService::writePaintToModelVolume(int objectIndex, int volumeIndex,
                                                  PaintKind kind,
                                                  const Slic3r::TriangleSelector &selector)
 {
@@ -1011,7 +1011,7 @@ bool ProjectServiceMock::writePaintToModelVolume(int objectIndex, int volumeInde
   return true;
 }
 
-bool ProjectServiceMock::clearPaintOnModelVolume(int objectIndex, int volumeIndex,
+bool ProjectService::clearPaintOnModelVolume(int objectIndex, int volumeIndex,
                                                  PaintKind kind)
 {
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -1032,7 +1032,7 @@ bool ProjectServiceMock::clearPaintOnModelVolume(int objectIndex, int volumeInde
 }
 #endif
 
-bool ProjectServiceMock::loadFile(const QString &filePath)
+bool ProjectService::loadFile(const QString &filePath)
 {
   if (loading_)
   {
@@ -1072,7 +1072,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
 #ifdef HAS_LIBSLIC3R
   const QString localPath = fi.absoluteFilePath();
-  const QPointer<ProjectServiceMock> receiver(this);
+  const QPointer<ProjectService> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
 
   // Qt 6.12 (G2): QtConcurrent::run is [[nodiscard]] -- the discarded QFuture
@@ -1684,7 +1684,7 @@ bool ProjectServiceMock::loadFile(const QString &filePath)
 
 // v2.4 IO-01: 项目保存（调用 libslic3r store_3mf 真实导出 .3mf）
 // 对齐上游 Plater::save_project → export_3mf (Plater.cpp:12165)
-void ProjectServiceMock::setProjectConfigOverlay(const QVariantMap &overlay)
+void ProjectService::setProjectConfigOverlay(const QVariantMap &overlay)
 {
   // v5.16 (PSET2-06): stored verbatim; saveProjectAs applies it into the
   // DynamicPrintConfig handed to store_3mf so a reload restores the preset
@@ -1692,7 +1692,7 @@ void ProjectServiceMock::setProjectConfigOverlay(const QVariantMap &overlay)
   m_projectConfigOverlay = overlay;
 }
 
-bool ProjectServiceMock::saveProjectAs(const QString &filePath)
+bool ProjectService::saveProjectAs(const QString &filePath)
 {
     // R-P0.4: "Save As" must produce the SAME archive as "Save" -- the full
     // storeProject3mf writer (plate_data_list + per-plate thumbnails, upstream
@@ -1732,7 +1732,7 @@ bool ProjectServiceMock::saveProjectAs(const QString &filePath)
 #endif
 }
 
-bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
+bool ProjectService::writeProjectSnapshot(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
     // Phase 241 (PAGE-04): backup primitive. Same FULL writer as saveProject
@@ -1769,7 +1769,7 @@ bool ProjectServiceMock::writeProjectSnapshot(const QString &filePath)
 }
 
 // v2.4 IO-02: 导出模型（STL/3MF/OBJ）
-bool ProjectServiceMock::exportModel(const QString &filePath, const QString &format)
+bool ProjectService::exportModel(const QString &filePath, const QString &format)
 {
 #ifdef HAS_LIBSLIC3R
     if (!model_) {
@@ -1828,28 +1828,28 @@ bool ProjectServiceMock::exportModel(const QString &filePath, const QString &for
 #endif
 }
 
-QVariantList ProjectServiceMock::takeProjectEmbeddedPresets()
+QVariantList ProjectService::takeProjectEmbeddedPresets()
 {
   // G-13: handed to BackendContext on loadFinished so the embedded presets
-  // are adopted into the PresetServiceMock (see readProjectEmbeddedPresets).
+  // are adopted into the PresetService (see readProjectEmbeddedPresets).
   QVariantList out = m_projectEmbeddedPresetsFromLoad;
   m_projectEmbeddedPresetsFromLoad.clear();
   return out;
 }
 
-void ProjectServiceMock::cancelLoad()
+void ProjectService::cancelLoad()
 {
   if (!loading_ || !activeCancelFlag_)
     return;
   activeCancelFlag_->store(true);
 }
 
-QStringList ProjectServiceMock::objectNames() const
+QStringList ProjectService::objectNames() const
 {
   return objectNames_;
 }
 
-QStringList ProjectServiceMock::plateNames() const
+QStringList ProjectService::plateNames() const
 {
   QStringList names;
   if (!m_plateList)
@@ -1861,14 +1861,14 @@ QStringList ProjectServiceMock::plateNames() const
   return names;
 }
 
-QString ProjectServiceMock::objectModuleName(int index) const
+QString ProjectService::objectModuleName(int index) const
 {
   if (index < 0 || index >= objectModuleNames_.size())
     return {};
   return objectModuleNames_[index];
 }
 
-bool ProjectServiceMock::setCurrentPlateIndex(int index)
+bool ProjectService::setCurrentPlateIndex(int index)
 {
   if (!m_plateList || index < 0 || index >= m_plateList->plateCount())
     return false;
@@ -1879,7 +1879,7 @@ bool ProjectServiceMock::setCurrentPlateIndex(int index)
   return true;
 }
 
-bool ProjectServiceMock::addPlate()
+bool ProjectService::addPlate()
 {
   if (loading_ || !m_plateList)
     return false;
@@ -1899,7 +1899,7 @@ bool ProjectServiceMock::addPlate()
   return true;
 }
 
-bool ProjectServiceMock::deletePlate(int plateIndex)
+bool ProjectService::deletePlate(int plateIndex)
 {
   if (loading_ || !m_plateList)
     return false;
@@ -1955,7 +1955,7 @@ bool ProjectServiceMock::deletePlate(int plateIndex)
   return true;
 }
 
-bool ProjectServiceMock::renamePlate(int plateIndex, const QString &newName)
+bool ProjectService::renamePlate(int plateIndex, const QString &newName)
 {
   if (loading_ || !m_plateList)
     return false;
@@ -1965,7 +1965,7 @@ bool ProjectServiceMock::renamePlate(int plateIndex, const QString &newName)
   return true;
 }
 
-bool ProjectServiceMock::removeAllOnPlate(int plateIndex)
+bool ProjectService::removeAllOnPlate(int plateIndex)
 {
   if (loading_ || !m_plateList)
     return false;
@@ -1985,7 +1985,7 @@ bool ProjectServiceMock::removeAllOnPlate(int plateIndex)
   return true;
 }
 
-bool ProjectServiceMock::isPlateLocked(int plateIndex) const
+bool ProjectService::isPlateLocked(int plateIndex) const
 {
   if (!m_plateList)
     return false;
@@ -1993,7 +1993,7 @@ bool ProjectServiceMock::isPlateLocked(int plateIndex) const
   return p ? p->isLocked() : false;
 }
 
-bool ProjectServiceMock::setPlateLocked(int plateIndex, bool locked)
+bool ProjectService::setPlateLocked(int plateIndex, bool locked)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return false;
@@ -2004,14 +2004,14 @@ bool ProjectServiceMock::setPlateLocked(int plateIndex, bool locked)
 
 // ── v3.0 Phase 17: plate lifecycle completion (PLATE-03/04/05) ──────────
 
-bool ProjectServiceMock::isPlatePrintable(int plateIndex) const
+bool ProjectService::isPlatePrintable(int plateIndex) const
 {
   if (!m_plateList) return false;
   const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
   return p ? p->isPrintable() : false;
 }
 
-bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
+bool ProjectService::setPlatePrintable(int plateIndex, bool printable)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return false;
@@ -2022,7 +2022,7 @@ bool ProjectServiceMock::setPlatePrintable(int plateIndex, bool printable)
 
 // ── Plate print-volume geometry (PLATE-PRINT-LIFECYCLE batch 1) ────────────
 
-void ProjectServiceMock::attachPlateInstanceBounds()
+void ProjectService::attachPlateInstanceBounds()
 {
   if (!m_plateList)
     return;
@@ -2046,7 +2046,7 @@ void ProjectServiceMock::attachPlateInstanceBounds()
 #endif
 }
 
-int ProjectServiceMock::plateIndexAtPoint(double x, double y) const
+int ProjectService::plateIndexAtPoint(double x, double y) const
 {
   if (!m_plateList)
     return -1;
@@ -2064,13 +2064,13 @@ int ProjectServiceMock::plateIndexAtPoint(double x, double y) const
 #endif
 }
 
-int ProjectServiceMock::platePrintIndex(int plateIndex) const
+int ProjectService::platePrintIndex(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? p->printIndex() : -1;
 }
 
-int ProjectServiceMock::plateIndexForPrintIndex(int printIndex) const
+int ProjectService::plateIndexForPrintIndex(int printIndex) const
 {
   if (!m_plateList || printIndex < 0)
     return -1;
@@ -2082,42 +2082,42 @@ int ProjectServiceMock::plateIndexForPrintIndex(int printIndex) const
   return -1;
 }
 
-bool ProjectServiceMock::isPlateReadyForSlice(int plateIndex) const
+bool ProjectService::isPlateReadyForSlice(int plateIndex) const
 {
   if (!m_plateList) return false;
   const OWzx::PartPlate *p = m_plateList->plate(plateIndex);
   return p && p->canSlice();
 }
 
-bool ProjectServiceMock::currentPlateCanSlice() const
+bool ProjectService::currentPlateCanSlice() const
 {
   return isPlateReadyForSlice(currentPlateIndex());
 }
 
 // B3 all-plates aggregate readiness bridges (PartPlate.cpp:4989-5044).
-bool ProjectServiceMock::isAllSliceResultsValid() const
+bool ProjectService::isAllSliceResultsValid() const
 {
   return m_plateList && m_plateList->isAllSliceResultsValid();
 }
 
-bool ProjectServiceMock::isAllSliceResultsReadyForPrint() const
+bool ProjectService::isAllSliceResultsReadyForPrint() const
 {
   return m_plateList && m_plateList->isAllSliceResultsReadyForPrint();
 }
 
-bool ProjectServiceMock::isAllSliceResultReadyForExport() const
+bool ProjectService::isAllSliceResultReadyForExport() const
 {
   return m_plateList && m_plateList->isAllSliceResultReadyForExport();
 }
 
-void ProjectServiceMock::setPlateSliceResultValid(int plateIndex, bool valid)
+void ProjectService::setPlateSliceResultValid(int plateIndex, bool valid)
 {
   if (!m_plateList) return;
   OWzx::PartPlate *p = m_plateList->plate(plateIndex);
   if (p) p->setSliceResultValid(valid);
 }
 
-void ProjectServiceMock::setAllSliceResultsValid(bool valid)
+void ProjectService::setAllSliceResultsValid(bool valid)
 {
   if (!m_plateList) return;
   for (int i = 0; i < m_plateList->plateCount(); ++i) {
@@ -2131,7 +2131,7 @@ void ProjectServiceMock::setAllSliceResultsValid(bool valid)
 // (cast to int for the Q_INVOKABLE boundary; QML/Phase 110 popup will pass the
 // enum-named constants). The int overload on PartPlate::setFilamentMapMode
 // accepts the raw value here.
-bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps)
+bool ProjectService::setPlateFilamentMap(int plateIndex, int mode, const QList<int>& maps)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return false;
@@ -2148,7 +2148,7 @@ bool ProjectServiceMock::setPlateFilamentMap(int plateIndex, int mode, const QLi
 // plumbing by reading the current maps and delegating to setPlateFilamentMap.
 // The clamp at PartPlate::setFilamentMapMode(int) (R-02 / FP-04) guards the
 // int boundary, so out-of-range modes resolve to fmmDefault before the write.
-bool ProjectServiceMock::setPlateFilamentMapMode(int plateIndex, int mode)
+bool ProjectService::setPlateFilamentMapMode(int plateIndex, int mode)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return false;
@@ -2161,7 +2161,7 @@ bool ProjectServiceMock::setPlateFilamentMapMode(int plateIndex, int mode)
   return setPlateFilamentMap(plateIndex, mode, currentMaps);
 }
 
-int ProjectServiceMock::plateFilamentMapMode(int plateIndex) const
+int ProjectService::plateFilamentMapMode(int plateIndex) const
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
     return int(OWzx::FilamentMapMode::fmmAutoForFlush);  // default Auto
@@ -2170,7 +2170,7 @@ int ProjectServiceMock::plateFilamentMapMode(int plateIndex) const
            : int(OWzx::FilamentMapMode::fmmAutoForFlush);
 }
 
-QList<int> ProjectServiceMock::plateFilamentMaps(int plateIndex) const
+QList<int> ProjectService::plateFilamentMaps(int plateIndex) const
 {
   QList<int> result;
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount())
@@ -2182,10 +2182,10 @@ QList<int> ProjectServiceMock::plateFilamentMaps(int plateIndex) const
   return result;
 }
 
-QStringList ProjectServiceMock::plateFilamentColours() const
+QStringList ProjectService::plateFilamentColours() const
 {
   // Phase 222 (FIL-COLOUR): prefer the active filament colours synced from
-  // PresetServiceMock (setActiveFilamentColours). These come from the loaded
+  // PresetService (setActiveFilamentColours). These come from the loaded
   // filament presets' default_filament_colour, which is where the user's
   // actual filament colours live (the plate-local config rarely carries
   // filament_colour). Falls back to the plate config, then a single default.
@@ -2210,7 +2210,7 @@ QStringList ProjectServiceMock::plateFilamentColours() const
   return QStringList{QStringLiteral("#F2754E")};
 }
 
-int ProjectServiceMock::filamentCount() const
+int ProjectService::filamentCount() const
 {
   // Phase 222: prefer the active filament colour list length.
   if (!m_activeFilamentColours.isEmpty())
@@ -2233,7 +2233,7 @@ int ProjectServiceMock::filamentCount() const
 // 3MF persistence is handled upstream (Format/3mf.cpp). Qt6 only reads/
 // writes the in-memory member; saving the project serializes automatically.
 
-int ProjectServiceMock::objectDrainHoleCount(int objectIndex) const
+int ProjectService::objectDrainHoleCount(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -2246,7 +2246,7 @@ int ProjectServiceMock::objectDrainHoleCount(int objectIndex) const
 #endif
 }
 
-QVariantList ProjectServiceMock::objectDrainHoles(int objectIndex) const
+QVariantList ProjectService::objectDrainHoles(int objectIndex) const
 {
   QVariantList holes;
 #ifdef HAS_LIBSLIC3R
@@ -2273,7 +2273,7 @@ QVariantList ProjectServiceMock::objectDrainHoles(int objectIndex) const
   return holes;
 }
 
-bool ProjectServiceMock::appendObjectDrainHole(int objectIndex, float px, float py, float pz,
+bool ProjectService::appendObjectDrainHole(int objectIndex, float px, float py, float pz,
                                                float nx, float ny, float nz,
                                                float radius, float height)
 {
@@ -2304,7 +2304,7 @@ bool ProjectServiceMock::appendObjectDrainHole(int objectIndex, float px, float 
 #endif
 }
 
-bool ProjectServiceMock::clearObjectDrainHoles(int objectIndex)
+bool ProjectService::clearObjectDrainHoles(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -2324,7 +2324,7 @@ bool ProjectServiceMock::clearObjectDrainHoles(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::movePlate(int oldIndex, int newIndex)
+bool ProjectService::movePlate(int oldIndex, int newIndex)
 {
   if (loading_ || !m_plateList) return false;
   const int prevCurrent = m_plateList->currentPlateIndex();
@@ -2336,7 +2336,7 @@ bool ProjectServiceMock::movePlate(int oldIndex, int newIndex)
   return true;
 }
 
-bool ProjectServiceMock::clonePlate(int sourceIndex)
+bool ProjectService::clonePlate(int sourceIndex)
 {
   // D-06: deep copy including ModelObjects (upstream duplicate_plate).
   if (loading_ || !m_plateList) return false;
@@ -2402,28 +2402,28 @@ bool ProjectServiceMock::clonePlate(int sourceIndex)
   return true;
 }
 
-QList<int> ProjectServiceMock::plateObjectIndices(int plateIndex) const
+QList<int> ProjectService::plateObjectIndices(int plateIndex) const
 {
   if (!m_plateList)
     return {};
   return m_plateList->objectIndicesOnPlate(plateIndex);
 }
 
-QList<int> ProjectServiceMock::currentPlateObjectIndices() const
+QList<int> ProjectService::currentPlateObjectIndices() const
 {
   if (!m_plateList)
     return {};
   return m_plateList->objectIndicesOnPlate(m_plateList->currentPlateIndex());
 }
 
-int ProjectServiceMock::plateObjectCount(int index) const
+int ProjectService::plateObjectCount(int index) const
 {
   if (!m_plateList || index < 0 || index >= m_plateList->plateCount())
     return 0;
   return m_plateList->objectIndicesOnPlate(index).size();
 }
 
-int ProjectServiceMock::plateIndexForObject(int objectIndex) const
+int ProjectService::plateIndexForObject(int objectIndex) const
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
     return -1;
@@ -2439,7 +2439,7 @@ int ProjectServiceMock::plateIndexForObject(int objectIndex) const
   return -1;
 }
 
-void ProjectServiceMock::setObjectPlateForIndex(int objectIndex, int plateIndex)
+void ProjectService::setObjectPlateForIndex(int objectIndex, int plateIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
     return;
@@ -2472,14 +2472,14 @@ void ProjectServiceMock::setObjectPlateForIndex(int objectIndex, int plateIndex)
   emit plateDataLoaded(m_plateList->plateCount());
 }
 
-bool ProjectServiceMock::objectPrintable(int index) const
+bool ProjectService::objectPrintable(int index) const
 {
   if (index < 0 || index >= objectPrintableStates_.size())
     return false;
   return objectPrintableStates_[index];
 }
 
-bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
+bool ProjectService::setObjectPrintable(int index, bool printable)
 {
   if (loading_)
   {
@@ -2521,7 +2521,7 @@ bool ProjectServiceMock::setObjectPrintable(int index, bool printable)
   return true;
 }
 
-bool ProjectServiceMock::instancePrintable(int objectIndex, int instanceIndex) const
+bool ProjectService::instancePrintable(int objectIndex, int instanceIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
@@ -2538,7 +2538,7 @@ bool ProjectServiceMock::instancePrintable(int objectIndex, int instanceIndex) c
 #endif
 }
 
-bool ProjectServiceMock::setInstancePrintable(int objectIndex, int instanceIndex, bool printable)
+bool ProjectService::setInstancePrintable(int objectIndex, int instanceIndex, bool printable)
 {
   if (loading_)
     return false;
@@ -2580,7 +2580,7 @@ bool ProjectServiceMock::setInstancePrintable(int objectIndex, int instanceIndex
 #endif
 }
 
-QVector3D ProjectServiceMock::objectMirror(int index) const
+QVector3D ProjectService::objectMirror(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -2596,7 +2596,7 @@ QVector3D ProjectServiceMock::objectMirror(int index) const
   return QVector3D(1, 1, 1);
 }
 
-bool ProjectServiceMock::setObjectMirror(int index, float x, float y, float z)
+bool ProjectService::setObjectMirror(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -2613,14 +2613,14 @@ bool ProjectServiceMock::setObjectMirror(int index, float x, float y, float z)
   return true;
 }
 
-bool ProjectServiceMock::objectVisible(int index) const
+bool ProjectService::objectVisible(int index) const
 {
   if (index < 0 || index >= objectVisibleStates_.size())
     return true;
   return objectVisibleStates_[index];
 }
 
-bool ProjectServiceMock::setObjectVisible(int index, bool visible)
+bool ProjectService::setObjectVisible(int index, bool visible)
 {
   // R-P0.5: in the locked upstream snapshot there is ONE object-level flag,
   // ModelInstance::printable -- the object-list "eye" IS the printable
@@ -2634,7 +2634,7 @@ bool ProjectServiceMock::setObjectVisible(int index, bool visible)
   return setObjectPrintable(index, visible);
 }
 
-int ProjectServiceMock::objectVolumeCount(int index) const
+int ProjectService::objectVolumeCount(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || index < 0 || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
@@ -2648,7 +2648,7 @@ int ProjectServiceMock::objectVolumeCount(int index) const
 #endif
 }
 
-int ProjectServiceMock::objectInstanceCount(int index) const
+int ProjectService::objectInstanceCount(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || index < 0 || size_t(index) >= model_->objects.size() || !model_->objects[size_t(index)])
@@ -2660,7 +2660,7 @@ int ProjectServiceMock::objectInstanceCount(int index) const
 #endif
 }
 
-QString ProjectServiceMock::objectVolumeName(int objectIndex, int volumeIndex) const
+QString ProjectService::objectVolumeName(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -2699,7 +2699,7 @@ static QString mockVolumeTypeLabel(MockVolumeType type)
   return QObject::tr("体积");
 }
 
-QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeIndex) const
+QString ProjectService::objectVolumeTypeLabel(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -2730,7 +2730,7 @@ QString ProjectServiceMock::objectVolumeTypeLabel(int objectIndex, int volumeInd
 #endif
 }
 
-int ProjectServiceMock::objectVolumeType(int objectIndex, int volumeIndex) const
+int ProjectService::objectVolumeType(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -2771,12 +2771,12 @@ int ProjectServiceMock::objectVolumeType(int objectIndex, int volumeIndex) const
 // (GUI_Factories.cpp:69): flush_into_infill / flush_into_objects /
 // flush_into_support, stored on the OBJECT config. Reads fall back to the
 // global print preset upstream; the Qt6 per-plate DynamicPrintConfig is the
-// matching scope (ProjectServiceMock D-04).
+// matching scope (ProjectService D-04).
 
 static const char *kFlushOptionKeys[] = {
     "flush_into_infill", "flush_into_objects", "flush_into_support"};
 
-bool ProjectServiceMock::objectFlushOption(int objectIndex, int optionIndex) const
+bool ProjectService::objectFlushOption(int objectIndex, int optionIndex) const
 {
   if (optionIndex < 0 || optionIndex > 2)
     return false;
@@ -2786,7 +2786,7 @@ bool ProjectServiceMock::objectFlushOption(int objectIndex, int optionIndex) con
   return scopedOptionValue(objectIndex, -1, key, fallback).toBool();
 }
 
-bool ProjectServiceMock::setObjectFlushOption(int objectIndex, int optionIndex, bool value)
+bool ProjectService::setObjectFlushOption(int objectIndex, int optionIndex, bool value)
 {
   if (optionIndex < 0 || optionIndex > 2)
   {
@@ -2802,7 +2802,7 @@ bool ProjectServiceMock::setObjectFlushOption(int objectIndex, int optionIndex, 
 // ── P16.9: Invalidate cut info (对齐上游 has_selected_cut_object /
 // invalidate_cut_info_for_selection, GUI_ObjectList.cpp:3033-3076) ──
 
-bool ProjectServiceMock::objectHasCutInfo(int objectIndex) const
+bool ProjectService::objectHasCutInfo(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
@@ -2815,7 +2815,7 @@ bool ProjectServiceMock::objectHasCutInfo(int objectIndex) const
 #endif
 }
 
-bool ProjectServiceMock::invalidateCutInfo(int objectIndex)
+bool ProjectService::invalidateCutInfo(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() ||
@@ -2852,7 +2852,7 @@ bool ProjectServiceMock::invalidateCutInfo(int objectIndex)
 #endif
 }
 
-QVariant ProjectServiceMock::scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue) const
+QVariant ProjectService::scopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &fallbackValue) const
 {
 #ifdef HAS_LIBSLIC3R
   return readConfigValue(scopedConfigForRead(model_, objectIndex, volumeIndex), key, fallbackValue);
@@ -2883,7 +2883,7 @@ QVariant ProjectServiceMock::scopedOptionValue(int objectIndex, int volumeIndex,
 #endif
 }
 
-bool ProjectServiceMock::setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value)
+bool ProjectService::setScopedOptionValue(int objectIndex, int volumeIndex, const QString &key, const QVariant &value)
 {
   if (loading_)
   {
@@ -2933,7 +2933,7 @@ bool ProjectServiceMock::setScopedOptionValue(int objectIndex, int volumeIndex, 
 #endif
 }
 
-QVariant ProjectServiceMock::plateScopedOptionValue(int plateIndex, const QString &key, const QVariant &fallbackValue) const
+QVariant ProjectService::plateScopedOptionValue(int plateIndex, const QString &key, const QVariant &fallbackValue) const
 {
 #ifdef HAS_LIBSLIC3R
   // v3.0 Phase 19 (D-16): read from PartPlate::config() (replaces the TODO stub).
@@ -2966,7 +2966,7 @@ QVariant ProjectServiceMock::plateScopedOptionValue(int plateIndex, const QStrin
 #endif
 }
 
-bool ProjectServiceMock::setPlateScopedOptionValue(int plateIndex, const QString &key, const QVariant &value)
+bool ProjectService::setPlateScopedOptionValue(int plateIndex, const QString &key, const QVariant &value)
 {
 #ifdef HAS_LIBSLIC3R
   // v3.0 Phase 19 (D-16): write into PartPlate::config() (replaces the TODO stub).
@@ -3008,7 +3008,7 @@ bool ProjectServiceMock::setPlateScopedOptionValue(int plateIndex, const QString
 #endif
 }
 
-const Slic3r::DynamicPrintConfig *ProjectServiceMock::plateDynamicConfig(int plateIndex) const
+const Slic3r::DynamicPrintConfig *ProjectService::plateDynamicConfig(int plateIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -3019,7 +3019,7 @@ const Slic3r::DynamicPrintConfig *ProjectServiceMock::plateDynamicConfig(int pla
 #endif
 }
 
-int ProjectServiceMock::scopedOverrideCount(int objectIndex, int volumeIndex) const
+int ProjectService::scopedOverrideCount(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   const auto *config = scopedConfigForRead(model_, objectIndex, volumeIndex);
@@ -3035,7 +3035,7 @@ int ProjectServiceMock::scopedOverrideCount(int objectIndex, int volumeIndex) co
 #endif
 }
 
-QString ProjectServiceMock::scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const
+QString ProjectService::scopedOverriddenKey(int objectIndex, int volumeIndex, int index) const
 {
 #ifdef HAS_LIBSLIC3R
   const auto *config = scopedConfigForRead(model_, objectIndex, volumeIndex);
@@ -3060,7 +3060,7 @@ QString ProjectServiceMock::scopedOverriddenKey(int objectIndex, int volumeIndex
 #endif
 }
 
-bool ProjectServiceMock::resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key)
+bool ProjectService::resetScopedOptionValue(int objectIndex, int volumeIndex, const QString &key)
 {
 #ifdef HAS_LIBSLIC3R
   auto *config = scopedConfigForWrite(model_, objectIndex, volumeIndex);
@@ -3085,7 +3085,7 @@ bool ProjectServiceMock::resetScopedOptionValue(int objectIndex, int volumeIndex
 #endif
 }
 
-int ProjectServiceMock::plateScopedOverrideCount(int plateIndex) const
+int ProjectService::plateScopedOverrideCount(int plateIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -3096,7 +3096,7 @@ int ProjectServiceMock::plateScopedOverrideCount(int plateIndex) const
 #endif
 }
 
-QString ProjectServiceMock::plateScopedOverriddenKey(int plateIndex, int index) const
+QString ProjectService::plateScopedOverriddenKey(int plateIndex, int index) const
 {
 #ifdef HAS_LIBSLIC3R
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -3113,7 +3113,7 @@ QString ProjectServiceMock::plateScopedOverriddenKey(int plateIndex, int index) 
 #endif
 }
 
-bool ProjectServiceMock::resetPlateScopedOptionValue(int plateIndex, const QString &key)
+bool ProjectService::resetPlateScopedOptionValue(int plateIndex, const QString &key)
 {
 #ifdef HAS_LIBSLIC3R
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -3132,7 +3132,7 @@ bool ProjectServiceMock::resetPlateScopedOptionValue(int plateIndex, const QStri
 #endif
 }
 
-bool ProjectServiceMock::deleteObjectVolume(int objectIndex, int volumeIndex)
+bool ProjectService::deleteObjectVolume(int objectIndex, int volumeIndex)
 {
   if (loading_)
   {
@@ -3227,7 +3227,7 @@ bool ProjectServiceMock::deleteObjectVolume(int objectIndex, int volumeIndex)
 #endif
 }
 
-bool ProjectServiceMock::addVolume(int objectIndex, int volumeType)
+bool ProjectService::addVolume(int objectIndex, int volumeType)
 {
   if (loading_)
   {
@@ -3304,11 +3304,11 @@ bool ProjectServiceMock::addVolume(int objectIndex, int volumeType)
 
   // Generate name (对齐上游 GUI_ObjectList::load_generic_subobject 命名)
   static const char *typeNames[] = {
-    QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
-    QT_TRANSLATE_NOOP("ProjectServiceMock", "负体积"),
-    QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
-    QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
-    QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
+    QT_TRANSLATE_NOOP("ProjectService", "部件"),
+    QT_TRANSLATE_NOOP("ProjectService", "负体积"),
+    QT_TRANSLATE_NOOP("ProjectService", "修改器"),
+    QT_TRANSLATE_NOOP("ProjectService", "支撑屏蔽"),
+    QT_TRANSLATE_NOOP("ProjectService", "支撑增强"),
   };
   int count = 0;
   auto it = m_mockVolumes.find(objectIndex);
@@ -3330,7 +3330,7 @@ bool ProjectServiceMock::addVolume(int objectIndex, int volumeType)
 #endif
 }
 
-bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int newVolumeType)
+bool ProjectService::changeVolumeType(int objectIndex, int volumeIndex, int newVolumeType)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3373,13 +3373,13 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
 
   // 更新部件名称前缀
   static const char *typeNames[] = {
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "负体积"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "文字浮雕"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "SVG浮雕"),
+      QT_TRANSLATE_NOOP("ProjectService", "部件"),
+      QT_TRANSLATE_NOOP("ProjectService", "负体积"),
+      QT_TRANSLATE_NOOP("ProjectService", "修改器"),
+      QT_TRANSLATE_NOOP("ProjectService", "支撑屏蔽"),
+      QT_TRANSLATE_NOOP("ProjectService", "支撑增强"),
+      QT_TRANSLATE_NOOP("ProjectService", "文字浮雕"),
+      QT_TRANSLATE_NOOP("ProjectService", "SVG浮雕"),
   };
   // 保留编号，更新类型名
   QString oldName = it->at(volumeIndex).name;
@@ -3395,7 +3395,7 @@ bool ProjectServiceMock::changeVolumeType(int objectIndex, int volumeIndex, int 
 
 // ── Volume 级 extruder 分配（对齐上游 ModelVolume::extruder_id）──
 
-int ProjectServiceMock::volumeExtruderId(int objectIndex, int volumeIndex) const
+int ProjectService::volumeExtruderId(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size() &&
@@ -3413,7 +3413,7 @@ int ProjectServiceMock::volumeExtruderId(int objectIndex, int volumeIndex) const
   return it->at(volumeIndex).extruderId;
 }
 
-bool ProjectServiceMock::setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId)
+bool ProjectService::setVolumeExtruderId(int objectIndex, int volumeIndex, int extruderId)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3482,7 +3482,7 @@ bool ProjectServiceMock::setVolumeExtruderId(int objectIndex, int volumeIndex, i
 
 // ── Volume 外部文件导入（对齐上游 GUI_ObjectList::load_generic_subobject 文件加载）──
 
-bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType)
+bool ProjectService::addVolumeFromFile(int objectIndex, const QString &filePath, int volumeType)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3549,13 +3549,13 @@ bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &fileP
 #else
   auto &vols = m_mockVolumes[objectIndex];
   static const char *typeNames[] = {
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "部件"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "负体积"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "修改器"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑屏蔽"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "支撑增强"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "文字浮雕"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "SVG浮雕"),
+      QT_TRANSLATE_NOOP("ProjectService", "部件"),
+      QT_TRANSLATE_NOOP("ProjectService", "负体积"),
+      QT_TRANSLATE_NOOP("ProjectService", "修改器"),
+      QT_TRANSLATE_NOOP("ProjectService", "支撑屏蔽"),
+      QT_TRANSLATE_NOOP("ProjectService", "支撑增强"),
+      QT_TRANSLATE_NOOP("ProjectService", "文字浮雕"),
+      QT_TRANSLATE_NOOP("ProjectService", "SVG浮雕"),
   };
 
   MockVolumeEntry entry;
@@ -3571,7 +3571,7 @@ bool ProjectServiceMock::addVolumeFromFile(int objectIndex, const QString &fileP
 
 // ── 原始体创建（对齐上游 create_mesh + add_volume）──
 
-bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType, int volumeType)
+bool ProjectService::addPrimitive(int objectIndex, int primitiveType, int volumeType)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3580,10 +3580,10 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType, int vo
   }
 
   static const char *primNames[] = {
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "立方体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "球体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆柱体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆环"),
+      QT_TRANSLATE_NOOP("ProjectService", "立方体"),
+      QT_TRANSLATE_NOOP("ProjectService", "球体"),
+      QT_TRANSLATE_NOOP("ProjectService", "圆柱体"),
+      QT_TRANSLATE_NOOP("ProjectService", "圆环"),
   };
   if (primitiveType < 0 || primitiveType > 3)
   {
@@ -3650,18 +3650,18 @@ bool ProjectServiceMock::addPrimitive(int objectIndex, int primitiveType, int vo
 // Phase 144 (EMB-01/02): emboss font + height/depth setters. Forwarded from
 // EditorViewModel Q_PROPERTYs before addTextVolume runs. Replaces the pre-Phase-144
 // hardcoded arial.ttf / 10mm / 2mm defaults; values persist for the next addTextVolume.
-void ProjectServiceMock::setEmbossFont(const QString &fontPath)
+void ProjectService::setEmbossFont(const QString &fontPath)
 {
   m_embossFontPath = fontPath.toStdString();
 }
 
-void ProjectServiceMock::setEmbossHeight(float mm)
+void ProjectService::setEmbossHeight(float mm)
 {
   if (mm > 0.0f)
     m_embossHeight = mm;
 }
 
-void ProjectServiceMock::setEmbossDepth(float mm)
+void ProjectService::setEmbossDepth(float mm)
 {
   if (mm > 0.0f)
     m_embossDepth = mm;
@@ -3671,22 +3671,22 @@ void ProjectServiceMock::setEmbossDepth(float mm)
 // fields and reach text2shapes; use-surface + curve-projection are persisted
 // into TextConfiguration for round-trip (geometry deformation deferred — see
 // the upstream-gap note in the header).
-void ProjectServiceMock::setEmbossBoldness(float boldness)
+void ProjectService::setEmbossBoldness(float boldness)
 {
   // Clamp to a sane range; upstream boldness is a width delta in mm.
   m_embossBoldness = (boldness < 0.0f) ? 0.0f : (boldness > 2.0f ? 2.0f : boldness);
 }
 
-void ProjectServiceMock::setEmbossItalic(bool italic) { m_embossItalic = italic; }
-void ProjectServiceMock::setEmbossUseSurface(bool useSurface) { m_embossUseSurface = useSurface; }
-void ProjectServiceMock::setEmbossCurveProjection(bool curveProjection) { m_embossCurveProjection = curveProjection; }
+void ProjectService::setEmbossItalic(bool italic) { m_embossItalic = italic; }
+void ProjectService::setEmbossUseSurface(bool useSurface) { m_embossUseSurface = useSurface; }
+void ProjectService::setEmbossCurveProjection(bool curveProjection) { m_embossCurveProjection = curveProjection; }
 
 // Phase 144 (EMB-01): enumerate system fonts via upstream Emboss. Wraps
 // Slic3r::Emboss::get_font_list_by_enumeration (Windows registry-based) +
 // get_font_list_by_folder fallback. Returns a QVariantList of {family, path}
 // pairs for QML consumption. Each call re-enumerates (cheap on Windows due
 // to registry cache).
-QVariantList ProjectServiceMock::embossFontList() const
+QVariantList ProjectService::embossFontList() const
 {
   QVariantList result;
 #ifdef HAS_LIBSLIC3R
@@ -3713,7 +3713,7 @@ QVariantList ProjectServiceMock::embossFontList() const
   return result;
 }
 
-bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
+bool ProjectService::addTextVolume(int objectIndex, const QString &text)
 {
   // Phase 145 (EMB-03): thin wrapper around performEmbossVolumeAdd so the
   // synchronous Q_INVOKABLE path and the async path share one implementation.
@@ -3736,7 +3736,7 @@ bool ProjectServiceMock::addTextVolume(int objectIndex, const QString &text)
 // (polygons2model already baked depth into the geometry, persisted as
 // MODEL_PART). We additionally surface the depth intent in the volume name
 // suffix as an in-session affordance.
-void ProjectServiceMock::attachEmbossMetadata(void *volume, const QString &text,
+void ProjectService::attachEmbossMetadata(void *volume, const QString &text,
                                               const std::string &fontPath,
                                               float height, float depth,
                                               float boldness, bool italic)
@@ -3791,7 +3791,7 @@ void ProjectServiceMock::attachEmbossMetadata(void *volume, const QString &text,
 // the GUI thread; callers must guarantee no concurrent model_ mutation while
 // this runs (the async path enforces this by serializing via a single in-flight
 // cancel flag + canceling prior jobs).
-bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &text, QString &errMsg)
+bool ProjectService::performEmbossVolumeAdd(int objectIndex, const QString &text, QString &errMsg)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -3916,14 +3916,14 @@ bool ProjectServiceMock::performEmbossVolumeAdd(int objectIndex, const QString &
 // GUI thread via a queued signal. A second invocation auto-cancels the prior
 // job (typing fast does not pile up stale merges). Mirrors the
 // QtConcurrent::run + std::atomic_bool pattern from loadModelFromPath.
-void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text)
+void ProjectService::addTextVolumeAsync(int objectIndex, const QString &text)
 {
   // Cancel any in-flight job + install a fresh flag for this invocation.
   if (m_embossCancelFlag)
     m_embossCancelFlag->store(true);
   m_embossCancelFlag = std::make_shared<std::atomic_bool>(false);
   const auto cancelFlag = m_embossCancelFlag;
-  const QPointer<ProjectServiceMock> receiver(this);
+  const QPointer<ProjectService> receiver(this);
 
   // Snapshot the inputs the worker reads so they cannot race with a setter
   // mid-flight. (m_embossFontPath/Height/Depth + the Phase 158 style axes are
@@ -4074,7 +4074,7 @@ void ProjectServiceMock::addTextVolumeAsync(int objectIndex, const QString &text
                     });
 }
 
-void ProjectServiceMock::cancelEmbossVolume()
+void ProjectService::cancelEmbossVolume()
 {
   if (m_embossCancelFlag)
     m_embossCancelFlag->store(true);
@@ -4083,7 +4083,7 @@ void ProjectServiceMock::cancelEmbossVolume()
 
 // ── SVG 浮雕 volume（对齐上游 GLGizmoSVG → Model::read_from_file）──
 
-bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier)
+bool ProjectService::addSvgVolume(int objectIndex, const QString &svgFilePath, float depthModifier)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -4166,7 +4166,7 @@ bool ProjectServiceMock::addSvgVolume(int objectIndex, const QString &svgFilePat
 
 // ── 网格简化（对齐上游 GLGizmoSimplify → its_quadric_edge_collapse）──
 
-bool ProjectServiceMock::simplifyObject(int objectIndex, int wantedCount, float maxError)
+bool ProjectService::simplifyObject(int objectIndex, int wantedCount, float maxError)
 {
   if (loading_)
   {
@@ -4240,7 +4240,7 @@ bool ProjectServiceMock::simplifyObject(int objectIndex, int wantedCount, float 
 // its_quadric_edge_collapse as simplifyObject on a COPY and reports the
 // resulting facet count without mutating the model (Apply commits through
 // simplifyObject; Cancel just drops the count).
-int ProjectServiceMock::simplifyObjectPreview(int objectIndex, int wantedCount,
+int ProjectService::simplifyObjectPreview(int objectIndex, int wantedCount,
                                               float maxError) const
 {
 #ifdef HAS_LIBSLIC3R
@@ -4277,7 +4277,7 @@ int ProjectServiceMock::simplifyObjectPreview(int objectIndex, int wantedCount,
 
 // Phase 240 (GIZ-06): read a volume's TextConfiguration (upstream
 // ModelVolume::text_configuration, Model.hpp:876) back for in-place editing.
-QVariantMap ProjectServiceMock::volumeTextConfiguration(int objectIndex,
+QVariantMap ProjectService::volumeTextConfiguration(int objectIndex,
                                                         int volumeIndex) const
 {
   QVariantMap out;
@@ -4319,7 +4319,7 @@ QVariantMap ProjectServiceMock::volumeTextConfiguration(int objectIndex,
 // (upstream GLGizmoEmboss in-place editing). Same text2shapes + polygons2model
 // pipeline as performEmbossVolumeAdd, but the resulting mesh REPLACES the
 // target volume's mesh instead of appending a new volume.
-bool ProjectServiceMock::updateTextVolume(int objectIndex, int volumeIndex,
+bool ProjectService::updateTextVolume(int objectIndex, int volumeIndex,
                                           const QString &text)
 {
 #ifdef HAS_LIBSLIC3R
@@ -4420,7 +4420,7 @@ bool ProjectServiceMock::updateTextVolume(int objectIndex, int volumeIndex,
 #endif
 }
 
-bool ProjectServiceMock::orientObject(int objectIndex)
+bool ProjectService::orientObject(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -4767,7 +4767,7 @@ void appendArrangeWipeTowers(const OWzx::PartPlateList *plateList,
 }  // namespace
 #endif  // HAS_LIBSLIC3R
 
-bool ProjectServiceMock::arrangeWipeTowerNeededForPlate(
+bool ProjectService::arrangeWipeTowerNeededForPlate(
     int plateIndex, const QVariantMap &wipeTowerContext) const
 {
 #ifdef HAS_LIBSLIC3R
@@ -4784,7 +4784,7 @@ bool ProjectServiceMock::arrangeWipeTowerNeededForPlate(
 #endif
 }
 
-bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool alignY,
+bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                           const QString &printableArea,
                                           const QVariantMap &wipeTowerContext)
 {
@@ -4912,7 +4912,7 @@ bool ProjectServiceMock::arrangeObjects(float spacing, bool allowRotation, bool 
 #endif
 }
 
-int ProjectServiceMock::cutObject(int objectIndex, int axis, double position, int keepMode)
+int ProjectService::cutObject(int objectIndex, int axis, double position, int keepMode)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -5042,7 +5042,7 @@ int ProjectServiceMock::cutObject(int objectIndex, int axis, double position, in
 #endif
 }
 
-int ProjectServiceMock::cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
+int ProjectService::cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
                                             float grooveDepth, float grooveWidth, float grooveFlapsAngle, float grooveAngle)
 {
 #ifdef HAS_LIBSLIC3R
@@ -5200,7 +5200,7 @@ int ProjectServiceMock::cutObjectWithGroove(int objectIndex, int axis, double po
 #endif
 }
 
-bool ProjectServiceMock::mirrorObject(int objectIndex, int axis)
+bool ProjectService::mirrorObject(int objectIndex, int axis)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -5232,7 +5232,7 @@ bool ProjectServiceMock::mirrorObject(int objectIndex, int axis)
 #endif
 }
 
-bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, int operation)
+bool ProjectService::meshBoolean(int srcObjectIndex, int toolObjectIndex, int operation)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_)
@@ -5382,7 +5382,7 @@ bool ProjectServiceMock::meshBoolean(int srcObjectIndex, int toolObjectIndex, in
 #endif
 }
 
-bool ProjectServiceMock::drillObject(int objectIndex, float radius, float depth, int shape, int direction, bool oneLayerOnly)
+bool ProjectService::drillObject(int objectIndex, float radius, float depth, int shape, int direction, bool oneLayerOnly)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_)
@@ -5505,7 +5505,7 @@ bool ProjectServiceMock::drillObject(int objectIndex, float radius, float depth,
 #endif
 }
 
-void ProjectServiceMock::syncTransformsFromModel()
+void ProjectService::syncTransformsFromModel()
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_)
@@ -5524,7 +5524,7 @@ void ProjectServiceMock::syncTransformsFromModel()
 
 // ── Mesh snapshot for undo/redo ──
 
-QByteArray ProjectServiceMock::captureObjectMeshSnapshot(int objectIndex) const
+QByteArray ProjectService::captureObjectMeshSnapshot(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -5575,7 +5575,7 @@ QByteArray ProjectServiceMock::captureObjectMeshSnapshot(int objectIndex) const
 #endif
 }
 
-bool ProjectServiceMock::restoreObjectMeshSnapshot(int objectIndex, const QByteArray &snapshot)
+bool ProjectService::restoreObjectMeshSnapshot(int objectIndex, const QByteArray &snapshot)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -5630,7 +5630,7 @@ bool ProjectServiceMock::restoreObjectMeshSnapshot(int objectIndex, const QByteA
 
 // ── v5.16 UNDO-01/UNDO-05: 整对象快照（对齐上游 Plater::_take_snapshot）──
 
-QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
+QByteArray ProjectService::captureFullObjectSnapshot(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -5720,7 +5720,7 @@ QByteArray ProjectServiceMock::captureFullObjectSnapshot(int objectIndex) const
 #endif
 }
 
-int ProjectServiceMock::restoreFullObjectSnapshot(const QByteArray &snapshot, int insertAt,
+int ProjectService::restoreFullObjectSnapshot(const QByteArray &snapshot, int insertAt,
                                                   const QString &name, bool printable,
                                                   bool visible, int plateIndex)
 {
@@ -5947,7 +5947,7 @@ int ProjectServiceMock::restoreFullObjectSnapshot(const QByteArray &snapshot, in
 
 // ── v5.16 UNDO-02: volume 级网格快照 ──
 
-QByteArray ProjectServiceMock::captureVolumeMeshSnapshot(int objectIndex, int volumeIndex) const
+QByteArray ProjectService::captureVolumeMeshSnapshot(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -6006,7 +6006,7 @@ QByteArray ProjectServiceMock::captureVolumeMeshSnapshot(int objectIndex, int vo
 #endif
 }
 
-bool ProjectServiceMock::restoreVolumeSnapshot(int objectIndex, int volumeIndex,
+bool ProjectService::restoreVolumeSnapshot(int objectIndex, int volumeIndex,
                                                const QByteArray &snapshot,
                                                const QString &volName, int volType)
 {
@@ -6155,7 +6155,7 @@ struct PlateObjectSnapshot {
 };
 }  // namespace
 
-QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
+QByteArray ProjectService::capturePlateListSnapshot(bool deepObjects) const
 {
   if (!m_plateList)
     return {};
@@ -6220,7 +6220,7 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
 
   // Object-list identity (name per index). restore() removes objects that are
   // not present here — that is how clone-plate undo deletes the duplicated
-  // copies (duplicateObject names them "<name> (副本)", ProjectServiceMock.cpp:6817).
+  // copies (duplicateObject names them "<name> (副本)", ProjectService.cpp:6817).
   const QStringList names = objectNames();
   ds << qint32(names.size());
   for (const QString &n : names) ds << n;
@@ -6285,7 +6285,7 @@ QByteArray ProjectServiceMock::capturePlateListSnapshot(bool deepObjects) const
   return buffer;
 }
 
-int ProjectServiceMock::indexOfStableId(quint64 stableId) const
+int ProjectService::indexOfStableId(quint64 stableId) const
 {
   // G-06: locate a current object by its Slic3r::ObjectID — the exact
   // identity used for undo snapshot reconciliation (see restorePlateListSnapshot).
@@ -6301,7 +6301,7 @@ int ProjectServiceMock::indexOfStableId(quint64 stableId) const
   return -1;
 }
 
-bool ProjectServiceMock::restorePlateListSnapshot(const QByteArray &snapshot)
+bool ProjectService::restorePlateListSnapshot(const QByteArray &snapshot)
 {
   if (loading_ || !m_plateList || snapshot.isEmpty())
     return false;
@@ -6569,7 +6569,7 @@ constexpr quint32 kPaintSnapshotMagic = 0x4F575054u;
 constexpr quint32 kPaintSnapshotVersion = 1;
 }  // namespace
 
-QByteArray ProjectServiceMock::capturePaintSnapshot(int objectIndex, int volumeIndex,
+QByteArray ProjectService::capturePaintSnapshot(int objectIndex, int volumeIndex,
                                                     int kind) const
 {
 #ifdef HAS_LIBSLIC3R
@@ -6605,7 +6605,7 @@ QByteArray ProjectServiceMock::capturePaintSnapshot(int objectIndex, int volumeI
 #endif
 }
 
-bool ProjectServiceMock::restorePaintSnapshot(int objectIndex, int volumeIndex,
+bool ProjectService::restorePaintSnapshot(int objectIndex, int volumeIndex,
                                               int kind, const QByteArray &snapshot)
 {
 #ifdef HAS_LIBSLIC3R
@@ -6680,7 +6680,7 @@ bool ProjectServiceMock::restorePaintSnapshot(int objectIndex, int volumeIndex,
 }
 
 #ifdef HAS_LIBSLIC3R
-bool ProjectServiceMock::deserializePaintIntoSelector(int objectIndex, int volumeIndex,
+bool ProjectService::deserializePaintIntoSelector(int objectIndex, int volumeIndex,
                                                       PaintKind kind,
                                                       Slic3r::TriangleSelector &selector) const
 {
@@ -6705,7 +6705,7 @@ bool ProjectServiceMock::deserializePaintIntoSelector(int objectIndex, int volum
 #endif
 
 #ifdef HAS_LIBSLIC3R
-int ProjectServiceMock::objectTriangleCount(int objectIndex) const
+int ProjectService::objectTriangleCount(int objectIndex) const
 {
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
     return 0;
@@ -6719,21 +6719,21 @@ int ProjectServiceMock::objectTriangleCount(int objectIndex) const
   return total;
 }
 
-int ProjectServiceMock::objectOpenEdges(int objectIndex) const
+int ProjectService::objectOpenEdges(int objectIndex) const
 {
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
     return 0;
   return model_->objects[size_t(objectIndex)]->get_object_stl_stats().open_edges;
 }
 
-int ProjectServiceMock::objectRepairedErrors(int objectIndex) const
+int ProjectService::objectRepairedErrors(int objectIndex) const
 {
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
     return 0;
   return model_->objects[size_t(objectIndex)]->get_repaired_errors_count();
 }
 
-float ProjectServiceMock::objectVolume(int objectIndex) const
+float ProjectService::objectVolume(int objectIndex) const
 {
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size() || !model_->objects[size_t(objectIndex)])
     return 0.f;
@@ -6745,7 +6745,7 @@ float ProjectServiceMock::objectVolume(int objectIndex) const
 // order Plater.cpp:4237-4253 applies them in). The raw STL volume is the
 // exact metric Model::looks_like_saved_in_meters / looks_like_imperial_units
 // read, and objectVolume() already exposes get_object_stl_stats().volume.
-int ProjectServiceMock::loadedObjectUnitHint(int objectIndex) const
+int ProjectService::loadedObjectUnitHint(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   static constexpr double kVolumeThresholdMeters = 0.008;   // Model.cpp:803 (0.2*0.2*0.2)
@@ -6769,7 +6769,7 @@ int ProjectServiceMock::loadedObjectUnitHint(int objectIndex) const
 // (Model.cpp:830-844, called from Plater.cpp:4231 after every non-project
 // model load). Deletes objects whose raw STL volume is below the 1e-10
 // epsilon and refreshes the mirror arrays so the UI list stays consistent.
-int ProjectServiceMock::removeObjectsWithZeroVolume()
+int ProjectService::removeObjectsWithZeroVolume()
 {
 #ifdef HAS_LIBSLIC3R
   static constexpr double kZeroVolume = 0.0000000001; // Model.cpp:830
@@ -6800,7 +6800,7 @@ int ProjectServiceMock::removeObjectsWithZeroVolume()
 // objectPosition applies). Backs EditorViewModel::scaleSelectionToFitBed,
 // which ports upstream Selection::scale_to_fit_print_volume
 // (Selection.cpp:1419-1508, rectangle branch at :1449-1462).
-QVariantMap ProjectServiceMock::selectionWorldBoundingBox(const QList<int> &objectIndices) const
+QVariantMap ProjectService::selectionWorldBoundingBox(const QList<int> &objectIndices) const
 {
   QVariantMap box;
 #ifdef HAS_LIBSLIC3R
@@ -6862,7 +6862,7 @@ QVariantMap ProjectServiceMock::selectionWorldBoundingBox(const QList<int> &obje
 // produced by the shared storeProject3mf writer into a temp file, then every
 // entry is copied into the destination archive and the G-code entry is
 // appended.
-bool ProjectServiceMock::exportGcode3mf(int plateIndex, const QString &destPath,
+bool ProjectService::exportGcode3mf(int plateIndex, const QString &destPath,
                                         const QString &gcodeSourcePath)
 {
   if (destPath.isEmpty())
@@ -6956,12 +6956,12 @@ bool ProjectServiceMock::exportGcode3mf(int plateIndex, const QString &destPath,
 }
 
 // Phase 112 (MEASURE-01): per-volume ITS accessor. See the ownership contract
-// in ProjectServiceMock.h (MI-02/MI-03/MI-04/MI-05/MI-06). Shallow-share via
+// in ProjectService.h (MI-02/MI-03/MI-04/MI-05/MI-06). Shallow-share via
 // the shared_ptr aliasing constructor: the returned shared_ptr shares the
 // ModelVolume's m_mesh refcount and points at &mesh.its, so the TriangleMesh
 // (and its ITS) stays alive as long as ANY caller holds the result.
 std::shared_ptr<const indexed_triangle_set>
-ProjectServiceMock::volumeMeshIts(int objectIndex, int volumeIndex) const
+ProjectService::volumeMeshIts(int objectIndex, int volumeIndex) const
 {
   // MI-05: defensive null return. No model, no object, no volume -> nullptr.
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -6997,7 +6997,7 @@ ProjectServiceMock::volumeMeshIts(int objectIndex, int volumeIndex) const
 }
 
 // Phase 120 (PAINT-01): per-volume TriangleMesh accessor. See the ownership
-// contract in ProjectServiceMock.h (mirrors volumeMeshIts MI-02..MI-06). The
+// contract in ProjectService.h (mirrors volumeMeshIts MI-02..MI-06). The
 // aliasing target is the TriangleMesh itself (not &its like volumeMeshIts) so
 // TriangleSelector::TriangleSelector(const TriangleMesh&, ...) can bind a
 // stable reference whose lifetime is refcount-tied to ModelVolume::m_mesh.
@@ -7008,7 +7008,7 @@ ProjectServiceMock::volumeMeshIts(int objectIndex, int volumeIndex) const
 // therefore the TriangleMesh alive for as long as any PaintEngine selector
 // holds the result.
 std::shared_ptr<const Slic3r::TriangleMesh>
-ProjectServiceMock::volumeMeshTriangleMesh(int objectIndex, int volumeIndex) const
+ProjectService::volumeMeshTriangleMesh(int objectIndex, int volumeIndex) const
 {
   // MI-05: defensive null return. No model, no object, no volume -> nullptr.
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -7046,12 +7046,12 @@ ProjectServiceMock::volumeMeshTriangleMesh(int objectIndex, int volumeIndex) con
 
 // ── Layer range support (对齐上游 ModelObject::layer_config_ranges) ──
 
-QList<MockLayerRange> ProjectServiceMock::objectLayerRanges(int objectIndex) const
+QList<MockLayerRange> ProjectService::objectLayerRanges(int objectIndex) const
 {
   return m_mockLayerRanges.value(objectIndex);
 }
 
-bool ProjectServiceMock::addObjectLayerRange(int objectIndex, double minZ, double maxZ)
+bool ProjectService::addObjectLayerRange(int objectIndex, double minZ, double maxZ)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
     return false;
@@ -7094,7 +7094,7 @@ bool ProjectServiceMock::addObjectLayerRange(int objectIndex, double minZ, doubl
   return true;
 }
 
-void ProjectServiceMock::syncLayerRangesToModel(int objectIndex)
+void ProjectService::syncLayerRangesToModel(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   // v5.16 (UNDO-06): bridge the mock layer ranges into the real
@@ -7121,7 +7121,7 @@ void ProjectServiceMock::syncLayerRangesToModel(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::removeObjectLayerRange(int objectIndex, int rangeIndex)
+bool ProjectService::removeObjectLayerRange(int objectIndex, int rangeIndex)
 {
   auto it = m_mockLayerRanges.find(objectIndex);
   if (it == m_mockLayerRanges.end())
@@ -7134,7 +7134,7 @@ bool ProjectServiceMock::removeObjectLayerRange(int objectIndex, int rangeIndex)
   return true;
 }
 
-bool ProjectServiceMock::setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value)
+bool ProjectService::setLayerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &value)
 {
   auto it = m_mockLayerRanges.find(objectIndex);
   if (it == m_mockLayerRanges.end())
@@ -7147,7 +7147,7 @@ bool ProjectServiceMock::setLayerRangeValue(int objectIndex, int rangeIndex, con
   return true;
 }
 
-QVariant ProjectServiceMock::layerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &fallback) const
+QVariant ProjectService::layerRangeValue(int objectIndex, int rangeIndex, const QString &key, const QVariant &fallback) const
 {
   auto it = m_mockLayerRanges.constFind(objectIndex);
   if (it == m_mockLayerRanges.cend())
@@ -7157,7 +7157,7 @@ QVariant ProjectServiceMock::layerRangeValue(int objectIndex, int rangeIndex, co
   return it->at(rangeIndex).overrides.value(key, fallback);
 }
 
-bool ProjectServiceMock::deleteObject(int index)
+bool ProjectService::deleteObject(int index)
 {
   if (loading_)
   {
@@ -7368,7 +7368,7 @@ bool ProjectServiceMock::deleteObject(int index)
   }
 }
 
-void ProjectServiceMock::fixMeshForObject(int objectIndex)
+void ProjectService::fixMeshForObject(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
@@ -7390,7 +7390,7 @@ void ProjectServiceMock::fixMeshForObject(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::fixMesh(int objectIndex)
+bool ProjectService::fixMesh(int objectIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -7433,7 +7433,7 @@ bool ProjectServiceMock::fixMesh(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::reloadFromDisk(int objectIndex)
+bool ProjectService::reloadFromDisk(int objectIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -7521,7 +7521,7 @@ bool ProjectServiceMock::reloadFromDisk(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::replaceVolume(int objectIndex, int volumeIndex, const QString &stlPath)
+bool ProjectService::replaceVolume(int objectIndex, int volumeIndex, const QString &stlPath)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -7581,7 +7581,7 @@ bool ProjectServiceMock::replaceVolume(int objectIndex, int volumeIndex, const Q
 #endif
 }
 
-bool ProjectServiceMock::splitVolumeIntoParts(int objectIndex, int volumeIndex)
+bool ProjectService::splitVolumeIntoParts(int objectIndex, int volumeIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size() || volumeIndex < 0) {
     lastError_ = tr("Invalid part split target");
@@ -7626,7 +7626,7 @@ bool ProjectServiceMock::splitVolumeIntoParts(int objectIndex, int volumeIndex)
 #endif
 }
 
-bool ProjectServiceMock::dropObjectToBed(int objectIndex)
+bool ProjectService::dropObjectToBed(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -7658,7 +7658,7 @@ bool ProjectServiceMock::dropObjectToBed(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::subdivideObject(int objectIndex, int volumeIndex)
+bool ProjectService::subdivideObject(int objectIndex, int volumeIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -7721,7 +7721,7 @@ bool ProjectServiceMock::subdivideObject(int objectIndex, int volumeIndex)
 #endif
 }
 
-bool ProjectServiceMock::convertObjectUnits(int objectIndex, int conversionType)
+bool ProjectService::convertObjectUnits(int objectIndex, int conversionType)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -7764,12 +7764,12 @@ bool ProjectServiceMock::convertObjectUnits(int objectIndex, int conversionType)
 #endif
 }
 
-bool ProjectServiceMock::assembleObjects(const QList<int> &objIndices)
+bool ProjectService::assembleObjects(const QList<int> &objIndices)
 {
   return assembleObjectsReturningIndex(objIndices) >= 0;
 }
 
-int ProjectServiceMock::assembleObjectsReturningIndex(const QList<int> &objIndices)
+int ProjectService::assembleObjectsReturningIndex(const QList<int> &objIndices)
 {
   if (objIndices.size() < 2)
   {
@@ -8047,7 +8047,7 @@ int ProjectServiceMock::assembleObjectsReturningIndex(const QList<int> &objIndic
 #endif
 }
 
-bool ProjectServiceMock::mergeObjectVolumes(int objectIndex)
+bool ProjectService::mergeObjectVolumes(int objectIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -8096,7 +8096,7 @@ bool ProjectServiceMock::mergeObjectVolumes(int objectIndex)
 #endif
 }
 
-bool ProjectServiceMock::duplicateInstanceAsObject(int objectIndex, int instanceIndex)
+bool ProjectService::duplicateInstanceAsObject(int objectIndex, int instanceIndex)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size())
   {
@@ -8143,7 +8143,7 @@ bool ProjectServiceMock::duplicateInstanceAsObject(int objectIndex, int instance
 #endif
 }
 
-bool ProjectServiceMock::setObjectInstanceCount(int objectIndex, int count)
+bool ProjectService::setObjectInstanceCount(int objectIndex, int count)
 {
   if (objectIndex < 0 || objectIndex >= objectNames_.size() || count < 1 || count > 1000) {
     lastError_ = tr("Invalid instance count target");
@@ -8203,7 +8203,7 @@ bool ProjectServiceMock::setObjectInstanceCount(int objectIndex, int count)
 #endif
 }
 
-bool ProjectServiceMock::arrayObject(int objectIndex, int rows, int cols, float spacingX, float spacingY)
+bool ProjectService::arrayObject(int objectIndex, int rows, int cols, float spacingX, float spacingY)
 {
   // v5.11 gap-closure: rectangular array (对齐上游 instance-based array).
   // Generates rows*cols instances on a grid. The first instance keeps its
@@ -8266,7 +8266,7 @@ bool ProjectServiceMock::arrayObject(int objectIndex, int rows, int cols, float 
 // cut_connectors（CutConnector 列表）→ NEGATIVE_VOLUME（cut_info 置位）→
 // Cut::perform_with_plane 内部 process_connector_cut 消费（两半各生成孔/凸台）。
 
-int ProjectServiceMock::objectCutConnectorCount(int objectIndex) const
+int ProjectService::objectCutConnectorCount(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -8279,7 +8279,7 @@ int ProjectServiceMock::objectCutConnectorCount(int objectIndex) const
 #endif
 }
 
-QVariantList ProjectServiceMock::objectCutConnectors(int objectIndex) const
+QVariantList ProjectService::objectCutConnectors(int objectIndex) const
 {
   QVariantList result;
 #ifdef HAS_LIBSLIC3R
@@ -8307,7 +8307,7 @@ QVariantList ProjectServiceMock::objectCutConnectors(int objectIndex) const
   return result;
 }
 
-bool ProjectServiceMock::addCutConnector(int objectIndex, double px, double py, double pz,
+bool ProjectService::addCutConnector(int objectIndex, double px, double py, double pz,
                                          float radius, float height,
                                          int type, int style, int shape, int axis)
 {
@@ -8353,7 +8353,7 @@ bool ProjectServiceMock::addCutConnector(int objectIndex, double px, double py, 
 #endif
 }
 
-bool ProjectServiceMock::clearCutConnectors(int objectIndex)
+bool ProjectService::clearCutConnectors(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -8372,7 +8372,7 @@ bool ProjectServiceMock::clearCutConnectors(int objectIndex)
 #endif
 }
 
-int ProjectServiceMock::applyCutConnectorsInModel(int objectIndex)
+int ProjectService::applyCutConnectorsInModel(int objectIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -8434,7 +8434,7 @@ int ProjectServiceMock::applyCutConnectorsInModel(int objectIndex)
 #endif
 }
 
-int ProjectServiceMock::cutObjectWithConnectors(int objectIndex, int axis, double position, int keepMode)
+int ProjectService::cutObjectWithConnectors(int objectIndex, int axis, double position, int keepMode)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -8521,7 +8521,7 @@ int ProjectServiceMock::cutObjectWithConnectors(int objectIndex, int axis, doubl
 // user-rotated plane rotation. This port keeps the existing base axis
 // alignment (axis -> +Z plane normal) and pre-multiplies the Euler XYZ tilt
 // around the WORLD axes, so 0/0/0 reproduces the plain axis-aligned cut.
-int ProjectServiceMock::cutObjectWithRotation(int objectIndex, int axis,
+int ProjectService::cutObjectWithRotation(int objectIndex, int axis,
                                               double position,
                                               float rotX, float rotY, float rotZ,
                                               int keepMode)
@@ -8612,7 +8612,7 @@ int ProjectServiceMock::cutObjectWithRotation(int objectIndex, int axis,
 #endif
 }
 
-bool ProjectServiceMock::exportObjects(const QList<int> &objectIndices,
+bool ProjectService::exportObjects(const QList<int> &objectIndices,
                                        const QString &outputPath,
                                        bool separateFiles,
                                        bool drcFormat)
@@ -8711,7 +8711,7 @@ bool ProjectServiceMock::exportObjects(const QList<int> &objectIndices,
 #endif
 }
 
-bool ProjectServiceMock::addFilesToPlate(int plateIndex, const QStringList &filePaths)
+bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePaths)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount()
       || filePaths.isEmpty()) {
@@ -8813,7 +8813,7 @@ bool ProjectServiceMock::addFilesToPlate(int plateIndex, const QStringList &file
 #endif
 }
 
-bool ProjectServiceMock::addHandyModelToPlate(int plateIndex, const QString &modelId)
+bool ProjectService::addHandyModelToPlate(int plateIndex, const QString &modelId)
 {
   struct HandyModelDefinition {
     const char *id;
@@ -8872,7 +8872,7 @@ bool ProjectServiceMock::addHandyModelToPlate(int plateIndex, const QString &mod
   return addFilesToPlate(plateIndex, filePaths);
 }
 
-bool ProjectServiceMock::replaceAllOnPlateWithFiles(int plateIndex, const QStringList &filePaths)
+bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringList &filePaths)
 {
   if (!m_plateList || plateIndex < 0 || plateIndex >= m_plateList->plateCount()
       || filePaths.isEmpty()) {
@@ -9041,16 +9041,16 @@ bool ProjectServiceMock::replaceAllOnPlateWithFiles(int plateIndex, const QStrin
 #endif
 }
 
-int ProjectServiceMock::addPrimitiveToPlate(int type)
+int ProjectService::addPrimitiveToPlate(int type)
 {
   static const char *primNames[] = {
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "立方体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "球体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆柱体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆锥体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "截头锥体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆环体"),
-      QT_TRANSLATE_NOOP("ProjectServiceMock", "圆盘"),
+      QT_TRANSLATE_NOOP("ProjectService", "立方体"),
+      QT_TRANSLATE_NOOP("ProjectService", "球体"),
+      QT_TRANSLATE_NOOP("ProjectService", "圆柱体"),
+      QT_TRANSLATE_NOOP("ProjectService", "圆锥体"),
+      QT_TRANSLATE_NOOP("ProjectService", "截头锥体"),
+      QT_TRANSLATE_NOOP("ProjectService", "圆环体"),
+      QT_TRANSLATE_NOOP("ProjectService", "圆盘"),
   };
   constexpr int kTypeCount = sizeof(primNames) / sizeof(primNames[0]);
   if (type < 0 || type >= kTypeCount)
@@ -9138,7 +9138,7 @@ int ProjectServiceMock::addPrimitiveToPlate(int type)
 #endif
 }
 
-bool ProjectServiceMock::renameObject(int index, const QString &newName)
+bool ProjectService::renameObject(int index, const QString &newName)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -9151,7 +9151,7 @@ bool ProjectServiceMock::renameObject(int index, const QString &newName)
   return true;
 }
 
-bool ProjectServiceMock::moveObject(int fromIndex, int toIndex)
+bool ProjectService::moveObject(int fromIndex, int toIndex)
 {
   if (fromIndex < 0 || fromIndex >= objectNames_.size())
     return false;
@@ -9214,13 +9214,13 @@ bool ProjectServiceMock::moveObject(int fromIndex, int toIndex)
 
 // ── v3.0 Phase 16 (D-05): per-plate settings re-backed on PartPlate ──
 
-int ProjectServiceMock::plateBedType(int plateIndex) const
+int ProjectService::plateBedType(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? p->bedType() : 0;
 }
 
-bool ProjectServiceMock::setPlateBedType(int plateIndex, int bedType)
+bool ProjectService::setPlateBedType(int plateIndex, int bedType)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9251,7 +9251,7 @@ bool ProjectServiceMock::setPlateBedType(int plateIndex, int bedType)
   return true;
 }
 
-QVariant ProjectServiceMock::plateConfigValue(int plateIndex, const QString &key) const
+QVariant ProjectService::plateConfigValue(int plateIndex, const QString &key) const
 {
 #ifdef HAS_LIBSLIC3R
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -9271,13 +9271,13 @@ QVariant ProjectServiceMock::plateConfigValue(int plateIndex, const QString &key
   return {};
 }
 
-int ProjectServiceMock::platePrintSequence(int plateIndex) const
+int ProjectService::platePrintSequence(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? p->printSequence() : 0;
 }
 
-bool ProjectServiceMock::setPlatePrintSequence(int plateIndex, int seq)
+bool ProjectService::setPlatePrintSequence(int plateIndex, int seq)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p || seq < 0 || seq > 2) return false;
@@ -9289,13 +9289,13 @@ bool ProjectServiceMock::setPlatePrintSequence(int plateIndex, int seq)
   return true;
 }
 
-int ProjectServiceMock::plateSpiralMode(int plateIndex) const
+int ProjectService::plateSpiralMode(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? p->spiralMode() : 0;
 }
 
-bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
+bool ProjectService::setPlateSpiralMode(int plateIndex, int mode)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9313,13 +9313,13 @@ bool ProjectServiceMock::setPlateSpiralMode(int plateIndex, int mode)
 
 // ── 首层耗材顺序（对齐上游 first_layer_print_sequence）──
 
-int ProjectServiceMock::plateFirstLayerSeqChoice(int plateIndex) const
+int ProjectService::plateFirstLayerSeqChoice(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? p->firstLayerSeqChoice() : 0;
 }
 
-bool ProjectServiceMock::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
+bool ProjectService::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9339,7 +9339,7 @@ bool ProjectServiceMock::setPlateFirstLayerSeqChoice(int plateIndex, int choice)
   return true;
 }
 
-QVariantList ProjectServiceMock::plateFirstLayerSeqOrder(int plateIndex) const
+QVariantList ProjectService::plateFirstLayerSeqOrder(int plateIndex) const
 {
   QVariantList result;
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -9349,7 +9349,7 @@ QVariantList ProjectServiceMock::plateFirstLayerSeqOrder(int plateIndex) const
   return result;
 }
 
-bool ProjectServiceMock::setPlateFirstLayerSeqOrder(int plateIndex, const QVariantList &order)
+bool ProjectService::setPlateFirstLayerSeqOrder(int plateIndex, const QVariantList &order)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9373,13 +9373,13 @@ bool ProjectServiceMock::setPlateFirstLayerSeqOrder(int plateIndex, const QVaria
 
 // ── 其他层耗材顺序（对齐上游 other_layers_print_sequence + LayerPrintSequence）──
 
-int ProjectServiceMock::plateOtherLayersSeqChoice(int plateIndex) const
+int ProjectService::plateOtherLayersSeqChoice(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? p->otherLayersSeqChoice() : 0;
 }
 
-bool ProjectServiceMock::setPlateOtherLayersSeqChoice(int plateIndex, int choice)
+bool ProjectService::setPlateOtherLayersSeqChoice(int plateIndex, int choice)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9391,13 +9391,13 @@ bool ProjectServiceMock::setPlateOtherLayersSeqChoice(int plateIndex, int choice
   return true;
 }
 
-int ProjectServiceMock::plateOtherLayersSeqCount(int plateIndex) const
+int ProjectService::plateOtherLayersSeqCount(int plateIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   return p ? int(p->otherLayersSeqEntries().size()) : 0;
 }
 
-int ProjectServiceMock::plateOtherLayersSeqBegin(int plateIndex, int entryIndex) const
+int ProjectService::plateOtherLayersSeqBegin(int plateIndex, int entryIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return 2;
@@ -9406,7 +9406,7 @@ int ProjectServiceMock::plateOtherLayersSeqBegin(int plateIndex, int entryIndex)
   return entries[size_t(entryIndex)].beginLayer;
 }
 
-int ProjectServiceMock::plateOtherLayersSeqEnd(int plateIndex, int entryIndex) const
+int ProjectService::plateOtherLayersSeqEnd(int plateIndex, int entryIndex) const
 {
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return 100;
@@ -9415,7 +9415,7 @@ int ProjectServiceMock::plateOtherLayersSeqEnd(int plateIndex, int entryIndex) c
   return entries[size_t(entryIndex)].endLayer;
 }
 
-QVariantList ProjectServiceMock::plateOtherLayersSeqOrder(int plateIndex, int entryIndex) const
+QVariantList ProjectService::plateOtherLayersSeqOrder(int plateIndex, int entryIndex) const
 {
   QVariantList result;
   const OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
@@ -9427,7 +9427,7 @@ QVariantList ProjectServiceMock::plateOtherLayersSeqOrder(int plateIndex, int en
   return result;
 }
 
-bool ProjectServiceMock::addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer, int endLayer)
+bool ProjectService::addPlateOtherLayersSeqEntry(int plateIndex, int beginLayer, int endLayer)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9455,7 +9455,7 @@ bool ProjectServiceMock::addPlateOtherLayersSeqEntry(int plateIndex, int beginLa
   return true;
 }
 
-bool ProjectServiceMock::removePlateOtherLayersSeqEntry(int plateIndex, int entryIndex)
+bool ProjectService::removePlateOtherLayersSeqEntry(int plateIndex, int entryIndex)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9470,7 +9470,7 @@ bool ProjectServiceMock::removePlateOtherLayersSeqEntry(int plateIndex, int entr
   return true;
 }
 
-bool ProjectServiceMock::setPlateOtherLayersSeqRange(int plateIndex, int entryIndex, int beginLayer, int endLayer)
+bool ProjectService::setPlateOtherLayersSeqRange(int plateIndex, int entryIndex, int beginLayer, int endLayer)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9493,7 +9493,7 @@ bool ProjectServiceMock::setPlateOtherLayersSeqRange(int plateIndex, int entryIn
   return true;
 }
 
-bool ProjectServiceMock::setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order)
+bool ProjectService::setPlateOtherLayersSeqOrder(int plateIndex, int entryIndex, const QVariantList &order)
 {
   OWzx::PartPlate *p = m_plateList ? m_plateList->plate(plateIndex) : nullptr;
   if (!p) return false;
@@ -9512,13 +9512,13 @@ bool ProjectServiceMock::setPlateOtherLayersSeqOrder(int plateIndex, int entryIn
   return true;
 }
 
-int ProjectServiceMock::plateExtruderCount(int plateIndex) const
+int ProjectService::plateExtruderCount(int plateIndex) const
 {
   // Mock 模式：基于平板上的对象数推断耗材数（上限 4）
   return qMin(qMax(1, plateObjectCount(plateIndex)), 4);
 }
 
-QString ProjectServiceMock::plateThumbnailBase64(int plateIndex) const
+QString ProjectService::plateThumbnailBase64(int plateIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (!m_plateList) return {};
@@ -9545,7 +9545,7 @@ QString ProjectServiceMock::plateThumbnailBase64(int plateIndex) const
 // PartPlate::setThumbnail for the given plate. This is what the QML capture
 // handler calls to persist captured bytes for non-current plates (the gap
 // that forced Phase 151 to ship persisted-only).
-bool ProjectServiceMock::setPlateThumbnailFromBase64(int plateIndex, const QString &base64)
+bool ProjectService::setPlateThumbnailFromBase64(int plateIndex, const QString &base64)
 {
 #ifdef HAS_LIBSLIC3R
   if (!m_plateList || base64.isEmpty()) return false;
@@ -9583,7 +9583,7 @@ bool ProjectServiceMock::setPlateThumbnailFromBase64(int plateIndex, const QStri
 #endif
 }
 
-bool ProjectServiceMock::setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64)
+bool ProjectService::setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64)
 {
 #ifdef HAS_LIBSLIC3R
   if (!m_plateList || base64.isEmpty()) return false;
@@ -9621,7 +9621,7 @@ bool ProjectServiceMock::setPlatePickThumbnailFromBase64(int plateIndex, const Q
 #endif
 }
 
-int ProjectServiceMock::duplicateObject(int sourceIndex)
+int ProjectService::duplicateObject(int sourceIndex)
 {
   if (loading_)
   {
@@ -9796,7 +9796,7 @@ int ProjectServiceMock::duplicateObject(int sourceIndex)
   }
 }
 
-QList<int> ProjectServiceMock::splitObject(int objectIndex)
+QList<int> ProjectService::splitObject(int objectIndex)
 {
   QList<int> newIndices;
 
@@ -9982,7 +9982,7 @@ QList<int> ProjectServiceMock::splitObject(int objectIndex)
   }
 }
 
-int ProjectServiceMock::addObject(const QString &name)
+int ProjectService::addObject(const QString &name)
 {
   if (loading_)
   {
@@ -10083,7 +10083,7 @@ int ProjectServiceMock::addObject(const QString &name)
 #endif
 }
 
-QVector3D ProjectServiceMock::objectPosition(int index) const
+QVector3D ProjectService::objectPosition(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10101,7 +10101,7 @@ QVector3D ProjectServiceMock::objectPosition(int index) const
   return (index >= 0 && index < objectPositions_.size()) ? objectPositions_[index] : QVector3D(0, 0, 0);
 }
 
-QVector3D ProjectServiceMock::objectRotation(int index) const
+QVector3D ProjectService::objectRotation(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10121,7 +10121,7 @@ QVector3D ProjectServiceMock::objectRotation(int index) const
   return (index >= 0 && index < objectRotations_.size()) ? objectRotations_[index] : QVector3D(0, 0, 0);
 }
 
-QVector3D ProjectServiceMock::objectScale(int index) const
+QVector3D ProjectService::objectScale(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10138,7 +10138,7 @@ QVector3D ProjectServiceMock::objectScale(int index) const
   return (index >= 0 && index < objectScales_.size()) ? objectScales_[index] : QVector3D(1, 1, 1);
 }
 
-bool ProjectServiceMock::setObjectPosition(int index, float x, float y, float z)
+bool ProjectService::setObjectPosition(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -10162,7 +10162,7 @@ bool ProjectServiceMock::setObjectPosition(int index, float x, float y, float z)
   return true;
 }
 
-bool ProjectServiceMock::setObjectRotation(int index, float x, float y, float z)
+bool ProjectService::setObjectRotation(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -10186,7 +10186,7 @@ bool ProjectServiceMock::setObjectRotation(int index, float x, float y, float z)
   return true;
 }
 
-bool ProjectServiceMock::setObjectScale(int index, float x, float y, float z)
+bool ProjectService::setObjectScale(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -10208,7 +10208,7 @@ bool ProjectServiceMock::setObjectScale(int index, float x, float y, float z)
   return true;
 }
 
-bool ProjectServiceMock::setObjectScaleUniform(int index, float s)
+bool ProjectService::setObjectScaleUniform(int index, float s)
 {
   return setObjectScale(index, s, s, s);
 }
@@ -10217,7 +10217,7 @@ bool ProjectServiceMock::setObjectScaleUniform(int index, float s)
 // XYZ degrees. Upstream builds the sidebar hint orientation from the first
 // selected volume's instance rotation matrix (Selection.cpp:2010-2013), so
 // the query reads instances.front() like the other transform accessors.
-QVector3D ProjectServiceMock::objectInstanceRotationDegrees(int objectIndex) const
+QVector3D ProjectService::objectInstanceRotationDegrees(int objectIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size() &&
@@ -10246,7 +10246,7 @@ QVector3D ProjectServiceMock::objectInstanceRotationDegrees(int objectIndex) con
 // Euler angles keeps the same degrees representation as
 // objectInstanceRotationDegrees. Mock mode stores no volume rotations, so it
 // degrades to the instance rotation (identity volume = world axes preserved).
-QVector3D ProjectServiceMock::objectVolumeRotationDegrees(int objectIndex, int volumeIndex) const
+QVector3D ProjectService::objectVolumeRotationDegrees(int objectIndex, int volumeIndex) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && objectIndex >= 0 && size_t(objectIndex) < model_->objects.size())
@@ -10274,7 +10274,7 @@ QVector3D ProjectServiceMock::objectVolumeRotationDegrees(int objectIndex, int v
 // ModelInstance::m_assemble_transformation (upstream Model.hpp:1253-1298) instead of
 // m_transformation. Same slic3r(X,Y,Z) <-> GL(X,Z,Y) Y/Z swap for offset, deg<->rad
 // for rotation. The Prepare/View3D path above is unchanged.
-QVector3D ProjectServiceMock::assembleOffset(int index) const
+QVector3D ProjectService::assembleOffset(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10292,7 +10292,7 @@ QVector3D ProjectServiceMock::assembleOffset(int index) const
   return (index >= 0 && index < assembleOffsets_.size()) ? assembleOffsets_[index] : QVector3D(0, 0, 0);
 }
 
-QVector3D ProjectServiceMock::assembleRotation(int index) const
+QVector3D ProjectService::assembleRotation(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10312,7 +10312,7 @@ QVector3D ProjectServiceMock::assembleRotation(int index) const
   return (index >= 0 && index < assembleRotations_.size()) ? assembleRotations_[index] : QVector3D(0, 0, 0);
 }
 
-QVector3D ProjectServiceMock::assembleScale(int index) const
+QVector3D ProjectService::assembleScale(int index) const
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10329,7 +10329,7 @@ QVector3D ProjectServiceMock::assembleScale(int index) const
   return (index >= 0 && index < assembleScales_.size()) ? assembleScales_[index] : QVector3D(1, 1, 1);
 }
 
-bool ProjectServiceMock::setAssembleOffset(int index, float x, float y, float z)
+bool ProjectService::setAssembleOffset(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -10357,7 +10357,7 @@ bool ProjectServiceMock::setAssembleOffset(int index, float x, float y, float z)
   return true;
 }
 
-bool ProjectServiceMock::setAssembleRotation(int index, float x, float y, float z)
+bool ProjectService::setAssembleRotation(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -10382,7 +10382,7 @@ bool ProjectServiceMock::setAssembleRotation(int index, float x, float y, float 
   return true;
 }
 
-bool ProjectServiceMock::setAssembleScale(int index, float x, float y, float z)
+bool ProjectService::setAssembleScale(int index, float x, float y, float z)
 {
   if (index < 0 || index >= objectNames_.size())
     return false;
@@ -10409,7 +10409,7 @@ bool ProjectServiceMock::setAssembleScale(int index, float x, float y, float z)
   return true;
 }
 
-bool ProjectServiceMock::isAssembleInitialized(int index)
+bool ProjectService::isAssembleInitialized(int index)
 {
 #ifdef HAS_LIBSLIC3R
   if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
@@ -10423,7 +10423,7 @@ bool ProjectServiceMock::isAssembleInitialized(int index)
   return false;
 }
 
-void ProjectServiceMock::clearProject()
+void ProjectService::clearProject()
 {
   if (loading_)
     cancelLoad();
@@ -10473,11 +10473,11 @@ void ProjectServiceMock::clearProject()
 #ifdef HAS_LIBSLIC3R
 // Phase 96 (THUMBWRITE-01/02): convert a captured QImage into a
 // Slic3r::ThumbnailData (width/height/RGBA bytes) for the 3MF writer.
-// Format symmetry: the READ side (ProjectServiceMock.cpp:5455) wraps
+// Format symmetry: the READ side (ProjectService.cpp:5455) wraps
 // ThumbnailData::pixels as QImage::Format_RGBA8888, so the write side MUST
 // produce RGBA8888 bytes (convertToFormat) for a clean round-trip.
 // File-local (not a member) to keep bbs_3mf.hpp out of the public header,
-// matching the buildPlateDataList design (ProjectServiceMock.cpp:5048-5049).
+// matching the buildPlateDataList design (ProjectService.cpp:5048-5049).
 // NOTE: do NOT call ThumbnailData::set(w,h) — it fills the buffer with white
 // (255) defaults (ThumbnailData.cpp:5-18); we want real captured pixels, so
 // resize + memcpy the RGBA bytes directly.
@@ -10663,9 +10663,9 @@ static QList<ProjectEmbeddedPreset> readProjectEmbeddedPresets(const QString &ar
     const char *idKey;
   };
   const EmbeddedEntry entries[] = {
-      {"Metadata/process_settings_1.config", PresetServiceMock::PrintCat, "print_settings_id"},
-      {"Metadata/filament_settings_1.config", PresetServiceMock::FilamentCat, "filament_settings_id"},
-      {"Metadata/machine_settings_1.config", PresetServiceMock::PrinterCat, "printer_settings_id"},
+      {"Metadata/process_settings_1.config", PresetService::PrintCat, "print_settings_id"},
+      {"Metadata/filament_settings_1.config", PresetService::FilamentCat, "filament_settings_id"},
+      {"Metadata/machine_settings_1.config", PresetService::PrinterCat, "printer_settings_id"},
   };
 
   mz_zip_archive archive;
@@ -10877,7 +10877,7 @@ static Slic3r::PlateDataPtrs buildPlateDataList(const OWzx::PartPlateList *plate
       // pattern (the def-respecting option<T>(...,true) form avoids the type-
       // mismatch crash an earlier Phase 107 draft hit on filament_map_mode).
       // The reader (bbs_3mf.cpp:4450-4459) parses this back into both
-      // plate->filament_maps AND plate->config["filament_map"]; ProjectServiceMock
+      // plate->filament_maps AND plate->config["filament_map"]; ProjectService
       // reads plate->filament_maps, so the array now survives save->reload.
       if (!p->filamentMaps().empty()) {
         if (auto *opt = pd->config.option<Slic3r::ConfigOptionInts>("filament_map", true))
@@ -10941,7 +10941,7 @@ static QByteArray buildOwzxPlateFilamentStateBytes(const OWzx::PartPlateList *pl
 /// R-P0.4: the OWzx plate filament-state sidecar (per-plate filamentMapMode +
 /// filamentMaps JSON appended next to the 3MF archive). Shared by saveProject
 /// and saveProjectAs so every save path produces the identical project payload.
-bool ProjectServiceMock::writePlateFilamentStateSidecar(const QString &filePath)
+bool ProjectService::writePlateFilamentStateSidecar(const QString &filePath)
 {
   if (!writeOwzxPlateFilamentStates(
           filePath, buildOwzxPlateFilamentStateBytes(m_plateList.get())))
@@ -11078,14 +11078,14 @@ static bool buildProjectSavePayload(const Slic3r::Model *liveModel,
   if (!embeddedPresets.isEmpty() && embedDir.isValid())
   {
     const std::map<int, Slic3r::Preset::Type> tierTypes = {
-      {PresetServiceMock::PrinterCat,  Slic3r::Preset::TYPE_PRINTER},
-      {PresetServiceMock::FilamentCat, Slic3r::Preset::TYPE_FILAMENT},
-      {PresetServiceMock::PrintCat,    Slic3r::Preset::TYPE_PRINT},
+      {PresetService::PrinterCat,  Slic3r::Preset::TYPE_PRINTER},
+      {PresetService::FilamentCat, Slic3r::Preset::TYPE_FILAMENT},
+      {PresetService::PrintCat,    Slic3r::Preset::TYPE_PRINT},
     };
     const std::map<int, const char *> idKeys = {
-      {PresetServiceMock::PrintCat,    "print_settings_id"},
-      {PresetServiceMock::FilamentCat, "filament_settings_id"},
-      {PresetServiceMock::PrinterCat,  "printer_settings_id"},
+      {PresetService::PrintCat,    "print_settings_id"},
+      {PresetService::FilamentCat, "filament_settings_id"},
+      {PresetService::PrinterCat,  "printer_settings_id"},
     };
     auto variantToString = [](const QVariant &value) -> QString {
       if (value.type() == QVariant::Double)
@@ -11302,7 +11302,7 @@ static bool runStoreBbs3mf(ProjectSavePayload &payload, QString &errText)
   {
     // Payload cleanup (Model copy / PlateData / presets) runs when the
     // payload dies — including on this throw path.
-    errText = ProjectServiceMock::tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
+    errText = ProjectService::tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
     return false;
   }
 
@@ -11320,7 +11320,7 @@ static bool runStoreBbs3mf(ProjectSavePayload &payload, QString &errText)
              int(QFileInfo(outInfo.dir(), outInfo.fileName() + QStringLiteral(".tmp")).exists()),
              int(payload.plateData.size()),
              payload.modelCopy ? int(payload.modelCopy->objects.size()) : -1);
-    errText = ProjectServiceMock::tr("3MF 保存失败");
+    errText = ProjectService::tr("3MF 保存失败");
     return false;
   }
   return true;
@@ -11331,7 +11331,7 @@ static bool runStoreBbs3mf(ProjectSavePayload &payload, QString &errText)
 // (same body; saveProject keeps the plate-state JSON + bookkeeping on top).
 // Mirrors upstream Plater::export_3mf -> store_bbs_3mf with plate_data_list
 // populated (Plater.cpp:11462 for the sliced-file variant).
-bool ProjectServiceMock::storeProject3mf(const QString &filePath)
+bool ProjectService::storeProject3mf(const QString &filePath)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_)
@@ -11373,17 +11373,17 @@ bool ProjectServiceMock::storeProject3mf(const QString &filePath)
 // queued STALE snapshot would overwrite newer project state, which is the
 // one re-entrancy mode a save must never have.
 
-bool ProjectServiceMock::saveProjectAsync(const QString &filePath)
+bool ProjectService::saveProjectAsync(const QString &filePath)
 {
   return startAsyncSave(filePath, AsyncSaveKind::Project);
 }
 
-bool ProjectServiceMock::saveProjectAsAsync(const QString &filePath)
+bool ProjectService::saveProjectAsAsync(const QString &filePath)
 {
   return startAsyncSave(filePath, AsyncSaveKind::ProjectAs);
 }
 
-bool ProjectServiceMock::writeProjectSnapshotAsync(const QString &filePath)
+bool ProjectService::writeProjectSnapshotAsync(const QString &filePath)
 {
   return startAsyncSave(filePath, AsyncSaveKind::Snapshot);
 }
@@ -11392,7 +11392,7 @@ bool ProjectServiceMock::writeProjectSnapshotAsync(const QString &filePath)
 // (3MF + JSON branches), saveProjectAs and the async delivery lambda — a
 // future field lands on all of them or none (the byte-level sync/async
 // unification extends to the bookkeeping layer).
-void ProjectServiceMock::applyProjectSaveBookkeeping(AsyncSaveKind kind,
+void ProjectService::applyProjectSaveBookkeeping(AsyncSaveKind kind,
                                                      const QString &filePath)
 {
   sourceFilePath_ = filePath;
@@ -11403,7 +11403,7 @@ void ProjectServiceMock::applyProjectSaveBookkeeping(AsyncSaveKind kind,
   emit projectChanged();
 }
 
-bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
+bool ProjectService::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
 {
 #ifndef HAS_LIBSLIC3R
   // No writer in this build: degrade to the sync entries' rejection contract
@@ -11480,7 +11480,7 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
   saving_ = true;
   emit savingChanged();
 
-  const QPointer<ProjectServiceMock> receiver(this);
+  const QPointer<ProjectService> receiver(this);
   // (void) keeps QtConcurrent's exception-swallow future semantics -- see the
   // full rationale at the import lambda (G2 Qt 6.12 [[nodiscard]] review).
   (void)QtConcurrent::run([receiver, payload, filePath, kind]()
@@ -11497,12 +11497,12 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
     catch (const std::exception &ex)
     {
       ok = false;
-      errText = ProjectServiceMock::tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
+      errText = ProjectService::tr("3MF 保存异常: %1").arg(QString::fromStdString(ex.what()));
     }
     catch (...)
     {
       ok = false;
-      errText = ProjectServiceMock::tr("3MF 保存异常");
+      errText = ProjectService::tr("3MF 保存异常");
     }
     if (ok && kind != AsyncSaveKind::Snapshot && !payload->sidecarBytes.isEmpty())
     {
@@ -11511,7 +11511,7 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
       if (!writeOwzxPlateFilamentStates(filePath, payload->sidecarBytes))
       {
         ok = false;
-        errText = ProjectServiceMock::tr("Unable to write OWzx plate state");
+        errText = ProjectService::tr("Unable to write OWzx plate state");
       }
     }
     // The payload (Model copy, PlateData, presets, staging dir) dies with the
@@ -11560,7 +11560,7 @@ bool ProjectServiceMock::startAsyncSave(const QString &filePath, AsyncSaveKind k
 #endif
 }
 
-bool ProjectServiceMock::saveProject(const QString &filePath)
+bool ProjectService::saveProject(const QString &filePath)
 {
   if (loading_)
   {
@@ -11765,7 +11765,7 @@ bool ProjectServiceMock::saveProject(const QString &filePath)
   return true;
 }
 
-bool ProjectServiceMock::loadProject(const QString &filePath)
+bool ProjectService::loadProject(const QString &filePath)
 {
   // U8 复核（阻塞 1）: 与 saving_ 单槽对称——保存 worker 在飞时拒绝换工程。
   // 换工程替换 model_/sourceFilePath_/currentProjectPath_/projectName_，而在
@@ -11809,7 +11809,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
     emit loadProgressChanged();
 
     const QString localPath = fi.absoluteFilePath();
-    const QPointer<ProjectServiceMock> receiver(this);
+    const QPointer<ProjectService> receiver(this);
     const auto cancelFlag = activeCancelFlag_;
 
     // (void) keeps QtConcurrent's exception-swallow future semantics -- see the
@@ -12645,7 +12645,7 @@ bool ProjectServiceMock::loadProject(const QString &filePath)
 // derived from that box and FROZEN in m_instanceChannelPlateShift: the
 // channel matrices apply it, later transform edits do not re-center the
 // scene (upstream objects stay where placed).
-QByteArray ProjectServiceMock::meshData() const
+QByteArray ProjectService::meshData() const
 {
   // Blob v2 layout:
   // [int32 magic 0x3244534D ('MDS2')][int32 batchCount]
@@ -12923,7 +12923,7 @@ QByteArray ProjectServiceMock::meshData() const
   }
 }
 
-QList<QMatrix4x4> ProjectServiceMock::meshBatchInstanceTransforms() const
+QList<QMatrix4x4> ProjectService::meshBatchInstanceTransforms() const
 {
   QList<QMatrix4x4> transforms;
 #ifdef HAS_LIBSLIC3R

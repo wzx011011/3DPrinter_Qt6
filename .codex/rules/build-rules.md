@@ -119,8 +119,8 @@ its mechanism:
 `auto_verify_with_vcvars.ps1` ends with a conditional slice regression gate
 (`scripts/perf/run_slice_gate.ps1`). It fires when uncommitted changes or the
 commits since the last green gate run touch the slicing surface (SliceService,
-PreviewViewModel, EditorViewModel, `src/cli/*`, ProjectServiceMock,
-PresetServiceMock, the OrcaSlicer submodule pointer, PerfBench.cpp, and the
+PreviewViewModel, EditorViewModel, `src/cli/*`, ProjectService,
+PresetService, the OrcaSlicer submodule pointer, PerfBench.cpp, and the
 gate's own files).
 
 - Correctness layer (hard fail, exit 1): headless `owzx-cli` slices of

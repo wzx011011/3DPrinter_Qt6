@@ -1,6 +1,6 @@
 #include "CalibrationServiceMock.h"
 #include "SliceService.h"
-#include "ProjectServiceMock.h"
+#include "ProjectService.h"
 #include <QTimer>
 #include <QDateTime>
 #include <QDebug>
@@ -633,7 +633,7 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
             // the current-plate model. loadFile is async
             // (QtConcurrent::run + loadFinished), so we defer
             // setCalibParams/startSlice to onCalibTowerLoadFinished. When
-            // ProjectServiceMock is unavailable or extraction fails, fall
+            // ProjectService is unavailable or extraction fails, fall
             // back to the legacy cloneCurrentPlateModel() geometry path.
             const QString towerQrc = towerModelQrcPathForMode(calibType.calibMode, m_flowRatePass);
             if (m_projectService && !towerQrc.isEmpty()) {
@@ -643,14 +643,14 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
                     // Wire one-shot loadFinished -> setCalibParams + startSlice.
                     // The connection removes itself after firing so a later user
                     // loadFile is not intercepted.
-                    connect(m_projectService, &ProjectServiceMock::loadFinished, this,
+                    connect(m_projectService, &ProjectService::loadFinished, this,
                             [this, mode = calibType.calibMode, start = calibType.calibStart,
                              end = calibType.calibEnd, step = calibType.calibStep,
                              printNumbers = calibType.printNumbers, projectName]
                             (bool ok, const QString & /*msg*/) {
                         if (!m_pendingCalibTowerLoad) return;
                         m_pendingCalibTowerLoad = false;
-                        disconnect(m_projectService, &ProjectServiceMock::loadFinished, this, nullptr);
+                        disconnect(m_projectService, &ProjectService::loadFinished, this, nullptr);
                         if (!ok || !m_sliceService) {
                             qWarning("[Calib] tower load failed or no SliceService - aborting slice");
                             if (m_currentItem >= 0)
@@ -711,7 +711,7 @@ void CalibrationServiceMock::cancelCalibration()
     // Phase 197: if a dedicated tower-model load is in flight, drop the
     // one-shot loadFinished connection so the deferred slice never starts.
     if (m_pendingCalibTowerLoad && m_projectService) {
-        disconnect(m_projectService, &ProjectServiceMock::loadFinished, this, nullptr);
+        disconnect(m_projectService, &ProjectService::loadFinished, this, nullptr);
     }
     m_pendingCalibTowerLoad = false;
 
@@ -1164,9 +1164,9 @@ void CalibrationServiceMock::setSliceService(SliceService *slice)
     }
 }
 
-void CalibrationServiceMock::setProjectService(ProjectServiceMock *project)
+void CalibrationServiceMock::setProjectService(ProjectService *project)
 {
-    // Phase 197: weak reference; ProjectServiceMock owns its own lifetime
+    // Phase 197: weak reference; ProjectService owns its own lifetime
     // (created in BackendContext). We only store the pointer for the tower
     // loadFile() path; no signal wiring is needed because loadFile emits its
     // own loadFinished and we do not block on it here.

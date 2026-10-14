@@ -1,6 +1,6 @@
 #include "core/services/SequentialClearanceCompute.h"
 
-#include "core/services/ProjectServiceMock.h"
+#include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 
 #ifdef HAS_LIBSLIC3R
@@ -89,7 +89,7 @@ namespace
 #endif
 } // namespace
 
-ConfigValues resolveConfigValues(ProjectServiceMock *projectService,
+ConfigValues resolveConfigValues(ProjectService *projectService,
                                  int plateIndex,
                                  const QHash<QString, QVariant> &mergedPreset,
                                  double bedMinX, double bedMinY,
@@ -131,7 +131,7 @@ ConfigValues resolveConfigValues(ProjectServiceMock *projectService,
   return values;
 }
 
-HullCache captureHullCache(ProjectServiceMock *projectService, const ConfigValues &config)
+HullCache captureHullCache(ProjectService *projectService, const ConfigValues &config)
 {
   HullCache cache;
 #ifdef HAS_LIBSLIC3R
@@ -221,7 +221,7 @@ HullCache captureHullCache(ProjectServiceMock *projectService, const ConfigValue
   return cache;
 }
 
-std::vector<std::vector<InstancePose>> collectInstancePoses(ProjectServiceMock *projectService)
+std::vector<std::vector<InstancePose>> collectInstancePoses(ProjectService *projectService)
 {
   std::vector<std::vector<InstancePose>> poses;
 #ifdef HAS_LIBSLIC3R

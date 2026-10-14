@@ -896,7 +896,7 @@ namespace
     {
       // Bed polygons (printable_area / bed_exclude_area): serialize as
       // "x1,y1,x2,y2,..." — the format EditorViewModel's bed-sync and
-      // ProjectServiceMock::arrangeObjects printableArea parsing expect.
+      // ProjectService::arrangeObjects printableArea parsing expect.
       const auto *v = def->get_default_value<Slic3r::ConfigOptionPoints>();
       QString serialized;
       for (const auto &pt : v->values)

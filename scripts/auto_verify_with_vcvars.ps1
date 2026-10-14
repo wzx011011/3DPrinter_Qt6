@@ -861,8 +861,8 @@ if (Test-Path $e2eExe) {
 # OWZX_SLICE_GATE=0 skips; OWZX_SLICE_GATE=force runs regardless of the diff.
 $sliceGateSurface = @(
   'src/core/services/SliceService.*',
-  'src/core/services/ProjectServiceMock.*',
-  'src/core/services/PresetServiceMock.*',
+  'src/core/services/ProjectService.*',
+  'src/core/services/PresetService.*',
   'src/core/viewmodels/PreviewViewModel.*',
   'src/core/viewmodels/EditorViewModel.cpp',
   'src/cli/*',

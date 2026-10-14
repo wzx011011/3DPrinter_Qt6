@@ -27,7 +27,7 @@ import OWzx
 //      removes + re-adds the range through the existing VM channels — the QML
 //      composition of ObjectList::edit_layer_range erase+insert
 //      (GUI_ObjectList.cpp:4717-4745) — carrying the layer_height override
-//      across; the Backend clips overlaps on add (ProjectServiceMock.cpp:
+//      across; the Backend clips overlaps on add (ProjectService.cpp:
 //      6989-7031, call-only per U12 — U07 mutex).
 //   ② Per-row '+' inserts after the row's maxZ via addObjectLayerRange
 //      (upstream add_layer_range_after_current, GUI_ObjectList.cpp:4552-4644:
@@ -143,7 +143,7 @@ CxDialog {
     // move the per-range config): remove + re-add through the existing VM
     // proxies and carry the layer_height override over via setLayerRangeValue.
     // The Backend trims overlaps of neighbouring ranges on add
-    // (ProjectServiceMock.cpp:6989-7031 — call-only per U12).
+    // (ProjectService.cpp:6989-7031 — call-only per U12).
     function applyRangeEdit(rangeIndex, newMin, newMax, editor, revertValue) {
         if (!root.editorVm || root.objectIndex < 0) return
         var carryLH = root.editorVm.layerRangeValue(root.objectIndex, rangeIndex, "layer_height", "")
@@ -332,7 +332,7 @@ CxDialog {
                                 // (GUI_ObjectList.cpp:4552-4644): the new range
                                 // starts at the row's maxZ; the Backend clips
                                 // overlaps with the following ranges
-                                // (ProjectServiceMock.cpp:6989-7031).
+                                // (ProjectService.cpp:6989-7031).
                                 root.editorVm.addObjectLayerRange(root.objectIndex, maxZ, maxZ + 2.0)
                                 root.refreshModel()
                             }

@@ -17,7 +17,7 @@ struct PresetEntry
   bool incompatible = false;
 };
 
-class PresetServiceMock;
+class PresetService;
 
 class PresetListModel final : public QAbstractListModel
 {
@@ -53,13 +53,13 @@ public:
   Q_INVOKABLE int countByCategory(const QString &category) const;
   Q_INVOKABLE int globalIndex(const QString &category, int localIndex) const;
 
-  /// Refresh from PresetServiceMock (populates from loaded vendor presets)
-  void refreshFromService(PresetServiceMock *service);
+  /// Refresh from PresetService (populates from loaded vendor presets)
+  void refreshFromService(PresetService *service);
   /// v5.16 (PSET2-05): refresh with an active printer — entries of the
   /// filament/print categories get `incompatible` computed against it
   /// (upstream PresetBundle::update_compatible). An empty printerName skips
   /// the compatibility pass.
-  void refreshFromService(PresetServiceMock *service, const QString &printerName);
+  void refreshFromService(PresetService *service, const QString &printerName);
 
 signals:
   void countChanged();

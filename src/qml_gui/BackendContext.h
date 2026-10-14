@@ -19,9 +19,9 @@ class QNetworkAccessManager;
 #include "core/ai/AppToolRegistry.h"
 
 class SliceService;
-class PresetServiceMock;
+class PresetService;
 class DeviceServiceMock;
-class ProjectServiceMock;
+class ProjectService;
 class NetworkServiceMock;
 class CalibrationServiceMock;
 class CameraServiceMock;
@@ -111,8 +111,8 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   // Phase 199 (WIZ-01): expose the preset data service to QML so the
   // ConfigWizard can enumerate vendors / printer models / materials /
   // bed surfaces via Q_INVOKABLE. Returned as QObject* to avoid pulling
-  // the PresetServiceMock header into every QML-facing include.
-  Q_PROPERTY(QObject *presetServiceMock READ presetServiceMock CONSTANT)
+  // the PresetService header into every QML-facing include.
+  Q_PROPERTY(QObject *presetService READ presetService CONSTANT)
   // Phase 239 (ENGN-03): expose the slice engine service the same way the
   // other services are exposed (QObject* CONSTANT). Lets QML/tests observe
   // the engine-level validateWarning / export signals directly.
@@ -340,7 +340,7 @@ public:
   explicit BackendContext(QObject *parent = nullptr);
   /// Review P1-2: the slice worker dereferences projectService_ while
   /// ~SliceService joins it. Qt deletes children in creation order, which
-  /// would destroy ProjectServiceMock (created first) BEFORE SliceService
+  /// would destroy ProjectService (created first) BEFORE SliceService
   /// (created second) and leave the joined worker touching a dangling
   /// service. Deleting the slice service explicitly first closes that
   /// window by construction.
@@ -360,7 +360,7 @@ public:
   /// source; installPlugin is a state flip, not a real download.
   QObject *pluginService() const;
   /// Phase 199 (WIZ-01): preset data service for ConfigWizard enumeration.
-  QObject *presetServiceMock() const;
+  QObject *presetService() const;
   QObject *sliceService() const;
   QObject *appSettings() const;
   /// Camera image provider used by Monitor preview surfaces.
@@ -483,7 +483,7 @@ public:
   /// entry type to the owning service's cancel -- NotiTypeSlicingProgress
   /// -> SliceService::cancelSlice, NotiTypeExportOngoing ->
   /// SliceService::cancelExport, NotiTypeProgressBar (3MF import) ->
-  /// ProjectServiceMock::cancelLoad -- then flips the entry to its
+  /// ProjectService::cancelLoad -- then flips the entry to its
   /// "cancelling" feedback text; the service worker reports the terminal
   /// state through its own signal, which retires the entry. A stale entry
   /// (service already idle) is dismissed outright, mirroring upstream's
@@ -502,7 +502,7 @@ public:
   Q_INVOKABLE void postExportOngoing(const QString &stage = {});
   /// U3: 3MF import progress toast (upstream ProgressBarNotification,
   /// NotificationManager.hpp:107 "Progress bar with cancel button"). Fed
-  /// from ProjectServiceMock::loadProgressUpdated -- before U3 the load
+  /// from ProjectService::loadProgressUpdated -- before U3 the load
   /// worker emitted progress only into EditorViewModel::statusText, which
   /// the removed StatusBar used to render, so large imports looked like a
   /// frozen GUI. Dedup-updates the live NotiTypeProgressBar entry.
@@ -588,7 +588,7 @@ public:
   Q_INVOKABLE bool topbarImportModel(const QString &filePath);
   /// Phase 237 (VIEW-02): Import Configs entry (upstream MainFrame::
   /// load_config_file, MainFrame.cpp:3204-3247). Loads a .json preset bundle
-  /// through PresetServiceMock::importBundle and posts an import-result
+  /// through PresetService::importBundle and posts an import-result
   /// notification. Returns true when at least one preset was imported.
   Q_INVOKABLE bool topbarImportConfigs(const QString &filePath);
   Q_INVOKABLE bool topbarSaveProject();
@@ -770,12 +770,12 @@ private:
   void setUpdateCheckRunning(bool running);
   CalibrationServiceMock *calibrationService_ = nullptr;
   SliceService *sliceService_ = nullptr;
-  PresetServiceMock *presetService_ = nullptr;
+  PresetService *presetService_ = nullptr;
   DeviceServiceMock *deviceService_ = nullptr;
   // U11: send-print（FTP+MQTT）桥接状态——printSendUpload* 属性的存储。
   bool m_printSendUploadActive = false;
   int m_printSendUploadProgress = 0;
-  ProjectServiceMock *projectService_ = nullptr;
+  ProjectService *projectService_ = nullptr;
   NetworkServiceMock *networkService_ = nullptr;
   /// Upstream-aligned QML API.
   CameraServiceMock *cameraService_ = nullptr;
@@ -864,7 +864,7 @@ private:
   /// bar with cancel button", NotificationManager.hpp:107). Clicking it
   /// routes through cancelNotificationAction() to the owning service's
   /// cancel (SliceService::cancelSlice/cancelExport,
-  /// ProjectServiceMock::cancelLoad) -- the services always had the flag
+  /// ProjectService::cancelLoad) -- the services always had the flag
   /// paths, this flag is what makes them reachable from QML.
   bool cancellable = false;
   bool requiresConfirm = false; ///< Whether the notification requires confirmation.

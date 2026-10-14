@@ -875,7 +875,7 @@ Item {
             }
             // Phase 237 (VIEW-02): Import Configs (upstream MainFrame::
             // load_config_file, MainFrame.cpp:2330-2332). The Qt6 consumer
-            // surface is the .json preset bundle (PresetServiceMock::
+            // surface is the .json preset bundle (PresetService::
             // importBundle); upstream's zip/orca_* formats have no importer
             // here so they stay out of the filter.
             CxMenuItem {

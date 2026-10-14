@@ -134,16 +134,16 @@ endif()
         # SequentialPrintClearance streams, no Print::apply).
         src/core/services/SequentialClearanceCompute.cpp
         src/core/services/SequentialClearanceCompute.h
-        src/core/services/PresetServiceMock.cpp
-        src/core/services/PresetServiceMock.h
+        src/core/services/PresetService.cpp
+        src/core/services/PresetService.h
         src/core/services/DeviceServiceMock.cpp
         src/core/services/DeviceServiceMock.h
         src/core/services/CameraServiceMock.cpp
         src/core/services/CameraServiceMock.h
         src/core/services/CloudServiceMock.cpp
         src/core/services/CloudServiceMock.h
-        src/core/services/ProjectServiceMock.cpp
-        src/core/services/ProjectServiceMock.h
+        src/core/services/ProjectService.cpp
+        src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp
         src/core/services/UndoRedoManager.h
         src/core/services/UndoCommands.cpp
@@ -199,7 +199,7 @@ endif()
         # driver. Reuses libslic3r's TriangleSelector byte-for-byte (NOT a
         # reimplementation) -- the engine wraps ctor/select_patch/get_facets/
         # serialize/deserialize with a per-volume cache fed by
-        # ProjectServiceMock::volumeMeshTriangleMesh (the aliasing shared_ptr
+        # ProjectService::volumeMeshTriangleMesh (the aliasing shared_ptr
         # that keeps the TriangleMesh alive for the selector's reference).
         # #ifdef HAS_LIBSLIC3R -- TriangleSelector / TriangleMesh only exist
         # there. Pure C++ (no Qt widget dependency) so unit-testable.
@@ -847,7 +847,7 @@ if(BUILD_TESTING)
     )
 
     # PerfBench (PERF): stage-level headless benchmark of the real pipeline
-    # (ProjectServiceMock -> meshData -> PrepareSceneData -> ObjectPicking,
+    # (ProjectService -> meshData -> PrepareSceneData -> ObjectPicking,
     # SliceService, PreviewViewModel gcode parse). Deliberately NOT part of
     # the pass/fail verify gate: run it via scripts/perf/run_stage_bench.ps1
     # and record results in docs/perf-baseline.md (standing rule: re-run the
@@ -914,12 +914,12 @@ if(BUILD_CLI AND BUILD_LIBSLIC3R AND TARGET libslic3r)
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
         src/core/model/PartPlateList.h
-        src/core/services/ProjectServiceMock.cpp
-        src/core/services/ProjectServiceMock.h
+        src/core/services/ProjectService.cpp
+        src/core/services/ProjectService.h
         src/core/services/SliceService.cpp
         src/core/services/SliceService.h
-        src/core/services/PresetServiceMock.cpp
-        src/core/services/PresetServiceMock.h
+        src/core/services/PresetService.cpp
+        src/core/services/PresetService.h
         src/cli/CliRunner.cpp
         src/cli/CliRunner.h
     )

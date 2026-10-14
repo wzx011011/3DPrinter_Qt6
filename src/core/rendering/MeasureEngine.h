@@ -23,7 +23,7 @@
 //   This class wraps `Measure::Measuring` directly. It does NOT reimplement
 //   the plane extraction / feature detection / closest-feature math. The
 //   engine builds one `Measuring` per volume from the Phase 112 ITS
-//   (ProjectServiceMock::volumeMeshIts -- the ITS source injected as a
+//   (ProjectService::volumeMeshIts -- the ITS source injected as a
 //   callable), caches it alongside the Phase 113 SceneRaycaster, and
 //   invalidates on model change (lazy + invalidated on model change).
 //
@@ -155,10 +155,10 @@ struct QtMeasurement
 // MeasureEngine -- per-volume Measure::Measuring cache + get_feature wiring.
 //
 // The ITS source is an injected callable (VolumeMeshItsFn) so this class has
-// no hard dependency on ProjectServiceMock -- it just needs something that
+// no hard dependency on ProjectService -- it just needs something that
 // returns shared_ptr<const indexed_triangle_set> for (object, volume). In
 // production this is the SAME accessor SceneRaycaster (Phase 113) uses
-// (ProjectServiceMock::volumeMeshIts). Reusing one accessor instance across
+// (ProjectService::volumeMeshIts). Reusing one accessor instance across
 // the raycaster and the engine keeps the per-volume ITS identity consistent.
 //
 // CACHE (ME-01): one Measure::Measuring per (objectIndex, volumeIndex),

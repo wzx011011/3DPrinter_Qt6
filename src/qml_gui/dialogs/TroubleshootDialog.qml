@@ -143,8 +143,8 @@ CxDialog {
     // ── Profiles overview counts (upstream create_item_loaded_profiles,
     //    TroubleshootDialog.cpp:55-95) ─────────────────────────────────────
     function refreshProfileCounts() {
-        var psvc = (typeof Backend !== "undefined" && Backend && Backend.presetServiceMock)
-            ? Backend.presetServiceMock : null
+        var psvc = (typeof Backend !== "undefined" && Backend && Backend.presetService)
+            ? Backend.presetService : null
         if (!psvc) {
             profileCounts = null
             return
@@ -170,10 +170,10 @@ CxDialog {
 
     // GetProfilesOverview JSON (TroubleshootDialog.cpp:408-546), condensed to
     // the overview counts plus the per-collection enabled/user name lists
-    // available from PresetServiceMock.
+    // available from PresetService.
     function buildOverviewJson() {
-        var psvc = (typeof Backend !== "undefined" && Backend && Backend.presetServiceMock)
-            ? Backend.presetServiceMock : null
+        var psvc = (typeof Backend !== "undefined" && Backend && Backend.presetService)
+            ? Backend.presetService : null
         if (!psvc || !profileCounts)
             return "{}"
         var printerModel = psvc.selectedPrinterModel()
