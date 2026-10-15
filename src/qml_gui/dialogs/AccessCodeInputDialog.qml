@@ -6,22 +6,15 @@ import OWzx
 
 // v2.7 P2-A: Bambu LAN access code input dialog.
 // Opened before connecting to a printer that has no access code set.
-Dialog {
+//
+// X2 (audit 2026-10-10 ④): the bare Dialog with self-drawn chrome joins
+// CxDialog -- the app's single dialog-chrome contract (header, 1px
+// separator, ✕ close, Esc policy, Overlay centering) replaces the private
+// background/hand-rolled centering, exactly like the other migrated
+// dialogs. The two-line header (icon + title + subtitle) maps to the
+// CxDialog titleIcon/dialogTitle header plus a content subtitle row.
+CxDialog {
     id: root
-    modal: true
-    anchors.centerIn: parent
-    width: 420
-    // manual mode carries one extra field row; +20 over the old 420/360 to fit
-    // the persistent two-line hint below the access code field (upstream
-    // ConnectPrinter.cpp:53-59)
-    height: manualAddMode ? 440 : 380
-    padding: 0
-    background: Rectangle {
-        color: Theme.bgPanel
-        radius: Theme.radiusLG
-        border.width: 1
-        border.color: Theme.borderSubtle
-    }
 
     property string deviceIp: ""        // 预填 IP（从设备列表传入）
     property string deviceName: ""      // 设备名（显示用）
@@ -35,39 +28,34 @@ Dialog {
     signal connectRequested(string ip, string accessCode, int port)
     signal manualAddRequested(string name, string ip, string accessCode, int port)
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: Theme.spacingXXL
-        spacing: Theme.spacingXL
-        // 标题
-        RowLayout {
+    dialogTitle: {
+        if (root.manualAddMode) return qsTr("手动添加设备")
+        if (deviceName.length > 0) return qsTr("连接到 %1").arg(deviceName)
+        return qsTr("连接 Bambu 打印机")
+    }
+    titleIcon: "\u{1F5A5}\u{FE0F}"
+
+    width: 420
+    // manual mode carries one extra field row; +20 over the old 420/360 to fit
+    // the persistent two-line hint below the access code field (upstream
+    // ConnectPrinter.cpp:53-59). +44 = the CxDialog header (the former
+    // in-content title row moved into it).
+    height: manualAddMode ? 470 : 410
+
+    contentItem: ColumnLayout {
+        width: root.width - 32
+        spacing: Theme.spacingMD
+
+        // Subtitle line (the former in-content title block's second row;
+        // the title itself lives in the CxDialog header now)
+        Text {
             Layout.fillWidth: true
-            spacing: Theme.spacingLG
-            Text {
-                text: "\u{1F5A5}\u{FE0F}"  // 🖥️ 打印机
-                font.pixelSize: Theme.fontSizeDisplay
-            }
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spacingXS
-                Text {
-                    text: {
-                        if (root.manualAddMode) return qsTr("手动添加设备")
-                        if (deviceName.length > 0) return qsTr("连接到 %1").arg(deviceName)
-                        return qsTr("连接 Bambu 打印机")
-                    }
-                    color: Theme.textPrimary
-                    font.pixelSize: Theme.fontSizeXL
-                    font.bold: true
-                }
-                Text {
-                    text: root.manualAddMode
-                          ? qsTr("输入设备名称、IP 与局域网访问码以加入设备列表")
-                          : qsTr("输入局域网访问码以建立 MQTT 连接")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeSM
-                }
-            }
+            text: root.manualAddMode
+                  ? qsTr("输入设备名称、IP 与局域网访问码以加入设备列表")
+                  : qsTr("输入局域网访问码以建立 MQTT 连接")
+            color: Theme.textSecondary
+            font.pixelSize: Theme.fontSizeSM
+            wrapMode: Text.WordWrap
         }
 
         // monitor-6: device name (manual add only)
@@ -184,7 +172,7 @@ Dialog {
             }
             CxButton {
                 text: root.manualAddMode ? qsTr("添加") : qsTr("连接")
-                highlighted: true
+                cxStyle: CxButton.Style.Primary
                 enabled: ipField.text.trim().length > 0 &&
                          accessCodeField.text.trim().length > 0 &&
                          (!root.manualAddMode || nameField.text.trim().length > 0)

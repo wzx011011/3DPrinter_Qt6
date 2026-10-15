@@ -628,19 +628,15 @@ CxDialog {
 
             // U03: hover branch uses the token hover surface and the
             // semantic error text token (was a dead error-subtle fill with
-            // a hardcoded "#ff9090")
-            Rectangle {
-                width: 72; height: 28; radius: Theme.radiusSM
-                color: clearHov.containsMouse ? Theme.bgHover : "transparent"
-                border.color: Theme.statusError
-                border.width: 1
-                Text { anchors.centerIn: parent; text: qsTr("清空"); color: Theme.statusError; font.pixelSize: Theme.fontSizeSM }
-                MouseArea {
-                    id: clearHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        // Phase 171 (CL-01): confirm before clearing (was firing immediately).
-                        clearConfirm.open()
-                    }
+            // a hardcoded "#ff9090"). X2: the hand-drawn destructive ghost
+            // is the system CxButton GhostDanger variant.
+            CxButton {
+                text: qsTr("清空")
+                compact: true
+                cxStyle: CxButton.Style.GhostDanger
+                onClicked: {
+                    // Phase 171 (CL-01): confirm before clearing (was firing immediately).
+                    clearConfirm.open()
                 }
             }
         }

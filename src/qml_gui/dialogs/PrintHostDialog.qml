@@ -254,16 +254,22 @@ CxDialog {
                         text = trimmed
                 }
             }
-            ParameterButton {
+            CxButton {
                 // m_printhost_browse_btn: shown iff has_auto_discovery (:598).
+                // X2: system CxButton (was the ParameterButton copy).
                 visible: root.hostCaps.browse
-                label: qsTr("浏览…")  // _L("Browse") + dots :153
+                text: qsTr("浏览…")  // _L("Browse") + dots :153
+                compact: true
+                cxStyle: CxButton.Style.Secondary
                 iconSource: "qrc:/qml/assets/icons/printer_host_browser.svg"
                 onClicked: discoveryPopup.open()
             }
-            ParameterButton {
+            CxButton {
                 // m_printhost_test_btn: "Login/Test" for cloud hosts (:509).
-                label: root.hostCaps.cloud ? qsTr("登录/测试") : qsTr("测试")
+                // X2: system CxButton (was the ParameterButton copy).
+                text: root.hostCaps.cloud ? qsTr("登录/测试") : qsTr("测试")
+                compact: true
+                cxStyle: CxButton.Style.Secondary
                 iconSource: "qrc:/qml/assets/icons/printer_host_test.svg"
                 // Enable(!print_host.empty() && can_test) :596; the probe is
                 // async so the button also parks while a test is in flight.
@@ -279,12 +285,15 @@ CxDialog {
                                           root.showUserPasswordRows ? passwordField.text : "")
                 }
             }
-            ParameterButton {
+            CxButton {
                 // m_printhost_logout_btn: created with an empty icon (:268)
                 // and shown iff is_logged_in (:599) -- only SimplyPrint /
                 // 3DPrinterOS report it (and only with stored credentials).
+                // X2: system CxButton (was the ParameterButton copy).
                 visible: root.hostCaps.login && apiKeyField.text.length > 0
-                label: qsTr("退出登录")
+                text: qsTr("退出登录")
+                compact: true
+                cxStyle: CxButton.Style.Secondary
                 onClicked: logoutConfirm.open()
             }
         }
@@ -381,11 +390,13 @@ CxDialog {
                 // Always seed from the config, even when empty (:656-661).
                 model: [""]
             }
-            ParameterButton {
+            CxButton {
                 // m_printhost_port_browse_btn "Refresh …" (:290-297); shown
-                // together with the line (:723).
+                // together with the line (:723). X2: system CxButton.
                 visible: root.showPortRow
-                label: qsTr("刷新…")  // _L("Refresh") + dots :291
+                text: qsTr("刷新…")  // _L("Refresh") + dots :291
+                compact: true
+                cxStyle: CxButton.Style.Secondary
                 iconSource: "qrc:/qml/assets/icons/monitor_signal_strong.svg"
                 onClicked: {
                     // update_printers (:732-758) mock: OWzx has no Repetier /
@@ -415,10 +426,12 @@ CxDialog {
                 font.pixelSize: Theme.fontSizeSM
                 enabled: root.caRowEnabled
             }
-            ParameterButton {
+            CxButton {
                 // m_printhost_cafile_browse_btn; disabled for SimplyPrint
-                // together with the field (:686-692).
-                label: qsTr("浏览…")
+                // together with the field (:686-692). X2: system CxButton.
+                text: qsTr("浏览…")
+                compact: true
+                cxStyle: CxButton.Style.Secondary
                 iconSource: "qrc:/qml/assets/icons/monitor_signal_strong.svg"
                 enabled: root.caRowEnabled
                 onClicked: caFileDialog.open()
@@ -522,47 +535,10 @@ CxDialog {
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
-    // Upstream Button ButtonType::Parameter (Button.cpp:206-211): min 120x26,
-    // corner radius 4, 1px border, Body_14 label, optional 16px icon.
-    component ParameterButton: Rectangle {
-        id: paramButton
-        property string label: ""
-        property url iconSource: ""
-        signal clicked()
-        implicitWidth: Math.max(120, paramContent.implicitWidth + 24)  // padding 12x8
-        implicitHeight: 26
-        radius: Theme.radiusSM
-        color: paramMouse.containsMouse ? Theme.bgHover : Theme.bgPanel
-        border.width: 1
-        border.color: paramMouse.containsMouse ? Theme.borderStrong : Theme.borderDefault
-        opacity: enabled ? 1.0 : 0.45
-        Row {
-            id: paramContent
-            anchors.centerIn: parent
-            spacing: 6
-            Image {
-                visible: paramButton.iconSource !== ""
-                source: paramButton.iconSource
-                sourceSize.width: 16
-                sourceSize.height: 16
-                fillMode: Image.PreserveAspectFit
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            Text {
-                text: paramButton.label
-                color: Theme.textPrimary
-                font.pixelSize: Theme.fontSizeLG  // Label::Body_14
-                anchors.verticalCenter: parent.verticalCenter
-            }
-        }
-        MouseArea {
-            id: paramMouse
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: paramButton.clicked()
-        }
-    }
+    // X2 (audit 2026-10-10 ④): the private ParameterButton copy (Rectangle +
+    // MouseArea, an upstream ButtonType::Parameter stand-in) is retired --
+    // the browse/test/logout buttons are system CxButtons; the optional
+    // leading icon is the CxButton iconSource slot added in X2 batch 1.
 
     // ── Discovery picker (Browse …, :151-208) ─────────────────────────────
     // Upstream opens BonjourDialog / CrealityDiscoveryDialog / the Flashforge

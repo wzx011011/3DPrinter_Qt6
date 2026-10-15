@@ -2,6 +2,7 @@ import QtQuick
 pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Dialogs
+import QtQuick.Layouts
 import OWzx
 
 Item {
@@ -1114,20 +1115,47 @@ Item {
         }
     }
 
-    Dialog {
+    // X2 (audit 2026-10-10 ④): the last bare Dialog in the context-menu
+    // family (self-drawn chrome + stock Ok|Cancel buttons) joins CxDialog --
+    // the app's single dialog-chrome contract -- with system CxButtons.
+    CxDialog {
         id: instanceCountDialog
-        modal: true
-        title: qsTr("Set number of instances")
-        standardButtons: Dialog.Ok | Dialog.Cancel
-        onAccepted: {
-            if (root.editorVm)
-                root.editorVm.setSelectedInstanceCount(instanceCount.value)
-        }
-        CxSpinBox {
-            id: instanceCount
-            anchors.fill: parent
-            from: 1
-            to: 1000
+        dialogTitle: qsTr("Set number of instances")
+        width: 320
+        height: 190
+
+        contentItem: ColumnLayout {
+            width: instanceCountDialog.width - 32
+            spacing: Theme.spacingMD
+
+            CxSpinBox {
+                id: instanceCount
+                Layout.fillWidth: true
+                from: 1
+                to: 1000
+            }
+
+            Item { Layout.fillHeight: true }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingMD
+                Item { Layout.fillWidth: true }
+                CxButton {
+                    text: qsTr("取消")
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: instanceCountDialog.reject()
+                }
+                CxButton {
+                    text: qsTr("确定")
+                    cxStyle: CxButton.Style.Primary
+                    onClicked: {
+                        if (root.editorVm)
+                            root.editorVm.setSelectedInstanceCount(instanceCount.value)
+                        instanceCountDialog.accept()
+                    }
+                }
+            }
         }
         // G-07: refresh the spin box at open time — the one-shot declarative
         // binding captured objectInstanceCount() when the menu was built, so

@@ -284,13 +284,13 @@ CxDialog {
                 }
             }
 
-            // Confirm button
-            Rectangle {
+            // Confirm button (X2: hand-drawn Rectangle+MouseArea → CxButton
+            // Primary)
+            CxButton {
                 Layout.alignment: Qt.AlignVCenter
-                width: 100; height: 30; radius: Theme.radiusSM
-                color: okHov.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                Text { anchors.centerIn: parent; text: qsTr("确认"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
-                MouseArea { id: okHov; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.close() }
+                text: qsTr("确认")
+                cxStyle: CxButton.Style.Primary
+                onClicked: root.close()
             }
         }
     }

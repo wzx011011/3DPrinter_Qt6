@@ -189,10 +189,10 @@ Item {
         }
     }
 
-    // v2.7 P2-A: Bambu LAN access code input dialog
+    // v2.7 P2-A: Bambu LAN access code input dialog (X2: CxDialog chrome --
+    // centering comes from the CxDialog default, no per-instance anchors).
     AccessCodeInputDialog {
         id: accessCodeDialog
-        anchors.centerIn: parent
         onConnectRequested: function(ip, code, port) {
             root.monitorVm.setSelectedDeviceAccessCode(code, port);
             root.monitorVm.connectDevice(0);
@@ -206,7 +206,6 @@ Item {
     // like the seeded discovery flow and comes online at the next scan.
     AccessCodeInputDialog {
         id: manualAddDialog
-        anchors.centerIn: parent
         manualAddMode: true
         onManualAddRequested: function(name, ip, code, port) {
             if (root.monitorVm.addManualDevice(name, ip, code, port)) {

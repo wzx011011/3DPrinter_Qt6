@@ -10,13 +10,16 @@ import OWzx
 // separator line (cpp:33-36), a full-height left selector panel of 150x28
 // square tab buttons (cpp:39-43, 116-126) and a scrolling shortcuts page on
 // the right (cpp:58-64, 338-365). Content area is 1032x501 = 150 + 12 + 870
-// wide and 1 + 500 high, centered on the parent (cpp:77-78).
+// wide and 1 + 500 high.
 //
-// The 5 selector tabs mirror the upstream page order (cpp:45-49 bound via
-// cpp:67-71): "Global" -> Global shortcuts, "Prepare" -> Plater, "Toolbar" ->
-// Gizmo, "Objects list" -> Objects List, "Preview" -> Preview. The camera
-// preset rows therefore live in the Prepare tab (upstream Plater page,
-// cpp:242-248) and the Toolbar tab shows the gizmo keys (cpp:276-282).
+// X2 (audit 2026-10-10 ④): the bare Dialog with self-drawn chrome joins
+// CxDialog -- the standard dialog header (title + ✕ + Esc policy + Overlay
+// centering) replaces the private chrome, +44px over the upstream content
+// geometry; the left selector's hand-drawn Rectangle+MouseArea tabs are
+// system CxButton Segment pills (the accent-capsule selected state replaces
+// the accent-fill tab fill). The camera preset rows therefore live in the
+// Prepare tab (upstream Plater page, cpp:242-248) and the Toolbar tab shows
+// the gizmo keys (cpp:276-282).
 //
 // Presentation only: this dialog documents the user-visible shortcuts. The
 // canvas letter/slider keys (A/Q/M/R/S/F/.../arrows/PgUp/PgDn) are handled by
@@ -37,16 +40,14 @@ import OWzx
 // modifier, the Objects List rename pair and the Preview Up/Down /
 // Ctrl+wheel slider rows.
 
-Dialog {
+CxDialog {
     id: root
-    title: qsTr("Keyboard Shortcuts")
-    modal: true
-    anchors.centerIn: parent
+    dialogTitle: qsTr("Keyboard Shortcuts")
+
     // Upstream content geometry (KBShortcutsDialog.cpp:53-64, Fit() +
-    // CenterOnParent() at :77-78).
+    // CenterOnParent() at :77-78) + the CxDialog header height.
     width: 1032
-    height: 501
-    padding: 0
+    height: 501 + Theme.dialogHeaderHeight
 
     // Group selector model aligned with the upstream tab labels
     // (KBShortcutsDialog.cpp:45-49); the ids keep the historical names.
@@ -228,20 +229,6 @@ Dialog {
         return []
     }
 
-    background: Rectangle {
-        color: Theme.bgPanel
-
-        // Full-width 1px top separator line (upstream m_top_line, cpp:33-36);
-        // the neutral border token stands in for upstream RGB(166,169,170).
-        Rectangle {
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 1
-            color: Theme.borderDefault
-        }
-    }
-
     contentItem: Item {
         implicitWidth: 1032
         implicitHeight: 501
@@ -252,14 +239,15 @@ Dialog {
         Rectangle {
             id: leftPanel
             anchors.top: parent.top
-            anchors.topMargin: 1
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             width: 150
             color: Theme.bgElevated
 
             // 20 DIP above the first button (upstream cpp:43), then flush
-            // 150x28 square buttons (cpp:116).
+            // 150x28 square tab buttons (cpp:116). X2: system CxButton
+            // Segment pills (was Rectangle+MouseArea with a hand-painted
+            // accent fill).
             Column {
                 anchors.top: parent.top
                 anchors.topMargin: 20
@@ -268,33 +256,14 @@ Dialog {
 
                 Repeater {
                     model: root.groups
-                    delegate: Rectangle {
+                    delegate: CxButton {
                         required property var modelData
                         width: 150
                         height: 28
-                        radius: 0
-                        color: root.currentGroup === modelData.id ? Theme.accent : "transparent"
-                        opacity: groupMouse.containsMouse && root.currentGroup !== modelData.id ? 0.8 : 1.0
-
-                        Text {
-                            // 22px left indent, vertically centered
-                            // (upstream cpp:120-126); 13px label switching
-                            // between body and bold weights on selection.
-                            x: 22
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.name
-                            color: root.currentGroup === modelData.id ? Theme.textOnAccent : Theme.textSecondary
-                            font.pixelSize: Theme.fontSize13
-                            font.bold: root.currentGroup === modelData.id
-                        }
-
-                        MouseArea {
-                            id: groupMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.currentGroup = modelData.id
-                        }
+                        cxStyle: CxButton.Style.Segment
+                        selected: root.currentGroup === modelData.id
+                        text: modelData.name
+                        onClicked: root.currentGroup = modelData.id
                     }
                 }
             }
@@ -305,7 +274,6 @@ Dialog {
         // 338-365).
         ScrollView {
             anchors.top: parent.top
-            anchors.topMargin: 1
             anchors.left: leftPanel.right
             anchors.leftMargin: 12
             anchors.right: parent.right

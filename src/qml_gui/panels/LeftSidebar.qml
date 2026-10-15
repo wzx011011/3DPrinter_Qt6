@@ -171,22 +171,39 @@ Rectangle {
                 // (rename/delete, upstream preset combo right-click menu).
                 // Row actions reveal on hover (upstream hides the printer
                 // edit button until hover, Plater.cpp:2568-2570,2636-2646).
-                PixelIconButton {
-                    hoverShow: true
+                // X2: the private PixelIconButton copy (a CxIconButton
+                // clone) is gone -- these are system CxIconButtons; the
+                // hover-reveal is expressed on the instance (opacity only:
+                // a disabled control never reports hovered, so the click
+                // gate of the old copy collapses to invisibility+hover).
+                CxIconButton {
+                    buttonSize: 24
+                    iconSize: 13
+                    cxStyle: CxIconButton.Style.Surface
+                    opacity: hovered ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
                     iconSource: "qrc:/qml/assets/icons/dots.svg"
                     toolTipText: qsTr("预设操作")
                     onClicked: root.editPreset(2, root.configVm ? root.configVm.currentPrinterPreset : "")
                 }
 
-                PixelIconButton {
-                    hoverShow: true
+                CxIconButton {
+                    buttonSize: 24
+                    iconSize: 13
+                    cxStyle: CxIconButton.Style.Surface
+                    opacity: hovered ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
                     iconSource: "qrc:/qml/assets/icons/settings.svg"
                     toolTipText: qsTr("编辑打印机预设")
                     onClicked: Backend.forwardSettingsRequest("printer")
                 }
 
-                PixelIconButton {
-                    hoverShow: true
+                CxIconButton {
+                    buttonSize: 24
+                    iconSize: 13
+                    cxStyle: CxIconButton.Style.Surface
+                    opacity: hovered ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
                     iconSource: "qrc:/qml/assets/icons/send-2.svg"
                     toolTipText: qsTr("打印机连接")
                     onClicked: Backend.showPrintHostDialog()
@@ -402,7 +419,11 @@ Rectangle {
                     // The upstream menu_filament bitmap is absent from the
                     // project set; the dots glyph (same affordance as the
                     // printer row's preset menu) stands in.
-                    PixelIconButton {
+                    // X2: system CxIconButton (was the PixelIconButton copy).
+                    CxIconButton {
+                        buttonSize: 24
+                        iconSize: 13
+                        cxStyle: CxIconButton.Style.Surface
                         iconSource: "qrc:/qml/assets/icons/dots.svg"
                         toolTipText: qsTr("点击编辑预设")
                         onClicked: root.editPreset(1, root.configVm
@@ -474,16 +495,21 @@ Rectangle {
                 // pair; search opens the find dialog instead of a permanent
                 // search field. The upstream copy_menu bitmap is absent from
                 // the project set; the copy glyph stands in.
-                PixelIconButton {
-                    iconSource: "qrc:/qml/assets/icons/copy.svg"
+                // X2: system CxIconButtons (was the PixelIconButton copy).
+                CxIconButton {
+                    buttonSize: 24
                     iconSize: 16
+                    cxStyle: CxIconButton.Style.Surface
+                    iconSource: "qrc:/qml/assets/icons/copy.svg"
                     toolTipText: qsTr("预设操作")
                     onClicked: root.editPreset(0, root.configVm ? root.configVm.currentPrintPreset : "")
                 }
 
-                PixelIconButton {
-                    iconSource: "qrc:/qml/assets/icons/search.svg"
+                CxIconButton {
+                    buttonSize: 24
                     iconSize: 16
+                    cxStyle: CxIconButton.Style.Surface
+                    iconSource: "qrc:/qml/assets/icons/search.svg"
                     toolTipText: qsTr("搜索设置")
                     onClicked: root.openParamsSearch()
                 }
@@ -1053,7 +1079,7 @@ Rectangle {
             id: processScopeBar
             spacing: 6
 
-            PixelSegment {
+            ScopeSegment {
                 text: qsTr("全局")
                 // M2.5/G3 fix (2026-10-14, Qt 6.12): bare `a && b` yields
                 // undefined when a is undefined, and Qt 6.12 now WARNS on
@@ -1066,7 +1092,7 @@ Rectangle {
                 onClicked: if (root.configVm) root.configVm.requestGlobalScope()
             }
 
-            PixelSegment {
+            ScopeSegment {
                 text: qsTr("对象")
                 selected: !!root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
                 onClicked: {
@@ -1077,7 +1103,7 @@ Rectangle {
                 }
             }
 
-            PixelSegment {
+            ScopeSegment {
                 text: qsTr("盘")
                 // !! guard: same Qt 6.12 undefined-to-bool warning as above.
                 selected: !!root.configVm && root.configVm.settingsScope === "plate"
@@ -1199,9 +1225,13 @@ Rectangle {
 
             Repeater {
                 model: headerRoot.extraActions
-                delegate: PixelIconButton {
+                // X2: system CxIconButton (was the PixelIconButton copy).
+                delegate: CxIconButton {
                     required property int index
                     required property var modelData
+                    buttonSize: 24
+                    iconSize: 13
+                    cxStyle: CxIconButton.Style.Surface
                     visible: modelData.visible !== false
                     iconSource: modelData.icon
                     toolTipText: modelData.tooltip
@@ -1209,7 +1239,10 @@ Rectangle {
                 }
             }
 
-            PixelIconButton {
+            CxIconButton {
+                buttonSize: 24
+                iconSize: 13
+                cxStyle: CxIconButton.Style.Surface
                 visible: headerRoot.actionIcon !== ""
                 iconSource: headerRoot.actionIcon
                 toolTipText: headerRoot.actionToolTip
@@ -1219,92 +1252,19 @@ Rectangle {
         }
     }
 
-    component PixelIconButton: Rectangle {
-        id: iconButtonRoot
-        property url iconSource: ""
-        property string toolTipText: ""
-        property bool hoverShow: false
-        property int buttonSize: 24
-        property int iconSize: 13
-        signal clicked()
-
-        Layout.preferredWidth: iconButtonRoot.buttonSize
-        Layout.preferredHeight: iconButtonRoot.buttonSize
-        implicitWidth: iconButtonRoot.buttonSize
-        implicitHeight: iconButtonRoot.buttonSize
-        radius: Theme.radiusSM
-        color: !enabled ? root.fieldSurface
-              : iconMA.containsMouse ? Theme.bgPressed
-              : root.controlSurface
-        border.width: 1
-        border.color: root.dividerColor
-        // hoverShow mirrors upstream printer edit buttons that appear only
-        // while the row is hovered (Plater.cpp:2636-2646); space stays
-        // reserved so the row layout does not jump.
-        opacity: !enabled ? 0.45
-              : hoverShow ? (hoverHandler.hovered ? 1.0 : 0.0)
-              : 1.0
-        Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
-
-        HoverHandler {
-            id: hoverHandler
-            enabled: iconButtonRoot.hoverShow
-        }
-
-        Image {
-            anchors.centerIn: parent
-            width: iconButtonRoot.iconSize
-            height: iconButtonRoot.iconSize
-            source: iconButtonRoot.iconSource
-            fillMode: Image.PreserveAspectFit
-            opacity: 0.8
-        }
-
-        MouseArea {
-            id: iconMA
-            anchors.fill: parent
-            hoverEnabled: true
-            enabled: iconButtonRoot.enabled && (!iconButtonRoot.hoverShow || hoverHandler.hovered)
-            cursorShape: Qt.PointingHandCursor
-            onClicked: iconButtonRoot.clicked()
-        }
-
-        ToolTip.visible: iconMA.containsMouse && iconButtonRoot.toolTipText.length > 0
-        ToolTip.text: iconButtonRoot.toolTipText
-        ToolTip.delay: 400
-    }
+    // X2 (audit 2026-10-10 ④): the private PixelIconButton component (a
+    // near-verbatim CxIconButton clone flagged by the audit) is retired --
+    // the sidebar row/header icon buttons are system CxIconButtons now, and
+    // the scope pills below are system CxButton Segments instead of the
+    // private PixelSegment pseudo-segment.
 
     // Inline scope pill (ref: small Global/Objects pills inside the title
-    // row, selected = accent fill + white text).
-    component PixelSegment: Rectangle {
-        id: segmentRoot
-        property string text: ""
-        property bool selected: false
-        signal clicked()
-
-        implicitWidth: segmentLabel.implicitWidth + 20
-        implicitHeight: 22
-        radius: Theme.radiusXL
-        color: segmentRoot.selected ? Theme.accent : root.sectionSurface
-        border.width: 1
-        border.color: segmentRoot.selected ? Theme.accent : root.dividerColor
-        opacity: enabled ? 1.0 : 0.45
-
-        Text {
-            id: segmentLabel
-            anchors.centerIn: parent
-            text: segmentRoot.text
-            color: segmentRoot.selected ? Theme.textOnAccent : root.mutedText
-            font.pixelSize: Theme.fontSizeSM
-            font.bold: segmentRoot.selected
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            enabled: segmentRoot.enabled
-            cursorShape: Qt.PointingHandCursor
-            onClicked: segmentRoot.clicked()
-        }
+    // row). X2: system CxButton Segment pills (was the private PixelSegment
+    // pseudo-segment) -- same selected = accent capsule + white text look,
+    // sourced from the shared control.
+    component ScopeSegment: CxButton {
+        compact: true
+        cxStyle: CxButton.Style.Segment
     }
 
     // U14: one label/value pair of the persistent Sliced Info card. The row
