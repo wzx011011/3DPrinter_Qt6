@@ -99,8 +99,12 @@ CxDialog {
           if (dev && dev.online === true)
             entries.push({
               filteredIndex: i,
-              name: dev.name || dev.model || qsTr("未知设备"),
-              status: dev.status || ""
+              // X1 演示披露: 种子假设备条目（编造 IP）在名称上显式标注，
+              // 且绝不进入真实 FTP/MQTT 发送链路（服务侧同样拒绝）。
+              name: (dev.name || dev.model || qsTr("未知设备"))
+                    + (dev.demo === true ? qsTr("（演示）") : ""),
+              status: dev.status || "",
+              demo: dev.demo === true
             })
         }
       }
@@ -249,23 +253,28 @@ CxDialog {
       // U11: enter the sending page BEFORE the call so a synchronous send
       // failure (missing gcode, busy, publish rejected) is consumed by the
       // onPrintSendFinished handler below with the dialog already listening.
-      // With a real FTP upload in flight (Backend.printSendUploadActive) the
-      // gauge follows Backend.printSendUploadProgress; the local animation
-      // stays only for the disclosed demo path (MQTT not connected).
+      // X1: 路由按所选条目的 provenance 分流——demo 条目走显式演示动画
+      // （服务侧 sendPrintViaFtp 对 demo 条目同样拒绝，双保险），真实设备
+      // 只走真实 FTP 上传 + MQTT 打印命令通道：失败经 Backend 桥回失败面板，
+      // 无 MQTT 连接时不再播演示动画掩盖失败。
       sendFailed = false
       sendProgress = 0
       sendState = 1
-      root.monitorVm.startPrint(printerEntries[printerCombo.currentIndex].filteredIndex,
-                                root.editorVm.lastGcodePath)
+      const entry = printerEntries[printerCombo.currentIndex]
+      root.monitorVm.startPrint(entry.filteredIndex, root.editorVm.lastGcodePath)
       if (typeof Backend !== "undefined" && Backend && Backend.printSendUploadActive) {
         // Real upload in flight -- gauge/terminal state arrive via Backend.
+      } else if (entry.demo === true) {
+        // Disclosed demo entry: local animation only; its "printing" state is
+        // part of the disclosed demo data (never an FTP/MQTT target).
+        sendAnim.restart()
       } else if (root.monitorVm.mqttConnected) {
         // Real path engaged but nothing is in flight: the attempt failed
         // synchronously and onPrintSendFinished already returned the dialog
         // to prepare with the failed-info panel; do not fake the animation.
-      } else {
-        sendAnim.restart()
       }
+      // (real device, no MQTT): startPrint 已发 sendPrintFailed —— Backend 桥
+      // 弹失败 toast 且 printSendFinished 把对话框带回 prepare + 失败面板。
     }
 
     // Upstream EVT_PRINT_JOB_CANCEL -> on_print_job_cancel -> prepare_mode
@@ -875,13 +884,13 @@ CxDialog {
         // Bottom margin (SendToPrinter.cpp:578)
         Item { Layout.preferredHeight: 13 }
 
-        // R-P1.E disclosure: the device list is still mock-fed; the send itself
-        // is real over MQTT (FTP upload + print command, U11) and falls back to
-        // the local demo animation only while no MQTT Backend is connected.
+        // X1 disclosure: 假设备条目显式标注"（演示）"且绝不作为 FTP/MQTT
+        // 目标 host；真实打印机（手动添加）的发送走真实 FTP 上传与打印命令
+        // 通道（失败会明确提示），无 MQTT 连接时不伪装发送成功。
         Text {
             Layout.fillWidth: true
             Layout.leftMargin: 16; Layout.rightMargin: 16
-            text: qsTr("设备列表为本地模拟数据；MQTT 连接后发送走真实 FTP 上传与打印命令通道（失败会明确提示），未连接时为本地演示动画。")
+            text: qsTr("标注（演示）的设备条目为本地模拟数据，不会被用作真实发送目标；真实打印机发送走 FTP 上传与 MQTT 打印命令通道（失败会明确提示），未连接时不伪装发送。")
             color: Theme.textDisabled
             font.pixelSize: Theme.fontSizeXS
             horizontalAlignment: Text.AlignHCenter

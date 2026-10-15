@@ -52,6 +52,10 @@ struct MockDevice
   int     totalLayerNum       = 0;  ///< total_layer_num（总层数）
   int     currentLayerNum     = 0;  ///< layer_num（当前层）
   int     remainingTime       = 0;  ///< mc_remaining_time（剩余分钟）
+  // X1 演示披露：种子假设备（编造的 192.168.1.x 条目）= true；手动添加的
+  // 真实打印机 = false。真发送链路（sendPrintViaFtp）拒绝把 demo 条目当
+  // FTP/MQTT 目标 host。
+  bool    demo                = true;
 };
 
 /// HMS notification item (对齐上游 DeviceManager HMSItem / HMSPanel HMSNotifyItem)
@@ -73,7 +77,73 @@ struct MockHmsItem
         msgCode(code), alreadyRead(read), message(msg), wikiUrl(wiki) {}
 };
 
-class DeviceServiceMock final : public QObject
+/// X1（审计④章）：Device 数据面窄接口——设备清单 / 凭据 / 任务发送 / 遥测。
+///
+/// 刻意不搬 300+ Q_INVOKABLE 上帝面（审计风险项：接口切分不当会把上帝对象
+/// 固化成上帝接口）——接口只收编真实后端（bambu_networking / 局域网打印机栈）
+/// 即将到达的数据面角色；AMS/HMS/灯光/打印模拟等展示面留在具体类。迁移评估
+/// 结论：mock→真的替换从"原位改写 12.5k 行具体类"变为"实现既有窄接口 +
+/// 切换装配"，BackendContext 保持唯一装配点，测试以本接口注入替身（注入缝，
+/// 替代锁生产 mock 假时序的旧写法）。
+class IDeviceDataPlane : public QObject
+{
+  Q_OBJECT
+
+public:
+  explicit IDeviceDataPlane(QObject *parent = nullptr) : QObject(parent) {}
+  ~IDeviceDataPlane() override = default;
+
+  // ── 设备清单 ──
+  virtual int deviceCount() const = 0;
+  /// filteredIndex → 设备数据（含 demo 披露键，见 isDemoDevice）
+  virtual QVariantMap deviceAt(int filteredIndex) const = 0;
+  virtual void selectDevice(int filteredIndex) = 0;
+  /// 手动添加设备（真实目标：用户录入的 IP + access code）
+  virtual bool addManualDevice(const QString &name, const QString &ip,
+                               const QString &accessCode, int port = 8883) = 0;
+  /// X1 演示披露：种子假设备条目（编造的 192.168.1.x 等）返回 true。
+  /// 真发送链路以本旗标拒绝把假设备当 FTP/MQTT 目标 host。
+  virtual bool isDemoDevice(int filteredIndex) const = 0;
+
+  // ── 凭据 ──
+  virtual QString selectedDeviceAccessCode() const = 0;
+  virtual int selectedDeviceMqttPort() const = 0;
+  virtual void setSelectedDeviceAccessCode(const QString &accessCode, int port = 8883) = 0;
+
+  // ── 任务发送（真链路：FTP 上传 + MQTT 打印命令）──
+  /// U11 契约：返回 false 时一定伴随 sendPrintFailed（原因可读），绝不静默
+  /// 降级成 mock 打印态。
+  virtual bool sendPrintViaFtp(int filteredIndex, const QString &gcodePath) = 0;
+  virtual void cancelSendPrint() = 0;
+  virtual bool sendPrintInFlight() const = 0;
+
+  // ── 遥测 ──
+  virtual bool selectedDeviceOnline() const = 0;
+  virtual QString selectedDeviceStatus() const = 0;
+  virtual QString selectedDeviceIp() const = 0;
+  virtual bool isMqttConnected() const = 0;
+  virtual int selectedDeviceTemperature() const = 0;
+  virtual int selectedDeviceBedTemperature() const = 0;
+  virtual int selectedDeviceNozzleTargetTemp() const = 0;
+  virtual int selectedDeviceBedTargetTemp() const = 0;
+  virtual int selectedDeviceTotalLayerNum() const = 0;
+  virtual int selectedDeviceCurrentLayerNum() const = 0;
+  virtual int selectedDeviceRemainingTime() const = 0;
+  /// MQTT report payload → 遥测字段（Bambu device/<serial>/report 信封）
+  virtual bool applyMqttReportPayload(const QString &payload, int deviceIndex = -1) = 0;
+
+signals:
+  void devicesChanged();
+  void selectedDeviceChanged();
+  // ── U11: send-print（FTP+MQTT）真实链路进度与终态 ──
+  void sendPrintUploadStarted();
+  void sendPrintUploadProgress(int percent);
+  void sendPrintSucceeded();
+  void sendPrintFailed(const QString &reason);
+  void sendPrintCancelled();
+};
+
+class DeviceServiceMock final : public IDeviceDataPlane
 {
   Q_OBJECT
   /// Number of devices in the mock list (QML can use this as Repeater model count)
@@ -146,32 +216,48 @@ class DeviceServiceMock final : public QObject
 public:
   explicit DeviceServiceMock(QObject *parent = nullptr);
 
-  int deviceCount() const;
+  // ── IDeviceDataPlane：设备清单（override 由接口锁定契约；QML 可达面
+  //    保持 Q_INVOKABLE 不变） ──
+  int deviceCount() const override;
+  Q_INVOKABLE QVariantMap deviceAt(int filteredIndex) const override;
+  Q_INVOKABLE void selectDevice(int filteredIndex) override;
+  Q_INVOKABLE bool addManualDevice(const QString &name, const QString &ip,
+                                   const QString &accessCode, int port = 8883) override;
+  Q_INVOKABLE bool isDemoDevice(int filteredIndex) const override;
+
+  // ── IDeviceDataPlane：凭据 ──
+  QString selectedDeviceAccessCode() const override;
+  int selectedDeviceMqttPort() const override;
+  Q_INVOKABLE void setSelectedDeviceAccessCode(const QString &accessCode, int port = 8883) override;
+
+  // ── IDeviceDataPlane：任务发送 ──
+  Q_INVOKABLE bool sendPrintViaFtp(int filteredIndex, const QString &gcodePath) override;
+  Q_INVOKABLE void cancelSendPrint() override;
+  bool sendPrintInFlight() const override { return ftpSendInProgress_; }
+
+  // ── IDeviceDataPlane：遥测 ──
+  bool selectedDeviceOnline() const override;
+  QString selectedDeviceStatus() const override;
+  QString selectedDeviceIp() const override;
+  Q_INVOKABLE bool isMqttConnected() const override;
+  int selectedDeviceTemperature() const override;
+  int selectedDeviceBedTemperature() const override;
+  int selectedDeviceNozzleTargetTemp() const override;
+  int selectedDeviceBedTargetTemp() const override;
+  int selectedDeviceTotalLayerNum() const override;
+  int selectedDeviceCurrentLayerNum() const override;
+  int selectedDeviceRemainingTime() const override;
+  Q_INVOKABLE bool applyMqttReportPayload(const QString &payload, int deviceIndex = -1) override;
+
+  // ── DeviceServiceMock 自有面（QML/Q_PROPERTY/Q_INVOKABLE） ──
   QString deviceListJson() const;
 
   int selectedDeviceIndex() const;
   QString selectedDeviceName() const;
   QString selectedDeviceModel() const;
   QString selectedDeviceSerial() const;
-  bool selectedDeviceOnline() const;
-  QString selectedDeviceStatus() const;
   int selectedDeviceProgress() const;
   QString selectedDeviceTaskName() const;
-  QString selectedDeviceIp() const;
-  int selectedDeviceTemperature() const;
-  /// v2.7 P2-A: 新遥测字段 getter
-  int selectedDeviceBedTemperature() const;
-  int selectedDeviceNozzleTargetTemp() const;
-  int selectedDeviceBedTargetTemp() const;
-  int selectedDeviceTotalLayerNum() const;
-  int selectedDeviceCurrentLayerNum() const;
-  int selectedDeviceRemainingTime() const;
-  /// v2.7 P2-A: MQTT 连接参数 getter
-  QString selectedDeviceAccessCode() const;
-  int selectedDeviceMqttPort() const;
-  /// v2.7 P2-A: 设置选中设备的 access code + 端口（连接对话框录入后调用）
-  Q_INVOKABLE void setSelectedDeviceAccessCode(const QString &accessCode, int port = 8883);
-  Q_INVOKABLE bool applyMqttReportPayload(const QString &payload, int deviceIndex = -1);
   static QString buildPrintCommandEnvelope(const QString &command,
                                            const QString &param,
                                            int sequenceId);
@@ -219,11 +305,8 @@ public:
   /// the mock exposes only timelapse until per-device capability lands.
   Q_INVOKABLE bool printOptionSupported(const QString &key) const;
 
-  /// Retrieve a device by filtered index (used by QML Repeater delegate)
-  Q_INVOKABLE QVariantMap deviceAt(int filteredIndex) const;
-
-  /// Select device by filtered index
-  Q_INVOKABLE void selectDevice(int filteredIndex);
+  // deviceAt / selectDevice / addManualDevice：声明已收编进 IDeviceDataPlane
+  // 覆写组（X1），Q_INVOKABLE 保留在覆写上——此处不再重复声明。
 
   /// Raw filtered index of the selected device (for bridging print state queries)
   int selectedFilteredIndex() const { return selectedDeviceIndex_; }
@@ -234,19 +317,12 @@ public:
   /// 模拟设备扫描（对齐上游 SSDP discovery）
   Q_INVOKABLE void scanDevices();
 
-  /// monitor-6: manual add (ref "+ 手动添加" form). Appends a connecting-state
-  /// mock device; the next scan flips it to idle/online like the seeded peers.
-  /// Returns false when the name is empty (caller shows a failure notice).
-  Q_INVOKABLE bool addManualDevice(const QString &name, const QString &ip,
-                                   const QString &accessCode, int port = 8883);
-
   /// 连接/断开设备（对齐上游 DeviceManager connect / disconnect）
   Q_INVOKABLE void connectDevice(int filteredIndex);
   Q_INVOKABLE void disconnectDevice(int filteredIndex);
   // v2.5 DEV-02: MQTT 真实连接（替代 mock 模拟）
   Q_INVOKABLE void connectViaMqtt(const QString &host, int port, const QString &accessCode);
   Q_INVOKABLE void disconnectMqtt();
-  Q_INVOKABLE bool isMqttConnected() const;
 
   /// 打印任务控制（对齐上游 Plater print/pause/resume/stop）
   Q_INVOKABLE void startPrint(int filteredIndex, const QString &gcodePath);
@@ -255,14 +331,10 @@ public:
   /// 仅在 MQTT 已连接时启用（需要 IP + access code）。
   /// sendPrintUploadProgress 信号反馈上传百分比，终态经
   /// sendPrintSucceeded/sendPrintFailed/sendPrintCancelled 通知。
-  /// 返回 true 表示上传已启动（结果异步通知）。U11 契约：返回 false 时
-  /// 一定伴随 sendPrintFailed（原因可读），绝不静默降级成 mock 打印态。
-  Q_INVOKABLE bool sendPrintViaFtp(int filteredIndex, const QString &gcodePath);
+  /// 契约见 IDeviceDataPlane::sendPrintViaFtp（U11：返回 false 必伴随
+  /// sendPrintFailed；X1：demo 假设备条目拒绝作为 FTP/MQTT 目标）。
   /// U11: 中止在途的 send-print FTP 上传（PrintDialog 取消按钮）。
   /// 无在途任务时为安全 no-op；取消结果经 sendPrintCancelled 通知。
-  Q_INVOKABLE void cancelSendPrint();
-  /// U11: 是否有 send-print FTP 上传在途（自 uploadStarted 至终态信号）。
-  bool sendPrintInFlight() const { return ftpSendInProgress_; }
   Q_INVOKABLE void pausePrint(int filteredIndex);
   Q_INVOKABLE void resumePrint(int filteredIndex);
   Q_INVOKABLE void stopPrint(int filteredIndex);
@@ -300,26 +372,13 @@ public:
   Q_INVOKABLE void setSelectedDeviceAmsSlot(int slotIndex);
 
 signals:
-  void devicesChanged();
-  void selectedDeviceChanged();
+  // X1: devicesChanged / selectedDeviceChanged / sendPrint* 由
+  // IDeviceDataPlane 基类声明（NOTIFY/连接经元对象继承解析，已验证）。
+  // 自有面信号保留在此：
   void searchTextChanged();
   void hmsChanged();
   void sendJobChanged();
   void printOptionsChanged();
-
-  // ── U11: send-print（FTP+MQTT）真实链路进度与终态 ─────────────────────────
-  /// FTP 上传已启动（进度归零）。BackendContext 据此置 printSendUploadActive，
-  /// PrintDialog 发送页仪表从演示动画切换到真实百分比。
-  void sendPrintUploadStarted();
-  /// FTP 上传进度（0-100；FtpUploader 自 libcurl 线程经队列投递）。
-  /// U11 之前该通道零订阅，大 gcode 上传全程无进度。
-  void sendPrintUploadProgress(int percent);
-  /// 终态三兄弟：succeeded = 上传完成且 MQTT 打印命令已被接受（设备此时才
-  /// 置 printing）；failed = 打印机永远没收到任务（上传失败或 publish 被
-  /// 拒），设备状态保持原样；cancelled = 用户中止在途上传。
-  void sendPrintSucceeded();
-  void sendPrintFailed(const QString &reason);
-  void sendPrintCancelled();
 
 private:
   void buildMockDevices();

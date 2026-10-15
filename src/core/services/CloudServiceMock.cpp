@@ -5,7 +5,7 @@
 #include <QVariantMap>
 
 CloudServiceMock::CloudServiceMock(QObject *parent)
-    : QObject(parent)
+    : ICloudDataPlane(parent)
 {
 }
 

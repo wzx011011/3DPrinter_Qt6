@@ -11,7 +11,7 @@
 #include <algorithm>
 
 DeviceServiceMock::DeviceServiceMock(QObject *parent)
-    : QObject(parent)
+    : IDeviceDataPlane(parent)
 {
   buildMockDevices();
   rebuildFilteredIndices();
@@ -91,6 +91,8 @@ DeviceServiceMock::DeviceServiceMock(QObject *parent)
 void DeviceServiceMock::buildMockDevices()
 {
   // Build devices with AMS slots (对齐上游 AMSScreen / AMSModel)
+  // X1: 本批种子条目全部是演示数据（demo=true 默认）——编造的 192.168.1.x
+  // IP 只用于 UI 演示，真发送链路拒绝把它们当 FTP/MQTT 目标 host。
   MockDevice k1Max;
   k1Max.name = "K1 Max";
   k1Max.model = "K1 Max";
@@ -226,9 +228,18 @@ QString DeviceServiceMock::deviceListJson() const
     obj["ip"]             = d.ip;
     obj["temperature"]    = d.temperature;
     obj["signalStrength"] = d.signalStrength;
+    obj["demo"]           = d.demo;   // X1 演示披露
     arr.append(obj);
   }
   return QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+}
+
+bool DeviceServiceMock::isDemoDevice(int filteredIndex) const
+{
+  // X1: 演示数据披露 —— 种子假设备条目（编造的 192.168.1.x）返回 true。
+  const int idx = filteredIndex >= 0 && filteredIndex < filteredIndices_.size()
+                      ? filteredIndices_[filteredIndex] : -1;
+  return idx >= 0 && idx < devices_.size() ? devices_[idx].demo : false;
 }
 
 int DeviceServiceMock::selectedDeviceIndex() const
@@ -427,6 +438,7 @@ QVariantMap DeviceServiceMock::deviceAt(int filteredIndex) const
   map["ip"]             = d.ip;
   map["temperature"]    = d.temperature;
   map["signalStrength"] = d.signalStrength;
+  map["demo"]           = d.demo;   // X1 演示披露（PrintDialog 组合框标注与路由）
   return map;
 }
 
@@ -494,6 +506,9 @@ bool DeviceServiceMock::addManualDevice(const QString &name, const QString &ip,
   d.signalStrength = 2;
   d.accessCode = accessCode.trimmed();
   d.mqttPort = port > 0 ? port : 8883;
+  // X1: 手动添加 = 用户录入的真实打印机（IP + access code），非演示条目——
+  // 它才允许作为 FTP/MQTT 真发送目标 host。
+  d.demo = false;
   d.amsSlots = {
     {"", "", 0.0f, false},
     {"", "", 0.0f, false},
@@ -722,21 +737,35 @@ void DeviceServiceMock::disconnectDevice(int filteredIndex)
 // the GUI can surface the reason; a false return must never degrade into the
 // mock print path — the printer that never received anything must never be
 // shown as "printing".
+// X1 contract: 目标设备在一切链路检查之前解析——种子假设备条目（demo）绝不
+// 作为 FTP/MQTT 目标 host；FTP/MQTT host 必须就是对话框所选且 MQTT 已连接
+// 的那台设备（跨设备上传会把任务发给用户没选的打印机）。
 bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodePath)
 {
+    // 1) 目标解析 + 演示披露：假设备条目不进入任何真实链路检查，直接拒绝
+    if (filteredIndex < 0 || filteredIndex >= filteredIndices_.size()) {
+        qDebug("[Device] sendPrintViaFtp: invalid printer selection %d", filteredIndex);
+        emit sendPrintFailed(QStringLiteral("invalid printer selection"));
+        return false;
+    }
+    const int selIdx = filteredIndices_[filteredIndex];
+    if (devices_[selIdx].demo) {
+        qDebug("[Device] sendPrintViaFtp: refusing demo device entry "
+               "(idx=%d, ip=%s) as FTP/MQTT target",
+               selIdx, devices_[selIdx].ip.toUtf8().constData());
+        emit sendPrintFailed(QStringLiteral(
+            "演示设备条目不是真实打印机，不接收真实发送任务"));
+        return false;
+    }
+
+    // 2) MQTT 链路必须在（FTP 目标可达性依赖它）
     if (!isMqttConnected()) {
         qDebug("[Device] sendPrintViaFtp: MQTT not connected, cannot send print");
         emit sendPrintFailed(QStringLiteral("MQTT not connected"));
         return false;
     }
-    if (gcodePath.isEmpty() || !QFileInfo::exists(gcodePath)) {
-        qDebug("[Device] sendPrintViaFtp: invalid gcode path: %s", gcodePath.toUtf8().constData());
-        emit sendPrintFailed(gcodePath.isEmpty()
-            ? QStringLiteral("gcode path is empty")
-            : QStringLiteral("local gcode file not found: %1").arg(gcodePath));
-        return false;
-    }
-    // U11 防重入：已有发送在途时直接拒绝（uploadFile 的 busy 拒绝不产信号，
+
+    // 3) U11 防重入：已有发送在途时直接拒绝（uploadFile 的 busy 拒绝不产信号，
     // 在这里补上失败通知，且绝不 fall-through 到 mock 打印任务）。
     if (ftpSendInProgress_ || (ftpUploader_ && ftpUploader_->isUploading())) {
         qDebug("[Device] sendPrintViaFtp: another send is already in progress");
@@ -744,14 +773,27 @@ bool DeviceServiceMock::sendPrintViaFtp(int filteredIndex, const QString &gcodeP
         return false;
     }
 
-    // 获取连接设备参数
-    const int idx = mqttConnectedDeviceIndex_;
-    if (idx < 0 || idx >= devices_.size()) {
-        emit sendPrintFailed(QStringLiteral("no connected device"));
+    // 4) gcode 文件必须在本地存在
+    if (gcodePath.isEmpty() || !QFileInfo::exists(gcodePath)) {
+        qDebug("[Device] sendPrintViaFtp: invalid gcode path: %s", gcodePath.toUtf8().constData());
+        emit sendPrintFailed(gcodePath.isEmpty()
+            ? QStringLiteral("gcode path is empty")
+            : QStringLiteral("local gcode file not found: %1").arg(gcodePath));
         return false;
     }
-    const QString host = devices_[idx].ip;
-    const QString accessCode = devices_[idx].accessCode;
+
+    // 5) 发送目标 = 所选设备，且必须是 MQTT 已连接的那台（host 一致性）。
+    // 此前 host 取自 mqttConnectedDeviceIndex_，与对话框所选条目解耦——
+    // 连着 A 机却往对话框选的 B 条目上显示发送。这里锁死二者一致。
+    if (selIdx != mqttConnectedDeviceIndex_) {
+        qDebug("[Device] sendPrintViaFtp: selected printer (idx=%d) is not the "
+               "MQTT-connected device (idx=%d)", selIdx, mqttConnectedDeviceIndex_);
+        emit sendPrintFailed(QStringLiteral("所选打印机与已连接的 MQTT 设备不一致"));
+        return false;
+    }
+
+    const QString host = devices_[selIdx].ip;
+    const QString accessCode = devices_[selIdx].accessCode;
     // Bambu 打印机 FTP 目录：/mnt/sdcard/（或 /userdata/）
     const QString remotePath = buildPrintRemotePath(gcodePath);
     lastPrintRemotePath_ = remotePath;
@@ -903,22 +945,31 @@ void DeviceServiceMock::startPrint(int filteredIndex, const QString &gcodePath){
   if (!d.online || d.status == "printing")
     return;
 
-  // v2.8 P2-C: real print path 鈥?FTP upload + MQTT command (when connected)
-  if (isMqttConnected() && !gcodePath.isEmpty()) {
+  // X1: 真实（手动添加、非 demo）设备只走真链路——打印机没收到任务就绝不
+  // 显示 "printing"。此前 MQTT 未连接时 fall-through 到 mock 任务，对手动
+  // 添加的真实打印机构造假打印态；demo 种子设备保留显式演示兜底（披露见
+  // PrintDialog/MonitorPage 的演示标注），U11 演示语义不变。
+  if (!d.demo) {
+    if (gcodePath.isEmpty() || !QFileInfo::exists(gcodePath)) {
+      emit sendPrintFailed(gcodePath.isEmpty()
+          ? QStringLiteral("gcode path is empty")
+          : QStringLiteral("local gcode file not found: %1").arg(gcodePath));
+      return;
+    }
+    if (!isMqttConnected()) {
+      emit sendPrintFailed(QStringLiteral("MQTT not connected"));
+      return;
+    }
     // U11 防重入：FTP 上传在途时设备状态还不是 "printing"（终态才置位），
-    // 上面的 status 守卫拦不住二次点击；此前二次点击走到 sendPrintViaFtp →
-    // uploadFile 以 busy 返回 false → fall-through 到 mock 任务，真实上传
-    // 完成后又覆盖同一状态，造成双重 printing。在途即直接吞掉这次点击。
+    // 上面的 status 守卫拦不住二次点击；在途即直接吞掉这次点击。
     if (ftpSendInProgress_ || (ftpUploader_ && ftpUploader_->isUploading()))
       return;
-    if (sendPrintViaFtp(filteredIndex, gcodePath))
-      return; // FTP upload started 鈥?async result via uploadFinished
-    // U11: 真链路已经介入但上传没能启动（MQTT 断开/文件缺失等），
-    // sendPrintViaFtp 已发 sendPrintFailed。此处若再 fall-through 到 mock
-    // 任务，就会凭空造出打印机从未进入过的 "printing" 状态——真链路介入
-    // 后永远不再走 mock 兜底。
+    // 真链路：成败均经 sendPrint* 信号交付（BackendContext 桥 toast/对话框）。
+    sendPrintViaFtp(filteredIndex, gcodePath);
     return;
   }
+
+  // ── demo 设备：显式演示任务（mock 模拟，披露见 UI 侧演示标注） ──
 
   // Create print job state
   PrintJobState job;
