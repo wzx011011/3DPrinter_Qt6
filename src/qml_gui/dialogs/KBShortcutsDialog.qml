@@ -24,13 +24,18 @@ import OWzx
 // PreviewPage.handlePreviewKey); the app-wide bindings are QML Shortcut{}
 // registrations in main.qml (no C++ key handler exists).
 //
-// U7 ghost-entry alignment (docs/开发计划_2026-10-10.md §6b U7): every row
-// below now names a real binding. Deleted -- no implementation and no plan:
-// Ctrl+Shift+E "Publish 3MF" (no publish/network feature in src/, the topbar
-// publish button is a placeholder) and Ctrl+M "3Dconnexion devices settings"
-// (no 3Dconnexion/SpaceMouse support anywhere in src/). Implemented
-// instead of documented-but-dead: Space -> command palette (main.qml) and
-// "?" -> this dialog (main.qml).
+// U7 ghost-entry alignment (docs/开发计划_2026-10-10.md §6b U7) + the U2
+// row-by-row truth pass (§6b U2 = audit M11): every row below names a
+// real binding. Deleted by U7 -- no implementation and no plan:
+// Ctrl+Shift+E "Publish 3MF" (no publish/network feature in src/, the
+// topbar publish button is a placeholder) and Ctrl+M "3Dconnexion
+// devices settings" (no 3Dconnexion/SpaceMouse support anywhere in
+// src/). Implemented instead of documented-but-dead: Space -> command
+// palette (main.qml) and "?" -> this dialog (main.qml).
+// Deleted by U2 (rows that named a key with no distinct behavior --
+// per-row comments cite the code): Shift+A, H, E, the gizmo 1mm-snap
+// modifier, the Objects List rename pair and the Preview Up/Down /
+// Ctrl+wheel slider rows.
 
 Dialog {
     id: root
@@ -84,10 +89,18 @@ Dialog {
     readonly property var prepareShortcuts: [
         { key: "Left mouse button", desc: qsTr("Rotate View") },
         { key: "Middle mouse button", desc: qsTr("Pan View") },
-        { key: "Right mouse button", desc: qsTr("None") },
+        // U2: right-drag pans in this port (RhiViewport.cpp CAM-PARITY
+        // branch; upstream default right_mouse_drag_action = Pan,
+        // AppConfig.cpp:248-249) and a short right click opens the object
+        // context menu -- the old "None" row contradicted the real map.
+        { key: "Right mouse button", desc: qsTr("Pan View (short click opens the context menu)") },
         { key: "Mouse wheel", desc: qsTr("Zoom View") },
         { key: "A", desc: qsTr("Arrange all objects") },
-        { key: "Shift+A", desc: qsTr("Arrange objects on selected plates") },
+        // U2: upstream lists Shift+A "arrange on selected plates"
+        // (KBShortcutsDialog.cpp:223); this port's key table routes Shift+A
+        // through the same arrangeAllObjects() as plain A
+        // (PreparePage.handleCanvasKey), so the distinct row is dropped
+        // instead of documenting a behavior that does not exist.
         { key: "Q", desc: qsTr("Auto orientate selected objects (or all)") },
         { key: "Shift+Q", desc: qsTr("Auto orientate objects on the active plate") },
         { key: "Shift+R", desc: qsTr("Auto orientate selected objects") },
@@ -123,13 +136,19 @@ Dialog {
         { key: "F", desc: qsTr("Gizmo Place face on bed") },
         { key: "C", desc: qsTr("Gizmo cut") },
         { key: "B", desc: qsTr("Gizmo mesh boolean") },
-        { key: "H", desc: qsTr("Gizmo FDM paint-on fuzzy skin") },
+        // U2: upstream "H" paint-on fuzzy skin (KBShortcutsDialog.cpp:283)
+        // has no canvas key here -- the gizmo exists as a toolbar button
+        // only (GLToolbars.qml, GizmoFuzzySkin), so the row is dropped
+        // until the key gets a real binding.
         { key: "L", desc: qsTr("Gizmo SLA support points") },
         { key: "P", desc: qsTr("Gizmo FDM paint-on seam") },
         { key: "T", desc: qsTr("Gizmo Text emboss / engrave") },
         { key: "U", desc: qsTr("Gizmo measure") },
         { key: "Y", desc: qsTr("Gizmo assemble") },
-        { key: "E", desc: qsTr("Gizmo brim ears") },
+        // U2: upstream "E" brim ears (KBShortcutsDialog.cpp:286) has no Qt6
+        // gizmo mode in this port yet (GLToolbars.qml: "BrimEars ...
+        // still have no Qt6 gizmo mode") -- no key and no gizmo, row
+        // dropped.
         { key: "I", desc: qsTr("Zoom in") },
         { key: "O", desc: qsTr("Zoom out") },
         { key: "V", desc: qsTr("Toggle printable for selected object/part") },
@@ -146,7 +165,12 @@ Dialog {
     // (cpp:45-49 + cpp:67-71).
     readonly property var toolbarShortcuts: [
         { key: "Esc", desc: qsTr("Deselect All") },
-        { key: "Shift+", desc: qsTr("Move: press to snap by 1mm") },
+        // U2: upstream's bare "Shift" row "Move: press to snap by 1mm"
+        // (KBShortcutsDialog.cpp:279) is not implemented here -- the move
+        // gizmo chain applies raw deltas (RhiViewport emits
+        // gizmoMoveRequested unquantized and no Shift branch exists in the
+        // drag path), so the row is dropped instead of documenting a dead
+        // modifier.
         { key: "Ctrl+Mouse wheel", desc: qsTr("Support/Color Painting: adjust pen radius") },
         { key: "Alt+Mouse wheel", desc: qsTr("Support/Color Painting: adjust section position") }
     ]
@@ -163,24 +187,32 @@ Dialog {
         { key: "Ctrl+K", desc: qsTr("Clone selected") },
         { key: "Ctrl+Shift+P", desc: qsTr("Command palette") },
         { key: "Ctrl+Z", desc: qsTr("Undo") },
-        { key: "Ctrl+Y", desc: qsTr("Redo") },
-        { key: "Space", desc: qsTr("Select the object/part and press space to change the name") },
-        { key: "Mouse click", desc: qsTr("Select the object/part and mouse click to change the name") }
+        { key: "Ctrl+Y", desc: qsTr("Redo") }
+        // U2: upstream also lists Space / mouse-click rename-in-object-list
+        // (KBShortcutsDialog.cpp:294-296) -- this port has no object-list
+        // panel yet (X6, docs/开发计划_2026-10-10.md §6c), so those rows are
+        // dropped until the panel lands with the rename flow.
     ]
-    // Preview: slider navigation keys mirroring the upstream Preview page
-    // (cpp:301-315); L/C are handled in the C++ keyPressEvent.
+    // Preview: slider/playback navigation keys as implemented in
+    // PreviewPage.handlePreviewKey (upstream Preview page,
+    // KBShortcutsDialog.cpp:301-315). U2 truth pass: Up/Down had no handler
+    // (dropped); the real arrow steps are x10 with Shift and x100 with Ctrl
+    // (the old "5x" wording copied upstream); the layer-rail wheel honors
+    // Shift only (PreviewLayerRail WheelHandler -> wheelLayer), so the
+    // Ctrl+wheel row is gone; Space play/pause and PgUp/PgDn layer steps
+    // are real and now listed.
     readonly property var previewShortcuts: [
-        { key: "Arrow Up", desc: qsTr("Vertical slider - Move active thumb Up") },
-        { key: "Arrow Down", desc: qsTr("Vertical slider - Move active thumb Down") },
         { key: "Arrow Left", desc: qsTr("Horizontal slider - Move active thumb Left") },
         { key: "Arrow Right", desc: qsTr("Horizontal slider - Move active thumb Right") },
+        { key: "Shift+Any arrow", desc: qsTr("Move slider 10x faster") },
+        { key: "Ctrl+Any arrow", desc: qsTr("Move slider 100x faster") },
+        { key: "Shift+Mouse wheel", desc: qsTr("Layer slider: move 5x faster (wheel over the layer rail)") },
+        { key: "PageUp", desc: qsTr("Layer slider - move one layer up (Shift: 10 layers)") },
+        { key: "PageDown", desc: qsTr("Layer slider - move one layer down (Shift: 10 layers)") },
+        { key: "Space", desc: qsTr("Play/Pause playback") },
         { key: "L", desc: qsTr("Toggle single-layer mode") },
         { key: "C", desc: qsTr("Toggle G-code window") },
         { key: "Tab", desc: qsTr("Switch between Prepare/Preview") },
-        { key: "Shift+Any arrow", desc: qsTr("Move slider 5x faster") },
-        { key: "Shift+Mouse wheel", desc: qsTr("Move slider 5x faster") },
-        { key: "Ctrl+Any arrow", desc: qsTr("Move slider 5x faster") },
-        { key: "Ctrl+Mouse wheel", desc: qsTr("Move slider 5x faster") },
         { key: "Home", desc: qsTr("Horizontal slider - Move to start position") },
         { key: "End", desc: qsTr("Horizontal slider - Move to last position") }
     ]
