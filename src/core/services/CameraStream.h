@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QImage>
+#include <QElapsedTimer>
 #include <QThread>
 #include <atomic>
 
@@ -57,9 +58,22 @@ protected:
     void run() override;
 
 private:
+    /// X1: 协作取消回调——stopStream 置 m_running=false 后，FFmpeg 的阻塞点
+    /// （avformat_open_input / av_read_frame）经此立即返回，替代 terminate() 强杀。
+    /// 同时在打开阶段（open + find_stream_info）强制 kOpenTimeoutMs 截止：
+    /// FFmpeg 5.0 起 rtsp 的 stimeout 更名 timeout（旧名被静默忽略），不可达
+    /// 主机的 TCP SYN 重试可达 ~21s——截止时间给出确定性的"连不上即错误态"上界。
+    static int onInterruptCallback(void *ctx);
+    static constexpr int kOpenTimeoutMs = 6000;
+
     QString m_url;
     QString m_error;
     std::atomic<bool> m_running{false};
+    // 打开阶段截止（仅 worker 线程读写；interrupt callback 在同一线程内被
+    // FFmpeg 调用，原子仅用于跨 stopStream 的可见性）
+    std::atomic<bool> m_opening{false};
+    QElapsedTimer m_openTimer;
+    bool m_openDeadlineExceeded = false;
     int m_width = 0;
     int m_height = 0;
 

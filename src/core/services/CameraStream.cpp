@@ -47,12 +47,34 @@ void CameraStream::startStream()
 
 void CameraStream::stopStream()
 {
+    // X1: 协作取消——置停标志后，解码线程内的 FFmpeg 阻塞点经
+    // interrupt_callback（openStream 里挂到 AVFormatContext）立即以错误返回，
+    // wait() 在秒级内自然汇合。不再 terminate()：强杀持 FFmpeg 内部锁的线程
+    // 会撕裂解码器状态并可能死锁在下次 av_* 调用上。
     m_running.store(false);
     if (isRunning()) {
-        wait(3000);  // 等待 3 秒
-        if (isRunning()) terminate();
+        if (!wait(3000))
+            qWarning("[Camera] decode thread still running after 3s "
+                     "(interrupt callback should have aborted blocking IO)");
     }
     emit streamStopped();
+}
+
+int CameraStream::onInterruptCallback(void *ctx)
+{
+    auto *self = static_cast<CameraStream *>(ctx);
+    if (!self)
+        return 1;
+    // 返回 1 = 中止当前阻塞的 avformat_open_input / av_read_frame
+    if (!self->m_running.load())
+        return 1;
+    // 打开阶段硬截止：连不上即错误态（s 6s 确定性上界），不再依赖协议层
+    // 超时选项的版本语义
+    if (self->m_opening.load() && self->m_openTimer.elapsed() > kOpenTimeoutMs) {
+        self->m_openDeadlineExceeded = true;
+        return 1;
+    }
+    return 0;
 }
 
 bool CameraStream::openStream()
@@ -61,10 +83,24 @@ bool CameraStream::openStream()
     m_error = "FFmpeg support is not available in this build";
     return false;
 #else
+    // X1: 先分配 context 挂 interrupt callback（协作取消 + 打开截止），再打开
+    // 输入——avformat_open_input 接受调用方预分配的 context 并沿用其回调。
+    m_fmtCtx = avformat_alloc_context();
+    if (!m_fmtCtx) {
+        m_error = "avformat_alloc_context failed";
+        return false;
+    }
+    m_fmtCtx->interrupt_callback.callback = &CameraStream::onInterruptCallback;
+    m_fmtCtx->interrupt_callback.opaque = this;
+    m_openDeadlineExceeded = false;
+    m_openTimer.start();
+    m_opening.store(true);
+
     // 打开 RTSP 流（低延迟模式）
     AVDictionary *opts = nullptr;
     av_dict_set(&opts, "rtsp_transport", "tcp", 0);      // TCP 传输（比 UDP 稳定）
-    av_dict_set(&opts, "stimeout", "5000000", 0);         // 5 秒超时
+    av_dict_set(&opts, "stimeout", "5000000", 0);         // 5 秒 socket IO 超时（FFmpeg ≤4.x 键名）
+    av_dict_set(&opts, "timeout", "5000000", 0);          // FFmpeg 5.0+ 更名（≤4.x 下未知键被安全忽略）
     av_dict_set(&opts, "fflags", "nobuffer", 0);          // 无缓冲（低延迟）
     av_dict_set(&opts, "flags", "low_delay", 0);
 
@@ -72,15 +108,21 @@ bool CameraStream::openStream()
     av_dict_free(&opts);
 
     if (ret != 0) {
+        m_opening.store(false);
         char errbuf[256];
         av_strerror(ret, errbuf, sizeof(errbuf));
-        m_error = QString("avformat_open_input failed: %1").arg(errbuf);
+        m_error = m_openDeadlineExceeded
+                      ? QString("RTSP connect/open timeout after %1 ms").arg(kOpenTimeoutMs)
+                      : QString("avformat_open_input failed: %1").arg(errbuf);
         return false;
     }
 
     ret = avformat_find_stream_info(m_fmtCtx, nullptr);
+    m_opening.store(false);
     if (ret < 0) {
-        m_error = "avformat_find_stream_info failed";
+        m_error = m_openDeadlineExceeded
+                      ? QString("RTSP probe timeout after %1 ms").arg(kOpenTimeoutMs)
+                      : "avformat_find_stream_info failed";
         return false;
     }
 
@@ -157,16 +199,21 @@ bool CameraStream::decodeFrame()
     AVPacket *pkt = av_packet_alloc();
     bool gotFrame = false;
 
-    while (av_read_frame(m_fmtCtx, pkt) >= 0) {
+    while (m_running.load() && av_read_frame(m_fmtCtx, pkt) >= 0) {
         if (avcodec_send_packet(m_decCtx, pkt) >= 0) {
             while (avcodec_receive_frame(m_decCtx, m_frame) >= 0) {
                 // YUV → RGB
                 sws_scale(m_swsCtx, m_frame->data, m_frame->linesize, 0, m_height,
                           m_rgbFrame->data, m_rgbFrame->linesize);
 
-                // RGB → QImage（用 static_cast 避免 FFmpeg 宏污染 QImage 枚举）
+                // RGB → QImage。X1: 具名常量 QImage::Format_RGB888（packed 3 字节
+                // RGB，与 sws 输出 AV_PIX_FMT_RGB24 逐字节对应，行距即
+                // linesize[0]=width*3）。原写法 static_cast<QImage::Format>(4)
+                // 实为 Format_RGB32（4 字节/像素）——按错误布局解释 RGB24 缓冲，
+                // 颜色与行对齐均是错的；魔数注释"Format_RGB24 = 4"本身也不存在
+                // 该枚举名。
                 QImage img(m_rgbBuffer, m_width, m_height, m_rgbFrame->linesize[0],
-                           static_cast<QImage::Format>(4));  // Format_RGB24 = 4
+                           QImage::Format_RGB888);
 
                 // 复制 QImage（深拷贝，因为 m_rgbBuffer 会被下一帧覆盖）
                 emit frameReady(img.copy());
