@@ -142,6 +142,19 @@ private slots:
   // family (演示模式/演示数据) and any source reformatting.
   void s7MockSurfacesCarryDisclosureToken();
   void s7MockSurfacesCarryDisclosureToken_data();
+  // ── X2 (audit ④): component-discipline behavior net. Two layers:
+  // (a) the CxNumericEdit min/max error contract (invalid input shows the
+  // error state and does NOT commit — the anti-"silent clamp" lock), and
+  // (b, added with the page migration batches) per-page Cx* instance floors:
+  // the hand-drawn Rectangle+MouseArea pseudo-controls migrated to the Cx*
+  // system surface as CxButton / CxSwitch / CxIconButton instances on the
+  // object tree, so a regression back to page-private controls drops the
+  // counts and goes red. This is the per-site destination
+  // QmlUiAuditTests::v53PseudoButtonSwept deferred to the X2 rework
+  // ("per-panel behavior form needs stable panel ids").
+  void x2NumericEditErrorStateContract();
+  void x2PagesCarryCxComponentDiscipline();
+  void x2PagesCarryCxComponentDiscipline_data();
   void cleanupTestCase();
 
 private:
@@ -491,6 +504,154 @@ void QmlSmokeTests::s7MockSurfacesCarryDisclosureToken()
                                     " requires user-visible demo-data disclosure")
                           .arg(qmlPath)
                           .arg(texts.size())));
+}
+
+// ── X2 (audit ④): component-discipline behavior net ───────────────────────
+
+void QmlSmokeTests::x2NumericEditErrorStateContract()
+{
+  QQmlComponent component(
+      engine_, QUrl(QStringLiteral("qrc:/qml/OWzx/controls/CxNumericEdit.qml")));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("CxNumericEdit failed to compile: %1")
+                          .arg(component.errorString())));
+  std::unique_ptr<QObject> edit(component.create());
+  QVERIFY2(edit, qPrintable(QStringLiteral("CxNumericEdit failed to create: %1")
+                                .arg(component.errorString())));
+
+  QSignalSpy commitSpy(edit.get(), SIGNAL(commit(QString)));
+  QVERIFY(commitSpy.isValid());
+
+  // Bounded field: [0, 10].
+  edit->setProperty("minimumValue", 0.0);
+  edit->setProperty("maximumValue", 10.0);
+
+  // 1. Out-of-range entry: visible error, text kept, NO commit (the
+  //    anti-"silent clamp" contract — the former path committed anything and
+  //    let the caller clamp it back invisibly).
+  edit->setProperty("text", QStringLiteral("15"));
+  QVERIFY(QMetaObject::invokeMethod(edit.get(), "tryCommit"));
+  QCOMPARE(edit->property("error").toBool(), true);
+  QVERIFY(!edit->property("errorText").toString().isEmpty());
+  QCOMPARE(commitSpy.count(), 0);
+
+  // 2. Re-typed (here: re-set) text followed by an in-range entry commits
+  //    and clears the error state (user edits additionally clear the error
+  //    immediately via onTextEdited, which a programmatic set does not fire).
+  edit->setProperty("text", QStringLiteral("5"));
+  QVERIFY(QMetaObject::invokeMethod(edit.get(), "tryCommit"));
+  QCOMPARE(edit->property("error").toBool(), false);
+  QCOMPARE(commitSpy.count(), 1);
+  QCOMPARE(commitSpy.at(0).at(0).toString(), QStringLiteral("5"));
+
+  // 4. Non-numeric entry (empty) is an error too, not a silent commit.
+  edit->setProperty("text", QStringLiteral(""));
+  QVERIFY(QMetaObject::invokeMethod(edit.get(), "tryCommit"));
+  QCOMPARE(edit->property("error").toBool(), true);
+  QCOMPARE(commitSpy.count(), 1);
+
+  // 5. Unbounded field (the OptionRow configuration today) keeps the
+  //    pre-X2 back-compat behavior: every parseable value commits.
+  std::unique_ptr<QObject> unbounded(component.create());
+  QVERIFY(unbounded);
+  QSignalSpy unboundedSpy(unbounded.get(), SIGNAL(commit(QString)));
+  unbounded->setProperty("text", QStringLiteral("1e9"));
+  QVERIFY(QMetaObject::invokeMethod(unbounded.get(), "tryCommit"));
+  QCOMPARE(unbounded->property("error").toBool(), false);
+  QCOMPARE(unboundedSpy.count(), 1);
+}
+
+namespace {
+
+// Depth-first count of live instances whose metaobject class name starts
+// with `prefix` (QML singletons instantiate as <Type>_QMLTYPE_<n> or
+// <Type>_QML_<_n>). This is the runtime per-site presence counter: a control
+// migrated to the Cx* system appears here; a regression to a page-private
+// Rectangle+MouseArea control does not.
+int countInstancesByClassPrefix(QObject *object, const char *prefix)
+{
+  if (!object)
+    return 0;
+  int count = QString::fromLatin1(object->metaObject()->className())
+                  .startsWith(QLatin1String(prefix))
+                  ? 1
+                  : 0;
+  const QList<QObject *> children = object->children();
+  for (QObject *child : children)
+    count += countInstancesByClassPrefix(child, prefix);
+  return count;
+}
+
+} // namespace
+
+void QmlSmokeTests::x2PagesCarryCxComponentDiscipline_data()
+{
+  QTest::addColumn<QString>("qmlPath");
+  QTest::addColumn<QVariantMap>("initialProps");
+  QTest::addColumn<int>("minCxButtons");
+  QTest::addColumn<int>("minCxSwitches");
+  QTest::addColumn<int>("minCxIconButtons");
+
+  auto vm = [this](const char *prop) {
+    QObject *value = backendProperty(prop);
+    return QVariant::fromValue(value);
+  };
+
+  // X2 migrates the ~29 PreparePage and ~21 MonitorPage hand-drawn
+  // pseudo-controls onto CxButton/CxSwitch/CxIconButton in batches; each
+  // migration batch raises these floors to the post-migration live counts
+  // (minus a safety margin). The floors catch a wholesale revert to
+  // page-private controls, not exact layout quantities.
+  QTest::newRow("PreparePage")
+      << "qrc:/qml/OWzx/pages/PreparePage.qml"
+      << QVariantMap{{"editorVm", vm("editorViewModel")},
+                     {"configVm", vm("configViewModel")}}
+      << 10 << 0 << 1;
+  QTest::newRow("MonitorPage")
+      << "qrc:/qml/OWzx/pages/MonitorPage.qml"
+      << QVariantMap{{"monitorVm", vm("monitorViewModel")}}
+      << 4 << 0 << 4;
+}
+
+void QmlSmokeTests::x2PagesCarryCxComponentDiscipline()
+{
+  QFETCH(QString, qmlPath);
+  QFETCH(QVariantMap, initialProps);
+  QFETCH(int, minCxButtons);
+  QFETCH(int, minCxSwitches);
+  QFETCH(int, minCxIconButtons);
+
+  QQmlComponent component(engine_, QUrl(qmlPath));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("%1 failed to compile: %2")
+                          .arg(qmlPath, component.errorString())));
+  std::unique_ptr<QObject> page(
+      component.createWithInitialProperties(initialProps));
+  QVERIFY2(page, qPrintable(QStringLiteral("%1 failed to instantiate: %2")
+                                .arg(qmlPath, component.errorString())));
+
+  const int buttons = countInstancesByClassPrefix(page.get(), "CxButton");
+  const int switches = countInstancesByClassPrefix(page.get(), "CxSwitch");
+  const int iconButtons = countInstancesByClassPrefix(page.get(), "CxIconButton");
+  QVERIFY2(buttons >= minCxButtons,
+           qPrintable(QStringLiteral("%1 carries %2 CxButton instances (floor %3)"
+                                    " — X2 migrated the hand-drawn pseudo-buttons"
+                                    " onto the Cx* system; a drop means a page-"
+                                    "private control regression")
+                          .arg(qmlPath)
+                          .arg(buttons)
+                          .arg(minCxButtons)));
+  QVERIFY2(switches >= minCxSwitches,
+           qPrintable(QStringLiteral("%1 carries %2 CxSwitch instances (floor %3)")
+                          .arg(qmlPath)
+                          .arg(switches)
+                          .arg(minCxSwitches)));
+  QVERIFY2(iconButtons >= minCxIconButtons,
+           qPrintable(QStringLiteral("%1 carries %2 CxIconButton instances"
+                                    " (floor %3)")
+                          .arg(qmlPath)
+                          .arg(iconButtons)
+                          .arg(minCxIconButtons)));
 }
 
 // ── S1 (audit ④): cluster NOTIFY migration checks ─────────────────────────

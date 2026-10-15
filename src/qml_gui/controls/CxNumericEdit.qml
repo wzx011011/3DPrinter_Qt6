@@ -1,5 +1,6 @@
 import QtQuick
 pragma ComponentBehavior: Bound
+import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
 
@@ -10,6 +11,15 @@ import OWzx
 // Presentation only: the caller validates and commits via the `commit` signal.
 // The int/percent path still uses CxSpinBox (step arrows); this control covers
 // the free-form double and range-editor cases.
+//
+// X2 (audit 2026-10-10 ④, §4 并入项): unified input error state. The caller
+// sets minimumValue/maximumValue; on editingFinished the commit is only
+// emitted for values inside the bounds -- an out-of-range or non-numeric
+// entry sets `error` + `errorText` (red border + hover tooltip) and the text
+// STAYS so the user sees what they typed, instead of the caller silently
+// clamping the value back ("非法输入可见反馈而非静默回弹"). `error` is a
+// writable property so callers can surface their own validation through the
+// same visual contract; editing the text again clears it.
 Rectangle {
     id: editor
 
@@ -21,6 +31,13 @@ Rectangle {
     // (Field.cpp:923 m_combine_side_text = !m_opt.multiline), same approach as
     // CxSpinBox's suffix.
     property string suffix: ""
+    // X2: optional bounds; the sentinels mean "unbounded" (the pre-X2
+    // behavior -- every parseable value commits). Both are inclusive.
+    property real minimumValue: -Number.MAX_VALUE
+    property real maximumValue: Number.MAX_VALUE
+    // X2: visible error state (writable for caller-driven validation).
+    property bool error: false
+    property string errorText: ""
     signal commit(string valueText)
 
     Layout.preferredWidth: 120
@@ -30,7 +47,10 @@ Rectangle {
     // CxTextField/CxSpinBox; was Theme.bgInset).
     color: Theme.bgPanel
     border.width: 1
-    border.color: edit.activeFocus ? Theme.borderFocus
+    // X2: the error border wins over focus/hover so invalid state is never
+    // visually silent.
+    border.color: editor.error ? Theme.statusError
+                 : edit.activeFocus ? Theme.borderFocus
                  : enabled && editHover.hovered ? Theme.accentDark
                  : enabled ? Theme.borderInput
                  : Theme.borderSubtle
@@ -42,6 +62,32 @@ Rectangle {
     // TextInput.cpp:33-35 Normal #DBDBDB -> Hovered teal).
     HoverHandler { id: editHover }
 
+    // X2: the error feedback also speaks when hovered -- the allowed range.
+    ToolTip.visible: editor.error && editHover.hovered && editor.errorText.length > 0
+    ToolTip.text: editor.errorText
+    ToolTip.delay: 200
+
+    // X2: single commit path shared by editingFinished and tests. Commit only
+    // fires for in-range numeric text; anything else shows the error state
+    // and keeps the typed text on screen.
+    function tryCommit() {
+        const parsed = parseFloat(edit.text)
+        if (isNaN(parsed)) {
+            editor.error = true
+            editor.errorText = qsTr("请输入有效数字")
+            return
+        }
+        if (parsed < editor.minimumValue || parsed > editor.maximumValue) {
+            editor.error = true
+            editor.errorText = qsTr("超出范围（%1 ~ %2）")
+                    .arg(editor.minimumValue).arg(editor.maximumValue)
+            return
+        }
+        editor.error = false
+        editor.errorText = ""
+        editor.commit(edit.text)
+    }
+
     TextInput {
         id: edit
         anchors.left: parent.left
@@ -51,8 +97,9 @@ Rectangle {
         anchors.right: suffixText.visible ? suffixText.left : parent.right
         anchors.rightMargin: suffixText.visible ? 5 : 6
         verticalAlignment: Text.AlignVCenter
-        horizontalAlignment: Text.AlignRight
-        color: Theme.textPrimary
+        // X2: invalid text turns red in-place as well, so the feedback
+        // survives even when the border is covered by a neighbor.
+        color: editor.error ? Theme.statusError : Theme.textPrimary
         font.pixelSize: Theme.fontSizeSM
         font.bold: true
         font.family: editor.monospace ? Theme.fontMono : ""
@@ -62,7 +109,12 @@ Rectangle {
             decimals: editor.decimals
             notation: DoubleValidator.StandardNotation
         }
-        onEditingFinished: editor.commit(text)
+        // X2: editing again clears the error before the next commit check.
+        onTextEdited: {
+            editor.error = false
+            editor.errorText = ""
+        }
+        onEditingFinished: editor.tryCommit()
     }
 
     Text {
