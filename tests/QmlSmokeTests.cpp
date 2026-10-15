@@ -95,6 +95,22 @@ int allowlistIndexForQmlMessage(const QString &message)
   return -1;
 }
 
+// S7: depth-first collection of every `text` string property on the QML
+// object tree. Disclosure copy lives on Text/Label items (and any custom
+// control exposing text), so a token search over this list is the runtime
+// equivalent of the former source-string locks — but at property level.
+void collectTextProperties(QObject *object, QStringList &out)
+{
+  if (!object)
+    return;
+  const QVariant text = object->property("text");
+  if (text.typeId() == QMetaType::QString)
+    out.append(text.toString());
+  const QList<QObject *> children = object->children();
+  for (QObject *child : children)
+    collectTextProperties(child, out);
+}
+
 } // namespace
 
 class QmlSmokeTests : public QObject
@@ -118,6 +134,14 @@ private slots:
   void s1SelectionClusterReevaluation();
   void s1TopologyClusterReevaluation();
   void s1BusyPaintClusterReevaluation();
+  // ── S7 (audit ④): string-lock downgrade destination. The mock-disclosure
+  // copy locks in QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure
+  // migrate here: instantiate each registry-Mock page surface and assert its
+  // runtime text tree carries the 演示 disclosure token family — a
+  // property-level behavior assertion that survives rewording within the
+  // family (演示模式/演示数据) and any source reformatting.
+  void s7MockSurfacesCarryDisclosureToken();
+  void s7MockSurfacesCarryDisclosureToken_data();
   void cleanupTestCase();
 
 private:
@@ -402,6 +426,71 @@ void QmlSmokeTests::pagesInstantiate()
   failOnUnexpectedQmlMessages(messagesBefore,
                               QStringLiteral("%1 instantiation").arg(qmlPath)
                                   .toUtf8().constData());
+}
+
+// ── S7 (audit ④): mock-disclosure behavior net ────────────────────────────
+// Destination of the R-P1.E / S5 mock-disclosure copy locks
+// (QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure). Same pages and
+// the same initial required properties as pagesInstantiate_data; the
+// contract is asserted on the instantiated object tree instead of the
+// source file.
+
+void QmlSmokeTests::s7MockSurfacesCarryDisclosureToken_data()
+{
+  QTest::addColumn<QString>("qmlPath");
+  QTest::addColumn<QVariantMap>("initialProps");
+
+  auto vm = [this](const char *prop) {
+    QObject *value = backendProperty(prop);
+    return QVariant::fromValue(value);
+  };
+
+  QTest::newRow("HomePage")
+      << "qrc:/qml/OWzx/pages/HomePage.qml"
+      << QVariantMap{{"homeVm", vm("homeViewModel")}};
+  QTest::newRow("MonitorPage")
+      << "qrc:/qml/OWzx/pages/MonitorPage.qml"
+      << QVariantMap{{"monitorVm", vm("monitorViewModel")}};
+  QTest::newRow("MultiMachinePage")
+      << "qrc:/qml/OWzx/pages/MultiMachinePage.qml"
+      << QVariantMap{{"multiMachineVm", vm("multiMachineViewModel")}};
+}
+
+void QmlSmokeTests::s7MockSurfacesCarryDisclosureToken()
+{
+  QFETCH(QString, qmlPath);
+  QFETCH(QVariantMap, initialProps);
+
+  QQmlComponent component(engine_, QUrl(qmlPath));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("%1 failed to compile: %2")
+                          .arg(qmlPath, component.errorString())));
+
+  std::unique_ptr<QObject> page(
+      component.createWithInitialProperties(initialProps));
+  QVERIFY2(page, qPrintable(QStringLiteral("%1 failed to instantiate: %2")
+                                .arg(qmlPath, component.errorString())));
+
+  QStringList texts;
+  collectTextProperties(page.get(), texts);
+
+  // R-P1.E + S5 behavior: every registry-Mock page discloses its demo data
+  // in user-visible copy. Token = the 演示 disclosure family (演示模式 /
+  // 演示数据), so rewording inside the family needs no test edit; losing the
+  // disclosure entirely (or deferring it behind an un-instantiated branch)
+  // goes red.
+  int disclosureHits = 0;
+  for (const QString &text : texts)
+  {
+    if (text.contains(QStringLiteral("演示")))
+      ++disclosureHits;
+  }
+  QVERIFY2(disclosureHits > 0,
+           qPrintable(QStringLiteral("%1 carries %2 text items but none discloses"
+                                    " the local mock (演示 token family) — R-P1.E/S5"
+                                    " requires user-visible demo-data disclosure")
+                          .arg(qmlPath)
+                          .arg(texts.size())));
 }
 
 // ── S1 (audit ④): cluster NOTIFY migration checks ─────────────────────────

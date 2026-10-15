@@ -745,6 +745,10 @@ private slots:
   // shells, tool marker consumption, move-kind toggles, tick pickers,
   // stats split display, extruder legend visibility, software fallback.
   void previewCompletionSourceAudit();
+  // R-P1.E / S5 mock-disclosure honesty. S7 batch 3: the page-surface copy
+  // locks moved to the runtime net (QmlSmokeTests
+  // s7MockSurfacesCarryDisclosureToken); the three not-yet-instantiated
+  // dialogs keep their source disclosure locks here (S7-transition).
   void mockSurfacesCarryUserVisibleDisclosure();
   void wizardAndWipeTowerBindConfigViewModelOnly();
   void previewWave5SliderSourceAudit();
@@ -12158,37 +12162,36 @@ void QmlUiAuditTests::platerHotkeysFollowCanvasFocus()
 // mock device/cloud/fleet services must carry a user-visible
 // demo-mode disclosure so mock responses are never mistaken for real
 // device state. S5 (audit 2026-10-10 ch.4 / docs/services-status.md)
-// extends the same contract to the remaining registry-Mock surfaces:
-// the Monitor AMS slot strip, the Monitor camera panel, AMSSettingsDialog
-// and PluginManagerDialog.
+// extends the same contract to the remaining registry-Mock surfaces.
+// S7 (batch 3, 2026-10-15): the page surfaces (HomePage login/bind,
+// MonitorPage device/camera/AMS strip/camera panel, MultiMachinePage
+// fleet/send) are asserted at runtime by QmlSmokeTests
+// s7MockSurfacesCarryDisclosureToken (演示 token family on the live text
+// tree); this slot keeps only the three dialogs not yet instantiated by
+// the smoke suite (S7-transition: migrate when they join it).
 void QmlUiAuditTests::mockSurfacesCarryUserVisibleDisclosure()
 {
-  const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
-  const QString monitorPage = readSource(QStringLiteral("src/qml_gui/pages/MonitorPage.qml"));
-  const QString multiMachinePage = readSource(QStringLiteral("src/qml_gui/pages/MultiMachinePage.qml"));
   const QString selectMachine = readSource(QStringLiteral("src/qml_gui/dialogs/SelectMachineDialog.qml"));
   const QString amsSettings = readSource(QStringLiteral("src/qml_gui/dialogs/AMSSettingsDialog.qml"));
   const QString pluginManager = readSource(QStringLiteral("src/qml_gui/dialogs/PluginManagerDialog.qml"));
-  QVERIFY2(!homePage.isEmpty() && !monitorPage.isEmpty()
-               && !multiMachinePage.isEmpty() && !selectMachine.isEmpty()
-               && !amsSettings.isEmpty() && !pluginManager.isEmpty(),
-           "Unable to read the mock-backed surfaces");
-  QVERIFY2(homePage.contains(QStringLiteral("演示模式")),
-           "R-P1.E: HomePage login/bind must disclose the local mock");
-  QVERIFY2(monitorPage.contains(QStringLiteral("演示模式")),
-           "R-P1.E: MonitorPage device/camera/print controls must disclose"
-           " the local mock");
-  // S5: per-surface explicit demo-data state on the registry-Mock sources.
-  QVERIFY2(monitorPage.contains(QStringLiteral("演示数据")),
-           "S5: MonitorPage AMS slot strip / camera panel must carry the"
-           " explicit demo-data state (docs/services-status.md)");
+  QVERIFY2(!selectMachine.isEmpty() && !amsSettings.isEmpty()
+               && !pluginManager.isEmpty(),
+           "Unable to read the mock-backed dialogs");
+  // S7 (batch 3): the HomePage / MonitorPage / MultiMachinePage exact-copy
+  // locks (演示模式 / 演示数据 / 任务发送) migrated to the runtime behavior
+  // net — QmlSmokeTests::s7MockSurfacesCarryDisclosureToken instantiates
+  // each page and asserts the 演示 disclosure token family on the live text
+  // tree (property level). Rewording the copy inside the family and any
+  // reformatting no longer touch tests; losing the disclosure entirely
+  // still goes red.
+  //
+  // The three dialogs below are not instantiated by the smoke suite, so
+  // their disclosure locks stay here: S7-transition — migrate to runtime
+  // when the dialogs join the smoke instantiation set (X2 follow-up).
   QVERIFY2(amsSettings.contains(QStringLiteral("演示数据")),
            "S5: AMSSettingsDialog slot/settings demo data must be disclosed");
   QVERIFY2(pluginManager.contains(QStringLiteral("演示数据")),
            "S5: PluginManagerDialog install mock must be disclosed");
-  QVERIFY2(multiMachinePage.contains(QStringLiteral("演示模式"))
-               && multiMachinePage.contains(QStringLiteral("任务发送")),
-           "R-P1.E: MultiMachinePage fleet/send must disclose the local mock");
   QVERIFY2(selectMachine.contains(QStringLiteral("演示模式")),
            "R-P1.E: SelectMachineDialog device list must disclose the local mock");
 }

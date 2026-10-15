@@ -23,7 +23,7 @@
 ## 落地机制
 
 - **`QmlUiAuditTests::normalizedSource()`**：把任意空白串（缩进/换行/CRLF）折叠为单空格。新写"序列锁"一律 `normalizedSource(src).contains("token1 token2 ...")`；只有 ID/像素锁才直接用 `readSource()` 原文匹配。
-- **`QmlSmokeTests`**：行为网本体（真实 QQmlEngine 加载 main.qml+10 页面，断言零 QML 错误 + S1 簇 NOTIFY 契约 + 绑定重求值）。字符串锁降级的目的地优先是这里——能实例化的表面，锁运行时属性/文本，不锁源码。
+- **`QmlSmokeTests`**：行为网本体（真实 QQmlEngine 加载 main.qml+10 页面，断言零 QML 错误 + S1 簇 NOTIFY 契约 + 绑定重求值）。字符串锁降级的目的地优先是这里——能实例化的表面，锁运行时属性/文本，不锁源码。已成范本：`s7MockSurfacesCarryDisclosureToken`（实例化 HomePage/MonitorPage/MultiMachinePage 后在活对象树上断言"演示"披露 token 家族，接替 QmlUiAuditTests 里三个页面的逐字文案锁）。
 - **新增锁的准入**：往 QmlUiAuditTests 加新 `contains()` 前，先问能否写成 QmlSmokeTests 的行为断言；确实只能锁源码的，按上表归类并写明锁的是什么（行为还是格式）。
 
 ## 迁移节奏（S7 分批）
