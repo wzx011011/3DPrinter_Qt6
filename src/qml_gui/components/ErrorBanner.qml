@@ -8,13 +8,22 @@ import OWzx
 // PopNotification (third_party/OrcaSlicer/src/slic3r/GUI/
 // NotificationManager.cpp): window rounding + border (:221,:244,:247),
 // content-driven height (set_next_window_size :612-618), wrapped text with
-// the "..More" expand link (render_text :682-732), the collapse button
+// the "More" expand link (render_text :682-732), the collapse button
 // (:988-1018), the borderless close glyph + full-height hit strip
 // (render_close_button :830-875) and the rounded left level sign
 // (bbl_render_left_sign :956-970). No per-level icon and no pending-count
 // badge: the upstream warning level renders text only (render_left_sign
 // :972-987 is fully commented out) and unclosed notifications stack instead
 // of overflowing into a counter (render_notifications :3130-3155).
+//
+// X2 (audit 2026-10-10 (4)): the collapse machinery is the unified
+// notification-window contract shared with ErrorToast/NotificationCenter --
+// a hidden wrap measurer drives the full line count, the collapsed view is
+// a maximumLineCount:2 + elide Text with the trailing "More" expander and
+// the minimize glyph collapses it again (ErrorToast's technique). The former
+// banner-private binary-search wrapped-line extraction
+// (positionToRectangle/endOfWrappedLine) is retired: one implementation of
+// the upstream折叠提取 semantics instead of three divergent ones.
 Rectangle {
     id: root
 
@@ -36,9 +45,7 @@ Rectangle {
     readonly property color levelColor: Theme.statusWarning
 
     // Line height of the body font (upstream m_line_height =
-    // ImGui::CalcTextSize("A").y, count_spaces :481). Starts from the font
-    // metrics; refreshCollapsedLines() refines it to the natural height of
-    // one laid-out text line.
+    // ImGui::CalcTextSize("A").y, count_spaces :481).
     property real lineHeight: bodyMetrics.height
 
     // Icon button edge = glyph size x 1.25 (render_close_button :853-854).
@@ -66,12 +73,8 @@ Rectangle {
     // "More" renders when the collapsed view hides lines (:722-725).
     readonly property bool hasMoreLink: !isExpanded && measureText.lineCount > 2
 
-    // Collapsed-mode line substrings, extracted from the wrapped layout.
-    property string collapsedLine1: ""
-    property string collapsedLine2: ""
-
     readonly property real bodyImplicitHeight: isExpanded ? expandedBody.implicitHeight
-                                                          : collapsedBody.implicitHeight
+                                                          : collapsedBody.height
     // Height = (max(lines, 2) + 1) x line_height: one line height of combined
     // vertical padding on top of the content, minimum two content lines
     // (set_next_window_size :612-618); the collapsed view is fixed at
@@ -86,22 +89,11 @@ Rectangle {
         font.pixelSize: Theme.fontSizeMD
     }
 
-    TextMetrics {
-        id: moreMetrics
-        text: ".." + qsTr("More")
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeMD
-    }
-
-    TextMetrics {
-        id: spaceMetrics
-        text: " "
-        font.family: Theme.fontFamily
-        font.pixelSize: Theme.fontSizeMD
-    }
-
-    // Hidden wrap reference: counts the wrapped lines and provides the
-    // character position -> line mapping used by the collapsed two-line view.
+    // Hidden wrap reference: the full wrapped line count of the message.
+    // Drives isExpanded/hasMoreLink without feeding truncated state back
+    // into the visible text (no binding loop) -- the ErrorToast measurer
+    // pattern, now the single collapse technique across the notification
+    // surfaces.
     Text {
         id: measureText
         visible: false
@@ -110,84 +102,7 @@ Rectangle {
         wrapMode: Text.Wrap
         font.family: Theme.fontFamily
         font.pixelSize: Theme.fontSizeMD
-        onLineCountChanged: root.refreshCollapsedLinesLater()
     }
-
-    function refreshCollapsedLinesLater() {
-        // Coalesced deferred refresh: runs once after the pending binding and
-        // layout changes settle.
-        Qt.callLater(root.refreshCollapsedLines)
-    }
-
-    // Advance width of s with the body font.
-    function textAdvance(s) {
-        bodyMetrics.text = s
-        return bodyMetrics.advanceWidth
-    }
-
-    // Character position just past the last character of wrapped line lineNo
-    // (1-based); 0 for line 0, message length beyond the last line.
-    function endOfWrappedLine(lineNo) {
-        const limit = root.message.length
-        if (lineNo < 1)
-            return 0
-        if (measureText.lineCount < lineNo)
-            return limit
-        const bottom = lineNo * root.lineHeight
-        let lo = 0
-        let hi = limit
-        while (lo < hi) {
-            const mid = (lo + hi) >> 1
-            if (measureText.positionToRectangle(mid).y < bottom)
-                lo = mid + 1
-            else
-                hi = mid
-        }
-        return lo
-    }
-
-    // Upstream skips one space/newline right after every wrapped break
-    // (NotificationManager.cpp:636,647-648,698).
-    function skipSeparator(pos) {
-        if (pos < root.message.length && (root.message[pos] === " " || root.message[pos] === "\n"))
-            return pos + 1
-        return pos
-    }
-
-    function wrappedLineBounds(lineNo) {
-        if (lineNo < 1 || measureText.lineCount < lineNo)
-            return [root.message.length, root.message.length]
-        const start = lineNo > 1 ? skipSeparator(endOfWrappedLine(lineNo - 1)) : 0
-        const end = endOfWrappedLine(lineNo)
-        return [start, end]
-    }
-
-    // Rebuilds the collapsed substrings and the refined line height.
-    function refreshCollapsedLines() {
-        measureText.forceLayout()
-        if (measureText.lineCount > 0)
-            root.lineHeight = measureText.implicitHeight / measureText.lineCount
-        // The refined line height feeds contentWidth; force the relayout so
-        // the extraction below sees the final geometry.
-        measureText.forceLayout()
-        const bounds1 = wrappedLineBounds(1)
-        root.collapsedLine1 = root.message.substring(bounds1[0], bounds1[1])
-        const bounds2 = wrappedLineBounds(2)
-        let line2 = root.message.substring(bounds2[0], bounds2[1])
-        if (root.hasMoreLink) {
-            // Chop the second line until ".." plus "More" still fit on it
-            // (render_text :699-703).
-            const maxWidth = root.contentWidth - moreMetrics.advanceWidth
-            while (line2.length > 0 && root.textAdvance(line2) > maxWidth)
-                line2 = line2.substring(0, line2.length - 1)
-        }
-        root.collapsedLine2 = line2
-    }
-
-    Component.onCompleted: refreshCollapsedLinesLater()
-    onMessageChanged: refreshCollapsedLinesLater()
-    onWidthChanged: refreshCollapsedLinesLater()
-    onIsExpandedChanged: refreshCollapsedLinesLater()
 
     // ---- Left level sign ----------------------------------------------------
 
@@ -231,70 +146,58 @@ Rectangle {
         font.pixelSize: Theme.fontSizeMD
     }
 
-    // Collapsed view: at most two lines; when more lines exist the second one
-    // is chopped and followed by the "More" hyperlink (render_text :690-725).
-    Column {
+    // Collapsed view: exactly two rendered lines, the second trimmed with an
+    // ellipsis and the width reserved for the "More" expander (upstream trims
+    // line 2 until "..More" fits, render_text :699-711 + :722-725). Same
+    // contract as the ErrorToast collapsed entry.
+    Item {
         id: collapsedBody
         visible: !root.isExpanded
         x: root.contentX
         width: root.contentWidth
-        spacing: 0
+        height: 2 * root.lineHeight
         anchors.verticalCenter: parent.verticalCenter
 
         Text {
-            width: parent.width
-            visible: root.collapsedLine1 !== ""
-            text: root.collapsedLine1
+            id: collapsedText
+            anchors.left: parent.left
+            anchors.top: parent.top
+            width: root.hasMoreLink ? parent.width - moreLink.width - 4
+                                    : parent.width
+            text: root.message
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+            elide: Text.ElideRight
             color: Theme.statusWarning
             font.family: Theme.fontFamily
             font.pixelSize: Theme.fontSizeMD
         }
 
-        Row {
-            visible: measureText.lineCount > 1
-            spacing: spaceMetrics.advanceWidth
+        // "More" expander (render_hypertext more=true, :722-725/:743-749):
+        // click re-expands to the full wrapped view. Brand accent, bold --
+        // the ErrorToast link form, replacing the banner-private underline
+        // Rectangle variant.
+        Text {
+            id: moreLink
+            visible: root.hasMoreLink
+            anchors.left: collapsedText.right
+            anchors.leftMargin: 4
+            anchors.bottom: parent.bottom
+            height: root.lineHeight
+            verticalAlignment: Text.AlignVCenter
+            text: qsTr("More")
+            color: moreArea.containsMouse ? Theme.accentDark : Theme.accent
+            font.pixelSize: Theme.fontSizeMD
+            font.bold: true
 
-            Text {
-                text: root.collapsedLine2 + (root.hasMoreLink ? ".." : "")
-                color: Theme.statusWarning
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeMD
-            }
-
-            // "More" hyperlink with a 1px underline 2px above the glyph
-            // bottom (render_hypertext :734-792). Brand accent green replaces
-            // the upstream teal hyperlink color.
-            Text {
-                id: moreLink
-                visible: root.hasMoreLink
-                text: qsTr("More")
-                color: moreArea.containsMouse ? Theme.accentDark : Theme.accent
-                font.family: Theme.fontFamily
-                font.pixelSize: Theme.fontSizeMD
-
-                Rectangle {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 2
-                    height: 1
-                    color: parent.color
-                }
-
-                // Invisible hit area padding around the label
-                // (render_hypertext :738-743).
-                MouseArea {
-                    id: moreArea
-                    x: -4
-                    y: -5
-                    width: parent.width + 6
-                    height: parent.height + 10
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.overrideMessage = root.message
-                        root.expandedOverride = 1
-                    }
+            MouseArea {
+                id: moreArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.overrideMessage = root.message
+                    root.expandedOverride = 1
                 }
             }
         }

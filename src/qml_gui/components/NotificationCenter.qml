@@ -27,6 +27,13 @@ import OWzx
 //     cpp:988-1017: x = width - 1.8 x line_height, y = height - button - 5).
 // The upstream line height at scale 1 is 18 px (window width = 25 x 18 = 450,
 // cpp:498; collapsed window = 3 x line_height, hpp:639-640).
+//
+// X2 (audit 2026-10-10 ④): the row chrome (close/minimize glyphs, "More"
+// expander) is the unified ErrorToast notification-window contract — shared
+// svg glyph assets and the maximumLineCount collapse — instead of a third
+// divergent rendering of the upstream form; the header action chips are
+// system CxButtons. Severity color/icon lookups stay on the canonical
+// Theme.severityColors/severityIcons palettes (Phase 167 Cmp-01).
 Item {
     id: root
 
@@ -101,54 +108,32 @@ Item {
                     }
                 }
 
-                // Mark read button
-                Rectangle {
+                // Header actions. X2: the three hand-drawn 24px glyph chips
+                // are system CxButtons (Chip style); the history list rows
+                // below keep the upstream window form.
+                CxButton {
                     visible: Backend.unreadHistoryCount > 0
-                    width: 24; height: 24; radius: Theme.radiusSM
-                    color: "transparent"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "✓"
-                        color: Theme.statusInfo
-                        font.pixelSize: Theme.fontSize13
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: Backend.markHistoryRead()
-                    }
+                    text: "✓"
+                    compact: true
+                    cxStyle: CxButton.Style.Chip
+                    toolTipText: qsTr("全部标为已读")
+                    onClicked: Backend.markHistoryRead()
                 }
 
-                // Clear all button
-                Rectangle {
+                CxButton {
                     visible: Backend.historyCount > 0
-                    width: 24; height: 24; radius: Theme.radiusSM
-                    color: "transparent"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "🗑"
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSizeMD
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: Backend.clearHistory()
-                    }
+                    text: "🗑"
+                    compact: true
+                    cxStyle: CxButton.Style.Chip
+                    toolTipText: qsTr("清空通知记录")
+                    onClicked: Backend.clearHistory()
                 }
 
-                // Close button
-                Rectangle {
-                    width: 24; height: 24; radius: Theme.radiusSM
-                    color: "transparent"
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: "✕"
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fontSize13
-                    }
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: root.closeRequested()
-                    }
+                CxButton {
+                    text: "✕"
+                    compact: true
+                    cxStyle: CxButton.Style.Chip
+                    onClicked: root.closeRequested()
                 }
             }
 
@@ -297,8 +282,10 @@ Item {
 
                             // "More" hypertext after the truncated second line
                             // (upstream render_hypertext with more=true,
-                            // NotificationManager.cpp:722-725, 743-749:
-                            // underlined link, click expands the text).
+                            // NotificationManager.cpp:722-725, 743-749). X2:
+                            // the accent bold expander is the unified
+                            // ErrorToast link form (was an underlined
+                            // Text variant).
                             Text {
                                 id: moreLink
                                 visible: !card.expanded && msgMeasure.lineCount > 2
@@ -308,7 +295,7 @@ Item {
                                 text: qsTr("更多")
                                 color: moreMA.containsMouse ? Theme.accentDark : Theme.accent
                                 font.pixelSize: Theme.fontSizeMD
-                                font.underline: true
+                                font.bold: true
                                 MouseArea {
                                     id: moreMA
                                     anchors.fill: parent
@@ -323,15 +310,18 @@ Item {
                     // Minimize glyph (render_minimize_button,
                     // NotificationManager.cpp:988-1017: shown when multiline
                     // && lines > 3, left edge at width - 1.8 x line_height,
-                    // y = height - button - 5, click collapses).
-                    Text {
-                        visible: card.expanded && msgText.lineCount > 3
+                    // y = height - button - 5, click collapses). X2: the
+                    // shared notification_minimalize svg glyph (the ErrorToast
+                    // contract) replaces the page-private ▴ Text variant.
+                    Image {
+                        visible: card.expanded && msgMeasure.lineCount > 3
                         x: parent.width - 1.8 * root.notifLineHeight
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: 5
-                        text: "▴"
-                        color: minMA.containsMouse ? Theme.textPrimary : Theme.textMuted
-                        font.pixelSize: Math.round(1.25 * root.notifLineHeight)
+                        width: 22; height: 22
+                        source: minMA.containsMouse
+                                ? "qrc:/qml/assets/icons/notification_minimalize_hover.svg"
+                                : "qrc:/qml/assets/icons/notification_minimalize.svg"
                         MouseArea {
                             id: minMA
                             anchors.fill: parent
@@ -359,17 +349,18 @@ Item {
 
                     // Per-row close glyph (render_close_button,
                     // NotificationManager.cpp:853-860: 1.25 x line_height
-                    // glyph, SetCursorPosX(width - 2.75 x line_height) puts
-                    // its left edge there, vertically centered; hover swaps
-                    // the glyph -- the Qt6 hover swaps the color, click
-                    // removes the row).
-                    Text {
+                    // glyph at width - 2.75 x line_height, vertically
+                    // centered; hover swaps the glyph). X2: the shared
+                    // notification_close svg glyph (the ErrorToast contract)
+                    // replaces the row-private ✕ Text variant.
+                    Image {
                         visible: !card.blockLevel
                         x: parent.width - 2.75 * root.notifLineHeight
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "✕"
-                        color: closeMA.containsMouse ? Theme.textPrimary : Theme.textMuted
-                        font.pixelSize: Math.round(1.25 * root.notifLineHeight)
+                        width: 22; height: 22
+                        source: closeMA.containsMouse
+                                ? "qrc:/qml/assets/icons/notification_close_hover.svg"
+                                : "qrc:/qml/assets/icons/notification_close.svg"
                         MouseArea {
                             id: closeMA
                             anchors.fill: parent
@@ -382,14 +373,16 @@ Item {
                     // Block-row close glyph, larger (bbl_render_block_notif_
                     // buttons, NotificationManager.cpp:877-903: 2 x line_height
                     // glyph, left edge at width - 2.0 x line_height, vertically
-                    // centered).
-                    Text {
+                    // centered). Same shared block_notification_close asset
+                    // family the ErrorToast block form uses.
+                    Image {
                         visible: card.blockLevel
                         x: parent.width - 2.0 * root.notifLineHeight
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "✕"
-                        color: blockCloseMA.containsMouse ? Theme.textPrimary : Theme.textMuted
-                        font.pixelSize: 2 * root.notifLineHeight
+                        width: 36; height: 36
+                        source: blockCloseMA.containsMouse
+                                ? "qrc:/qml/assets/icons/block_notification_close_hover.svg"
+                                : "qrc:/qml/assets/icons/block_notification_close.svg"
                         MouseArea {
                             id: blockCloseMA
                             anchors.fill: parent

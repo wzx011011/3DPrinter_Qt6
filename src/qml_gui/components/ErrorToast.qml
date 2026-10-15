@@ -60,6 +60,12 @@ import OWzx
 // after the helper is cleared).
 // Hypertext: entries may carry a trailing clickable link (upstream
 // NotificationData.hypertext rendered by render_hypertext :734-753).
+// X2 (audit 2026-10-10 ④): this file hosts the CANONICAL implementation of
+// the upstream notification-window contract (maximumLineCount collapse +
+// "More" expander + minimize/close svg glyphs) that ErrorBanner and
+// NotificationCenter now share; the in-toast action chips are system
+// CxButtons instead of hand-drawn Rectangle+MouseArea copies. U12 (复制详情)
+// and the U1 severity semantics are preserved verbatim.
 Item {
     id: root
 
@@ -443,39 +449,34 @@ Item {
                 // (slice / export / 3MF import); the service reports the
                 // terminal state through its own signal, which retires the
                 // toast.
+                // X2: the former hand-drawn chip is a system CxButton (Chip
+                // style, X2 batch 1).
                 Row {
                     visible: entry.cancellable
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 8
 
-                    Rectangle {
-                        width: 60; height: 24; radius: Theme.radiusSM
-                        color: Theme.chromePressed
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text { anchors.centerIn: parent; text: qsTr("取消"); color: entry.textColor; font.pixelSize: Theme.fontSizeSM }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.cancelNotificationAction(entry.entryId) }
+                    CxButton {
+                        text: qsTr("取消")
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: Backend.cancelNotificationAction(entry.entryId)
                     }
                 }
 
                 // Hint navigation buttons (aligns with upstream HintNotification next/prev arrows)
+                // X2: hand-drawn glyph chips are system CxButtons (Chip/Ghost).
                 Row {
                     visible: entry.isHint
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 6
 
                     // Prev hint
-                    Rectangle {
-                        width: 24; height: 22; radius: Theme.radiusSM
-                        color: prevMA.containsMouse ? Theme.borderInput : Theme.chromePressed
-                        Text { anchors.centerIn: parent; text: "<"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSize13; font.bold: true }
-                        MouseArea {
-                            id: prevMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.prevHint()
-                        }
+                    CxButton {
+                        text: "<"
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: Backend.prevHint()
                     }
 
                     // Hint index
@@ -500,158 +501,113 @@ Item {
                     }
 
                     // Next hint
-                    Rectangle {
-                        width: 24; height: 22; radius: Theme.radiusSM
-                        color: nextMA.containsMouse ? Theme.borderInput : Theme.chromePressed
-                        Text { anchors.centerIn: parent; text: ">"; color: Theme.chromeTextMuted; font.pixelSize: Theme.fontSize13; font.bold: true }
-                        MouseArea {
-                            id: nextMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.nextHint()
-                        }
+                    CxButton {
+                        text: ">"
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: Backend.nextHint()
                     }
 
                     // Documentation link button (aligns with upstream HintNotification documentation button)
-                    Rectangle {
+                    CxButton {
                         visible: Backend.currentHintHasDocumentationLink()
-                        width: 40; height: 22; radius: Theme.radiusSM
-                        color: docMA.containsMouse ? Theme.bgWarningSubtle : Theme.bgCard
-                        Text { anchors.centerIn: parent; text: qsTr("文档"); color: entry.isBlock ? entry.textColor : Theme.textMuted; font.pixelSize: Theme.fontSizeXS; font.bold: true }
-                        MouseArea {
-                            id: docMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.openHintDocumentation()
-                        }
+                        text: qsTr("文档")
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: Backend.openHintDocumentation()
                     }
 
                     // Don't show again
-                    Text {
+                    CxButton {
                         anchors.verticalCenter: parent.verticalCenter
-                        leftPadding: 8
                         text: qsTr("不再提示")
-                        color: prefMA.containsMouse ? Theme.chromeTextMuted : Theme.borderActive
-                        font.pixelSize: Theme.fontSizeXS
-                        MouseArea {
-                            id: prefMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                Backend.dismissNotificationById(entry.entryId)
-                                Backend.setHintsEnabled(false)
-                            }
+                        compact: true
+                        cxStyle: CxButton.Style.Ghost
+                        onClicked: {
+                            Backend.dismissNotificationById(entry.entryId)
+                            Backend.setHintsEnabled(false)
                         }
                     }
                 }
 
                 // Slicing completion buttons (aligns with upstream SlicingProgressNotification export/preview)
+                // X2: hand-drawn chips are system CxButtons.
                 Row {
                     visible: entry.isSlicingComplete
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 8
 
                     // Preview button
-                    Rectangle {
+                    CxButton {
                         visible: entry.showPreviewBtn
-                        width: 70; height: 24; radius: Theme.radiusSM
-                        color: previewMA.containsMouse ? Theme.scrollBarHoverColor : Theme.scrollBarHoverColor
-                        Text { anchors.centerIn: parent; text: qsTr("预览"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM; font.bold: true }
-                        MouseArea {
-                            id: previewMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                Backend.dismissNotificationById(entry.entryId)
-                                Backend.setCurrentPage(2)
-                            }
+                        text: qsTr("预览")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: {
+                            Backend.dismissNotificationById(entry.entryId)
+                            Backend.setCurrentPage(2)
                         }
                     }
 
                     // Export button
-                    Rectangle {
+                    CxButton {
                         visible: entry.showExportBtn
-                        width: 70; height: 24; radius: Theme.radiusSM
-                        color: Theme.statusInfo
-                        Text { anchors.centerIn: parent; text: qsTr("导出"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM; font.bold: true }
-                        MouseArea {
-                            id: exportMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                Backend.dismissNotificationById(entry.entryId)
-                                Backend.exportGCodeRequested()
-                            }
+                        text: qsTr("导出")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: {
+                            Backend.dismissNotificationById(entry.entryId)
+                            Backend.exportGCodeRequested()
                         }
                     }
 
                     // Dismiss
-                    Rectangle {
-                        width: 50; height: 24; radius: Theme.radiusSM
-                        color: Theme.chromePressed
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text { anchors.centerIn: parent; text: qsTr("关闭"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeXS }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.dismissNotificationById(entry.entryId) }
+                    CxButton {
+                        text: qsTr("关闭")
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: Backend.dismissNotificationById(entry.entryId)
                     }
                 }
 
                 // Confirm/Cancel buttons (aligns with upstream notification_manager confirm dialog)
+                // X2: hand-drawn chips are system CxButtons.
                 Row {
                     visible: entry.requiresConfirm
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 8
 
-                    Rectangle {
-                        width: 60; height: 24; radius: Theme.radiusSM
-                        color: Theme.chromePressed
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.cancelNotificationById(entry.entryId) }
+                    CxButton {
+                        text: qsTr("取消")
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: Backend.cancelNotificationById(entry.entryId)
                     }
-                    Rectangle {
-                        width: 60; height: 24; radius: Theme.radiusSM
-                        color: entry.currentColor
-                        Text { anchors.centerIn: parent; text: qsTr("确认"); color: Theme.accentDark; font.pixelSize: Theme.fontSizeSM }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                            onClicked: Backend.confirmNotificationById(entry.entryId) }
+                    CxButton {
+                        text: qsTr("确认")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: Backend.confirmNotificationById(entry.entryId)
                     }
                 }
 
                 // Copy-details button (U12): puts the entry's title + message
                 // on the system clipboard so failure text can be pasted into
-                // a bug report. Button language follows the shared row style
-                // (chromePressed chip); on the solid block form the label
-                // switches to the forced white text color.
+                // a bug report. X2: the hand-drawn chip becomes a system
+                // CxButton; the transient 已复制 acknowledgement is preserved.
                 Row {
                     visible: entry.canCopyDetails
                     anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 8
 
-                    Rectangle {
-                        width: 72; height: 24; radius: Theme.radiusSM
-                        color: Theme.chromePressed
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: entry.copyAcknowledged ? qsTr("已复制") : qsTr("复制详情")
-                            color: entry.isBlock ? entry.textColor : Theme.chromeText
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                root.copyTextToClipboard(entry.detailText)
-                                entry.copyAcknowledged = true
-                                copyAckTimer.restart()
-                            }
+                    CxButton {
+                        text: entry.copyAcknowledged ? qsTr("已复制") : qsTr("复制详情")
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        onClicked: {
+                            root.copyTextToClipboard(entry.detailText)
+                            entry.copyAcknowledged = true
+                            copyAckTimer.restart()
                         }
                     }
                 }
