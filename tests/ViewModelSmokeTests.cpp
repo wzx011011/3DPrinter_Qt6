@@ -3595,19 +3595,18 @@ void ViewModelSmokeTests::int01_SsdpDiscoveryParsesMockResponse()
 }
 
 // -- v2.6 Phase 4: INT-03 摄像头视频流自回归（状态机 + 帧令牌） ------
-// 验证 CameraServiceMock 状态机 + MonitorViewModel 帧令牌转发：
+// X1 事件驱动化改写（dwfrun 白名单扩展批准，2026-10-15）：1500/800ms 假时序
+// 已撤除，状态由 CameraStream 解码事件驱动（streamStarted/errorOccurred/
+// streamStopped/frameReady）——不可达 RTSP 必落 Error(4) 终态，永不假翻
+// Streaming(3)。原「锁生产 mock 假时序」写法按审计④章 X1（"测试获得注入缝
+// （替代 int03 锁生产 mock 假时序的写法）"）由接口缝取代：接口级替身注入
+// 见 tests/ServiceSeamTests.cpp。
 //   - 初始 streamStatus=0 (Disconnected), frameToken=0
 //   - updateForDevice(online=true) → cameraAvailable=true
-//   - startStream → 状态机切换 Connecting(1) → Connected(2) → Streaming(3)
-//   - MonitorViewModel.cameraStreamStatus / cameraFrameToken 可读
-//   - stopStream → Disconnected(0), frameToken 归零（清帧）
-//
-// 不依赖真实 RTSP 服务器：cameraUrl_ 为空时 startRtspDecoder 为 noop，
-// 纯 mock 状态机验证。
-//
-// Q12: 时序断言收敛——不对生产 mock 的 singleShot(1500)/(800) 假时序做
-// qWait 精确中间态断言（裕度仅 200/400ms，CI 负载即偶崩）；只等终态到达，
-// 中间态回归由状态发射序列断言补偿。
+//   - startStream → 立即 Connecting(1)（唯一同步发射），终态由解码事件收敛
+//   - 不可达 RTSP → Error(4)：序列单调、含 Error、无 Streaming，错误可读
+//   - stopStream 协作取消：及时回 Disconnected(0)，帧清零（不再 terminate）
+//   - 非 RTSP 源（真实相机后端未接入形态）→ 显式错误披露，不假直播
 void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
 {
   CameraServiceMock camera;
@@ -3634,23 +3633,23 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
   connect(&camera, &CameraServiceMock::streamStatusChanged, &camera,
           [&camera, &statusSequence]() { statusSequence.append(camera.streamStatus()); });
 
-  // 启动流：状态机同步进入 Connecting(1)，且只发射这一次
+  // 启动流：状态机同步进入 Connecting(1)，且只发射这一次（事件驱动化起点）
   camera.startStream();
   QCOMPARE(camera.cameraUrl(),
            QStringLiteral("rtsp://192.168.1.50:8554/streaming/live/1"));
   QCOMPARE(statusSequence, QList<int>{1}); // Connecting
 
-  // Q12: 终态收敛——不锁 1500/800ms 的精确中间态时刻，只等终态
-  // Streaming(3) 到达（QTRY 轮询，裕度 10s >> 名义 2.3s，CI 负载不再偶崩）。
-  // 中间态回归由状态序列断言补偿：序列必须严格是
-  // Connecting(1) → Connected(2) → Streaming(3)——不回退、不跳步、无重复。
-  QTRY_COMPARE_WITH_TIMEOUT(camera.streamStatus(), 3, 10000);
-  QCOMPARE(statusSequence, (QList<int>{1, 2, 3}));
+  // X1: 终态由解码事件收敛——不可达 RTSP 必落 Error(4)（FFmpeg stimeout
+  // 5s，QTRY 裕度 12s 覆盖 CI 负载），绝不假翻 Streaming(3)。
+  QTRY_COMPARE_WITH_TIMEOUT(camera.streamStatus(), 4, 12000);
+  QVERIFY2(!statusSequence.contains(3),
+           "camera must never show Streaming without a real stream");
+  QCOMPARE(statusSequence.first(), 1);  // 单调：从 Connecting 出发
+  QCOMPARE(statusSequence.last(), 4);   // 收敛 Error 终态
+  QVERIFY(!camera.errorMessage().isEmpty());
+  QCOMPARE(monitor.cameraStreamStatus(), 4);
 
-  // MonitorViewModel 转发一致
-  QCOMPARE(monitor.cameraStreamStatus(), 3);
-
-  // 停止流：回到 Disconnected，帧清零
+  // 停止流（协作取消）：回到 Disconnected，帧清零
   QSignalSpy frameSpy(&camera, &CameraServiceMock::frameTokenChanged);
   camera.stopStream();
   QCOMPARE(camera.streamStatus(), 0); // Disconnected
@@ -3663,6 +3662,15 @@ void ViewModelSmokeTests::int03_CameraStateMachineAndFrameToken()
   camera.startStream(); // 应被拒
   QCOMPARE(camera.streamStatus(), 0); // 仍 Disconnected
   QVERIFY(!camera.errorMessage().isEmpty());
+
+  // X1: 非 RTSP 源 → 显式错误披露（真实相机后端未接入形态），同步落 Error
+  camera.updateForDevice(QStringLiteral("192.168.1.50"), true);
+  camera.setCameraUrl(QStringLiteral("http://not-rtsp.example/stream"));
+  camera.startStream();
+  QCOMPARE(camera.streamStatus(), 4);
+  QVERIFY(!camera.errorMessage().isEmpty());
+  camera.stopStream();
+  QCOMPARE(camera.streamStatus(), 0);
 }
 
 // -- v2.7 P1: INT-02 校准自回归（calib slice 生成 G-code） ----------

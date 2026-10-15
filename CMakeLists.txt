@@ -573,6 +573,27 @@ if(BUILD_TESTING)
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
+    # X1 (2026-10-15): 服务接口缝接口级单测——mock 实现数据面窄接口
+    # (IDeviceDataPlane/ICloudDataPlane/ICameraStreamService)、手写替身可注入、
+    # 真发送链路 provenance 契约（demo 条目绝不成为 FTP/MQTT 目标 host）、
+    # MQTT 上游式 TLS URI、相机流事件驱动/协作取消。只链 owzx_app_core
+    # （服务与 CameraStream/MqttClient/FtpUploader 均在其中），无需 owzx_qml。
+    qt_add_executable(ServiceSeamTests tests/ServiceSeamTests.cpp)
+    target_link_libraries(ServiceSeamTests PRIVATE owzx_app_core
+        Qt6::Core Qt6::Gui Qt6::Test
+    )
+    # Same shared-SHA1 duplicate definitions as ViewModelSmokeTests above
+    # (paho-mqtt static + libcrypto both define SHA1_*; audit Q4).
+    if(MSVC)
+        target_link_options(ServiceSeamTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(ServiceSeamTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME ServiceSeamTests COMMAND ServiceSeamTests)
+    set_tests_properties(ServiceSeamTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
     # AI 控制面回归（OWzx-only，docs/ai-control.md）：headless 服务栈 +
     # AppToolRegistry + McpHttpServer（本地 socket 全链路）。
     qt_add_executable(AppToolTests tests/AppToolTests.cpp)
