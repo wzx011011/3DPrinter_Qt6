@@ -49,7 +49,7 @@ class EditorViewModel final : public QObject
   // assembleViewDataPoolIsolatedFromPrepareAndPreview isolation slot.
   friend class ViewModelSmokeTests;
   Q_PROPERTY(QString projectName READ projectName NOTIFY stateChanged)
-  Q_PROPERTY(int modelCount READ modelCount NOTIFY stateChanged)
+  Q_PROPERTY(int modelCount READ modelCount NOTIFY sceneTopologyChanged)
   // ── S1 plate cluster ────────────────────────────────────────────────────
   // Plate list/count/index and per-plate display states move on plate-scoped
   // edits (add/delete/clone/move/lock/rename/settings/printability, plate
@@ -74,16 +74,16 @@ class EditorViewModel final : public QObject
   /// Property-ized (S1) with the same plateChanged carrier: thumbnail cache
   /// writes emit plateChanged from the VM write paths.
   Q_PROPERTY(QString currentPlateThumbnailBase64 READ currentPlateThumbnailBase64 NOTIFY plateChanged)
-  Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
-  Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices NOTIFY stateChanged)
-  Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY sceneTopologyChanged)
+  Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices NOTIFY sceneTopologyChanged)
+  Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices NOTIFY sceneTopologyChanged)
   // P15.1/15.2 (COLOR): per-batch render-channel metadata paralleling
   // meshBatchSourceObjectIndices. Drives the upstream model coloring
   // (filament_colour by extruder, translucent modifier volumes, unprintable
   // black) in PrepareSceneData.
-  Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes NOTIFY stateChanged)
-  Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds NOTIFY stateChanged)
-  Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes NOTIFY sceneTopologyChanged)
+  Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds NOTIFY sceneTopologyChanged)
+  Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags NOTIFY sceneTopologyChanged)
   // S3 (2026-10-14): per-batch instance->world transform channel (one
   // QMatrix4x4 per blob batch, ProjectService::meshBatchInstanceTransforms).
   // Under the decomposed mesh blob this is the ONLY thing that moves on a
@@ -141,14 +141,14 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(bool canDeleteSelection READ canDeleteSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool canSetSelectionPrintable READ canSetSelectionPrintable NOTIFY selectionChanged)
   Q_PROPERTY(bool canTransformSelection READ canTransformSelection NOTIFY selectionChanged)
-  Q_PROPERTY(bool canArrangeObjects READ canArrangeObjects NOTIFY stateChanged)
+  Q_PROPERTY(bool canArrangeObjects READ canArrangeObjects NOTIFY sceneTopologyChanged)
   Q_PROPERTY(int availableGizmoMask READ availableGizmoMask NOTIFY stateChanged)
   Q_PROPERTY(QString settingsTargetType READ settingsTargetType NOTIFY selectionChanged)
   Q_PROPERTY(QString settingsTargetName READ settingsTargetName NOTIFY selectionChanged)
   Q_PROPERTY(int settingsTargetObjectIndex READ settingsTargetObjectIndex NOTIFY selectionChanged)
   Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY selectionChanged)
   // Object-list panel support
-  Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
+  Q_PROPERTY(int objectCount READ objectCount NOTIFY sceneTopologyChanged)
   // Phase 236 (DLG-03): RecenterDialog data — entries are
   // { "index": <source object index>, "name": <display name> } maps for every
   // object whose estimated footprint leaves the printable area. Refreshed by
@@ -158,8 +158,8 @@ class EditorViewModel final : public QObject
   // the .mtl next to a freshly imported .obj (upstream
   // ObjImportColorDialog). Non-empty only between load completion and
   // applyPendingObjColors/dismiss; objColorMappingRequested announces it.
-  Q_PROPERTY(QVariantList pendingObjColors READ pendingObjColors NOTIFY stateChanged)
-  Q_PROPERTY(int pendingObjObjectIndex READ pendingObjObjectIndex NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList pendingObjColors READ pendingObjColors NOTIFY sceneTopologyChanged)
+  Q_PROPERTY(int pendingObjObjectIndex READ pendingObjObjectIndex NOTIFY sceneTopologyChanged)
   Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY selectionChanged)
   Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY selectionChanged)
   // P15.11 (MULTICENTER): sorted list of ALL selected source object indices
@@ -184,7 +184,7 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int contextInstanceIndex READ contextInstanceIndex NOTIFY selectionChanged)
   Q_PROPERTY(int contextPlateIndex READ contextPlateIndex NOTIFY selectionChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
-  Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
+  Q_PROPERTY(QByteArray meshData READ meshData NOTIFY sceneTopologyChanged)
   // P15.11: post-validate clearance streams, packed as raw float XYZ triples.
   Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline NOTIFY sequentialClearanceChanged)
   Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill NOTIFY sequentialClearanceChanged)
@@ -196,7 +196,7 @@ class EditorViewModel final : public QObject
   // drawing during the gizmo drag (upstream resets the overlay at mouse-up).
   Q_PROPERTY(bool sequentialClearancePreviewMode READ sequentialClearancePreviewMode NOTIFY sequentialClearanceChanged)
   /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
-  Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY stateChanged)
+  Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY sceneTopologyChanged)
   /// 选中对象边界框尺寸 (dx, dy, dz, volume)，全零表示无选中.
   /// S1: NOTIFY is the transform cluster -- the tracked bbox moves on transform
   /// edits (the only cluster that fires per drag frame), and the selection /
@@ -1471,7 +1471,7 @@ public:
   Q_PROPERTY(QString sliceResultCost READ sliceResultCost NOTIFY stateChanged)
   Q_PROPERTY(int sliceResultLayerCount READ sliceResultLayerCount NOTIFY stateChanged)
   /// 模型尺寸文本（对齐上游 SliceInfoPanel 模型信息）
-  Q_PROPERTY(QString modelSizeText READ modelSizeText NOTIFY stateChanged)
+  Q_PROPERTY(QString modelSizeText READ modelSizeText NOTIFY transformChanged)
   /// 平均打印速度（对齐上游 PrintEstimatedStatistics）
   Q_PROPERTY(QString avgPrintSpeed READ avgPrintSpeed NOTIFY stateChanged)
   /// 预估打印时间（对齐上游 PrintEstimatedStatistics）

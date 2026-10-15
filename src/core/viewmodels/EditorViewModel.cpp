@@ -11591,7 +11591,10 @@ void EditorViewModel::dismissPendingObjColors()
     return;
   m_pendingObjColors.clear();
   m_pendingObjObjectIndex = -1;
-  emit stateChanged();
+  // S1: pure VM-local pending-state clear -- no service signal fires, so the
+  // topology cluster (which carries the pendingObj* properties) is emitted
+  // here directly.
+  emitSceneTopologyClusterChanged();
 }
 
 void EditorViewModel::clearWorkspace()
@@ -11624,7 +11627,12 @@ void EditorViewModel::clearWorkspace()
   m_cachedMeshBatchSourceObjectIndices.clear();
   m_sliceAllQueue.clear();
   statusText_ = QStringLiteral("已新建项目");
-  emit stateChanged();
+  // S1: ProjectService::clearProject emits NOTHING -- this local emission is
+  // the only carrier. A cleared workspace replaces the whole scene (mesh
+  // blob, batch tables, selection, plate list, current plate), so the switch
+  // signal + the full cluster fan-out.
+  emit currentPlateIndexChanged();
+  emitSceneTopologyClusterChanged();
 }
 
 void EditorViewModel::refreshAfterLoad()

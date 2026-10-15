@@ -116,6 +116,7 @@ private slots:
   void s1TransformClusterReevaluation();
   void s1PlateClusterReevaluation();
   void s1SelectionClusterReevaluation();
+  void s1TopologyClusterReevaluation();
   void cleanupTestCase();
 
 private:
@@ -480,6 +481,25 @@ const S1NotifyExpectation kS1NotifyExpectations[] = {
     {"contextVolumeIndex", "selectionChanged"},
     {"contextInstanceIndex", "selectionChanged"},
     {"contextPlateIndex", "selectionChanged"},
+    // Commit 4 — scene topology cluster: the mesh blob, the batch tables,
+    // the object/plate counts and the fit hint.
+    {"modelCount", "sceneTopologyChanged"},
+    {"objectCount", "sceneTopologyChanged"},
+    {"meshData", "sceneTopologyChanged"},
+    {"meshBatchSourceObjectIndices", "sceneTopologyChanged"},
+    {"meshBatchVolumeIndices", "sceneTopologyChanged"},
+    {"meshBatchInstanceIndices", "sceneTopologyChanged"},
+    {"meshBatchExtruderIds", "sceneTopologyChanged"},
+    {"meshBatchPrintableFlags", "sceneTopologyChanged"},
+    {"meshBatchVolumeTypes", "sceneTopologyChanged"},
+    {"fitHint", "sceneTopologyChanged"},
+    {"canArrangeObjects", "sceneTopologyChanged"},
+    {"pendingObjColors", "sceneTopologyChanged"},
+    {"pendingObjObjectIndex", "sceneTopologyChanged"},
+    // modelSizeText derives from measureDimensions -- it moves on scale
+    // drags, so it rides the transform cluster (topology fan-out includes
+    // transformChanged; the reverse does not hold).
+    {"modelSizeText", "transformChanged"},
 };
 
 } // namespace
@@ -718,6 +738,68 @@ void QmlSmokeTests::s1SelectionClusterReevaluation()
   QCOMPARE(vm->property("hasSelection").toBool(), false);
   QVERIFY(evals("hasSel") > hasSelBefore + 1);
   QVERIFY2(!component.isError(), "no late QML errors on the selection probe");
+}
+
+// S1 commit 4 — scene topology cluster re-evaluation: object add/remove must
+// re-evaluate the counts AND the mesh blob binding (the RhiViewport
+// setMeshData feed), while a pure transform edit must NOT re-push the blob
+// (the S1+S3 combined win -- meshData re-parses are topology-only).
+void QmlSmokeTests::s1TopologyClusterReevaluation()
+{
+  auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));
+  QVERIFY2(vm != nullptr, "editorViewModel must be an EditorViewModel");
+
+  QQmlComponent component(engine_);
+  component.setData(QByteArrayLiteral(R"QML(
+    import QtQuick
+    Item {
+        required property var editorVm
+        property var counts: ({ modelCount: 0, batchIdx: 0 })
+        readonly property int modelCount:
+            { counts.modelCount++; return editorVm.modelCount }
+        readonly property int batchIdx:
+            { counts.batchIdx++; return editorVm.meshBatchInstanceIndices.length }
+    }
+    )QML"),
+                       QUrl(QStringLiteral("qrc:/qml/OWzx/tests/S1TopologyProbe.qml")));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("inline topology probe failed: %1")
+                          .arg(component.errorString())));
+  std::unique_ptr<QObject> probeHolder(
+      component.createWithInitialProperties(
+          QVariantMap{{"editorVm", QVariant::fromValue(vm)}}));
+  QVERIFY2(probeHolder, qPrintable(component.errorString()));
+  const auto evals = [&](const char *name) {
+    return probeHolder->property("counts").toMap().value(QString::fromLatin1(name)).toInt();
+  };
+
+  const int countBefore = vm->property("modelCount").toInt();
+  const int batchEvalsBefore = evals("batchIdx");
+
+  // Add: topology fan-out re-evaluates counts and the batch-table binding.
+  QVERIFY(vm->addPrimitiveToPlate(0)); // 0 = cube
+  const int countAfterAdd = vm->property("modelCount").toInt();
+  QCOMPARE(countAfterAdd, countBefore + 1);
+  QVERIFY(evals("batchIdx") > batchEvalsBefore);
+
+  // Transform-only edit: during DRAG FRAMES the batch-table binding must NOT
+  // re-evaluate -- the S1 drag merge emits transformChanged only (the relay
+  // is signal-blocked), so the viewport's mesh-data channels stay quiet
+  // mid-drag (the S1+S3 combined win; the discrete close re-evaluates once
+  // through the relay fan-out, guarded viewport-side by content compares).
+  vm->selectObject(countAfterAdd - 1);
+  const int batchEvalsMid = evals("batchIdx");
+  vm->beginGizmoMoveDrag();
+  vm->applyGizmoMoveDelta(2.0f, 0.0f, 0.0f);
+  vm->applyGizmoMoveDelta(1.0f, 1.0f, 0.0f);
+  QVERIFY(evals("batchIdx") == batchEvalsMid);
+  vm->endGizmoMoveDrag();
+
+  // Remove: back to the pre-test count, batch binding re-evaluates.
+  vm->deleteObject(countAfterAdd - 1);
+  QCOMPARE(vm->property("modelCount").toInt(), countBefore);
+  QVERIFY(evals("batchIdx") > batchEvalsMid);
+  QVERIFY2(!component.isError(), "no late QML errors on the topology probe");
 }
 
 int main(int argc, char *argv[])
