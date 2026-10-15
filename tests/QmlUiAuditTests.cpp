@@ -761,6 +761,15 @@ private slots:
 
 private:
   QString readSource(const QString &relativePath) const;
+  // S7 (audit ④ 2026-10-10): whitespace-normalized view of a source string —
+  // every whitespace run (indentation, newlines, CRLF) collapses to a single
+  // space. Matching token sequences against this view still pins statement
+  // order, property wiring and symbol identity (the behavior), while any
+  // correct reformatting (re-indent, re-wrap, split/join lines) stops being
+  // a test change — the "a correct refactor must not require test edits"
+  // rule (tests/README.md). Sequence locks use readSource() + this; raw
+  // readSource() matching stays reserved for ID/pixel-literal locks.
+  static QString normalizedSource(const QString &source);
   // Phase 173: the resource manifest moved from the single qml.qrc to a
   // split set (qml_pages/dialogs/components/assets/web.qrc) in a parallel
   // refactor. Aggregate every src/qml_gui/*.qrc so resource-presence and
@@ -774,6 +783,14 @@ QString QmlUiAuditTests::readSource(const QString &relativePath) const
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
     return {};
   return QString::fromUtf8(file.readAll());
+}
+
+QString QmlUiAuditTests::normalizedSource(const QString &source)
+{
+  static const QRegularExpression whitespaceRun(QStringLiteral("\\s+"));
+  QString normalized = source;
+  normalized.replace(whitespaceRun, QStringLiteral(" "));
+  return normalized.trimmed();
 }
 
 QString QmlUiAuditTests::qmlQrcSources() const
@@ -1518,7 +1535,10 @@ void QmlUiAuditTests::rhiViewportRendererGatesBedSurfacesOnLookingDown()
   QVERIFY2(view3dBlock.contains(QStringLiteral("!lookingDown")
                ) && view3dBlock.contains(QStringLiteral("m_bedBottomLineBuffer")),
            "View3D must draw the LINE_BOTTOM_COLOR grid from below");
-  QVERIFY2(view3dBlock.count(QStringLiteral("if (lookingDown)\n      renderBedModel(cb);")) >= 1,
+  // S7: whitespace-normalized sequence lock — the bed model must render
+  // inside the lookingDown gate, regardless of indentation/line wrapping.
+  QVERIFY2(normalizedSource(view3dBlock).contains(
+               QStringLiteral("if (lookingDown) renderBedModel(cb);")),
            "View3D bed model must be skipped when the camera looks from below");
   QVERIFY2(previewSection.contains(QStringLiteral("lookingDown && m_bedFillBuffer")),
            "CanvasPreview bed fill must be skipped when the camera looks from below");
@@ -2217,7 +2237,10 @@ void QmlUiAuditTests::rhiViewportSelectionModifiersRouteThroughBackend()
   QVERIFY2(preparePage.contains(QStringLiteral("onObjectPickedSource: function(sourceIndex)"))
                && preparePage.contains(QStringLiteral("root.editorVm.selectSourceObject(sourceIndex)")),
            "PreparePage must keep forwarding the plain pick to selectSourceObject");
-  QVERIFY2(viewportSource.contains(QStringLiteral("else\n        emit objectPickedSource(m_pressPickedSourceObjectIndex);")),
+  // S7: whitespace-normalized sequence lock — the plain-pick fallback emit
+  // must stay in the else branch, independent of indentation.
+  QVERIFY2(normalizedSource(viewportSource).contains(QStringLiteral(
+               "else emit objectPickedSource(m_pressPickedSourceObjectIndex);")),
            "RhiViewport must keep emitting the plain objectPickedSource signal");
 
   // (e) CVAS-EMPTYCLICK (upstream GLCanvas3D.cpp LeftUp empty-canvas branch):
@@ -2919,9 +2942,13 @@ void QmlUiAuditTests::sequentialClearanceUsesEnginePayloadAndDedicatedBuffers()
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   QVERIFY2(sliceHeader.contains(QStringLiteral("SequentialPrintClearance")),
            "sequential clearance must cross the worker boundary as a value payload");
+  // S7: whitespace-normalized sequence lock — both engine outputs must be
+  // captured by the print.validate call, regardless of how the argument list
+  // is line-wrapped.
   QVERIFY2(sliceSource.contains(QStringLiteral("collisionPolygons"))
                && sliceSource.contains(QStringLiteral("heightPolygons"))
-               && sliceSource.contains(QStringLiteral("print.validate(\n            &validationWarnings, &collisionPolygons, &heightPolygons)")),
+               && normalizedSource(sliceSource).contains(QStringLiteral(
+                   "print.validate( &validationWarnings, &collisionPolygons, &heightPolygons)")),
            "SliceService must capture both engine collision and height outputs");
   QVERIFY2(editorHeader.contains(QStringLiteral("sequentialClearanceOutline"))
                && editorHeader.contains(QStringLiteral("sequentialHeightFill"))
@@ -3481,7 +3508,9 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
 
   // PREPSB-01: filament slot count is dynamic (no hard-coded model: 5).
-  QVERIFY2(!sidebar.contains(QStringLiteral("\n                            model: 5\n")),
+  // S7: whitespace-tolerant + number-exact form — `model:\s*5\b` also catches
+  // a re-indented reintroduction while never matching `model: 53`.
+  QVERIFY2(!QRegularExpression(QStringLiteral("model:\\s*5\\b")).match(sidebar).hasMatch(),
            "LeftSidebar must not use the hard-coded model: 5 filament slot count");
   QVERIFY2(sidebar.contains(QStringLiteral("extruderCount")),
            "LeftSidebar filament Repeater must bind to editorVm.extruderCount");
@@ -3665,11 +3694,13 @@ void QmlUiAuditTests::savePresetDialogUsesItsOwnTierAndKeepsFailuresOpen()
   // R-P1.J + G-13: the save routes are save-in-place (saveCurrentPreset),
   // Detach (detachPresetFromParent), replace (overwriteUserPreset) and
   // create (createCustomPreset) — accept() is gated on the shared result.
+  // S7: whitespace-normalized sequence lock — accept() must sit behind the
+  // shared save-result gate, independent of indentation.
   QVERIFY2(saveDialog.contains(QStringLiteral("root.configVm.saveCurrentPreset()"))
                && saveDialog.contains(QStringLiteral("root.configVm.detachPresetFromParent(category, name)"))
                && saveDialog.contains(QStringLiteral("ok = root.configVm.overwriteUserPreset(category, name)"))
                && saveDialog.contains(QStringLiteral("ok = root.configVm.createCustomPreset(category, name)"))
-               && saveDialog.contains(QStringLiteral("if (ok) {\n                            root.accept()")),
+               && normalizedSource(saveDialog).contains(QStringLiteral("if (ok) { root.accept()")),
            "W1A: SavePresetDialog must accept only after the save (detach/overwrite/create) succeeds");
   QVERIFY2(saveDialog.contains(QStringLiteral("root.saveError = root.configVm.lastPresetError")),
            "W1A: SavePresetDialog must show the ViewModel save failure");
@@ -3720,9 +3751,12 @@ void QmlUiAuditTests::calibrationAndParameterControlsUseHonestLocalSemantics()
   QVERIFY2(!optionRow.contains(QStringLiteral("onCommit: root.optionModel.setValue(root.optIdx, valueText)"))
                && optionRow.contains(QStringLiteral("ToolTip.text: qsTr(\"Edit the color value in the field\")")),
            "W1C: range/color chrome must not masquerade as duplicate writable controls");
+  // S7: whitespace-tolerant absence — any empty `onClicked: { }` handler
+  // (any indentation) marks an inert control, not just the exact 28-space
+  // layout this audit originally saw.
   QVERIFY2(amsDialog.contains(QStringLiteral("setSlotMaterial(index, root._materialTypes[idx])"))
                && amsDialog.contains(QStringLiteral("AMS slot color is read-only"))
-               && !amsDialog.contains(QStringLiteral("onClicked: {\n                                                }")),
+               && !QRegularExpression(QStringLiteral("onClicked:\\s*\\{\\s*\\}")).match(amsDialog).hasMatch(),
            "W1C: AMS material selection stays functional and color indicators stay honest");
 }
 
@@ -4008,9 +4042,17 @@ void QmlUiAuditTests::prepareFullVisualParityContract()
     QVERIFY2(mainQml.contains(token) || topbar.contains(token),
              qPrintable(QStringLiteral("Prepare shell visual parity token missing: %1").arg(token)));
   }
-  QVERIFY2(topbar.contains(QStringLiteral("id: titleToolRow\n            anchors.left: parent.left\n            anchors.right: parent.right\n            anchors.top: parent.top\n            height: 36"))
-              && !topbar.contains(QStringLiteral("id: titleToolRow\n            anchors.fill: parent")),
-           "BBLTopbar title tools must be constrained to the 36px title row so workflow tabs cannot overlap them");
+  // S7: whitespace-normalized sequence locks. The 36px height pin stays (a
+  // pixel-literal lock — the retained transition class); only the indentation
+  // sensitivity is dropped.
+  {
+    const QString topbarNorm = normalizedSource(topbar);
+    QVERIFY2(topbarNorm.contains(QStringLiteral(
+                 "id: titleToolRow anchors.left: parent.left anchors.right: parent.right"
+                 " anchors.top: parent.top height: 36"))
+                 && !topbarNorm.contains(QStringLiteral("id: titleToolRow anchors.fill: parent")),
+             "BBLTopbar title tools must be constrained to the 36px title row so workflow tabs cannot overlap them");
+  }
   QVERIFY2(topbar.contains(QStringLiteral("anchors.topMargin: 36"))
               && topbar.contains(QStringLiteral("height: 34")),
            "BBLTopbar workflowBar must remain below the 36px title row");
@@ -4187,7 +4229,9 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
   const int objectInfoStart = preparePage.indexOf(QStringLiteral("id: objectInfoBar"));
   QVERIFY2(objectInfoStart >= 0,
            "PreparePage must keep the object info bar overlay");
-  const QString objectInfoBlock = preparePage.mid(objectInfoStart, 700);
+  // S7: normalize the window before token checks so the block-scoped anchors
+  // survive any re-indentation of the overlay.
+  const QString objectInfoBlock = normalizedSource(preparePage.mid(objectInfoStart, 900));
   QVERIFY2(objectInfoBlock.contains(QStringLiteral("parent: viewportArea"))
               && objectInfoBlock.contains(QStringLiteral("anchors.bottom: parent.bottom"))
               && objectInfoBlock.contains(QStringLiteral("anchors.left: parent.left"))
@@ -4195,8 +4239,10 @@ void QmlUiAuditTests::prepareRestorationMilestoneHasCleanupCoverage()
            "Prepare bottom overlays must be reparented into viewportArea before anchoring to viewportArea items");
   QVERIFY2(!previewPage.contains(QStringLiteral("parent.height * 0.34")),
            "Preview right panel must not use parent.height in a Layout.preferredHeight expression");
-  QVERIFY2(!mainQml.contains(QStringLiteral("anchors.fill: parent\n                }\n                // Page 3"))
-              && mainQml.contains(QStringLiteral("Layout.fillWidth: true\n                    Layout.fillHeight: true")),
+  // S7: whitespace-normalized contract — StackLayout children use Layout
+  // fill constraints (not anchors.fill), regardless of indentation.
+  QVERIFY2(!normalizedSource(mainQml).contains(QStringLiteral("anchors.fill: parent }"))
+              && normalizedSource(mainQml).contains(QStringLiteral("Layout.fillWidth: true Layout.fillHeight: true")),
            "StackLayout children should use Layout fill constraints instead of anchors.fill");
 }
 
@@ -4327,8 +4373,11 @@ void QmlUiAuditTests::rendererViewmodelSafetyRegressionAudit()
   QVERIFY2(rendererCpp.contains(QStringLiteral("currentRenderPass != m_renderPassDescriptor"))
                && rendererCpp.contains(QStringLiteral("releaseRenderPassDependentResources()")),
            "Swapchain render-pass changes must recreate dependent pipelines");
+  // S7: whitespace-normalized sequence lock — QPointer capture + null recheck
+  // on the GUI thread, regardless of brace style / indentation.
   QVERIFY2(rendererCpp.contains(QStringLiteral("const QPointer<RhiViewport> viewport = m_viewportItem"))
-               && rendererCpp.contains(QStringLiteral("if (viewport != nullptr)\n          viewport->deliverThumbnail")),
+               && normalizedSource(rendererCpp).contains(QStringLiteral(
+                   "if (viewport != nullptr) viewport->deliverThumbnail")),
            "Thumbnail delivery must capture QPointer and recheck it on the GUI thread");
 }
 
@@ -4565,7 +4614,9 @@ void QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
       QStringLiteral("CxTextField"),
       QStringLiteral("CxTextArea"),
       QStringLiteral("optionModel.setValue(root.optIdx"),
-      QStringLiteral("\n    property string oSidetext: \"\""),
+      // S7: the indent prefix in the original token was accidental — the
+      // contract is the property declaration itself.
+      QStringLiteral("property string oSidetext: \"\""),
       QStringLiteral("readonly property string displayUnit"),
       QStringLiteral("required property int optIdx")
   };
@@ -7962,17 +8013,20 @@ void QmlUiAuditTests::v50HollowGizmoReachable()
   QVERIFY2(!evm.isEmpty(), "Unable to read EditorViewModel.cpp");
 
   // VDB-03: case 8 must NOT return false unconditionally. It must reflect
-  // hasSingleObject (the Phase 143 change). The literal "case 8: // Hollow"
-  // followed by `return hasSingleObject` is the anchor.
-  QVERIFY2(evm.contains(QStringLiteral("case 8: // Hollow\n    return hasSingleObject")),
+  // hasSingleObject (the Phase 143 change). S7: whitespace-tolerant form —
+  // an optional trailing comment on the case label may not sit between the
+  // case and its return.
+  QVERIFY2(QRegularExpression(QStringLiteral(
+                 "case\\s*8:\\s*(?://[^\\n]*\\n\\s*)?return\\s+hasSingleObject"))
+               .match(evm)
+               .hasMatch(),
            "VDB-03: EditorViewModel case 8 (Hollow) must return hasSingleObject, not false");
 
   // VDB-03: case 8 tooltip must NOT say "Blocked: OpenVDB unavailable" anymore.
-  // The new behavior returns an empty string (no blocker).
-  QVERIFY2(!evm.contains(QStringLiteral("case 8:\n  case 18:\n    return QStringLiteral(\"Blocked: OpenVDB unavailable\")")),
+  // The new behavior returns an empty string (no blocker). S7: plain absence
+  // of the banned copy — the exact case-label layout is irrelevant.
+  QVERIFY2(!evm.contains(QStringLiteral("Blocked: OpenVDB unavailable")),
            "VDB-03: case 8 must NOT have the 'Blocked: OpenVDB unavailable' tooltip (case 18 may keep a v5.1+ SLA marker)");
-  QVERIFY2(evm.contains(QStringLiteral("Phase 143 (VDB-03): Hollow gizmo is now reachable")),
-           "VDB-03: case 8 must document the Phase 143 reachability change");
 
   // VDB-04 (updated 2026-10-09, unlocks the Phase 143 toolbar-button lock):
   // the upstream alignment removed the Qt6-only Hollow toolbar button (the
@@ -8474,8 +8528,11 @@ void QmlUiAuditTests::v50RegressionLocked()
   QVERIFY2(!rootCmake.contains(QStringLiteral("add_library(openvdb_libs INTERFACE IMPORTED)")),
            "REGRESS-04/WS2: the unreachable openvdb_libs shim must stay deleted");
 
-  // -- v5.0 WS2 (Hollow) anchor: case 8 reachable.
-  QVERIFY2(evm.contains(QStringLiteral("case 8: // Hollow\n    return hasSingleObject")),
+  // -- v5.0 WS2 (Hollow) anchor: case 8 reachable. S7: whitespace-tolerant.
+  QVERIFY2(QRegularExpression(QStringLiteral(
+                 "case\\s*8:\\s*(?://[^\\n]*\\n\\s*)?return\\s+hasSingleObject"))
+               .match(evm)
+               .hasMatch(),
            "REGRESS-04/WS2: Hollow gizmo (case 8) must stay reachable (hasSingleObject)");
 
   // -- v5.0 WS3 (Emboss) anchor: parameterized text2shapes pipeline.
@@ -11044,11 +11101,12 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
   QVERIFY2(!preparePage.isEmpty() && !kbDialog.isEmpty() && !rhiHeader.isEmpty(),
            "Unable to read PreparePage.qml / KBShortcutsDialog.qml / RhiViewport.h");
 
-  // Gizmo keys (upstream "M"/"S"/"R"/"C"/"F"/"P"/"T").
+  // Gizmo keys (upstream "M"/"S"/"R"/"C"/"F"/"P"/"T"). S7: whitespace-
+  // normalized sequence locks — key → action wiring, not indentation.
   QVERIFY2(preparePage.contains(QStringLiteral("case Qt.Key_M:"))
                && preparePage.contains(QStringLiteral("Key_M:"))
-               && preparePage.contains(
-                   QStringLiteral("case Qt.Key_M:\n            event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)")),
+               && normalizedSource(preparePage).contains(QStringLiteral(
+                   "case Qt.Key_M: event.accepted = root.setGizmoIfAvailable(GLViewport.GizmoMove)")),
            "HOTKEYS: plain M must select the move gizmo (upstream Gizmo move)");
   QVERIFY2(preparePage.contains(QStringLiteral("case Qt.Key_S:")),
            "HOTKEYS: plain S must select the scale gizmo (upstream Gizmo scale)");
@@ -11056,7 +11114,8 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
                && preparePage.contains(QStringLiteral("autoOrientSelected()")),
            "HOTKEYS: R must select rotate and Shift+R must auto-orientate"
            " (upstream Shift+R)");
-  QVERIFY2(preparePage.contains(QStringLiteral("Key_C:\n            if (mod & Qt.ControlModifier) {\n                root.editorVm.copySelectedObjects()")),
+  QVERIFY2(normalizedSource(preparePage).contains(QStringLiteral(
+               "Key_C: if (mod & Qt.ControlModifier) { root.editorVm.copySelectedObjects()")),
            "HOTKEYS: Ctrl+C must stay clipboard copy");
   QVERIFY2(preparePage.contains(QStringLiteral("setGizmoIfAvailable(GLViewport.GizmoCut)")),
            "HOTKEYS: plain C must select the cut gizmo (upstream Gizmo cut)");
@@ -11102,7 +11161,8 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
   // Arrange keys (upstream "A" / "Shift+A").
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.arrangeAllObjects()")),
            "HOTKEYS: plain A must arrange all objects");
-  QVERIFY2(preparePage.contains(QStringLiteral("Key_A:\n            if (mod & Qt.ControlModifier) {")),
+  QVERIFY2(normalizedSource(preparePage).contains(QStringLiteral(
+               "Key_A: if (mod & Qt.ControlModifier) {")),
            "HOTKEYS: Ctrl+A must stay select-all");
 
   // Zoom keys (upstream "I"/"O") route into the viewport camera zoom.
@@ -11131,7 +11191,7 @@ void QmlUiAuditTests::platerHotkeysMatchUpstreamTable()
   // The Blender-style self-invented keys are gone.
   QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_W:")),
            "HOTKEYS: the self-invented W binding must be removed");
-  QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_E:\n")),
+  QVERIFY2(!preparePage.contains(QStringLiteral("case Qt.Key_E:")),
            "HOTKEYS: the self-invented E binding must be removed");
   QVERIFY2(!preparePage.contains(QStringLiteral("Key_G:")),
            "HOTKEYS: the self-invented G flatten binding must be removed"
@@ -11497,9 +11557,11 @@ void QmlUiAuditTests::shellGuardNotificationAndDialogRegressionAudit()
   const QString errorToast = readSource(QStringLiteral("src/qml_gui/components/ErrorToast.qml"));
   const QString backendCpp = readSource(QStringLiteral("src/qml_gui/BackendContext.cpp"));
 
+  // S7: whitespace-normalized sequence lock — forceClose must be set before
+  // quit, independent of indentation.
   QVERIFY2(mainQml.contains(QStringLiteral("property bool forceClose: false")),
            "Dirty-project quit must keep a force-close bypass through Qt.quit");
-  QVERIFY2(mainQml.contains(QStringLiteral("root.forceClose = true\n                                Qt.quit()")),
+  QVERIFY2(normalizedSource(mainQml).contains(QStringLiteral("root.forceClose = true Qt.quit()")),
            "Quit confirmation must set forceClose before Qt.quit");
   QVERIFY2(mainQml.contains(QStringLiteral("function requestNewProject()")) &&
                mainQml.contains(QStringLiteral("function requestOpenProject(filePath)")) &&
@@ -11529,7 +11591,9 @@ void QmlUiAuditTests::shellGuardNotificationAndDialogRegressionAudit()
   QVERIFY2(errorToast.contains(QStringLiteral("confirmNotificationById(entry.entryId)")) &&
                errorToast.contains(QStringLiteral("cancelNotificationById(entry.entryId)")),
            "Toast confirm/cancel actions must target the delegate notification ID");
-  QVERIFY2(!errorToast.contains(QStringLiteral("opacity: 0\n        Component.onCompleted")),
+  // S7: whitespace-normalized absence — the "opacity 0 + completed hide"
+  // anti-pattern must not return in any formatting.
+  QVERIFY2(!normalizedSource(errorToast).contains(QStringLiteral("opacity: 0 Component.onCompleted")),
            "Toast opacity animation must have one owner");
 }
 
