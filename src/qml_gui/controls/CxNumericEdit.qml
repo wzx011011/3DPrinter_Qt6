@@ -97,6 +97,11 @@ Rectangle {
         anchors.right: suffixText.visible ? suffixText.left : parent.right
         anchors.rightMargin: suffixText.visible ? 5 : 6
         verticalAlignment: Text.AlignVCenter
+        // X2 regression restore (X4 visual gate catch): the batch-1 edit
+        // dropped this line, silently re-aligning every option-row value
+        // left (upstream Field renders the value right-aligned against the
+        // sidetext, Field.cpp combine_side_text).
+        horizontalAlignment: Text.AlignRight
         // X2: invalid text turns red in-place as well, so the feedback
         // survives even when the border is covered by a neighbor.
         color: editor.error ? Theme.statusError : Theme.textPrimary

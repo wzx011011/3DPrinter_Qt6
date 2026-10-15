@@ -34,6 +34,12 @@ Button {
     enum Style { Primary, Secondary, Danger, Ghost, Segment, Chip, Warning, Info, GhostDanger }
 
     readonly property bool _isChip: cxStyle === CxButton.Style.Chip
+    // X2 fix (X4 visual gate catch): a `url` property compared with the STRICT
+    // `!==` against "" is true even when empty (no string coercion across the
+    // url/value-type boundary), which reserved a phantom 16px icon slot on
+    // every iconless CxButton (+20px width, label pushed off-center). Coerce
+    // through String() so an unset iconSource really is "no icon".
+    readonly property bool _hasIcon: String(iconSource).length > 0
 
     implicitHeight: compact ? Theme.controlHeightSM : Theme.controlHeightMD
     // Chip drops the 64px text-button minimum: dense chip rows size to
@@ -135,21 +141,30 @@ Button {
         Behavior on border.color { ColorAnimation { duration: Theme.motionFast } }
     }
 
-    contentItem: Row {
-        spacing: root.iconSource !== "" ? Theme.spacingXS : 0
+    contentItem: Item {
+        implicitWidth: contentLabel.implicitWidth
+                       + (root._hasIcon ? 16 + Theme.spacingXS : 0)
+        implicitHeight: contentLabel.implicitHeight
 
+        // Optional leading icon (16px, same slot as CxIconButton). Plain-Item
+        // manual layout: anchors are ignored on positioner children, so a Row
+        // would top-left both children and shift every label off-center
+        // (caught by the X4 visual gate as ghosted button labels).
         Image {
-            visible: root.iconSource !== ""
+            visible: root._hasIcon
             source: root.iconSource
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
             width: 16
             height: 16
-            anchors.verticalCenter: parent.verticalCenter
             fillMode: Image.PreserveAspectFit
             smooth: true
             opacity: root.enabled ? 1.0 : 0.5
         }
 
         Text {
+            id: contentLabel
+            anchors.centerIn: parent
             text: root.text
             color: {
                 if (!root.enabled) {
