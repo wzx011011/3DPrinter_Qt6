@@ -3,6 +3,7 @@
 #include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/rendering/GizmoCenter.h"
 #include "core/rendering/GizmoGeometry.h"
+#include "core/rendering/GizmoMath.h" // S4: gizmoWorldScale single source
 
 #include <QDebug>
 #include <QFile>
@@ -655,9 +656,11 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   m_cameraEye = viewport->m_camera.eye();
   // P15.11: the selection-center sphere has a fixed upstream radius of
   // 0.75 mm, while the shared gizmo shader scales its local coordinates by
-  // camera distance. Rebuild only when that scale changes.
+  // camera distance. Rebuild only when that scale changes. S4: the scale
+  // resolves through the pick-side single source so the sphere the shader
+  // draws is the body the grabber pick tests.
   const float selectionCenterGizmoScale =
-      std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.0f);
+      GizmoMath::gizmoWorldScale(m_gizmoCenter, m_cameraEye);
   if (!qFuzzyCompare(selectionCenterGizmoScale, m_selectionCenterLastGizmoScale)) {
     m_gizmoVertexBufferUploaded = false;
     m_prepareScene.markDirty(PrepareSceneData::DirtyGizmoBuffer);
@@ -4149,9 +4152,10 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   // coalesce them and risking an off-by-one during SRB bind (a plausible
   // 0xC0000005 source). The pack matches the GLSL std140 CameraBlock exactly
   // (see CameraBlockPacked above): mesh shader reads only the first 64 bytes
-  // (mat4 mvp), gizmo shader reads the full 80. gizmoScale is computed the
-  // same way as before (distance-based, clamped to >= 5).
-  const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
+  // (mat4 mvp), gizmo shader reads the full 80. gizmoScale is the S4
+  // single-sourced distance-based value (clamped to >= 5) the grabber pick
+  // resolves through the same helper.
+  const float gizmoScale = GizmoMath::gizmoWorldScale(m_gizmoCenter, m_cameraEye);
   CameraBlockPacked packed;
   std::memcpy(packed.mvp, corrected.constData(), 16 * sizeof(float));
   packed.gizmoCenter[0] = m_gizmoCenter.x();
@@ -4582,7 +4586,8 @@ bool RhiViewportRenderer::uploadGizmoBuffer(QRhiResourceUpdateBatch *updates)
   // uniform and depth-independent triangle pipeline.
   constexpr float kSelectionCenterRadius = 0.75f;
   constexpr float kSelectionCenterColor[4] = {1.f, 1.f, 1.f, 1.f};
-  const float gizmoScale = std::max((m_gizmoCenter - m_cameraEye).length() * 0.15f, 5.f);
+  // S4: the same single-sourced scale the uniform block + grabber pick use.
+  const float gizmoScale = GizmoMath::gizmoWorldScale(m_gizmoCenter, m_cameraEye);
   QVector<GizmoVertex> selectionCenterVerts = GizmoGeometry::buildBrushSphereVertices(
       QVector3D(), kSelectionCenterRadius / gizmoScale, kSelectionCenterColor);
 

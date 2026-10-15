@@ -18,6 +18,7 @@
 #include "core/rendering/GizmoMath.h"
 #include "core/rendering/ObjectPicking.h"
 #include "core/rendering/PickingRaycaster.h"
+#include "core/rendering/SceneRaycaster.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
 
 #include <algorithm>
@@ -202,6 +203,24 @@ namespace
     float sxCenter() const { return float(viewSize.width()) * 0.5f; }
     float syCenter() const { return float(viewSize.height()) * 0.5f; }
   };
+
+  // S4: barycentric point-in-triangle on a raw ITS facet (2D in the facet
+  // plane via the dominant-axis projection -- the test quad is axis-aligned
+  // so a plain XY check suffices).
+  bool pointInFacetXY(const QVector3D &p,
+                      const QVector3D &a, const QVector3D &b, const QVector3D &c)
+  {
+    const float d = (b.y() - c.y()) * (a.x() - c.x())
+                  + (c.x() - b.x()) * (a.y() - c.y());
+    if (std::abs(d) < 1e-9f)
+      return false;
+    const float u = ((b.y() - c.y()) * (p.x() - c.x())
+                   + (c.x() - b.x()) * (p.y() - c.y())) / d;
+    const float v = ((c.y() - a.y()) * (p.x() - c.x())
+                   + (a.x() - c.x()) * (p.y() - c.y())) / d;
+    const float w = 1.0f - u - v;
+    return u >= -1e-4f && v >= -1e-4f && w >= -1e-4f;
+  }
 }
 
 class ObjectPickingTests final : public QObject
@@ -224,6 +243,15 @@ private slots:
   void gizmoMovePickMissesRadialGapThatOldThresholdAccepted();
   void gizmoScalePickHitsBoxHandleAndMissesRadialGap();
   void gizmoRotatePickHitsRingTubeAndMissesBeyondTube();
+  // S4 (audit 2026-10-10 ch.4): the pick/render shared transform chain -- a
+  // 90°-rotated instance's raw ITS facets must land exactly where the render
+  // compose draws them, and the facet the render highlights must be the
+  // facet the paint/measure chain resolves (the pre-S4 frame-mixed candidate
+  // transform hit rotated ghosts instead).
+  void rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt();
+  // S4: the gizmo world scale max(dist*0.15, 5.0) is single-sourced in
+  // GizmoMath::gizmoWorldScale (pick bodies == rendered bodies).
+  void gizmoWorldScaleFormulaSingleSourced();
 };
 
 void ObjectPickingTests::aabbHitTriangleMissDoesNotPickObject()
@@ -593,6 +621,158 @@ void ObjectPickingTests::gizmoRotatePickHitsRingTubeAndMissesBeyondTube()
                                  gizmoCenter, QVector3D(0.0f, 0.0f, cam.eyeZ),
                                  /*hasSelection=*/true);
   QCOMPARE(ax, 0);
+}
+
+// ===========================================================================
+// S4 (audit 2026-10-10 ch.4): pick/render shared transform chain.
+//
+// The scene: a 10x10 raw ITS quad (slic3r frame, volume-local, pre-volMat --
+// exactly what ProjectService::volumeMeshIts hands the stage-2 raycaster)
+// split into two facets by the (0,0)-(10,10) diagonal, on an instance
+// rotated 90° about the slic3r Z axis (the "imported then rotated" case
+// that produced the pre-S4 rotated ghost) with the production plate
+// normalization shift applied. The render truth is the real scene compose:
+// a decomposed 'MDS2' blob (volume-local GL vertices A·v) plus the S3
+// instance channel matrix, consumed by PrepareSceneData -- the same parse +
+// compose the renderer walks every frame.
+// ===========================================================================
+
+void ObjectPickingTests::rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt()
+{
+  const QVector3D raw[4] = {
+      {0.0f, 0.0f, 0.0f}, {10.0f, 0.0f, 0.0f},
+      {0.0f, 10.0f, 0.0f}, {10.0f, 10.0f, 0.0f}};
+  const int facet0[3] = {0, 1, 2};
+  const int facet1[3] = {1, 3, 2};
+
+  // Instance: 90° about slic3r Z; plate shift = the normalization center.
+  QMatrix4x4 instMat;
+  instMat.rotate(90.0f, 0.0f, 0.0f, 1.0f);
+  const QVector3D plateShift(110.0f, 0.0f, -110.0f);
+
+  // The S3 channel entry, composed exactly like the production spelling
+  // (ProjectService::glWorldInstanceMatrix): conjugate first, then the
+  // QMatrix4x4::translate plate-shift append.
+  const QMatrix4x4 A = OWzx::SceneTransforms::slic3rToGlAxes();
+  QMatrix4x4 channel = A * instMat * A.inverted();
+  channel.translate(plateShift);
+
+  // Render side: the v2 blob + channel through the real scene compose.
+  const auto bakeGL = [&A](const QVector3D &v) { return A.map(v); };
+  const auto toWorld = [&channel, &A](const QVector3D &v) {
+    return channel.map(A.map(v));
+  };
+  QVector3D bmin(1e30f, 1e30f, 1e30f);
+  QVector3D bmax(-1e30f, -1e30f, -1e30f);
+  QByteArray blob;
+  appendInt32(blob, 0x3244534D); // 'MDS2' little-endian (ProjectService kMeshBlobMagicV2)
+  appendInt32(blob, 1);          // one batch
+  appendInt32(blob, 777);        // render object id (stable-id stand-in)
+  appendInt32(blob, 2);          // two triangles
+  for (int f = 0; f < 2; ++f) {
+    const int *fac = (f == 0) ? facet0 : facet1;
+    for (int k = 0; k < 3; ++k) {
+      const QVector3D g = bakeGL(raw[fac[k]]);
+      appendFloat(blob, g.x());
+      appendFloat(blob, g.y());
+      appendFloat(blob, g.z());
+      const QVector3D w = toWorld(raw[fac[k]]);
+      bmin = QVector3D(std::min(bmin.x(), w.x()), std::min(bmin.y(), w.y()),
+                       std::min(bmin.z(), w.z()));
+      bmax = QVector3D(std::max(bmax.x(), w.x()), std::max(bmax.y(), w.y()),
+                       std::max(bmax.z(), w.z()));
+    }
+  }
+  const float trailer[6] = {bmin.x(), bmin.y(), bmin.z(),
+                            bmax.x(), bmax.y(), bmax.z()};
+  for (float value : trailer)
+    appendFloat(blob, value);
+
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+  scene.setPlateContext(0, 1, QList<int>{42});
+  scene.setModelMeshData(blob,
+                         QList<int>{42}, QList<int>{0}, QList<int>{0},
+                         QList<int>{42},
+                         QList<int>{0}, QList<int>{1}, QList<int>{1},
+                         QList<QVector4D>(),
+                         QList<QMatrix4x4>{channel});
+
+  // (1) Chain parity -- the S4 pick chain places every raw ITS vertex on the
+  // rendered vertex. The pre-S4 frame-mixed candidate transform (GL-mapped
+  // translation + slic3r rotation, no volume matrix, no plate shift) placed
+  // rotated geometry elsewhere: the ghost.
+  const QMatrix4x4 chain = OWzx::SceneTransforms::volumeWorldMatrix(channel);
+  const auto verts = scene.modelVertices();
+  QCOMPARE(verts.size(), 6);
+  int renderedIdx = 0;
+  for (int f = 0; f < 2; ++f) {
+    const int *fac = (f == 0) ? facet0 : facet1;
+    for (int k = 0; k < 3; ++k) {
+      const QVector3D world = chain.map(raw[fac[k]]);
+      const PrepareSceneData::ModelVertex &mv = verts.at(renderedIdx++);
+      QVERIFY(std::abs(world.x() - mv.x) < 1e-3f);
+      QVERIFY(std::abs(world.y() - mv.y) < 1e-3f);
+      QVERIFY(std::abs(world.z() - mv.z) < 1e-3f);
+    }
+  }
+
+  // Ghost control: the un-rotated placement (what a frame-mixed transform
+  // effectively tests against) is far away from the rendered geometry.
+  {
+    QMatrix4x4 naive;
+    naive.translate(plateShift);
+    const float miss = (naive.map(A.map(raw[3])) - chain.map(raw[3])).length();
+    QVERIFY(miss > 10.0f);
+  }
+
+  // (2) Highlight parity -- the cursor ray through the chain-mapped facet-1
+  // centroid (perpendicular to the rendered facet) hits OUR object on the
+  // render side, and the hit position un-chains onto the RAW facet 1: the
+  // same facet the paint/measure stage-2 raycast resolves through this
+  // chain. Under the pre-S4 mixed transform the resolved facet was a
+  // rotated ghost the render never highlighted.
+  const QVector3D rawCentroid(
+      (raw[1].x() + raw[3].x() + raw[2].x()) / 3.0f,
+      (raw[1].y() + raw[3].y() + raw[2].y()) / 3.0f,
+      (raw[1].z() + raw[3].z() + raw[2].z()) / 3.0f);
+  const QVector3D facetNormal =
+      chain.mapVector(QVector3D(0.0f, 0.0f, 1.0f)).normalized();
+  const QVector3D aim = chain.map(rawCentroid);
+
+  const ObjectPicking::Hit render = ObjectPicking::pick(
+      aim + facetNormal * 50.0f, -facetNormal,
+      scene.modelVertices(), scene.modelBatches());
+  QVERIFY(render.isValid());
+  QCOMPARE(render.sourceObjectIndex, 42);
+  QCOMPARE(render.volumeIndex, 0);
+  QCOMPARE(render.instanceIndex, 0);
+
+  const QMatrix4x4 chainInv = chain.inverted();
+  const QVector3D local = chainInv.map(render.position);
+  QVERIFY(pointInFacetXY(local, raw[1], raw[3], raw[2]));  // resolved facet 1
+  QVERIFY(!pointInFacetXY(local, raw[0], raw[1], raw[2])); // not facet 0
+
+  // (3) Direction back-conversion: the GL-frame facet normal returns to the
+  // raw slic3r normal through the axes permutation (the flatten path feeds
+  // its rotation math with slic3r-frame normals).
+  const QVector3D backNormal =
+      OWzx::SceneTransforms::glDirectionToSlic3r(facetNormal);
+  QVERIFY(std::abs(backNormal.x()) < 1e-4f);
+  QVERIFY(std::abs(backNormal.y()) < 1e-4f);
+  QVERIFY(backNormal.z() > 0.99f);
+}
+
+void ObjectPickingTests::gizmoWorldScaleFormulaSingleSourced()
+{
+  // The S4 single source: max(distance * 0.15, 5.0). 40 units -> 6.0 (the
+  // X3 grabber-picking rig above); 5 units -> the 5.0 floor wins.
+  QCOMPARE(GizmoMath::gizmoWorldScale(QVector3D(0.0f, 0.0f, 0.0f),
+                                      QVector3D(0.0f, 0.0f, 40.0f)),
+           6.0f);
+  QCOMPARE(GizmoMath::gizmoWorldScale(QVector3D(3.0f, 4.0f, 0.0f),
+                                      QVector3D(0.0f, 0.0f, 0.0f)),
+           5.0f);
 }
 
 QTEST_MAIN(ObjectPickingTests)

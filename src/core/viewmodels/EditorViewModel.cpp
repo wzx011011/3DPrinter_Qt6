@@ -53,12 +53,10 @@
 #ifdef HAS_LIBSLIC3R
 namespace
 {
-// Forward declaration -- the definition lives in the anonymous namespace
-// before computeMeasureReadoutFromHit. The Phase 240 flatten pick paths sit
-// earlier in the file and need it (GIZ-03/GIZ-02).
-Slic3r::Transform3d rebuildWorldTransform(QVector3D translation,
-                                          QVector3D rotationRad,
-                                          QVector3D scale);
+// S4: the early rebuildWorldTransform forward declaration is retired -- the
+// pre-S4 gizmo paths that needed it (hollow/flatten, via the frame-mixed
+// decomposed rebuild) now consume the shared pick/render chain declared in
+// the S4 block below.
 }
 #endif
 #include <limits>
@@ -705,19 +703,154 @@ static int primarySelectedSourceIndex(const EditorViewModel *vm)
 }
 
 #ifdef HAS_LIBSLIC3R
-// Rebuild a Slic3r::Transform3d from QML-facing translation/rotation/scale.
-// Same composition as the later anonymous-namespace rebuildWorldTransform
-// (Geometry::assemble_transform: T = translation * RotZ * RotY * RotX * Scale),
-// inlined here so early gizmo paths (hollow) can use it without a forward
-// declaration crossing anonymous-namespace boundaries.
-static Slic3r::Transform3d hollowWorldTransform(QVector3D translation,
-                                                QVector3D rotationRad,
-                                                QVector3D scale)
+// ── S4 (audit 2026-10-10 ch.4): the shared pick/render transform chain ─────
+// Every stage-2 hitTest entry (hollow / cut connector / flatten / measure /
+// the four paint fills) used to re-assemble its own candidate worldTransform
+// from the decomposed object accessors: GL-mapped translation
+// (objectPosition) + slic3r-frame rotation/scale (objectRotation/objectScale
+// via assemble_transform), no volume matrix, no plate shift. That frame-mixed
+// transform diverges from the rendered frame exactly when the instance is
+// rotated -- the "90° ghost": stage-2 hits land on geometry the render never
+// drew, so measure/paint/hollow/flatten facetIdx + worldPosition miss. The
+// chain below instead consumes the S3 per-batch render channel
+// (ProjectService::meshBatchInstanceTransforms -- the very matrices the
+// renderer submits) corrected by AXES-ROT for the raw-ITS input (see
+// SceneRaycaster.h SceneTransforms), so pick and render cannot disagree.
+struct VolumeRaycastResult
 {
-  return Slic3r::Geometry::assemble_transform(
-      Slic3r::Vec3d(double(translation.x()), double(translation.y()), double(translation.z())),
-      Slic3r::Vec3d(double(rotationRad.x()), double(rotationRad.y()), double(rotationRad.z())),
-      Slic3r::Vec3d(double(scale.x()), double(scale.y()), double(scale.z())));
+  OWzx::SceneRaycasterHit hit{};
+  // Winning volume's full chain (identity when !hasHit).
+  Slic3r::Transform3d worldTransform = Slic3r::Transform3d::Identity();
+  bool hasHit = false;
+};
+
+// Snapshot of the S3 render channel + its batch identities (index-aligned:
+// channel[i] belongs to (objects[i], volumes[i])). Read live every call so
+// transform edits are visible on the next pick without any refresh -- the
+// same freshness contract the renderer's synchronize() path has.
+struct VolumeChainSource
+{
+  QList<QMatrix4x4> channel;
+  QList<int> objects;
+  QList<int> volumes;
+  bool valid = false;
+};
+
+inline VolumeChainSource loadVolumeChainSource(ProjectService *service)
+{
+  VolumeChainSource src;
+  if (!service)
+    return src;
+  src.channel = service->meshBatchInstanceTransforms();
+  src.objects = service->meshBatchSourceObjectIndices();
+  src.volumes = service->meshBatchVolumeIndices();
+  src.valid = (src.channel.size() == src.objects.size())
+              && (src.channel.size() == src.volumes.size());
+  return src;
+}
+
+// Full chain for one volume: the first render batch of (object, volume)
+// (first match = first instance, the same instance-0 convention
+// objectPosition() has always used). Returns identity when the volume has no
+// render batch (not renderable / blob not produced) -- unrendered geometry is
+// not pickable and not liftable.
+inline Slic3r::Transform3d volumeChainFor(const VolumeChainSource &src,
+                                          int objectIndex, int volumeIndex)
+{
+  if (!src.valid)
+    return Slic3r::Transform3d::Identity();
+  for (int b = 0; b < src.objects.size(); ++b) {
+    if (src.objects.at(b) == objectIndex && src.volumes.at(b) == volumeIndex)
+      return OWzx::volumeWorldTransform(src.channel.at(b));
+  }
+  return Slic3r::Transform3d::Identity();
+}
+
+inline bool volumeChainResolves(const VolumeChainSource &src,
+                                int objectIndex, int volumeIndex)
+{
+  if (!src.valid)
+    return false;
+  for (int b = 0; b < src.objects.size(); ++b) {
+    if (src.objects.at(b) == objectIndex && src.volumes.at(b) == volumeIndex)
+      return true;
+  }
+  return false;
+}
+
+// The single stage-2 pick entry: lazily constructs the shared SceneRaycaster
+// (one ITS-source lambda instead of one per call site) and hitTests the
+// picked object's renderable volumes through the shared chain. Set
+// onlyVolumeIndex >= 0 to narrow to one volume (paintAtFacet's concrete
+// (obj, vol) form); candidateObjectIndex defaults to pickedSourceIndex and
+// is what the hit reports back (paintAtFacet passes the QML-supplied obj).
+inline VolumeRaycastResult raycastObjectVolumes(
+    ProjectService *service,
+    std::unique_ptr<OWzx::SceneRaycaster> &raycaster,
+    int pickedSourceIndex,
+    const QVector3D &rayOrigin, const QVector3D &rayDir,
+    int candidateObjectIndex = -1, int onlyVolumeIndex = -1)
+{
+  VolumeRaycastResult out;
+  if (!service || pickedSourceIndex < 0)
+    return out;
+
+  if (!raycaster) {
+    raycaster = std::make_unique<OWzx::SceneRaycaster>(
+        [svc = service](int objIdx, int volIdx)
+            -> std::shared_ptr<const indexed_triangle_set> {
+          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
+        });
+  }
+
+  const VolumeChainSource chain = loadVolumeChainSource(service);
+  const int reportObjectIndex =
+      (candidateObjectIndex >= 0) ? candidateObjectIndex : pickedSourceIndex;
+
+  std::vector<OWzx::SceneRaycasterCandidate> candidates;
+  const int volumeCount = service->objectVolumeCount(pickedSourceIndex);
+  if (onlyVolumeIndex >= 0) {
+    // Same unrendered-volume skip as the enumerate path: an identity chain
+    // would raycast raw mesh coordinates (the ghost class).
+    if (!volumeChainResolves(chain, pickedSourceIndex, onlyVolumeIndex))
+      return out;
+    OWzx::SceneRaycasterCandidate cand;
+    cand.objectIndex = reportObjectIndex;
+    cand.volumeIndex = onlyVolumeIndex;
+    cand.worldTransform = volumeChainFor(chain, pickedSourceIndex, onlyVolumeIndex);
+    candidates.push_back(cand);
+  } else {
+    candidates.reserve(std::max(1, volumeCount));
+    for (int v = 0; v < std::max(1, volumeCount); ++v) {
+      // Volumes without a render batch are not in the rendered frame -- the
+      // identity chain would raycast them at raw mesh coordinates, exactly
+      // the ghost class this migration removes. Skip them.
+      if (!volumeChainResolves(chain, pickedSourceIndex, v))
+        continue;
+      OWzx::SceneRaycasterCandidate cand;
+      cand.objectIndex = reportObjectIndex;
+      cand.volumeIndex = v;
+      cand.worldTransform = volumeChainFor(chain, pickedSourceIndex, v);
+      candidates.push_back(cand);
+    }
+  }
+  if (candidates.empty())
+    return out;
+
+  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
+                             double(rayOrigin.z()));
+  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
+                          double(rayDir.z()));
+  out.hit = raycaster->hitTest(origin, dir, candidates);
+  out.hasHit = out.hit.hit;
+  if (out.hasHit) {
+    // The winning volume's chain, for the consumers that lift mesh-local
+    // results (normals, markers, clipping planes) with the same math.
+    out.worldTransform = volumeChainFor(
+        chain, pickedSourceIndex,
+        out.hit.volumeIndex >= 0 ? out.hit.volumeIndex : 0);
+  }
+  return out;
 }
 #endif
 
@@ -2147,49 +2280,17 @@ bool EditorViewModel::placeHollowPoint(int pickedSourceIndex, QVector3D rayOrigi
   // Phase HOLLOW (对齐上游 GLGizmoHollow::on_mouse → unproject_on_mesh):
   // cast the world ray through the picked object's volumes, take the nearest
   // mesh-local intersection, and append a sla::DrainHole there. Reuses the
-  // shared SceneRaycaster (same instance the measure/paint paths use).
+  // shared SceneRaycaster (same instance the measure/paint paths use) and,
+  // since S4, the shared pick/render transform chain.
   if (!projectService_ || pickedSourceIndex < 0)
     return false;
 
-  // Lazy-construct the shared SceneRaycaster (same contract as paintAtFacet).
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
-
-  // Reconstruct the candidate object's world transform (Eigen types cannot
-  // cross QML -- mirror of paintAtFacet).
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      hollowWorldTransform(translation, rotationRad, scale);
-
-  // Enumerate every volume of the picked object as a ray candidate.
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  const OWzx::SceneRaycasterHit hit = m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit)
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex, rayOrigin, rayDir);
+  if (!pick.hasHit)
     return false; // ray missed every volume -- no hole placed
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
+  const Slic3r::Transform3d &worldTransform = pick.worldTransform;
 
   // SceneRaycasterHit exposes worldNormal but DrainHole::normal lives in
   // mesh-local space. Convert via the inverse of the world transform's
@@ -2233,14 +2334,11 @@ void EditorViewModel::rebuildHollowMarkerData()
     return;
 
   // Object world transform (to lift mesh-local hole positions to world space).
-  const QVector3D translation = projectService_->objectPosition(obj);
-  const QVector3D rotationDeg = projectService_->objectRotation(obj);
-  const QVector3D scale = projectService_->objectScale(obj);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  // S4: the shared pick/render chain instead of the retired decomposed
+  // rebuild -- the markers must sit on the rendered mesh under any instance
+  // rotation. Volume 0 (the body volume the holes are seeded from).
   const Slic3r::Transform3d worldTransform =
-      hollowWorldTransform(translation, rotationRad, scale);
+      volumeChainFor(loadVolumeChainSource(projectService_), obj, 0);
 
   // Build a cylinder per hole (对齐上游 GLGizmoHollow::render_points which
   // renders a cylinder along the hole normal). We generate the cylinder
@@ -2324,14 +2422,11 @@ void EditorViewModel::rebuildAdvancedCutConnectorMarkers()
   if (connectors.isEmpty())
     return;
 
-  const QVector3D translation = projectService_->objectPosition(obj);
-  const QVector3D rotationDeg = projectService_->objectRotation(obj);
-  const QVector3D scale = projectService_->objectScale(obj);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
+  // S4: shared pick/render chain for the mesh-local -> world lift (volume 0,
+  // the body volume the pins are seeded from) -- same freshness contract as
+  // the hollow markers above.
   const Slic3r::Transform3d worldTransform =
-      hollowWorldTransform(translation, rotationRad, scale);
+      volumeChainFor(loadVolumeChainSource(projectService_), obj, 0);
 
   std::vector<GizmoVertex> verts;
   constexpr float kColor[4] = {0.30f, 0.65f, 0.95f, 0.85f}; // blue-ish pins
@@ -3166,42 +3261,15 @@ bool EditorViewModel::placeAdvancedCutConnector(int pickedSourceIndex,
 {
   // 对齐上游 GLGizmoAdvancedCut::add_connector：世界射线 → 网格表面命中 →
   // 以 mesh-local 命中点放置连接器（Z 轴对齐当前切割轴）。复用共享的
-  // SceneRaycaster（measure/paint/hollow 同一实例）。
+  // SceneRaycaster（measure/paint/hollow 同一实例）与 S4 共享变换链。
   if (!projectService_ || pickedSourceIndex < 0 || !m_advCutConnectors)
     return false;
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      hollowWorldTransform(translation, rotationRad, scale);
 
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  const OWzx::SceneRaycasterHit hit = m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit)
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex, rayOrigin, rayDir);
+  if (!pick.hasHit)
     return false;
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
 
   // Pin dimensions (对齐上游 add_connector 的量纲)：radius = size/2（size 是
   // 直径语义的滑块值），height = size × depth 比例。
@@ -3577,54 +3645,10 @@ QVector3D EditorViewModel::flattenRotationForNormal(const QVector3D &oldRotation
 
 QByteArray EditorViewModel::flattenHoverData() const { return m_flattenHoverData; }
 
-#ifdef HAS_LIBSLIC3R
-// Shared stage-2 raycast for the flatten pick paths. Returns the closest hit
-// over the picked object's volumes (same two-stage contract as the paint /
-// measure paths). hasHit=false when the ray misses.
-namespace {
-struct FlattenPickResult
-{
-  bool hasHit = false;
-  OWzx::SceneRaycasterHit hit{};
-};
-} // namespace
-
-static FlattenPickResult flattenRaycast(ProjectService *service,
-                                        OWzx::SceneRaycaster *raycaster,
-                                        int pickedSourceIndex,
-                                        QVector3D rayOrigin, QVector3D rayDir)
-{
-  FlattenPickResult out;
-  if (!service || !raycaster || pickedSourceIndex < 0)
-    return out;
-  const QVector3D translation = service->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = service->objectRotation(pickedSourceIndex);
-  const QVector3D scale = service->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
-
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = service->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  out.hit = raycaster->hitTest(origin, dir, candidates);
-  out.hasHit = out.hit.hit;
-  return out;
-}
-#endif
+// S4: the flatten pick paths' private stage-2 helper (FlattenPickResult /
+// flattenRaycast, which re-assembled the frame-mixed candidate transform)
+// collapsed into the shared raycastObjectVolumes -- the chain contract lives
+// in one place now (see the S4 block in the leading anonymous namespace).
 
 void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
                                        QVector3D worldOrigin,
@@ -3641,18 +3665,11 @@ void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
     }
     return;
   }
-  if (!m_sceneRaycaster)
-  {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
-  const FlattenPickResult pick = flattenRaycast(projectService_,
-                                                m_sceneRaycaster.get(),
-                                                pickedSourceIndex,
-                                                worldOrigin, worldDirection);
+  // S4: the shared raycast lazily constructs the raycaster (single
+  // ITS-source lambda across all entries) and walks the shared chain.
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex,
+      worldOrigin, worldDirection);
   if (!pick.hasHit)
   {
     if (!m_flattenHoverData.isEmpty())
@@ -3666,22 +3683,13 @@ void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
 
   // Rebuild the highlighted facet as a world-space triangle stream:
   // [int32 vertexCount][float x,y,z]* — the hovered ITS facet transformed
-  // by the volume's world matrix (upstream recolors the hovered flatten
+  // by the volume's world chain (upstream recolors the hovered flatten
   // plane, GLGizmoFlatten.cpp:107).
   const auto its = projectService_->volumeMeshIts(pick.hit.objectIndex,
                                                   pick.hit.volumeIndex);
   if (!its || pick.hit.facetIdx >= its->indices.size())
     return;
-  const QVector3D translation =
-      projectService_->objectPosition(pick.hit.objectIndex);
-  const QVector3D rotationDeg =
-      projectService_->objectRotation(pick.hit.objectIndex);
-  const QVector3D scale = projectService_->objectScale(pick.hit.objectIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
+  const Slic3r::Transform3d worldTransform = pick.worldTransform;
 
   const Slic3r::Vec3i32 idx = its->indices[pick.hit.facetIdx];
   for (int corner = 0; corner < 3; ++corner)
@@ -3722,18 +3730,10 @@ bool EditorViewModel::flattenPickFace(int pickedSourceIndex,
 #ifdef HAS_LIBSLIC3R
   if (!projectService_ || m_selectedSourceIndices.isEmpty() || pickedSourceIndex < 0)
     return false;
-  if (!m_sceneRaycaster)
-  {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
-  const FlattenPickResult pick = flattenRaycast(projectService_,
-                                                m_sceneRaycaster.get(),
-                                                pickedSourceIndex,
-                                                worldOrigin, worldDirection);
+  // S4: shared raycast + shared chain.
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex,
+      worldOrigin, worldDirection);
   if (!pick.hasHit)
     return false;
 
@@ -3743,11 +3743,16 @@ bool EditorViewModel::flattenPickFace(int pickedSourceIndex,
   const QVector3D oldScale = projectService_->objectScale(idx);
 
   // Upstream math (Selection.cpp:1299-1305): rotate so the picked world
-  // normal faces DOWN; the offset is preserved.
-  const QVector3D newRot = flattenRotationForNormal(
-      oldRot, QVector3D(float(pick.hit.worldNormal.x()),
-                        float(pick.hit.worldNormal.y()),
-                        float(pick.hit.worldNormal.z())));
+  // normal faces DOWN; the offset is preserved. The rotation stored by
+  // setObjectRotation is slic3r-frame, so the GL-frame hit normal converts
+  // back through the axes permutation first (upstream's world frame IS the
+  // rotation frame; ours is GL).
+  const QVector3D hitNormalGL(float(pick.hit.worldNormal.x()),
+                              float(pick.hit.worldNormal.y()),
+                              float(pick.hit.worldNormal.z()));
+  const QVector3D hitNormalSlic3r =
+      OWzx::SceneTransforms::glDirectionToSlic3r(hitNormalGL);
+  const QVector3D newRot = flattenRotationForNormal(oldRot, hitNormalSlic3r);
   projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
   if (m_undoManager)
   {
@@ -4739,10 +4744,19 @@ bool EditorViewModel::computeMeasureReadoutFromHit(int objectIndex,
         });
   }
 
+  // S4: the feature lift must use the same chain the pick hit through --
+  // exact shared chain when the volume has a render batch (production path
+  // via pickMeasureFeatureAt); the decomposed rebuild stays only as the
+  // fallback for hits that arrive without a resident render channel (the
+  // decomposed QML seam).
   const Slic3r::Vec3d worldPt(double(worldPoint.x()), double(worldPoint.y()),
                               double(worldPoint.z()));
+  const VolumeChainSource chainSource = loadVolumeChainSource(projectService_);
   const Slic3r::Transform3d worldTran =
-      rebuildWorldTransform(volumeTranslation, volumeRotationRad, volumeScale);
+      volumeChainResolves(chainSource, objectIndex, volumeIndex)
+          ? volumeChainFor(chainSource, objectIndex, volumeIndex)
+          : rebuildWorldTransform(volumeTranslation, volumeRotationRad,
+                                  volumeScale);
 
   // Resolve the feature at this hit (ME-02). The returned QtFeature is
   // pure POD (pitfall 6 scrubbed) -- safe to hold across calls.
@@ -4777,13 +4791,21 @@ bool EditorViewModel::computeMeasureReadoutFromHit(int objectIndex,
   // Second click: re-resolve the "from" feature from the stashed hit fields
   // (we stash the hit, not the feature, so the engine can rebuild the
   // SurfaceFeature on this side of the boundary without holding a libslic3r
-  // object). Then measure feature-vs-fromFeature.
+  // object). Then measure feature-vs-fromFeature. S4: the from-side lift
+  // resolves its chain live from the render channel (the same matrices the
+  // from-feature was picked through); the decomposed rebuild only backs the
+  // no-channel fallback.
   const Slic3r::Vec3d fromWorldPt(
       double(m_measureFromWorldPoint.x()), double(m_measureFromWorldPoint.y()),
       double(m_measureFromWorldPoint.z()));
-  const Slic3r::Transform3d fromWorldTran = rebuildWorldTransform(
-      m_measureFromVolumeTranslation, m_measureFromVolumeRotationRad,
-      m_measureFromVolumeScale);
+  const Slic3r::Transform3d fromWorldTran =
+      volumeChainResolves(chainSource, m_measureFromObjectIndex,
+                          m_measureFromVolumeIndex)
+          ? volumeChainFor(chainSource, m_measureFromObjectIndex,
+                           m_measureFromVolumeIndex)
+          : rebuildWorldTransform(m_measureFromVolumeTranslation,
+                                  m_measureFromVolumeRotationRad,
+                                  m_measureFromVolumeScale);
   OWzx::QtFeature fromFeature = m_measureEngine->getFeature(
       m_measureFromObjectIndex, m_measureFromVolumeIndex,
       static_cast<std::size_t>(m_measureFromFacetIdx), fromWorldPt,
@@ -4868,52 +4890,13 @@ bool EditorViewModel::pickMeasureFeatureAt(QVector3D rayOrigin,
     return false;
   }
 
-  // Lazy-construct the SceneRaycaster from the SAME ITS source MeasureEngine
-  // uses (ProjectService::volumeMeshIts, Phase 112). Reusing one accessor
-  // keeps per-volume ITS identity consistent across the raycaster + engine.
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
-
-  // Reconstruct the candidate volume's world transform from the object's
-  // translation/rotation/scale (Eigen types cannot cross QML). The candidate
-  // list is the SINGLE stage-1 survivor -- SceneRaycaster never loops the
-  // whole scene. Volume 0 is the primary mesh volume per ProjectService
-  // convention (objectVolumeCount >= 1 for any loaded object).
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
-
-  // Enumerate the candidate volume(s) for the picked object. Most objects
-  // have exactly one mesh volume; multi-volume objects add their mesh
-  // volumes here. The loop is bounded by objectVolumeCount (typically 1).
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDirection.x()), double(rayDirection.y()),
-                          double(rayDirection.z()));
-  const OWzx::SceneRaycasterHit hit =
-      m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit) {
+  // S4: the shared stage-2 pick -- one ITS-source lambda across all entries
+  // (the SAME source MeasureEngine uses, Phase 112) + the shared pick/render
+  // chain, so the resolved hit is the facet the render drew.
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex,
+      rayOrigin, rayDirection);
+  if (!pick.hasHit) {
     // Ray missed every candidate volume: clear the hover highlight so no
     // stale marker follows the cursor off the mesh.
     m_measureHoverFeatureKind = 0;
@@ -4921,20 +4904,23 @@ bool EditorViewModel::pickMeasureFeatureAt(QVector3D rayOrigin,
     emit measureReadoutChanged();
     return false;
   }
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
 
   // Drive the existing Phase 114 readout path with the resolved world-space
   // hit. computeMeasureReadoutFromHit stashes the first hit as the "from"
   // feature and measures the second against it (mirrors GLGizmoMeasure
   // two-click flow). It also updates m_measureHoverFeatureKind/Position from
   // the resolved feature (MS-03 visual feedback), so the default
-  // FeatureSelection path needs no extra work here.
+  // FeatureSelection path needs no extra work here. The decomposed triplet is
+  // only the readout core's no-channel fallback seam -- the core resolves the
+  // exact shared chain from the render channel itself.
   const QVector3D worldHit(float(hit.worldPosition.x()),
                            float(hit.worldPosition.y()),
                            float(hit.worldPosition.z()));
   const bool onlySelectPlane = false;  // full feature sniff (Point/Edge/Circle/Plane)
   computeMeasureReadoutFromHit(hit.objectIndex, hit.volumeIndex,
                                int(hit.facetIdx), worldHit,
-                               translation, rotationRad, scale,
+                               QVector3D(), QVector3D(), QVector3D(),
                                onlySelectPlane);
   if (shiftHeld) {
     // Upstream EMode::PointSelection (GLGizmoMeasure.cpp:413): the raw hit
@@ -4977,19 +4963,6 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
   if (!projectService_ || pickedSourceIndex < 0)
     return false;
 
-  // Lazy-construct the shared SceneRaycaster (same instance pickMeasureFeatureAt
-  // uses). The ITS source is volumeMeshIts (the SceneRaycaster consumes ITS,
-  // not TriangleMesh -- they alias the SAME refcount on ModelVolume::m_mesh).
-  // Reusing one raycaster keeps per-volume ITS identity consistent across the
-  // measure + paint paths and shares the cache invalidation.
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
-
   // Lazy-construct the PaintEngine from the TriangleMesh source (TS-01). This
   // is a DIFFERENT accessor from the raycaster's ITS source: volumeMeshTriangleMesh
   // aliases onto &mesh (not &mesh.its) so TriangleSelector's `const TriangleMesh&`
@@ -5003,49 +4976,21 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
         });
   }
 
-  // Reconstruct the candidate volume's world transform from the object's
-  // translation/rotation/scale (Eigen types cannot cross QML). Same rebuild
-  // pickMeasureFeatureAt uses (the candidate list is the single stage-1
-  // survivor -- SceneRaycaster never loops the whole scene, pitfall 7).
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
-
-  // Build the candidate list. When the caller passes a concrete (obj, vol) we
-  // narrow to exactly that volume; otherwise enumerate every volume of the
-  // picked object (mirrors pickMeasureFeatureAt's volume enumeration).
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  if (obj >= 0 && vol >= 0) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = obj;
-    cand.volumeIndex = vol;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  } else {
-    const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-    candidates.reserve(std::max(1, volumeCount));
-    for (int v = 0; v < std::max(1, volumeCount); ++v) {
-      OWzx::SceneRaycasterCandidate cand;
-      cand.objectIndex = pickedSourceIndex;
-      cand.volumeIndex = v;
-      cand.worldTransform = worldTransform;
-      candidates.push_back(cand);
-    }
-  }
-
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  const OWzx::SceneRaycasterHit hit =
-      m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit)
+  // S4: shared stage-2 pick + shared chain. When the caller passes a
+  // concrete (obj, vol) we narrow to exactly that volume; otherwise every
+  // renderable volume of the picked object is a candidate.
+  const bool narrowVolume = (obj >= 0 && vol >= 0);
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex,
+      rayOrigin, rayDir,
+      /*candidateObjectIndex=*/narrowVolume ? obj : -1,
+      /*onlyVolumeIndex=*/narrowVolume ? vol : -1);
+  if (!pick.hasHit)
     return false; // ray missed every candidate volume -- nothing to paint
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
+  const Slic3r::Transform3d worldTransform = pick.worldTransform;
+
+  // S4: the raycast already ran through the shared chain above (pick.hit).
 
   // PAINT-ALT-WHEEL-CLIP: cross-section plane (upstream threads
   // get_clipping_plane_in_volume_coordinates into every paint call and
@@ -5081,10 +5026,10 @@ bool EditorViewModel::paintAtFacet(int obj, int vol, int facetIdx,
 
   // trafo_no_translate for select_patch (TriangleSelector.hpp:309): the mesh->
   // world transform with the translation column zeroed. select_patch uses it to
-  // transform cursor directions/normals (rotation + scale only). Built by
-  // reusing rebuildWorldTransform with a zero translation.
-  const Slic3r::Transform3d trafoNoTranslate =
-      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+  // transform cursor directions/normals (rotation + scale only). S4: derived
+  // from the shared chain (its linear part), not a decomposed rebuild.
+  Slic3r::Transform3d trafoNoTranslate = worldTransform;
+  trafoNoTranslate.matrix().block<3, 1>(0, 3).setZero();
   const Slic3r::Vec3d cameraWorld(double(cameraPosition.x()),
                                   double(cameraPosition.y()),
                                   double(cameraPosition.z()));
@@ -5187,13 +5132,6 @@ bool EditorViewModel::smartFillAtFacet(int state,
   if (!projectService_ || pickedSourceIndex < 0)
     return false;
 
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
   if (!m_paintEngine) {
     m_paintEngine = std::make_unique<OWzx::PaintEngine>(
         [svc = projectService_](int objIdx, int volIdx)
@@ -5202,34 +5140,14 @@ bool EditorViewModel::smartFillAtFacet(int state,
         });
   }
 
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
-
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  const OWzx::SceneRaycasterHit hit =
-      m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit)
+  // S4: shared stage-2 pick + shared chain (the raycaster lazy-constructs
+  // inside the shared entry).
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex, rayOrigin, rayDir);
+  if (!pick.hasHit)
     return false;
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
+  const Slic3r::Transform3d worldTransform = pick.worldTransform;
 
   // PAINT-ALT-WHEEL-CLIP: the seed fill honours the cross-section plane the
   // same way the brush does -- a seed hit on the clipped side is rejected
@@ -5260,8 +5178,9 @@ bool EditorViewModel::smartFillAtFacet(int state,
       clippingPlane.is_mesh_point_clipped(hit.meshLocalPosition))
     return false; // seed hit is on the clipped side -- nothing fillable there
 
-  const Slic3r::Transform3d trafoNoTranslate =
-      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+  // S4: the chain's linear part (translation zeroed) feeds select_patch.
+  Slic3r::Transform3d trafoNoTranslate = worldTransform;
+  trafoNoTranslate.matrix().block<3, 1>(0, 3).setZero();
 
   const Slic3r::EnforcerBlockerType ebt =
       static_cast<Slic3r::EnforcerBlockerType>(state);
@@ -5295,13 +5214,6 @@ bool EditorViewModel::bucketFillAtFacet(int state,
   if (!projectService_ || pickedSourceIndex < 0)
     return false;
 
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
   if (!m_paintEngine) {
     m_paintEngine = std::make_unique<OWzx::PaintEngine>(
         [svc = projectService_](int objIdx, int volIdx)
@@ -5310,34 +5222,13 @@ bool EditorViewModel::bucketFillAtFacet(int state,
         });
   }
 
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
-
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  const OWzx::SceneRaycasterHit hit =
-      m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit)
+  // S4: shared stage-2 pick + shared chain.
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex, rayOrigin, rayDir);
+  if (!pick.hasHit)
     return false;
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
+  const Slic3r::Transform3d worldTransform = pick.worldTransform;
 
   // PAINT-ALT-WHEEL-CLIP: the bucket fill honours the cross-section plane the
   // same way the brush does -- a seed hit on the clipped side is rejected
@@ -5367,8 +5258,9 @@ bool EditorViewModel::bucketFillAtFacet(int state,
       clippingPlane.is_mesh_point_clipped(hit.meshLocalPosition))
     return false; // seed hit is on the clipped side -- nothing fillable there
 
-  const Slic3r::Transform3d trafoNoTranslate =
-      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
+  // S4: the chain's linear part (translation zeroed) feeds select_patch.
+  Slic3r::Transform3d trafoNoTranslate = worldTransform;
+  trafoNoTranslate.matrix().block<3, 1>(0, 3).setZero();
 
   const Slic3r::EnforcerBlockerType ebt =
       static_cast<Slic3r::EnforcerBlockerType>(state);
@@ -5401,13 +5293,6 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
   if (!projectService_ || pickedSourceIndex < 0)
     return false;
 
-  if (!m_sceneRaycaster) {
-    m_sceneRaycaster = std::make_unique<OWzx::SceneRaycaster>(
-        [svc = projectService_](int objIdx, int volIdx)
-            -> std::shared_ptr<const indexed_triangle_set> {
-          return svc ? svc->volumeMeshIts(objIdx, volIdx) : nullptr;
-        });
-  }
   if (!m_paintEngine) {
     m_paintEngine = std::make_unique<OWzx::PaintEngine>(
         [svc = projectService_](int objIdx, int volIdx)
@@ -5416,36 +5301,17 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
         });
   }
 
-  const QVector3D translation = projectService_->objectPosition(pickedSourceIndex);
-  const QVector3D rotationDeg = projectService_->objectRotation(pickedSourceIndex);
-  const QVector3D scale = projectService_->objectScale(pickedSourceIndex);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
-  const Slic3r::Transform3d trafoNoTranslate =
-      rebuildWorldTransform(QVector3D(0.f, 0.f, 0.f), rotationRad, scale);
-
-  std::vector<OWzx::SceneRaycasterCandidate> candidates;
-  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
-  candidates.reserve(std::max(1, volumeCount));
-  for (int v = 0; v < std::max(1, volumeCount); ++v) {
-    OWzx::SceneRaycasterCandidate cand;
-    cand.objectIndex = pickedSourceIndex;
-    cand.volumeIndex = v;
-    cand.worldTransform = worldTransform;
-    candidates.push_back(cand);
-  }
-
-  const Slic3r::Vec3d origin(double(rayOrigin.x()), double(rayOrigin.y()),
-                             double(rayOrigin.z()));
-  const Slic3r::Vec3d dir(double(rayDir.x()), double(rayDir.y()),
-                          double(rayDir.z()));
-  const OWzx::SceneRaycasterHit hit =
-      m_sceneRaycaster->hitTest(origin, dir, candidates);
-  if (!hit.hit)
+  // S4: shared stage-2 pick + shared chain (the raycaster lazy-constructs
+  // inside the shared entry).
+  const VolumeRaycastResult pick = raycastObjectVolumes(
+      projectService_, m_sceneRaycaster, pickedSourceIndex, rayOrigin, rayDir);
+  if (!pick.hasHit)
     return false;
+  const OWzx::SceneRaycasterHit &hit = pick.hit;
+  const Slic3r::Transform3d worldTransform = pick.worldTransform;
+  // S4: the chain's linear part (translation zeroed) feeds select_patch.
+  Slic3r::Transform3d trafoNoTranslate = worldTransform;
+  trafoNoTranslate.matrix().block<3, 1>(0, 3).setZero();
 
   // PAINT-ALT-WHEEL-CLIP: an anchor hit on the clipped side rejects the
   // stroke (the upstream HeightRange cursor would carry the plane too,
@@ -5510,10 +5376,21 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
   // GLGizmoPainterBase.cpp:537-572): every OTHER part volume whose facets
   // intersect the band gets the same band cursor, seeded at its first
   // in-band facet (select_patch's hr branch scans all facets anyway -- the
-  // seed only satisfies the facet_start contract).
+  // seed only satisfies the facet_start contract). S4: each volume lifts
+  // through ITS OWN chain (per-volume render batches differ once volume
+  // matrices are non-identity).
+  const VolumeChainSource chainSource =
+      loadVolumeChainSource(projectService_);
+  const int volumeCount = projectService_->objectVolumeCount(pickedSourceIndex);
   for (int v = 0; v < std::max(1, volumeCount); ++v) {
     if (v == hit.volumeIndex)
       continue;
+    if (!volumeChainResolves(chainSource, pickedSourceIndex, v))
+      continue; // not in the rendered frame -- nothing to band-paint
+    const Slic3r::Transform3d volChain =
+        volumeChainFor(chainSource, pickedSourceIndex, v);
+    Slic3r::Transform3d volTrafoNoTranslate = volChain;
+    volTrafoNoTranslate.matrix().block<3, 1>(0, 3).setZero();
     const std::shared_ptr<const indexed_triangle_set> its =
         projectService_->volumeMeshIts(pickedSourceIndex, v);
     if (!its)
@@ -5529,8 +5406,8 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
       for (int k = 0; k < 3; ++k) {
         const Slic3r::Vec3f &p = its->vertices[size_t(idx[k])];
         const Slic3r::Vec3d w =
-            worldTransform * Slic3r::Vec3d(double(p.x()), double(p.y()),
-                                           double(p.z()));
+            volChain * Slic3r::Vec3d(double(p.x()), double(p.y()),
+                                     double(p.z()));
         if (float(w.z()) < zBotWorld)
           ++below;
         else if (float(w.z()) > zTopWorld)
@@ -5546,8 +5423,8 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
     if (firstInBandFacet < 0)
       continue;
     if (m_paintEngine->paintHeightRangeAt(pickedSourceIndex, v, zBotWorld,
-                                          bandHeight, ebt, worldTransform,
-                                          trafoNoTranslate, cameraLocal,
+                                          bandHeight, ebt, volChain,
+                                          volTrafoNoTranslate, cameraLocal,
                                           firstInBandFacet)) {
       anyPainted = true;
       commitPaintedSelector(pickedSourceIndex, v, firstInBandFacet, state);
@@ -5641,10 +5518,10 @@ void EditorViewModel::resyncPaintSelector(int objectIndex, int volumeIndex, int 
 // World transform: PaintEngine::getFacets returns MESH-LOCAL vertices
 // (TriangleSelector stores m_vertices in mesh space). The overlay must render in
 // WORLD space (same as the model mesh), so each vertex is transformed by the
-// object's TRS -- the SAME rebuildWorldTransform paintAtFacet uses (.cpp:2560-
-// 2567). The ITS is converted to libslic3r world frame, then the renderer's
-// upstream Y->Qt-Z swap is applied in uploadPaintOverlayBuffer (mirrors the
-// mesh-data path). Here we emit libslic3r world coords (X,Y,Z up).
+// S4 shared pick/render chain per volume -- the exact matrices the render
+// submission walked, so the highlight sits on the rendered mesh under any
+// instance rotation (the retired decomposed rebuild floated it off the mesh
+// once the object was rotated). Here we emit libslic3r world coords (X,Y,Z up).
 QByteArray EditorViewModel::paintOverlayData() const
 {
   // const getter but getFacets may lazily build selectors. Reuse the same
@@ -5673,15 +5550,9 @@ QByteArray EditorViewModel::paintOverlayData() const
   if (!engine)
     return {};
 
-  // Rebuild the object's world transform (same as paintAtFacet .cpp:2560-2567).
-  const QVector3D translation = projectService_->objectPosition(obj);
-  const QVector3D rotationDeg = projectService_->objectRotation(obj);
-  const QVector3D scale = projectService_->objectScale(obj);
-  const QVector3D rotationRad(float(rotationDeg.x() * float(M_PI) / 180.0f),
-                              float(rotationDeg.y() * float(M_PI) / 180.0f),
-                              float(rotationDeg.z() * float(M_PI) / 180.0f));
-  const Slic3r::Transform3d worldTransform =
-      rebuildWorldTransform(translation, rotationRad, scale);
+  // S4: per-volume chains from the shared render channel.
+  const VolumeChainSource chainSource =
+      loadVolumeChainSource(projectService_);
 
   // Enumerate the relevant EnforcerBlockerType states. Support/Seam use only
   // Enforcer(1) + Blocker(2); MMU uses Extruder1..16 (values 1..16, where
@@ -5698,6 +5569,11 @@ QByteArray EditorViewModel::paintOverlayData() const
   const int volumeCount = std::max(1, projectService_->objectVolumeCount(obj));
   for (int v = 0; v < volumeCount; ++v)
   {
+    // S4: this volume's own chain; unrendered volumes have no highlight.
+    if (!volumeChainResolves(chainSource, obj, v))
+      continue;
+    const Slic3r::Transform3d worldTransform =
+        volumeChainFor(chainSource, obj, v);
     for (int stateInt = 1; stateInt <= 16; ++stateInt)
     {
       const Slic3r::EnforcerBlockerType state =

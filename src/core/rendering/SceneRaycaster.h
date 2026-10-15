@@ -44,6 +44,9 @@
 #include <utility>
 #include <vector>
 
+#include <QMatrix4x4>
+#include <QVector3D>
+
 #ifdef HAS_LIBSLIC3R
 #include <libslic3r/Point.hpp>  // Vec3d, Transform3d (via Point.hpp -> Eigen)
 struct indexed_triangle_set;
@@ -51,8 +54,110 @@ struct indexed_triangle_set;
 
 #include "MeshRaycaster.h"
 
+// ===========================================================================
+// S4 (audit 2026-10-10 ch.4): SceneTransforms -- the single spelling of the
+// pick/render world chain.
+//
+// Since S3 the renderer draws every volume as
+//   world_gl = channel · A · (volMat · v)
+// where the mesh blob bakes the volume-local GL vertices A·(volMat·v) and the
+// per-batch instance channel (ProjectService::meshBatchInstanceTransforms)
+// applies T(plateShift) · A · instMat · A⁻¹. A is the slic3r->GL AXES-ROT
+// permutation (GL.x=x, GL.y=z, GL.z=-y; det=+1).
+//
+// The pick side raycasts the RAW volume ITS (slic3r volume-local, pre-volMat
+// -- ProjectService::volumeMeshIts), so its candidate worldTransform must be
+// the same chain:
+//   worldTransform = channel · A · volMat
+// (SceneTransforms::volumeWorldMatrix / volumeWorldTransform below). Before
+// S4 every EditorViewModel pick entry re-assembled its own transform from the
+// decomposed object accessors -- GL-mapped translation + slic3r-frame
+// rotation/scale, no volume matrix, no plate shift -- which is frame-mixed
+// and diverges from the rendered frame exactly when the instance is rotated
+// (the "90° ghost": stage-2 hit lands on geometry the render never drew).
+// Consuming the render channel makes that divergence structurally impossible:
+// pick and render walk the same matrices.
+//
+// Qt-only (usable from the standalone picking suites, which do not link
+// libslic3r); the Eigen bridge for the ViewModel lives under HAS_LIBSLIC3R.
+// ===========================================================================
+namespace OWzx
+{
+namespace SceneTransforms
+{
+// The slic3r->GL AXES-ROT permutation A (GL.x=x, GL.y=z, GL.z=-y; det=+1, a
+// rotation -- not a mirror). Mirror of the production spelling at
+// ProjectService::axesRotSlic3rToGl (ProjectService.cpp:513), which owns the
+// render-side compose; the two must stay the same matrix and the S4 suite in
+// tests/ObjectPickingTests.cpp pins the chain against the rendered frame.
+inline QMatrix4x4 slic3rToGlAxes()
+{
+  // QMatrix4x4's array constructor is row-major.
+  const float values[16] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, -1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f,
+  };
+  return QMatrix4x4(values);
+}
+
+// The full pick-side chain: raw volume-local mesh vertex -> rendered GL
+// world. `batchInstanceChannel` is one entry of the S3 render channel
+// (ProjectService::meshBatchInstanceTransforms -- the same matrices the
+// renderer consumes); `volumeMatrix` is the volume's own (slic3r-frame)
+// transform, identity for the common single-part import where the instance
+// carries the whole placement.
+inline QMatrix4x4 volumeWorldMatrix(
+    const QMatrix4x4 &batchInstanceChannel,
+    const QMatrix4x4 &volumeMatrix = QMatrix4x4())
+{
+  return batchInstanceChannel * slic3rToGlAxes() * volumeMatrix;
+}
+
+// Direction back-conversion GL -> slic3r (linear part only). Consumers whose
+// math is slic3r-frame (e.g. the flatten rotation, which feeds
+// setObjectRotation) convert the world-space hit normal through this. A is
+// orthonormal (a +-1 permutation), so the inverse is the transpose.
+inline QVector3D glDirectionToSlic3r(const QVector3D &glDirection)
+{
+  return slic3rToGlAxes().transposed().mapVector(glDirection);
+}
+} // namespace SceneTransforms
+
+// The Eigen bridge + the raycaster itself only exist with libslic3r; the
+// unconditional OWzx namespace opened above closes AFTER this guard so
+// SceneTransforms is available to the standalone (non-HAS_LIBSLIC3R) suites.
 #ifdef HAS_LIBSLIC3R
-namespace OWzx {
+
+
+namespace
+{
+// Eigen bridge for the ViewModel pick paths: QMatrix4x4 (Qt, row-major
+// accessors) -> Transform3d (Eigen, column-major storage).
+inline Slic3r::Transform3d transformFromQMatrix(const QMatrix4x4 &m)
+{
+  Slic3r::Transform3d t = Slic3r::Transform3d::Identity();
+  for (int r = 0; r < 4; ++r)
+    for (int c = 0; c < 4; ++c)
+      t.matrix()(r, c) = double(m(r, c));
+  return t;
+}
+} // namespace
+
+// S4: the volume world chain as a Transform3d -- the candidate worldTransform
+// for SceneRaycaster::hitTest (see the SceneTransforms header comment). The
+// channel·A product is evaluated in float (the channel is float data); the
+// volume matrix rides the Eigen product so double precision is kept where it
+// exists.
+inline Slic3r::Transform3d volumeWorldTransform(
+    const QMatrix4x4 &batchInstanceChannel,
+    const Slic3r::Transform3d &volumeMatrix = Slic3r::Transform3d::Identity())
+{
+  return transformFromQMatrix(batchInstanceChannel
+                              * SceneTransforms::slic3rToGlAxes())
+         * volumeMatrix;
+}
 
 // Hit result for the two-stage pick. This is the WORLD-SPACE view the
 // Phase 114 (Measuring) + Phase 115 (snap UX) consumers need; MeshRaycasterHit
@@ -92,9 +197,17 @@ struct SceneRaycasterCandidate
 {
   int               objectIndex  = -1;
   int               volumeIndex  = -1;
-  // World transform of the volume (ModelVolume::get_matrix() /
-  // instance matrix). Mesh-local ray = inverse(worldTransform) * world ray
-  // (mirror of MeshUtils.cpp:432-434).
+  // S4 contract: the FULL GL-frame world chain
+  //   T(plateShift) · A · instMat · volMat
+  // (A = the slic3r->GL AXES-ROT permutation) that maps a RAW volume-local
+  // ITS vertex (ProjectService::volumeMeshIts, pre-volMat) to the exact
+  // world position the renderer drew. Compose it through
+  // OWzx::volumeWorldTransform from the S3 render channel
+  // (ProjectService::meshBatchInstanceTransforms) so picking consumes the
+  // same matrices the render submission walked -- hand-assembling it from
+  // the decomposed object accessors is what produced the frame-mixed
+  // "rotated ghost" hits S4 removes. Mesh-local ray =
+  // inverse(worldTransform) * world ray (mirror of MeshUtils.cpp:432-434).
   Slic3r::Transform3d worldTransform = Slic3r::Transform3d::Identity();
 };
 
@@ -165,5 +278,5 @@ private:
   std::map<Key, std::shared_ptr<MeshRaycaster>> m_cache;
 };
 
-} // namespace OWzx
 #endif // HAS_LIBSLIC3R
+} // namespace OWzx

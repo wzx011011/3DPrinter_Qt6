@@ -37,17 +37,6 @@
 
 namespace
 {
-// The gizmo world scale, single-sourced with the renderer's uniform
-// (RhiViewportRenderer.cpp uploadGizmoBuffer / renderSelectionCenter): the
-// gizmo shader maps gizmo-local units to world as
-//   world_pos = position * gizmoScale + gizmoCenter
-// (shaders/rhi_gizmo.vert:29). The pick must use the SAME mapping so the
-// tested bodies are the drawn bodies.
-float gizmoWorldScale(const QVector3D &gizmoCenter, const QVector3D &cameraEye)
-{
-  return std::max((gizmoCenter - cameraEye).length() * 0.15f, 5.0f);
-}
-
 // Two-sided Moller-Trumbore ray-triangle intersection. Returns the ray
 // parameter t (>= 0) of the hit, or -1 on miss. Two-sided like the upstream
 // MeshRaycaster, so a grabber body is hittable from either winding.
@@ -212,7 +201,7 @@ int GizmoMath::pickMoveAxis(float sx, float sy, const QSize &viewSize,
   auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
   const GizmoBodyGeometry &geometry = GizmoBodyGeometry::instance();
   return pickAxisBody(orig, dir, gizmoCenter,
-                      gizmoWorldScale(gizmoCenter, cameraEye),
+                      GizmoMath::gizmoWorldScale(gizmoCenter, cameraEye),
                       geometry.moveVerts, geometry.moveOffsets.coneBase,
                       geometry.moveOffsets.coneVertCount);
 }
@@ -254,6 +243,22 @@ float GizmoMath::computeRotateAngle(float sx, float sy, int axis,
 }
 
 // ===========================================================================
+// gizmoWorldScale  -- S4 single source of the gizmo world scale
+//
+// max(distance(gizmoCenter, cameraEye) * 0.15, 5.0). The pick side
+// (pickMoveAxis/pickRotateAxis/pickScaleAxis -- the drawn grabber bodies) and
+// the render side (RhiViewportRenderer's selection-center sphere rebuild +
+// the CameraBlock uniform) all resolve the scale through THIS function, so
+// what you can grab is exactly what you can see (the formula was previously
+// inlined on both sides of that implicit contract).
+// ===========================================================================
+float GizmoMath::gizmoWorldScale(const QVector3D &gizmoCenter,
+                                 const QVector3D &cameraEye)
+{
+  return std::max((gizmoCenter - cameraEye).length() * 0.15f, 5.0f);
+}
+
+// ===========================================================================
 // pickRotateAxis  -- returns 1/2/3 for X/Y/Z ring, 0 if no hit
 //
 // X3: exact ray vs the drawn torus ring bodies (majorR 0.7, minorR 0.035 in
@@ -276,7 +281,7 @@ int GizmoMath::pickRotateAxis(float sx, float sy, const QSize &viewSize,
   auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
   const GizmoBodyGeometry &geometry = GizmoBodyGeometry::instance();
   return pickAxisBody(orig, dir, gizmoCenter,
-                      gizmoWorldScale(gizmoCenter, cameraEye),
+                      GizmoMath::gizmoWorldScale(gizmoCenter, cameraEye),
                       geometry.rotateVerts, geometry.rotateOffsets.ringBase,
                       geometry.rotateOffsets.ringVertCount);
 }
@@ -302,7 +307,7 @@ int GizmoMath::pickScaleAxis(float sx, float sy, const QSize &viewSize,
   auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
   const GizmoBodyGeometry &geometry = GizmoBodyGeometry::instance();
   return pickAxisBody(orig, dir, gizmoCenter,
-                      gizmoWorldScale(gizmoCenter, cameraEye),
+                      GizmoMath::gizmoWorldScale(gizmoCenter, cameraEye),
                       geometry.scaleVerts, geometry.scaleOffsets.boxBase,
                       geometry.scaleOffsets.boxVertCount);
 }

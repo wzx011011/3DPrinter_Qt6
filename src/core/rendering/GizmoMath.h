@@ -94,6 +94,18 @@ public:
       const QMatrix4x4 &projMatrix, const QMatrix4x4 &viewMatrix,
       const QVector3D &gizmoCenter, float rotateStartAngle);
 
+  // S4 (audit 2026-10-10 ch.4): the single source of the gizmo world scale
+  //   max(distance(gizmoCenter, cameraEye) * 0.15, 5.0)
+  // The gizmo shader maps gizmo-local units to world as
+  //   world_pos = position * gizmoScale + gizmoCenter
+  // (shaders/rhi_gizmo.vert:29), so pick (pickMoveAxis/pickRotateAxis/
+  // pickScaleAxis test the drawn bodies) and render (RhiViewportRenderer's
+  // selection-center sphere + uniform block) must resolve the SAME value --
+  // previously the formula lived as inline copies on both sides of that
+  // implicit contract.
+  static float gizmoWorldScale(const QVector3D &gizmoCenter,
+                               const QVector3D &cameraEye);
+
 private:
   GizmoMath() = delete; // static-only utility
 };
