@@ -27,6 +27,10 @@ class CalibrationServiceMock;
 class CameraServiceMock;
 class AppSettingsService;
 class PluginService;
+// X1: 数据面窄接口（声明随各服务头文件；此处仅前置声明供访问器签名）
+class IDeviceDataPlane;
+class ICloudDataPlane;
+class ICameraStreamService;
 
 class EditorViewModel;
 class PreviewViewModel;
@@ -371,6 +375,15 @@ public:
   QObject *appSettings() const;
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
+  // ── X1: 数据面窄接口访问器（注入缝的装配点出口）──
+  // mock 与未来真实现共同实现接口；消费方/测试面向接口而非具体 mock 类，
+  // 后端替换 = 改构造函数这一处装配。mock→真的替换不再依赖原位改写。
+  /// 设备清单/凭据/任务发送/遥测（X1 数据面）
+  IDeviceDataPlane *deviceDataPlane() const;
+  /// 云账号/云绑定设备/云同步（X1 数据面）
+  ICloudDataPlane *cloudDataPlane() const;
+  /// 相机流状态/帧供应（X1 数据面）
+  ICameraStreamService *cameraStreamService() const;
   bool visualCompareMode() const;
   // S8: former root context properties (see Q_PROPERTY block above).
   bool startupSkipFirstRun() const { return startupSkipFirstRun_; }
@@ -794,6 +807,8 @@ private:
   NetworkServiceMock *networkService_ = nullptr;
   /// Upstream-aligned QML API.
   CameraServiceMock *cameraService_ = nullptr;
+  /// X1: 云数据面成员（此前为构造函数局部变量；入成员以支撑接口访问器）。
+  class CloudServiceMock *cloudService_ = nullptr;
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
   /// Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry +

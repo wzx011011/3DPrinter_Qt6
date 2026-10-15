@@ -36,6 +36,7 @@
 #include <QGuiApplication>
 #include <QFont>
 #include <iterator>
+#include <type_traits>
 #include <utility>
 #include <QUrl>
 #include <algorithm>
@@ -81,6 +82,21 @@ static const double kScales[] = {1.0, 1.25, 1.5, 1.75, 2.0};
 // 语言代码映射
 static const char *kLangCodes[] = {"zh_CN", "en", "ja", "ko", "de", "fr"};
 
+// ── X1（审计④章）：数据面窄接口的装配点 ──────────────────────────────
+// 编译期钉死：mock 必须实现各自的数据面窄接口。真后端到达时以"实现接口 +
+// 改本文件这一处装配"接入，消费方/测试面向接口（注入缝），不再原位改写
+// 12.5k 行具体类。
+static_assert(std::is_base_of_v<IDeviceDataPlane, DeviceServiceMock>,
+              "DeviceServiceMock must implement IDeviceDataPlane (X1 data-plane seam)");
+static_assert(std::is_base_of_v<ICloudDataPlane, CloudServiceMock>,
+              "CloudServiceMock must implement ICloudDataPlane (X1 data-plane seam)");
+static_assert(std::is_base_of_v<ICameraStreamService, CameraServiceMock>,
+              "CameraServiceMock must implement ICameraStreamService (X1 data-plane seam)");
+
+IDeviceDataPlane *BackendContext::deviceDataPlane() const { return deviceService_; }
+ICloudDataPlane *BackendContext::cloudDataPlane() const { return cloudService_; }
+ICameraStreamService *BackendContext::cameraStreamService() const { return cameraService_; }
+
 BackendContext::BackendContext(QObject *parent)
     : QObject(parent)
 {
@@ -100,7 +116,8 @@ BackendContext::BackendContext(QObject *parent)
   calibrationService_->setProjectService(projectService_);
   networkService_ = new NetworkServiceMock(this);
   cameraService_ = new CameraServiceMock(this);
-  auto *cloudService = new CloudServiceMock(this);
+  // X1: 云数据面装配（接口访问器 cloudDataPlane() 出口；此前为构造函数局部量）
+  cloudService_ = new CloudServiceMock(this);
 
   // U11: 发送链路真实性桥。DeviceServiceMock 的 FTP+MQTT 真发送路径此前
   // 只在 uploadFinished 里打日志：publish 失败仍无条件把设备置 "printing"，
@@ -215,7 +232,7 @@ BackendContext::BackendContext(QObject *parent)
   connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
     configViewModel_->setExtruderCount(editorViewModel_->extruderCount());
   });
-  homeViewModel_ = new HomeViewModel(cloudService, this);
+  homeViewModel_ = new HomeViewModel(cloudService_, this);
   settingsViewModel_ = new SettingsViewModel(this);
   projectViewModel_ = new ProjectViewModel(this);
   // Phase 241 (PAGE-01/PAGE-02): Home mirrors the persisted recent list from
