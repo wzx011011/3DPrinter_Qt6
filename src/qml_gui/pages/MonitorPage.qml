@@ -894,29 +894,15 @@ Item {
 
                         // monitor-9: upstream AddMachinePanel button is
                         // 96x39, corner radius 12, border #909090, face
-                        // following the panel (Monitor.cpp:60-74). Dark-theme
-                        // mapping: #909090 -> borderDefault, panel face ->
-                        // bgPanel, hover -> bgHover. Hint text sits below.
-                        Rectangle {
-                            width: 96; height: 39; radius: Theme.radiusXL
+                        // following the panel (Monitor.cpp:60-74). X2: the
+                        // hand-drawn Rectangle became a system CxButton
+                        // (Secondary) at the upstream 96x39 geometry.
+                        CxButton {
+                            width: 96; height: 39
                             anchors.horizontalCenter: parent.horizontalCenter
-                            color: noPrinterScanMA.containsMouse ? Theme.bgHover : Theme.bgPanel
-                            border.width: 1
-                            border.color: Theme.borderDefault
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: qsTr("扫描设备")
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeMD
-                            }
-                            MouseArea {
-                                id: noPrinterScanMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.monitorVm.scanDevices()
-                            }
+                            text: qsTr("扫描设备")
+                            cxStyle: CxButton.Style.Secondary
+                            onClicked: root.monitorVm.scanDevices()
                         }
 
                         Text {
@@ -1014,25 +1000,12 @@ Item {
 
                 // Retry button (monitor-9: width was mis-bound to a color
                 // token on both branches, collapsing the button; size from
-                // the label now).
-                Rectangle {
-                    width: retryLabel.implicitWidth + 32
-                    height: 36; radius: Theme.radiusLG
+                // the label now). X2: hand-drawn → system CxButton Primary.
+                CxButton {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    Text {
-                        id: retryLabel
-                        anchors.centerIn: parent
-                        text: qsTr("\u21BB 重新连接")
-                        color: "white"
-                        font.pixelSize: Theme.fontSizeLG
-                    }
-                    MouseArea {
-                        id: retryPanelMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.connectWithAccessCode()
-                    }
+                    text: qsTr("\u21BB 重新连接")
+                    cxStyle: CxButton.Style.Primary
+                    onClicked: root.connectWithAccessCode()
                 }
             }
 
@@ -1348,21 +1321,14 @@ Item {
 
                                     Item { Layout.fillWidth: true }
 
-                                    // Refresh button
-                                    Rectangle {
-                                        width: refreshBtn.implicitWidth + 16
-                                        height: 28; radius: Theme.radiusSM
-                                        color: refreshBtnHover.containsMouse ? Theme.bgHover : Theme.bgElevated
-                                        border.width: 1; border.color: Theme.borderSubtle
-                                        Text {
-                                            id: refreshBtn
-                                            anchors.centerIn: parent
-                                            text: qsTr("\u21BB 刷新状态")
-                                            color: Theme.textSecondary
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        HoverHandler { id: refreshBtnHover }
-                                        TapHandler { onTapped: root.monitorVm.refresh() }
+                                    // Refresh button (X2: hand-drawn → CxButton;
+                                    // Phase 168 migrated the header refresh to
+                                    // CxIconButton, this row-level one to CxButton)
+                                    CxButton {
+                                        text: qsTr("\u21BB 刷新状态")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Secondary
+                                        onClicked: root.monitorVm.refresh()
                                     }
                                 }
                             }
@@ -1440,7 +1406,9 @@ Item {
                                     anchors.rightMargin: Theme.spacingLG
                                     spacing: Theme.spacingXL
 
-                                    // Chamber light toggle
+                                    // Chamber light toggle (X2: hand-drawn
+                                    // capsule → system CxSwitch, same control
+                                    // the Cut/Arrange panels already used)
                                     Column {
                                         spacing: 4
                                         Text {
@@ -1448,25 +1416,9 @@ Item {
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeSM
                                         }
-                                        Rectangle {
-                                            width: 56; height: 28; radius: Theme.radiusXXL
-                                            color: root.monitorVm.selectedDeviceChamberLightOn ? Theme.accent : Theme.borderDefault
-                                            border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceChamberLightOn ? Theme.accentDark : Theme.borderStrong
-
-                                            Rectangle {
-                                                width: 22; height: 22; radius: Theme.radiusXL
-                                                color: "white"
-                                                x: root.monitorVm.selectedDeviceChamberLightOn ? parent.width - 25 : 3
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.setChamberLight(!root.monitorVm.selectedDeviceChamberLightOn)
-                                            }
+                                        CxSwitch {
+                                            checked: root.monitorVm.selectedDeviceChamberLightOn
+                                            onToggled: root.monitorVm.setChamberLight(checked)
                                         }
                                     }
 
@@ -1477,7 +1429,7 @@ Item {
                                         color: Theme.borderSubtle
                                     }
 
-                                    // Work light toggle
+                                    // Work light toggle (X2: → CxSwitch)
                                     Column {
                                         spacing: 4
                                         Text {
@@ -1485,25 +1437,9 @@ Item {
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeSM
                                         }
-                                        Rectangle {
-                                            width: 56; height: 28; radius: Theme.radiusXXL
-                                            color: root.monitorVm.selectedDeviceWorkLightOn ? Theme.accent : Theme.borderDefault
-                                            border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceWorkLightOn ? Theme.accentDark : Theme.borderStrong
-
-                                            Rectangle {
-                                                width: 22; height: 22; radius: Theme.radiusXL
-                                                color: "white"
-                                                x: root.monitorVm.selectedDeviceWorkLightOn ? parent.width - 25 : 3
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.setWorkLight(!root.monitorVm.selectedDeviceWorkLightOn)
-                                            }
+                                        CxSwitch {
+                                            checked: root.monitorVm.selectedDeviceWorkLightOn
+                                            onToggled: root.monitorVm.setWorkLight(checked)
                                         }
                                     }
 
@@ -1514,7 +1450,10 @@ Item {
                                         color: Theme.borderSubtle
                                     }
 
-                                    // Camera recording toggle
+                                    // Camera recording toggle (X2: → CxSwitch;
+                                    // the red REC recording state stays carried
+                                    // by the video overlay badge + the camera
+                                    // toolbar button, which are severity-bound)
                                     Column {
                                         spacing: 4
                                         Text {
@@ -1522,35 +1461,9 @@ Item {
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeSM
                                         }
-                                        Rectangle {
-                                            width: 56; height: 28; radius: Theme.radiusXXL
-                                            color: root.monitorVm.selectedDeviceCameraRecording ? Theme.statusError : Theme.borderDefault
-                                            border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceCameraRecording ? Theme.chromeDangerHover : Theme.borderStrong
-
-                                            // Recording indicator dot
-                                            Rectangle {
-                                                visible: root.monitorVm.selectedDeviceCameraRecording
-                                                width: 8; height: 8; radius: Theme.radiusSM
-                                                color: Theme.statusError
-                                                anchors.left: parent.left
-                                                anchors.leftMargin: 8
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-
-                                            Rectangle {
-                                                width: 22; height: 22; radius: Theme.radiusXL
-                                                color: "white"
-                                                x: root.monitorVm.selectedDeviceCameraRecording ? parent.width - 25 : 3
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.toggleDeviceRecording()
-                                            }
+                                        CxSwitch {
+                                            checked: root.monitorVm.selectedDeviceCameraRecording
+                                            onToggled: root.monitorVm.toggleDeviceRecording()
                                         }
                                     }
 
@@ -1561,7 +1474,7 @@ Item {
                                         color: Theme.borderSubtle
                                     }
 
-                                    // Camera timelapse toggle
+                                    // Camera timelapse toggle (X2: → CxSwitch)
                                     Column {
                                         spacing: 4
                                         Text {
@@ -1569,25 +1482,9 @@ Item {
                                             color: Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeSM
                                         }
-                                        Rectangle {
-                                            width: 56; height: 28; radius: Theme.radiusXXL
-                                            color: root.monitorVm.selectedDeviceCameraTimelapse ? Theme.statusInfo : Theme.borderDefault
-                                            border.width: 1
-                                            border.color: root.monitorVm.selectedDeviceCameraTimelapse ? Theme.statusInfo : Theme.borderStrong
-
-                                            Rectangle {
-                                                width: 22; height: 22; radius: Theme.radiusXL
-                                                color: "white"
-                                                x: root.monitorVm.selectedDeviceCameraTimelapse ? parent.width - 25 : 3
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Behavior on x { NumberAnimation { duration: Theme.motionFast } }
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.toggleDeviceTimelapse()
-                                            }
+                                        CxSwitch {
+                                            checked: root.monitorVm.selectedDeviceCameraTimelapse
+                                            onToggled: root.monitorVm.toggleDeviceTimelapse()
                                         }
                                     }
 
@@ -1646,127 +1543,64 @@ Item {
 
                                     Item { Layout.fillWidth: true }
 
-                                    // Connect/Disconnect button
-                                    Rectangle {
-                                        width: 70; height: 26; radius: Theme.radiusSM
-                                        color: connectMA.containsMouse ? Theme.chromeDangerHover : Theme.statusError
+                                    // Print-control buttons (X2: the six
+                                    // hand-drawn Rectangle+MouseArea buttons
+                                    // are system CxButtons; semantic styles
+                                    // Danger/Primary/Warning/Info from batch 1)
+                                    CxButton {
+                                        text: qsTr("断开")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Danger
                                         visible: root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus !== "printing"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: qsTr("断开")
-                                            color: "white"
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        MouseArea {
-                                            id: connectMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                // Phase 171 (CL-01): confirm before disconnecting.
-                                                disconnectConfirm.open()
-                                            }
+                                        onClicked: {
+                                            // Phase 171 (CL-01): confirm before disconnecting.
+                                            disconnectConfirm.open()
                                         }
                                     }
 
                                     // Start print button
-                                    Rectangle {
-                                        width: 70; height: 26; radius: Theme.radiusSM
-                                        color: startMA.containsMouse ? Theme.accentDark : Theme.accent
+                                    CxButton {
+                                        text: qsTr("打印")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Primary
                                         visible: root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus === "idle"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: qsTr("打印")
-                                            color: "white"
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        MouseArea {
-                                            id: startMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.monitorVm.startPrint(0, "")
-                                        }
+                                        onClicked: root.monitorVm.startPrint(0, "")
                                     }
 
                                     // Pause button
-                                    Rectangle {
-                                        width: 60; height: 26; radius: Theme.radiusSM
-                                        color: pauseMA.containsMouse ? Theme.statusWarning : Theme.statusWarning
+                                    CxButton {
+                                        text: qsTr("暂停")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Warning
                                         visible: root.monitorVm.selectedDeviceStatus === "printing"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: qsTr("暂停")
-                                            color: "white"
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        MouseArea {
-                                            id: pauseMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.monitorVm.pausePrint(0)
-                                        }
+                                        onClicked: root.monitorVm.pausePrint(0)
                                     }
 
                                     // Resume button
-                                    Rectangle {
-                                        width: 60; height: 26; radius: Theme.radiusSM
-                                        color: resumeMA.containsMouse ? Theme.accentDark : Theme.accent
+                                    CxButton {
+                                        text: qsTr("继续")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Primary
                                         visible: root.monitorVm.selectedDeviceStatus === "paused"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: qsTr("继续")
-                                            color: "white"
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        MouseArea {
-                                            id: resumeMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.monitorVm.resumePrint(0)
-                                        }
+                                        onClicked: root.monitorVm.resumePrint(0)
                                     }
 
                                     // Stop button
-                                    Rectangle {
-                                        width: 60; height: 26; radius: Theme.radiusSM
-                                        color: stopMA.containsMouse ? Theme.chromeDangerHover : Theme.statusError
+                                    CxButton {
+                                        text: qsTr("停止")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Danger
                                         visible: root.monitorVm.selectedDeviceStatus === "printing" || root.monitorVm.selectedDeviceStatus === "paused"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: qsTr("停止")
-                                            color: "white"
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        MouseArea {
-                                            id: stopMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.monitorVm.stopPrint(0)
-                                        }
+                                        onClicked: root.monitorVm.stopPrint(0)
                                     }
 
                                     // Connect offline device button
-                                    Rectangle {
-                                        width: 70; height: 26; radius: Theme.radiusSM
-                                        color: connOnMA.containsMouse ? Theme.statusInfo : Theme.statusInfo
+                                    CxButton {
+                                        text: qsTr("连接")
+                                        compact: true
+                                        cxStyle: CxButton.Style.Info
                                         visible: !root.monitorVm.selectedDeviceOnline && root.monitorVm.selectedDeviceStatus === "offline"
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: qsTr("连接")
-                                            color: "white"
-                                            font.pixelSize: Theme.fontSizeSM
-                                        }
-                                        MouseArea {
-                                            id: connOnMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.connectWithAccessCode()
-                                        }
+                                        onClicked: root.connectWithAccessCode()
                                     }
                                 }
 
@@ -2261,122 +2095,67 @@ Item {
                                     }
 
                                     // ── Camera control toolbar (对齐 upstream CameraPopup controls) ──
+                                    // X2: hand-drawn buttons → system CxButtons
+                                    // with state-driven styles.
                                     RowLayout {
                                         Layout.fillWidth: true
                                         spacing: Theme.spacingSM
 
                                         // Start/Stop stream
-                                        Rectangle {
-                                            width: 70; height: 28; radius: Theme.radiusSM
-                                            color: streamMA.containsMouse
-                                                    ? (root.monitorVm.cameraStreamStatus <= 1 ? Theme.chromeDangerHover : Theme.borderActive)
-                                                    : (root.monitorVm.cameraStreamStatus <= 1 ? Theme.statusError : Theme.borderStrong)
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: root.monitorVm.cameraStreamStatus <= 1
-                                                       ? qsTr("连接") : qsTr("断开")
-                                                color: "white"
-                                                font.pixelSize: Theme.fontSizeSM
-                                            }
-                                            MouseArea {
-                                                id: streamMA
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: {
-                                                    if (root.monitorVm.cameraStreamStatus <= 1)
-                                                        root.monitorVm.startCameraStream()
-                                                    else
-                                                        root.monitorVm.stopCameraStream()
-                                                }
+                                        CxButton {
+                                            text: root.monitorVm.cameraStreamStatus <= 1
+                                                  ? qsTr("连接") : qsTr("断开")
+                                            compact: true
+                                            cxStyle: root.monitorVm.cameraStreamStatus <= 1
+                                                     ? CxButton.Style.Primary : CxButton.Style.Secondary
+                                            onClicked: {
+                                                if (root.monitorVm.cameraStreamStatus <= 1)
+                                                    root.monitorVm.startCameraStream()
+                                                else
+                                                    root.monitorVm.stopCameraStream()
                                             }
                                         }
 
                                         // Toggle recording
-                                        Rectangle {
-                                            width: 70; height: 28; radius: Theme.radiusSM
-                                            color: recMA.containsMouse
-                                                    ? (root.monitorVm.cameraRecordingStatus >= 3 ? Theme.chromeDangerHover : Theme.accentDark)
-                                                    : (root.monitorVm.cameraRecordingStatus >= 3 ? Theme.statusError : Theme.accent)
+                                        CxButton {
+                                            text: root.monitorVm.cameraRecordingStatus >= 3
+                                                  ? qsTr("停止录像") : qsTr("录像")
+                                            compact: true
+                                            cxStyle: root.monitorVm.cameraRecordingStatus >= 3
+                                                     ? CxButton.Style.Danger : CxButton.Style.Primary
                                             visible: root.monitorVm.cameraStreamStatus === 3
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: root.monitorVm.cameraRecordingStatus >= 3
-                                                       ? qsTr("停止录像") : qsTr("录像")
-                                                color: "white"
-                                                font.pixelSize: Theme.fontSizeSM
-                                            }
-                                            MouseArea {
-                                                id: recMA
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.toggleCameraRecording()
-                                            }
+                                            onClicked: root.monitorVm.toggleCameraRecording()
                                         }
 
                                         // Toggle timelapse
-                                        Rectangle {
-                                            width: 80; height: 28; radius: Theme.radiusSM
-                                            color: tlMA.containsMouse
-                                                    ? (root.monitorVm.cameraTimelapseStatus >= 3 ? Theme.statusWarning : Theme.statusInfo)
-                                                    : (root.monitorVm.cameraTimelapseStatus >= 3 ? Theme.statusWarning : Theme.statusInfo)
+                                        CxButton {
+                                            text: root.monitorVm.cameraTimelapseStatus >= 3
+                                                  ? qsTr("停止延时") : qsTr("延时摄影")
+                                            compact: true
+                                            cxStyle: root.monitorVm.cameraTimelapseStatus >= 3
+                                                     ? CxButton.Style.Warning : CxButton.Style.Info
                                             visible: root.monitorVm.cameraStreamStatus === 3
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: root.monitorVm.cameraTimelapseStatus >= 3
-                                                       ? qsTr("停止延时") : qsTr("延时摄影")
-                                                color: "white"
-                                                font.pixelSize: Theme.fontSizeSM
-                                            }
-                                            MouseArea {
-                                                id: tlMA
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.toggleCameraTimelapse()
-                                            }
+                                            onClicked: root.monitorVm.toggleCameraTimelapse()
                                         }
 
                                         Item { Layout.fillWidth: true }
 
                                         // Switch camera
-                                        Rectangle {
-                                            width: 60; height: 28; radius: Theme.radiusSM
-                                            color: switchMA.containsMouse ? Theme.borderDefault : Theme.bgCard
+                                        CxButton {
+                                            text: qsTr("切换")
+                                            compact: true
+                                            cxStyle: CxButton.Style.Secondary
                                             visible: root.monitorVm.cameraStreamStatus === 3
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: qsTr("切换")
-                                                color: Theme.textSecondary
-                                                font.pixelSize: Theme.fontSizeSM
-                                            }
-                                            MouseArea {
-                                                id: switchMA
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.switchCameraView()
-                                            }
+                                            onClicked: root.monitorVm.switchCameraView()
                                         }
 
                                         // Screenshot
-                                        Rectangle {
-                                            width: 50; height: 28; radius: Theme.radiusSM
-                                            color: shotMA.containsMouse ? Theme.borderDefault : Theme.bgCard
+                                        CxButton {
+                                            text: "\u{1F4F7}"
+                                            compact: true
+                                            cxStyle: CxButton.Style.Secondary
                                             visible: root.monitorVm.cameraStreamStatus === 3
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: "\u{1F4F7}"
-                                                font.pixelSize: Theme.fontSizeLG
-                                            }
-                                            MouseArea {
-                                                id: shotMA
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: root.monitorVm.takeCameraScreenshot()
-                                            }
+                                            onClicked: root.monitorVm.takeCameraScreenshot()
                                         }
                                     }
 
@@ -2392,29 +2171,18 @@ Item {
                                         }
                                         Row {
                                             spacing: 4
+                                            // X2: hand-drawn pills → CxButton Segments.
                                             Repeater {
                                                 model: ["720P", "1080P"]
-                                                Rectangle {
+                                                CxButton {
                                                     required property var modelData
                                                     required property int index
-                                                    width: 52; height: 22; radius: Theme.radiusSM
-                                                    color: index === root.monitorVm.cameraResolution
-                                                           ? Theme.accent : Theme.bgCard
-                                                    border.width: 1
-                                                    border.color: index === root.monitorVm.cameraResolution
-                                                                ? Theme.accent : Theme.borderDefault
-                                                    Text {
-                                                        anchors.centerIn: parent
-                                                        text: modelData
-                                                        color: index === root.monitorVm.cameraResolution
-                                                               ? "white" : Theme.textTertiary
-                                                        font.pixelSize: Theme.fontSizeSM
-                                                    }
-                                                    MouseArea {
-                                                        anchors.fill: parent
-                                                        cursorShape: Qt.PointingHandCursor
-                                                        onClicked: root.monitorVm.setCameraResolution(index)
-                                                    }
+                                                    width: 52
+                                                    compact: true
+                                                    cxStyle: CxButton.Style.Segment
+                                                    selected: index === root.monitorVm.cameraResolution
+                                                    text: modelData
+                                                    onClicked: root.monitorVm.setCameraResolution(index)
                                                 }
                                             }
                                         }
@@ -2695,32 +2463,19 @@ Item {
                         }
 
                         // Clear all button. Width is content+padding (matches
-                        // the refresh button above); the hover ternary drives
-                        // the background color -- it previously sat on `width`,
-                        // collapsing the button to 0px wide.
-                        Rectangle {
+                        // the refresh button above). X2: hand-drawn → CxButton
+                        // Secondary (the hover ternary previously sat on
+                        // `width`, collapsing the button to 0px wide -- the
+                        // CxButton implicit sizing kills that class of bug).
+                        CxButton {
                             Layout.alignment: Qt.AlignRight
                             visible: root.monitorVm.selectedHmsCount > 0
-                            width: clearHmsLabel.implicitWidth + 16
-                            height: 28; radius: Theme.radiusMD
-                            color: clearHmsMA.containsMouse ? Theme.bgHover : Theme.bgElevated
-                            border.width: 1; border.color: Theme.borderSubtle
-                            Text {
-                                id: clearHmsLabel
-                                anchors.centerIn: parent
-                                text: qsTr("全部标为已读")
-                                color: Theme.textSecondary
-                                font.pixelSize: Theme.fontSizeSM
-                            }
-                            MouseArea {
-                                id: clearHmsMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    for (var i = 0; i < root.monitorVm.selectedHmsCount; ++i)
-                                        root.monitorVm.markHmsRead(i)
-                                }
+                            text: qsTr("全部标为已读")
+                            compact: true
+                            cxStyle: CxButton.Style.Secondary
+                            onClicked: {
+                                for (var i = 0; i < root.monitorVm.selectedHmsCount; ++i)
+                                    root.monitorVm.markHmsRead(i)
                             }
                         }
                     }

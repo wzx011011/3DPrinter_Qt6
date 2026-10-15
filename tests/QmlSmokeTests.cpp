@@ -610,7 +610,7 @@ void QmlSmokeTests::x2PagesCarryCxComponentDiscipline_data()
   QTest::newRow("MonitorPage")
       << "qrc:/qml/OWzx/pages/MonitorPage.qml"
       << QVariantMap{{"monitorVm", vm("monitorViewModel")}}
-      << 4 << 0 << 4;
+      << 14 << 4 << 4;
 }
 
 void QmlSmokeTests::x2PagesCarryCxComponentDiscipline()
