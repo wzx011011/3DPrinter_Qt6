@@ -770,6 +770,11 @@ private:
   // rule (tests/README.md). Sequence locks use readSource() + this; raw
   // readSource() matching stays reserved for ID/pixel-literal locks.
   static QString normalizedSource(const QString &source);
+  // S7: extract a top-level member-function body from `signature` to the
+  // closing brace at column 0 (the engineSemanticsSourceAudit idiom, made
+  // reusable). Occurrence-count locks over call sites migrate to asserting
+  // each named function's own body.
+  static QString memberFunctionBody(const QString &source, const QString &signature);
   // Phase 173: the resource manifest moved from the single qml.qrc to a
   // split set (qml_pages/dialogs/components/assets/web.qrc) in a parallel
   // refactor. Aggregate every src/qml_gui/*.qrc so resource-presence and
@@ -791,6 +796,16 @@ QString QmlUiAuditTests::normalizedSource(const QString &source)
   QString normalized = source;
   normalized.replace(whitespaceRun, QStringLiteral(" "));
   return normalized.trimmed();
+}
+
+QString QmlUiAuditTests::memberFunctionBody(const QString &source,
+                                            const QString &signature)
+{
+  const int start = source.indexOf(signature);
+  if (start < 0)
+    return {};
+  const int end = source.indexOf(QStringLiteral("\n}"), start);
+  return end > start ? source.mid(start, end - start) : QString();
 }
 
 QString QmlUiAuditTests::qmlQrcSources() const
@@ -3002,12 +3017,36 @@ void QmlUiAuditTests::sequentialClearanceDragPreviewMirrorsUpstream()
   // The ViewModel drag entry points (invoked from the viewport hooks via QML)
   // must begin / refresh / end the clearance preview on ALL gizmo drags that
   // displace objects (upstream Move/Scale/Rotate, GLCanvas3D.cpp:4051-4056).
-  QVERIFY2(editorSource.count(QStringLiteral("beginDragSequentialClearance();")) >= 3,
-           "begin/rotate/scale drag must begin the clearance preview");
-  QVERIFY2(editorSource.count(QStringLiteral("refreshDragSequentialClearance();")) >= 3,
-           "move/rotate/scale deltas must refresh the clearance preview");
-  QVERIFY2(editorSource.count(QStringLiteral("endDragSequentialClearance();")) >= 3,
-           "end/rotate/scale drag must end the clearance preview");
+  // S7: the old call-site count>=3 became a per-lifecycle lock — each named
+  // begin/apply/end member must drive its phase itself, so extracting a
+  // shared helper or reformatting no longer needs a test edit while a drag
+  // phase silently losing its hook still goes red.
+  struct ClearanceDragHook
+  {
+    const char *signature;
+    const char *call;
+  };
+  const ClearanceDragHook kClearanceDragHooks[] = {
+      {"EditorViewModel::beginGizmoMoveDrag", "beginDragSequentialClearance();"},
+      {"EditorViewModel::applyGizmoMoveDelta", "refreshDragSequentialClearance();"},
+      {"EditorViewModel::endGizmoMoveDrag", "endDragSequentialClearance();"},
+      {"EditorViewModel::beginGizmoRotateDrag", "beginDragSequentialClearance();"},
+      {"EditorViewModel::applyGizmoRotateDelta", "refreshDragSequentialClearance();"},
+      {"EditorViewModel::endGizmoRotateDrag", "endDragSequentialClearance();"},
+      {"EditorViewModel::beginGizmoScaleDrag", "beginDragSequentialClearance();"},
+      {"EditorViewModel::applyGizmoScaleFactor", "refreshDragSequentialClearance();"},
+      {"EditorViewModel::endGizmoScaleDrag", "endDragSequentialClearance();"},
+  };
+  for (const ClearanceDragHook &hook : kClearanceDragHooks)
+  {
+    const QString body = memberFunctionBody(editorSource,
+                                            QLatin1String(hook.signature));
+    QVERIFY2(!body.isEmpty(),
+             qPrintable(QStringLiteral("clearance drag: %1 must exist").arg(hook.signature)));
+    QVERIFY2(body.contains(QLatin1String(hook.call)),
+             qPrintable(QStringLiteral("%1 must drive %2")
+                            .arg(hook.signature, hook.call)));
+  }
   // Upstream ByObject gate (GLCanvas3D.cpp:5192-5195).
   const int beginPreviewStart = editorSource.indexOf(QStringLiteral("void EditorViewModel::beginDragSequentialClearance"));
   QVERIFY2(beginPreviewStart >= 0, "beginDragSequentialClearance must be defined");
@@ -3282,14 +3321,33 @@ void QmlUiAuditTests::shellActionsBindToBackendContextGates()
               && topbar.contains(QStringLiteral("Qt.Key_Space")),
            "Workflow tabs must be keyboard-operable");
 
-  // canUndo / canRedo must each appear at least twice (toolbar icon + Edit-menu
-  // item) so a regression deleting one binding is caught.
-  const int canUndoCount = topbar.count(QStringLiteral("Backend.canUndo"));
-  QVERIFY2(canUndoCount >= 2,
-           qPrintable(QStringLiteral("Backend.canUndo must appear >= 2 times (toolbar + menu), got %1").arg(canUndoCount)));
-  const int canRedoCount = topbar.count(QStringLiteral("Backend.canRedo"));
-  QVERIFY2(canRedoCount >= 2,
-           qPrintable(QStringLiteral("Backend.canRedo must appear >= 2 times (toolbar + menu), got %1").arg(canRedoCount)));
+  // canUndo / canRedo must be bound by BOTH named surfaces: the toolbar icon
+  // buttons and the Edit-menu items — a regression deleting one binding is
+  // caught. S7: the old global count>=2 became per-site presence; adding a
+  // third legit binding no longer changes the test, removing either named
+  // surface still goes red.
+  {
+    const int undoBtn = topbar.indexOf(QStringLiteral("arrow-back-up.svg"));
+    const int redoBtn = topbar.indexOf(QStringLiteral("arrow-forward-up.svg"));
+    const int editMenu = topbar.indexOf(QStringLiteral("id: topMenu"));
+    QVERIFY2(undoBtn >= 0 && redoBtn >= 0 && editMenu >= 0,
+             "Topbar must keep the undo/redo icon buttons and the topMenu");
+    const QString undoBtnBlock = normalizedSource(topbar.mid(undoBtn, 500));
+    const QString redoBtnBlock = normalizedSource(topbar.mid(redoBtn, 500));
+    // Edit submenu: from topMenu's declaration through the undo/redo items.
+    const QString editMenuBlock = normalizedSource(topbar.mid(editMenu, 1200));
+    QVERIFY2(undoBtnBlock.contains(QStringLiteral("Backend.canUndo"))
+                 && undoBtnBlock.contains(QStringLiteral("root.undoRequested()")),
+             "Toolbar undo button must gate on Backend.canUndo and route undoRequested");
+    QVERIFY2(redoBtnBlock.contains(QStringLiteral("Backend.canRedo"))
+                 && redoBtnBlock.contains(QStringLiteral("root.redoRequested()")),
+             "Toolbar redo button must gate on Backend.canRedo and route redoRequested");
+    QVERIFY2(editMenuBlock.contains(QStringLiteral("Backend.canUndo"))
+                 && editMenuBlock.contains(QStringLiteral("root.undoRequested()"))
+                 && editMenuBlock.contains(QStringLiteral("Backend.canRedo"))
+                 && editMenuBlock.contains(QStringLiteral("root.redoRequested()")),
+             "Edit menu must bind canUndo/canRedo on its undo/redo items");
+  }
 }
 
 void QmlUiAuditTests::mainWindowDefaultsToFramelessMaximizedShell()
@@ -3518,8 +3576,26 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar slot count must guard against 0 with Math.max(1, ...)");
 
   // PREPSB-03: dirty state surfaced via isPresetDirty (printer + process).
-  QVERIFY2(sidebar.count(QStringLiteral("isPresetDirty")) >= 2,
-           "LeftSidebar must surface isPresetDirty on >= 2 preset rows (printer + process)");
+  // S7: the old count>=2 became per-row presence — each named preset row
+  // (printer / process) must surface the dirty state itself.
+  {
+    const auto rowBlock = [&sidebar](const char *rowId, const char *nextRowId) {
+      const int start = sidebar.indexOf(QLatin1String(rowId));
+      const int end =
+          start >= 0 ? sidebar.indexOf(QLatin1String(nextRowId), start) : -1;
+      return (start >= 0 && end > start)
+                 ? normalizedSource(sidebar.mid(start, end - start))
+                 : QString();
+    };
+    const QString printerRow =
+        rowBlock("id: printerPresetRow", "id: printerBedTypeRow");
+    const QString processRow =
+        rowBlock("id: processPresetRow", "id: slicedInfoCard");
+    QVERIFY2(!printerRow.isEmpty() && printerRow.contains(QStringLiteral("isPresetDirty")),
+             "LeftSidebar printer preset row must surface isPresetDirty");
+    QVERIFY2(!processRow.isEmpty() && processRow.contains(QStringLiteral("isPresetDirty")),
+             "LeftSidebar process preset row must surface isPresetDirty");
+  }
   QVERIFY2(!sidebar.contains(QStringLiteral("presetActionBlocker(2, root.configVm.currentPrinterPreset, \"rename\")"))
               && !sidebar.contains(QStringLiteral("presetActionBlocker(1, root.configVm.currentFilamentPreset, \"rename\")")),
            "LeftSidebar settings entry buttons must stay clickable even when a preset cannot be renamed");
@@ -3601,8 +3677,24 @@ void QmlUiAuditTests::presetSystemCompletionSourceAudit()
            "ConfigViewModel must own the unsavedDialogActive re-entry gate");
   QVERIFY2(settingsDialog.contains(QStringLiteral("beginUnsavedDialog()")),
            "SettingsDialog must gate its unsaved-changes modal on beginUnsavedDialog()");
-  QVERIFY2(settingsDialog.count(QStringLiteral("endUnsavedDialog()")) >= 2,
-           "SettingsDialog must release the gate on both accept and reject");
+  // S7: the old count>=2 became per-path presence — both exit paths
+  // (onAccepted / onRejected) must release the gate themselves. QML braces
+  // are indented, so the handler windows are bounded by the next explicit
+  // handler boundary instead of a column-0 brace.
+  {
+    const int acceptedStart = settingsDialog.indexOf(QStringLiteral("onAccepted:"));
+    const int rejectedStart = settingsDialog.indexOf(QStringLiteral("onRejected:"));
+    QVERIFY2(acceptedStart >= 0 && rejectedStart > acceptedStart,
+             "SettingsDialog must keep its accept/reject handlers");
+    const QString acceptedBody =
+        normalizedSource(settingsDialog.mid(acceptedStart, rejectedStart - acceptedStart));
+    const QString rejectedBody =
+        normalizedSource(settingsDialog.mid(rejectedStart, 400));
+    QVERIFY2(acceptedBody.contains(QStringLiteral("endUnsavedDialog()")),
+             "SettingsDialog must release the unsaved-dialog gate on accept");
+    QVERIFY2(rejectedBody.contains(QStringLiteral("endUnsavedDialog()")),
+             "SettingsDialog must release the unsaved-dialog gate on reject");
+  }
 
   // PSET2-03: Transfer + per-item checkboxes exist in the dialog.
   QVERIFY2(unsavedDialog.contains(QStringLiteral("transferPendingChanges")),
@@ -7120,12 +7212,28 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
            "P11.B2.3: RhiViewport.h must expose paintLockAxis");
   QVERIFY2(editorSource.contains(QStringLiteral("EditorViewModel::setPaintLockAxis")),
            "P11.B2.3: EditorViewModel must implement the paintLockAxis setter");
-  QVERIFY2(preparePagePaint.count(QStringLiteral("paintLockAxis === 1")) >= 2,
-           "P11.B2.3: Seam + MMU panels must bind the Vertical lock checkbox");
-  QVERIFY2(preparePagePaint.contains(QStringLiteral("paintLockAxis === 2")),
-           "P11.B2.3: MMU panel must bind the Horizontal lock checkbox");
-  const int lockCheckboxes = preparePagePaint.count(QStringLiteral("root.editorVm.paintLockAxis = checked"));
-  QCOMPARE(lockCheckboxes, 3); // Seam Vertical + MMU Vertical/Horizontal; support panel exposes none
+  // S7: the old count>=2 / count==3 occurrence locks became writer-shape
+  // locks — every axis-lock checkbox must write through the exact ternary
+  // (Vertical `? 1 : 0` on Seam+MMU, Horizontal `? 2 : 0` on MMU), no bare
+  // `= checked` writer may exist anywhere, and the readers keep their
+  // per-axis presence. Reformatting or adding a fourth panel needs no test
+  // edit; a checkbox writing the axis outside the ternary goes red.
+  {
+    const QString paintNorm = normalizedSource(preparePagePaint);
+    QVERIFY2(paintNorm.count(QStringLiteral("paintLockAxis === 1")) >= 2,
+             "P11.B2.3: Seam + MMU panels must bind the Vertical lock checkbox");
+    QVERIFY2(paintNorm.contains(QStringLiteral("paintLockAxis === 2")),
+             "P11.B2.3: MMU panel must bind the Horizontal lock checkbox");
+    QVERIFY2(paintNorm.count(QStringLiteral("paintLockAxis = checked ? 1 : 0")) >= 2,
+             "P11.B2.3: Seam Vertical + MMU Vertical must write through the ternary");
+    QVERIFY2(paintNorm.count(QStringLiteral("paintLockAxis = checked ? 2 : 0")) >= 1,
+             "P11.B2.3: MMU Horizontal must write through the ternary");
+    QVERIFY2(!QRegularExpression(QStringLiteral(
+                   "paintLockAxis\\s*=\\s*checked(?!\\s*\\?)"))
+                   .match(preparePagePaint)
+                   .hasMatch(),
+             "P11.B2.3: axis-lock checkboxes must write through the ternary only"
+             " (Seam Vertical + MMU Vertical/Horizontal; support panel exposes none)");  }
 
   // P11: right-button paint (upstream GLGizmoPainterBase.cpp:649 RightDown,
   // MMU disabled via GLGizmoMmuSegmentation.hpp:94) and Shift = temporary
@@ -7240,9 +7348,15 @@ void QmlUiAuditTests::triangleSelectorEnginePorted()
   QVERIFY2(preparePagePaint.contains(QStringLiteral("onPaintClippingTuned")) &&
            preparePagePaint.contains(QStringLiteral("paintClippingPosition = position")),
            "PAINT-ALT-WHEEL-CLIP: PreparePage must forward paintClippingTuned into the ViewModel");
-  QVERIFY2(preparePagePaint.count(QStringLiteral("paintClippingPosition = value / 100.0")) >= 3,
+  // S7: whitespace-normalized 3-panel coverage contract — each painter gizmo
+  // panel (support / seam / MMU) binds the section slider + reset; the count
+  // stays a coverage threshold (>=, tolerant of additions) but no longer
+  // depends on indentation or line wrapping.
+  QVERIFY2(normalizedSource(preparePagePaint)
+                   .count(QStringLiteral("paintClippingPosition = value / 100.0")) >= 3,
            "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each bind the section slider");
-  QVERIFY2(preparePagePaint.count(QStringLiteral("resetPaintClippingPlane()")) >= 3,
+  QVERIFY2(normalizedSource(preparePagePaint)
+                   .count(QStringLiteral("resetPaintClippingPlane()")) >= 3,
            "PAINT-ALT-WHEEL-CLIP: support/seam/MMU panels must each expose the reset action");
 
   // PAINT-MMU-TOOLS (upstream GLGizmoMmuSegmentation.cpp:594-595 Pointer
@@ -9180,11 +9294,19 @@ void QmlUiAuditTests::v52TypographyHardcodeSwept()
 
   // Spot-check: a known dense-typography file should now reference Theme.fontSize*.
   // PreparePage had 114 font.pixelSize literals per PreparePage-UI-REVIEW; the
-  // sweep migrated them. We assert Theme.fontSize* is used heavily in the file.
+  // sweep migrated them. S7: the honest behavior contract is the absence of
+  // raw pixel literals (re-checkable after any refactor), not a minimum
+  // occurrence count of the token (which a partial revert could satisfy).
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
-  const int themeFontSizeUses = preparePage.count(QStringLiteral("Theme.fontSize"));
-  QVERIFY2(themeFontSizeUses > 30,
-           "TK-02: PreparePage must reference Theme.fontSize* tokens 30+ times (sweep migrated 114 literals)");
+  QVERIFY2(!preparePage.isEmpty(),
+           "TK-02: PreparePage.qml must be readable");
+  QVERIFY2(!QRegularExpression(QStringLiteral("font\\.pixelSize:\\s*[0-9]"))
+                .match(preparePage)
+                .hasMatch(),
+           "TK-02: PreparePage must carry no raw font.pixelSize numeric literals"
+           " (sweep migrated 114 literals to Theme.fontSize* tokens)");
+  QVERIFY2(preparePage.contains(QStringLiteral("Theme.fontSize")),
+           "TK-02: PreparePage typography must route through Theme.fontSize* tokens");
 }
 
 // Phase 164 (TK-03/SW-01): sidebar width system unbroken gate.
@@ -9351,17 +9473,14 @@ void QmlUiAuditTests::v52VisualControlMigration()
   //     Find the CxSlider binding embossBoldness.
   QVERIFY2(preparePage.contains(QStringLiteral("CxSlider")),
            "VS-02: PreparePage Emboss panel must use CxSlider for boldness (was raw QtQuick Slider -- inconsistent with peer gizmo panels)");
-  // Verify there's no raw `Slider {` (excluding the CxSlider/CxSliderStyle
-  // matches). The check: count raw `\nSlider {` occurrences.
-  int rawSliderCount = 0;
-  int idx = 0;
-  while ((idx = preparePage.indexOf(QStringLiteral("Slider {"), idx)) != -1) {
-    rawSliderCount += 1;
-    idx += 8;
-  }
-  // CxSlider matches contain "Slider {" as a substring, so subtract those.
-  int cxSliderCount = preparePage.count(QStringLiteral("CxSlider"));
-  QVERIFY2(rawSliderCount - cxSliderCount <= 0,
+  // Verify there's no raw `Slider {` element (CxSlider/CxSliderStyle tokens
+  // must not trip it). S7: element-boundary regex instead of the old
+  // subtract-two-counts arithmetic, which double-counted the "Slider {"
+  // substring inside every Cx* token; the regex anchors the type name so a
+  // reformat or rename cannot silently bypass it.
+  QVERIFY2(!QRegularExpression(QStringLiteral("(^|\\n)\\s*Slider\\s*\\{"))
+                .match(preparePage)
+                .hasMatch(),
            "VS-02: PreparePage must have no raw `Slider {` (all migrated to CxSlider)");
 }
 
@@ -9569,6 +9688,10 @@ void QmlUiAuditTests::v53PseudoButtonSwept()
   // PreparePage: multiple gizmo panel execute buttons migrated to CxButton.
   // Spot-check that the file has multiple CxButton instances in the gizmo
   // panels (was 0 before Phase 168 + Phase 173).
+  // S7-transition: occurrence-count lock kept intentionally — the per-panel
+  // behavior form needs stable panel ids, which land with the X2 component
+  // rework (that rework is expected to rewrite this lock with per-panel
+  // presence). Plain reformatting cannot trip it (token has no whitespace).
   const int cxButtonCount = preparePage.count(QStringLiteral("CxButton"));
   QVERIFY2(cxButtonCount >= 6,
            "CL-03: PreparePage must have 6+ CxButton instances (Phase 173 migrated drill/cut/meshBoolean/faceDetect/addText/importSVG/emboss buttons)");
@@ -9778,7 +9901,9 @@ void QmlUiAuditTests::v53RegressionLocked()
   QVERIFY2(multiMachine.contains(QStringLiteral("removeDeviceConfirm")),
            "REGRESS-07/CL-01: MultiMachinePage must keep removeDeviceConfirm");
 
-  // -- v5.3 CL (Phase 173): pseudo-button sweep.
+  // -- v5.3 CL (Phase 173): pseudo-button sweep. S7-transition: same
+  // rationale as v53PseudoButtonSwept — count kept until X2 provides stable
+  // per-panel anchors for the per-panel presence form.
   QVERIFY2(preparePage.count(QStringLiteral("CxButton")) >= 6,
            "REGRESS-07/CL-03: PreparePage must keep 6+ CxButton instances");
 
@@ -10658,7 +10783,15 @@ void QmlUiAuditTests::v516BedExcludeAndHeightLimitWired()
            "EXCLAREA: PreparePage must bind editorVm.bedExcludeAreas");
   QVERIFY2(evmH.contains(QStringLiteral("resolvedPlatePrintSequence(int plateIndex) const")),
            "HTLIMIT: EditorViewModel must expose the resolved sequence API");
-  QVERIFY2(preparePage.count(QStringLiteral("resolvedPlatePrintSequence(root.editorVm.currentPlateIndex) === 2")) == 2
+  // S7: the old count==2 became per-binding presence — each named viewport
+  // gate (height limit + sequential clearance) must consume the resolved
+  // global-aware API itself; adding a third ByObject gate no longer needs a
+  // test edit, while demoting either named binding back to the raw
+  // (unresolved) API still goes red on both halves.
+  QVERIFY2(normalizedSource(preparePage).contains(QStringLiteral(
+               "bedHeightLimitActive: root.editorVm && root.editorVm.resolvedPlatePrintSequence(root.editorVm.currentPlateIndex) === 2"))
+               && normalizedSource(preparePage).contains(QStringLiteral(
+                   "sequentialClearanceActive: root.editorVm && root.editorVm.resolvedPlatePrintSequence(root.editorVm.currentPlateIndex) === 2"))
                && !preparePage.contains(QStringLiteral("platePrintSequence(root.editorVm.currentPlateIndex) === 2")),
            "HTLIMIT: PreparePage must gate both paths on the resolved ByObject sequence");
 }
@@ -11793,8 +11926,16 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
            "PAGE-04: reducedMotion (no upstream mapping, no consumer) must stay removed");
   QVERIFY2(!prefsPage.contains(QStringLiteral("compactMode")),
            "PAGE-04: compactMode (no upstream mapping, no consumer) must stay removed");
-  QVERIFY2(prefsPage.count(QStringLiteral("notYetEffectiveHint")) >= 4,
-           "PAGE-04: persisted-only settings must carry honest notYetEffectiveHint tokens");
+  // S7: the old count>=4 counted `notYetEffectiveHint` DOCUMENTATION
+  // comments, so rewording a comment (a no-op refactor) went red while
+  // deleting the user-visible disclosure would not. The behavior contract —
+  // persisted-only settings carry a visible honest disclosure — is asserted
+  // on the two visible disclosure surfaces instead (update-channel row +
+  // developer-category blurb covering its rows).
+  QVERIFY2(prefsPage.contains(QStringLiteral("未接入自动下载通道"))
+               && prefsPage.contains(QStringLiteral("尚未接入运行时")),
+           "PAGE-04: persisted-only settings must carry visible honest"
+           " not-yet-effective disclosures");
   QVERIFY2(prefsPage.contains(QStringLiteral("settingsVm.developerMode")),
            "PAGE-04: developerMode must gate the Developer category visibility");
 
