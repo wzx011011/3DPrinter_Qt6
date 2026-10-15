@@ -68,25 +68,26 @@ class EditorViewModel final : public QObject
   // S3 (2026-10-14): per-batch instance->world transform channel (one
   // QMatrix4x4 per blob batch, ProjectService::meshBatchInstanceTransforms).
   // Under the decomposed mesh blob this is the ONLY thing that moves on a
-  // transform edit -- the stateChanged umbrella (S1 will re-point this to the
-  // named transformChanged) re-evaluates the QML binding, the viewport setter
-  // content-compares, and the scene recomposes changed batches. Legacy
-  // world-baked blobs ignore the channel viewport-side (inert).
-  Q_PROPERTY(QVariantList meshBatchInstanceTransforms READ meshBatchInstanceTransforms NOTIFY stateChanged)
+  // transform edit -- the S1 transformChanged cluster re-evaluates the QML
+  // binding (per drag frame; the umbrella is merged away during drags), the
+  // viewport setter content-compares, and the scene recomposes changed
+  // batches. Legacy world-baked blobs ignore the channel viewport-side
+  // (inert).
+  Q_PROPERTY(QVariantList meshBatchInstanceTransforms READ meshBatchInstanceTransforms NOTIFY transformChanged)
   // Phase 138 (ASM-01): per-source-object assemble offset (GL X,Y,Z), one entry
   // per source object index, paralleling meshBatchSourceObjectIndices. Consumed
   // by RhiViewport on the CanvasAssembleView path so assembled volumes render at
   // their moved pose. Source: ModelInstance::m_assemble_transformation offset
   // (Model.hpp:1289) via ProjectService::assembleOffset.
-  Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets NOTIFY transformChanged)
   // Phase 141 (DEBT-04): per-source-object assemble rotation (Euler XYZ, radians)
   // and scale (XYZ), parallel to assembleOffsets. Read via ProjectService
   // assembleRotation/assembleScale (ModelInstance::m_assemble_transformation).
   // Bound to RhiViewport on CanvasAssembleView; the renderer composes the full
   // transform matrix (translate * rotate * scale) in buildModelVertices so
   // rotate/scale drags reflect in the live render (v4.8 tech debt: translate-only).
-  Q_PROPERTY(QVariantList assembleRotations READ assembleRotations NOTIFY stateChanged)
-  Q_PROPERTY(QVariantList assembleScales READ assembleScales NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList assembleRotations READ assembleRotations NOTIFY transformChanged)
+  Q_PROPERTY(QVariantList assembleScales READ assembleScales NOTIFY transformChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
   Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
   Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
@@ -177,8 +178,13 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(bool sequentialClearancePreviewMode READ sequentialClearancePreviewMode NOTIFY sequentialClearanceChanged)
   /// 加载完成后的相机适应提示: (cx, cy, cz, radius)，全零表示无效
   Q_PROPERTY(QVector4D fitHint READ fitHint NOTIFY stateChanged)
-  /// 选中对象边界框尺寸 (dx, dy, dz, volume)，全零表示无选中
-  Q_PROPERTY(QVector4D measureDimensions READ measureDimensions NOTIFY stateChanged)
+  /// 选中对象边界框尺寸 (dx, dy, dz, volume)，全零表示无选中.
+  /// S1: NOTIFY is the transform cluster -- the tracked bbox moves on transform
+  /// edits (the only cluster that fires per drag frame), and the selection /
+  /// topology clusters fan out into transformChanged on their edits
+  /// (emitSelectionClusterChanged / emitSceneTopologyClusterChanged), so every
+  /// path that can move this bbox re-evaluates the binding.
+  Q_PROPERTY(QVector4D measureDimensions READ measureDimensions NOTIFY transformChanged)
   /// 选中对象详细信息文本（对齐上游 Plater::show_object_info）
   Q_PROPERTY(QString selectedObjectInfoText READ selectedObjectInfoText NOTIFY stateChanged)
   /// 选中对象三角面数
@@ -189,17 +195,20 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(int selectedObjectRepairedErrors READ selectedObjectRepairedErrors NOTIFY stateChanged)
   /// 选中对象是否为流形网格（对齐上游 TriangleMeshStats::manifold）
   Q_PROPERTY(bool selectedObjectIsManifold READ selectedObjectIsManifold NOTIFY stateChanged)
-  /// 对象变换（对齐上游 ObjectManipulation）
-  Q_PROPERTY(float objectPosX READ objectPosX WRITE setObjectPosX NOTIFY stateChanged)
-  Q_PROPERTY(float objectPosY READ objectPosY WRITE setObjectPosY NOTIFY stateChanged)
-  Q_PROPERTY(float objectPosZ READ objectPosZ WRITE setObjectPosZ NOTIFY stateChanged)
-  Q_PROPERTY(float objectRotX READ objectRotX WRITE setObjectRotX NOTIFY stateChanged)
-  Q_PROPERTY(float objectRotY READ objectRotY WRITE setObjectRotY NOTIFY stateChanged)
-  Q_PROPERTY(float objectRotZ READ objectRotZ WRITE setObjectRotZ NOTIFY stateChanged)
-  Q_PROPERTY(float objectScaleX READ objectScaleX WRITE setObjectScaleX NOTIFY stateChanged)
-  Q_PROPERTY(float objectScaleY READ objectScaleY WRITE setObjectScaleY NOTIFY stateChanged)
-  Q_PROPERTY(float objectScaleZ READ objectScaleZ WRITE setObjectScaleZ NOTIFY stateChanged)
-  Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale NOTIFY stateChanged)
+  /// 对象变换（对齐上游 ObjectManipulation）—— S1 transform 簇：拖拽帧走
+  /// transformChanged 增量通道（伞信号在拖拽帧被合并抑制），离散编辑经
+  /// emitTransformEdited 补发伞信号；selection/topology 簇 fan-out 覆盖
+  /// 换选/增删对象后的读数刷新。
+  Q_PROPERTY(float objectPosX READ objectPosX WRITE setObjectPosX NOTIFY transformChanged)
+  Q_PROPERTY(float objectPosY READ objectPosY WRITE setObjectPosY NOTIFY transformChanged)
+  Q_PROPERTY(float objectPosZ READ objectPosZ WRITE setObjectPosZ NOTIFY transformChanged)
+  Q_PROPERTY(float objectRotX READ objectRotX WRITE setObjectRotX NOTIFY transformChanged)
+  Q_PROPERTY(float objectRotY READ objectRotY WRITE setObjectRotY NOTIFY transformChanged)
+  Q_PROPERTY(float objectRotZ READ objectRotZ WRITE setObjectRotZ NOTIFY transformChanged)
+  Q_PROPERTY(float objectScaleX READ objectScaleX WRITE setObjectScaleX NOTIFY transformChanged)
+  Q_PROPERTY(float objectScaleY READ objectScaleY WRITE setObjectScaleY NOTIFY transformChanged)
+  Q_PROPERTY(float objectScaleZ READ objectScaleZ WRITE setObjectScaleZ NOTIFY transformChanged)
+  Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale NOTIFY transformChanged)
   Q_PROPERTY(bool hasObjectManipSelection READ hasObjectManipSelection NOTIFY stateChanged)
   /// Undo/Redo (对齐上游 UndoRedo 框架)
   Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
@@ -207,9 +216,11 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(bool showLabels READ showLabels WRITE setShowLabels NOTIFY stateChanged)
   /// Phase 91 (ASMEXPLODE-01): explosion ratio for AssembleView multi-part
   /// separation. Mirrors upstream m_explosion_ratio (default 1.0,
-  /// GLCanvas3D.hpp:596). NOTIFY stateChanged drives the QML slider readout AND
-  /// the RhiViewport re-render (the offset pass keys on this value).
-  Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY stateChanged)
+  /// GLCanvas3D.hpp:596). NOTIFY transformChanged (S1) drives the QML slider
+  /// readout AND the RhiViewport re-render (the offset pass keys on this
+  /// value) -- the slider mutates per tick, which is a transform-channel
+  /// mutation, not a whole-page one.
+  Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio NOTIFY transformChanged)
   // Phase 92 (ASMMEASURE-01/02): Assembly measurement gizmo state. The gizmo
   // is activable only on AssembleView with explosion ratio ~= 1.0 AND >=2
   // volumes selected (mirrors GLGizmoAssembly::on_is_activable,
@@ -2007,6 +2018,39 @@ private slots:
 
 signals:
   void stateChanged();
+  // ── S1 (2026-10-15): semantic-cluster NOTIFY signals ────────────────────
+  // The audit ④ S1 god-signal split. stateChanged stays as the TRANSITION
+  // umbrella: every discrete mutation still emits it (unmigrated consumers
+  // keep working); only per-frame drag moves drop it (they emit
+  // transformChanged alone). The cluster signals model "which sub-state
+  // changed" for the first time:
+  //   transformChanged     -- instance/assemble transforms edited (the ONLY
+  //                           signal a gizmo drag frame emits; per S3 the
+  //                           channel is meshBatchInstanceTransforms /
+  //                           assemble*), the ObjectManipulation panel
+  //                           readouts, and the position-live viewport
+  //                           warning scan (which also re-runs on bed
+  //                           geometry changes).
+  //   selectionChanged     -- the selected object/volume set, the primary
+  //                           selection, or the context-menu probes changed.
+  //   plateChanged         -- plate list/count/name/lock/custom-settings or
+  //                           the current plate switched.
+  //   sceneTopologyChanged -- objects/volumes/instances/mesh content added,
+  //                           removed or replaced (mesh blob + batch tables).
+  //   busyStateChanged     -- the U4 synchronous busy flags (importing /
+  //                           arranging / exporting) flipped.
+  // Emission matrix (the *ClusterChanged() helpers in the .cpp): a drag frame
+  // emits transformChanged ONLY; a discrete transform edit adds the umbrella;
+  // a selection edit also re-emits transformChanged (the manipulation panel
+  // must re-read the new selection); a topology edit fans out to ALL four
+  // clusters; a plate edit stays plate-scoped. Q_PROPERTYs re-point onto
+  // these signals cluster by cluster (one S1 commit per cluster); the
+  // umbrella is deleted once every consumer has migrated (S1 follow-up).
+  void transformChanged();
+  void selectionChanged();
+  void plateChanged();
+  void sceneTopologyChanged();
+  void busyStateChanged();
   void paintDataChanged();
   /// G-03: emitted on every successful slice with the fresh G-code path —
   /// the print dialog listens for this to continue into device selection
@@ -2066,6 +2110,19 @@ signals:
 
 private:
   void refreshMeshCacheAndFitHint();
+  // ── S1: cluster emission helpers (see the signals block for the matrix).
+  /// Discrete transform edit: transform channel + umbrella.
+  void emitTransformEdited();
+  /// Selection edit: selection + transform (panel re-read) + umbrella.
+  void emitSelectionClusterChanged();
+  /// Plate edit: plate + umbrella. Callers that also touch the selection
+  /// (e.g. a plate switch revalidating it) pair this with
+  /// emitSelectionClusterChanged().
+  void emitPlateClusterChanged();
+  /// Scene topology edit: all four clusters + umbrella (an object added or
+  /// removed changes the mesh blob, the batch tables, the transform channel
+  /// length and usually the selection/plate views at once).
+  void emitSceneTopologyClusterChanged();
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
   /// Review P1-5: the wipe-tower arrange obstacle reads the GLOBAL merged

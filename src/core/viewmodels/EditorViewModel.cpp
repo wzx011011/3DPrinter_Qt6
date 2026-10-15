@@ -81,6 +81,9 @@ constexpr float kRadiansToDegrees = 180.0f / float(M_PI);
 // (normal return, early return, a Slic3r exception) releases the cursor.
 // No cursor code here: the pairing policy lives in BackendContext's central
 // manager; this scope only makes the state observable and exception-safe.
+// S1 (2026-10-15): the flips also emit the busyStateChanged cluster signal
+// (U4's states ride the named cluster now; the umbrella emission stays for
+// unmigrated consumers until the S1 umbrella deletion).
 class SyncBusyScope
 {
 public:
@@ -88,11 +91,13 @@ public:
       : vm_(vm), flag_(flag)
   {
     vm_->*flag_ = true;
+    emit vm_->busyStateChanged();
     emit vm_->stateChanged();
   }
   ~SyncBusyScope()
   {
     vm_->*flag_ = false;
+    emit vm_->busyStateChanged();
     emit vm_->stateChanged();
   }
   SyncBusyScope(const SyncBusyScope &) = delete;
@@ -874,7 +879,19 @@ void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
   {
     const QVector3D oldPos = projectService_->assembleOffset(idx);
     const QVector3D newPos = oldPos + delta;
-    projectService_->setAssembleOffset(idx, newPos.x(), newPos.y(), newPos.z());
+    // S1 drag-frame merge: suppress the per-frame projectChanged spray (the
+    // VM relay + BackendContext's file-tree/markDirty consumers would
+    // re-deliver the whole page per frame). The move-end TransformCommand
+    // push re-emits projectChanged exactly once.
+    if (m_gizmoMoveDragActive)
+    {
+      const QSignalBlocker suppressPerFrameRelay(projectService_);
+      projectService_->setAssembleOffset(idx, newPos.x(), newPos.y(), newPos.z());
+    }
+    else
+    {
+      projectService_->setAssembleOffset(idx, newPos.x(), newPos.y(), newPos.z());
+    }
     // No slice invalidation on AssembleView — the assemble pose is not sliced (T-07).
     if (!m_gizmoMoveDragActive && m_undoManager)
     {
@@ -887,13 +904,27 @@ void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
                            projectService_->assembleScale(idx));
       m_undoManager->push(cmd);
     }
-    emit stateChanged();
+    // S1: an active drag emits ONLY the transform channel (the audit's
+    // per-frame re-delivery cure); a discrete edit adds the umbrella.
+    if (m_gizmoMoveDragActive)
+      emit transformChanged();
+    else
+      emitTransformEdited();
     return;
   }
 
   const QVector3D oldPos = projectService_->objectPosition(idx);
   const QVector3D newPos = oldPos + delta;
-  projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
+  // S1 drag-frame merge (see the assemble branch above).
+  if (m_gizmoMoveDragActive)
+  {
+    const QSignalBlocker suppressPerFrameRelay(projectService_);
+    projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
+  }
+  else
+  {
+    projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
+  }
   invalidateSliceResultsForCurrentPlate();
   // P15.11: object moved during the drag -- restart the debounced preview.
   refreshDragSequentialClearance();
@@ -908,7 +939,11 @@ void EditorViewModel::applyGizmoMoveDelta(float dx, float dy, float dz)
     m_undoManager->push(cmd);
   }
 
-  emit stateChanged();
+  // S1: transform-channel-only during the drag frame; umbrella when discrete.
+  if (m_gizmoMoveDragActive)
+    emit transformChanged();
+  else
+    emitTransformEdited();
 }
 
 void EditorViewModel::endGizmoMoveDrag()
@@ -935,6 +970,10 @@ void EditorViewModel::endGizmoMoveDrag()
     if (delta.lengthSquared() <= 1e-12f)
     {
       m_gizmoMoveDragStartPos = {};
+      // S1: net-zero drag -- the model converged back to its start pose, but
+      // intermediate frames ran with the umbrella suppressed, so one closing
+      // emission keeps the umbrella consumers (status/undo gates) in sync.
+      emitTransformEdited();
       return;
     }
     if (m_undoManager)
@@ -955,7 +994,10 @@ void EditorViewModel::endGizmoMoveDrag()
       }
     }
     m_gizmoMoveDragStartPos = {};
-    emit stateChanged();
+    // S1: move end -- the TransformCommand push above re-emitted the single
+    // coalesced projectChanged (file tree / persistence consumers); the
+    // cluster + umbrella close the drag for the rest.
+    emitTransformEdited();
     return;
   }
 
@@ -964,6 +1006,8 @@ void EditorViewModel::endGizmoMoveDrag()
   if (delta.lengthSquared() <= 1e-12f)
   {
     m_gizmoMoveDragStartPos = {};
+    // S1: net-zero drag -- see the assemble branch above.
+    emitTransformEdited();
     return;
   }
 
@@ -985,7 +1029,9 @@ void EditorViewModel::endGizmoMoveDrag()
   }
 
   m_gizmoMoveDragStartPos = {};
-  emit stateChanged();
+  // S1: move end -- single coalesced projectChanged (via the command push)
+  // + transform cluster + umbrella close the drag.
+  emitTransformEdited();
 }
 
 void EditorViewModel::beginGizmoRotateDrag()
@@ -1040,7 +1086,16 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
       newRot.setZ(newRot.z() + degrees);
     else
       newRot.setY(newRot.y() - degrees);
-    projectService_->setAssembleRotation(idx, newRot.x(), newRot.y(), newRot.z());
+    // S1 drag-frame merge (see applyGizmoMoveDelta).
+    if (m_gizmoRotateDragActive)
+    {
+      const QSignalBlocker suppressPerFrameRelay(projectService_);
+      projectService_->setAssembleRotation(idx, newRot.x(), newRot.y(), newRot.z());
+    }
+    else
+    {
+      projectService_->setAssembleRotation(idx, newRot.x(), newRot.y(), newRot.z());
+    }
     // No slice invalidation on AssembleView (T-07).
     if (!m_gizmoRotateDragActive && m_undoManager)
     {
@@ -1054,7 +1109,11 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
                            projectService_->assembleScale(idx));
       m_undoManager->push(cmd);
     }
-    emit stateChanged();
+    // S1: transform channel only during the drag frame.
+    if (m_gizmoRotateDragActive)
+      emit transformChanged();
+    else
+      emitTransformEdited();
     return;
   }
 
@@ -1071,7 +1130,16 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
   else
     newRot.setY(newRot.y() - degrees);
 
-  projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
+  // S1 drag-frame merge (see applyGizmoMoveDelta).
+  if (m_gizmoRotateDragActive)
+  {
+    const QSignalBlocker suppressPerFrameRelay(projectService_);
+    projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
+  }
+  else
+  {
+    projectService_->setObjectRotation(idx, newRot.x(), newRot.y(), newRot.z());
+  }
   invalidateSliceResultsForCurrentPlate();
   // P15.11: rotation changed during the drag -- restart the debounced preview.
   refreshDragSequentialClearance();
@@ -1087,7 +1155,11 @@ void EditorViewModel::applyGizmoRotateDelta(int axis, float radians)
     m_undoManager->push(cmd);
   }
 
-  emit stateChanged();
+  // S1: transform channel only during the drag frame; umbrella when discrete.
+  if (m_gizmoRotateDragActive)
+    emit transformChanged();
+  else
+    emitTransformEdited();
 }
 
 void EditorViewModel::endGizmoRotateDrag()
@@ -1111,6 +1183,8 @@ void EditorViewModel::endGizmoRotateDrag()
     if ((finalRot - m_gizmoRotateDragStartRot).lengthSquared() <= 1e-12f)
     {
       m_gizmoRotateDragStartRot = {};
+      // S1: net-zero drag -- see endGizmoMoveDrag.
+      emitTransformEdited();
       return;
     }
     if (m_undoManager)
@@ -1132,7 +1206,8 @@ void EditorViewModel::endGizmoRotateDrag()
       }
     }
     m_gizmoRotateDragStartRot = {};
-    emit stateChanged();
+    // S1: rotate end -- coalesced projectChanged (command push) + cluster.
+    emitTransformEdited();
     return;
   }
 
@@ -1140,6 +1215,8 @@ void EditorViewModel::endGizmoRotateDrag()
   if ((finalRot - m_gizmoRotateDragStartRot).lengthSquared() <= 1e-12f)
   {
     m_gizmoRotateDragStartRot = {};
+    // S1: net-zero drag -- see endGizmoMoveDrag.
+    emitTransformEdited();
     return;
   }
 
@@ -1162,7 +1239,8 @@ void EditorViewModel::endGizmoRotateDrag()
   }
 
   m_gizmoRotateDragStartRot = {};
-  emit stateChanged();
+  // S1: rotate end -- coalesced projectChanged (command push) + cluster.
+  emitTransformEdited();
 }
 
 void EditorViewModel::beginGizmoScaleDrag()
@@ -1216,7 +1294,16 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
       newScale.setZ(newScale.z() * clampedFactor);
     else
       newScale.setY(newScale.y() * clampedFactor);
-    projectService_->setAssembleScale(idx, newScale.x(), newScale.y(), newScale.z());
+    // S1 drag-frame merge (see applyGizmoMoveDelta).
+    if (m_gizmoScaleDragActive)
+    {
+      const QSignalBlocker suppressPerFrameRelay(projectService_);
+      projectService_->setAssembleScale(idx, newScale.x(), newScale.y(), newScale.z());
+    }
+    else
+    {
+      projectService_->setAssembleScale(idx, newScale.x(), newScale.y(), newScale.z());
+    }
     // No slice invalidation on AssembleView (T-07).
     if (!m_gizmoScaleDragActive && m_undoManager)
     {
@@ -1230,7 +1317,11 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
                            newScale);
       m_undoManager->push(cmd);
     }
-    emit stateChanged();
+    // S1: transform channel only during the drag frame.
+    if (m_gizmoScaleDragActive)
+      emit transformChanged();
+    else
+      emitTransformEdited();
     return;
   }
 
@@ -1244,7 +1335,16 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
   else
     newScale.setY(newScale.y() * clampedFactor);
 
-  projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
+  // S1 drag-frame merge (see applyGizmoMoveDelta).
+  if (m_gizmoScaleDragActive)
+  {
+    const QSignalBlocker suppressPerFrameRelay(projectService_);
+    projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
+  }
+  else
+  {
+    projectService_->setObjectScale(idx, newScale.x(), newScale.y(), newScale.z());
+  }
   invalidateSliceResultsForCurrentPlate();
   // P15.11: scale changed during the drag -- restart the debounced preview.
   refreshDragSequentialClearance();
@@ -1260,7 +1360,11 @@ void EditorViewModel::applyGizmoScaleFactor(int axis, float factor)
     m_undoManager->push(cmd);
   }
 
-  emit stateChanged();
+  // S1: transform channel only during the drag frame; umbrella when discrete.
+  if (m_gizmoScaleDragActive)
+    emit transformChanged();
+  else
+    emitTransformEdited();
 }
 
 void EditorViewModel::endGizmoScaleDrag()
@@ -1284,6 +1388,8 @@ void EditorViewModel::endGizmoScaleDrag()
     if ((finalScale - m_gizmoScaleDragStartScale).lengthSquared() <= 1e-12f)
     {
       m_gizmoScaleDragStartScale = {};
+      // S1: net-zero drag -- see endGizmoMoveDrag.
+      emitTransformEdited();
       return;
     }
     if (m_undoManager)
@@ -1305,7 +1411,8 @@ void EditorViewModel::endGizmoScaleDrag()
       }
     }
     m_gizmoScaleDragStartScale = {};
-    emit stateChanged();
+    // S1: scale end -- coalesced projectChanged (command push) + cluster.
+    emitTransformEdited();
     return;
   }
 
@@ -1313,6 +1420,8 @@ void EditorViewModel::endGizmoScaleDrag()
   if ((finalScale - m_gizmoScaleDragStartScale).lengthSquared() <= 1e-12f)
   {
     m_gizmoScaleDragStartScale = {};
+    // S1: net-zero drag -- see endGizmoMoveDrag.
+    emitTransformEdited();
     return;
   }
 
@@ -1335,7 +1444,8 @@ void EditorViewModel::endGizmoScaleDrag()
   }
 
   m_gizmoScaleDragStartScale = {};
-  emit stateChanged();
+  // S1: scale end -- coalesced projectChanged (command push) + cluster.
+  emitTransformEdited();
 }
 
 void EditorViewModel::setObjectRotX(float v)
@@ -1464,7 +1574,9 @@ void EditorViewModel::setObjectScaleZ(float v)
 void EditorViewModel::setUniformScale(bool v)
 {
   m_uniformScale = v;
-  emit stateChanged();
+  // S1: the link-scales toggle is a transform-panel state -- rides the
+  // transform cluster + the transition umbrella.
+  emitTransformEdited();
 }
 
 void EditorViewModel::resetObjectTransform()
@@ -4157,14 +4269,14 @@ void EditorViewModel::setActiveCanvasType(int type)
 void EditorViewModel::setExplosionRatio(float ratio)
 {
   // Phase 91 (ASMEXPLODE-01): mirror upstream m_explosion_ratio
-  // (GLCanvas3D.hpp:596, default 1.0). NOTIFY stateChanged drives the QML
-  // slider readout AND the RhiViewport explosionRatio re-render (the renderer
-  // copies m_explosionRatio in synchronize() and re-uploads with the new
-  // per-volume offset on every change).
+  // (GLCanvas3D.hpp:596, default 1.0). NOTIFY transformChanged (S1) drives
+  // the QML slider readout AND the RhiViewport explosionRatio re-render (the
+  // renderer copies m_explosionRatio in synchronize() and re-uploads with the
+  // new per-volume offset on every change).
   if (qFuzzyCompare(m_explosionRatio, ratio) || !std::isfinite(ratio))
     return;
   m_explosionRatio = ratio;
-  emit stateChanged();
+  emitTransformEdited();
 }
 
 void EditorViewModel::resetExplosionRatio()
@@ -4174,7 +4286,7 @@ void EditorViewModel::resetExplosionRatio()
   if (qFuzzyCompare(m_explosionRatio, 1.0f))
     return;
   m_explosionRatio = 1.0f;
-  emit stateChanged();
+  emitTransformEdited();
 }
 
 bool EditorViewModel::isAssemblyMeasureActivable() const
@@ -5782,7 +5894,9 @@ void EditorViewModel::restoreSelection(const QSet<int> &sourceIndices, int prima
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndex = -1;
   ensureValidObjectSelection(false);
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
 }
 
 void EditorViewModel::rebuildAndNotify()
@@ -5797,12 +5911,15 @@ void EditorViewModel::rebuildAndNotify()
 EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
-  // Q8(1): measureDimensions tracks the selection ("随 selection 更新"). Until
-  // S1 splits the NOTIFYs there is no selection-specific signal, so the memo
-  // behind measureDimensions() is invalidated on stateChanged — every
-  // selection/mesh/project mutation path ends in stateChanged, and the getter
-  // rebuilds once on the next read instead of serving a stale value.
+  // Q8(1): measureDimensions tracks the selection ("随 selection 更新"). The
+  // memo behind measureDimensions() is invalidated on every cluster that can
+  // move the tracked bbox: transform edits (S1 cluster signal; the only one
+  // that fires during a gizmo drag), the umbrella (selection/mesh/project
+  // mutations still ride it during the S1 transition) -- the getter rebuilds
+  // once on the next read instead of serving a stale value.
   connect(this, &EditorViewModel::stateChanged, this, [this]()
+          { m_measureDimensionsDirty = true; });
+  connect(this, &EditorViewModel::transformChanged, this, [this]()
           { m_measureDimensionsDirty = true; });
 
   // S3 (2026-10-14): the viewport warning scan (upstream check_outside_state)
@@ -5810,10 +5927,21 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
   // stateChanged instead of only inside refreshMeshCacheAndFitHint -- under
   // the S3 contract narrowing that refresh is topology-only, and the
   // out-of-bed/over-height banner must still track transform edits live.
+  // S1 (2026-10-15): transformChanged covers the per-frame drag channel (the
+  // umbrella no longer fires during drag frames); the umbrella connect keeps
+  // covering topology/bed/preset paths during the transition.
   // Re-entrancy safe: the scan writes plain members and emits nothing.
   connect(this, &EditorViewModel::stateChanged, this, [this]()
           { checkViewportWarnings(); });
+  connect(this, &EditorViewModel::transformChanged, this, [this]()
+          { checkViewportWarnings(); });
 
+  // S1: the projectChanged relay maps a service-level model mutation onto
+  // the cluster fanout (any field may have changed). Drag frames never reach
+  // this relay: the gizmo drag paths suppress the per-frame projectChanged
+  // spray (QSignalBlocker around the transform writes; see
+  // applyGizmoMoveDelta) and the single move-end emission arrives through
+  // the TransformCommand push instead.
   connect(projectService_, &ProjectService::projectChanged, this, [this]()
           {
         simplifyPreviewCancel();
@@ -5828,8 +5956,12 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
             emit hollowDataChanged();
           }
         } catch (...) { /* model mid-mutation: skip this refresh */ }
-        emit stateChanged(); });
+        emitSceneTopologyClusterChanged(); });
 
+  // S1: a plate switch re-derives BOTH the plate view (currentPlateIndex /
+  // activePlateObjectIndices) and the selection (ensureValidObjectSelection
+  // mutates the selected set silently), so the relay emits the plate and the
+  // selection clusters together.
   connect(projectService_, &ProjectService::plateSelectionChanged, this, [this]()
           {
         if (sliceService_ && projectService_)
@@ -5843,7 +5975,8 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
             emit hollowDataChanged();
           }
         } catch (...) { /* skip on half-constructed model */ }
-        emit stateChanged(); });
+        emitPlateClusterChanged();
+        emitSelectionClusterChanged(); });
 
   connect(sliceService_, &SliceService::slicingChanged, this, [this]()
           {
@@ -6049,7 +6182,9 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       m_cachedMeshData.clear();
       m_cachedMeshBatchSourceObjectIndices.clear();
     }
-    emit stateChanged(); });
+    // S1: a load replaces the whole scene (mesh blob, batch tables,
+    // selection, plate views) -- cluster fanout, not the bare umbrella.
+    emitSceneTopologyClusterChanged(); });
 
   // U13: archive-import continuation. importArchiveEntries used to spin
   // QCoreApplication::processEvents() between entries (up to 10s busy-wait
@@ -6082,6 +6217,50 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
     m_bedDiameter = s.value(QStringLiteral("bed/diameter"), 220.0f).toFloat();
   }
 }
+
+// ── S1 (2026-10-15): cluster emission helpers ──────────────────────────────
+// The emission matrix documented in the signals block. Every helper still
+// emits the stateChanged umbrella: during the S1 transition the umbrella is
+// the compatibility carrier for consumers that have not migrated to the
+// cluster signals yet (BackendContext shell gates, status bindings). Only
+// the per-frame gizmo drag path (applyGizmo*Delta with an active drag) emits
+// a bare transformChanged() -- that suppression is the cure for the audit's
+// "every drag frame re-delivers the whole page" disease.
+
+void EditorViewModel::emitTransformEdited()
+{
+  emit transformChanged();
+  emit stateChanged();
+}
+
+void EditorViewModel::emitSelectionClusterChanged()
+{
+  emit selectionChanged();
+  // The manipulation panel / measure readouts re-read the (possibly new)
+  // selection's transform, so a selection edit also refreshes the transform
+  // channel consumers.
+  emit transformChanged();
+  emit stateChanged();
+}
+
+void EditorViewModel::emitPlateClusterChanged()
+{
+  emit plateChanged();
+  emit stateChanged();
+}
+
+void EditorViewModel::emitSceneTopologyClusterChanged()
+{
+  emit sceneTopologyChanged();
+  // A topology change re-shapes every downstream view: the transform channel
+  // gains/loses batches, the selection may be revalidated by the caller, the
+  // plate object lists change. Fan out to all clusters + the umbrella.
+  emit transformChanged();
+  emit selectionChanged();
+  emit plateChanged();
+  emit stateChanged();
+}
+
 
 QString EditorViewModel::projectName() const { return projectService_ ? projectService_->projectName() : QString(); }
 int EditorViewModel::modelCount() const { return projectService_ ? projectService_->modelCount() : 0; }
@@ -6196,11 +6375,11 @@ QVariantList EditorViewModel::assembleScales() const
 }
 // S3 (2026-10-14): per-batch instance->world transform channel (one QMatrix4x4
 // per blob batch, ProjectService::meshBatchInstanceTransforms). Deliberately
-// LAZY -- every read composes from the live model state, so the stateChanged
-// umbrella (projectChanged relay / gizmo drag emits) re-evaluating the QML
-// binding IS the transform-path refresh; refreshMeshCacheAndFitHint stays out
-// of the transform family by construction (S3 contract narrowing), and S1's
-// transformChanged will later own this NOTIFY re-point.
+// LAZY -- every read composes from the live model state, so the S1
+// transformChanged cluster emission (drag frames / emitTransformEdited /
+// relay fan-out) re-evaluating the QML binding IS the transform-path refresh;
+// refreshMeshCacheAndFitHint stays out of the transform family by
+// construction (S3 contract narrowing).
 QVariantList EditorViewModel::meshBatchInstanceTransforms() const
 {
   QVariantList out;
@@ -6988,7 +7167,9 @@ void EditorViewModel::selectVolume(int i, int volumeIndex)
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndices.insert(volumeIndex);
   m_selectedVolumeIndex = volumeIndex;
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
 }
 
 void EditorViewModel::toggleVolumeSelection(int i, int volumeIndex)
@@ -7032,7 +7213,9 @@ void EditorViewModel::toggleVolumeSelection(int i, int volumeIndex)
     m_selectedVolumeIndex = volumeIndex;
   }
 
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+  // manipulation panel re-reads the new selection's transform.
+  emitSelectionClusterChanged();
 }
 
 bool EditorViewModel::deleteSelectedVolumesBySource()
@@ -7476,7 +7659,9 @@ void EditorViewModel::selectObject(int i)
   m_selectedVolumeObjectSourceIndex = -1;
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndex = -1;
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
 }
 
 bool EditorViewModel::selectSourceObject(int sourceIndex)
@@ -7501,7 +7686,9 @@ bool EditorViewModel::selectSourceObject(int sourceIndex)
       m_selectedVolumeObjectSourceIndex = -1;
       m_selectedVolumeIndices.clear();
       m_selectedVolumeIndex = -1;
-      emit stateChanged();
+      // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
     }
     return false;
   }
@@ -7518,7 +7705,9 @@ bool EditorViewModel::selectSourceObject(int sourceIndex)
   m_selectedVolumeObjectSourceIndex = -1;
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndex = -1;
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
   return true;
 }
 
@@ -7551,7 +7740,9 @@ void EditorViewModel::toggleObjectSelection(int i)
     m_selectedVolumeIndex = -1;
   }
 
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
 }
 
 void EditorViewModel::clearObjectSelection()
@@ -7565,7 +7756,9 @@ void EditorViewModel::clearObjectSelection()
   m_selectedVolumeObjectSourceIndex = -1;
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndex = -1;
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+  // manipulation panel re-reads the new selection's transform.
+  emitSelectionClusterChanged();
 }
 
 // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4152-4168): Ctrl+click on an
@@ -7599,7 +7792,9 @@ void EditorViewModel::toggleSourceObjectSelection(int sourceIndex)
     m_selectedVolumeIndex = -1;
   }
 
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
 }
 
 // SEL-MODIFIERS-RECT (upstream GLCanvas3D.cpp:4135 Alt = volume selection
@@ -7621,7 +7816,9 @@ void EditorViewModel::selectVolumeBySource(int sourceIndex, int volumeIndex)
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndices.insert(volumeIndex);
   m_selectedVolumeIndex = volumeIndex;
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
 }
 
 // SEL-MODIFIERS-RECT (upstream _update_selection_from_hover,
@@ -7669,7 +7866,9 @@ void EditorViewModel::selectObjectsInRect(int modifiers, const QRectF &rect,
     m_selectedVolumeObjectSourceIndex = -1;
     m_selectedVolumeIndices.clear();
     m_selectedVolumeIndex = -1;
-    emit stateChanged();
+    // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
   }
   else
   {
@@ -7690,7 +7889,9 @@ void EditorViewModel::selectObjectsInRect(int modifiers, const QRectF &rect,
       }
     }
     ensureValidObjectSelection(false);
-    emit stateChanged();
+    // S1: selection edits fan the transform cluster too -- the
+        // manipulation panel re-reads the new selection's transform.
+        emitSelectionClusterChanged();
   }
 }
 
@@ -7708,7 +7909,9 @@ void EditorViewModel::selectAllVisibleObjects()
   m_selectedVolumeObjectSourceIndex = -1;
   m_selectedVolumeIndices.clear();
   m_selectedVolumeIndex = -1;
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+  // manipulation panel re-reads the new selection's transform.
+  emitSelectionClusterChanged();
 }
 
 void EditorViewModel::setSelectedObjectsPrintable(bool printable)
@@ -9472,7 +9675,9 @@ void EditorViewModel::setShowAllObjects(bool showAll)
   // S3: the show-all toggle is a UI-side object-list filter -- neither the
   // mesh blob nor the per-batch tables nor the viewport active set depend on
   // it; refreshMeshCacheAndFitHint is topology-only by contract.
-  emit stateChanged();
+  // S1: ensureValidObjectSelection may silently re-point the selection -- the
+  // cluster fan-out keeps the transform readouts tracking the new selection.
+  emitSelectionClusterChanged();
 }
 
 void EditorViewModel::setObjectOrganizeMode(int mode)
@@ -9483,7 +9688,9 @@ void EditorViewModel::setObjectOrganizeMode(int mode)
 
   m_objectOrganizeMode = normalizedMode;
   ensureValidObjectSelection(true);
-  emit stateChanged();
+  // S1: see setShowAllObjects -- the silent selection revalidation rides the
+  // selection cluster so the transform panel tracks it.
+  emitSelectionClusterChanged();
 }
 
 bool EditorViewModel::addPlate()
@@ -9564,7 +9771,9 @@ void EditorViewModel::selectAllOnPlate(int plateIndex)
     m_selectedSourceIndices.insert(objIdx);
   if (!objs.isEmpty())
     m_primarySelectedSourceIndex = objs.first();
-  emit stateChanged();
+  // S1: selection edits fan the transform cluster too -- the
+  // manipulation panel re-reads the new selection's transform.
+  emitSelectionClusterChanged();
 }
 
 void EditorViewModel::removeAllOnPlate(int plateIndex)

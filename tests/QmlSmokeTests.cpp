@@ -47,10 +47,13 @@
 #include <memory>
 
 #include "core/debug/CrashHandlerWin.h"
+#include "core/viewmodels/EditorViewModel.h"
 #include "qml_gui/BackendContext.h"
 #include "qml_gui/CameraImageProvider.h"
 #include "qml_gui/Renderer/RhiViewport.h"
 #include "qml_gui/Models/ConfigOptionFilterProxy.h"
+
+#include <QSignalSpy>
 
 namespace {
 
@@ -104,6 +107,13 @@ private slots:
   void mainQmlLoads();
   void pagesInstantiate();
   void pagesInstantiate_data();
+  // ── S1 (audit ④): per-cluster NOTIFY migration checks. Each cluster commit
+  // extends s1ClusterNotifyContract with its re-pointed properties; the
+  // dynamic re-evaluation slot drives real mutations and counts binding
+  // evaluations (the audit's "断言该簇覆盖的页面属性在触发后确实重求值，
+  // 或直接固化为 QmlSmokeTests 断言" — the固化 option).
+  void s1TransformClusterNotifyContract();
+  void s1TransformClusterReevaluation();
   void cleanupTestCase();
 
 private:
@@ -388,6 +398,147 @@ void QmlSmokeTests::pagesInstantiate()
   failOnUnexpectedQmlMessages(messagesBefore,
                               QStringLiteral("%1 instantiation").arg(qmlPath)
                                   .toUtf8().constData());
+}
+
+// ── S1 (audit ④): cluster NOTIFY migration checks ─────────────────────────
+
+namespace {
+
+struct S1NotifyExpectation
+{
+  const char *property;
+  const char *notifySignal;
+};
+
+// The properties re-pointed onto the S1 semantic clusters so far. One row per
+// migrated property: the test asserts the NOTIFY signal name through the
+// metaobject, which is the exact contract QML binding re-evaluation depends
+// on (a binding re-evaluates when ITS property's NOTIFY fires). The umbrella
+// (stateChanged) stays as the transition carrier for unmigrated families.
+const S1NotifyExpectation kS1NotifyExpectations[] = {
+    // Commit 1 — transform cluster: everything that moves per drag frame.
+    {"objectPosX", "transformChanged"},
+    {"objectPosY", "transformChanged"},
+    {"objectPosZ", "transformChanged"},
+    {"objectRotX", "transformChanged"},
+    {"objectRotY", "transformChanged"},
+    {"objectRotZ", "transformChanged"},
+    {"objectScaleX", "transformChanged"},
+    {"objectScaleY", "transformChanged"},
+    {"objectScaleZ", "transformChanged"},
+    {"uniformScale", "transformChanged"},
+    {"explosionRatio", "transformChanged"},
+    {"assembleOffsets", "transformChanged"},
+    {"assembleRotations", "transformChanged"},
+    {"assembleScales", "transformChanged"},
+    {"meshBatchInstanceTransforms", "transformChanged"},
+    {"measureDimensions", "transformChanged"},
+};
+
+} // namespace
+
+void QmlSmokeTests::s1TransformClusterNotifyContract()
+{
+  QObject *vm = backendProperty("editorViewModel");
+  QVERIFY2(vm != nullptr, "editorViewModel must be non-null");
+  const QMetaObject *mo = vm->metaObject();
+
+  for (const S1NotifyExpectation &expectation : kS1NotifyExpectations)
+  {
+    const int propIndex = mo->indexOfProperty(expectation.property);
+    QVERIFY2(propIndex >= 0,
+             qPrintable(QStringLiteral("property %1 must exist")
+                            .arg(expectation.property)));
+    const QMetaProperty prop = mo->property(propIndex);
+    QVERIFY2(prop.hasNotifySignal(),
+             qPrintable(QStringLiteral("property %1 must have a NOTIFY signal")
+                            .arg(expectation.property)));
+    const QString actual = prop.notifySignal().name();
+    QVERIFY2(actual == QString::fromLatin1(expectation.notifySignal),
+             qPrintable(QStringLiteral("property %1 NOTIFY drifted: expected %2, got %3")
+                            .arg(expectation.property, expectation.notifySignal, actual)));
+  }
+}
+
+void QmlSmokeTests::s1TransformClusterReevaluation()
+{
+  auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));
+  QVERIFY2(vm != nullptr, "editorViewModel must be an EditorViewModel");
+
+  // Content on the plate so the transform setters have a selection target.
+  QVERIFY(vm->addPrimitiveToPlate(0)); // 0 = cube
+  vm->selectObject(0);
+  QCOMPARE(vm->property("hasSelection").toBool(), true);
+
+  QSignalSpy transformSpy(vm, &EditorViewModel::transformChanged);
+  QSignalSpy umbrellaSpy(vm, &EditorViewModel::stateChanged);
+  QVERIFY(transformSpy.isValid());
+  QVERIFY(umbrellaSpy.isValid());
+
+  // Inline QML mirrors the page bindings: one counter per tracked property.
+  // posX mirrors the ObjectManipulation readout (transform cluster); status
+  // is an umbrella-carrier property (statusText) whose re-evaluation must be
+  // MERGED AWAY during drag frames -- the S1 drag coalescing proof.
+  QQmlComponent component(engine_);
+  component.setData(QByteArrayLiteral(R"QML(
+    import QtQuick
+    Item {
+        required property var editorVm
+        property int posXEvals: 0
+        readonly property real posX: { posXEvals++; return editorVm.objectPosX }
+        property int channelEvals: 0
+        readonly property int channelLen:
+            { channelEvals++; return editorVm.meshBatchInstanceTransforms.length }
+        property int statusEvals: 0
+        readonly property string status:
+            { statusEvals++; return editorVm.statusText }
+    }
+    )QML"),
+                       QUrl(QStringLiteral("qrc:/qml/OWzx/tests/S1InlineProbe.qml")));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("inline probe failed to compile: %1")
+                          .arg(component.errorString())));
+  std::unique_ptr<QObject> probeHolder(
+      component.createWithInitialProperties(
+          QVariantMap{{"editorVm", QVariant::fromValue(vm)}}));
+  QVERIFY2(probeHolder, qPrintable(component.errorString()));
+  const auto evals = [&](const char *name) {
+    return probeHolder->property(name).toInt();
+  };
+
+  const int posXEvalsBefore = evals("posXEvals");
+  const int statusEvalsBefore = evals("statusEvals");
+  const int transformBefore = transformSpy.count();
+  const int umbrellaBefore = umbrellaSpy.count();
+
+  // 1) Drag frame merge: gizmo move frames emit the transform cluster ONLY
+  //    (umbrella merged away), so the transform bindings re-evaluate while
+  //    the whole-page carriers stay quiet.
+  vm->beginGizmoMoveDrag();
+  vm->applyGizmoMoveDelta(5.0f, 0.0f, 0.0f);
+  vm->applyGizmoMoveDelta(3.0f, 1.0f, 0.0f);
+  QVERIFY(transformSpy.count() - transformBefore >= 2);
+  QCOMPARE(umbrellaSpy.count(), umbrellaBefore);
+  QVERIFY(evals("posXEvals") > posXEvalsBefore);
+  QVERIFY(evals("channelEvals") > 0); // S3 channel re-eval per frame
+  QCOMPARE(evals("statusEvals"), statusEvalsBefore);
+
+  // 2) Move end: the coalesced close re-emits the umbrella exactly for the
+  //    whole-page consumers (file tree / status / persistence).
+  vm->endGizmoMoveDrag();
+  QVERIFY(umbrellaSpy.count() > umbrellaBefore);
+  QVERIFY(transformSpy.count() > transformBefore);
+
+  // 3) Discrete panel write (ObjectManipulation spinbox path): property write
+  //    fans the transform cluster AND the umbrella.
+  const int transformMid = transformSpy.count();
+  const int umbrellaMid = umbrellaSpy.count();
+  const int posXMid = evals("posXEvals");
+  QVERIFY(vm->setProperty("objectPosX", vm->property("objectPosX").toFloat() + 2.0f));
+  QVERIFY(transformSpy.count() > transformMid);
+  QVERIFY(umbrellaSpy.count() > umbrellaMid);
+  QVERIFY(evals("posXEvals") > posXMid);
+  QVERIFY2(!component.isError(), "no late QML errors on the inline probe");
 }
 
 int main(int argc, char *argv[])
