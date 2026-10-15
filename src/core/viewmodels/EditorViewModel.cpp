@@ -1719,7 +1719,9 @@ void EditorViewModel::setMeasureSelectionMode(int mode)
   if (m_measureSelectionMode != mode)
   {
     m_measureSelectionMode = mode;
-    emit stateChanged();
+    // S1: the measure readouts re-derive from this mode -- the selection
+    // cluster (which fans transformChanged) re-evaluates them.
+    emitSelectionClusterChanged();
   }
 }
 
@@ -6821,7 +6823,9 @@ int EditorViewModel::synchronizeViewportContext(int targetKind,
         || projectService_->plateIndexForObject(sourceObjectIndex) != currentPlate
         || instanceIndex < 0
         || instanceIndex >= projectService_->objectInstanceCount(sourceObjectIndex)) {
-      emit stateChanged();
+      // S1: clearContextState() touched the context probes -- selection
+      // cluster.
+      emitSelectionClusterChanged();
       return int(m_contextMenuFamily);
     }
 
@@ -6865,7 +6869,9 @@ int EditorViewModel::synchronizeViewportContext(int targetKind,
   } else if (target == ViewportContextTarget::Plate) {
     if (plateIndex < 0 || plateIndex >= projectService_->plateCount()
         || !projectService_->setCurrentPlateIndex(plateIndex)) {
-      emit stateChanged();
+      // S1: context probes cleared -- selection cluster (the switch itself
+      // already rode the service plateSelectionChanged relay).
+      emitSelectionClusterChanged();
       return int(m_contextMenuFamily);
     }
     m_showAllObjects = false;
@@ -6886,11 +6892,16 @@ int EditorViewModel::synchronizeViewportContext(int targetKind,
     m_contextPlateIndex = projectService_->currentPlateIndex();
     m_contextMenuFamily = ContextMenuDefault;
   } else {
+    // S1: unknown target kind -- probes untouched, keep the transition
+    // umbrella only.
     emit stateChanged();
     return int(m_contextMenuFamily);
   }
 
-  emit stateChanged();
+  // S1: every completed sync mutates the context probes and usually the
+  // selection -- one selection-cluster emission (fans transformChanged for
+  // the manipulation panel).
+  emitSelectionClusterChanged();
   return int(m_contextMenuFamily);
 }
 

@@ -115,6 +115,7 @@ private slots:
   void s1ClusterNotifyContract();
   void s1TransformClusterReevaluation();
   void s1PlateClusterReevaluation();
+  void s1SelectionClusterReevaluation();
   void cleanupTestCase();
 
 private:
@@ -434,6 +435,7 @@ const S1NotifyExpectation kS1NotifyExpectations[] = {
     {"assembleScales", "transformChanged"},
     {"meshBatchInstanceTransforms", "transformChanged"},
     {"measureDimensions", "transformChanged"},
+    {"selectedHintLocalRotation", "transformChanged"},
     // Commit 2 — plate cluster: plate-scoped list/count/index + the
     // property-ized probes (the audit's 板级探针属性化).
     {"plateCount", "plateChanged"},
@@ -443,6 +445,41 @@ const S1NotifyExpectation kS1NotifyExpectations[] = {
     {"currentPlateIndex", "currentPlateIndexChanged"},
     {"plateIconStates", "plateChanged"},
     {"currentPlateThumbnailBase64", "plateChanged"},
+    // Commit 3 — selection cluster: the selected set, the context probes,
+    // and the selection-derived gates.
+    {"hasSelection", "selectionChanged"},
+    {"hasSelectedVolume", "selectionChanged"},
+    {"selectedVolumeCount", "selectionChanged"},
+    {"selectedVolumeIndex", "selectionChanged"},
+    {"selectedObjectIndex", "selectionChanged"},
+    {"selectedSourceObjectIndex", "selectionChanged"},
+    {"selectedSourceObjectIndices", "selectionChanged"},
+    {"selectedObjectCount", "selectionChanged"},
+    {"canOpenSelectionSettings", "selectionChanged"},
+    {"canRenameSelectedObject", "selectionChanged"},
+    {"canDuplicateSelectedObjects", "selectionChanged"},
+    {"canDeleteSelection", "selectionChanged"},
+    {"canSetSelectionPrintable", "selectionChanged"},
+    {"canTransformSelection", "selectionChanged"},
+    {"selectedObjectInfoText", "selectionChanged"},
+    {"selectedObjectTriangles", "selectionChanged"},
+    {"selectedObjectOpenEdges", "selectionChanged"},
+    {"selectedObjectRepairedErrors", "selectionChanged"},
+    {"selectedObjectIsManifold", "selectionChanged"},
+    {"hasObjectManipSelection", "selectionChanged"},
+    {"showAllObjects", "selectionChanged"},
+    {"objectOrganizeMode", "selectionChanged"},
+    {"showLabels", "selectionChanged"},
+    {"measureSelectionMode", "selectionChanged"},
+    {"settingsTargetType", "selectionChanged"},
+    {"settingsTargetName", "selectionChanged"},
+    {"settingsTargetObjectIndex", "selectionChanged"},
+    {"settingsTargetVolumeIndex", "selectionChanged"},
+    {"contextMenuFamily", "selectionChanged"},
+    {"contextSourceObjectIndex", "selectionChanged"},
+    {"contextVolumeIndex", "selectionChanged"},
+    {"contextInstanceIndex", "selectionChanged"},
+    {"contextPlateIndex", "selectionChanged"},
 };
 
 } // namespace
@@ -626,6 +663,61 @@ void QmlSmokeTests::s1PlateClusterReevaluation()
   QCOMPARE(states.at(plate).toMap().value(QStringLiteral("locked")).toBool(), lockedBefore);
   QCOMPARE(states.at(plate).toMap().value(QStringLiteral("name")).toString(), oldName);
   QVERIFY2(!component.isError(), "no late QML errors on the plate probe");
+}
+
+// S1 commit 3 — selection cluster re-evaluation: selection mutations must
+// re-evaluate the panel readouts AND the transform readouts (the cluster
+// fans transformChanged so the manipulation panel re-reads the new
+// selection's transform).
+void QmlSmokeTests::s1SelectionClusterReevaluation()
+{
+  auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));
+  QVERIFY2(vm != nullptr, "editorViewModel must be an EditorViewModel");
+
+  QVERIFY(vm->addPrimitiveToPlate(0)); // 0 = cube (a second primitive)
+  vm->clearObjectSelection();
+  QCOMPARE(vm->property("hasSelection").toBool(), false);
+
+  QQmlComponent component(engine_);
+  component.setData(QByteArrayLiteral(R"QML(
+    import QtQuick
+    Item {
+        required property var editorVm
+        property var counts: ({ hasSel: 0, selIdx: 0, posX: 0 })
+        readonly property bool hasSel:
+            { counts.hasSel++; return editorVm.hasSelection }
+        readonly property int selIdx:
+            { counts.selIdx++; return editorVm.selectedSourceObjectIndex }
+        readonly property real posX:
+            { counts.posX++; return editorVm.objectPosX }
+    }
+    )QML"),
+                       QUrl(QStringLiteral("qrc:/qml/OWzx/tests/S1SelectionProbe.qml")));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("inline selection probe failed: %1")
+                          .arg(component.errorString())));
+  std::unique_ptr<QObject> probeHolder(
+      component.createWithInitialProperties(
+          QVariantMap{{"editorVm", QVariant::fromValue(vm)}}));
+  QVERIFY2(probeHolder, qPrintable(component.errorString()));
+  const auto evals = [&](const char *name) {
+    return probeHolder->property("counts").toMap().value(QString::fromLatin1(name)).toInt();
+  };
+
+  const int hasSelBefore = evals("hasSel");
+  const int posXBefore = evals("posX");
+
+  vm->selectObject(0);
+  QCOMPARE(vm->property("hasSelection").toBool(), true);
+  QVERIFY(evals("hasSel") > hasSelBefore);
+  // The transform readout re-evaluates too -- the selection cluster fans
+  // transformChanged (the manipulation panel must show the NEW selection).
+  QVERIFY(evals("posX") > posXBefore);
+
+  vm->clearObjectSelection();
+  QCOMPARE(vm->property("hasSelection").toBool(), false);
+  QVERIFY(evals("hasSel") > hasSelBefore + 1);
+  QVERIFY2(!component.isError(), "no late QML errors on the selection probe");
 }
 
 int main(int argc, char *argv[])

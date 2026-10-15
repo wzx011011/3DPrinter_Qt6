@@ -130,23 +130,23 @@ class EditorViewModel final : public QObject
   /// 3mf write. The async G-code export worker state is
   /// SliceService::exportBusy.
   Q_PROPERTY(bool exporting READ exporting NOTIFY stateChanged)
-  Q_PROPERTY(bool showAllObjects READ showAllObjects NOTIFY stateChanged)
-  Q_PROPERTY(int objectOrganizeMode READ objectOrganizeMode NOTIFY stateChanged)
-  Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY stateChanged)
-  Q_PROPERTY(bool hasSelectedVolume READ hasSelectedVolume NOTIFY stateChanged)
-  Q_PROPERTY(int selectedVolumeCount READ selectedVolumeCount NOTIFY stateChanged)
-  Q_PROPERTY(bool canOpenSelectionSettings READ canOpenSelectionSettings NOTIFY stateChanged)
-  Q_PROPERTY(bool canRenameSelectedObject READ canRenameSelectedObject NOTIFY stateChanged)
-  Q_PROPERTY(bool canDuplicateSelectedObjects READ canDuplicateSelectedObjects NOTIFY stateChanged)
-  Q_PROPERTY(bool canDeleteSelection READ canDeleteSelection NOTIFY stateChanged)
-  Q_PROPERTY(bool canSetSelectionPrintable READ canSetSelectionPrintable NOTIFY stateChanged)
-  Q_PROPERTY(bool canTransformSelection READ canTransformSelection NOTIFY stateChanged)
+  Q_PROPERTY(bool showAllObjects READ showAllObjects NOTIFY selectionChanged)
+  Q_PROPERTY(int objectOrganizeMode READ objectOrganizeMode NOTIFY selectionChanged)
+  Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+  Q_PROPERTY(bool hasSelectedVolume READ hasSelectedVolume NOTIFY selectionChanged)
+  Q_PROPERTY(int selectedVolumeCount READ selectedVolumeCount NOTIFY selectionChanged)
+  Q_PROPERTY(bool canOpenSelectionSettings READ canOpenSelectionSettings NOTIFY selectionChanged)
+  Q_PROPERTY(bool canRenameSelectedObject READ canRenameSelectedObject NOTIFY selectionChanged)
+  Q_PROPERTY(bool canDuplicateSelectedObjects READ canDuplicateSelectedObjects NOTIFY selectionChanged)
+  Q_PROPERTY(bool canDeleteSelection READ canDeleteSelection NOTIFY selectionChanged)
+  Q_PROPERTY(bool canSetSelectionPrintable READ canSetSelectionPrintable NOTIFY selectionChanged)
+  Q_PROPERTY(bool canTransformSelection READ canTransformSelection NOTIFY selectionChanged)
   Q_PROPERTY(bool canArrangeObjects READ canArrangeObjects NOTIFY stateChanged)
   Q_PROPERTY(int availableGizmoMask READ availableGizmoMask NOTIFY stateChanged)
-  Q_PROPERTY(QString settingsTargetType READ settingsTargetType NOTIFY stateChanged)
-  Q_PROPERTY(QString settingsTargetName READ settingsTargetName NOTIFY stateChanged)
-  Q_PROPERTY(int settingsTargetObjectIndex READ settingsTargetObjectIndex NOTIFY stateChanged)
-  Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY stateChanged)
+  Q_PROPERTY(QString settingsTargetType READ settingsTargetType NOTIFY selectionChanged)
+  Q_PROPERTY(QString settingsTargetName READ settingsTargetName NOTIFY selectionChanged)
+  Q_PROPERTY(int settingsTargetObjectIndex READ settingsTargetObjectIndex NOTIFY selectionChanged)
+  Q_PROPERTY(int settingsTargetVolumeIndex READ settingsTargetVolumeIndex NOTIFY selectionChanged)
   // Object-list panel support
   Q_PROPERTY(int objectCount READ objectCount NOTIFY stateChanged)
   // Phase 236 (DLG-03): RecenterDialog data — entries are
@@ -160,29 +160,29 @@ class EditorViewModel final : public QObject
   // applyPendingObjColors/dismiss; objColorMappingRequested announces it.
   Q_PROPERTY(QVariantList pendingObjColors READ pendingObjColors NOTIFY stateChanged)
   Q_PROPERTY(int pendingObjObjectIndex READ pendingObjObjectIndex NOTIFY stateChanged)
-  Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY stateChanged)
-  Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY stateChanged)
+  Q_PROPERTY(int selectedObjectIndex READ selectedObjectIndex NOTIFY selectionChanged)
+  Q_PROPERTY(int selectedSourceObjectIndex READ selectedSourceObjectIndex NOTIFY selectionChanged)
   // P15.11 (MULTICENTER): sorted list of ALL selected source object indices
   // (upstream Selection::get_bounding_box() unions every selected volume's
   // bounds). The gizmo pivot and the white selection-center sphere sit at the
   // center of this union AABB, not the primary selection's.
-  Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices NOTIFY stateChanged)
-  Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices NOTIFY selectionChanged)
+  Q_PROPERTY(int selectedObjectCount READ selectedObjectCount NOTIFY selectionChanged)
   /// Phase 198 (PHASE198): currently selected single volume index for the
   /// per-object settings / layer-range dialogs. Exposed so QML dialogs bound
   /// to `editorVm.selectedVolumeIndex` resolve (previously undefined).
-  Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged)
+  Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY selectionChanged)
   /// P15.11 (SIDEBAR-LOCAL-AXES): orientation of the sidebar transform hint
   /// arrows on the selected object's local axes (upstream Selection.cpp
   /// orient_matrix: instance rotation, composed with the volume rotation for
   /// a single-volume selection). {rx, ry, rz} Euler degrees in the slic3r
   /// frame; {0, 0, 0} when there is no selection (world axes preserved).
-  Q_PROPERTY(QVariantList selectedHintLocalRotation READ selectedHintLocalRotation NOTIFY stateChanged)
-  Q_PROPERTY(int contextMenuFamily READ contextMenuFamily NOTIFY stateChanged)
-  Q_PROPERTY(int contextSourceObjectIndex READ contextSourceObjectIndex NOTIFY stateChanged)
-  Q_PROPERTY(int contextVolumeIndex READ contextVolumeIndex NOTIFY stateChanged)
-  Q_PROPERTY(int contextInstanceIndex READ contextInstanceIndex NOTIFY stateChanged)
-  Q_PROPERTY(int contextPlateIndex READ contextPlateIndex NOTIFY stateChanged)
+  Q_PROPERTY(QVariantList selectedHintLocalRotation READ selectedHintLocalRotation NOTIFY transformChanged)
+  Q_PROPERTY(int contextMenuFamily READ contextMenuFamily NOTIFY selectionChanged)
+  Q_PROPERTY(int contextSourceObjectIndex READ contextSourceObjectIndex NOTIFY selectionChanged)
+  Q_PROPERTY(int contextVolumeIndex READ contextVolumeIndex NOTIFY selectionChanged)
+  Q_PROPERTY(int contextInstanceIndex READ contextInstanceIndex NOTIFY selectionChanged)
+  Q_PROPERTY(int contextPlateIndex READ contextPlateIndex NOTIFY selectionChanged)
   /// 模型网格数据（TLV 格式，用于 GLViewport 渲染）
   Q_PROPERTY(QByteArray meshData READ meshData NOTIFY stateChanged)
   // P15.11: post-validate clearance streams, packed as raw float XYZ triples.
@@ -205,15 +205,15 @@ class EditorViewModel final : public QObject
   /// path that can move this bbox re-evaluates the binding.
   Q_PROPERTY(QVector4D measureDimensions READ measureDimensions NOTIFY transformChanged)
   /// 选中对象详细信息文本（对齐上游 Plater::show_object_info）
-  Q_PROPERTY(QString selectedObjectInfoText READ selectedObjectInfoText NOTIFY stateChanged)
+  Q_PROPERTY(QString selectedObjectInfoText READ selectedObjectInfoText NOTIFY selectionChanged)
   /// 选中对象三角面数
-  Q_PROPERTY(int selectedObjectTriangles READ selectedObjectTriangles NOTIFY stateChanged)
+  Q_PROPERTY(int selectedObjectTriangles READ selectedObjectTriangles NOTIFY selectionChanged)
   /// 选中对象未修复的非流形边数（对齐上游 TriangleMeshStats::open_edges）
-  Q_PROPERTY(int selectedObjectOpenEdges READ selectedObjectOpenEdges NOTIFY stateChanged)
+  Q_PROPERTY(int selectedObjectOpenEdges READ selectedObjectOpenEdges NOTIFY selectionChanged)
   /// 选中对象已修复错误总数（对齐上游 ModelObject::get_repaired_errors_count）
-  Q_PROPERTY(int selectedObjectRepairedErrors READ selectedObjectRepairedErrors NOTIFY stateChanged)
+  Q_PROPERTY(int selectedObjectRepairedErrors READ selectedObjectRepairedErrors NOTIFY selectionChanged)
   /// 选中对象是否为流形网格（对齐上游 TriangleMeshStats::manifold）
-  Q_PROPERTY(bool selectedObjectIsManifold READ selectedObjectIsManifold NOTIFY stateChanged)
+  Q_PROPERTY(bool selectedObjectIsManifold READ selectedObjectIsManifold NOTIFY selectionChanged)
   /// 对象变换（对齐上游 ObjectManipulation）—— S1 transform 簇：拖拽帧走
   /// transformChanged 增量通道（伞信号在拖拽帧被合并抑制），离散编辑经
   /// emitTransformEdited 补发伞信号；selection/topology 簇 fan-out 覆盖
@@ -228,11 +228,11 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(float objectScaleY READ objectScaleY WRITE setObjectScaleY NOTIFY transformChanged)
   Q_PROPERTY(float objectScaleZ READ objectScaleZ WRITE setObjectScaleZ NOTIFY transformChanged)
   Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale NOTIFY transformChanged)
-  Q_PROPERTY(bool hasObjectManipSelection READ hasObjectManipSelection NOTIFY stateChanged)
+  Q_PROPERTY(bool hasObjectManipSelection READ hasObjectManipSelection NOTIFY selectionChanged)
   /// Undo/Redo (对齐上游 UndoRedo 框架)
   Q_PROPERTY(bool canUndo READ canUndo NOTIFY stateChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY stateChanged)
-  Q_PROPERTY(bool showLabels READ showLabels WRITE setShowLabels NOTIFY stateChanged)
+  Q_PROPERTY(bool showLabels READ showLabels WRITE setShowLabels NOTIFY selectionChanged)
   /// Phase 91 (ASMEXPLODE-01): explosion ratio for AssembleView multi-part
   /// separation. Mirrors upstream m_explosion_ratio (default 1.0,
   /// GLCanvas3D.hpp:596). NOTIFY transformChanged (S1) drives the QML slider
@@ -1111,7 +1111,7 @@ public:
   Q_PROPERTY(float grooveFlapsAngle READ grooveFlapsAngle WRITE setGrooveFlapsAngle NOTIFY stateChanged)
   Q_PROPERTY(float connectorDepth READ connectorDepth WRITE setConnectorDepth NOTIFY stateChanged)
   /// 测量拾取模式（对齐上游 GLGizmoMeasure feature/point selection）
-  Q_PROPERTY(int measureSelectionMode READ measureSelectionMode WRITE setMeasureSelectionMode NOTIFY stateChanged)
+  Q_PROPERTY(int measureSelectionMode READ measureSelectionMode WRITE setMeasureSelectionMode NOTIFY selectionChanged)
   /// 支撑绘制设置（对齐上游 GLGizmoFdmSupports）
   // Phase 122/123 (PAINT-04/05): which paint kind is active so paintAtFacet
   // can route the write-back to the correct ModelVolume FacetsAnnotation member
