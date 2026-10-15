@@ -5976,6 +5976,9 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
           }
         } catch (...) { /* skip on half-constructed model */ }
         emitPlateClusterChanged();
+        // S1: plateSelectionChanged IS the switch -- the narrow signal rides
+        // with the plate cluster so the QML per-switch hooks fire.
+        emit currentPlateIndexChanged();
         emitSelectionClusterChanged(); });
 
   connect(sliceService_, &SliceService::slicingChanged, this, [this]()
@@ -6183,7 +6186,10 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       m_cachedMeshBatchSourceObjectIndices.clear();
     }
     // S1: a load replaces the whole scene (mesh blob, batch tables,
-    // selection, plate views) -- cluster fanout, not the bare umbrella.
+    // selection, plate views) -- cluster fanout, not the bare umbrella. A
+    // load also (re)sets the current plate to the service's default, so the
+    // narrow switch signal rides along.
+    emit currentPlateIndexChanged();
     emitSceneTopologyClusterChanged(); });
 
   // U13: archive-import continuation. importArchiveEntries used to spin
@@ -6390,6 +6396,44 @@ QVariantList EditorViewModel::meshBatchInstanceTransforms() const
   for (const QMatrix4x4 &transform : transforms)
     out.append(QVariant::fromValue(transform));
   return out;
+}
+
+// ── S1 plate cluster: property-ized probes ─────────────────────────────────
+// The audit's 板级探针属性化: the per-plate {locked, custom, name} states the
+// GL icon column renders, composed live from the service exactly like the
+// S3 lazy transform channel. Before this property, PreparePage kept a
+// plateIconStatesCache rebuilt by a Connections-onStateChanged full re-query
+// plus per-dialog dialog.closed reconnects -- both compensation layers are
+// deleted; a plateChanged emission (service projectChanged relay or the VM
+// write paths) re-evaluates the binding.
+QVariantList EditorViewModel::plateIconStates() const
+{
+  QVariantList states;
+  if (!projectService_)
+    return states;
+  const int count = projectService_->plateCount();
+  states.reserve(count);
+  for (int i = 0; i < count; ++i)
+  {
+    QVariantMap state;
+    state.insert(QStringLiteral("locked"), isPlateLocked(i));
+    state.insert(QStringLiteral("custom"), plateHasCustomSettings(i));
+    state.insert(QStringLiteral("name"), plateName(i));
+    states.append(state);
+  }
+  return states;
+}
+
+// PreviewPage plate-card thumbnail, property-ized with the same carrier.
+// Before S1 the page kept a manual refreshPlateThumb() re-invoked from a
+// Connections-onStateChanged handler -- the Q_INVOKABLE-in-a-binding gap the
+// audit calls out. Thumbnail cache writes emit plateChanged (see the
+// setPlate*ThumbnailFromBase64 write paths), as does a plate switch.
+QString EditorViewModel::currentPlateThumbnailBase64() const
+{
+  if (!projectService_)
+    return QString();
+  return projectService_->plateThumbnailBase64(projectService_->currentPlateIndex());
 }
 QString EditorViewModel::statusText() const { return statusText_; }
 int EditorViewModel::loadProgress() const { return projectService_ ? projectService_->loadProgress() : 0; }
@@ -9661,6 +9705,9 @@ bool EditorViewModel::setCurrentPlateIndex(int i)
   // S3: plate context is not topology -- the mesh blob and per-batch tables
   // are plate-independent (all-objects), and the viewport re-parses through
   // the activePlateObjectIndices generation bump on the stateChanged emit.
+  // S1: the service setCurrentPlateIndex emits plateSelectionChanged (the
+  // relay fans plate/selection clusters + the narrow switch signal); the
+  // local emission stays for the transition umbrella.
   emit stateChanged();
   return true;
 }
@@ -9748,7 +9795,10 @@ bool EditorViewModel::deletePlate(int plateIndex)
     // the selection, which can point past the remaining objects.
     ensureValidObjectSelection(true);
     refreshMeshCacheAndFitHint();
-    emit stateChanged();
+    // S1: a delete can renumber plates and switch the current one -- the
+    // narrow switch signal rides with the topology fanout.
+    emit currentPlateIndexChanged();
+    emitSceneTopologyClusterChanged();
     return true;
   }
   delete cmd;
@@ -10325,7 +10375,29 @@ QString EditorViewModel::plateThumbnailBase64(int plateIndex) const
 // PartPlate::setThumbnail (the gap that forced Phase 151 to ship persisted-only).
 bool EditorViewModel::setPlateThumbnailFromBase64(int plateIndex, const QString &base64)
 {
-  return projectService_ ? projectService_->setPlateThumbnailFromBase64(plateIndex, base64) : false;
+  // S1: the service cache write emits nothing itself, so the VM owns the
+  // cluster emission -- the property-ized currentPlateThumbnailBase64 /
+  // plateIconStates bindings re-evaluate off this plateChanged (this is what
+  // replaced PreparePage's dialog.closed/Connections compensation layers).
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->setPlateThumbnailFromBase64(plateIndex, base64);
+  if (ok)
+    emitPlateClusterChanged();
+  return ok;
+}
+
+bool EditorViewModel::setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64)
+{
+  // G-04 picking-cache variant -- existed only on ProjectService before S1;
+  // PreparePage's variant=1 capture handler called this name on editorVm and
+  // got a runtime TypeError on every delivery.
+  if (!projectService_)
+    return false;
+  const bool ok = projectService_->setPlatePickThumbnailFromBase64(plateIndex, base64);
+  if (ok)
+    emitPlateClusterChanged();
+  return ok;
 }
 
 void EditorViewModel::centerSelectedObjects()

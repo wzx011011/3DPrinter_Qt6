@@ -396,10 +396,12 @@ Item {
                 // thumbnail centered) with a 26x26 "</>" G-code window toggle
                 // button above it -- upstream Preview only has the canvas with
                 // the plate thumbnail floating on it (GUI_Preview.cpp:285-289),
-                // not a sidebar strip. The thumbnail re-reads on every
-                // EditorViewModel stateChanged (invokable accessors are not
-                // auto-reactive); with no thumbnail cached the plate color
-                // stands in (THUMBVERIFY-01: never fabricate a mock image).
+                // not a sidebar strip. S1: the thumbnail is the property-ized
+                // editorVm.currentPlateThumbnailBase64 (NOTIFY plateChanged);
+                // the former Connections-onStateChanged re-invocation of an
+                // Q_INVOKABLE and its Qt.callLater bootstrap are gone. With no
+                // thumbnail cached the plate color stands in (THUMBVERIFY-01:
+                // never fabricate a mock image).
                 Column {
                     id: plateCardCluster
                     anchors.left: parent.left
@@ -407,22 +409,9 @@ Item {
                     anchors.margins: 8
                     spacing: 8
 
-                    property string plateThumbBase64: ""
+                    readonly property string plateThumbBase64:
+                        root.editorVm ? root.editorVm.currentPlateThumbnailBase64 : ""
                     property int plateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
-
-                    function refreshPlateThumb() {
-                        if (!root.editorVm)
-                            return
-                        plateCardCluster.plateThumbBase64 =
-                            root.editorVm.plateThumbnailBase64(plateCardCluster.plateIndex)
-                    }
-                    Connections {
-                        target: root.editorVm
-                        function onStateChanged() { plateCardCluster.refreshPlateThumb() }
-                    }
-                    // Qt.callLater: the initial read must not run synchronously
-                    // inside component finalization (engine->load window).
-                    Component.onCompleted: Qt.callLater(plateCardCluster.refreshPlateThumb)
 
                     // 26x26 "</>" square button above the card (ref x~398-423,
                     // y~69-92); the "</>" glyph toggles the G-code window

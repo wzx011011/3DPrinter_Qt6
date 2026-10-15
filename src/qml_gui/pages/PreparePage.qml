@@ -1557,11 +1557,9 @@ Item {
                         var dialog = plateSettingsDialogComp.createObject(root)
                         dialog.plateIndex = plateIndex
                         dialog.plateName = root.editorVm.plateName(plateIndex)
-                        // Re-probe has_plate_settings when the dialog
-                        // dismisses so the changed icon tracks edits.
-                        dialog.closed.connect(function() {
-                            viewportArea.rebuildPlateIconStates()
-                        })
+                        // S1: no dialog.closed re-probe -- the plate settings
+                        // write path reaches viewportArea.plateIconStates via
+                        // the plateChanged cluster.
                         dialog.open()
                         break
                     }
@@ -1574,38 +1572,23 @@ Item {
                         var rename = plateRenameDialog.createObject(root)
                         rename.plateIndex = plateIndex
                         rename.currentName = root.editorVm.plateName(plateIndex)
-                        rename.closed.connect(function() {
-                            viewportArea.rebuildPlateIconStates()
-                        })
+                        // S1: no dialog.closed re-probe -- renamePlate rides
+                        // the plateChanged cluster.
                         rename.open()
                         break
                     }
                     }
                 }
 
-                // Per-plate display states for the GL icon column. The
-                // Q_INVOKABLE probes are not NOTIFY-bound, so the cache is
-                // recomputed on every ViewModel state change and after any
-                // dialog that mutates plate state closes.
-                property var plateIconStatesCache: []
-                function rebuildPlateIconStates() {
-                    var states = []
-                    if (root.editorVm) {
-                        for (var i = 0; i < root.editorVm.plateCount; ++i) {
-                            states.push({
-                                locked: root.editorVm.isPlateLocked(i),
-                                custom: root.editorVm.plateHasCustomSettings(i),
-                                name: root.editorVm.plateName(i)
-                            })
-                        }
-                    }
-                    viewportArea.plateIconStatesCache = states
-                }
-                Connections {
-                    target: root.editorVm
-                    function onStateChanged() { viewportArea.rebuildPlateIconStates() }
-                }
-                Component.onCompleted: viewportArea.rebuildPlateIconStates()
+                // Per-plate display states for the GL icon column. S1: the
+                // probes are property-ized on the ViewModel
+                // (editorVm.plateIconStates, NOTIFY plateChanged) -- the
+                // former Connections-onStateChanged full re-query and the
+                // per-dialog dialog.closed refresh layers are gone; every
+                // plate-scoped mutation reaches this binding through the
+                // plateChanged cluster.
+                readonly property var plateIconStates:
+                    root.editorVm ? root.editorVm.plateIconStates : []
 
                 // Hover tooltip (upstream show_tooltip, PartPlate.cpp:1141:
                 // the icon action hint renders at the cursor).
@@ -1613,9 +1596,15 @@ Item {
                     readonly property var hover: viewport3d.plateIconHover
                     readonly property int hoverIcon:
                         hover && hover.icon !== undefined ? hover.icon : -1
-                    readonly property bool hoverPlateLocked:
-                        hover && hover.plate !== undefined && root.editorVm
-                            ? root.editorVm.isPlateLocked(hover.plate) : false
+                    // S1: lock state reads the plateIconStates cluster binding
+                    // (was a non-reactive Q_INVOKABLE re-probe).
+                    readonly property bool hoverPlateLocked: {
+                        if (!hover || hover.plate === undefined)
+                            return false
+                        const states = viewportArea.plateIconStates
+                        return hover.plate >= 0 && hover.plate < states.length
+                            ? states[hover.plate].locked === true : false
+                    }
                     readonly property string hoverText: {
                         // Q2: same GLViewport-exposed PlateIconId names as the
                         // activation switch -- no magic icon numbers.
@@ -1679,7 +1668,7 @@ Item {
                     canvasType: GLViewport.CanvasView3D
                     // PLATEICONS-GL: per-plate display states for the bed
                     // icon column rendered inside the scene.
-                    plateIconStates: viewportArea.plateIconStatesCache
+                    plateIconStates: viewportArea.plateIconStates
                     onPlateIconActivated: (plateIndex, iconId) =>
                         viewportArea.handlePlateIconActivated(plateIndex, iconId)
                     uniformScale: root.editorVm ? root.editorVm.uniformScale : true

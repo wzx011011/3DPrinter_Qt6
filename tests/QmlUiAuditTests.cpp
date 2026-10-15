@@ -10251,18 +10251,30 @@ void QmlUiAuditTests::prepareViewportHostsPlateIdentityOverlay()
   // shows the hover tooltip, and routes plateIconActivated.
   QVERIFY2(!preparePage.contains(QStringLiteral("id: plateClusterRepeater")),
            "the screen-space plate cluster overlay must stay retired (icons live in GL)");
-  QVERIFY2(preparePage.contains(QStringLiteral("plateIconStates: viewportArea.plateIconStatesCache"))
+  // S1 lock rewrite (approved, dwfq-9606ed09-1): the page no longer keeps a
+  // plateIconStatesCache rebuilt from a Connections-onStateChanged re-query --
+  // the feed binds the property-ized editorVm.plateIconStates (NOTIFY
+  // plateChanged). Old lock: contains "plateIconStates: viewportArea.
+  // plateIconStatesCache".
+  QVERIFY2(preparePage.contains(QStringLiteral("plateIconStates: viewportArea.plateIconStates"))
                && preparePage.contains(QStringLiteral("onPlateIconActivated")),
            "GLViewport must feed plateIconStates and route plateIconActivated");
+  QVERIFY2(editorHeader.contains(QStringLiteral(
+               "Q_PROPERTY(QVariantList plateIconStates READ plateIconStates NOTIFY plateChanged)")),
+           "EditorViewModel must expose the plateIconStates cluster property");
   QVERIFY2(preparePage.contains(QStringLiteral("function handlePlateIconActivated(plateIndex, iconId)"))
                && preparePage.contains(QStringLiteral("root.editorVm.arrangePlate(plateIndex)"))
                && preparePage.contains(QStringLiteral("root.editorVm.togglePlateLocked(plateIndex)"))
                && preparePage.contains(QStringLiteral("root.confirmDeletePlateAt(plateIndex)"))
                && preparePage.contains(QStringLiteral("root.editorVm.movePlate(plateIndex, 0)")),
            "icon activation must route to the same ViewModel actions the cluster buttons ran");
-  QVERIFY2(preparePage.contains(QStringLiteral("plateHasCustomSettings(plateIndex)"))
-               || preparePage.contains(QStringLiteral("plateHasCustomSettings(i)")),
-           "the settings icon two-state must probe plateHasCustomSettings");
+  // S1 lock rewrite (approved, dwfq-9606ed09-1): the settings icon two-state
+  // is fed by plateIconStates[].custom (the property composes the same
+  // plateHasCustomSettings probe server-side); the QML-side probe call sites
+  // are gone with the compensation layers. Old lock: preparePage contains
+  // "plateHasCustomSettings(plateIndex)" or "(i)".
+  QVERIFY2(preparePage.contains(QStringLiteral("viewportArea.plateIconStates")),
+           "the settings icon two-state must be fed by the plateIconStates cluster binding");
   QVERIFY2(editorHeader.contains(QStringLiteral("Q_INVOKABLE bool plateHasCustomSettings(int plateIndex) const")),
            "EditorViewModel must expose the plate-customization probe");
   // Q2 (PLATEICONS-WIP closeout): icon dispatch and hover tooltips must
@@ -11309,24 +11321,26 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
 
   // ── PREV-LEFT: the left panel's current-plate summary block ────────────
   // v3.6 PREV-LEFT placeholder closure: the preview left panel shows the
-  // active plate thumbnail + plate badge. State changes re-read the
-  // invokable accessor (no auto-reactive Q_INVOKABLE), and with no cached
-  // thumbnail the plate color stands in -- never a fabricated mock image
-  // (THUMBVERIFY-01 contract).
+  // active plate thumbnail + plate badge. S1 lock rewrite (approved,
+  // dwfq-9606ed09-1): the thumbnail is the property-ized
+  // editorVm.currentPlateThumbnailBase64 (NOTIFY plateChanged) -- the former
+  // Connections-onStateChanged re-invocation of the Q_INVOKABLE is gone.
+  // With no cached thumbnail the plate color stands in -- never a fabricated
+  // mock image (THUMBVERIFY-01 contract).
   const QString editorVmHeaderForPreview =
       readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
-  QVERIFY2(previewPage.contains(QStringLiteral("plateThumbnailBase64("))
-               && previewPage.contains(QStringLiteral("onStateChanged"))
+  QVERIFY2(previewPage.contains(QStringLiteral("currentPlateThumbnailBase64"))
                && previewPage.contains(QStringLiteral("plateThumbnailColor(")),
-           "PREV-LEFT: PreviewPage must re-read the plate thumbnail on VM"
-           " state changes and fall back to the plate color when no"
-           " thumbnail is cached");
+           "PREV-LEFT: PreviewPage must bind the property-ized current-plate"
+           " thumbnail (plateChanged cluster) and fall back to the plate"
+           " color when no thumbnail is cached");
   QVERIFY2(editorVmHeaderForPreview.contains(
-               QStringLiteral("Q_INVOKABLE QString plateThumbnailBase64(int plateIndex) const;"))
-               && editorVmHeaderForPreview.contains(
-                   QStringLiteral("Q_INVOKABLE QString plateThumbnailColor(int plateIndex) const;")),
-           "PREV-LEFT: EditorViewModel must expose the persisted-thumbnail"
-           " and plate-color accessors");
+               QStringLiteral("Q_PROPERTY(QString currentPlateThumbnailBase64 READ currentPlateThumbnailBase64 NOTIFY plateChanged)")),
+           "PREV-LEFT: EditorViewModel must expose the property-ized"
+           " current-plate thumbnail (plateChanged cluster)");
+  QVERIFY2(editorVmHeaderForPreview.contains(
+               QStringLiteral("Q_INVOKABLE QString plateThumbnailColor(int plateIndex) const;")),
+           "PREV-LEFT: EditorViewModel must expose the plate-color accessor");
 }
 
 void QmlUiAuditTests::previewWave5SliderSourceAudit()

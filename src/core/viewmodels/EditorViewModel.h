@@ -50,11 +50,30 @@ class EditorViewModel final : public QObject
   friend class ViewModelSmokeTests;
   Q_PROPERTY(QString projectName READ projectName NOTIFY stateChanged)
   Q_PROPERTY(int modelCount READ modelCount NOTIFY stateChanged)
-  Q_PROPERTY(int plateCount READ plateCount NOTIFY stateChanged)
+  // ── S1 plate cluster ────────────────────────────────────────────────────
+  // Plate list/count/index and per-plate display states move on plate-scoped
+  // edits (add/delete/clone/move/lock/rename/settings/printability, plate
+  // switches) and on scene loads (topology fan-out includes plateChanged).
+  // projectName/modelCount stay on the umbrella (project-level identity).
+  Q_PROPERTY(int plateCount READ plateCount NOTIFY plateChanged)
   Q_PROPERTY(int maxPlateCount READ maxPlateCount CONSTANT)
-  Q_PROPERTY(bool canAddPlate READ canAddPlate NOTIFY stateChanged)
-  Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY stateChanged)
-  Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY stateChanged)
+  Q_PROPERTY(bool canAddPlate READ canAddPlate NOTIFY plateChanged)
+  // Dedicated switch signal: the QML Connections handler
+  // onCurrentPlateIndexChanged (PreparePage GL-thumbnail re-request) listens
+  // for exactly this -- before S1 the handler connected to a signal that did
+  // not exist and never fired.
+  Q_PROPERTY(int currentPlateIndex READ currentPlateIndex NOTIFY currentPlateIndexChanged)
+  Q_PROPERTY(QVariantList activePlateObjectIndices READ activePlateObjectIndices NOTIFY plateChanged)
+  /// PLATEICONS-GL probe states, property-ized (S1): one {locked, custom,
+  /// name} map per plate, composed live from the service on read. Replaces
+  /// the PreparePage Connections-onStateChanged full re-query + the
+  /// dialog.closed manual refresh layers -- a plateChanged emission (relay or
+  /// VM-local) re-evaluates the binding.
+  Q_PROPERTY(QVariantList plateIconStates READ plateIconStates NOTIFY plateChanged)
+  /// Current plate's session thumbnail as base64 (PreviewPage plate card).
+  /// Property-ized (S1) with the same plateChanged carrier: thumbnail cache
+  /// writes emit plateChanged from the VM write paths.
+  Q_PROPERTY(QString currentPlateThumbnailBase64 READ currentPlateThumbnailBase64 NOTIFY plateChanged)
   Q_PROPERTY(QVariantList meshBatchSourceObjectIndices READ meshBatchSourceObjectIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchVolumeIndices READ meshBatchVolumeIndices NOTIFY stateChanged)
   Q_PROPERTY(QVariantList meshBatchInstanceIndices READ meshBatchInstanceIndices NOTIFY stateChanged)
@@ -290,6 +309,9 @@ public:
   int maxPlateCount() const;
   int currentPlateIndex() const;
   QVariantList activePlateObjectIndices() const;
+  // S1 plate cluster property getters (see the Q_PROPERTY block).
+  QVariantList plateIconStates() const;
+  QString currentPlateThumbnailBase64() const;
   QVariantList meshBatchSourceObjectIndices() const;
   QVariantList meshBatchVolumeIndices() const;
   QVariantList meshBatchInstanceIndices() const;
@@ -1381,7 +1403,16 @@ public:
   /// Phase 156 (CLOS-03): runtime thumbnail WRITE proxy — forwards to
   /// ProjectService::setPlateThumbnailFromBase64. QML calls this from the
   /// per-plate capture handler so non-current plates get real thumbnails.
+  /// S1: emits plateChanged on success (the service cache write emits
+  /// nothing itself; the property-ized currentPlateThumbnailBase64 /
+  /// plateIconStates bindings re-evaluate off this emission).
   Q_INVOKABLE bool setPlateThumbnailFromBase64(int plateIndex, const QString &base64);
+  /// G-04: picking-cache variant of the thumbnail write proxy (forwards to
+  /// ProjectService::setPlatePickThumbnailFromBase64). Before S1 PreparePage
+  /// called this name on editorVm where it never existed -- every variant=1
+  /// capture delivery threw a TypeError and picking thumbnails silently
+  /// never landed. Emits plateChanged on success like the main variant.
+  Q_INVOKABLE bool setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64);
   /// 重命名对象（对齐上游 Plater::rename_object）
   Q_INVOKABLE bool renameObject(int index, const QString &newName);
   /// 移动对象排序位置（对齐上游 GUI_ObjectList 拖拽重排序）
@@ -1500,8 +1531,10 @@ public:
   Q_PROPERTY(bool bedCaliLinesActive READ bedCaliLinesActive NOTIFY bedShapeChanged)
   Q_PROPERTY(QString bedTypeImagesDir READ bedTypeImagesDir NOTIFY bedShapeChanged)
   /// v5.16: current plate's bed type (Slic3r BedType index) driving the
-  /// bed-type texture parts.
-  Q_PROPERTY(int currentPlateBedType READ currentPlateBedType NOTIFY stateChanged)
+  /// bed-type texture parts. S1 plate cluster: the write path is
+  /// setPlateBedType (service emits projectChanged -> relay fans
+  /// plateChanged) and a plate switch swaps the value (plateChanged again).
+  Q_PROPERTY(int currentPlateBedType READ currentPlateBedType NOTIFY plateChanged)
   /// Q11-④: the single source for bed-type combo labels, indexed by the
   /// libslic3r BedType enum (PrintConfig.hpp:404-412: btDefault=0, btPC=1,
   /// btEP=2, btPEI=3, btPTE=4, btPCT=5, btSuperTack=6, btCount=7 sentinel).
@@ -2049,6 +2082,10 @@ signals:
   void transformChanged();
   void selectionChanged();
   void plateChanged();
+  /// The current-plate switch -- deliberately narrower than plateChanged so
+  /// the per-switch GL-thumbnail re-request (PreparePage
+  /// onCurrentPlateIndexChanged) does not fire on every plate-scoped edit.
+  void currentPlateIndexChanged();
   void sceneTopologyChanged();
   void busyStateChanged();
   void paintDataChanged();

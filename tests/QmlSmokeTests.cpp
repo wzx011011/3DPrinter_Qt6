@@ -112,8 +112,9 @@ private slots:
   // dynamic re-evaluation slot drives real mutations and counts binding
   // evaluations (the audit's "断言该簇覆盖的页面属性在触发后确实重求值，
   // 或直接固化为 QmlSmokeTests 断言" — the固化 option).
-  void s1TransformClusterNotifyContract();
+  void s1ClusterNotifyContract();
   void s1TransformClusterReevaluation();
+  void s1PlateClusterReevaluation();
   void cleanupTestCase();
 
 private:
@@ -433,11 +434,20 @@ const S1NotifyExpectation kS1NotifyExpectations[] = {
     {"assembleScales", "transformChanged"},
     {"meshBatchInstanceTransforms", "transformChanged"},
     {"measureDimensions", "transformChanged"},
+    // Commit 2 — plate cluster: plate-scoped list/count/index + the
+    // property-ized probes (the audit's 板级探针属性化).
+    {"plateCount", "plateChanged"},
+    {"canAddPlate", "plateChanged"},
+    {"activePlateObjectIndices", "plateChanged"},
+    {"currentPlateBedType", "plateChanged"},
+    {"currentPlateIndex", "currentPlateIndexChanged"},
+    {"plateIconStates", "plateChanged"},
+    {"currentPlateThumbnailBase64", "plateChanged"},
 };
 
 } // namespace
 
-void QmlSmokeTests::s1TransformClusterNotifyContract()
+void QmlSmokeTests::s1ClusterNotifyContract()
 {
   QObject *vm = backendProperty("editorViewModel");
   QVERIFY2(vm != nullptr, "editorViewModel must be non-null");
@@ -476,22 +486,23 @@ void QmlSmokeTests::s1TransformClusterReevaluation()
   QVERIFY(umbrellaSpy.isValid());
 
   // Inline QML mirrors the page bindings: one counter per tracked property.
-  // posX mirrors the ObjectManipulation readout (transform cluster); status
-  // is an umbrella-carrier property (statusText) whose re-evaluation must be
-  // MERGED AWAY during drag frames -- the S1 drag coalescing proof.
+  // Counters live in a var map (deep mutation does not re-trigger the
+  // binding engine, unlike dedicated property writes which read as binding
+  // loops). posX mirrors the ObjectManipulation readout (transform cluster);
+  // status is an umbrella-carrier property (statusText) whose re-evaluation
+  // must be MERGED AWAY during drag frames -- the S1 drag coalescing proof.
   QQmlComponent component(engine_);
   component.setData(QByteArrayLiteral(R"QML(
     import QtQuick
     Item {
         required property var editorVm
-        property int posXEvals: 0
-        readonly property real posX: { posXEvals++; return editorVm.objectPosX }
-        property int channelEvals: 0
+        property var counts: ({ posX: 0, channel: 0, status: 0 })
+        readonly property real posX:
+            { counts.posX++; return editorVm.objectPosX }
         readonly property int channelLen:
-            { channelEvals++; return editorVm.meshBatchInstanceTransforms.length }
-        property int statusEvals: 0
+            { counts.channel++; return editorVm.meshBatchInstanceTransforms.length }
         readonly property string status:
-            { statusEvals++; return editorVm.statusText }
+            { counts.status++; return editorVm.statusText }
     }
     )QML"),
                        QUrl(QStringLiteral("qrc:/qml/OWzx/tests/S1InlineProbe.qml")));
@@ -503,11 +514,11 @@ void QmlSmokeTests::s1TransformClusterReevaluation()
           QVariantMap{{"editorVm", QVariant::fromValue(vm)}}));
   QVERIFY2(probeHolder, qPrintable(component.errorString()));
   const auto evals = [&](const char *name) {
-    return probeHolder->property(name).toInt();
+    return probeHolder->property("counts").toMap().value(QString::fromLatin1(name)).toInt();
   };
 
-  const int posXEvalsBefore = evals("posXEvals");
-  const int statusEvalsBefore = evals("statusEvals");
+  const int posXEvalsBefore = evals("posX");
+  const int statusEvalsBefore = evals("status");
   const int transformBefore = transformSpy.count();
   const int umbrellaBefore = umbrellaSpy.count();
 
@@ -519,9 +530,9 @@ void QmlSmokeTests::s1TransformClusterReevaluation()
   vm->applyGizmoMoveDelta(3.0f, 1.0f, 0.0f);
   QVERIFY(transformSpy.count() - transformBefore >= 2);
   QCOMPARE(umbrellaSpy.count(), umbrellaBefore);
-  QVERIFY(evals("posXEvals") > posXEvalsBefore);
-  QVERIFY(evals("channelEvals") > 0); // S3 channel re-eval per frame
-  QCOMPARE(evals("statusEvals"), statusEvalsBefore);
+  QVERIFY(evals("posX") > posXEvalsBefore);
+  QVERIFY(evals("channel") > 0); // S3 channel re-eval per frame
+  QCOMPARE(evals("status"), statusEvalsBefore);
 
   // 2) Move end: the coalesced close re-emits the umbrella exactly for the
   //    whole-page consumers (file tree / status / persistence).
@@ -533,17 +544,92 @@ void QmlSmokeTests::s1TransformClusterReevaluation()
   //    fans the transform cluster AND the umbrella.
   const int transformMid = transformSpy.count();
   const int umbrellaMid = umbrellaSpy.count();
-  const int posXMid = evals("posXEvals");
+  const int posXMid = evals("posX");
   QVERIFY(vm->setProperty("objectPosX", vm->property("objectPosX").toFloat() + 2.0f));
   QVERIFY(transformSpy.count() > transformMid);
   QVERIFY(umbrellaSpy.count() > umbrellaMid);
-  QVERIFY(evals("posXEvals") > posXMid);
+  QVERIFY(evals("posX") > posXMid);
   QVERIFY2(!component.isError(), "no late QML errors on the inline probe");
 }
 
-int main(int argc, char *argv[])
+// S1 commit 2 — plate cluster re-evaluation: the property-ized probes must
+// re-evaluate their bindings from the plateChanged emissions that replaced
+// the deleted PreparePage compensation layers (Connections-onStateChanged
+// full re-query + per-dialog dialog.closed refresh).
+void QmlSmokeTests::s1PlateClusterReevaluation()
 {
-  // Platform selection (see file header): default to the minimal QPA plugin
+  auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));
+  QVERIFY2(vm != nullptr, "editorViewModel must be an EditorViewModel");
+
+  QQmlComponent component(engine_);
+  component.setData(QByteArrayLiteral(R"QML(
+    import QtQuick
+    Item {
+        required property var editorVm
+        property var counts: ({ iconStates: 0, thumb: 0 })
+        readonly property var iconStates:
+            { counts.iconStates++; return editorVm.plateIconStates }
+        readonly property string thumb:
+            { counts.thumb++; return editorVm.currentPlateThumbnailBase64 }
+    }
+    )QML"),
+                       QUrl(QStringLiteral("qrc:/qml/OWzx/tests/S1PlateProbe.qml")));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("inline plate probe failed to compile: %1")
+                          .arg(component.errorString())));
+  std::unique_ptr<QObject> probeHolder(
+      component.createWithInitialProperties(
+          QVariantMap{{"editorVm", QVariant::fromValue(vm)}}));
+  QVERIFY2(probeHolder, qPrintable(component.errorString()));
+  const auto evals = [&](const char *name) {
+    return probeHolder->property("counts").toMap().value(QString::fromLatin1(name)).toInt();
+  };
+
+  const int plate = vm->property("currentPlateIndex").toInt();
+  QVariantList states = vm->property("plateIconStates").value<QVariantList>();
+  QVERIFY(plate >= 0 && plate < states.size());
+  const bool lockedBefore = states.at(plate).toMap().value(QStringLiteral("locked")).toBool();
+
+  const int iconEvalsBefore = evals("iconStates");
+  const int thumbEvalsBefore = evals("thumb");
+
+  // Lock flip (the PlateIconLock GL route): one plateChanged emission must
+  // re-evaluate the icon-states binding and flip the entry -- no manual
+  // rebuild call, no dialog.closed hook.
+  vm->togglePlateLocked(plate);
+  states = vm->property("plateIconStates").value<QVariantList>();
+  const bool lockedAfter = states.at(plate).toMap().value(QStringLiteral("locked")).toBool();
+  QCOMPARE(lockedAfter, !lockedBefore);
+  QVERIFY(evals("iconStates") > iconEvalsBefore);
+
+  // Rename (the PlateIconNameEdit GL route): same single-emission contract.
+  const QString oldName = states.at(plate).toMap().value(QStringLiteral("name")).toString();
+  const QString newName = oldName + QStringLiteral("-S1");
+  QVERIFY(vm->renamePlate(plate, newName));
+  states = vm->property("plateIconStates").value<QVariantList>();
+  QCOMPARE(states.at(plate).toMap().value(QStringLiteral("name")).toString(), newName);
+  QVERIFY(evals("iconStates") > iconEvalsBefore + 1);
+
+  // Thumbnail write path (the capture-delivery route): must refresh the
+  // property-ized thumbnail binding via plateChanged. Payload is a real
+  // 1x1 PNG -- the service validates the bytes.
+  QVERIFY(vm->setPlateThumbnailFromBase64(
+      plate,
+      QStringLiteral("data:image/png;base64,"
+                     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")));
+  QVERIFY(evals("thumb") > thumbEvalsBefore);
+
+  // Restore the pre-test plate state (lock flag + name).
+  vm->togglePlateLocked(plate);
+  vm->renamePlate(plate, oldName);
+  states = vm->property("plateIconStates").value<QVariantList>();
+  QCOMPARE(states.at(plate).toMap().value(QStringLiteral("locked")).toBool(), lockedBefore);
+  QCOMPARE(states.at(plate).toMap().value(QStringLiteral("name")).toString(), oldName);
+  QVERIFY2(!component.isError(), "no late QML errors on the plate probe");
+}
+
+int main(int argc, char *argv[])
+{  // Platform selection (see file header): default to the minimal QPA plugin
   // so no window is ever exposed and no frame is ever rendered. An explicit
   // OWZX_QMLSMOKE_PLATFORM wins; an externally-set QT_QPA_PLATFORM is
   // respected untouched. Must run before QGuiApplication construction.
