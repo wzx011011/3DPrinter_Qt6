@@ -108,8 +108,8 @@ class EditorViewModel final : public QObject
   Q_PROPERTY(QVariantList assembleRotations READ assembleRotations NOTIFY transformChanged)
   Q_PROPERTY(QVariantList assembleScales READ assembleScales NOTIFY transformChanged)
   Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
-  Q_PROPERTY(int loadProgress READ loadProgress NOTIFY stateChanged)
-  Q_PROPERTY(bool loading READ loading NOTIFY stateChanged)
+  Q_PROPERTY(int loadProgress READ loadProgress NOTIFY busyStateChanged)
+  Q_PROPERTY(bool loading READ loading NOTIFY busyStateChanged)
   /// U4: true while the synchronous drag-drop file parse (addFilesToCurrentPlate
   /// -> Slic3r::Model::read_from_file) blocks the GUI thread. BackendContext's
   /// central busy-cursor manager reads this through its direct stateChanged
@@ -117,19 +117,19 @@ class EditorViewModel final : public QObject
   /// applied while the GUI thread is inside the blocking read. Rides the
   /// stateChanged umbrella like every other property here (no new signal
   /// channel; S1 signal-cluster split will carry it along).
-  Q_PROPERTY(bool importing READ importing NOTIFY stateChanged)
+  Q_PROPERTY(bool importing READ importing NOTIFY busyStateChanged)
   /// U4: true while the synchronous arrangement (arrangeAllObjects /
   /// arrangePlate) blocks the GUI thread inside Slic3r::arrangement. Same
   /// mechanism and pairing guarantee as importing: set immediately before the
   /// blocking run, reset immediately after, so every path (success, no-op,
   /// failure) releases the busy cursor.
-  Q_PROPERTY(bool arranging READ arranging NOTIFY stateChanged)
+  Q_PROPERTY(bool arranging READ arranging NOTIFY busyStateChanged)
   /// U4: true while an export write is in flight. Since U13 the model export
   /// (exportModel) runs on a worker — this flag spans dispatch → completion
   /// signal; requestExportGcode3mf still sets it around its inline project
   /// 3mf write. The async G-code export worker state is
   /// SliceService::exportBusy.
-  Q_PROPERTY(bool exporting READ exporting NOTIFY stateChanged)
+  Q_PROPERTY(bool exporting READ exporting NOTIFY busyStateChanged)
   Q_PROPERTY(bool showAllObjects READ showAllObjects NOTIFY selectionChanged)
   Q_PROPERTY(int objectOrganizeMode READ objectOrganizeMode NOTIFY selectionChanged)
   Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
@@ -248,11 +248,11 @@ class EditorViewModel final : public QObject
   // computed via AssemblyMeasureGeometry (AABB-center distance + longest-axis
   // angle — documented Phase 92 simplification of the full feature-picking
   // engine, which needs ITS + raycaster + data pool from Phase 93).
-  Q_PROPERTY(bool assemblyMeasureGizmoActive READ assemblyMeasureGizmoActive NOTIFY stateChanged)
-  Q_PROPERTY(QString assemblyMeasureDistanceText READ assemblyMeasureDistanceText NOTIFY stateChanged)
-  Q_PROPERTY(QString assemblyMeasureAngleText READ assemblyMeasureAngleText NOTIFY stateChanged)
-  Q_PROPERTY(QVector3D assemblyMeasureDistanceXyz READ assemblyMeasureDistanceXyz NOTIFY stateChanged)
-  Q_PROPERTY(QString assemblyMeasurePlaneText READ assemblyMeasurePlaneText NOTIFY stateChanged)
+  Q_PROPERTY(bool assemblyMeasureGizmoActive READ assemblyMeasureGizmoActive NOTIFY selectionChanged)
+  Q_PROPERTY(QString assemblyMeasureDistanceText READ assemblyMeasureDistanceText NOTIFY selectionChanged)
+  Q_PROPERTY(QString assemblyMeasureAngleText READ assemblyMeasureAngleText NOTIFY selectionChanged)
+  Q_PROPERTY(QVector3D assemblyMeasureDistanceXyz READ assemblyMeasureDistanceXyz NOTIFY selectionChanged)
+  Q_PROPERTY(QString assemblyMeasurePlaneText READ assemblyMeasurePlaneText NOTIFY selectionChanged)
   // Phase 114 (MEASURE-03): real feature-picking measurement readouts. The
   // Assembly Q_PROPERTYs above are the COARSE AABB-center multi-volume
   // fallback (AssemblyMeasureGeometry, Phase 92). These are the PRECISE
@@ -1117,32 +1117,32 @@ public:
   // can route the write-back to the correct ModelVolume FacetsAnnotation member
   // (0=Support->supported_facets, 1=Seam->seam_facets, 2=Mmu->mmu_segmentation_facets).
   // QML sets this when switching gizmo (GizmoSupportPaint=6->0, GizmoSeamPaint=7->1, GizmoMmuSegmentation=10->2).
-  Q_PROPERTY(int activePaintKind READ activePaintKind WRITE setActivePaintKind NOTIFY stateChanged)
-  Q_PROPERTY(int supportPaintTool READ supportPaintTool WRITE setSupportPaintTool NOTIFY stateChanged)
-  Q_PROPERTY(int supportPaintCursorType READ supportPaintCursorType WRITE setSupportPaintCursorType NOTIFY stateChanged)
-  Q_PROPERTY(int supportPaintToolType READ supportPaintToolType WRITE setSupportPaintToolType NOTIFY stateChanged)
-  Q_PROPERTY(float supportPaintCursorRadius READ supportPaintCursorRadius WRITE setSupportPaintCursorRadius NOTIFY stateChanged)
-  Q_PROPERTY(float supportPaintAngleThreshold READ supportPaintAngleThreshold WRITE setSupportPaintAngleThreshold NOTIFY stateChanged)
-  Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY stateChanged)
-  Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY stateChanged)
+  Q_PROPERTY(int activePaintKind READ activePaintKind WRITE setActivePaintKind NOTIFY paintDataChanged)
+  Q_PROPERTY(int supportPaintTool READ supportPaintTool WRITE setSupportPaintTool NOTIFY paintDataChanged)
+  Q_PROPERTY(int supportPaintCursorType READ supportPaintCursorType WRITE setSupportPaintCursorType NOTIFY paintDataChanged)
+  Q_PROPERTY(int supportPaintToolType READ supportPaintToolType WRITE setSupportPaintToolType NOTIFY paintDataChanged)
+  Q_PROPERTY(float supportPaintCursorRadius READ supportPaintCursorRadius WRITE setSupportPaintCursorRadius NOTIFY paintDataChanged)
+  Q_PROPERTY(float supportPaintAngleThreshold READ supportPaintAngleThreshold WRITE setSupportPaintAngleThreshold NOTIFY paintDataChanged)
+  Q_PROPERTY(float supportPaintSmartFillAngle READ supportPaintSmartFillAngle WRITE setSupportPaintSmartFillAngle NOTIFY paintDataChanged)
+  Q_PROPERTY(float supportPaintGapArea READ supportPaintGapArea WRITE setSupportPaintGapArea NOTIFY paintDataChanged)
   // PAINT-MMU-TOOLS: the MMU gizmo's own tool chip (0=Brush, 1=BucketFill,
   // 3=GapFill, 4=HeightRange; upstream GLGizmoMmuSegmentation m_current_tool
   // Triangle/Fill/HeightRange/GapFill icons) + the bucket-fill edge-detection
   // checkbox (m_detect_geometry_edge) + the height-range band span
   // (m_cursor_height, 0.1..8 step 0.2). mmuPaintTool changes also emit
   // paintDataChanged so the -3 gap-fragment preview follows the chip.
-  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool NOTIFY stateChanged)
-  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection NOTIFY stateChanged)
-  Q_PROPERTY(float paintHeightRange READ paintHeightRange WRITE setPaintHeightRange NOTIFY stateChanged)
+  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool NOTIFY paintDataChanged)
+  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection NOTIFY paintDataChanged)
+  Q_PROPERTY(float paintHeightRange READ paintHeightRange WRITE setPaintHeightRange NOTIFY paintDataChanged)
   // PAINT-ALT-WHEEL-CLIP: cross-section (clipping) plane position 0..1
   // (0 = off) -- upstream ObjectClipper m_clp_ratio swept by Alt+wheel
   // (GLGizmoPainterBase.cpp:632-641) and reset via resetPaintClippingPlane.
-  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition NOTIFY stateChanged)
-  Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY stateChanged)
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition NOTIFY paintDataChanged)
+  Q_PROPERTY(bool supportPaintOnOverhangsOnly READ supportPaintOnOverhangsOnly WRITE setSupportPaintOnOverhangsOnly NOTIFY paintDataChanged)
   /// Phase 240 (GIZ-02): overhang filter angle (see supportPaintOverhangAngle).
-  Q_PROPERTY(float supportPaintOverhangAngle READ supportPaintOverhangAngle WRITE setSupportPaintOverhangAngle NOTIFY stateChanged)
-  Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY stateChanged)
-  Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY stateChanged)
+  Q_PROPERTY(float supportPaintOverhangAngle READ supportPaintOverhangAngle WRITE setSupportPaintOverhangAngle NOTIFY paintDataChanged)
+  Q_PROPERTY(bool supportEnable READ supportEnable WRITE setSupportEnable NOTIFY paintDataChanged)
+  Q_PROPERTY(int supportType READ supportType WRITE setSupportType NOTIFY paintDataChanged)
   /// 支撑绘制数据（对齐上游 GLGizmoFdmSupports paint state）
   Q_PROPERTY(int enforcedSupportCount READ enforcedSupportCount NOTIFY paintDataChanged)
   Q_PROPERTY(int blockedSupportCount READ blockedSupportCount NOTIFY paintDataChanged)
@@ -1164,13 +1164,13 @@ public:
   // it in lockstep with the overlay stream.
   Q_PROPERTY(QVariantList extrudersColors READ extrudersColors NOTIFY paintDataChanged)
   /// 缝线绘制设置（对齐上游 GLGizmoSeam）
-  Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY stateChanged)
-  Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY stateChanged)
-  Q_PROPERTY(bool seamPaintOnOverhangsOnly READ seamPaintOnOverhangsOnly WRITE setSeamPaintOnOverhangsOnly NOTIFY stateChanged)
+  Q_PROPERTY(int seamPaintTool READ seamPaintTool WRITE setSeamPaintTool NOTIFY paintDataChanged)
+  Q_PROPERTY(float seamPaintCursorRadius READ seamPaintCursorRadius WRITE setSeamPaintCursorRadius NOTIFY paintDataChanged)
+  Q_PROPERTY(bool seamPaintOnOverhangsOnly READ seamPaintOnOverhangsOnly WRITE setSeamPaintOnOverhangsOnly NOTIFY paintDataChanged)
   /// P11.B2.3 笔刷拖动轴锁（对齐上游 GLGizmoPainterBase m_vertical_only/
   /// m_horizontal_only）：0=关，1=垂直（锁屏幕 X），2=水平（锁屏幕 Y）。
   /// 单值天然互斥，等价上游 MMU 面板两个复选框的联动行为。
-  Q_PROPERTY(int paintLockAxis READ paintLockAxis WRITE setPaintLockAxis NOTIFY stateChanged)
+  Q_PROPERTY(int paintLockAxis READ paintLockAxis WRITE setPaintLockAxis NOTIFY paintDataChanged)
   /// SLA 空洞标记设置（对齐上游 GLGizmoHollow）
   Q_PROPERTY(bool hollowEnabled READ hollowEnabled WRITE setHollowEnabled NOTIFY stateChanged)
   Q_PROPERTY(float hollowHoleRadius READ hollowHoleRadius WRITE setHollowHoleRadius NOTIFY stateChanged)
@@ -1187,7 +1187,7 @@ public:
   Q_PROPERTY(int simplifyWantedCount READ simplifyWantedCount WRITE setSimplifyWantedCount NOTIFY stateChanged)
   Q_PROPERTY(float simplifyMaxError READ simplifyMaxError WRITE setSimplifyMaxError NOTIFY stateChanged)
   /// MMU 多耗材分段设置（对齐上游 GLGizmoMmuSegmentation）
-  Q_PROPERTY(int mmuSelectedExtruder READ mmuSelectedExtruder WRITE setMmuSelectedExtruder NOTIFY stateChanged)
+  Q_PROPERTY(int mmuSelectedExtruder READ mmuSelectedExtruder WRITE setMmuSelectedExtruder NOTIFY paintDataChanged)
   Q_PROPERTY(int mmuExtruderCount READ mmuExtruderCount NOTIFY stateChanged)
   /// Configured filament colours for the MMU swatches (对齐上游
   /// m_extruders_colors). Bound from ProjectService::plateFilamentColours
@@ -1235,9 +1235,9 @@ public:
   /// axis-aligned cylinder per pin, world space).
   Q_PROPERTY(QByteArray advancedCutMarkerData READ advancedCutMarkerData NOTIFY advancedCutConnectorDataChanged)
   /// FaceDetector 设置（对齐上游 GLGizmoFaceDetector）
-  Q_PROPERTY(float faceDetectorAngle READ faceDetectorAngle WRITE setFaceDetectorAngle NOTIFY stateChanged)
+  Q_PROPERTY(float faceDetectorAngle READ faceDetectorAngle WRITE setFaceDetectorAngle NOTIFY paintDataChanged)
   /// v5.12 gap-closure: number of flat faces found by detectFlatFaces.
-  Q_PROPERTY(int faceDetectorResultCount READ faceDetectorResultCount NOTIFY stateChanged)
+  Q_PROPERTY(int faceDetectorResultCount READ faceDetectorResultCount NOTIFY paintDataChanged)
   /// Text 设置（对齐上游 GLGizmoText）
   Q_PROPERTY(QString textContent READ textContent WRITE setTextContent NOTIFY stateChanged)
   Q_PROPERTY(float textSize READ textSize WRITE setTextSize NOTIFY stateChanged)
@@ -1245,9 +1245,9 @@ public:
   Q_PROPERTY(QString svgFilePath READ svgFilePath WRITE setSvgFilePath NOTIFY stateChanged)
   Q_PROPERTY(float svgScale READ svgScale WRITE setSvgScale NOTIFY stateChanged)
   /// 扁平可用面数（对齐上游 GLGizmoFlatten 面）
-  Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY stateChanged)
+  Q_PROPERTY(int flattenFaceCount READ flattenFaceCount NOTIFY paintDataChanged)
   /// Phase 240 (GIZ-03): hovered-facet highlight stream for the renderer.
-  Q_PROPERTY(QByteArray flattenHoverData READ flattenHoverData NOTIFY stateChanged)
+  Q_PROPERTY(QByteArray flattenHoverData READ flattenHoverData NOTIFY paintDataChanged)
   /// Phase 240 (GIZ-06): simplify preview state (upstream GLGizmoSimplify
   /// three-stage start/preview/apply).
   Q_PROPERTY(bool simplifyPreviewRunning READ simplifyPreviewRunning NOTIFY stateChanged)
@@ -2160,6 +2160,10 @@ private:
   /// removed changes the mesh blob, the batch tables, the transform channel
   /// length and usually the selection/plate views at once).
   void emitSceneTopologyClusterChanged();
+  /// Paint/flatten-gizmo state edit: paint channel + umbrella. The paint
+  /// readouts (brush params, MMU extruder pick, flatten probes) already
+  /// re-evaluate off the pre-existing paintDataChanged carrier.
+  void emitPaintClusterChanged();
   void invalidateSliceResultsForCurrentPlate();
   void invalidateSliceResultsForPlate(int plateIndex);
   /// Review P1-5: the wipe-tower arrange obstacle reads the GLOBAL merged

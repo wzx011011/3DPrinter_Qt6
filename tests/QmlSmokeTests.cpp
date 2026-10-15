@@ -117,6 +117,7 @@ private slots:
   void s1PlateClusterReevaluation();
   void s1SelectionClusterReevaluation();
   void s1TopologyClusterReevaluation();
+  void s1BusyPaintClusterReevaluation();
   void cleanupTestCase();
 
 private:
@@ -500,6 +501,45 @@ const S1NotifyExpectation kS1NotifyExpectations[] = {
     // drags, so it rides the transform cluster (topology fan-out includes
     // transformChanged; the reverse does not hold).
     {"modelSizeText", "transformChanged"},
+    // Commit 5 — busy cluster: the U4 synchronous flags.
+    {"importing", "busyStateChanged"},
+    {"arranging", "busyStateChanged"},
+    {"exporting", "busyStateChanged"},
+    {"loading", "busyStateChanged"},
+    {"loadProgress", "busyStateChanged"},
+    // Commit 5 — paint/flatten cluster: brush config, MMU pick, flatten
+    // probes (the pre-existing paintDataChanged carrier).
+    {"activePaintKind", "paintDataChanged"},
+    {"supportEnable", "paintDataChanged"},
+    {"supportType", "paintDataChanged"},
+    {"supportPaintTool", "paintDataChanged"},
+    {"supportPaintToolType", "paintDataChanged"},
+    {"supportPaintCursorType", "paintDataChanged"},
+    {"supportPaintCursorRadius", "paintDataChanged"},
+    {"supportPaintAngleThreshold", "paintDataChanged"},
+    {"supportPaintSmartFillAngle", "paintDataChanged"},
+    {"supportPaintGapArea", "paintDataChanged"},
+    {"supportPaintOnOverhangsOnly", "paintDataChanged"},
+    {"supportPaintOverhangAngle", "paintDataChanged"},
+    {"seamPaintTool", "paintDataChanged"},
+    {"seamPaintCursorRadius", "paintDataChanged"},
+    {"seamPaintOnOverhangsOnly", "paintDataChanged"},
+    {"mmuPaintTool", "paintDataChanged"},
+    {"mmuBucketEdgeDetection", "paintDataChanged"},
+    {"mmuSelectedExtruder", "paintDataChanged"},
+    {"paintHeightRange", "paintDataChanged"},
+    {"paintClippingPosition", "paintDataChanged"},
+    {"paintLockAxis", "paintDataChanged"},
+    {"flattenHoverData", "paintDataChanged"},
+    {"flattenFaceCount", "paintDataChanged"},
+    {"faceDetectorAngle", "paintDataChanged"},
+    {"faceDetectorResultCount", "paintDataChanged"},
+    // Commit 5 — assembly-measure readouts: selection-plane state.
+    {"assemblyMeasureGizmoActive", "selectionChanged"},
+    {"assemblyMeasureDistanceText", "selectionChanged"},
+    {"assemblyMeasureDistanceXyz", "selectionChanged"},
+    {"assemblyMeasureAngleText", "selectionChanged"},
+    {"assemblyMeasurePlaneText", "selectionChanged"},
 };
 
 } // namespace
@@ -800,6 +840,58 @@ void QmlSmokeTests::s1TopologyClusterReevaluation()
   QCOMPARE(vm->property("modelCount").toInt(), countBefore);
   QVERIFY(evals("batchIdx") > batchEvalsMid);
   QVERIFY2(!component.isError(), "no late QML errors on the topology probe");
+}
+
+// S1 commit 5 — busy + paint clusters: the U4 busy flags fire through the
+// SyncBusyScope pair (enter + exit), and the paint/flatten plane re-evaluates
+// off the paintDataChanged carrier.
+void QmlSmokeTests::s1BusyPaintClusterReevaluation()
+{
+  auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));
+  QVERIFY2(vm != nullptr, "editorViewModel must be an EditorViewModel");
+
+  // Busy: arrangeAllObjects wraps its synchronous run in a SyncBusyScope --
+  // enter and exit each emit busyStateChanged (with the stateChanged umbrella
+  // retained), so the busy-cursor consumers see both flips.
+  QSignalSpy busySpy(vm, &EditorViewModel::busyStateChanged);
+  QSignalSpy umbrellaSpy(vm, &EditorViewModel::stateChanged);
+  QVERIFY(busySpy.isValid());
+  vm->arrangeAllObjects();
+  QTest::qWait(50);
+  QVERIFY2(busySpy.count() >= 2,
+           qPrintable(QStringLiteral("SyncBusyScope must emit busyStateChanged on"
+                                     " enter and exit, got %1").arg(busySpy.count())));
+  QVERIFY(umbrellaSpy.count() >= 2);
+
+  // Paint: a brush-parameter write re-evaluates a paintDataChanged binding.
+  QQmlComponent component(engine_);
+  component.setData(QByteArrayLiteral(R"QML(
+    import QtQuick
+    Item {
+        required property var editorVm
+        property var counts: ({ radius: 0 })
+        readonly property real radius:
+            { counts.radius++; return editorVm.supportPaintCursorRadius }
+    }
+    )QML"),
+                       QUrl(QStringLiteral("qrc:/qml/OWzx/tests/S1PaintProbe.qml")));
+  QVERIFY2(!component.isError(),
+           qPrintable(QStringLiteral("inline paint probe failed: %1")
+                          .arg(component.errorString())));
+  std::unique_ptr<QObject> probeHolder(
+      component.createWithInitialProperties(
+          QVariantMap{{"editorVm", QVariant::fromValue(vm)}}));
+  QVERIFY2(probeHolder, qPrintable(component.errorString()));
+  const int radiusBefore = probeHolder->property("counts").toMap()
+                               .value(QStringLiteral("radius")).toInt();
+
+  const float oldRadius = vm->property("supportPaintCursorRadius").toFloat();
+  QVERIFY(vm->setProperty("supportPaintCursorRadius", oldRadius + 1.5f));
+  QVERIFY(probeHolder->property("counts").toMap()
+              .value(QStringLiteral("radius")).toInt() > radiusBefore);
+  // Restore.
+  vm->setProperty("supportPaintCursorRadius", oldRadius);
+  QVERIFY2(!component.isError(), "no late QML errors on the paint probe");
 }
 
 int main(int argc, char *argv[])

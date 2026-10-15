@@ -10001,8 +10001,13 @@ void QmlUiAuditTests::v56CrossWorkstreamRegressionLocked()
   // object tree (layer-range entry + fold triangle) binds to a real index.
   {
     const QString vmH = readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
-    QVERIFY2(vmH.contains(QStringLiteral("Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY stateChanged")),
-             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (object tree deepening)");
+    // S1 lock rewrite (4th instance under the dwfq-9606ed09-1 approval, same
+    // class as the three commit-2 rewrites): the lock pinned the pre-S1
+    // NOTIFY token inside the property declaration; S1 re-points
+    // selectedVolumeIndex onto the selection cluster. Intent preserved: the
+    // property must exist (object tree deepening) with its new truth NOTIFY.
+    QVERIFY2(vmH.contains(QStringLiteral("Q_PROPERTY(int selectedVolumeIndex READ selectedVolumeIndex NOTIFY selectionChanged")),
+             "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex Q_PROPERTY (object tree deepening; NOTIFY rides the S1 selection cluster)");
     QVERIFY2(vmH.contains(QStringLiteral("int selectedVolumeIndex() const")),
              "GATE-01/FEAT-03: EditorViewModel must keep the selectedVolumeIndex getter");
   }

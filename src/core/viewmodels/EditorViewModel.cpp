@@ -1731,7 +1731,8 @@ void EditorViewModel::setActivePaintKind(int kind)
 {
   if (m_activePaintKind != kind) {
     m_activePaintKind = kind;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 int EditorViewModel::supportPaintTool() const { return m_supportPaintTool; }
@@ -1740,7 +1741,8 @@ void EditorViewModel::setSupportPaintTool(int tool)
   if (m_supportPaintTool != tool)
   {
     m_supportPaintTool = tool;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1750,7 +1752,8 @@ void EditorViewModel::setSupportPaintCursorType(int type)
   if (m_supportPaintCursorType != type)
   {
     m_supportPaintCursorType = type;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1760,7 +1763,8 @@ void EditorViewModel::setSupportPaintToolType(int type)
   if (m_supportPaintToolType != type)
   {
     m_supportPaintToolType = type;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
     // PAINT-GAPFILL-PORT: switching to/from the gap-fill tool changes the
     // paintOverlayData contents (the -3 fragment view), so the overlay
     // binding must re-evaluate (upstream tool click ->
@@ -1775,7 +1779,8 @@ void EditorViewModel::setSupportPaintCursorRadius(float radius)
   if (!qFuzzyCompare(m_supportPaintCursorRadius, radius))
   {
     m_supportPaintCursorRadius = radius;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1785,7 +1790,8 @@ void EditorViewModel::setSupportPaintAngleThreshold(float angle)
   if (!qFuzzyCompare(m_supportPaintAngleThreshold, angle))
   {
     m_supportPaintAngleThreshold = angle;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1795,7 +1801,8 @@ void EditorViewModel::setSupportPaintSmartFillAngle(float angle)
   if (!qFuzzyCompare(m_supportPaintSmartFillAngle, angle))
   {
     m_supportPaintSmartFillAngle = angle;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1805,7 +1812,8 @@ void EditorViewModel::setSupportPaintGapArea(float area)
   if (!qFuzzyCompare(m_supportPaintGapArea, area))
   {
     m_supportPaintGapArea = area;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
     // PAINT-GAPFILL-PORT: the threshold shapes the -3 fragment view in
     // paintOverlayData, so the overlay binding must re-evaluate (upstream
     // gap_area slider -> request_update_render_data,
@@ -1820,7 +1828,8 @@ void EditorViewModel::setMmuPaintTool(int tool)
   if (m_mmuPaintTool != tool)
   {
     m_mmuPaintTool = tool;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
     // PAINT-MMU-TOOLS: switching to/from the MMU gap-fill tool changes the
     // paintOverlayData contents (the -3 fragment view), so the overlay
     // binding must re-evaluate (upstream tool_changed ->
@@ -1840,7 +1849,8 @@ void EditorViewModel::setMmuBucketEdgeDetection(bool on)
   if (m_mmuBucketEdgeDetection != on)
   {
     m_mmuBucketEdgeDetection = on;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1854,7 +1864,8 @@ void EditorViewModel::setPaintHeightRange(float height)
   if (!qFuzzyCompare(m_paintHeightRange, clamped))
   {
     m_paintHeightRange = clamped;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1872,7 +1883,8 @@ void EditorViewModel::setPaintClippingPosition(double pos)
   if (qFuzzyCompare(m_paintClippingPosition, clamped))
     return;
   m_paintClippingPosition = clamped;
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
 }
 
 void EditorViewModel::resetPaintClippingPlane()
@@ -1888,7 +1900,8 @@ void EditorViewModel::setSupportPaintOnOverhangsOnly(bool on)
   if (m_supportPaintOnOverhangsOnly != on)
   {
     m_supportPaintOnOverhangsOnly = on;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1900,7 +1913,8 @@ void EditorViewModel::setSupportPaintOverhangAngle(float angle)
   if (!qFuzzyCompare(m_supportPaintOverhangAngle, angle))
   {
     m_supportPaintOverhangAngle = angle;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 }
 
@@ -1910,7 +1924,8 @@ void EditorViewModel::setSupportEnable(bool enable)
   if (m_supportEnable != enable)
   {
     m_supportEnable = enable;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+    emitPaintClusterChanged();
   }
 }
 
@@ -1920,7 +1935,8 @@ void EditorViewModel::setSupportType(int type)
   if (m_supportType != type)
   {
     m_supportType = type;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+    emitPaintClusterChanged();
   }
 }
 
@@ -1952,7 +1968,8 @@ void EditorViewModel::clearSupportPaintOnSelection()
     }
 #endif
   }
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   emit paintDataChanged();
 }
 
@@ -2015,24 +2032,28 @@ void EditorViewModel::clearAllPaintData()
 int EditorViewModel::seamPaintTool() const { return m_seamPaintTool; }
 void EditorViewModel::setSeamPaintTool(int tool)
 {
-  if (m_seamPaintTool != tool) { m_seamPaintTool = tool; emit stateChanged(); }
+  if (m_seamPaintTool != tool) { m_seamPaintTool = tool; // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged(); }
 }
 float EditorViewModel::seamPaintCursorRadius() const { return m_seamPaintCursorRadius; }
 void EditorViewModel::setSeamPaintCursorRadius(float radius)
 {
-  if (!qFuzzyCompare(m_seamPaintCursorRadius, radius)) { m_seamPaintCursorRadius = radius; emit stateChanged(); }
+  if (!qFuzzyCompare(m_seamPaintCursorRadius, radius)) { m_seamPaintCursorRadius = radius; // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged(); }
 }
 bool EditorViewModel::seamPaintOnOverhangsOnly() const { return m_seamPaintOnOverhangsOnly; }
 void EditorViewModel::setSeamPaintOnOverhangsOnly(bool on)
 {
-  if (m_seamPaintOnOverhangsOnly != on) { m_seamPaintOnOverhangsOnly = on; emit stateChanged(); }
+  if (m_seamPaintOnOverhangsOnly != on) { m_seamPaintOnOverhangsOnly = on; // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged(); }
 }
 int EditorViewModel::paintLockAxis() const { return m_paintLockAxis; }
 void EditorViewModel::setPaintLockAxis(int axis)
 {
   // 0=off, 1=Vertical, 2=Horizontal; out-of-range falls back to off.
   const int clamped = qBound(0, axis, 2);
-  if (m_paintLockAxis != clamped) { m_paintLockAxis = clamped; emit stateChanged(); }
+  if (m_paintLockAxis != clamped) { m_paintLockAxis = clamped; // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged(); }
 }
 void EditorViewModel::clearSeamPaintOnSelection()
 {
@@ -2053,7 +2074,8 @@ void EditorViewModel::clearSeamPaintOnSelection()
     }
 #endif
   }
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   emit paintDataChanged();
 }
 
@@ -2502,7 +2524,8 @@ bool EditorViewModel::selectedObjectIsManifold() const
 // ── MMU segmentation gizmo (对齐上游 GLGizmoMmuSegmentation) ──
 
 int EditorViewModel::mmuSelectedExtruder() const { return m_mmuSelectedExtruder; }
-void EditorViewModel::setMmuSelectedExtruder(int idx) { m_mmuSelectedExtruder = idx; emit stateChanged(); }
+void EditorViewModel::setMmuSelectedExtruder(int idx) { m_mmuSelectedExtruder = idx; // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged(); }
 int EditorViewModel::mmuExtruderCount() const
 {
   // Bind to the configured filament count (对齐上游 extruders count) instead
@@ -3205,7 +3228,8 @@ bool EditorViewModel::placeAdvancedCutConnector(int pickedSourceIndex,
 
 
 float EditorViewModel::faceDetectorAngle() const { return m_faceDetectorAngle; }
-void EditorViewModel::setFaceDetectorAngle(float a) { m_faceDetectorAngle = a; emit stateChanged(); }
+void EditorViewModel::setFaceDetectorAngle(float a) { m_faceDetectorAngle = a; // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged(); }
 int EditorViewModel::faceDetectorResultCount() const { return m_faceDetectorResultCount; }
 bool EditorViewModel::detectFlatFaces()
 {
@@ -3216,7 +3240,8 @@ bool EditorViewModel::detectFlatFaces()
   m_faceDetectorResultCount = 0;
   const int obj = primarySelectedSourceIndex(this);
   if (!projectService_ || obj < 0) {
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
     return false;
   }
   const float thresholdRad = m_faceDetectorAngle * float(M_PI) / 180.0f;
@@ -3246,7 +3271,8 @@ bool EditorViewModel::detectFlatFaces()
     }
   }
   m_faceDetectorResultCount = foundFaces;
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   return foundFaces > 0;
 }
 
@@ -3463,7 +3489,8 @@ void EditorViewModel::flattenSelected()
   // This computes the best orientation (largest flat face down) upstream-style,
   // replacing the former mock that hardcoded 6 candidate faces + reset rotation.
   statusText_ = tr("Computing best flat orientation...");
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
 
   const int idx = *m_selectedSourceIndices.constBegin();
   bool ok = false;
@@ -3480,7 +3507,8 @@ void EditorViewModel::flattenSelected()
     rebuildObjectEntriesFromService();
     refreshMeshCacheAndFitHint();
   }
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
 }
 
 // ===========================================================================
@@ -3608,7 +3636,8 @@ void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
     if (!m_flattenHoverData.isEmpty())
     {
       m_flattenHoverData.clear();
-      emit stateChanged();
+      // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
     }
     return;
   }
@@ -3629,7 +3658,8 @@ void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
     if (!m_flattenHoverData.isEmpty())
     {
       m_flattenHoverData.clear();
-      emit stateChanged();
+      // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
     }
     return;
   }
@@ -3675,7 +3705,8 @@ void EditorViewModel::flattenHoverPick(int pickedSourceIndex,
   if (m_flattenHoverData != bytes)
   {
     m_flattenHoverData = bytes;
-    emit stateChanged();
+    // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   }
 #else
   Q_UNUSED(pickedSourceIndex);
@@ -3729,7 +3760,8 @@ bool EditorViewModel::flattenPickFace(int pickedSourceIndex,
   statusText_ = tr("Placed on face (Gizmo)");
   rebuildObjectEntriesFromService();
   refreshMeshCacheAndFitHint();
-  emit stateChanged();
+  // S1: paint/flatten plane rides the paintDataChanged carrier.
+  emitPaintClusterChanged();
   return true;
 #else
   Q_UNUSED(pickedSourceIndex);
@@ -4356,7 +4388,9 @@ bool EditorViewModel::activateAssemblyMeasureGizmo()
   if (m_assemblyMeasureGizmoActive)
     return true;
   m_assemblyMeasureGizmoActive = true;
-  emit stateChanged();
+  // S1: gizmo activation state is selection-plane state (the readouts derive
+  // from the picked features + selection).
+  emitSelectionClusterChanged();
   return true;
 }
 
@@ -4366,7 +4400,8 @@ void EditorViewModel::deactivateAssemblyMeasureGizmo()
   if (!m_assemblyMeasureGizmoActive)
     return;
   m_assemblyMeasureGizmoActive = false;
-  emit stateChanged();
+  // S1: see activateAssemblyMeasureGizmo.
+  emitSelectionClusterChanged();
 }
 
 QList<int> EditorViewModel::assemblyMeasureSelectedSourceIndices() const
@@ -6098,6 +6133,9 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
     emit stateChanged(); });
   connect(projectService_, &ProjectService::loadingChanged, this, [this]()
           {
+    // S1: the busy flags (loading/loadProgress) re-evaluate off the busy
+    // cluster now; the umbrella stays for the transition consumers.
+    emit busyStateChanged();
     if (!projectService_->loading())
       emit stateChanged(); });
   connect(projectService_, &ProjectService::loadFinished, this, [this](bool success, const QString &message)
@@ -6266,6 +6304,15 @@ void EditorViewModel::emitSceneTopologyClusterChanged()
   emit transformChanged();
   emit selectionChanged();
   emit plateChanged();
+  emit stateChanged();
+}
+
+void EditorViewModel::emitPaintClusterChanged()
+{
+  // S1: the paint/flatten-gizmo config plane. paintDataChanged is the
+  // pre-existing named carrier (paintOverlayData/extrudersColors et al.);
+  // the re-pointed brush/MMU/flatten properties ride it now too.
+  emit paintDataChanged();
   emit stateChanged();
 }
 
