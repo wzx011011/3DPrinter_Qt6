@@ -534,27 +534,21 @@ Item {
 
                     Item { Layout.fillWidth: true }
 
-                    Rectangle {
-                        height: 28
-                        width: cancelText.implicitWidth + 20
-                        radius: Theme.radiusMD
-                        color: cancelHov.containsMouse ? Theme.borderSubtle : Theme.bgHover
-                        Text { id: cancelText; anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
-                        HoverHandler { id: cancelHov }
-                        TapHandler { onTapped: dlg.close() }
+                    // X2: hand-drawn buttons joined the Cx* system.
+                    CxButton {
+                        text: qsTr("取消")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: dlg.close()
                     }
-                    Rectangle {
-                        height: 28
-                        width: okText.implicitWidth + 20
-                        radius: Theme.radiusMD
-                        color: Theme.accent
-                        Text { id: okText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD }
-                        TapHandler {
-                            onTapped: {
-                                if (root.editorVm && nameField.text.length > 0)
-                                    root.editorVm.renamePlate(dlg.plateIndex, nameField.text)
-                                dlg.close()
-                            }
+                    CxButton {
+                        text: qsTr("确定")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: {
+                            if (root.editorVm && nameField.text.length > 0)
+                                root.editorVm.renamePlate(dlg.plateIndex, nameField.text)
+                            dlg.close()
                         }
                     }
                 }
@@ -973,15 +967,18 @@ Item {
 
                                             Item { Layout.fillWidth: true }
 
-                                            // 删除按钮
-                                            Rectangle {
-                                                width: 20; height: 20; radius: Theme.radiusSM
-                                                color: removeBtnMA.containsMouse ? Theme.statusError : Theme.bgSurface
-                                                border.color: Theme.borderSubtle
-                                                Text { anchors.centerIn: parent; text: "✕"; color: removeBtnMA.containsMouse ? "white" : Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
-                                                TapHandler { id: removeBtnMA; onTapped: {
+                                            // 删除按钮 (X2: hand-drawn chip →
+                                            // system CxIconButton, ChromeDanger
+                                            // hover family)
+                                            CxIconButton {
+                                                buttonSize: 20
+                                                iconSize: 10
+                                                cxStyle: CxIconButton.Style.ChromeDanger
+                                                iconSource: "qrc:/qml/assets/icons/x.svg"
+                                                toolTipText: qsTr("删除此范围")
+                                                onClicked: {
                                                     if (root.editorVm) root.editorVm.removePlateOtherLayersSeqEntry(settingsDlg.plateIndex, delegateModel.entryIndex)
-                                                }}
+                                                }
                                             }
                                         }
 
@@ -1108,19 +1105,16 @@ Item {
                                 }
                             }
 
-                            // 添加层范围条目按钮
+                            // 添加层范围条目按钮 (X2: hand-drawn → CxButton)
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: 6
                                 Item { Layout.fillWidth: true }
-                                Rectangle {
-                                    height: 24
-                                    width: addSeqBtnText.implicitWidth + 16
-                                    radius: Theme.radiusMD
-                                    color: addSeqBtnMA.containsMouse ? Theme.accent : Theme.bgElevated
-                                    border.color: Theme.accent
-                                    Text { id: addSeqBtnText; anchors.centerIn: parent; text: qsTr("+ 添加层范围"); color: addSeqBtnMA.containsMouse ? Theme.textOnAccent : Theme.accent; font.pixelSize: Theme.fontSizeXS }
-                                    TapHandler { id: addSeqBtnMA; onTapped: {
+                                CxButton {
+                                    text: qsTr("+ 添加层范围")
+                                    compact: true
+                                    cxStyle: CxButton.Style.Secondary
+                                    onClicked: {
                                         var count = root.editorVm ? root.editorVm.plateOtherLayersSeqCount(settingsDlg.plateIndex) : 0
                                         var beginL = 2
                                         var endL = 100
@@ -1130,32 +1124,28 @@ Item {
                                             endL = beginL + 100
                                         }
                                         if (root.editorVm) root.editorVm.addPlateOtherLayersSeqEntry(settingsDlg.plateIndex, beginL, endL)
-                                    }}
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // 确认按钮
+                // 确认按钮 (X2: hand-drawn → CxButton)
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 8
                     Item { Layout.fillWidth: true }
-                    Rectangle {
-                        height: 30
-                        width: psOkText.implicitWidth + 24
-                        radius: Theme.radiusMD
-                        color: Theme.accent
-                        Text { id: psOkText; anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
-                        TapHandler {
-                            onTapped: {
-                                if (root.editorVm) {
-                                    if (psNameField.text.length > 0)
-                                        root.editorVm.renamePlate(settingsDlg.plateIndex, psNameField.text)
-                                }
-                                settingsDlg.close()
+                    CxButton {
+                        text: qsTr("确定")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: {
+                            if (root.editorVm) {
+                                if (psNameField.text.length > 0)
+                                    root.editorVm.renamePlate(settingsDlg.plateIndex, psNameField.text)
                             }
+                            settingsDlg.close()
                         }
                     }
                 }
@@ -2408,29 +2398,21 @@ Item {
 
                 // Tool selector (对齐上游 GLGizmoFdmSupports m_current_tool):
                 // 1=Enforcer (green), 2=Blocker (red). Bound to supportPaintTool.
+                // X2: hand-drawn chips → system CxButton Segment pills.
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("强制"), qsTr("阻止")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 72; height: 24; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.supportPaintTool === (index + 1) ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.supportPaintTool = index + 1
-                            }
+                            width: 72
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.supportPaintTool === (index + 1)
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.supportPaintTool = index + 1
                         }
                     }
                 }
@@ -2446,23 +2428,14 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("智能填充"), val: 2}, {label: qsTr("缝隙填充"), val: 3}]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
-                            width: 76; height: 24; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                color: root.editorVm && root.editorVm.supportPaintToolType === modelData.val ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.supportPaintToolType = modelData.val
-                            }
+                            width: 76
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.supportPaintToolType === modelData.val
+                            text: modelData.label
+                            onClicked: if (root.editorVm) root.editorVm.supportPaintToolType = modelData.val
                         }
                     }
                 }
@@ -2594,58 +2567,40 @@ Item {
                 }
 
                 // Cursor type combo (Sphere=1 / Circle=0, 对齐 PaintCursorType).
+                // X2: hand-drawn chips → system CxButton Segment pills.
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("光标:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
                     Repeater {
                         model: [{label: qsTr("球体"), val: 1}, {label: qsTr("圆形"), val: 0}]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
-                            width: 56; height: 22; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
-                            }
+                            width: 56
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val
+                            text: modelData.label
+                            onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
                         }
                     }
                 }
 
-                // Clear button.
-                Rectangle {
+                // Clear button (X2: hand-drawn → CxButton).
+                CxButton {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 80; height: 24; radius: Theme.radiusSM
-                    color: Theme.bgElevated
-                    border.color: Theme.borderDefault; border.width: 1
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("清除全部")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeXS
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        // v5.14: confirm before wiping all painted facets
-                        // (UI-REVIEW blocker: fired instantly before).
-                        onClicked: {
-                            deleteConfirm.dialogTitle = qsTr("清除全部绘制数据")
-                            deleteConfirm.message = qsTr("确定要清除当前对象的全部绘制数据吗？")
-                            deleteConfirm.confirmText = qsTr("清除")
-                            deleteConfirm.openWithAction(function() {
-                                if (root.editorVm) root.editorVm.clearAllPaintData()
-                            })
-                        }
+                    text: qsTr("清除全部")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    // v5.14: confirm before wiping all painted facets
+                    // (UI-REVIEW blocker: fired instantly before).
+                    onClicked: {
+                        deleteConfirm.dialogTitle = qsTr("清除全部绘制数据")
+                        deleteConfirm.message = qsTr("确定要清除当前对象的全部绘制数据吗？")
+                        deleteConfirm.confirmText = qsTr("清除")
+                        deleteConfirm.openWithAction(function() {
+                            if (root.editorVm) root.editorVm.clearAllPaintData()
+                        })
                     }
                 }
             }
@@ -2698,29 +2653,21 @@ Item {
                 spacing: 4
 
                 // 测量拾取模式（对齐上游 GLGizmoMeasure selection mode）
+                // X2: hand-drawn chips → system CxButton Segment pills.
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("点测量"), qsTr("特征测量")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 60; height: 22; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.measureSelectionMode === index ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.measureSelectionMode = index
-                            }
+                            width: 60
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.measureSelectionMode === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.measureSelectionMode = index
                         }
                     }
                 }
@@ -2855,20 +2802,12 @@ Item {
                 Row {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
-                    Rectangle {
-                        width: 80; height: 28; radius: Theme.radiusSM
-                        color: Theme.accent
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("平放")
-                            color: "white"
-                            font.pixelSize: Theme.fontSizeSM
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.editorVm.flattenSelected()
-                        }
+                    // X2: hand-drawn → CxButton.
+                    CxButton {
+                        text: qsTr("平放")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: root.editorVm.flattenSelected()
                     }
                     Text {
                         text: qsTr("(G)")
@@ -2911,30 +2850,21 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                 }
 
-                // 切割轴选择
+                // 切割轴选择 (X2: hand-drawn chips → system CxButton Segments)
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("X 轴"), qsTr("Y 轴"), qsTr("Z 轴")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 58; height: 26; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.cutAxis === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.cutAxis === index ? Theme.accent : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.cutAxis === index ? Theme.accent : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.cutAxis = index
-                            }
+                            width: 58
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.cutAxis === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.cutAxis = index
                         }
                     }
                 }
@@ -2945,24 +2875,15 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("平面切割"), qsTr("舌槽模式")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 70; height: 24; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.cutMode === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.cutMode === index ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.cutMode === index ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.cutMode = index
-                            }
+                            width: 70
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.cutMode === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.cutMode = index
                         }
                     }
                 }
@@ -2975,24 +2896,15 @@ Item {
                     Text { text: qsTr("类型:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; anchors.verticalCenter: parent.verticalCenter }
                     Repeater {
                         model: [qsTr("Plug"), qsTr("Dowel"), qsTr("Snap")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 52; height: 22; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.connectorType === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.connectorType === index ? Theme.statusWarning : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.connectorType === index ? Theme.statusWarning : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.connectorType = index
-                            }
+                            width: 52
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.connectorType === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.connectorType = index
                         }
                     }
                 }
@@ -3007,25 +2919,16 @@ Item {
                     Text { text: qsTr("样式:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; anchors.verticalCenter: parent.verticalCenter }
                     Repeater {
                         model: [qsTr("Prism"), qsTr("Frustum")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 56; height: 22; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.statusWarning : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.connectorStyle === index ? Theme.statusWarning : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: root.editorVm ? root.editorVm.connectorType === 0 : false
-                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: if (root.editorVm) root.editorVm.connectorStyle = index
-                            }
+                            width: 56
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            enabled: root.editorVm ? root.editorVm.connectorType === 0 : false
+                            selected: root.editorVm && root.editorVm.connectorStyle === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.connectorStyle = index
                         }
                     }
                 }
@@ -3040,25 +2943,16 @@ Item {
                     Text { text: qsTr("形状:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS; anchors.verticalCenter: parent.verticalCenter }
                     Repeater {
                         model: ["△", "□", "⬡", "○"]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 28; height: 22; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.connectorShape === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.connectorShape === index ? Theme.statusWarning : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.connectorShape === index ? Theme.statusWarning : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeSM
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: root.editorVm ? root.editorVm.connectorType !== 2 : false
-                                cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                onClicked: if (root.editorVm) root.editorVm.connectorShape = index
-                            }
+                            width: 28
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            enabled: root.editorVm ? root.editorVm.connectorType !== 2 : false
+                            selected: root.editorVm && root.editorVm.connectorShape === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.connectorShape = index
                         }
                     }
                 }
@@ -3113,22 +3007,14 @@ Item {
                               : "")
                         color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS
                     }
-                    Rectangle {
-                        width: 44; height: 20; radius: Theme.radiusSM
+                    // X2: hand-drawn micro-chips → system CxButton Chips.
+                    CxButton {
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
                         visible: root.editorVm && root.editorVm.advCutConnectors
                                  && root.editorVm.advancedCutConnectorCount > 0
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("清除")
-                            color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.clearAdvancedCutConnectors()
-                        }
+                        text: qsTr("清除")
+                        onClicked: if (root.editorVm) root.editorVm.clearAdvancedCutConnectors()
                     }
                 }
 
@@ -3169,115 +3055,69 @@ Item {
                         font.pixelSize: Theme.fontSizeXS
                         font.family: Theme.fontMono
                     }
-                    Rectangle {
-                        width: 44; height: 20; radius: Theme.radiusSM
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("重置")
-                            color: Theme.textPrimary; font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) {
-                                root.editorVm.cutRotationX = 0
-                                root.editorVm.cutRotationY = 0
-                                root.editorVm.cutRotationZ = 0
-                            }
+                    // X2: hand-drawn micro-chip → system CxButton Chip.
+                    CxButton {
+                        compact: true
+                        cxStyle: CxButton.Style.Chip
+                        text: qsTr("重置")
+                        onClicked: if (root.editorVm) {
+                            root.editorVm.cutRotationX = 0
+                            root.editorVm.cutRotationY = 0
+                            root.editorVm.cutRotationZ = 0
                         }
                     }
                 }
 
-                // 保留模式
+                // 保留模式 (X2: hand-drawn chips → system CxButton Segments)
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("全部保留"), qsTr("保留上半"), qsTr("保留下半")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 70; height: 26; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.accent : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.cutKeepMode === index ? Theme.accent : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.cutKeepMode = index
-                            }
+                            width: 70
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.cutKeepMode === index
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.cutKeepMode = index
                         }
                     }
                 }
 
-                // 操作按钮
+                // 操作按钮 (X2: hand-drawn → CxButton)
                 Row {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
-                    Rectangle {
-                        width: 60; height: 28; radius: Theme.radiusSM
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("翻转")
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.flipCutPlane()
-                        }
+                    CxButton {
+                        text: qsTr("翻转")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: if (root.editorVm) root.editorVm.flipCutPlane()
                     }
-                    Rectangle {
-                        width: 70; height: 28; radius: Theme.radiusSM
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("居中")
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.centerCutPlane()
-                        }
+                    CxButton {
+                        text: qsTr("居中")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: if (root.editorVm) root.editorVm.centerCutPlane()
                     }
-                    Rectangle {
-                        width: 80; height: 28; radius: Theme.radiusSM
-                        color: Theme.accent
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("执行切割")
-                            color: "white"
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                // Phase 240 (GIZ-04): rotated plane goes through
-                                // cutSelectedWithRotation; a 0/0/0 tilt keeps the
-                                // legacy axis-aligned path byte-for-byte.
-                                if (root.editorVm) {
-                                    if (root.editorVm.cutRotationX !== 0
-                                            || root.editorVm.cutRotationY !== 0
-                                            || root.editorVm.cutRotationZ !== 0)
-                                        root.editorVm.cutSelectedWithRotation()
-                                    else
-                                        root.editorVm.cutSelected(root.editorVm.cutAxis, root.editorVm.cutPosition)
-                                }
+                    CxButton {
+                        text: qsTr("执行切割")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: {
+                            // Phase 240 (GIZ-04): rotated plane goes through
+                            // cutSelectedWithRotation; a 0/0/0 tilt keeps the
+                            // legacy axis-aligned path byte-for-byte.
+                            if (root.editorVm) {
+                                if (root.editorVm.cutRotationX !== 0
+                                        || root.editorVm.cutRotationY !== 0
+                                        || root.editorVm.cutRotationZ !== 0)
+                                    root.editorVm.cutSelectedWithRotation()
+                                else
+                                    root.editorVm.cutSelected(root.editorVm.cutAxis, root.editorVm.cutPosition)
                             }
                         }
                     }
@@ -3317,29 +3157,21 @@ Item {
                 }
 
                 // 工具选择（对齐上游 GLGizmoSeam m_current_tool）
+                // X2: hand-drawn chips → system CxButton Segment pills.
                 Row {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("强制缝线"), qsTr("阻止缝线")]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
                             required property int index
-                            width: 72; height: 24; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: root.editorVm && root.editorVm.seamPaintTool === (index + 1) ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.seamPaintTool = index + 1
-                            }
+                            width: 72
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.seamPaintTool === (index + 1)
+                            text: modelData
+                            onClicked: if (root.editorVm) root.editorVm.seamPaintTool = index + 1
                         }
                     }
                 }
@@ -3404,23 +3236,13 @@ Item {
                     onToggled: if (root.editorVm) root.editorVm.paintLockAxis = checked ? 1 : 0
                 }
 
-                // 清除按钮
-                Rectangle {
+                // 清除按钮 (X2: hand-drawn → CxButton)
+                CxButton {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 80; height: 24; radius: Theme.radiusSM
-                    color: Theme.bgElevated
-                    border.color: Theme.borderDefault; border.width: 1
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("清除全部")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeXS
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.editorVm) root.editorVm.clearSeamPaintOnSelection()
-                    }
+                    text: qsTr("清除全部")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.clearSeamPaintOnSelection()
                 }
             }
         }
@@ -3451,29 +3273,16 @@ Item {
                 }
 
                 // 启用/禁用空洞（对齐上游 GLGizmoHollow m_enable_hollowing）
+                // X2: the hand-drawn hollow capsule switch (PreparePage:3450
+                // in the audit) joins the Cx* system as a real CxSwitch — the
+                // same control the Cut panel already used.
                 RowLayout {
                     spacing: 8
                     Layout.alignment: Qt.AlignHCenter
                     Text { text: qsTr("启用空洞化:"); color: Theme.textMuted; font.pixelSize: Theme.fontSizeXS }
-                    Rectangle {
-                        width: 36; height: 18; radius: Theme.radiusHero  // clamps to height/2: full capsule
-                        color: root.editorVm && root.editorVm.hollowEnabled ? Theme.accent : Theme.borderDefault
-                        Rectangle {
-                            width: 14; height: 14; radius: Theme.radiusLG
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.left: root.editorVm && root.editorVm.hollowEnabled ? undefined : parent.left
-                            anchors.right: root.editorVm && root.editorVm.hollowEnabled ? parent.right : undefined
-                            anchors.leftMargin: root.editorVm && root.editorVm.hollowEnabled ? 0 : 2
-                            anchors.rightMargin: root.editorVm && root.editorVm.hollowEnabled ? 2 : 0
-                            color: "white"
-                            Behavior on anchors.left { PropertyAnimation { duration: Theme.motionFast } }
-                            Behavior on anchors.right { PropertyAnimation { duration: Theme.motionFast } }
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.hollowEnabled = !root.editorVm.hollowEnabled
-                        }
+                    CxSwitch {
+                        checked: root.editorVm ? root.editorVm.hollowEnabled : false
+                        onToggled: if (root.editorVm) root.editorVm.hollowEnabled = checked
                     }
                 }
 
@@ -3537,25 +3346,15 @@ Item {
                     }
                 }
 
-                // 删除选中钻孔
-                Rectangle {
+                // 删除选中钻孔 (X2: hand-drawn → CxButton)
+                CxButton {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 100; height: 24; radius: Theme.radiusSM
-                    color: Theme.bgElevated
-                    border.color: Theme.borderDefault; border.width: 1
-                    Text {
-                        anchors.centerIn: parent
-                        // MVP clears ALL holes on the object (no per-point
-                        // selection yet), so label says "删除全部" not "删除选中".
-                        text: qsTr("删除全部 (%1)").arg(root.editorVm ? root.editorVm.hollowHoleCount : 0)
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeXS
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.editorVm) root.editorVm.deleteSelectedHollowPoints()
-                    }
+                    text: qsTr("删除全部 (%1)").arg(root.editorVm ? root.editorVm.hollowHoleCount : 0)
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    // MVP clears ALL holes on the object (no per-point
+                    // selection yet), so label says "删除全部" not "删除选中".
+                    onClicked: if (root.editorVm) root.editorVm.deleteSelectedHollowPoints()
                 }
             }
         }
@@ -3646,58 +3445,28 @@ Item {
                 RowLayout {
                     spacing: 6
                     Layout.alignment: Qt.AlignHCenter
-                    Rectangle {
-                        width: 76; height: 24; radius: Theme.radiusSM
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault; border.width: 1
-                        opacity: root.editorVm && root.editorVm.simplifyPreviewRunning ? 0.5 : 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: root.editorVm && root.editorVm.simplifyPreviewRunning
-                                  ? qsTr("计算中…") : qsTr("预览简化")
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            enabled: !(root.editorVm && root.editorVm.simplifyPreviewRunning)
-                            onClicked: if (root.editorVm) root.editorVm.simplifyPreviewStart()
-                        }
+                    // X2: hand-drawn simplify flow buttons → CxButton.
+                    CxButton {
+                        text: root.editorVm && root.editorVm.simplifyPreviewRunning
+                              ? qsTr("计算中…") : qsTr("预览简化")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        enabled: !(root.editorVm && root.editorVm.simplifyPreviewRunning)
+                        onClicked: if (root.editorVm) root.editorVm.simplifyPreviewStart()
                     }
-                    Rectangle {
+                    CxButton {
                         visible: root.editorVm && root.editorVm.simplifyPreviewValid
-                        width: 76; height: 24; radius: Theme.radiusSM
-                        color: Theme.accent
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("应用")
-                            color: "white"
-                            font.pixelSize: Theme.fontSizeXS
-                            font.bold: true
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.simplifyPreviewApply()
-                        }
+                        text: qsTr("应用")
+                        compact: true
+                        cxStyle: CxButton.Style.Primary
+                        onClicked: if (root.editorVm) root.editorVm.simplifyPreviewApply()
                     }
-                    Rectangle {
+                    CxButton {
                         visible: root.editorVm && root.editorVm.simplifyPreviewValid
-                        width: 76; height: 24; radius: Theme.radiusSM
-                        color: Theme.bgElevated
-                        border.color: Theme.borderDefault; border.width: 1
-                        Text {
-                            anchors.centerIn: parent
-                            text: qsTr("取消")
-                            color: Theme.textPrimary
-                            font.pixelSize: Theme.fontSizeXS
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: if (root.editorVm) root.editorVm.simplifyPreviewCancel()
-                        }
+                        text: qsTr("取消")
+                        compact: true
+                        cxStyle: CxButton.Style.Secondary
+                        onClicked: if (root.editorVm) root.editorVm.simplifyPreviewCancel()
                     }
                 }
 
@@ -3818,23 +3587,14 @@ Item {
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [{label: qsTr("笔刷"), val: 0}, {label: qsTr("桶填充"), val: 1}, {label: qsTr("高度范围"), val: 4}, {label: qsTr("缝隙填充"), val: 3}]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
-                            width: 64; height: 24; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                color: root.editorVm && root.editorVm.mmuPaintTool === modelData.val ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.mmuPaintTool = modelData.val
-                            }
+                            width: 64
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.mmuPaintTool === modelData.val
+                            text: modelData.label
+                            onClicked: if (root.editorVm) root.editorVm.mmuPaintTool = modelData.val
                         }
                     }
                 }
@@ -3851,23 +3611,14 @@ Item {
                     visible: root.editorVm && root.editorVm.mmuPaintTool === 0
                     Repeater {
                         model: [{label: qsTr("圆"), val: 0}, {label: qsTr("球"), val: 1}, {label: qsTr("指针"), val: 2}]
-                        delegate: Rectangle {
+                        delegate: CxButton {
                             required property var modelData
-                            width: 48; height: 24; radius: Theme.radiusSM
-                            color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.chromePressed : Theme.bgPanel
-                            border.color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.bgHover
-                            border.width: 1
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                color: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
-                            }
+                            width: 48
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
+                            selected: root.editorVm && root.editorVm.supportPaintCursorType === modelData.val
+                            text: modelData.label
+                            onClicked: if (root.editorVm) root.editorVm.supportPaintCursorType = modelData.val
                         }
                     }
                 }
@@ -4003,22 +3754,13 @@ Item {
                 }
 
                 // 清除分段按钮（对齐上游 reset triangle painting）
-                Rectangle {
+                // X2: hand-drawn → CxButton.
+                CxButton {
                     Layout.alignment: Qt.AlignHCenter
-                    width: 80; height: 24; radius: Theme.radiusSM
-                    color: Theme.borderDefault
-                    border.color: Theme.borderStrong; border.width: 1
-                    Text {
-                        anchors.centerIn: parent
-                        text: qsTr("清除分段")
-                        color: Theme.textPrimary
-                        font.pixelSize: Theme.fontSizeXS
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: if (root.editorVm) root.editorVm.clearMmuSegmentation()
-                    }
+                    text: qsTr("清除分段")
+                    compact: true
+                    cxStyle: CxButton.Style.Secondary
+                    onClicked: if (root.editorVm) root.editorVm.clearMmuSegmentation()
                 }
             }
         }
@@ -4302,35 +4044,29 @@ Item {
                 // v5.16 (CIRC-03): mode selector aligned with advCutSelected's
                 // dispatch — 0 planar / 1 tongue-groove / discrete connectors.
                 // (The executor branches on cutMode==1 then advCutConnectors.)
+                // X2: hand-drawn chips → system CxButton Segments.
                 RowLayout {
                     spacing: 4
                     Layout.alignment: Qt.AlignHCenter
                     Repeater {
                         model: [qsTr("平面"), qsTr("舌槽"), qsTr("连接销")]
-                        Rectangle {
+                        CxButton {
                             required property var modelData
                             required property int index
-                            width: 52; height: 22; radius: Theme.radiusSM
+                            width: 52
+                            compact: true
+                            cxStyle: CxButton.Style.Segment
                             readonly property bool activeMode: index === 2
                                 ? (root.editorVm && root.editorVm.advCutConnectors)
                                 : (root.editorVm && root.editorVm.cutMode === index && !root.editorVm.advCutConnectors)
-                            color: activeMode ? Theme.chromePressed : Theme.bgPanel
-                            border.color: activeMode ? Theme.statusInfo : Theme.bgHover
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData
-                                color: activeMode ? Theme.statusInfo : Theme.textTertiary
-                                font.pixelSize: Theme.fontSizeXS
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: if (root.editorVm) {
-                                    if (index === 2) {
-                                        root.editorVm.advCutConnectors = true
-                                    } else {
-                                        root.editorVm.advCutConnectors = false
-                                        root.editorVm.cutMode = index
-                                    }
+                            selected: activeMode
+                            text: modelData
+                            onClicked: if (root.editorVm) {
+                                if (index === 2) {
+                                    root.editorVm.advCutConnectors = true
+                                } else {
+                                    root.editorVm.advCutConnectors = false
+                                    root.editorVm.cutMode = index
                                 }
                             }
                         }

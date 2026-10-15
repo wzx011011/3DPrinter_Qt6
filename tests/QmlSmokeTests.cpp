@@ -606,7 +606,7 @@ void QmlSmokeTests::x2PagesCarryCxComponentDiscipline_data()
       << "qrc:/qml/OWzx/pages/PreparePage.qml"
       << QVariantMap{{"editorVm", vm("editorViewModel")},
                      {"configVm", vm("configViewModel")}}
-      << 10 << 0 << 1;
+      << 30 << 0 << 2;
   QTest::newRow("MonitorPage")
       << "qrc:/qml/OWzx/pages/MonitorPage.qml"
       << QVariantMap{{"monitorVm", vm("monitorViewModel")}}
