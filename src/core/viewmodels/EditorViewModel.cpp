@@ -5342,11 +5342,19 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
 
   // Upstream anchors the band at the WORLD Z of the ray hit (z_bot_world,
   // GLGizmoPainterBase.cpp:532) and clamps the span to
-  // CursorHeightMin/Max (GLGizmoPainterBase.hpp:242-245).
+  // CursorHeightMin/Max (GLGizmoPainterBase.hpp:242-245). S4 re-review fix:
+  // the vendored HeightRange cursor compares (trafo*point).z() against the
+  // band in Z-UP world semantics (TriangleSelector.cpp:1154-1176, upstream
+  // world == slic3r world). The GL chain's z column is the desktop depth
+  // axis (GL Z = -slic3r Y), so the cursor consumes the height-frame
+  // transform A^-1 * chain and the anchor is its z of the mesh-local hit
+  // (== the GL world Y of the rendered hit).
+  const Slic3r::Transform3d trafoWorldHeight =
+      OWzx::glToSlic3rAxes() * worldTransform;
   const Slic3r::Vec3d hitWorldD =
-      worldTransform * Slic3r::Vec3d(double(hit.meshLocalPosition.x()),
-                                     double(hit.meshLocalPosition.y()),
-                                     double(hit.meshLocalPosition.z()));
+      trafoWorldHeight * Slic3r::Vec3d(double(hit.meshLocalPosition.x()),
+                                       double(hit.meshLocalPosition.y()),
+                                       double(hit.meshLocalPosition.z()));
   const float zBotWorld = float(hitWorldD.z());
   const float bandHeight = qBound(0.1f, float(height), 8.0f);
   const float zTopWorld = zBotWorld + bandHeight;
@@ -5362,12 +5370,12 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
   const Slic3r::EnforcerBlockerType ebt =
       static_cast<Slic3r::EnforcerBlockerType>(state);
 
-  // The hit volume paints through the full world transform (the HeightRange
-  // cursor transforms mesh points into world Z; upstream passes
-  // trafo_matrix WITH translation here, GLGizmoPainterBase.cpp:729).
+  // The hit volume paints through the full height-frame transform (the
+  // HeightRange cursor transforms mesh points into Z-up world Z; upstream
+  // passes trafo_matrix WITH translation here, GLGizmoPainterBase.cpp:729).
   bool anyPainted = m_paintEngine->paintHeightRangeAt(
       hit.objectIndex, hit.volumeIndex, zBotWorld, bandHeight, ebt,
-      worldTransform, trafoNoTranslate, cameraLocal, int(hit.facetIdx));
+      trafoWorldHeight, trafoNoTranslate, cameraLocal, int(hit.facetIdx));
   if (anyPainted)
     commitPaintedSelector(hit.objectIndex, hit.volumeIndex,
                           int(hit.facetIdx), state);
@@ -5389,6 +5397,10 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
       continue; // not in the rendered frame -- nothing to band-paint
     const Slic3r::Transform3d volChain =
         volumeChainFor(chainSource, pickedSourceIndex, v);
+    // Same height-frame conversion as the hit volume above: the band compares
+    // Z-UP world Z, not GL depth.
+    const Slic3r::Transform3d volTrafoWorldHeight =
+        OWzx::glToSlic3rAxes() * volChain;
     Slic3r::Transform3d volTrafoNoTranslate = volChain;
     volTrafoNoTranslate.matrix().block<3, 1>(0, 3).setZero();
     const std::shared_ptr<const indexed_triangle_set> its =
@@ -5406,8 +5418,8 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
       for (int k = 0; k < 3; ++k) {
         const Slic3r::Vec3f &p = its->vertices[size_t(idx[k])];
         const Slic3r::Vec3d w =
-            volChain * Slic3r::Vec3d(double(p.x()), double(p.y()),
-                                     double(p.z()));
+            volTrafoWorldHeight * Slic3r::Vec3d(double(p.x()), double(p.y()),
+                                                double(p.z()));
         if (float(w.z()) < zBotWorld)
           ++below;
         else if (float(w.z()) > zTopWorld)
@@ -5423,7 +5435,7 @@ bool EditorViewModel::paintHeightRangeAt(int state, double height,
     if (firstInBandFacet < 0)
       continue;
     if (m_paintEngine->paintHeightRangeAt(pickedSourceIndex, v, zBotWorld,
-                                          bandHeight, ebt, volChain,
+                                          bandHeight, ebt, volTrafoWorldHeight,
                                           volTrafoNoTranslate, cameraLocal,
                                           firstInBandFacet)) {
       anyPainted = true;

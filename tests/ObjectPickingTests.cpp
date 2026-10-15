@@ -249,6 +249,12 @@ private slots:
   // facet the paint/measure chain resolves (the pre-S4 frame-mixed candidate
   // transform hit rotated ghosts instead).
   void rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt();
+  // S4 re-review: the height-range band axis. The vendored HeightRange cursor
+  // compares (trafo*p).z() against the band in Z-UP world semantics, so the
+  // cursor must consume A^-1 * chain (height frame = render up axis), not the
+  // GL chain (whose z column is the desktop depth axis -- the S4 regression
+  // this pins).
+  void heightBandAxisIsRenderUpNotDepth();
   // S4: the gizmo world scale max(dist*0.15, 5.0) is single-sourced in
   // GizmoMath::gizmoWorldScale (pick bodies == rendered bodies).
   void gizmoWorldScaleFormulaSingleSourced();
@@ -761,6 +767,58 @@ void ObjectPickingTests::rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt()
   QVERIFY(std::abs(backNormal.x()) < 1e-4f);
   QVERIFY(std::abs(backNormal.y()) < 1e-4f);
   QVERIFY(backNormal.z() > 0.99f);
+}
+
+void ObjectPickingTests::heightBandAxisIsRenderUpNotDepth()
+{
+  // Same rig as rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt: a
+  // 90°-about-slic3r-Z instance with the production plate shift. Under this
+  // instance the height axis (GL world Y) is NOT the GL chain's z column
+  // (depth) -- the exact mix-up that silently re-anchored the MMU/height-
+  // range band along the desktop depth axis.
+  QMatrix4x4 instMat;
+  instMat.rotate(90.0f, 0.0f, 0.0f, 1.0f);
+  const QVector3D plateShift(110.0f, 0.0f, -110.0f);
+  const QMatrix4x4 A = OWzx::SceneTransforms::slic3rToGlAxes();
+  QMatrix4x4 channel = A * instMat * A.inverted();
+  channel.translate(plateShift);
+  const QMatrix4x4 chain = OWzx::SceneTransforms::volumeWorldMatrix(channel);
+  // The height frame the vendored HeightRange cursor needs: A^T * chain
+  // (A^T == A^-1 exactly -- +-1 orthonormal permutation). Production spells
+  // it as OWzx::glToSlic3rAxes() * chain under HAS_LIBSLIC3R.
+  const QMatrix4x4 heightFrame = A.transposed() * chain;
+
+  // A raw mesh column along the height axis (slic3r Z): rotation about Z
+  // preserves raw z, so world height must track raw z monotonically.
+  const QVector3D column[3] = {
+      {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, 10.0f}};
+  float prevHeight = -1e30f;
+  for (const QVector3D &v : column) {
+    const QVector3D gl = chain.map(v);
+    const float height = heightFrame.map(v).z();
+    // (1) The band axis IS the render up axis: height-frame z == GL world y
+    // (GL Y is up in the scene the mesh renders in).
+    QVERIFY(std::abs(height - gl.y()) < 1e-3f);
+    // (2) Monotone with mesh height, and actually carrying the raw height
+    // through the rotated instance (band [z, z+h] lands where the mesh is).
+    QVERIFY(height > prevHeight);
+    QVERIFY(std::abs(height - v.z()) < 1e-3f); // rotZ(90) preserves raw z
+    // (3) Regression discriminator: the GL chain's z column is the depth
+    // axis -- anchoring the band on it (the S4 regression) selects a
+    // different axis entirely (here: ~110mm plate-shift depth vs the mm-
+    // scale height).
+    QVERIFY(std::abs(gl.z() - height) > 1.0f);
+    prevHeight = height;
+  }
+
+  // The flat quad from the parity slot: heights order with raw z (=0 there),
+  // and every quad vertex also satisfies the axis identity.
+  const QVector3D raw[4] = {
+      {0.0f, 0.0f, 0.0f}, {10.0f, 0.0f, 0.0f},
+      {0.0f, 10.0f, 0.0f}, {10.0f, 10.0f, 0.0f}};
+  for (const QVector3D &v : raw) {
+    QVERIFY(std::abs(heightFrame.map(v).z() - chain.map(v).y()) < 1e-3f);
+  }
 }
 
 void ObjectPickingTests::gizmoWorldScaleFormulaSingleSourced()

@@ -5010,13 +5010,19 @@ bool RhiViewportRenderer::uploadPaintOverlayBuffer(QRhiResourceUpdateBatch *upda
         stateColor(int(tris[t].state), m_extrudersColors, color);
         for (int v = 0; v < 3; ++v)
         {
-          // Upstream Y -> Qt-Z axis swap (libslic3r world X,Y,Z -> scene X,Z,Y),
-          // matching the mesh-data path (parsePreviewSegments). The ViewModel
-          // emits libslic3r world coords; the renderer converts to scene coords.
+          // S4 re-review fix: the ViewModel emits the overlay in the SAME
+          // world frame the mesh renders in (the shared pick/render chain
+          // output -- chain·raw == modelVertices, pinned by
+          // ObjectPickingTests::rotatedInstanceChainPlacesRawFacetWhereRenderDrawsIt),
+          // so the highlight uploads verbatim like buildModelVertices does
+          // for the mesh. The retired (X,Y,Z)->(X,Z,Y) swap here double-
+          // transformed already-scene coordinates and drew the highlight off
+          // the mesh (a defect since the S3 frame flip ffa6424, exposed by
+          // the S4 chain migration).
           Vertex gv;
           gv.x = tris[t].verts[v * 3 + 0];
-          gv.y = tris[t].verts[v * 3 + 2]; // libslic3r Z -> scene Y (up)
-          gv.z = tris[t].verts[v * 3 + 1]; // libslic3r Y -> scene Z (into bed)
+          gv.y = tris[t].verts[v * 3 + 1];
+          gv.z = tris[t].verts[v * 3 + 2];
           gv.r = color[0];
           gv.g = color[1];
           gv.b = color[2];
@@ -5090,10 +5096,14 @@ bool RhiViewportRenderer::uploadHollowMarkerBuffer(QRhiResourceUpdateBatch *upda
       vertices.reserve(int(count));
       for (quint32 i = 0; i < count; ++i) {
         Vertex v;
-        // libslic3r world (X,Y,Z) -> scene (X,Z,Y): Z becomes up, Y goes into bed.
+        // S4 re-review fix: the marker stream is already in the rendered
+        // world frame (shared pick/render chain lift in
+        // EditorViewModel::rebuildHollowMarkerData) -- upload verbatim, same
+        // as buildModelVertices. The retired (X,Y,Z)->(X,Z,Y) swap drew the
+        // markers off the mesh.
         v.x = gv[i].x;
-        v.y = gv[i].z;
-        v.z = gv[i].y;
+        v.y = gv[i].y;
+        v.z = gv[i].z;
         v.r = gv[i].r;
         v.g = gv[i].g;
         v.b = gv[i].b;
@@ -5138,9 +5148,10 @@ void RhiViewportRenderer::renderHollowMarkers(QRhiCommandBuffer *cb)
 
 // ===========================================================================
 // v5.13: AdvancedCut connector-pin marker upload + render.
-// Same packed format as the hollow markers ([uint32 count][GizmoVertex...] in
-// libslic3r world space; Y/Z swapped to scene here). Gated to GizmoAdvancedCut
-// (mode 14); translucent fill so pins don't occlude the mesh.
+// Same packed format as the hollow markers ([uint32 count][GizmoVertex...]);
+// since S4 the stream is already in the rendered world frame and uploads
+// verbatim (re-review fix). Gated to GizmoAdvancedCut (mode 14); translucent
+// fill so pins don't occlude the mesh.
 // ===========================================================================
 bool RhiViewportRenderer::uploadAdvancedCutMarkerBuffer(QRhiResourceUpdateBatch *updates)
 {
@@ -5160,10 +5171,12 @@ bool RhiViewportRenderer::uploadAdvancedCutMarkerBuffer(QRhiResourceUpdateBatch 
       vertices.reserve(int(count));
       for (quint32 i = 0; i < count; ++i) {
         Vertex v;
-        // libslic3r world (X,Y,Z) -> scene (X,Z,Y).
+        // S4 re-review fix: already in the rendered world frame (shared chain
+        // lift in EditorViewModel::rebuildAdvancedCutConnectorMarkers) --
+        // upload verbatim, same as buildModelVertices.
         v.x = gv[i].x;
-        v.y = gv[i].z;
-        v.z = gv[i].y;
+        v.y = gv[i].y;
+        v.z = gv[i].z;
         v.r = gv[i].r;
         v.g = gv[i].g;
         v.b = gv[i].b;
@@ -5304,10 +5317,12 @@ bool RhiViewportRenderer::uploadFlattenHoverBuffer(QRhiResourceUpdateBatch *upda
       for (qint32 i = 0; i < vertexCount; ++i) {
         const float *c = coords + qint64(i) * 3;
         Vertex v;
-        // libslic3r world (X,Y,Z) -> scene (X,Z,Y).
+        // S4 re-review fix: the hover stream is already in the rendered
+        // world frame (shared chain lift in EditorViewModel::flattenHoverPick)
+        // -- upload verbatim, same as buildModelVertices.
         v.x = c[0];
-        v.y = c[2];
-        v.z = c[1];
+        v.y = c[1];
+        v.z = c[2];
         // Hover color: upstream FLATTEN_HOVER_COLOR is a strong cyan/blue.
         v.r = 0.118f;
         v.g = 0.565f;

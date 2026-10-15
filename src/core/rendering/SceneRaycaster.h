@@ -159,6 +159,22 @@ inline Slic3r::Transform3d volumeWorldTransform(
          * volumeMatrix;
 }
 
+// S4 re-review: the Z-UP world frame (upstream/slic3r world) as an Eigen
+// transform -- the inverse of the AXES-ROT permutation (GL(X,Y,Z) ->
+// slic3r(X,-Z,Y)). Math that compares WORLD Z against a height (the vendored
+// TriangleSelector::HeightRange cursor, TriangleSelector.cpp:1154-1176, and
+// anything else with upstream Z=up semantics) must consume A⁻¹·chain, NOT
+// the GL chain: the GL chain's z column is the desktop depth axis.
+inline Slic3r::Transform3d glToSlic3rAxes()
+{
+  Slic3r::Transform3d t = Slic3r::Transform3d::Identity();
+  t.matrix() << 1.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, -1.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 1.0;
+  return t;
+}
+
 // Hit result for the two-stage pick. This is the WORLD-SPACE view the
 // Phase 114 (Measuring) + Phase 115 (snap UX) consumers need; MeshRaycasterHit
 // (MeshRaycaster.h) is the mesh-local intermediate.
