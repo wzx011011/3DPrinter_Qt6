@@ -27,6 +27,14 @@
 
 namespace
 {
+  // 上游无时间轴播放，OWzx 增强：upstream GCodeViewer only owns the two
+  // IMSlider handles (GCodeViewer.hpp:214-215) and IMSlider.hpp carries no
+  // play/pause facility, so this playback cadence is OWzx-native. Base 1.0x
+  // interval 24ms; the speed multiplier is clamped to [0.25, 8] (setPlaybackSpeed).
+  constexpr int kPlaybackBaseIntervalMs = 24;
+  constexpr double kPlaybackSpeedMin = 0.25;
+  constexpr double kPlaybackSpeedMax = 8.0;
+
   // Aligned with upstream short_and_splitted_time.
   QString formatTime(float totalSecs)
   {
@@ -771,7 +779,10 @@ PreviewViewModel::PreviewViewModel(ProjectService *projectService, SliceService 
   showSeamMarks_ = settings.value(QStringLiteral("preview/showSeamMarks"), showSeamMarks_).toBool();
   showToolChanges_ = settings.value(QStringLiteral("preview/showToolChanges"), showToolChanges_).toBool();
   playTimer_ = new QTimer(this);
-  playTimer_->setInterval(24);
+  // 上游无时间轴播放，OWzx 增强：initial cadence derives from the default
+  // playbackSpeed_ (1.0x -> 24ms), keeping the interval single-sourced in
+  // applyPlaybackInterval().
+  applyPlaybackInterval();
   connect(playTimer_, &QTimer::timeout, this, [this]()
           {
     if (moveCount_ <= 0)
@@ -828,6 +839,12 @@ bool PreviewViewModel::slicing() const
 bool PreviewViewModel::isPlaying() const
 {
   return playTimer_ && playTimer_->isActive();
+}
+
+// 上游无时间轴播放，OWzx 增强（see the playbackSpeed Q_PROPERTY）。
+double PreviewViewModel::playbackSpeed() const
+{
+  return playbackSpeed_;
 }
 
 QString PreviewViewModel::estimatedTime() const
@@ -1508,6 +1525,34 @@ void PreviewViewModel::togglePlayPause()
     pauseAnimation();
   else
     playAnimation();
+}
+
+// 上游无时间轴播放，OWzx 增强：clamp to [0.25, 8] and re-derive the play
+// timer cadence (baseInterval/speed) immediately so the new speed takes
+// effect even while a playback is running.
+void PreviewViewModel::setPlaybackSpeed(double speed)
+{
+  const double clamped = qBound(kPlaybackSpeedMin, speed, kPlaybackSpeedMax);
+  if (qFuzzyCompare(playbackSpeed_, clamped))
+    return;
+  playbackSpeed_ = clamped;
+  applyPlaybackInterval();
+  emit stateChanged();
+}
+
+// 上游无时间轴播放，OWzx 增强：cadence = baseInterval / speed, floored at 1ms
+// so the extreme 8x tier never yields a zero/coarse Qt timer.
+void PreviewViewModel::applyPlaybackInterval()
+{
+  if (!playTimer_)
+    return;
+  const int interval = qMax(1, qRound(kPlaybackBaseIntervalMs / playbackSpeed_));
+  if (playTimer_->isActive())
+    // Restart so the new cadence lands mid-playback instead of after the
+    // remaining old-interval timeout.
+    playTimer_->start(interval);
+  else
+    playTimer_->setInterval(interval);
 }
 
 void PreviewViewModel::setViewModeIndex(int index)

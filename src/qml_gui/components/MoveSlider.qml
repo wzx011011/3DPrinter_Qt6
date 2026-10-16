@@ -39,6 +39,34 @@ Item {
             onClicked: if (root.previewVm) root.previewVm.togglePlayPause()
         }
 
+        // 上游无时间轴播放（GCodeViewer/IMSlider 无任何播放设施），OWzx 增强：
+        // 播放速度档。ViewModel 侧夹取 [0.25,8] 并即时重算播放节拍；此处只列
+        // 常用档（0.5x/1x/2x/4x），窄体 64px 不挤右侧时间标签。
+        CxComboBox {
+            id: speedCombo
+            readonly property var speedSteps: [0.5, 1, 2, 4]
+            model: ["0.5x", "1x", "2x", "4x"]
+            implicitWidth: 64
+            enabled: root.previewVm && root.totalMoves > 0
+            currentIndex: {
+                if (!root.previewVm)
+                    return 1
+                const current = root.previewVm.playbackSpeed
+                let best = 1
+                for (let i = 0; i < speedCombo.speedSteps.length; ++i) {
+                    if (Math.abs(speedCombo.speedSteps[i] - current)
+                        < Math.abs(speedCombo.speedSteps[best] - current))
+                        best = i
+                }
+                return best
+            }
+            onActivated: function(index) {
+                if (!root.previewVm)
+                    return
+                root.previewVm.playbackSpeed = speedCombo.speedSteps[index]
+            }
+        }
+
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 36

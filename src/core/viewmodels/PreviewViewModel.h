@@ -33,6 +33,12 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(int progress READ progress NOTIFY stateChanged)
   Q_PROPERTY(bool slicing READ slicing NOTIFY stateChanged)
   Q_PROPERTY(bool isPlaying READ isPlaying NOTIFY stateChanged)
+  /// 上游无时间轴播放，OWzx 增强：upstream holds no playback facility at all
+  /// (GCodeViewer.hpp:214-215 only stores the m_moves_slider/m_layers_slider
+  /// IMSlider pointers; IMSlider.hpp has no play/pause), so the speed knob is
+  /// OWzx-native. Multiplier clamped to [0.25, 8]; the play timer cadence is
+  /// baseInterval/speed and is re-applied live while playing.
+  Q_PROPERTY(double playbackSpeed READ playbackSpeed WRITE setPlaybackSpeed NOTIFY stateChanged)
   Q_PROPERTY(QString estimatedTime READ estimatedTime NOTIFY stateChanged)
   Q_PROPERTY(bool previewReady READ previewReady NOTIFY stateChanged)
   Q_PROPERTY(QString previewStatusText READ previewStatusText NOTIFY stateChanged)
@@ -225,6 +231,8 @@ public:
   int progress() const;
   bool slicing() const;
   bool isPlaying() const;
+  /// 上游无时间轴播放，OWzx 增强：playback speed multiplier in [0.25, 8].
+  double playbackSpeed() const;
   QString estimatedTime() const;
   bool previewReady() const;
   QString previewStatusText() const;
@@ -475,6 +483,10 @@ public:
   Q_INVOKABLE void playAnimation();
   Q_INVOKABLE void pauseAnimation();
   Q_INVOKABLE void togglePlayPause();
+  /// 上游无时间轴播放，OWzx 增强：set the playback speed multiplier
+  /// (clamped to [0.25, 8]); the play timer interval is recomputed to
+  /// baseInterval/speed immediately, taking effect mid-playback.
+  void setPlaybackSpeed(double speed);
   /// Accepts the full EViewType range [0, VT_ModeCount). The QML combo only
   /// produces the 10 upstream dropdown rows, while the internal capability
   /// tail stays addressable for tests and future callers. Clamps, then
@@ -535,6 +547,11 @@ signals:
 
 private:
   void resetPreviewState();
+  /// 上游无时间轴播放，OWzx 增强：recompute the playTimer_ cadence from
+  /// playbackSpeed_ (baseInterval/speed). An active timer is restarted at the
+  /// new interval so a speed change lands immediately during playback; an
+  /// idle timer just stores the interval for the next playAnimation().
+  void applyPlaybackInterval();
   void rebuildFromGCode(const QString &filePath);
   void syncPreviewWithActiveResult();
   void recolorAndPackSegments();
@@ -643,6 +660,9 @@ private:
   // the new legend row starts in the revealed state like the seam toggles.
   bool showToolChanges_ = true;
   QTimer *playTimer_ = nullptr;
+  // 上游无时间轴播放，OWzx 增强：playback speed multiplier (see the
+  // playbackSpeed Q_PROPERTY); the timer cadence derives from it.
+  double playbackSpeed_ = 1.0;
 
   // Stored parsed segments for view-mode recoloring
   struct StoredSegment
