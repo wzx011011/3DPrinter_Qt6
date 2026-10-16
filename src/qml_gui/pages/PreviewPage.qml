@@ -581,7 +581,14 @@ Item {
                     }
 
                     ColumnLayout {
-                        visible: root.analysisExpanded
+                        // unsliced-preview-semantics: the analysis stack
+                        // (StatsPanel/VisibilityFilter/Legend) is gcode-
+                        // derived; upstream load_preview returns before the
+                        // legend refresh when there is no gcode to show
+                        // (GUI_Preview.cpp:668-672), so collapse it while
+                        // keeping the SidePanelHeader + panel frame stable
+                        // to avoid a layout jump on the right rail.
+                        visible: root.analysisExpanded && root.hasPreviewData
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         spacing: 8
@@ -751,6 +758,11 @@ Item {
 
             Rectangle {
                 id: verticalLayerRail
+                // unsliced-preview-semantics: entering Preview without
+                // slicing collapses the layer rail -- upstream calls
+                // show_sliders(false) and returns when !has_layers &&
+                // !directly_preview (GUI_Preview.cpp:668-672).
+                visible: root.hasPreviewData
                 Layout.preferredWidth: root.targetPreviewLayerRailWidth
                 Layout.fillHeight: true
                 color: Theme.bgElevated
@@ -767,6 +779,11 @@ Item {
 
         Rectangle {
             id: moveSliderBar
+            // unsliced-preview-semantics: same show_sliders(false) gate as
+            // the layer rail (GUI_Preview.cpp:400-404 show_moves_sliders +
+            // show_layers_sliders) -- the move bar collapses until gcode
+            // exists instead of showing a disabled "0 moves" strip.
+            visible: root.hasPreviewData
             Layout.fillWidth: true
             Layout.preferredHeight: root.targetPreviewMoveBarHeight
             color: Theme.switchTrackOff
