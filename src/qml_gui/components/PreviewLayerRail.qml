@@ -228,14 +228,27 @@ Item {
             // drag / wheel / right-click interaction paths stay untouched.
             Item {
                 id: lowerHandleProxy
+                objectName: "lowerHandleHoverProxy"
                 // Upstream one_layer_flag renders only the higher handle's
                 // label (IMSlider.cpp:955); single-layer mode collapses both
                 // handles onto the same layer, so only the upper readout shows.
                 enabled: !root.previewVm || !root.previewVm.singleLayer
                 readonly property var handleItem: layerRangeSlider.first.handle
-                readonly property point mappedPos: handleItem
-                    ? layerRangeSlider.mapFromItem(handleItem, 0, 0)
-                    : Qt.point(0, 0)
+                // Geometry binding: QML's dependency tracker only sees property
+                // reads made in QML -- the x/y reads inside the C++
+                // mapFromItem invokable are invisible to it, so a bare
+                // mapFromItem binding never re-runs when the style moves the
+                // handle and the proxy freezes at its completion-time position
+                // (verify review 2026-10-16: TRACKS=false repro). Reading the
+                // handle's x/y here at QML level first registers those change
+                // signals; the mapping itself still runs through mapFromItem.
+                readonly property point mappedPos: {
+                    if (!handleItem)
+                        return Qt.point(0, 0)
+                    const handleX = handleItem.x
+                    const handleY = handleItem.y
+                    return layerRangeSlider.mapFromItem(handleItem, 0, 0)
+                }
                 x: mappedPos.x
                 y: mappedPos.y
                 width: handleItem ? handleItem.width : 0
@@ -248,10 +261,17 @@ Item {
 
             Item {
                 id: upperHandleProxy
+                objectName: "upperHandleHoverProxy"
                 readonly property var handleItem: layerRangeSlider.second.handle
-                readonly property point mappedPos: handleItem
-                    ? layerRangeSlider.mapFromItem(handleItem, 0, 0)
-                    : Qt.point(0, 0)
+                // See lowerHandleProxy: the QML-level x/y reads are what make
+                // this binding re-run when the style moves the handle.
+                readonly property point mappedPos: {
+                    if (!handleItem)
+                        return Qt.point(0, 0)
+                    const handleX = handleItem.x
+                    const handleY = handleItem.y
+                    return layerRangeSlider.mapFromItem(handleItem, 0, 0)
+                }
                 x: mappedPos.x
                 y: mappedPos.y
                 width: handleItem ? handleItem.width : 0
