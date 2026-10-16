@@ -57,6 +57,15 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(QByteArray gcodePreviewData READ gcodePreviewData NOTIFY stateChanged)
   Q_PROPERTY(int gcodeLineCount READ gcodeLineCount NOTIFY stateChanged)
   Q_PROPERTY(int currentGcodeLine READ currentGcodeLine NOTIFY stateChanged)
+  /// gcode-window-follow: window-local index into gcodeLines of the row
+  /// flagged `current` (-1 while the window is empty). Upstream keeps the
+  /// selected line on screen by re-deriving the window rows on every
+  /// m_selected_line_id change (GCodeViewer.cpp:876-886); the Qt window
+  /// builder (rebuildGcodeLineWindow) likewise recenters per rebuild, but
+  /// the QVariantList re-assign resets the QML ListView to the top -- this
+  /// exposes the current row's position so the view can follow it during
+  /// playback.
+  Q_PROPERTY(int currentGcodeRowIndex READ currentGcodeRowIndex NOTIFY stateChanged)
   Q_PROPERTY(QVariantList gcodeLines READ gcodeLines NOTIFY stateChanged)
   Q_PROPERTY(QVariantList legendItems READ legendItems NOTIFY stateChanged)
   /// Legend rendering type aligned with upstream GCodeViewer legend: 0=discrete, 1=gradient, 2=extruder.
@@ -253,6 +262,7 @@ public:
   const QByteArray &gcodePreviewData() const { return gcodePreviewData_; }
   int gcodeLineCount() const { return gcodeLineCount_; }
   int currentGcodeLine() const { return currentGcodeLine_; }
+  int currentGcodeRowIndex() const { return currentGcodeRowIndex_; }
   QVariantList gcodeLines() const { return gcodeLines_; }
   QVariantList legendItems() const { return legendItems_; }
   int legendType() const { return m_legendType; }
@@ -622,6 +632,7 @@ private:
   QString estimatedCost_ = QStringLiteral("--");
   int gcodeLineCount_ = 0;
   int currentGcodeLine_ = 0;
+  int currentGcodeRowIndex_ = -1;  ///< gcode-window-follow (see the Q_PROPERTY).
   QVariantList gcodeLines_;
 
   /// Per-role time breakdown aligned with upstream ExtrusionRole.

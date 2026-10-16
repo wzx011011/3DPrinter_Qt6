@@ -1454,6 +1454,7 @@ void PreviewViewModel::rebuildGcodeLineWindow()
   gcodeLines_.clear();
   gcodeLineCount_ = m_gcodeSourceLines.size();
   currentGcodeLine_ = 0;
+  currentGcodeRowIndex_ = -1;
 
   if (m_gcodeSourceLines.isEmpty())
     return;
@@ -1469,6 +1470,13 @@ void PreviewViewModel::rebuildGcodeLineWindow()
   currentGcodeLine_ = m_gcodeSourceLines[anchor].lineNumber;
   const int start = qMax(0, anchor - 24);
   const int end = qMin(m_gcodeSourceLines.size() - 1, anchor + 28);
+  // gcode-window-follow: the row flagged `current` (i == anchor below) sits
+  // at window-local index anchor - start. Derived straight from the anchor
+  // the window was centered on, so it can never drift from the flag -- no
+  // separate lineNumber->index lookup pass is needed. Every currentGcodeLine_
+  // update flows through here or resetPreviewState, so the property stays
+  // in sync with gcodeLines_ by construction.
+  currentGcodeRowIndex_ = anchor - start;
   for (int i = start; i <= end; ++i) {
     const SourceGcodeLine &source = m_gcodeSourceLines[i];
     QVariantMap row;
@@ -2028,6 +2036,7 @@ void PreviewViewModel::resetPreviewState()
   estimatedCost_ = QStringLiteral("--");
   gcodeLineCount_ = 0;
   currentGcodeLine_ = 0;
+  currentGcodeRowIndex_ = -1;  // gcode-window-follow: cleared with the window.
   gcodeLines_.clear();
   m_gcodeSourceLines.clear();
   m_legendType = 0;

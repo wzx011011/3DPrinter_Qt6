@@ -677,6 +677,42 @@ Item {
                                     clip: true
                                     model: root.previewVm ? root.previewVm.gcodeLines : []
 
+                                    // gcode-window-follow: upstream re-derives
+                                    // the window rows whenever the selected
+                                    // line changes so the current line always
+                                    // stays inside the visible window
+                                    // (GCodeViewer.cpp:876-886 re-derives
+                                    // start_id..end_id per m_selected_line_id).
+                                    // The ViewModel likewise rebuilds
+                                    // gcodeLines per stateChanged, but
+                                    // re-assigning the QVariantList resets the
+                                    // ListView to the top, so during playback
+                                    // the current row (window index ~24)
+                                    // scrolled out of the short viewport and
+                                    // never came back. Follow it here.
+                                    // Deliberate simplification: follow only
+                                    // while isPlaying -- following on every
+                                    // stateChanged would also fire on paused
+                                    // scrubs/toggles and fight the user's
+                                    // manual scrolling inside the window
+                                    // (upstream has no scrollable window to
+                                    // fight: it re-derives the row set
+                                    // instead). Qt.callLater defers the jump
+                                    // until the rebound model has been
+                                    // applied, so the positioning can never
+                                    // land on the stale pre-reset window.
+                                    Connections {
+                                        target: root.previewVm
+                                        function onStateChanged() {
+                                            if (!root.previewVm.isPlaying
+                                                || root.previewVm.currentGcodeRowIndex < 0)
+                                                return
+                                            Qt.callLater(() => gcodeList.positionViewAtIndex(
+                                                             root.previewVm.currentGcodeRowIndex,
+                                                             ListView.Contain))
+                                        }
+                                    }
+
                                     delegate: Rectangle {
                                         id: gcodeRow
                                         required property var modelData
