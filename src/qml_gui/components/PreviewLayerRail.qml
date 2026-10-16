@@ -83,6 +83,35 @@ Item {
                && Math.abs(y - c.y) <= handle.height / 2
     }
 
+    // Handle hover readout (layer-rail-z-labels): upstream's rail value table
+    // IS the Z table (GUI_Preview.cpp:562 SetSliderValues(layers_z) into
+    // IMSlider.hpp:212 m_values) and each handle renders "layer / Z.mm"
+    // beside itself (get_label ltHeightWithLayer, IMSlider.cpp:1733-1742).
+    // This rail carries the layer numbers in the bottom Label, so the Z
+    // readout rides the handle hover tooltip. The elapsed-time line uses the
+    // same layer-START boundary as the tick tooltip below: handles and ticks
+    // both sit at the start of their layer, so the elapsed time is the one
+    // accumulated BEFORE that layer begins (IMSlider.cpp:774-781).
+    function handleReadoutText(layerIdx) {
+        if (!root.previewVm || layerIdx < 0 || layerIdx > root.lastLayerIndex)
+            return ""
+        const zPart = qsTr("Z: %1 mm").arg(root.previewVm.layerZAt(layerIdx).toFixed(2))
+        const timePart = (layerIdx > 0 && root.previewVm.layerTimeCount() > 0)
+                         ? root.previewVm.layerTimeLabel(layerIdx - 1) : ""
+        return timePart !== "" ? zPart + "\n" + timePart : zPart
+    }
+
+    // Z span of the current layer range for the bottom Label tooltip.
+    function rangeZLabel() {
+        if (!root.previewVm || root.totalLayers <= 0)
+            return ""
+        const zMin = root.previewVm.layerZAt(root.previewVm.currentLayerMin).toFixed(2)
+        const zMax = root.previewVm.layerZAt(root.previewVm.currentLayerMax).toFixed(2)
+        return zMin === zMax
+               ? qsTr("Z: %1 mm").arg(zMin)
+               : qsTr("Z: %1 - %2 mm").arg(zMin).arg(zMax)
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: Theme.spacingXS
@@ -113,6 +142,15 @@ Item {
             color: Theme.accentLight
             font.pixelSize: Theme.fontSizeSM
             font.bold: true
+            // layer-rail-z-labels: Z of the top layer -- the Z readout of the
+            // top-most slider position (upstream renders each handle's Z via
+            // get_label ltHeightWithLayer, IMSlider.cpp:1733-1742).
+            HoverHandler { id: topLayerHover }
+            ToolTip.visible: topLayerHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: root.previewVm && root.totalLayers > 0
+                ? qsTr("Z: %1 mm").arg(root.previewVm.layerZAt(root.lastLayerIndex).toFixed(2))
+                : ""
         }
 
         CxStepButton {
@@ -180,6 +218,48 @@ Item {
                         event.accepted = true
                     }
                 }
+            }
+
+            // layer-rail-z-labels: passive hover proxies over the two real
+            // handles. The geometry is mapped from the actual handle item the
+            // same way pointOnHandle maps the handle center, and the bindings
+            // track the handle position so the proxy follows it during drags.
+            // Plain Items + HoverHandler accept no pointer events, so the
+            // drag / wheel / right-click interaction paths stay untouched.
+            Item {
+                id: lowerHandleProxy
+                // Upstream one_layer_flag renders only the higher handle's
+                // label (IMSlider.cpp:955); single-layer mode collapses both
+                // handles onto the same layer, so only the upper readout shows.
+                enabled: !root.previewVm || !root.previewVm.singleLayer
+                readonly property var handleItem: layerRangeSlider.first.handle
+                readonly property point mappedPos: handleItem
+                    ? layerRangeSlider.mapFromItem(handleItem, 0, 0)
+                    : Qt.point(0, 0)
+                x: mappedPos.x
+                y: mappedPos.y
+                width: handleItem ? handleItem.width : 0
+                height: handleItem ? handleItem.height : 0
+                HoverHandler { id: lowerHandleHover }
+                ToolTip.visible: lowerHandleHover.hovered
+                ToolTip.delay: 400
+                ToolTip.text: root.handleReadoutText(Math.round(layerRangeSlider.first.value))
+            }
+
+            Item {
+                id: upperHandleProxy
+                readonly property var handleItem: layerRangeSlider.second.handle
+                readonly property point mappedPos: handleItem
+                    ? layerRangeSlider.mapFromItem(handleItem, 0, 0)
+                    : Qt.point(0, 0)
+                x: mappedPos.x
+                y: mappedPos.y
+                width: handleItem ? handleItem.width : 0
+                height: handleItem ? handleItem.height : 0
+                HoverHandler { id: upperHandleHover }
+                ToolTip.visible: upperHandleHover.hovered
+                ToolTip.delay: 400
+                ToolTip.text: root.handleReadoutText(Math.round(layerRangeSlider.second.value))
             }
 
             // Tick marks rendered on the slider track, aligned with upstream IMSlider::draw_ticks.
@@ -331,10 +411,20 @@ Item {
 
         Label {
             Layout.alignment: Qt.AlignHCenter
-            text: root.previewVm ? root.previewVm.currentLayerMin + 1 : 0
+            // Dual readout "first/last" of the current layer range, 1-based
+            // like upstream's handle layer numbers (get_label
+            // ltHeightWithLayer prints value + 1, IMSlider.cpp:1738).
+            text: root.previewVm
+                ? (root.previewVm.currentLayerMin + 1) + "/" + (root.previewVm.currentLayerMax + 1)
+                : "0/0"
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
             font.family: Theme.fontMono
+            // layer-rail-z-labels: Z span of the current range on hover.
+            HoverHandler { id: currentLayerHover }
+            ToolTip.visible: currentLayerHover.hovered
+            ToolTip.delay: 400
+            ToolTip.text: root.rangeZLabel()
         }
 
         CxStepButton {
