@@ -208,7 +208,14 @@ private:
 };
 
 // ── MoveObjectCommand ───────────────────────────────────────────────────────
-/// Records fromIndex/toIndex for object reordering. On undo/redo, swaps back.
+/// Records fromIndex/toIndex for object reordering (upstream "Object order
+/// changed" snapshot, GUI_ObjectList.cpp:2005). undo()/redo() walk the reorder
+/// as ADJACENT service steps in either direction -- ProjectService::moveObject
+/// only keeps model_ (adjacent swap walk) and the parallel arrays (single
+/// swap) consistent for adjacent moves (see UndoCommands.cpp walkObjectOrder).
+/// Callers pre-apply the reorder before push() (the established two-phase
+/// pattern), so redo() skips its first invocation — QUndoStack::push() runs
+/// redo() once and a pre-applied swap would be swapped right back (X6).
 class MoveObjectCommand : public QUndoCommand
 {
 public:
@@ -223,6 +230,10 @@ private:
   int m_fromIndex;
   int m_toIndex;
   ProjectService *m_service;
+  /// QUndoStack::push() invokes redo() once while the reorder is already
+  /// applied — skip that first call (Qt skip-first pattern, same as
+  /// CloneCommand; a swap is not idempotent like Rename/Printable).
+  bool m_firstRedoDone = false;
 };
 
 // ── CloneCommand ────────────────────────────────────────────────────────────

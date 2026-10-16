@@ -209,6 +209,12 @@ endif()
         src/core/model/PartPlate.h
         src/core/model/PartPlateList.cpp
         src/core/model/PartPlateList.h
+        # X6 (2026-10-15): object-list panel scene-tree bridge. QAbstractItemModel
+        # mirror of upstream ObjectDataViewModel (plates -> objects ->
+        # volumes/instances); reads ProjectService source indices + the VM
+        # clusters, mutates only through EditorViewModel's undo-wired methods.
+        src/core/model/SceneTreeModel.cpp
+        src/core/model/SceneTreeModel.h
         src/core/viewmodels/EditorViewModel.cpp
         src/core/viewmodels/EditorViewModel.h
         src/core/viewmodels/PreviewViewModel.cpp

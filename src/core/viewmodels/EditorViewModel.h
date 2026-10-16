@@ -35,6 +35,7 @@
 class ProjectService;
 class UndoRedoManager;
 class ConfigViewModel;
+class SceneTreeModel;
 class QTimer;
 namespace OWzx {
 class MeasureEngine;
@@ -977,8 +978,9 @@ public:
   Q_INVOKABLE bool invalidateSelectedCutInfo();
   /// P16.11: per-instance printable (upstream itInstance toggle,
   /// ObjectList::toggle_printable_state GUI_ObjectList.cpp:5817-5866).
-  Q_INVOKABLE bool instancePrintable(int objectIndex, int instanceIndex) const;
-  Q_INVOKABLE void toggleInstancePrintable(int objectIndex, int instanceIndex);
+  /// X6: SOURCE object index addressing (scene-tree instance rows).
+  Q_INVOKABLE bool instancePrintable(int sourceIndex, int instanceIndex) const;
+  Q_INVOKABLE void toggleInstancePrintable(int sourceIndex, int instanceIndex);
   /// 将指定实例复制为独立对象（对齐上游 GUI_ObjectList::instance_to_object）
   Q_INVOKABLE bool instanceToObject(int instIdx);
   Q_INVOKABLE bool setSelectedInstanceCount(int count);
@@ -1413,10 +1415,32 @@ public:
   /// capture delivery threw a TypeError and picking thumbnails silently
   /// never landed. Emits plateChanged on success like the main variant.
   Q_INVOKABLE bool setPlatePickThumbnailFromBase64(int plateIndex, const QString &base64);
-  /// 重命名对象（对齐上游 Plater::rename_object）
-  Q_INVOKABLE bool renameObject(int index, const QString &newName);
-  /// 移动对象排序位置（对齐上游 GUI_ObjectList 拖拽重排序）
-  Q_INVOKABLE bool moveObject(int fromIndex, int toIndex);
+  /// 重命名对象（对齐上游 GUI_ObjectList 列表内重命名，GUI_ObjectList.cpp:
+  /// 6080-6098 + update_name_in_model :1176-1213）。X6 (2026-10-15)：语义改为
+  /// SOURCE 对象索引（场景树桥按源索引寻址，组织模式过滤表索引面不适用）；
+  /// 空名与上游非法文件名字符集 "<>:/\|?*\"" 拒绝（Plater.cpp:290-298）；
+  /// 命中即入 RenameCommand undo。
+  Q_INVOKABLE bool renameObject(int sourceIndex, const QString &newName);
+  /// 拖拽重排对象顺序（对齐上游 GUI_ObjectList::OnDrop "Object order changed"，
+  /// GUI_ObjectList.cpp:1992-2035：同板内逐对 swap + 快照）。X6：补齐缺失的
+  /// undo 入栈（MoveObjectCommand）与刷新面（重排改变 mesh blob 对象顺序）。
+  /// 语义为 SOURCE 对象索引；跨板拒绝（上游 can_drop :1920-1930 同板守卫）。
+  Q_INVOKABLE bool moveObject(int fromSourceIndex, int toSourceIndex);
+  /// X6: per-row printable toggle for the object-list panel (upstream
+  /// toggle_printable_state single-row case, GUI_ObjectList.cpp:6812-6867).
+  /// Source-index addressing; routes through PrintableCommand like the
+  /// selection-wide setSelectedObjectsPrintable path.
+  Q_INVOKABLE bool toggleObjectPrintableAt(int sourceIndex);
+  /// X6: source-index selection probe for the scene-tree bridge (the
+  /// Q_INVOKABLE isObjectSelected(i) above maps a FILTERED index first).
+  Q_INVOKABLE bool objectSelectedBySource(int sourceIndex) const;
+  /// X6: the object-list panel's scene-tree bridge (root=plates → objects →
+  /// volumes/instances). Created once in the constructor against this VM's
+  /// ProjectService; QML binds it into a TreeView. CONSTANT: the instance is
+  /// stable for the VM lifetime (refresh rides the model's own signal
+  /// subscriptions, not re-creation).
+  Q_PROPERTY(SceneTreeModel *sceneTreeModel READ sceneTreeModel CONSTANT)
+  SceneTreeModel *sceneTreeModel() const { return m_sceneTreeModel; }
   /// 平板设置（对齐上游 PlateSettingsDialog）
   Q_INVOKABLE int plateBedType(int plateIndex) const;
   Q_INVOKABLE bool setPlateBedType(int plateIndex, int bedType);
@@ -2289,6 +2313,10 @@ private:
   SliceService *sliceService_ = nullptr;
   ConfigViewModel *configViewModel_ = nullptr;
   UndoRedoManager *m_undoManager = nullptr;
+  // X6: object-list panel scene-tree bridge (see the sceneTreeModel
+  // Q_PROPERTY above). Owned by this VM; reads the service source-index
+  // surface, mutates only through this VM's undo-wired methods.
+  SceneTreeModel *m_sceneTreeModel = nullptr;
   // Phase 90 (ASMROUTE-01): active canvas type (0=View3D, 1=Preview,
   // 2=AssembleView). Default View3D. Set by BackendContext::setCurrentViewMode.
   int m_activeCanvasType = 0;

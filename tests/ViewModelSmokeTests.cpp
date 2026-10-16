@@ -39,6 +39,7 @@
 
 #include "core/services/AppSettingsService.h"
 #include "core/model/PartPlate.h"
+#include "core/model/SceneTreeModel.h"
 #include "core/model/PartPlateList.h"
 #include "core/services/CameraServiceMock.h"
 #include "core/services/CalibrationServiceMock.h"
@@ -686,6 +687,10 @@ private slots:
   // P16.11: per-instance printable toggle + undo
   // (GUI_ObjectList.cpp:5817-5866).
   void instancePrintableToggleRoundTrip();
+  // X6: object-list scene-tree bridge (ObjectDataViewModel mirror) +
+  // undo-wired panel mutations (rename / reorder / printable).
+  void sceneTreeModelMirrorsUpstreamObjectDataViewModel();
+  void sceneTreeRenameReorderPrintableRideUndoStack();
   // U9: arrange ("A") / auto-orient ("Q") / split / import+drop all ride the
   // undo stack via SceneSnapshotCommand (upstream take_snapshot at
   // Plater.cpp:17945 "Arrange", :13630 "Orient", :10338 "Split to Objects",
@@ -6344,7 +6349,14 @@ void ViewModelSmokeTests::prepareVisibleObjectActionsMapToSourceObjects()
 
   QCOMPARE(editor.objectCount(), 1);
   QCOMPARE(editor.selectedObjectIndex(), -1);
-  QVERIFY(editor.renameObject(0, QStringLiteral("Visible plate 1 object")));
+  // X6: renameObject takes the SOURCE object index (the scene-tree rows and
+  // the undo commands RenameCommand/MoveObjectCommand are source-indexed;
+  // the pre-X6 filtered mapping had no production caller outside identity
+  // scenes). The filtered-context probes below (selectObject(0),
+  // setVolumeExtruderId(0,...), centerSelectedObjects) keep their
+  // filtered->source routing -- this test still proves the two worlds hit
+  // the right object.
+  QVERIFY(editor.renameObject(plate1Object, QStringLiteral("Visible plate 1 object")));
   QCOMPARE(project.objectNames().value(plate0Object), plate0InitialName);
   QCOMPARE(project.objectNames().value(plate1Object), QStringLiteral("Visible plate 1 object"));
 
@@ -10251,6 +10263,201 @@ void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 void ViewModelSmokeTests::instancePrintableToggleRoundTrip()
 {
   QSKIP("P16.11 per-instance printable requires HAS_LIBSLIC3R");
+}
+#endif
+
+// ── X6: object-list scene-tree bridge + undo-wired panel mutations ─────────
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::sceneTreeModelMirrorsUpstreamObjectDataViewModel()
+{
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  // Plate 0: two objects, the first with 2 instances. Plate 1: empty.
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(project.setObjectInstanceCount(0, 2));
+  editor.rebuildAndNotify();
+  QVERIFY(editor.addPlate());
+
+  SceneTreeModel *tree = editor.sceneTreeModel();
+  QVERIFY(tree != nullptr);
+
+  // Root = plates (upstream ObjectDataViewModel root level, itPlate).
+  QCOMPARE(tree->rowCount(), project.plateCount());
+  QVERIFY(tree->rowCount() >= 2);
+
+  const QModelIndex plate0 = tree->index(0, 0);
+  QCOMPARE(plate0.data(SceneTreeModel::NodeTypeRole).toInt(), int(SceneTreeModel::NodePlate));
+  QCOMPARE(plate0.data(SceneTreeModel::PlateIndexRole).toInt(), 0);
+  QCOMPARE(plate0.data(SceneTreeModel::IsCurrentPlateRole).toBool(), true);
+  QCOMPARE(tree->rowCount(plate0), 2); // two objects on plate 0
+
+  const QModelIndex obj0 = tree->index(0, 0, plate0);
+  QCOMPARE(obj0.data(SceneTreeModel::NodeTypeRole).toInt(), int(SceneTreeModel::NodeObject));
+  QCOMPARE(obj0.data(SceneTreeModel::SourceObjectIndexRole).toInt(), 0);
+  QCOMPARE(obj0.data(SceneTreeModel::InstanceCountRole).toInt(), 2);
+  QCOMPARE(obj0.data(SceneTreeModel::PrintableRole).toBool(), true);
+  QCOMPARE(obj0.data(SceneTreeModel::CanRenameRole).toBool(), true);
+  QCOMPARE(tree->rowCount(obj0), 2); // 1 volume + instance root
+
+  // Volume row identity (itVolume).
+  const QModelIndex vol0 = tree->index(0, 0, obj0);
+  QCOMPARE(vol0.data(SceneTreeModel::NodeTypeRole).toInt(), int(SceneTreeModel::NodeVolume));
+  QCOMPARE(vol0.data(SceneTreeModel::VolumeIndexRole).toInt(), 0);
+  QCOMPARE(vol0.data(SceneTreeModel::CanRenameRole).toBool(), false);
+
+  // Instance root + "Instance N" naming (ObjectDataViewModel.cpp:117-124).
+  const QModelIndex instRoot = tree->index(1, 0, obj0);
+  QCOMPARE(instRoot.data(SceneTreeModel::NodeTypeRole).toInt(), int(SceneTreeModel::NodeInstanceRoot));
+  QCOMPARE(instRoot.data(Qt::DisplayRole).toString(), QStringLiteral("Instances"));
+  QCOMPARE(tree->rowCount(instRoot), 2);
+  QCOMPARE(tree->index(0, 0, instRoot).data(Qt::DisplayRole).toString(),
+           QStringLiteral("Instance 1"));
+  QCOMPARE(tree->index(1, 0, instRoot).data(Qt::DisplayRole).toString(),
+           QStringLiteral("Instance 2"));
+  QCOMPARE(tree->index(1, 0, instRoot).data(SceneTreeModel::PrintableRole).toBool(), true);
+
+  // Plate 1 is empty (upstream AddPlate yields a leaf-less plate node).
+  const QModelIndex plate1 = tree->index(1, 0);
+  QCOMPARE(plate1.data(SceneTreeModel::PlateIndexRole).toInt(), 1);
+  QCOMPARE(plate1.data(SceneTreeModel::IsCurrentPlateRole).toBool(), false);
+  QCOMPARE(tree->rowCount(plate1), 0);
+
+  // Selection probe rides the VM selection set (source-index semantics).
+  QVERIFY(editor.selectSourceObject(0));
+  QCOMPARE(tree->index(0, 0, plate0).data(SceneTreeModel::SelectedRole).toBool(), true);
+  QCOMPARE(tree->index(1, 0, plate0).data(SceneTreeModel::SelectedRole).toBool(), false);
+
+  // Renaming through the model (EditRole) updates the tree cell. The rename
+  // rides ProjectService::projectChanged → the VM topology-cluster relay → a
+  // model rebuild (reset), so indexes captured before the mutation are
+  // invalidated by the QAbstractItemModel reset contract -- re-fetch rows
+  // after it, exactly like the QML delegate (which reads roles per reset).
+  QVERIFY(tree->setData(obj0, QStringLiteral("Renamed Object"), Qt::EditRole));
+  const QModelIndex plate0AfterRename = tree->index(0, 0);
+  const QModelIndex obj0AfterRename = tree->index(0, 0, plate0AfterRename);
+  QCOMPARE(obj0AfterRename.data(Qt::DisplayRole).toString(), QStringLiteral("Renamed Object"));
+  QCOMPARE(project.objectNames().value(0), QStringLiteral("Renamed Object"));
+
+  // Topology mutations reshape the tree without re-creating the model
+  // (CONSTANT property contract).
+  SceneTreeModel *before = tree;
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QCOMPARE(editor.sceneTreeModel(), before);
+  QCOMPARE(tree->rowCount(tree->index(0, 0)), 3);
+}
+#else
+void ViewModelSmokeTests::sceneTreeModelMirrorsUpstreamObjectDataViewModel()
+{
+  QSKIP("X6 scene-tree bridge tests require HAS_LIBSLIC3R");
+}
+#endif
+
+#ifdef HAS_LIBSLIC3R
+void ViewModelSmokeTests::sceneTreeRenameReorderPrintableRideUndoStack()
+{
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+
+  // Three objects on plate 0; then plate 1 is created AND made current before
+  // the fourth add -- addPrimitiveToPlate(int) takes the PRIMITIVE TYPE and
+  // lands the object on the CURRENT plate (ProjectService.cpp:9198-9201), so
+  // the plate switch must be explicit for a cross-plate scene.
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.setCurrentPlateIndex(1));
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.rebuildAndNotify();
+  QCOMPARE(project.plateObjectIndices(0).size(), 3);
+  QCOMPARE(project.plateObjectIndices(1).size(), 1);
+
+  // Rename: undo/redo round-trip through RenameCommand.
+  QVERIFY(editor.renameObject(0, QStringLiteral("Alpha")));
+  QCOMPARE(project.objectNames().value(0), QStringLiteral("Alpha"));
+  QVERIFY(undoManager.canUndo());
+  undoManager.undo();
+  QCOMPARE(project.objectNames().value(0) != QStringLiteral("Alpha"), true);
+  undoManager.redo();
+  QCOMPARE(project.objectNames().value(0), QStringLiteral("Alpha"));
+
+  // Upstream rename_item rejects empty input and the illegal-filename set
+  // (GUI_ObjectList.cpp:6089-6095, Plater.cpp:290-298).
+  QVERIFY(!editor.renameObject(0, QString()));
+  QVERIFY(!editor.renameObject(0, QStringLiteral("bad/name")));
+  QCOMPARE(project.objectNames().value(0), QStringLiteral("Alpha"));
+
+  // Reorder ("Object order changed", GUI_ObjectList.cpp:2005-2035): source
+  // index 1 moves to slot 0. Cross-plate targets are rejected (can_drop
+  // same-plate guard, :1920-1930) -- object 3 lives on plate 1.
+  const QString name1Before = project.objectNames().value(1);
+  QVERIFY(editor.moveObject(1, 0));
+  QCOMPARE(project.objectNames().value(0), name1Before);
+  QVERIFY(undoManager.canUndo());
+  undoManager.undo();
+  QCOMPARE(project.objectNames().value(1), name1Before);
+  undoManager.redo();
+  QCOMPARE(project.objectNames().value(0), name1Before);
+  QVERIFY(!editor.moveObject(0, project.plateObjectIndices(1).first())); // cross-plate
+
+  // Long-range reorder (|from-to| > 1): the VM applies it as adjacent steps
+  // so ProjectService's model_ (adjacent walk) and parallel arrays (single
+  // swap) stay in the same permutation, and the undo walk retraces it. After
+  // the undo below, the original order must be EXACTLY restored -- a direct
+  // service moveObject(2, 0) would diverge the two structures (UndoCommands
+  // walkObjectOrder contract).
+  undoManager.clear();
+  QStringList orderBefore;
+  for (int i = 0; i < 3; ++i)
+    orderBefore << project.objectNames().value(i);
+  QVERIFY(editor.moveObject(2, 0)); // [0,1,2] -> [2,0,1] (same plate 0)
+  QCOMPARE(project.objectNames().value(0), orderBefore.value(2));
+  QCOMPARE(project.objectNames().value(1), orderBefore.value(0));
+  QCOMPARE(project.objectNames().value(2), orderBefore.value(1));
+  undoManager.undo();
+  QCOMPARE(project.objectNames().value(0), orderBefore.value(0));
+  QCOMPARE(project.objectNames().value(1), orderBefore.value(1));
+  QCOMPARE(project.objectNames().value(2), orderBefore.value(2));
+  undoManager.redo();
+  QCOMPARE(project.objectNames().value(0), orderBefore.value(2));
+
+  // Per-row printable toggle rides PrintableCommand (undo round-trip), and
+  // the printable mirror == the visibility mirror (R-P0.5 single flag).
+  QVERIFY(editor.toggleObjectPrintableAt(0));
+  QVERIFY(!project.objectPrintable(0));
+  QVERIFY(!project.objectVisible(0));
+  undoManager.undo();
+  QVERIFY(project.objectPrintable(0));
+  QVERIFY(project.objectVisible(0));
+  undoManager.redo();
+  QVERIFY(!project.objectPrintable(0));
+
+  // Per-instance toggle keeps SOURCE-index addressing (P16.11, X6 re-point):
+  // instance 1 flips, instance 0 keeps its state, undo restores -- asserted
+  // relative to the recorded before-state so it does not depend on what
+  // default new instances inherit while the object is printable=off.
+  QVERIFY(project.setObjectInstanceCount(0, 2));
+  editor.rebuildAndNotify();
+  const bool inst0Before = project.instancePrintable(0, 0);
+  const bool inst1Before = project.instancePrintable(0, 1);
+  editor.toggleInstancePrintable(0, 1);
+  QCOMPARE(project.instancePrintable(0, 0), inst0Before);
+  QCOMPARE(project.instancePrintable(0, 1), !inst1Before);
+  undoManager.undo();
+  QCOMPARE(project.instancePrintable(0, 1), inst1Before);
+}
+#else
+void ViewModelSmokeTests::sceneTreeRenameReorderPrintableRideUndoStack()
+{
+  QSKIP("X6 panel mutation tests require HAS_LIBSLIC3R");
 }
 #endif
 

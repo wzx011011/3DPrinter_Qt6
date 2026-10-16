@@ -5,6 +5,10 @@
 #include "core/services/UndoRedoManager.h"
 #include "core/services/UndoCommands.h"
 #include "core/model/PartPlateList.h"
+// X6: the object-list panel scene-tree bridge lives in core/model (next to
+// PartPlate); it reads this VM's service and signals, and routes mutations
+// back through the undo-wired methods below.
+#include "core/model/SceneTreeModel.h"
 #include "core/rendering/AssemblyMeasureGeometry.h"
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/services/PresetService.h" // Phase 222: activeFilamentColours()
@@ -5836,6 +5840,12 @@ void EditorViewModel::rebuildAndNotify()
 EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *sliceService, QObject *parent)
     : QObject(parent), projectService_(projectService), sliceService_(sliceService)
 {
+  // X6: the scene-tree bridge is created once per VM (sceneTreeModel is a
+  // CONSTANT property). It subscribes to the S1 clusters itself; nothing else
+  // re-creates it on load/unload (the model rebuilds its node tree off
+  // topology/plate signals instead).
+  m_sceneTreeModel = new SceneTreeModel(this, projectService_, this);
+
   // Q8(1): measureDimensions tracks the selection ("随 selection 更新"). The
   // memo behind measureDimensions() is invalidated on every cluster that can
   // move the tracked bbox: transform edits (S1 cluster signal; the only one
@@ -8809,20 +8819,22 @@ bool EditorViewModel::invalidateSelectedCutInfo()
 }
 
 // ── P16.11: per-instance printable (GUI_ObjectList.cpp:5817-5866) ──────────
+// X6 (2026-10-15): both take the SOURCE object index now -- the scene-tree
+// instance rows carry source indices and the organize-mode filtered surface
+// does not apply to them. No caller ever used the filtered mapping outside
+// identity-mapped scenes.
 
-bool EditorViewModel::instancePrintable(int objectIndex, int instanceIndex) const
+bool EditorViewModel::instancePrintable(int sourceIndex, int instanceIndex) const
 {
   if (!projectService_)
     return false;
-  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
   return sourceIndex >= 0 && projectService_->instancePrintable(sourceIndex, instanceIndex);
 }
 
-void EditorViewModel::toggleInstancePrintable(int objectIndex, int instanceIndex)
+void EditorViewModel::toggleInstancePrintable(int sourceIndex, int instanceIndex)
 {
   if (!projectService_)
     return;
-  const int sourceIndex = mapFilteredToSourceIndex(objectIndex);
   if (sourceIndex < 0 || instanceIndex < 0)
     return;
   const bool flipped = !projectService_->instancePrintable(sourceIndex, instanceIndex);
@@ -10059,14 +10071,26 @@ QString EditorViewModel::plateThumbnailColor(int plateIndex) const
   return QString::fromUtf8(kColors[plateIndex % count]);
 }
 
-bool EditorViewModel::renameObject(int index, const QString &newName)
+bool EditorViewModel::renameObject(int sourceIndex, const QString &newName)
 {
-  if (!projectService_ || index < 0)
+  if (!projectService_ || sourceIndex < 0)
     return false;
 
-  const int sourceIndex = mapFilteredToSourceIndex(index);
-  if (sourceIndex < 0)
+  // Upstream rename_item rejects empty input by cancelling the edit
+  // (GUI_ObjectList.cpp:6089-6090) and warning on the illegal-filename set
+  // (:6092-6095, Plater::has_illegal_filename_characters Plater.cpp:290-298).
+  if (newName.isEmpty())
     return false;
+  static const QString kIllegalChars = QStringLiteral("<>:/\\|?*\"");
+  for (const QChar &c : newName)
+  {
+    if (kIllegalChars.contains(c))
+    {
+      statusText_ = tr("名称含非法字符：<>:/\\|?*\"");
+      emit stateChanged();
+      return false;
+    }
+  }
 
   const QString oldName = projectService_->objectNames().value(sourceIndex);
   if (oldName == newName)
@@ -10081,16 +10105,95 @@ bool EditorViewModel::renameObject(int index, const QString &newName)
   return true;
 }
 
-bool EditorViewModel::moveObject(int fromIndex, int toIndex)
+bool EditorViewModel::moveObject(int fromSourceIndex, int toSourceIndex)
 {
-  if (!projectService_ || fromIndex < 0 || toIndex < 0)
+  if (!projectService_ || fromSourceIndex < 0 || toSourceIndex < 0)
     return false;
-  // Map filtered indices to source indices
-  const int srcFrom = mapFilteredToSourceIndex(fromIndex);
-  const int srcTo = mapFilteredToSourceIndex(toIndex);
-  if (srcFrom < 0 || srcTo < 0)
+
+  // Upstream can_drop confines object drags to one plate
+  // (GUI_ObjectList.cpp:1920-1930: from_plate != to_plate -> reject).
+  if (projectService_->plateIndexForObject(fromSourceIndex) !=
+      projectService_->plateIndexForObject(toSourceIndex))
     return false;
-  return projectService_->moveObject(srcFrom, srcTo);
+  if (fromSourceIndex == toSourceIndex)
+    return true;
+
+  // X6 root-fix: the pre-X6 stub forwarded to the service without undo and
+  // without any refresh -- a reorder silently desynced the mesh blob, the
+  // object entry cache and the undo history. Upstream OnDrop takes the
+  // "Object order changed" snapshot before swapping
+  // (GUI_ObjectList.cpp:2005-2035); the Qt equivalent is MoveObjectCommand
+  // (its undo/redo walk the same adjacent-step chain back and forth -- see
+  // UndoCommands.cpp walkObjectOrder for why steps must be adjacent) plus
+  // the same refresh sequence deleteObject uses (rebuild entries + mesh blob
+  // + selection revalidation).
+  auto *cmd = m_undoManager ? new MoveObjectCommand(fromSourceIndex, toSourceIndex,
+                                                    projectService_)
+                            : nullptr;
+  bool moved = true;
+  {
+    // Pre-apply as adjacent steps: a single service moveObject(from,to) with
+    // |from-to|>1 would reorder model_ (adjacent walk) differently from the
+    // parallel arrays (single swap).
+    const int delta = fromSourceIndex < toSourceIndex ? 1 : -1;
+    for (int id = fromSourceIndex; id != toSourceIndex && moved; id += delta)
+      moved = projectService_->moveObject(id, id + delta);
+  }
+  if (!moved)
+  {
+    delete cmd;
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  if (m_undoManager && cmd)
+    m_undoManager->push(cmd);
+
+  rebuildObjectEntriesFromService();
+  ensureValidObjectSelection(true);
+  refreshMeshCacheAndFitHint();
+  statusText_ = tr("已调整对象顺序");
+  emitSceneTopologyClusterChanged();
+  return true;
+}
+
+bool EditorViewModel::toggleObjectPrintableAt(int sourceIndex)
+{
+  if (!projectService_ || sourceIndex < 0 ||
+      sourceIndex >= projectService_->objectNames().size())
+    return false;
+
+  // Upstream colPrint click: flip the clicked row's printable flag
+  // (GUI_ObjectList.cpp:6826-6828 -- printable =
+  // !object(obj_idx)->instances[inst_idx]->printable). The object-level write
+  // fans out to every instance of the object (setObjectPrintable), which is
+  // the itObject branch of the upstream toggle (:6850-6852).
+  const bool current = projectService_->objectPrintable(sourceIndex);
+  const bool target = !current;
+  const int plateIndex = projectService_->plateIndexForObject(sourceIndex);
+  if (!projectService_->setObjectPrintable(sourceIndex, target))
+  {
+    statusText_ = projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+
+  // Same undo surface as the selection-wide path (P16.8): PrintableCommand,
+  // instanceIndex -1 = whole object (UndoCommands.h PrintableCommand).
+  if (m_undoManager)
+    m_undoManager->push(new PrintableCommand(sourceIndex, -1, current, target,
+                                             projectService_));
+
+  if (plateIndex >= 0)
+    invalidateSliceResultsForPlate(plateIndex);
+  emit stateChanged();
+  return true;
+}
+
+bool EditorViewModel::objectSelectedBySource(int sourceIndex) const
+{
+  return sourceIndex >= 0 && m_selectedSourceIndices.contains(sourceIndex);
 }
 
 int EditorViewModel::plateBedType(int plateIndex) const

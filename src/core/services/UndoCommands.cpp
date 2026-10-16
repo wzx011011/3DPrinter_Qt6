@@ -424,6 +424,24 @@ void RenameCommand::redo()
 
 // ── MoveObjectCommand ───────────────────────────────────────────────────────
 
+namespace
+{
+// ProjectService::moveObject only keeps model_ (adjacent std::swap walk,
+// upstream GUI_ObjectList.cpp:2028-2029) and the parallel name/printable/
+// position arrays (single from↔to swap) consistent for ADJACENT moves; for
+// |from-to| > 1 the two structures would permute differently. Every caller
+// therefore walks the reorder as adjacent steps -- the same iteration the
+// upstream OnDrop performs -- so each service call is consistent on both.
+void walkObjectOrder(ProjectService *service, int fromIndex, int toIndex)
+{
+  if (!service || fromIndex == toIndex)
+    return;
+  const int delta = fromIndex < toIndex ? 1 : -1;
+  for (int id = fromIndex; id != toIndex; id += delta)
+    service->moveObject(id, id + delta);
+}
+} // namespace
+
 MoveObjectCommand::MoveObjectCommand(int fromIndex, int toIndex,
                                      ProjectService *service,
                                      QUndoCommand *parent)
@@ -435,14 +453,21 @@ MoveObjectCommand::MoveObjectCommand(int fromIndex, int toIndex,
 
 void MoveObjectCommand::undo()
 {
-  if (m_service)
-    m_service->moveObject(m_toIndex, m_fromIndex);
+  // Inverse walk: adjacent steps in the opposite direction retrace the same
+  // permutation (upstream "Object order changed" snapshot, :2005).
+  walkObjectOrder(m_service, m_toIndex, m_fromIndex);
 }
 
 void MoveObjectCommand::redo()
 {
-  if (m_service)
-    m_service->moveObject(m_fromIndex, m_toIndex);
+  // X6: skip-first (see the class comment) — the caller pre-applied the
+  // reorder before push(), and QUndoStack::push() runs redo() once.
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
+  walkObjectOrder(m_service, m_fromIndex, m_toIndex);
 }
 
 // ── CloneCommand ────────────────────────────────────────────────────────────
