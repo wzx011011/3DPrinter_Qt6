@@ -131,6 +131,11 @@ Item {
         }
         onRequestActivateGizmo: function(mode) { root.setGizmoIfAvailable(mode) }
         onRequestObjectLayers: objectLayersDialog.open()
+        // X6: the shared Rename item edits the selected row in the object
+        // list (upstream obj_list()->rename_item(), GUI_ObjectList.cpp:6080)
+        // -- same entry whether the menu was opened from the canvas or the
+        // panel, because the menus are one shared instance.
+        onRequestRenameSelected: leftSidebar.beginObjectListRename()
         onRequestRenamePlate: {
             if (!root.editorVm || root.editorVm.contextPlateIndex < 0) return
             var dialog = plateRenameDialog.createObject(root)
@@ -1488,6 +1493,12 @@ Item {
                 toggleRequested: root.sidebarToggleRequested
                 widthChanged: root.sidebarWidthChanged
                 onExportRequested: root.openExportDialog()
+                // X6: the object-list panel already resolved the menu family
+                // against the shared VM context (same surface the canvas
+                // right-click uses); popup the SAME menu instance here.
+                onObjectListMenuRequested: function(family, menuX, menuY) {
+                    prepareContextMenus.openResolved(family, menuX, menuY)
+                }
                 visible: root.leftPanelVisible
             }
 

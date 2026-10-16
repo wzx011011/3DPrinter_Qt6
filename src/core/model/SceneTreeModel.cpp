@@ -277,6 +277,9 @@ QVariant SceneTreeModel::data(const QModelIndex &index, int role) const
   case NodeTypeRole:
     return int(node->type);
   case PrintableRole:
+    // Real booleans for every row (never invalid QVariant): the QML
+    // delegate binds this role as a required bool property on ALL rows, and
+    // Qt 6.12 warns on undefined-to-bool assignment for inapplicable rows.
     switch (node->type)
     {
     case NodeObject:
@@ -287,7 +290,7 @@ QVariant SceneTreeModel::data(const QModelIndex &index, int role) const
       return m_service->instancePrintable(node->sourceObjectIndex,
                                           node->instanceIndex);
     default:
-      return QVariant();
+      return false;
     }
   case InstanceCountRole:
     return node->type == NodeObject
@@ -302,9 +305,9 @@ QVariant SceneTreeModel::data(const QModelIndex &index, int role) const
                ? m_viewModel->objectSelectedBySource(node->sourceObjectIndex)
                : false;
   case IsCurrentPlateRole:
-    if (node->type == NodePlate)
-      return node->plateIndex == m_service->currentPlateIndex();
-    return QVariant();
+    // Real boolean on every row (see PrintableRole note above).
+    return node->type == NodePlate
+               && node->plateIndex == m_service->currentPlateIndex();
   case VolumeTypeLabelRole:
     return node->type == NodeVolume
                ? m_service->objectVolumeTypeLabel(node->sourceObjectIndex,
@@ -392,6 +395,10 @@ QHash<int, QByteArray> SceneTreeModel::roleNames() const
       {InstanceIndexRole, "instanceIndex"},
       {PlateIndexRole, "plateIndex"},
       {CanRenameRole, "canRename"},
+      // NOTE: NOT "selected" -- QQuickTreeView injects a view-driven
+      // `required property bool selected` (selection-model backed) that
+      // would shadow any same-named model role in delegates.
+      {SelectedRole, "objectSelected"},
   };
   return kRoles;
 }

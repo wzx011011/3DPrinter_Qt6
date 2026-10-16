@@ -31,6 +31,15 @@ Item {
     required property var configVm
     property string processCategory: ""
 
+    // X6: bubble the object-list panel's resolved context-menu request up to
+    // PreparePage (which owns the shared PrepareContextMenus instance).
+    signal objectListMenuRequested(int family, real menuX, real menuY)
+
+    /// X6: forward the shared menus' Rename action to the object list.
+    function beginObjectListRename() {
+        leftSidebar.beginObjectListRename()
+    }
+
     // Dock 状态（绑定 Backend.sidebarXxx）
     required property bool collapsed
     required property int sidebarWidth      // 当前宽度（展开时）
@@ -71,6 +80,9 @@ Item {
             configVm: root.configVm
             processCategory: root.processCategory
             onExportRequested: root.exportRequested()
+            onObjectListMenuRequested: function(family, menuX, menuY) {
+                root.objectListMenuRequested(family, menuX, menuY)
+            }
         }
     }
 

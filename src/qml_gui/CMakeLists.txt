@@ -70,6 +70,7 @@ qt_add_qml_module(owzx_qml
         panels/LeftSidebar.qml
         panels/DockableSidebar.qml
         panels/ChatSidebar.qml
+        panels/ObjectListPanel.qml
         components/NavigatorLabels.qml
         components/ErrorToast.qml
         components/CommandPalette.qml

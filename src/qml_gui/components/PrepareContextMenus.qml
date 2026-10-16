@@ -30,6 +30,13 @@ Item {
     signal requestActivateGizmo(int mode)
     signal requestObjectLayers()
     signal requestRenamePlate()
+    // X6: the shared object menu's Rename item (upstream
+    // append_menu_item_rename first in create_common_object_menu,
+    // GUI_Factories.cpp:1422 -> obj_list()->rename_item, GUI_ObjectList.cpp
+    // :6080). PreparePage routes this to the object-list panel's inline
+    // editor. The part menu's upstream Rename first item rides the same
+    // signal once a renameVolume service surface exists (parity doc §7).
+    signal requestRenameSelected()
 
     function addHandyModel(modelId) {
         if (root.editorVm)
@@ -359,6 +366,15 @@ Item {
         onAboutToShow: ++root.menuRefreshTick
         // Upstream create_extra_object_menu (GUI_Factories.cpp:1463-1524)
         // plus the object_menu() dynamic tail (:1851-1860).
+        // X6: Rename leads the object menu (create_common_object_menu calls
+        // append_menu_item_rename FIRST, GUI_Factories.cpp:1420-1425); the
+        // action opens the object-list panel's inline editor, matching
+        // obj_list()->rename_item() editing the selected row.
+        CxMenuItem {
+            text: qsTr("Rename")
+            enabled: root.editorVm && root.editorVm.selectedSourceObjectIndex >= 0
+            onTriggered: root.requestRenameSelected()
+        }
         // Instance manipulation group (append_menu_items_instance_manipulation,
         // :2018-2035); upstream labels carry the +/- shortcut annotations.
         CxMenuItem {

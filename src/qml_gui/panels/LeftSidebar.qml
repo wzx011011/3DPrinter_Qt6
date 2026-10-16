@@ -19,6 +19,17 @@ Rectangle {
     // preserved exactly.
     property string processCategory: ""
     signal exportRequested()
+    // X6: the object-list panel resolves the shared context-menu family; the
+    // sidebar bubbles it up so PreparePage can popup the same
+    // PrepareContextMenus instance the canvas uses.
+    signal objectListMenuRequested(int family, real menuX, real menuY)
+
+    /// X6: entry point for the shared menus' Rename item (upstream
+    /// append_menu_item_rename -> obj_list()->rename_item()); forwarded to
+    /// the object-list panel's inline editor.
+    function beginObjectListRename() {
+        objectListPanel.beginRenameSelection()
+    }
 
     // Sidebar filament slot rows (upstream add_filament/delete_filament,
     // Plater.cpp:5380,5393): seeded once from the editor extruder count,
@@ -573,6 +584,36 @@ Rectangle {
                     label: qsTr("重量")
                     value: root.editorVm ? root.editorVm.sliceResultWeight : ""
                 }
+            }
+        }
+
+        // ── X6: object list panel (upstream Plater sidebar section) ─────────
+        // Upstream mounts the ObjectList inside the settings sidebar between
+        // the search bar and the params area (Plater.cpp:3234, 3243-3245,
+        // weight 1 vs the params' 3). The section header reuses this file's
+        // PixelHeader; the panel itself is the shared TreeView surface
+        // (see panels/ObjectListPanel.qml + docs/ui-reference/object-list-parity.md).
+        PixelHeader {
+            id: objectListHeader
+            Layout.fillWidth: true
+            title: qsTr("对象列表")
+            iconSource: "qrc:/qml/assets/icons/list-details.svg"
+            collapsible: true
+        }
+
+        ObjectListPanel {
+            id: objectListPanel
+            Layout.fillWidth: true
+            // Upstream proportion: object list weight 1 vs params weight 3
+            // (Plater.cpp:3243-3245) -- the list takes a quarter of the
+            // shared remaining height, params the rest.
+            Layout.fillHeight: true
+            Layout.preferredHeight: sidebarContent.height / 4
+            Layout.minimumHeight: 96
+            visible: objectListHeader.expanded
+            editorVm: root.editorVm
+            onContextMenuResolved: function(family, menuX, menuY) {
+                root.objectListMenuRequested(family, menuX, menuY)
             }
         }
 
