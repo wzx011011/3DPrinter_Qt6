@@ -15,12 +15,11 @@
 //
 // Upstream references:
 //   - ;TYPE: role strings:  libslic3r/ExtrusionEntity.cpp:583-639 (role_to_string / string_to_role)
-//   - EViewType: GAP-3 adjudication -- viewModes() equals the upstream
-//     view_type_items dropdown exactly (10 items, GCodeViewer.cpp:892-901,
-//     strings from :59-84); Tool is hidden upstream and FilamentId stays
-//     internal. OWzx-only render capabilities (Summary/Acceleration/Actual
-//     Speed/Jerk/Actual Flow/Pressure Advance/Tool/FilamentId) remain
-//     addressable via the EViewType internal tail.
+//   - EViewType: GAP-3 + view-mode-toolbar -- viewModes() carries the full
+//     upstream view_type_items dropdown (16 items, GCodeViewer.cpp:1119-1135,
+//     strings from :66-104) in EViewType value order (row == enum value);
+//     Tool is hidden upstream (appended after the string table, :1145) and
+//     FilamentId stays internal, so neither gets a row.
 //   - EGCodeExtrusionRole:  libvgcode/include/Types.hpp:131-157 (canonical Qt6 index)
 
 #include <QDir>
@@ -50,7 +49,7 @@ class PreviewParserTests final : public QObject
 private slots:
   void test_fixture_has_expected_role_coverage();
   void test_role_string_mapping_covers_upstream_enum();
-  void test_view_modes_match_upstream_ten();
+  void test_view_modes_match_upstream_sixteen();
   void test_view_mode_availability_all_upstream_rows_available();
   void test_summary_mode_has_no_gradient_legend();
   void test_divergent_role_colors_correct();
@@ -189,11 +188,14 @@ void PreviewParserTests::test_role_string_mapping_covers_upstream_enum()
   QCOMPARE(preview.roleForType(QStringLiteral("Nonexistent role")), 0);
 }
 
-// GREEN since GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): viewModes() returns exactly
-// the upstream GCodeViewer view_type_items dropdown -- 10 items, fixed order
-// from update_by_mode (GCodeViewer.cpp:892-901), display strings from
-// get_view_type_string (GCodeViewer.cpp:59-84).
-void PreviewParserTests::test_view_modes_match_upstream_ten()
+// GREEN since view-mode-toolbar (PREVIEW-VIEWMODES-16): viewModes() returns
+// the full upstream GCodeViewer view_type_items dropdown -- 16 items with the
+// exact get_view_type_string display names (GCodeViewer.cpp:66-104,
+// membership from update_by_mode :1119-1135). Row order is the EViewType
+// value order, NOT the upstream visual order (Summary first), because the
+// row index must equal the EViewType constant (viewModeIndex_ doubles as the
+// recolor switch key); rows 0..9 keep the historical GAP-3 prefix.
+void PreviewParserTests::test_view_modes_match_upstream_sixteen()
 {
   ProjectService project;
   SliceService slice(&project);
@@ -201,47 +203,58 @@ void PreviewParserTests::test_view_modes_match_upstream_ten()
 
   const QStringList modes = preview.viewModes();
   const QStringList upstream = {
-      QStringLiteral("Line Type"),        // FeatureType
-      QStringLiteral("Filament"),         // ColorPrint
-      QStringLiteral("Speed"),            // Feedrate
-      QStringLiteral("Layer Height"),     // Height
-      QStringLiteral("Line Width"),       // Width
-      QStringLiteral("Flow"),             // VolumetricRate
-      QStringLiteral("Layer Time"),       // LayerTime
-      QStringLiteral("Layer Time (log)"), // LayerTimeLog
-      QStringLiteral("Fan Speed"),        // FanSpeed
-      QStringLiteral("Temperature"),      // Temperature
+      QStringLiteral("Line Type"),        // FeatureType  (upstream row 1)
+      QStringLiteral("Filament"),         // ColorPrint   (upstream row 2)
+      QStringLiteral("Speed"),            // Feedrate     (upstream row 3)
+      QStringLiteral("Layer Height"),     // Height       (upstream row 7)
+      QStringLiteral("Line Width"),       // Width        (upstream row 8)
+      QStringLiteral("Flow"),             // VolumetricRate (upstream row 9)
+      QStringLiteral("Layer Time"),       // LayerTime    (upstream row 11)
+      QStringLiteral("Layer Time (log)"), // LayerTimeLog (upstream row 12)
+      QStringLiteral("Fan Speed"),        // FanSpeed     (upstream row 13)
+      QStringLiteral("Temperature"),      // Temperature  (upstream row 14)
+      QStringLiteral("Summary"),          // Summary      (upstream row 0)
+      QStringLiteral("Actual Speed"),     // ActualSpeed  (upstream row 4)
+      QStringLiteral("Acceleration"),     // Acceleration (upstream row 5)
+      QStringLiteral("Jerk"),             // Jerk         (upstream row 6)
+      QStringLiteral("Actual Flow"),      // ActualVolumetricFlowRate (row 10)
+      QStringLiteral("Pressure Advance"), // PressureAdvance (upstream row 15)
   };
-  QCOMPARE(modes.size(), 10);
+  QCOMPARE(modes.size(), 16);
   for (int i = 0; i < upstream.size(); ++i) {
     QVERIFY2(modes.at(i) == upstream.at(i),
-             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (upstream order), got '%3'")
+             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (EViewType order), got '%3'")
                             .arg(i).arg(upstream.at(i), modes.at(i))));
   }
-  // Internal capability modes must not resurface as dropdown rows.
-  QVERIFY2(!modes.contains(QStringLiteral("Summary")),
-           "Summary has no upstream dropdown row");
+  // Hidden modes must not resurface as dropdown rows.
   QVERIFY2(!modes.contains(QStringLiteral("Tool")),
-           "Tool is hidden upstream (GCodeViewer.cpp:902-904)");
+           "Tool is hidden upstream (appended after the string table, GCodeViewer.cpp:1145)");
   QVERIFY2(!modes.contains(QStringLiteral("FilamentId")),
-           "FilamentId stays internal (GCodeViewer.cpp:911)");
+           "FilamentId stays internal (no upstream dropdown row)");
   // The dropdown row index must equal the EViewType constant for every row so
   // viewModeIndex_ doubles as the combo row and the recolor switch key.
-  QCOMPARE(modes.indexOf(QStringLiteral("Line Type")), PreviewViewModel::VT_LineType);
-  QCOMPARE(modes.indexOf(QStringLiteral("Filament")), PreviewViewModel::VT_Filament);
-  QCOMPARE(modes.indexOf(QStringLiteral("Speed")), PreviewViewModel::VT_Speed);
-  QCOMPARE(modes.indexOf(QStringLiteral("Layer Height")), PreviewViewModel::VT_Height);
-  QCOMPARE(modes.indexOf(QStringLiteral("Line Width")), PreviewViewModel::VT_Width);
-  QCOMPARE(modes.indexOf(QStringLiteral("Flow")), PreviewViewModel::VT_Flow);
-  QCOMPARE(modes.indexOf(QStringLiteral("Layer Time")), PreviewViewModel::VT_LayerTime);
-  QCOMPARE(modes.indexOf(QStringLiteral("Layer Time (log)")), PreviewViewModel::VT_LayerTimeLog);
-  QCOMPARE(modes.indexOf(QStringLiteral("Fan Speed")), PreviewViewModel::VT_FanSpeed);
-  QCOMPARE(modes.indexOf(QStringLiteral("Temperature")), PreviewViewModel::VT_Temperature);
+  QCOMPARE(modes.indexOf(QStringLiteral("Line Type")), int(PreviewViewModel::VT_LineType));
+  QCOMPARE(modes.indexOf(QStringLiteral("Filament")), int(PreviewViewModel::VT_Filament));
+  QCOMPARE(modes.indexOf(QStringLiteral("Speed")), int(PreviewViewModel::VT_Speed));
+  QCOMPARE(modes.indexOf(QStringLiteral("Layer Height")), int(PreviewViewModel::VT_Height));
+  QCOMPARE(modes.indexOf(QStringLiteral("Line Width")), int(PreviewViewModel::VT_Width));
+  QCOMPARE(modes.indexOf(QStringLiteral("Flow")), int(PreviewViewModel::VT_Flow));
+  QCOMPARE(modes.indexOf(QStringLiteral("Layer Time")), int(PreviewViewModel::VT_LayerTime));
+  QCOMPARE(modes.indexOf(QStringLiteral("Layer Time (log)")), int(PreviewViewModel::VT_LayerTimeLog));
+  QCOMPARE(modes.indexOf(QStringLiteral("Fan Speed")), int(PreviewViewModel::VT_FanSpeed));
+  QCOMPARE(modes.indexOf(QStringLiteral("Temperature")), int(PreviewViewModel::VT_Temperature));
+  QCOMPARE(modes.indexOf(QStringLiteral("Summary")), int(PreviewViewModel::VT_Summary));
+  QCOMPARE(modes.indexOf(QStringLiteral("Actual Speed")), int(PreviewViewModel::VT_ActualSpeed));
+  QCOMPARE(modes.indexOf(QStringLiteral("Acceleration")), int(PreviewViewModel::VT_Acceleration));
+  QCOMPARE(modes.indexOf(QStringLiteral("Jerk")), int(PreviewViewModel::VT_Jerk));
+  QCOMPARE(modes.indexOf(QStringLiteral("Actual Flow")), int(PreviewViewModel::VT_ActualFlow));
+  QCOMPARE(modes.indexOf(QStringLiteral("Pressure Advance")), int(PreviewViewModel::VT_PressureAdvance));
 }
 
 // GREEN since GAP-3: every dropdown row is available (v5.11 parses real data
-// for M220/M221/M205/M900, so nothing is data-gated) and the internal
-// capability modes stay out of the dropdown.
+// for M220/M221/M205/M900, so nothing is data-gated -- the six appended rows
+// included) and the hidden internal modes (Tool/FilamentId) stay out of the
+// dropdown.
 void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available()
 {
   ProjectService project;
@@ -249,7 +262,7 @@ void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available
   PreviewViewModel preview(&project, &slice);
 
   const QStringList modes = preview.viewModes();
-  QCOMPARE(modes.size(), 10);
+  QCOMPARE(modes.size(), 16);
   for (int i = 0; i < modes.size(); ++i) {
     QVERIFY2(preview.viewModeAvailable(i),
              qPrintable(QStringLiteral("%1 must be available (all fields parse since v5.11)").arg(modes.at(i))));
@@ -257,15 +270,10 @@ void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available
              qPrintable(QStringLiteral("%1 must not show an unavailable-mode status").arg(modes.at(i))));
   }
 
-  // Retained internal capabilities (no upstream dropdown row).
+  // Hidden internal capabilities (no upstream dropdown row).
   const QStringList internalOnly = {
-    QStringLiteral("Summary"),
-    QStringLiteral("Actual Speed"),
-    QStringLiteral("Acceleration"),
-    QStringLiteral("Jerk"),
-    QStringLiteral("Actual Flow"),
-    QStringLiteral("Pressure Advance"),
-    QStringLiteral("Tool")
+    QStringLiteral("Tool"),
+    QStringLiteral("FilamentId")
   };
   for (const QString &modeName : internalOnly) {
     QVERIFY2(!modes.contains(modeName),
@@ -277,10 +285,11 @@ void PreviewParserTests::test_view_mode_availability_all_upstream_rows_available
            "currentViewModeAvailable must follow setViewModeIndex for dropdown rows");
 }
 
-// GAP-3: Summary lost its dropdown row (no upstream GCodeViewer counterpart)
-// but stays reachable as an internal capability (VT_Summary) and still must
-// produce no gradient legend. legendType() stays 0 (discrete) and
-// legendItems() is empty when viewModeIndex maps to Summary.
+// GAP-3/view-mode-toolbar: Summary IS upstream's first dropdown row
+// (update_by_mode pushes it first, GCodeViewer.cpp:1119) but it is a
+// statistics-only view -- selecting it must still produce no gradient
+// legend. legendType() stays 0 (discrete) and legendItems() is empty when
+// viewModeIndex maps to Summary.
 void PreviewParserTests::test_summary_mode_has_no_gradient_legend()
 {
   ProjectService project;
@@ -340,8 +349,8 @@ void PreviewParserTests::test_all_view_modes_keep_valid_gcv1_payload()
            "fixture should parse before validating view-mode payload survival");
 
   const QStringList modes = preview.viewModes();
-  // Every addressable mode must keep a healthy payload: the 10 upstream
-  // dropdown rows plus the internal capability tail (VT_Summary..VT_FilamentId).
+  // Every addressable mode must keep a healthy payload: the 16 upstream
+  // dropdown rows plus the hidden tail (VT_Tool/VT_FilamentId).
   for (int i = 0; i < PreviewViewModel::VT_ModeCount; ++i) {
     preview.setViewModeIndex(i);
     const QByteArray payload = preview.gcodePreviewData();

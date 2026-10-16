@@ -468,13 +468,14 @@ private slots:
   void prepareContextMeshAndUnitActionsUseUpstreamModelOperations();
   void prepareContextProcessSettingsCopyPasteUsesScopedConfig();
   // Phase 55-04 (GCODE-02/03): render-side role-toggle no-repack guard,
-  // legend/global-scope coherence, currentMove atomicity, upstream-10 contract.
+  // legend/global-scope coherence, currentMove atomicity, upstream view-mode
+  // contract (16 rows since view-mode-toolbar).
   void roleVisibilityToggleDoesNotRepackGcodePreviewData();
   void legendGradientBoundsStableAcrossLayerMoveDrag();
   void currentMoveUpdatesGcodeLineWindowAtomically();
   void stepCurrentMoveClampsAndUpdatesGcodeLineWindow();
   void gcodeLineWindowTokenizesAndTruncatesLikeUpstream();
-  void viewModesExposeUpstreamTenModes();
+  void viewModesExposeUpstreamSixteenModes();
   // Phase 55 code-review fix (GCODE-02): the renderer consumes a DENSE 20-bool
   // mask, not the 18-row QVariantMap UI list. Guard the producer shape and the
   // toggle→mask propagation so the role-visibility feature cannot silently
@@ -6965,11 +6966,15 @@ void ViewModelSmokeTests::currentMoveUpdatesGcodeLineWindowAtomically()
            "gcodeLines window must be populated after a move step");
 }
 
-// GAP-3 (PREVIEW-VIEWMODES-UPSTREAM): belt-and-suspenders alongside
-// PreviewParserTests -- viewModes() must equal the upstream GCodeViewer
-// view_type_items table item by item: count, order, and the exact
-// get_view_type_string display names (GCodeViewer.cpp:892-901 + :59-84).
-void ViewModelSmokeTests::viewModesExposeUpstreamTenModes()
+// view-mode-toolbar (PREVIEW-VIEWMODES-16): belt-and-suspenders alongside
+// PreviewParserTests -- viewModes() must carry the full upstream GCodeViewer
+// view_type_items table item-for-item: count (16), display names, and the
+// row==EViewType invariant. Upstream dropdown order (update_by_mode,
+// GCodeViewer.cpp:1119-1135; strings from get_view_type_string :66-104) is
+// Summary-first; ours is EViewType value order so viewModeIndex_ keeps
+// doubling as the recolor switch key. Rows 0..9 are the unchanged GAP-3
+// prefix, so the appended tail is purely additive.
+void ViewModelSmokeTests::viewModesExposeUpstreamSixteenModes()
 {
   ProjectService project;
   SliceService slice(&project);
@@ -6977,33 +6982,45 @@ void ViewModelSmokeTests::viewModesExposeUpstreamTenModes()
 
   const QStringList modes = preview.viewModes();
   const QStringList upstream = {
-      QStringLiteral("Line Type"),        // FeatureType
-      QStringLiteral("Filament"),         // ColorPrint
-      QStringLiteral("Speed"),            // Feedrate
-      QStringLiteral("Layer Height"),     // Height
-      QStringLiteral("Line Width"),       // Width
-      QStringLiteral("Flow"),             // VolumetricRate
-      QStringLiteral("Layer Time"),       // LayerTime
-      QStringLiteral("Layer Time (log)"), // LayerTimeLog
-      QStringLiteral("Fan Speed"),        // FanSpeed
-      QStringLiteral("Temperature"),      // Temperature
+      QStringLiteral("Line Type"),        // FeatureType  (upstream row 1)
+      QStringLiteral("Filament"),         // ColorPrint   (upstream row 2)
+      QStringLiteral("Speed"),            // Feedrate     (upstream row 3)
+      QStringLiteral("Layer Height"),     // Height       (upstream row 7)
+      QStringLiteral("Line Width"),       // Width        (upstream row 8)
+      QStringLiteral("Flow"),             // VolumetricRate (upstream row 9)
+      QStringLiteral("Layer Time"),       // LayerTime    (upstream row 11)
+      QStringLiteral("Layer Time (log)"), // LayerTimeLog (upstream row 12)
+      QStringLiteral("Fan Speed"),        // FanSpeed     (upstream row 13)
+      QStringLiteral("Temperature"),      // Temperature  (upstream row 14)
+      QStringLiteral("Summary"),          // Summary      (upstream row 0)
+      QStringLiteral("Actual Speed"),     // ActualSpeed  (upstream row 4)
+      QStringLiteral("Acceleration"),     // Acceleration (upstream row 5)
+      QStringLiteral("Jerk"),             // Jerk         (upstream row 6)
+      QStringLiteral("Actual Flow"),      // ActualVolumetricFlowRate (row 10)
+      QStringLiteral("Pressure Advance"), // PressureAdvance (upstream row 15)
   };
   QVERIFY2(modes.size() == upstream.size(),
-           qPrintable(QStringLiteral("viewModes() should expose the 10 upstream modes, got %1").arg(modes.size())));
+           qPrintable(QStringLiteral("viewModes() should expose the 16 upstream modes, got %1").arg(modes.size())));
   for (int i = 0; i < upstream.size(); ++i)
   {
     QVERIFY2(modes.at(i) == upstream.at(i),
-             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (upstream order), got '%3'")
+             qPrintable(QStringLiteral("viewModes()[%1] should be '%2' (EViewType order), got '%3'")
                             .arg(i).arg(upstream.at(i), modes.at(i))));
   }
-  // Upstream hides Tool (commented out at GCodeViewer.cpp:902-904), keeps
-  // FilamentId internal (GCodeViewer.cpp:911), and has no Summary row.
+  // The six appended rows must sit exactly at their EViewType values so a
+  // combo selection feeds the recolor switch key directly.
+  QCOMPARE(modes.indexOf(QStringLiteral("Summary")), int(PreviewViewModel::VT_Summary));
+  QCOMPARE(modes.indexOf(QStringLiteral("Actual Speed")), int(PreviewViewModel::VT_ActualSpeed));
+  QCOMPARE(modes.indexOf(QStringLiteral("Acceleration")), int(PreviewViewModel::VT_Acceleration));
+  QCOMPARE(modes.indexOf(QStringLiteral("Jerk")), int(PreviewViewModel::VT_Jerk));
+  QCOMPARE(modes.indexOf(QStringLiteral("Actual Flow")), int(PreviewViewModel::VT_ActualFlow));
+  QCOMPARE(modes.indexOf(QStringLiteral("Pressure Advance")), int(PreviewViewModel::VT_PressureAdvance));
+  // Upstream hides Tool (appended only after the string table is built,
+  // GCodeViewer.cpp:1145) and has no FilamentId dropdown row.
   QVERIFY2(!modes.contains(QStringLiteral("Tool")),
            "Tool is hidden upstream and must not appear in the dropdown");
-  QVERIFY2(!modes.contains(QStringLiteral("Summary")),
-           "Summary has no upstream dropdown row");
   QVERIFY2(!modes.contains(QStringLiteral("FilamentId")),
-           "FilamentId stays internal (GCodeViewer.cpp:911)");
+           "FilamentId stays internal (no upstream dropdown row)");
 }
 
 // -- Phase 56-01: Wave 0 RED test scaffolds for SETTINGS-01..07 --

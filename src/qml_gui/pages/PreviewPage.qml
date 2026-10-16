@@ -52,7 +52,7 @@ Item {
     // preview-4: localized display names for the legend-header view-mode
     // combo. The upstream English display strings stay verbatim in
     // PreviewViewModel::viewModes() (locked by ViewModelSmokeTests
-    // ::viewModesExposeUpstreamTenModes); only this presentation layer
+    // ::viewModesExposeUpstreamSixteenModes); only this presentation layer
     // localizes them, index-aligned with viewModes().
     function viewModeDisplayName(index) {
         switch (index) {
@@ -66,6 +66,12 @@ Item {
         case 7: return qsTr("层耗时(对数)") // Layer Time (log)
         case 8: return qsTr("风扇转速")     // Fan Speed
         case 9: return qsTr("温度")         // Temperature
+        case 10: return qsTr("摘要")        // Summary
+        case 11: return qsTr("实际速度")    // Actual Speed
+        case 12: return qsTr("加速度")      // Acceleration
+        case 13: return qsTr("抖动")        // Jerk
+        case 14: return qsTr("实际流量")    // Actual Flow
+        case 15: return qsTr("压力前进")    // Pressure Advance
         default: return ""
         }
     }

@@ -906,25 +906,43 @@ QString PreviewViewModel::timeAtMove(int moveIndex) const
 
 QStringList PreviewViewModel::viewModes() const
 {
-  // The upstream-visible view types ONLY, in the fixed update_by_mode order
-  // (GCodeViewer.cpp:892-901): FeatureType, ColorPrint, Feedrate, Height,
-  // Width, VolumetricRate, LayerTime, LayerTimeLog, FanSpeed, Temperature.
-  // Tool is hidden upstream (commented out, GCodeViewer.cpp:902-904) and
-  // FilamentId is internal-only (appended after the string table is built,
-  // GCodeViewer.cpp:911). Display strings are get_view_type_string
-  // (GCodeViewer.cpp:59-84). Row index equals the EViewType value, so
-  // viewModeIndex_ doubles as the combo row and the recolor switch key.
+  // The 16 upstream dropdown rows, display strings verbatim from
+  // get_view_type_string (GCodeViewer.cpp:66-104).
+  //
+  // ORDER NOTE: upstream update_by_mode (GCodeViewer.cpp:1119-1135) shows
+  // these as Summary, Line Type, Filament, Speed, Actual Speed, Acceleration,
+  // Jerk, Layer Height, Line Width, Flow, Actual Flow, Layer Time,
+  // Layer Time (log), Fan Speed, Temperature, Pressure Advance. We keep
+  // EViewType VALUE order instead of that visual order on purpose:
+  // viewModeIndex_ doubles as the combo row AND the recolor switch key, so
+  // mirroring the upstream sequence would force renumbering EViewType
+  // (PreviewViewModel.h invariant: row index == EViewType value). Content is
+  // the upstream 16 items item-for-item; only the sequence differs.
+  //
+  // Rows 0..9 are the historical GAP-3 prefix (unchanged, so every
+  // modes.indexOf(...) consumer keeps its row). Rows 10..15 expose the six
+  // modes whose recolor/legend/hover-detail branches already existed
+  // (v5.11 parses real M220/M221/M205/M900 data for them). Tool stays hidden
+  // upstream (appended only after the string table is built,
+  // GCodeViewer.cpp:1145) and FilamentId stays internal-only, so neither
+  // gets a row.
   return {
-      QStringLiteral("Line Type"),        // FeatureType
-      QStringLiteral("Filament"),         // ColorPrint
-      QStringLiteral("Speed"),            // Feedrate
-      QStringLiteral("Layer Height"),     // Height
-      QStringLiteral("Line Width"),       // Width
-      QStringLiteral("Flow"),             // VolumetricRate
-      QStringLiteral("Layer Time"),       // LayerTime
-      QStringLiteral("Layer Time (log)"), // LayerTimeLog
-      QStringLiteral("Fan Speed"),        // FanSpeed
-      QStringLiteral("Temperature")};     // Temperature
+      QStringLiteral("Line Type"),         // FeatureType  (upstream row 1)
+      QStringLiteral("Filament"),          // ColorPrint   (upstream row 2)
+      QStringLiteral("Speed"),             // Feedrate     (upstream row 3)
+      QStringLiteral("Layer Height"),      // Height       (upstream row 7)
+      QStringLiteral("Line Width"),        // Width        (upstream row 8)
+      QStringLiteral("Flow"),              // VolumetricRate (upstream row 9)
+      QStringLiteral("Layer Time"),        // LayerTime    (upstream row 11)
+      QStringLiteral("Layer Time (log)"),  // LayerTimeLog (upstream row 12)
+      QStringLiteral("Fan Speed"),         // FanSpeed     (upstream row 13)
+      QStringLiteral("Temperature"),       // Temperature  (upstream row 14)
+      QStringLiteral("Summary"),           // Summary      (upstream row 0)
+      QStringLiteral("Actual Speed"),      // ActualSpeed  (upstream row 4)
+      QStringLiteral("Acceleration"),      // Acceleration (upstream row 5)
+      QStringLiteral("Jerk"),              // Jerk         (upstream row 6)
+      QStringLiteral("Actual Flow"),       // ActualVolumetricFlowRate (row 10)
+      QStringLiteral("Pressure Advance")}; // PressureAdvance (upstream row 15)
 }
 
 bool PreviewViewModel::currentViewModeAvailable() const
@@ -1494,10 +1512,9 @@ void PreviewViewModel::togglePlayPause()
 
 void PreviewViewModel::setViewModeIndex(int index)
 {
-  // The QML combo only offers the 10 upstream dropdown rows, but the internal
-  // capability tail (VT_Summary..VT_FilamentId) stays addressable so the
-  // recolor/legend branches and the tests keep exercising them (GAP-3 kept
-  // capabilities).
+  // The QML combos offer the 16 upstream dropdown rows (viewModes()); the
+  // hidden tail (VT_Tool/VT_FilamentId) stays addressable so the recolor
+  // branches and the tests keep exercising it (GAP-3 kept capabilities).
   const int clamped = qBound(0, index, VT_ModeCount - 1);
   if (clamped == viewModeIndex_)
     return;
