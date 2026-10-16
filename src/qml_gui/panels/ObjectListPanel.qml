@@ -539,8 +539,12 @@ Rectangle {
     // Row selection routing (upstream selection_changed :1229-1266 /
     // update_selections :4814): object rows select by SOURCE index (plain
     // click replaces, Ctrl toggles); volume rows select the volume on the
-    // canvas (VM volume selection takes the object index -- identity outside
-    // organize-mode, which is a canvas-only filter state); instance rows
+    // canvas via selectVolumeBySource -- the SOURCE-index twin of
+    // selectVolume() built for callers that carry (sourceObjectIndex,
+    // volumeIndex) directly (EditorViewModel.cpp:7804, the viewport-pick
+    // pattern; selectVolume maps a FILTERED index through
+    // mapFilteredToSourceIndex and would mis-address multi-plate scenes
+    // where visibleObjectIndices = current-plate objects); instance rows
     // select the owning object (no instance-scoped selection surface);
     // plate rows switch the current plate (Plater plate selection surface).
     function _selectRow(row, modifiers) {
@@ -552,7 +556,7 @@ Rectangle {
             else
                 root.editorVm.selectSourceObject(row.sourceObjectIndex)
         } else if (row.nodeType === root.nodeVolume) {
-            root.editorVm.selectVolume(row.sourceObjectIndex, row.volumeIndex)
+            root.editorVm.selectVolumeBySource(row.sourceObjectIndex, row.volumeIndex)
         } else if (row.nodeType === root.nodeInstance) {
             root.editorVm.selectSourceObject(row.sourceObjectIndex)
         } else if (row.nodeType === root.nodePlate) {

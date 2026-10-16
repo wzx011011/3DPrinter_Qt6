@@ -386,7 +386,11 @@ QHash<int, QByteArray> SceneTreeModel::roleNames() const
       {PrintableRole, "printable"},
       {InstanceCountRole, "instanceCount"},
       {VolumeCountRole, "volumeCount"},
-      {SelectedRole, "selected"},
+      // SelectedRole maps to "objectSelected" -- NOT "selected":
+      // QQuickTreeView injects a view-driven
+      // `required property bool selected` (selection-model backed) that
+      // would shadow any same-named model role in delegates.
+      {SelectedRole, "objectSelected"},
       {IsCurrentPlateRole, "isCurrentPlate"},
       {VolumeTypeLabelRole, "volumeTypeLabel"},
       {ExtruderIdRole, "extruderId"},
@@ -395,10 +399,6 @@ QHash<int, QByteArray> SceneTreeModel::roleNames() const
       {InstanceIndexRole, "instanceIndex"},
       {PlateIndexRole, "plateIndex"},
       {CanRenameRole, "canRename"},
-      // NOTE: NOT "selected" -- QQuickTreeView injects a view-driven
-      // `required property bool selected` (selection-model backed) that
-      // would shadow any same-named model role in delegates.
-      {SelectedRole, "objectSelected"},
   };
   return kRoles;
 }
