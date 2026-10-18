@@ -178,6 +178,7 @@ jobs:
             -DBUILD_LIBSLIC3R=ON `
             -DLIBSLIC3R_FROM_SOURCE=ON `
             -DOWZX_QML_GUI=ON `
+            -DOWZX_QML_HOT_RELOAD=OFF `
             -DDEPS_PREFIX="$env:DEPS_PREFIX" `
             -DVCPKG_INSTALLED_DIR="$env:VCPKG_INSTALLED_DIR" `
             -DPAHO_MQTT_PREFIX="$env:PAHO_MQTT_PREFIX"

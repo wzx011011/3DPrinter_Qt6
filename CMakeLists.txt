@@ -65,6 +65,12 @@ option(OWZX_ENABLE_PDB "Emit a full PDB for OWzxSlicer.exe (slow link, ~1.1 GB d
 # checking). Pair with OWZX_ENABLE_PDB=ON for symbolized reports. implies
 # a full rebuild of the instrumented targets; ~2x runtime cost.
 option(OWZX_ENABLE_ASAN "Build owzx_app_core + OWzxSlicer with AddressSanitizer (diagnostics only)" OFF)
+# QML hot reload (2026-10-18, Qt 6.12): compile the QML debug service enabler
+# into OWzxSlicer so `qmlpreview` can attach and hot-patch QML without a
+# restart — trivial diffs patch in place, keeping C++ singletons and the
+# RHI viewport alive. Arms a debug-server hook; dev builds only. CI release
+# builds must pass =OFF (debug port must not ship).
+option(OWZX_QML_HOT_RELOAD "Compile in the QML debug service for qmlpreview hot reload (dev only; opens a debug port)" ON)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -418,6 +424,11 @@ endif()
         src/qml_gui/qml_web.qrc
     )
     target_link_libraries(OWzxSlicer PRIVATE owzx_app_core owzx_qml)
+    # The hot-reload enabler is a static ctor inside qqmldebug.h; no Qt header
+    # includes it transitively, so main_qml.cpp pulls it in under this define.
+    if(OWZX_QML_HOT_RELOAD)
+        target_compile_definitions(OWzxSlicer PRIVATE QT_QML_DEBUG)
+    endif()
     target_link_libraries(OWzxSlicer PRIVATE
         Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Svg
     )

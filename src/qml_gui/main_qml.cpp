@@ -18,6 +18,11 @@
 #include <QStringList>
 #include <QVector>
 #include <QtQml/qqml.h>
+#ifdef QT_QML_DEBUG
+// QML hot reload (qmlpreview): arms the QML debug service before the engine
+// is created. No Qt header includes qqmldebug.h transitively.
+#include <QtQml/qqmldebug.h>
+#endif
 #include <functional>
 #include <memory>
 #include "qml_gui/Renderer/RhiBackendSelector.h"
