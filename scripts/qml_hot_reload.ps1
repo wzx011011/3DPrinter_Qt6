@@ -15,10 +15,22 @@
 #   powershell -ExecutionPolicy Bypass -File scripts/qml_hot_reload.ps1 -AppArgs "--skip-first-run","--open-page","preview"
 #
 # Then just edit any .qml under src/qml_gui/ and save. Ctrl+C here stops the app.
+#
+# Trivial edits (colors/texts/bindings/literals) hot-patch in place with state
+# preserved. Structural edits (add/remove objects or properties) CRASH the
+# running process (the engine's component-rebuild path trips app-side teardown
+# fragility) — pass -AutoRestart to bounce the app back in seconds; the fresh
+# launch serves the edited source file directly, so the structure change lands
+# (runtime state is lost, like any restart).
 param(
   [string[]]$AppArgs = @("--skip-first-run"),
-  [switch]$VerbosePreview
+  [switch]$VerbosePreview,
+  [switch]$AutoRestart
 )
+
+# -File passes raw strings, so "-AppArgs a,b,c" arrives as ONE element; flatten
+# comma-joined values back into separate args (harmless for array invocation).
+$AppArgs = @($AppArgs | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Resolve-Path (Join-Path $scriptDir '..')
@@ -35,13 +47,11 @@ if (-not (Test-Path $exe)) {
 $qmlpreview = $null
 $cacheFile = Join-Path $buildDir 'CMakeCache.txt'
 if (Test-Path $cacheFile) {
-  $qt6Dir = (Select-String -Path $cacheFile -Pattern '^Qt6_DIR:INTERNAL=(.*)$').Matches |
-    ForEach-Object { $_.Groups[1].Value } | Select-Object -First 1
-  if (-not $qt6Dir) {
-    $qt6Dir = (Select-String -Path $cacheFile -Pattern '^Qt6_DIR:.*=(.*)$').Matches |
-      ForEach-Object { $_.Groups[1].Value } | Select-Object -First 1
+  $cacheLine = Select-String -Path $cacheFile -Pattern '^Qt6_DIR:.*?=(.+)$' | Select-Object -First 1
+  if ($cacheLine -and $cacheLine.Matches.Count -gt 0) {
+    $qt6Dir = $cacheLine.Matches[0].Groups[1].Value
+    if ($qt6Dir) { $qmlpreview = Join-Path (Split-Path (Split-Path (Split-Path $qt6Dir))) 'bin\qmlpreview.exe' }
   }
-  if ($qt6Dir) { $qmlpreview = Join-Path (Split-Path (Split-Path (Split-Path $qt6Dir))) 'bin\qmlpreview.exe' }
 }
 if (-not $qmlpreview -or -not (Test-Path $qmlpreview)) {
   $qmlpreview = Join-Path $repoRoot '.deps\Qt6.12\6.12.0\msvc2022_64\bin\qmlpreview.exe'
@@ -80,5 +90,18 @@ Write-Host "[hot-reload] resource map written: $mapFile"
 $previewArgs = @('--resource', $mapFile)
 if ($VerbosePreview) { $previewArgs += '--verbose' }
 Write-Host "[hot-reload] launching: $qmlpreview $($previewArgs -join ' ') $exe $($AppArgs -join ' ')"
-& $qmlpreview @previewArgs $exe @AppArgs
-exit $LASTEXITCODE
+if (-not $AutoRestart) {
+  & $qmlpreview @previewArgs $exe @AppArgs
+  exit $LASTEXITCODE
+}
+# -AutoRestart: relaunch qmlpreview whenever the app dies (structural edits
+# crash it; the relaunch serves the edited source file at load time).
+# NOTE: the running app locks build/OWzxSlicer.exe — stop this script (Ctrl+C)
+# before any build/relink, or the linker fails with LNK1104.
+$round = 0
+while ($true) {
+  $round++
+  & $qmlpreview @previewArgs $exe @AppArgs
+  Write-Host ("[hot-reload] app exited (round " + $round + ", exit " + $LASTEXITCODE + "); restarting in 2s (Ctrl+C to stop)") -ForegroundColor Yellow
+  Start-Sleep -Seconds 2
+}
