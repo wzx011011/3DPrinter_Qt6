@@ -1021,6 +1021,10 @@ Item {
         // filter rather than a global scene overlay.
         CxMenu {
             id: viewMenu
+            // G3 debt ④ (fixed 2026-10-19): a CxMenu without a title renders
+            // no parent row in the top-menu popup, which made the whole view
+            // menu — including the assembly-view entry — unreachable.
+            title: qsTr("视图")
 
             readonly property bool viewEnabled: Backend.currentPage === Backend.tp3DEditor
                                                 || Backend.currentPage === Backend.tpPreview

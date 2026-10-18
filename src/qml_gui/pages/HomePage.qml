@@ -1039,6 +1039,8 @@ Item {
 
         Item { Layout.fillHeight: true }
 
-        Text { text: qsTr("版本 2.4.0-dev  |  Qt 6.10  |  OWzx"); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
+        // G3 debt ③: Qt version is runtime truth (was hardcoded "Qt 6.10"
+        // while the app ships 6.12).
+        Text { text: qsTr("版本 2.4.0-dev  |  Qt %1  |  OWzx").arg(Backend.qtVersion); color: Theme.textDisabled; font.pixelSize: Theme.fontSizeXS }
     }
 }

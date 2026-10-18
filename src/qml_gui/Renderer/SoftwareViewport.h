@@ -6,6 +6,7 @@
 #include <QPointF>
 #include <QQuickPaintedItem>
 #include <QRectF>
+#include <QUrl>
 #include <QVariant>
 #include <QVector>
 #include <QVector3D>
@@ -77,6 +78,68 @@ class SoftwareViewport : public QQuickPaintedItem
   // Phase 121 (PAINT-03/OV-06): brush params (mirror RhiViewport) so the
   // software path can draw a 2D brush cursor circle when a paint gizmo is on.
   Q_PROPERTY(float brushRadius READ brushRadius WRITE setBrushRadius)
+  // G3 debt ② (fixed 2026-10-19): inert contract mirrors of RhiViewport.
+  // OWZX_RHI_RENDERER=software swaps the GLViewport registration to this
+  // class, and every PreparePage binding below must resolve here or the whole
+  // page aborts with "Cannot assign to non-existent property" (startup
+  // exit(-1)). The values are stored but never rendered — the fallback paints
+  // only the bed/preview pass. The mirror set is locked by
+  // QmlSmokeTests::softwareViewportMirrorsPreparePageBindings.
+  Q_PROPERTY(QByteArray advancedCutMarkerData READ advancedCutMarkerData WRITE setAdvancedCutMarkerData)
+  Q_PROPERTY(bool bedCaliLinesActive READ bedCaliLinesActive WRITE setBedCaliLinesActive)
+  Q_PROPERTY(QVariantList bedExcludeAreas READ bedExcludeAreas WRITE setBedExcludeAreas)
+  Q_PROPERTY(bool bedHeightLimitActive READ bedHeightLimitActive WRITE setBedHeightLimitActive)
+  Q_PROPERTY(float bedHeightToLid READ bedHeightToLid WRITE setBedHeightToLid)
+  Q_PROPERTY(float bedHeightToRod READ bedHeightToRod WRITE setBedHeightToRod)
+  Q_PROPERTY(QByteArray bedModelMeshData READ bedModelMeshData WRITE setBedModelMeshData)
+  Q_PROPERTY(float bedPrintableHeight READ bedPrintableHeight WRITE setBedPrintableHeight)
+  Q_PROPERTY(QUrl bedTextureUrl READ bedTextureUrl WRITE setBedTextureUrl)
+  Q_PROPERTY(QString bedTypeImagesDir READ bedTypeImagesDir WRITE setBedTypeImagesDir)
+  Q_PROPERTY(bool bedTypeTexturesActive READ bedTypeTexturesActive WRITE setBedTypeTexturesActive)
+  Q_PROPERTY(int brushCursorType READ brushCursorType WRITE setBrushCursorType)
+  Q_PROPERTY(double brushHeightRange READ brushHeightRange WRITE setBrushHeightRange)
+  Q_PROPERTY(int cameraNavStyle READ cameraNavStyle WRITE setCameraNavStyle)
+  Q_PROPERTY(int currentPlateBedType READ currentPlateBedType WRITE setCurrentPlateBedType)
+  Q_PROPERTY(float cutRotationX READ cutRotationX WRITE setCutRotationX)
+  Q_PROPERTY(float cutRotationY READ cutRotationY WRITE setCutRotationY)
+  Q_PROPERTY(float cutRotationZ READ cutRotationZ WRITE setCutRotationZ)
+  Q_PROPERTY(QByteArray flattenHoverData READ flattenHoverData WRITE setFlattenHoverData)
+  Q_PROPERTY(bool freeCamera READ freeCamera WRITE setFreeCamera)
+  Q_PROPERTY(float gapArea READ gapArea WRITE setGapArea)
+  Q_PROPERTY(QVariantList hintLocalRotation READ hintLocalRotation WRITE setHintLocalRotation)
+  Q_PROPERTY(QByteArray hollowMarkerData READ hollowMarkerData WRITE setHollowMarkerData)
+  Q_PROPERTY(QByteArray measureOverlayData READ measureOverlayData WRITE setMeasureOverlayData)
+  Q_PROPERTY(QVariantList meshBatchExtruderIds READ meshBatchExtruderIds WRITE setMeshBatchExtruderIds)
+  Q_PROPERTY(QVariantList meshBatchInstanceTransforms READ meshBatchInstanceTransforms WRITE setMeshBatchInstanceTransforms)
+  Q_PROPERTY(QVariantList meshBatchPrintableFlags READ meshBatchPrintableFlags WRITE setMeshBatchPrintableFlags)
+  Q_PROPERTY(QVariantList meshBatchVolumeTypes READ meshBatchVolumeTypes WRITE setMeshBatchVolumeTypes)
+  Q_PROPERTY(bool mmuBucketEdgeDetection READ mmuBucketEdgeDetection WRITE setMmuBucketEdgeDetection)
+  Q_PROPERTY(int mmuPaintTool READ mmuPaintTool WRITE setMmuPaintTool)
+  Q_PROPERTY(int navigatorBottomOffset READ navigatorBottomOffset WRITE setNavigatorBottomOffset)
+  Q_PROPERTY(bool navigatorEnabled READ navigatorEnabled WRITE setNavigatorEnabled)
+  Q_PROPERTY(double paintClippingPosition READ paintClippingPosition WRITE setPaintClippingPosition)
+  Q_PROPERTY(bool paintOnOverhangsOnly READ paintOnOverhangsOnly WRITE setPaintOnOverhangsOnly)
+  Q_PROPERTY(float paintOverhangAngle READ paintOverhangAngle WRITE setPaintOverhangAngle)
+  Q_PROPERTY(int paintState READ paintState WRITE setPaintState)
+  Q_PROPERTY(int paintToolType READ paintToolType WRITE setPaintToolType)
+  Q_PROPERTY(QVariantList plateIconStates READ plateIconStates WRITE setPlateIconStates)
+  Q_PROPERTY(bool reverseZoom READ reverseZoom WRITE setReverseZoom)
+  Q_PROPERTY(QVariantList selectedSourceObjectIndices READ selectedSourceObjectIndices WRITE setSelectedSourceObjectIndices)
+  Q_PROPERTY(bool sequentialClearanceActive READ sequentialClearanceActive WRITE setSequentialClearanceActive)
+  Q_PROPERTY(QByteArray sequentialClearanceFill READ sequentialClearanceFill WRITE setSequentialClearanceFill)
+  Q_PROPERTY(QByteArray sequentialClearanceOutline READ sequentialClearanceOutline WRITE setSequentialClearanceOutline)
+  Q_PROPERTY(bool sequentialClearancePreviewMode READ sequentialClearancePreviewMode WRITE setSequentialClearancePreviewMode)
+  Q_PROPERTY(QByteArray sequentialHeightFill READ sequentialHeightFill WRITE setSequentialHeightFill)
+  Q_PROPERTY(float smartFillAngle READ smartFillAngle WRITE setSmartFillAngle)
+  Q_PROPERTY(bool uniformScale READ uniformScale WRITE setUniformScale)
+  Q_PROPERTY(bool zoomToMouse READ zoomToMouse WRITE setZoomToMouse)
+  Q_PROPERTY(QVariantList roleVisibility READ roleVisibility WRITE setRoleVisibility)
+  Q_PROPERTY(QVariantList assembleOffsets READ assembleOffsets WRITE setAssembleOffsets)
+  Q_PROPERTY(QVariantList assembleRotations READ assembleRotations WRITE setAssembleRotations)
+  Q_PROPERTY(QVariantList assembleScales READ assembleScales WRITE setAssembleScales)
+  Q_PROPERTY(int assemblyMeasureSelectedA READ assemblyMeasureSelectedA WRITE setAssemblyMeasureSelectedA)
+  Q_PROPERTY(int assemblyMeasureSelectedB READ assemblyMeasureSelectedB WRITE setAssemblyMeasureSelectedB)
+  Q_PROPERTY(float explosionRatio READ explosionRatio WRITE setExplosionRatio)
 
 public:
   enum CanvasType { CanvasView3D = 0, CanvasPreview = 1 };
@@ -217,6 +280,118 @@ public:
   Q_INVOKABLE void requestViewPreset(int preset);
   // v5.16 (CIRC-01): history no-ops removed with the RhiViewport ones.
   Q_INVOKABLE void mirrorSelection(int axis) { Q_UNUSED(axis); }
+  // G3 ②: inert accessors for the mirror properties above (store only).
+  QByteArray advancedCutMarkerData() const { return m_advancedCutMarkerData; }
+  void setAdvancedCutMarkerData(QByteArray v) { m_advancedCutMarkerData = v; }
+  bool bedCaliLinesActive() const { return m_bedCaliLinesActive; }
+  void setBedCaliLinesActive(bool v) { m_bedCaliLinesActive = v; }
+  QVariantList bedExcludeAreas() const { return m_bedExcludeAreas; }
+  void setBedExcludeAreas(const QVariantList &v) { m_bedExcludeAreas = v; }
+  bool bedHeightLimitActive() const { return m_bedHeightLimitActive; }
+  void setBedHeightLimitActive(bool v) { m_bedHeightLimitActive = v; }
+  float bedHeightToLid() const { return m_bedHeightToLid; }
+  void setBedHeightToLid(float v) { m_bedHeightToLid = v; }
+  float bedHeightToRod() const { return m_bedHeightToRod; }
+  void setBedHeightToRod(float v) { m_bedHeightToRod = v; }
+  QByteArray bedModelMeshData() const { return m_bedModelMeshData; }
+  void setBedModelMeshData(QByteArray v) { m_bedModelMeshData = v; }
+  float bedPrintableHeight() const { return m_bedPrintableHeight; }
+  void setBedPrintableHeight(float v) { m_bedPrintableHeight = v; }
+  QUrl bedTextureUrl() const { return m_bedTextureUrl; }
+  void setBedTextureUrl(const QUrl &v) { m_bedTextureUrl = v; }
+  QString bedTypeImagesDir() const { return m_bedTypeImagesDir; }
+  void setBedTypeImagesDir(const QString &v) { m_bedTypeImagesDir = v; }
+  bool bedTypeTexturesActive() const { return m_bedTypeTexturesActive; }
+  void setBedTypeTexturesActive(bool v) { m_bedTypeTexturesActive = v; }
+  int brushCursorType() const { return m_brushCursorType; }
+  void setBrushCursorType(int v) { m_brushCursorType = v; }
+  double brushHeightRange() const { return m_brushHeightRange; }
+  void setBrushHeightRange(double v) { m_brushHeightRange = v; }
+  int cameraNavStyle() const { return m_cameraNavStyle; }
+  void setCameraNavStyle(int v) { m_cameraNavStyle = v; }
+  int currentPlateBedType() const { return m_currentPlateBedType; }
+  void setCurrentPlateBedType(int v) { m_currentPlateBedType = v; }
+  float cutRotationX() const { return m_cutRotationX; }
+  void setCutRotationX(float v) { m_cutRotationX = v; }
+  float cutRotationY() const { return m_cutRotationY; }
+  void setCutRotationY(float v) { m_cutRotationY = v; }
+  float cutRotationZ() const { return m_cutRotationZ; }
+  void setCutRotationZ(float v) { m_cutRotationZ = v; }
+  QByteArray flattenHoverData() const { return m_flattenHoverData; }
+  void setFlattenHoverData(QByteArray v) { m_flattenHoverData = v; }
+  bool freeCamera() const { return m_freeCamera; }
+  void setFreeCamera(bool v) { m_freeCamera = v; }
+  float gapArea() const { return m_gapArea; }
+  void setGapArea(float v) { m_gapArea = v; }
+  QVariantList hintLocalRotation() const { return m_hintLocalRotation; }
+  void setHintLocalRotation(const QVariantList &v) { m_hintLocalRotation = v; }
+  QByteArray hollowMarkerData() const { return m_hollowMarkerData; }
+  void setHollowMarkerData(QByteArray v) { m_hollowMarkerData = v; }
+  QByteArray measureOverlayData() const { return m_measureOverlayData; }
+  void setMeasureOverlayData(QByteArray v) { m_measureOverlayData = v; }
+  QVariantList meshBatchExtruderIds() const { return m_meshBatchExtruderIds; }
+  void setMeshBatchExtruderIds(const QVariantList &v) { m_meshBatchExtruderIds = v; }
+  QVariantList meshBatchInstanceTransforms() const { return m_meshBatchInstanceTransforms; }
+  void setMeshBatchInstanceTransforms(const QVariantList &v) { m_meshBatchInstanceTransforms = v; }
+  QVariantList meshBatchPrintableFlags() const { return m_meshBatchPrintableFlags; }
+  void setMeshBatchPrintableFlags(const QVariantList &v) { m_meshBatchPrintableFlags = v; }
+  QVariantList meshBatchVolumeTypes() const { return m_meshBatchVolumeTypes; }
+  void setMeshBatchVolumeTypes(const QVariantList &v) { m_meshBatchVolumeTypes = v; }
+  bool mmuBucketEdgeDetection() const { return m_mmuBucketEdgeDetection; }
+  void setMmuBucketEdgeDetection(bool v) { m_mmuBucketEdgeDetection = v; }
+  int mmuPaintTool() const { return m_mmuPaintTool; }
+  void setMmuPaintTool(int v) { m_mmuPaintTool = v; }
+  int navigatorBottomOffset() const { return m_navigatorBottomOffset; }
+  void setNavigatorBottomOffset(int v) { m_navigatorBottomOffset = v; }
+  bool navigatorEnabled() const { return m_navigatorEnabled; }
+  void setNavigatorEnabled(bool v) { m_navigatorEnabled = v; }
+  double paintClippingPosition() const { return m_paintClippingPosition; }
+  void setPaintClippingPosition(double v) { m_paintClippingPosition = v; }
+  bool paintOnOverhangsOnly() const { return m_paintOnOverhangsOnly; }
+  void setPaintOnOverhangsOnly(bool v) { m_paintOnOverhangsOnly = v; }
+  float paintOverhangAngle() const { return m_paintOverhangAngle; }
+  void setPaintOverhangAngle(float v) { m_paintOverhangAngle = v; }
+  int paintState() const { return m_paintState; }
+  void setPaintState(int v) { m_paintState = v; }
+  int paintToolType() const { return m_paintToolType; }
+  void setPaintToolType(int v) { m_paintToolType = v; }
+  QVariantList plateIconStates() const { return m_plateIconStates; }
+  void setPlateIconStates(const QVariantList &v) { m_plateIconStates = v; }
+  bool reverseZoom() const { return m_reverseZoom; }
+  void setReverseZoom(bool v) { m_reverseZoom = v; }
+  QVariantList selectedSourceObjectIndices() const { return m_selectedSourceObjectIndices; }
+  void setSelectedSourceObjectIndices(const QVariantList &v) { m_selectedSourceObjectIndices = v; }
+  bool sequentialClearanceActive() const { return m_sequentialClearanceActive; }
+  void setSequentialClearanceActive(bool v) { m_sequentialClearanceActive = v; }
+  QByteArray sequentialClearanceFill() const { return m_sequentialClearanceFill; }
+  void setSequentialClearanceFill(QByteArray v) { m_sequentialClearanceFill = v; }
+  QByteArray sequentialClearanceOutline() const { return m_sequentialClearanceOutline; }
+  void setSequentialClearanceOutline(QByteArray v) { m_sequentialClearanceOutline = v; }
+  bool sequentialClearancePreviewMode() const { return m_sequentialClearancePreviewMode; }
+  void setSequentialClearancePreviewMode(bool v) { m_sequentialClearancePreviewMode = v; }
+  QByteArray sequentialHeightFill() const { return m_sequentialHeightFill; }
+  void setSequentialHeightFill(QByteArray v) { m_sequentialHeightFill = v; }
+  float smartFillAngle() const { return m_smartFillAngle; }
+  void setSmartFillAngle(float v) { m_smartFillAngle = v; }
+  bool uniformScale() const { return m_uniformScale; }
+  void setUniformScale(bool v) { m_uniformScale = v; }
+  bool zoomToMouse() const { return m_zoomToMouse; }
+  void setZoomToMouse(bool v) { m_zoomToMouse = v; }
+  QVariantList roleVisibility() const { return m_roleVisibility; }
+  void setRoleVisibility(const QVariantList &v) { m_roleVisibility = v; }
+  QVariantList assembleOffsets() const { return m_assembleOffsets; }
+  void setAssembleOffsets(const QVariantList &v) { m_assembleOffsets = v; }
+  QVariantList assembleRotations() const { return m_assembleRotations; }
+  void setAssembleRotations(const QVariantList &v) { m_assembleRotations = v; }
+  QVariantList assembleScales() const { return m_assembleScales; }
+  void setAssembleScales(const QVariantList &v) { m_assembleScales = v; }
+  int assemblyMeasureSelectedA() const { return m_assemblyMeasureSelectedA; }
+  void setAssemblyMeasureSelectedA(int v) { m_assemblyMeasureSelectedA = v; }
+  int assemblyMeasureSelectedB() const { return m_assemblyMeasureSelectedB; }
+  void setAssemblyMeasureSelectedB(int v) { m_assemblyMeasureSelectedB = v; }
+  float explosionRatio() const { return m_explosionRatio; }
+  void setExplosionRatio(float v) { m_explosionRatio = v; }
+
   Q_INVOKABLE void arrangeSelected(float spacing = 0.f, bool rotation = false, bool alignY = false)
   {
     Q_UNUSED(spacing);
@@ -247,6 +422,71 @@ signals:
                             int plateIndex,
                             qreal popupX,
                             qreal popupY);
+  // G3 ②: further signal-compatible mirrors of RhiViewport (same rationale
+  // as the block above — never emitted, they exist so PreparePage's on*
+  // handlers resolve on the software path).
+  void advancedCutPickRequested(QVector3D worldOrigin,
+                                QVector3D worldDirection,
+                                int pickedSourceIndex);
+  void bedDragMoveBegin();
+  void bedDragMoveEnd();
+  void bedDragMoveRequested(const QVector3D &worldDelta);
+  void bucketFillPickRequested(QVector3D worldOrigin,
+                               QVector3D worldDirection,
+                               QVector3D cameraForward,
+                               int pickedSourceIndex,
+                               int paintState,
+                               double seedFillAngle,
+                               bool propagate);
+  void cutPlaneDragRequested(float position);
+  void cutPlaneRotateRequested(int rotationAxis, float deltaDegrees);
+  void flattenHoverRequested(QVector3D worldOrigin,
+                             QVector3D worldDirection,
+                             int pickedSourceIndex);
+  void flattenPickRequested(QVector3D worldOrigin,
+                            QVector3D worldDirection,
+                            int pickedSourceIndex);
+  void gapAreaTuned(double gapArea);
+  void gizmoDragBegin();
+  void gizmoDragEnd();
+  void gizmoMoveRequested(const QVector3D &worldDelta);
+  void gizmoRotateRequested(int axis, float radians);
+  void gizmoScaleRequested(int axis, float factor);
+  void heightRangePickRequested(QVector3D worldOrigin,
+                                QVector3D worldDirection,
+                                QVector3D cameraPosition,
+                                QVector3D cameraForward,
+                                int pickedSourceIndex,
+                                int paintState,
+                                double height);
+  void heightRangeTuned(double height);
+  void hollowPickRequested(QVector3D worldOrigin,
+                           QVector3D worldDirection,
+                           int pickedSourceIndex);
+  void measureHoverLeft();
+  void measurePickRequested(QVector3D worldOrigin,
+                            QVector3D worldDirection,
+                            int pickedSourceIndex,
+                            bool shiftHeld);
+  void paintClippingTuned(double position);
+  void paintPickRequested(QVector3D worldOrigin,
+                          QVector3D worldDirection,
+                          QVector3D cameraPosition,
+                          QVector3D cameraForward,
+                          int pickedSourceIndex,
+                          double brushRadius,
+                          int cursorType,
+                          int paintState,
+                          int smartFill);
+  void plateIconActivated(int plateIndex, int iconId);
+  void smartFillPickRequested(QVector3D worldOrigin,
+                              QVector3D worldDirection,
+                              QVector3D cameraForward,
+                              int pickedSourceIndex,
+                              int paintState,
+                              double smartFillAngle,
+                              bool overhangsOnly,
+                              double overhangAngle);
 
 protected:
   void mousePressEvent(QMouseEvent *event) override;
@@ -369,4 +609,60 @@ private:
   bool m_contextLayerEditingAtPress = false;
   PrepareSceneData m_pickScene;
   QString m_lastThumbnailData;
+  // G3 ②: storage for the inert mirror properties.
+  QByteArray m_advancedCutMarkerData;
+  bool m_bedCaliLinesActive = false;
+  QVariantList m_bedExcludeAreas;
+  bool m_bedHeightLimitActive = false;
+  float m_bedHeightToLid = 0.f;
+  float m_bedHeightToRod = 0.f;
+  QByteArray m_bedModelMeshData;
+  float m_bedPrintableHeight = 0.f;
+  QUrl m_bedTextureUrl;
+  QString m_bedTypeImagesDir;
+  bool m_bedTypeTexturesActive = false;
+  int m_brushCursorType = 0;
+  double m_brushHeightRange = 0.;
+  int m_cameraNavStyle = 0;
+  int m_currentPlateBedType = 0;
+  float m_cutRotationX = 0.f;
+  float m_cutRotationY = 0.f;
+  float m_cutRotationZ = 0.f;
+  QByteArray m_flattenHoverData;
+  bool m_freeCamera = false;
+  float m_gapArea = 0.f;
+  QVariantList m_hintLocalRotation;
+  QByteArray m_hollowMarkerData;
+  QByteArray m_measureOverlayData;
+  QVariantList m_meshBatchExtruderIds;
+  QVariantList m_meshBatchInstanceTransforms;
+  QVariantList m_meshBatchPrintableFlags;
+  QVariantList m_meshBatchVolumeTypes;
+  bool m_mmuBucketEdgeDetection = false;
+  int m_mmuPaintTool = 0;
+  int m_navigatorBottomOffset = 0;
+  bool m_navigatorEnabled = true;
+  double m_paintClippingPosition = 0.;
+  bool m_paintOnOverhangsOnly = false;
+  float m_paintOverhangAngle = 0.f;
+  int m_paintState = 0;
+  int m_paintToolType = 0;
+  QVariantList m_plateIconStates;
+  bool m_reverseZoom = false;
+  QVariantList m_selectedSourceObjectIndices;
+  bool m_sequentialClearanceActive = false;
+  QByteArray m_sequentialClearanceFill;
+  QByteArray m_sequentialClearanceOutline;
+  bool m_sequentialClearancePreviewMode = false;
+  QByteArray m_sequentialHeightFill;
+  float m_smartFillAngle = 0.f;
+  bool m_uniformScale = true;
+  bool m_zoomToMouse = false;
+  QVariantList m_roleVisibility;
+  QVariantList m_assembleOffsets;
+  QVariantList m_assembleRotations;
+  QVariantList m_assembleScales;
+  int m_assemblyMeasureSelectedA = -1;
+  int m_assemblyMeasureSelectedB = -1;
+  float m_explosionRatio = 1.f;
 };

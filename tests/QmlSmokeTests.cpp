@@ -44,6 +44,9 @@
 #include <QQuickWindow>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QFile>
+#include <QRegularExpression>
+#include <QSet>
 #include <memory>
 
 #include "core/debug/CrashHandlerWin.h"
@@ -51,6 +54,7 @@
 #include "qml_gui/BackendContext.h"
 #include "qml_gui/CameraImageProvider.h"
 #include "qml_gui/Renderer/RhiViewport.h"
+#include "qml_gui/Renderer/SoftwareViewport.h"
 #include "qml_gui/Models/ConfigOptionFilterProxy.h"
 
 #include <QSignalSpy>
@@ -155,6 +159,10 @@ private slots:
   void x2NumericEditErrorStateContract();
   void x2PagesCarryCxComponentDiscipline();
   void x2PagesCarryCxComponentDiscipline_data();
+  // G3 ② (2026-10-19): every direct GLViewport binding in PreparePage.qml
+  // must resolve against SoftwareViewport's metaobject, or the
+  // OWZX_RHI_RENDERER=software fallback aborts the page at startup.
+  void softwareViewportMirrorsPreparePageBindings();
   void cleanupTestCase();
 
 private:
@@ -1142,6 +1150,86 @@ void QmlSmokeTests::s1BusyPaintClusterReevaluation()
   // Restore.
   vm->setProperty("supportPaintCursorRadius", oldRadius);
   QVERIFY2(!component.isError(), "no late QML errors on the paint probe");
+}
+
+void QmlSmokeTests::softwareViewportMirrorsPreparePageBindings()
+{
+  // G3 ② (2026-10-19): OWZX_RHI_RENDERER=software swaps the GLViewport
+  // registration to SoftwareViewport; any direct binding on a page's
+  // viewport instance that the mirror lacks aborts the whole page with
+  // "Cannot assign to non-existent property" (startup exit(-1)). Lock the
+  // metaobject contract for both viewport-hosting pages — no software
+  // render pass needed.
+  const QStringList pagePaths = {
+      QStringLiteral(":/qml/OWzx/pages/PreparePage.qml"),
+      QStringLiteral(":/qml/OWzx/pages/PreviewPage.qml"),
+      QStringLiteral(":/qml/OWzx/pages/AssemblePage.qml")};
+  const QMetaObject &mo = SoftwareViewport::staticMetaObject;
+  // QQuickItem/QML built-ins every Item resolves without a mirror.
+  static const QSet<QString> builtins = {
+      QStringLiteral("id"),    QStringLiteral("z"),
+      QStringLiteral("visible"), QStringLiteral("anchors"),
+      QStringLiteral("x"),     QStringLiteral("y"),
+      QStringLiteral("width"), QStringLiteral("height")};
+  const QRegularExpression binding(
+      QStringLiteral("^([A-Za-z_][A-Za-z0-9_]*): "));
+  QStringList missing;
+
+  for (const QString &pagePath : pagePaths) {
+    QFile page(pagePath);
+    QVERIFY2(page.open(QIODevice::ReadOnly),
+             qPrintable(pagePath + QStringLiteral(" not readable")));
+    const QStringList lines =
+        QString::fromUtf8(page.readAll()).split(QLatin1Char('\n'));
+    page.close();
+
+    int opener = -1;
+    for (int i = 0; i < lines.size(); ++i) {
+      if (lines.at(i).contains(QStringLiteral("GLViewport {"))) {
+        opener = i;
+        break;
+      }
+    }
+    QVERIFY2(opener >= 0,
+             qPrintable(QStringLiteral("GLViewport instance not found in ")
+                            + pagePath));
+    const int blockIndent = lines.at(opener).indexOf(QLatin1Char('G'));
+    const QString childIndent(blockIndent + 4, QLatin1Char(' '));
+
+    int depth = 1;
+    for (int i = opener + 1; i < lines.size() && depth > 0; ++i) {
+      const QString &line = lines.at(i);
+      depth += line.count(QLatin1Char('{')) - line.count(QLatin1Char('}'));
+      if (!line.startsWith(childIndent) ||
+          line.mid(childIndent.size(), 1) == QLatin1String(" "))
+        continue;
+      const QRegularExpressionMatch match =
+          binding.match(line.mid(childIndent.size()));
+      if (!match.hasMatch())
+        continue;
+      QString name = match.captured(1);
+      if (name.startsWith(QStringLiteral("on")) && name.size() > 2 &&
+          name.at(2).isUpper())
+        name = name.mid(2, 1).toLower() + name.mid(3);
+      if (builtins.contains(name))
+        continue;
+      const QByteArray member = name.toUtf8();
+      bool resolved = mo.indexOfProperty(member.constData()) >= 0;
+      if (!resolved) {
+        for (int m = 0; m < mo.methodCount() && !resolved; ++m)
+          resolved = mo.method(m).name() == name;
+      }
+      if (!resolved)
+        missing << (pagePath.section(QLatin1Char('/'), -1) + QLatin1Char(':')
+                    + name);
+    }
+  }
+  QVERIFY2(missing.isEmpty(),
+           qPrintable(QStringLiteral(
+                          "SoftwareViewport lacks mirrors for viewport "
+                          "bindings: %1 (software fallback would abort the "
+                          "page at startup)")
+                          .arg(missing.join(QStringLiteral(", ")))));
 }
 
 int main(int argc, char *argv[])

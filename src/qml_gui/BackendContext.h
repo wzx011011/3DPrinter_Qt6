@@ -174,6 +174,9 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   Q_PROPERTY(QString saveActionLabel READ saveActionLabel NOTIFY stateChanged)
   Q_PROPERTY(QString saveActionHint READ saveActionHint NOTIFY stateChanged)
   Q_PROPERTY(int currentPage READ currentPage NOTIFY currentPageChanged)
+  // Runtime Qt version string (qVersion(), e.g. "6.12.0") for user-visible
+  // surfaces (HomePage version footnote). CONSTANT — fixed for the process.
+  Q_PROPERTY(QString qtVersion READ qtVersion CONSTANT)
   Q_PROPERTY(QString lastErrorMessage READ lastErrorMessage NOTIFY errorChanged)
   Q_PROPERTY(int lastErrorSeverity READ lastErrorSeverity NOTIFY errorChanged)
   Q_PROPERTY(QString lastErrorTitle READ lastErrorTitle NOTIFY errorChanged)
@@ -410,6 +413,7 @@ public:
   bool switchPage(int position) override;
   bool toggleSidebar() override;
   int currentPage() const;  // also implements AppToolUiProvider::currentPage
+  QString qtVersion() const { return QString::fromLatin1(qVersion()); }
   // Phase 51: shell action gates (forward to EditorViewModel/PreviewViewModel)
   bool canImport() const;
   bool canSlice() const;

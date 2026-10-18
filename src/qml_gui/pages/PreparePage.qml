@@ -254,6 +254,26 @@ Item {
         viewport3d.requestThumbnailCapture(root.editorVm ? root.editorVm.currentPlateIndex : 0, 128)
     }
 
+    // Phase 156 (CLOS-03): session-capture sweep for plates missing a
+    // thumbnail. Lives on the page ROOT scope — the sessionThumbScheduler
+    // Timer calls root.captureMissingPlateThumbnails(), and the former
+    // depth-3 declaration made that call throw a silent TypeError, so the
+    // scheduler never ran (G3 debt ①, fixed 2026-10-19).
+    function captureMissingPlateThumbnails() {
+        if (!root.editorVm || !viewport3d) return
+        const count = root.editorVm.plateCount
+        if (count <= 0) return
+        // Capture any plate that has no thumbnail yet (including non-current
+        // plates — the gap Phase 151 left). The per-plate signal handler in
+        // the viewport Connections persists each capture into
+        // PartPlate::setThumbnail.
+        for (let i = 0; i < count; i++) {
+            if (root.editorVm.plateThumbnailBase64(i).length === 0) {
+                viewport3d.requestThumbnailCapture(i, 128)
+            }
+        }
+    }
+
     function thumbnailSource(data) {
         if (!data || data.length === 0)
             return ""
@@ -4330,20 +4350,6 @@ Item {
             interval: 250
             repeat: false
             onTriggered: root.captureMissingPlateThumbnails()
-        }
-
-        function captureMissingPlateThumbnails() {
-            if (!root.editorVm || !viewport3d) return
-            const count = root.editorVm.plateCount
-            if (count <= 0) return
-            // Capture any plate that has no thumbnail yet (including non-current
-            // plates — the gap Phase 151 left). The per-plate signal handler
-            // above persists each capture into PartPlate::setThumbnail.
-            for (let i = 0; i < count; i++) {
-                if (root.editorVm.plateThumbnailBase64(i).length === 0) {
-                    viewport3d.requestThumbnailCapture(i, 128)
-                }
-            }
         }
 
         // 对象信息栏（对齐上游 Plater::show_object_info）
