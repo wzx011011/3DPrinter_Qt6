@@ -574,7 +574,10 @@ private:
   int playbackRangeEndExclusive() const;
   void rebuildFromGCode(const QString &filePath);
   void syncPreviewWithActiveResult();
-  void recolorAndPackSegments();
+  /// P17.7 parity recolor; fullColor=true skips the top_layer_only gray /
+  /// dim treatment (PREV-PLAY playback start/end restore the colorful
+  /// "everything shown" pack instead of the scrubbed look).
+  void recolorAndPackSegments(bool fullColor = false);
   void buildLegendItems(int mode, float minV, float maxV);
   QVariantMap legendItem(const QString &label, const QString &color, int count) const;
   void updateToolPositionData();
@@ -636,6 +639,12 @@ private:
   // drives top_layer_only_view_range (GCodeViewer.cpp:1132-1135); the
   // dim-lower-layers pref defaults false (AppConfig.cpp:206-207).
   bool m_topLayerOnly = true;
+  /// PREV-PLAY: playback is a full-color replay animation (upstream has no
+  /// playback facility), so the playAnimation restart must not run the
+  /// top_layer_only gray recolor that a manual scrub triggers -- the timer
+  /// path already skips it, and the restart reusing setCurrentMove would
+  /// otherwise gray the whole model the moment play is pressed.
+  bool m_suppressTopLayerRecolor = false;
   bool m_dimPreviousLayers = false;
   QVariantMap m_fullConfig;
   float prepareTimeSeconds_ = 0.f;

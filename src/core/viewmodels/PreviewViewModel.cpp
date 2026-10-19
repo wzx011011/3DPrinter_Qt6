@@ -794,6 +794,10 @@ PreviewViewModel::PreviewViewModel(ProjectService *projectService, SliceService 
     if (currentMove_ >= end)
     {
       playTimer_->stop();
+      // PREV-PLAY: finishing a replay restores the colorful "everything
+      // shown" pack (currentMove_ sits at the range end; a parity recolor
+      // here would gray all but that layer's band).
+      recolorAndPackSegments(true);
       // R-P1.B: notify the UI that playback finished -- without this emit
       // isPlaying stayed true and the QML play/pause button stuck on
       // "playing" after every completed playback.
@@ -1212,8 +1216,10 @@ void PreviewViewModel::setCurrentMove(int move)
   // P17.7: top_layer_only grays out-of-top-layer segments as the scrub
   // position crosses layer boundaries — repack keeps the baked colors in
   // sync with the current position (the payload rebuild mirrors upstream
-  // refresh_render_paths on sequential-view changes).
-  if (m_topLayerOnly)
+  // refresh_render_paths on sequential-view changes). PREV-PLAY: the
+  // playback restart bypasses this (playback is a full-color replay, see
+  // m_suppressTopLayerRecolor).
+  if (m_topLayerOnly && !m_suppressTopLayerRecolor)
     recolorAndPackSegments();
   emit stateChanged();
 }
@@ -1530,7 +1536,16 @@ void PreviewViewModel::playAnimation()
   const int start = playbackRangeStart();
   const int end = playbackRangeEndExclusive();
   if (currentMove_ >= end || currentMove_ < start)
+  {
+    // Full-color replay: suppress the top_layer_only gray recolor that a
+    // manual scrub would trigger for this position change (the timer path
+    // already skips it).
+    m_suppressTopLayerRecolor = true;
     setCurrentMove(start);
+    m_suppressTopLayerRecolor = false;
+    // Repack in full color even when the previous scrub left a gray pack.
+    recolorAndPackSegments(true);
+  }
   playTimer_->start();
   emit stateChanged();
 }
@@ -3968,7 +3983,7 @@ double PreviewViewModel::extruderUsedWeight(int extruderId) const
   return m_extruderUsedWeight.value(extruderId, 0.0); // grams
 }
 
-void PreviewViewModel::recolorAndPackSegments()
+void PreviewViewModel::recolorAndPackSegments(bool fullColor)
 {
   gcodePreviewData_.clear();
   legendItems_.clear();
@@ -4076,16 +4091,21 @@ void PreviewViewModel::recolorAndPackSegments()
     // P17.7: top_layer_only — while the sequential view is scrubbed
     // (moveEnd short of the full toolpath), segments outside the top layer
     // render in the upstream Neutral_Color dark gray
-    // (GV.cpp:3285 + :750 Neutral_Color = 0.18 gray).
-    const bool topLayerGray =
-        m_topLayerOnly && currentMove_ < moveCount_ && s.layer != currentLayerMax_;
+    // (GV.cpp:3285 + :750 Neutral_Color = 0.18 gray). The "current top
+    // layer" is the LAYER OF THE SCRUB POSITION (toolLayer_), NOT the
+    // layer-rail max handle -- with the rail parked at full range the old
+    // proxy grayed every segment except the last layer, so pressing play
+    // (which restarts at the range start) turned the whole model gray.
+    const int currentTopLayer = hasToolPosition_ ? toolLayer_ : currentLayerMax_;
+    const bool topLayerGray = !fullColor
+        && m_topLayerOnly && currentMove_ < moveCount_ && s.layer != currentTopLayer;
     // P17.12: dim-lower-layers — upstream darkens the TRUE color of layers
     // strictly below the viewed top layer while top-layer-only is scrubbing
     // (ViewerImpl.cpp:1225-1290: dim > gray precedence, so dimmed layers keep
     // their hue instead of collapsing to Neutral_Color gray; layers above the
     // current one stay gray).
     const bool dimmed =
-        m_dimPreviousLayers && topLayerGray && s.layer < currentLayerMax_;
+        !fullColor && m_dimPreviousLayers && topLayerGray && s.layer < currentTopLayer;
 
     if (mode == VT_LineType)
     {
