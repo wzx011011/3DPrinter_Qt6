@@ -29,6 +29,26 @@ ApplicationWindow {
     readonly property int resizeMargin: 6
     // AI 助手聊天侧栏开关（OWzx-only，docs/ai-control.md）
     property bool aiChatOpen: false
+    // STARTUP-DEFER (2026-10-19): Plater (Prepare+Preview+Assemble, ~2.7s of
+    // the measured engine->load) builds only after the first paint (timer
+    // below) — or immediately when the user actually enters the prepare/
+    // preview pages, whichever comes first.
+    property bool deferredUiReady: false
+
+    // Null-safe access to the (possibly not-yet-loaded) Plater's prepare
+    // page; every plater.preparePageRef call site routes through this.
+    function preparePage()
+    {
+        return platerLoader.item ? platerLoader.item.preparePageRef : null
+    }
+
+    Timer {
+        id: deferredUiTimer
+        interval: 100
+        repeat: false
+        running: false
+        onTriggered: root.deferredUiReady = true
+    }
     // Frame margin is 0 by default: the shell fills the whole window so the
     // app content goes edge-to-edge (matching the OrcaSlicer screenshot).
     readonly property int frameMargin: 0
@@ -221,7 +241,8 @@ ApplicationWindow {
             }
         }
         function onExportGCodeRequested() {
-            plater.preparePageRef.openExportDialog()
+            const p = root.preparePage()
+            if (p) p.openExportDialog()
         }
     }
 
@@ -506,7 +527,7 @@ ApplicationWindow {
         sequences: [StandardKey.Undo]
         enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
-        onActivated: plater.preparePageRef.undoFromTopbar()
+        onActivated: { const p = root.preparePage(); if (p) p.undoFromTopbar() }
     }
     Shortcut {
         sequences: [StandardKey.Save]
@@ -522,13 +543,13 @@ ApplicationWindow {
         sequences: [StandardKey.Redo]
         enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
-        onActivated: plater.preparePageRef.redoFromTopbar()
+        onActivated: { const p = root.preparePage(); if (p) p.redoFromTopbar() }
     }
     Shortcut {
         sequence: "Ctrl+Shift+Z"
         enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
-        onActivated: plater.preparePageRef.redoFromTopbar()
+        onActivated: { const p = root.preparePage(); if (p) p.redoFromTopbar() }
     }
     // Ctrl+Tab (upstream KBShortcutsDialog global "Switch table page",
     // MainFrame tab order): cycle the top-level pages through the guarded
@@ -648,7 +669,7 @@ ApplicationWindow {
         // KBShortcutsDialog.cpp:189)
         sequence: "Ctrl+Shift+G"
         enabled: Backend.currentPage === Backend.tp3DEditor
-        onActivated: plater.preparePageRef.openPrintDialog()
+        onActivated: { const p = root.preparePage(); if (p) p.openPrintDialog() }
     }
     // ── Phase 237 (VIEW-01): camera view presets (upstream Ctrl+0..6,
     // GLCanvas3D.cpp:3192-3201 / KBShortcutsDialog.cpp:247-253). The
@@ -806,12 +827,13 @@ ApplicationWindow {
             // 无需显式 property 传递（避免 required property 在构造期求值产生 undefined 误报）
             BBLTopbar {
                 id: bblTopbar
-                // Phase 3: preparePage 现在是 Plater 内部子组件，通过 plater.preparePageRef 访问
-                preparePageRef: plater.preparePageRef
+                // Phase 3: preparePage 现在是 Plater 内部子组件，通过 root.preparePage() 访问
+                // （Plater 延迟构造期间为 null，BBLTopbar 全部消费点已判空）
+                preparePageRef: platerLoader.item ? platerLoader.item.preparePageRef : null
                 // Phase 237 (VIEW-01): preview canvas for the View menu / Ctrl+0..6
                 // active-viewport routing (upstream MainFrame::select_view targets
                 // the current canvas3D, MainFrame.cpp:3455).
-                previewPageRef: plater.previewPageRef
+                previewPageRef: platerLoader.item ? platerLoader.item.previewPageRef : null
                 Layout.fillWidth: true
                 Layout.preferredHeight: root.prepareChromeHeight
                 windowVisibility: root.visibility
@@ -828,12 +850,12 @@ ApplicationWindow {
                     openModelDialog.nameFilters = [nameFilter, qsTr("所有文件 (*)")]
                     openModelDialog.open()
                 }
-                onExportGcodeRequested: plater.preparePageRef.openExportDialog()
+                onExportGcodeRequested: { const p = root.preparePage(); if (p) p.openExportDialog() }
                 onExportAllGcodeRequested: exportAllGcodeDialog.open()
                 onExportProjectRequested: saveProjectAsDialog.open()
                 onExportModelRequested: exportModelDialog.open()
-                onUndoRequested: if (Backend.currentPage === Backend.tp3DEditor) plater.preparePageRef.undoFromTopbar()
-                onRedoRequested: if (Backend.currentPage === Backend.tp3DEditor) plater.preparePageRef.redoFromTopbar()
+                onUndoRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.undoFromTopbar() }
+                onRedoRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.redoFromTopbar() }
                 // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the
                 // Edit-menu clipboard/delete/clone set routes through the same
                 // ViewModel actions as the shortcuts; delete-selected keeps the
@@ -841,7 +863,7 @@ ApplicationWindow {
                 onEditCutRequested: if (Backend.editorViewModel) Backend.editorViewModel.cutSelectedObjects()
                 onEditCopyRequested: if (Backend.editorViewModel) Backend.editorViewModel.copySelectedObjects()
                 onEditPasteRequested: if (Backend.editorViewModel) Backend.editorViewModel.pasteObjects()
-                onEditDeleteRequested: if (Backend.currentPage === Backend.tp3DEditor) plater.preparePageRef.confirmDeleteSelection()
+                onEditDeleteRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.confirmDeleteSelection() }
                 onEditCloneRequested: if (Backend.editorViewModel) Backend.editorViewModel.duplicateSelectedObjects()
                 onEditDuplicatePlateRequested: if (Backend.editorViewModel) Backend.editorViewModel.clonePlate(Backend.editorViewModel.currentPlateIndex)
                 onCalibrationRequested: Backend.requestSelectTab(Backend.tpCalibration)
@@ -906,11 +928,11 @@ ApplicationWindow {
                 id: printTopMenuExternal
                 CxMenuItem {
                     text: qsTr("发送打印")
-                    onTriggered: plater.preparePageRef.openPrintDialog()
+                    onTriggered: { const p = root.preparePage(); if (p) p.openPrintDialog() }
                 }
                 CxMenuItem {
                     text: qsTr("导出 G-code")
-                    onTriggered: plater.preparePageRef.openExportDialog()
+                    onTriggered: { const p = root.preparePage(); if (p) p.openExportDialog() }
                 }
             }
 
@@ -962,22 +984,32 @@ ApplicationWindow {
                 }
                 // Page 1 (tp3DEditor) + Page 2 (tpPreview) — Plater 单实例共享
                 // PreparePage 和 PreviewPage 作为 Plater 内部常驻子组件，由 viewMode 切可见性（ARCH-05/06/07）。
-                Plater {
-                    id: plater
-                    editorVm: Backend.editorViewModel
-                    previewVm: Backend.previewViewModel
-                    configVm: Backend.configViewModel
-                    viewMode: Backend.currentViewMode
-                    // Phase 4: sidebar dockable 三态绑定 Backend (统一管理 + 持久化)
-                    sidebarCollapsed: Backend.sidebarCollapsed
-                    sidebarWidth: Backend.sidebarWidth
-                    sidebarMinWidth: Backend.sidebarMinWidth
-                    sidebarMaxWidth: Backend.sidebarMaxWidth
-                    sidebarDockArea: Backend.sidebarDockArea
-                    sidebarToggleRequested: function() { Backend.requestToggleSidebar() }
-                    sidebarWidthChanged: function(w) { Backend.requestSetSidebarWidth(w) }
-                    // Phase 4 (Sidebar Dockable) 会在此接 BBLTopbar 折叠按钮；当前默认展开
-                    leftPanelVisible: true
+                // STARTUP-DEFER (2026-10-19): Plater 构造占 engine->load 的
+                // ~57%（对照量测 4772ms→2041ms），延迟到首帧后 100ms 或用户
+                // 进入 prepare/preview 时立即加载，二取先。
+                Loader {
+                    id: platerLoader
+                    active: root.deferredUiReady
+                             || Backend.currentPage === Backend.tp3DEditor
+                             || Backend.currentPage === Backend.tpPreview
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    sourceComponent: Plater {
+                        editorVm: Backend.editorViewModel
+                        previewVm: Backend.previewViewModel
+                        configVm: Backend.configViewModel
+                        viewMode: Backend.currentViewMode
+                        // Phase 4: sidebar dockable 三态绑定 Backend (统一管理 + 持久化)
+                        sidebarCollapsed: Backend.sidebarCollapsed
+                        sidebarWidth: Backend.sidebarWidth
+                        sidebarMinWidth: Backend.sidebarMinWidth
+                        sidebarMaxWidth: Backend.sidebarMaxWidth
+                        sidebarDockArea: Backend.sidebarDockArea
+                        sidebarToggleRequested: function() { Backend.requestToggleSidebar() }
+                        sidebarWidthChanged: function(w) { Backend.requestSetSidebarWidth(w) }
+                        // Phase 4 (Sidebar Dockable) 会在此接 BBLTopbar 折叠按钮；当前默认展开
+                        leftPanelVisible: true
+                    }
                 }
                 // Page 2 slot 占位 —— 实际内容由 slot 1 的 Plater 承载（viewMode=Preview 时显示）
                 // 此 Item 仅占位以满足 StackLayout 9-slot 结构，不可见（visible 绑定 false）。
@@ -1490,6 +1522,10 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        // STARTUP-DEFER: let the window paint Home first; the deferred-UI
+        // timer (100ms one-shot) then flips deferredUiReady to build Plater
+        // off the critical path.
+        deferredUiTimer.start()
         // S6: the persisted theme is applied by BackendContext's constructor
         // (initial applyTheme sync before QML loads) — Theme.qml projects
         // Backend.qmlTheme, so there is no QML-side restore step anymore.
