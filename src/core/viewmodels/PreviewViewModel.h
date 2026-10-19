@@ -572,6 +572,17 @@ private:
   /// (moveCount_ fallback). The live range is read per tick so narrowing
   /// the rail mid-playback halts at the band edge.
   int playbackRangeEndExclusive() const;
+  /// PREV-PLAY-AUDIT: inclusive playable ceiling for the current band. Full
+  /// range keeps the legacy [0, moveCount_] rest semantics (the load park
+  /// position shows everything); a narrowed band clamps to its last move so
+  /// the playhead/marker can never strand outside the drawn band (the move
+  /// slider used to scrub past a single-layer band into an empty viewport
+  /// with a floating marker).
+  int playbackRangeLastPlayable() const;
+  /// PREV-PLAY-AUDIT: reposition currentMove_ inside the current band after
+  /// a layer-range change (narrowing the rail used to leave the playhead --
+  /// and thus moveEnd/marker -- outside the visible band).
+  void clampMoveToPlaybackRange();
   void rebuildFromGCode(const QString &filePath);
   void syncPreviewWithActiveResult();
   /// P17.7 parity recolor; fullColor=true skips the top_layer_only gray /

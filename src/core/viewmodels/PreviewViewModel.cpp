@@ -1107,8 +1107,13 @@ void PreviewViewModel::setLayerRange(int minLayer, int maxLayer)
     return;
   currentLayerMin_ = lo;
   currentLayerMax_ = hi;
-  // P17.7: top_layer_only tints segments outside the current top layer, so a
-  // range change re-runs the recolor while the flag is on.
+  // PREV-PLAY-AUDIT: narrowing the band must reposition the playhead into
+  // it -- otherwise moveEnd stays past the band's last move (viewport for
+  // the band renders nothing) while the marker keeps the old position
+  // (floating over empty space).
+  clampMoveToPlaybackRange();
+  // P17.7: top_layer_only tints segments outside the current top layer, so
+  // a range change re-runs the recolor while the flag is on.
   if (m_topLayerOnly && !segments_.empty())
     recolorAndPackSegments();
   emit stateChanged();
@@ -1154,7 +1159,14 @@ void PreviewViewModel::setSingleLayer(bool enabled)
     return;
   singleLayer_ = enabled;
   if (singleLayer_)
-    setLayerRange(currentLayerMax_, currentLayerMax_);
+  {
+    // PREV-PLAY-AUDIT: anchor the band to the LAYER OF THE PLAYHEAD (the
+    // layer the user is looking at), not the rail's max handle -- the old
+    // anchor left the playhead outside the band, rendering an empty
+    // viewport with a floating marker right after the toggle.
+    const int anchor = hasToolPosition_ ? toolLayer_ : currentLayerMax_;
+    setLayerRange(anchor, anchor);
+  }
   else
     setLayerRange(0, layerCount_ - 1);
   emit stateChanged();
@@ -1207,7 +1219,12 @@ void PreviewViewModel::moveLayerRange(int delta)
 
 void PreviewViewModel::setCurrentMove(int move)
 {
-  const int clamped = qBound(0, move, moveCount_);
+  // PREV-PLAY-AUDIT: band-aware clamp -- with a narrowed layer range the
+  // playhead cannot leave the band, so the slider/Home/End/step paths can
+  // never strand the marker outside the drawn band (empty viewport with a
+  // floating marker). Full range keeps the legacy [0, moveCount_] bounds.
+  const int clamped = qBound(playbackRangeStart(), move,
+                             playbackRangeLastPlayable());
   if (clamped == currentMove_)
     return;
   currentMove_ = clamped;
@@ -1534,8 +1551,8 @@ void PreviewViewModel::playAnimation()
   // narrowed layer range) restarts from the range's first move so the
   // marker traces exactly the visible band.
   const int start = playbackRangeStart();
-  const int end = playbackRangeEndExclusive();
-  if (currentMove_ >= end || currentMove_ < start)
+  const int last = playbackRangeLastPlayable();
+  if (currentMove_ >= last || currentMove_ < start)
   {
     // Full-color replay: suppress the top_layer_only gray recolor that a
     // manual scrub would trigger for this position change (the timer path
@@ -1644,6 +1661,32 @@ int PreviewViewModel::playbackRangeEndExclusive() const
       return layerLastMove_[l] + 1;
   }
   return moveCount_;
+}
+
+// PREV-PLAY-AUDIT: inclusive playable ceiling. Full range keeps the legacy
+// park-at-moveCount_ rest; a narrowed band clamps to its last move so the
+// playhead never leaves the drawn band.
+int PreviewViewModel::playbackRangeLastPlayable() const
+{
+  const int start = playbackRangeStart();
+  const int end = playbackRangeEndExclusive();
+  if (start == 0 && end == moveCount_)
+    return moveCount_;               // full range: legacy semantics
+  return qMax(start, end - 1);       // narrowed band: last in-band move
+}
+
+// PREV-PLAY-AUDIT: after a layer-range change, pull the playhead back into
+// the band (tool position + gcode window follow; the pack itself is
+// refreshed by the caller).
+void PreviewViewModel::clampMoveToPlaybackRange()
+{
+  const int clamped = qBound(playbackRangeStart(), currentMove_,
+                             playbackRangeLastPlayable());
+  if (clamped == currentMove_)
+    return;
+  currentMove_ = clamped;
+  updateToolPositionData();
+  rebuildGcodeLineWindow();
 }
 
 void PreviewViewModel::setViewModeIndex(int index)
