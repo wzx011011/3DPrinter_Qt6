@@ -387,6 +387,15 @@ ApplicationWindow {
         id: shortcutDialog
     }
 
+    // Preferences dialog (2026-10-19): upstream hosts Preferences as a modal
+    // dialog opened from the menu, not as a workflow tab. Opened via the
+    // topbar preferencesRequested signal, Ctrl+P, the command palette, and
+    // Backend.showPreferencesDialog() (--open-dialog preferences).
+    PreferencesDialog {
+        id: preferencesDialog
+        settingsVm: Backend.settingsViewModel
+    }
+
     // U7: the "?" global entry the dialog always advertised is now real
     // (upstream KBShortcutsDialog.cpp:206 "?" Show keyboard shortcuts list).
     // Global scope like upstream -- the shortcuts table is useful from any
@@ -530,7 +539,7 @@ ApplicationWindow {
         onActivated: {
             var order = [Backend.tpHome, Backend.tp3DEditor, Backend.tpPreview,
                          Backend.tpDevice, Backend.tpMultiDevice, Backend.tpProject,
-                         Backend.tpCalibration, Backend.tpPreferences]
+                         Backend.tpCalibration]
             var cur = order.indexOf(Backend.currentPage)
             var next = order[(cur + 1 + order.length) % order.length]
             Backend.requestSelectTab(next)
@@ -615,7 +624,7 @@ ApplicationWindow {
         // Preferences (upstream Ctrl+P, KBShortcutsDialog.cpp:197 /
         // MainFrame.cpp:2697)
         sequence: "Ctrl+P"
-        onActivated: Backend.openSettings()
+        onActivated: preferencesDialog.open()
     }
     Shortcut {
         // Slice plate (upstream Ctrl+R "Slice plate", KBShortcutsDialog.cpp:184)
@@ -836,7 +845,7 @@ ApplicationWindow {
                 onEditCloneRequested: if (Backend.editorViewModel) Backend.editorViewModel.duplicateSelectedObjects()
                 onEditDuplicatePlateRequested: if (Backend.editorViewModel) Backend.editorViewModel.clonePlate(Backend.editorViewModel.currentPlateIndex)
                 onCalibrationRequested: Backend.requestSelectTab(Backend.tpCalibration)
-                onPreferencesRequested: Backend.openSettings()
+                onPreferencesRequested: preferencesDialog.open()
                 onAboutRequested: aboutDialog.open()
                 onShortcutOverviewRequested: shortcutDialog.open()
                 // Dead-control elimination: upstream Help menu entries
@@ -1034,16 +1043,15 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
-                // Page 8 (tpPreferences) - Preferences.
-                Loader {
+                // Page 8 (tpPreferences) — structural placeholder (same
+                // treatment as Page 7). Preferences moved to a menu-opened
+                // modal dialog (dialogs/PreferencesDialog.qml, upstream
+                // behavior) on 2026-10-19; the slot keeps the StackLayout
+                // count and the TabPosition enum range stable.
+                Item {
+                    visible: false
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    active: Backend.currentPage === Backend.tpPreferences
-                    sourceComponent: Component {
-                        PreferencesPage {
-                            settingsVm: Backend.settingsViewModel
-                        }
-                    }
                 }
             }
 
@@ -1173,6 +1181,7 @@ ApplicationWindow {
             editGCodeDialog.open()
         }
         function onShowAMSSettingsDialogRequested() { amsSettingsDialog.open() }
+        function onShowPreferencesDialogRequested() { preferencesDialog.open() }
         function onShowFirmwareDialogRequested() { firmwareDialog.open() }
         function onShowWipeTowerDialogRequested() { wipeTowerDialog.open() }
         function onShowPrintHostDialogRequested() { printHostDialog.open() }
@@ -1400,7 +1409,7 @@ ApplicationWindow {
             { id: "page-multi",       label: qsTr("转到：多设备"),     hint: "" },
             { id: "page-project",     label: qsTr("转到：项目"),       hint: "" },
             { id: "page-calibration", label: qsTr("转到：校准"),       hint: "" },
-            { id: "page-preferences", label: qsTr("转到：偏好设置"),   hint: "" },
+            { id: "page-preferences", label: qsTr("打开：偏好设置"),   hint: "" },
             { id: "theme-toggle",     label: Theme.isDark ? qsTr("切换到浅色主题") : qsTr("切换到深色主题"), hint: "" },
             { id: "density-toggle",   label: Theme.compactMode ? qsTr("密度：舒适") : qsTr("密度：紧凑"), hint: "" },
             { id: "scale-100",        label: qsTr("界面缩放：100%（重启后生效）"), hint: "" },
@@ -1420,7 +1429,12 @@ ApplicationWindow {
             pageMap["page-multi"] = Backend.tpMultiDevice
             pageMap["page-project"] = Backend.tpProject
             pageMap["page-calibration"] = Backend.tpCalibration
-            pageMap["page-preferences"] = Backend.tpPreferences
+            if (id === "page-preferences") {
+                // Preferences is a menu-opened dialog now (upstream hosts it
+                // as a modal, not a workflow tab).
+                preferencesDialog.open()
+                return
+            }
             if (pageMap[id] !== undefined) {
                 Backend.requestSelectTab(pageMap[id])
                 return

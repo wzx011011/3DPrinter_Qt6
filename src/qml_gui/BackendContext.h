@@ -577,7 +577,10 @@ public:
   /// string when there is nothing to back up / the save failed.
   Q_INVOKABLE QString triggerProjectBackup();
 
-  Q_INVOKABLE void openSettings(); // H3
+  /// Open the Preferences modal dialog (upstream hosts Preferences as a
+  /// menu-opened dialog, not a workflow tab). Replaces the former H3
+  /// openSettings() page navigation, removed with the page in 2026-10-19.
+  Q_INVOKABLE void showPreferencesDialog();
   // Phase 52 PREPSB-02: forward sidebar settings request (interim no-op log;
   // Phase 56 wires the independent dialog). category: "printer"/"filament"/"process".
   Q_INVOKABLE void forwardSettingsRequest(const QString &category);
@@ -736,6 +739,7 @@ signals:
   void showBedShapeDialogRequested();
   void showEditGCodeDialogRequested(const QString &key, const QString &value);
   void showAMSSettingsDialogRequested();
+  void showPreferencesDialogRequested();
   void showFirmwareDialogRequested();
   void showWipeTowerDialogRequested();
   void showPrintHostDialogRequested();

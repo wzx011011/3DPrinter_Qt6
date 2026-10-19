@@ -4,8 +4,17 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
 
-Item {
+// PreferencesDialog.qml — upstream hosts Preferences as a modal dialog opened
+// from the menu (Preferences.cpp / MainFrame), NOT as a workflow tab (the
+// upstream TAB_ID set has 7 tabs). Converted from the former PreferencesPage
+// (2026-10-19): same body, CxDialog chrome. Settings apply immediately via
+// settingsVm (no upstream OK/Cancel deferred-apply plumbing — noted deviation,
+// consistent with the other Cx* tool dialogs).
+CxDialog {
     id: root
+    dialogTitle: qsTr("偏好设置")
+    width: 920
+    height: 640
     required property var settingsVm
 
     AboutDialog {

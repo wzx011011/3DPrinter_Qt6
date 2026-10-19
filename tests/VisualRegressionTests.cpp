@@ -440,10 +440,10 @@ void VisualRegressionTests::pagesRender_data()
       QStringLiteral("qrc:/qml/OWzx/pages/CalibrationPage.qml"),
       QVariantMap{{"calibrationVm", vm("calibrationViewModel")}},
       kDefaultSettleMs);
-  row(QStringLiteral("PreferencesPage"),
-      QStringLiteral("qrc:/qml/OWzx/pages/PreferencesPage.qml"),
-      QVariantMap{{"settingsVm", vm("settingsViewModel")}},
-      kDefaultSettleMs);
+  // PreferencesPage row removed 2026-10-19: Preferences is now a modal
+  // dialog (dialogs/PreferencesDialog.qml) — a closed popup renders nothing
+  // under window->grabWindow(), so the fullscreen-page baseline no longer
+  // applies. Instantiation coverage lives in QmlSmokeTests pagesInstantiate.
 }
 
 // Stability hook — pin the Daily Tips hint to a fixed index before HomePage

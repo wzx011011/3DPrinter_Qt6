@@ -84,11 +84,11 @@ Item {
     // Upstream MainFrame.hpp:42-52 TAB_ID has exactly 7 built-in tabs. The
     // reference frame (prepare_ref.png) shows text-only tabs, so the per-tab
     // 16px icon column is dropped (topbar-12).
-    // BUILDGATE restore (2026-09-24): the Preferences tab is back at the end
-    // of the strip — WAVE-4 (waveFourRoutesAndPageIndicesAreDiscoverable)
-    // locks MultiMachine/Calibration/Preferences as discoverable workflow
-    // strip destinations, and BackendContext routing (kLastTab) still ends
-    // at tpPreferences.
+    // Upstream TAB_ID has exactly 7 workflow tabs (MainFrame.hpp:42-52) —
+    // Preferences is NOT one of them: upstream opens it as a modal dialog
+    // from the menu. 2026-10-19: the 8th strip tab is removed to match; the
+    // tpPreferences enum slot stays (BackendContext routing / kLastTab still
+    // ends at tpPreferences, the StackLayout keeps a structural placeholder).
     readonly property var workflowTabs: [
         { label: qsTr("首页"), pos: Backend.tpHome },
         { label: qsTr("准备"), pos: Backend.tp3DEditor },
@@ -96,8 +96,7 @@ Item {
         { label: qsTr("设备"), pos: Backend.tpDevice },
         { label: qsTr("多设备"), pos: Backend.tpMultiDevice },
         { label: qsTr("项目"), pos: Backend.tpProject },
-        { label: qsTr("校准"), pos: Backend.tpCalibration },
-        { label: qsTr("偏好设置"), pos: Backend.tpPreferences }
+        { label: qsTr("校准"), pos: Backend.tpCalibration }
     ]
 
     function selectWorkflowTab(tab) {
@@ -1162,9 +1161,8 @@ Item {
         }
 
         // Phase 236 (DLG-01): tool dialogs that upstream hosts in the
-        // Preferences dialog. The OWzx PreferencesPage is not yet mounted in
-        // the shell (pre-existing gap), so the shell menu carries the
-        // reachable entry points; the same dialog ids open via the
+        // Preferences dialog (now dialogs/PreferencesDialog.qml, opened by
+        // the entries above). The same dialog ids also open via the
         // BackendContext request signals.
         CxMenu {
             title: qsTr("工具")

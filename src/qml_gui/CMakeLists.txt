@@ -65,7 +65,6 @@ qt_add_qml_module(owzx_qml
         pages/MonitorPage.qml
         pages/ProjectPage.qml
         pages/CalibrationPage.qml
-        pages/PreferencesPage.qml
         pages/MultiMachinePage.qml
         panels/LeftSidebar.qml
         panels/DockableSidebar.qml
@@ -121,6 +120,7 @@ qt_add_qml_module(owzx_qml
         dialogs/PluginManagerDialog.qml
         dialogs/EnableLiteModeDialog.qml
         dialogs/KBShortcutsDialog.qml
+        dialogs/PreferencesDialog.qml
         dialogs/SavePresetDialog.qml
         dialogs/CreatePresetsDialog.qml
         dialogs/UnsavedChangesDialog.qml

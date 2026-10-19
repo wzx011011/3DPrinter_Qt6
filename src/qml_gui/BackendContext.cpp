@@ -1099,9 +1099,9 @@ void BackendContext::resetWindowLayout()
   requestSetSidebarDockArea(static_cast<int>(SidebarDockArea::Left));
 }
 
-void BackendContext::openSettings()
+void BackendContext::showPreferencesDialog()
 {
-  requestSelectTab(static_cast<int>(TabPosition::tpPreferences));
+  emit showPreferencesDialogRequested();
 }
 
 // ── ConfigWizard first-run trigger ──

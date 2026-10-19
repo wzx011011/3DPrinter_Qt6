@@ -3209,17 +3209,17 @@ void QmlUiAuditTests::visiblePlaceholderSurfacesAreHonest()
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString sidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
-  const QString preferences = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString preferences = readSource(QStringLiteral("src/qml_gui/dialogs/PreferencesDialog.qml"));
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!sidebar.isEmpty(), "Unable to read LeftSidebar.qml");
-  QVERIFY2(!preferences.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!preferences.isEmpty(), "Unable to read PreferencesDialog.qml");
 
   const QRegularExpression emptyClick(QStringLiteral("\\bon(?:Clicked|Triggered):\\s*\\{\\s*\\}"));
   QVERIFY2(!emptyClick.match(topbar).hasMatch(), "Topbar must not contain empty click/trigger handlers");
   QVERIFY2(!emptyClick.match(mainQml).hasMatch(), "main.qml must not contain empty click/trigger handlers");
   QVERIFY2(!emptyClick.match(sidebar).hasMatch(), "LeftSidebar must not contain empty click/trigger handlers");
-  QVERIFY2(!emptyClick.match(preferences).hasMatch(), "PreferencesPage must not contain empty click/trigger handlers");
+  QVERIFY2(!emptyClick.match(preferences).hasMatch(), "PreferencesDialog must not contain empty click/trigger handlers");
 
   const QStringList forbiddenRuntimeCopy = {
     QStringLiteral("qsTr(\"Search models, authors, tags...\")"),
@@ -9255,18 +9255,18 @@ void QmlUiAuditTests::v52ControlLibraryHardened()
 // worst-offender files now use Theme tokens instead of raw hex.
 void QmlUiAuditTests::v52ColorHardcodeSwept()
 {
-  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/dialogs/PreferencesDialog.qml"));
   const QString leftSidebar = readSource(QStringLiteral("src/qml_gui/panels/LeftSidebar.qml"));
   const QString presetDiff = readSource(QStringLiteral("src/qml_gui/dialogs/PresetDiffDialog.qml"));
 
-  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesDialog.qml");
   QVERIFY2(!leftSidebar.isEmpty(), "Unable to read LeftSidebar.qml");
   QVERIFY2(!presetDiff.isEmpty(), "Unable to read PresetDiffDialog.qml");
 
   // (1) PreferencesPage was the worst offender (0 Theme refs + 129 hex literals
   //     per Pages-UI-REVIEW). It must now source colors from Theme tokens.
   QVERIFY2(prefsPage.contains(QStringLiteral("Theme.")),
-           "TK-01: PreferencesPage must reference Theme tokens (was 0 refs + 129 hex literals pre-sweep)");
+           "TK-01: PreferencesDialog must reference Theme tokens (was 0 refs + 129 hex literals pre-sweep)");
 
   // (2) LeftSidebar's private palette (6 colors at lines 17-22 per Panels-UI-REVIEW)
   //     must now route through Theme tokens (panelSurface/sectionSurface/etc.
@@ -9551,11 +9551,11 @@ void QmlUiAuditTests::v52RegressionLocked()
   QVERIFY2(!cxButton.contains(QStringLiteral("Qt.darker")),
            "REGRESS-06/DS-02: CxButton must not use Qt.darker (Phase 161 removed it)");
 
-  // -- v5.2 TK (Phase 162/163): PreferencesPage now uses Theme tokens
+  // -- v5.2 TK (Phase 162/163): Preferences (now a dialog) uses Theme tokens
   //     (Pages-UI-REVIEW flagged it as the worst offender with 0 Theme refs).
-  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/dialogs/PreferencesDialog.qml"));
   QVERIFY2(prefsPage.contains(QStringLiteral("Theme.")),
-           "REGRESS-06/TK-01: PreferencesPage must reference Theme tokens (was 0 refs + 129 hex pre-Phase 162)");
+           "REGRESS-06/TK-01: PreferencesDialog must reference Theme tokens (was 0 refs + 129 hex pre-Phase 162)");
 
   // -- v5.2 SW (Phase 164): sidebar width system unbroken.
   QVERIFY2(backendH.contains(QStringLiteral("kSidebarMinWidth = 300"))
@@ -10861,6 +10861,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("PluginManagerDialog.qml"), QStringLiteral("showPluginManagerDialog()")},
       {QStringLiteral("EnableLiteModeDialog.qml"), QStringLiteral("showEnableLiteModeDialog()")},
       {QStringLiteral("KBShortcutsDialog.qml"), QStringLiteral("shortcutDialog.open()")},
+      {QStringLiteral("PreferencesDialog.qml"), QStringLiteral("preferencesDialog.open()")},
       {QStringLiteral("SavePresetDialog.qml"), QStringLiteral("saveAsDialog.open()")},
       {QStringLiteral("CreatePresetsDialog.qml"), QStringLiteral("requestCreatePreset()")},
       {QStringLiteral("UnsavedChangesDialog.qml"), QStringLiteral("openUnsavedChangesGuard")},
@@ -11158,7 +11159,7 @@ void QmlUiAuditTests::viewMenuShortcutsAndImportSourceAudit()
            "VIEW-02: Ctrl+A must call selectAllVisibleObjects");
   QVERIFY2(mainQml.contains(QStringLiteral("clearObjectSelection()")),
            "VIEW-02: Esc must call clearObjectSelection");
-  QVERIFY2(mainQml.contains(QStringLiteral("Backend.openSettings()")),
+  QVERIFY2(mainQml.contains(QStringLiteral("preferencesDialog.open()")),
            "VIEW-02: Ctrl+P must open Preferences (upstream KBShortcutsDialog.cpp:197)");
   QVERIFY2(mainQml.contains(QStringLiteral("Backend.editorViewModel.clearWorkspace()")),
            "VIEW-02: delete-all confirm must run EditorViewModel::clearWorkspace");
@@ -11709,9 +11710,9 @@ void QmlUiAuditTests::shellGuardNotificationAndDialogRegressionAudit()
                !projectPage.contains(QStringLiteral("Backend.topbarNewProject()")) &&
                !topbar.contains(QStringLiteral("Backend.topbarOpenProject(modelData)")),
            "Page and recent-menu triggers must not bypass the shell dirty guard");
-  QVERIFY2(mainQml.contains(QStringLiteral("PreferencesPage {")) &&
+  QVERIFY2(mainQml.contains(QStringLiteral("PreferencesDialog {")) &&
                backendCpp.contains(QStringLiteral("TabPosition::tpPreferences")),
-           "Preferences must have a real shell page route");
+           "Preferences must be hosted by the shell as a dialog while its tab slot stays reserved");
 
   QCOMPARE(confirmDialog.count(QStringLiteral("root.accepted()")), 0);
   QCOMPARE(confirmDialog.count(QStringLiteral("root.rejected()")), 0);
@@ -11790,10 +11791,17 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
   QVERIFY2(!topbar.isEmpty() && !mainQml.isEmpty() && !backendH.isEmpty() && !backendCpp.isEmpty(),
            "WAVE-4: unable to read shell/page routing sources");
 
+  // 2026-10-19 rewrite: upstream TAB_ID has 7 workflow tabs (MainFrame.hpp:
+  // 42-52) — Preferences is a menu-opened modal dialog, not a strip
+  // destination. MultiMachine/Calibration stay strip destinations;
+  // Preferences discoverability moves to the menu entries.
   QVERIFY2(topbar.contains(QStringLiteral("pos: Backend.tpMultiDevice"))
                && topbar.contains(QStringLiteral("pos: Backend.tpCalibration"))
-               && topbar.contains(QStringLiteral("pos: Backend.tpPreferences")),
-           "WAVE-4: MultiMachine, Calibration, and Preferences must be discoverable in the workflow strip");
+               && !topbar.contains(QStringLiteral("pos: Backend.tpPreferences")),
+           "WAVE-4: MultiMachine and Calibration must be discoverable in the workflow strip; Preferences must NOT be a strip tab (upstream hosts it as a menu dialog)");
+  QVERIFY2(topbar.contains(QStringLiteral("preferencesRequested()"))
+               && topbar.contains(QStringLiteral("qsTr(\"偏好设置\")")),
+           "WAVE-4: Preferences must stay discoverable via the top-menu entries");
 
   QVERIFY2(backendH.contains(QStringLiteral("tpDebug = tpPlaceholder1"))
                && backendH.contains(QStringLiteral("tpPreferences = 8"))
@@ -11801,14 +11809,13 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
                && backendH.contains(QStringLiteral("int tpPlaceholder2() const { return tpPlaceholder1(); }"))
                && !backendH.contains(QStringLiteral("tpPlaceholder2 = tpPreferences")),
            "WAVE-4: reserved/debug and Preferences indices must remain distinct");
-  QVERIFY2(backendCpp.contains(QStringLiteral("constexpr int kLastTab = static_cast<int>(TabPosition::tpPreferences)"))
-               && backendCpp.contains(QStringLiteral("requestSelectTab(static_cast<int>(TabPosition::tpPreferences))")),
-           "WAVE-4: existing routing must continue to accept Preferences as the final page index");
+  QVERIFY2(backendCpp.contains(QStringLiteral("constexpr int kLastTab = static_cast<int>(TabPosition::tpPreferences)")),
+           "WAVE-4: routing range must still end at the Preferences index");
 
-  QVERIFY2(mainQml.contains(QStringLiteral("PreferencesPage {"))
-               && mainQml.contains(QStringLiteral("active: Backend.currentPage === Backend.tpPreferences"))
+  QVERIFY2(mainQml.contains(QStringLiteral("PreferencesDialog {"))
+               && mainQml.contains(QStringLiteral("preferencesDialog.open()"))
                && mainQml.contains(QStringLiteral("+ (Backend.tpPreferences + 1)")),
-           "WAVE-4: Preferences must remain mounted at its semantic route and status index");
+           "WAVE-4: Preferences must live as the opened dialog and keep its status-index slot");
 
   // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the Edit menu must
   // expose the clipboard/delete/clone set, wired to the same ViewModel
@@ -11832,7 +11839,7 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
 {
   const QString homePage = readSource(QStringLiteral("src/qml_gui/pages/HomePage.qml"));
   const QString projectPage = readSource(QStringLiteral("src/qml_gui/pages/ProjectPage.qml"));
-  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/dialogs/PreferencesDialog.qml"));
   const QString preparePage = readSource(QStringLiteral("src/qml_gui/pages/PreparePage.qml"));
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main_qml.cpp"));
   const QString backendHeader = readSource(QStringLiteral("src/qml_gui/BackendContext.h"));
@@ -11843,7 +11850,7 @@ void QmlUiAuditTests::pageHonestyAndCliSourceAudit()
   const QString cliRunnerCpp = readSource(QStringLiteral("src/cli/CliRunner.cpp"));
   QVERIFY2(!homePage.isEmpty(), "Unable to read HomePage.qml");
   QVERIFY2(!projectPage.isEmpty(), "Unable to read ProjectPage.qml");
-  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesDialog.qml");
   QVERIFY2(!preparePage.isEmpty(), "Unable to read PreparePage.qml");
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main_qml.cpp");
   QVERIFY2(!backendHeader.isEmpty(), "Unable to read BackendContext.h");
@@ -12000,7 +12007,7 @@ void QmlUiAuditTests::deadControlEliminationAudit()
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString networkDlg = readSource(QStringLiteral("src/qml_gui/dialogs/NetworkTestDialog.qml"));
   const QString printHostDlg = readSource(QStringLiteral("src/qml_gui/dialogs/PrintHostDialog.qml"));
-  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/pages/PreferencesPage.qml"));
+  const QString prefsPage = readSource(QStringLiteral("src/qml_gui/dialogs/PreferencesDialog.qml"));
   const QString qrcSources = qmlQrcSources();
   QVERIFY2(!topbar.isEmpty(), "Unable to read BBLTopbar.qml");
   QVERIFY2(!backendH.isEmpty(), "Unable to read BackendContext.h");
@@ -12008,7 +12015,7 @@ void QmlUiAuditTests::deadControlEliminationAudit()
   QVERIFY2(!mainQml.isEmpty(), "Unable to read main.qml");
   QVERIFY2(!networkDlg.isEmpty(), "Unable to read NetworkTestDialog.qml");
   QVERIFY2(!printHostDlg.isEmpty(), "Unable to read PrintHostDialog.qml");
-  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesPage.qml");
+  QVERIFY2(!prefsPage.isEmpty(), "Unable to read PreferencesDialog.qml");
   QVERIFY2(!qrcSources.isEmpty(), "Unable to read the qml qrc sources");
 
   // Help menu: upstream item set, no Documentation/Check-for-Updates stubs.

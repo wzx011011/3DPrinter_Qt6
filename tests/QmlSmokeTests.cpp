@@ -415,8 +415,8 @@ void QmlSmokeTests::pagesInstantiate_data()
   QTest::newRow("CalibrationPage")
       << "qrc:/qml/OWzx/pages/CalibrationPage.qml"
       << QVariantMap{{"calibrationVm", vm("calibrationViewModel")}};
-  QTest::newRow("PreferencesPage")
-      << "qrc:/qml/OWzx/pages/PreferencesPage.qml"
+  QTest::newRow("PreferencesDialog")
+      << "qrc:/qml/OWzx/dialogs/PreferencesDialog.qml"
       << QVariantMap{{"settingsVm", vm("settingsViewModel")}};
 }
 

@@ -173,6 +173,8 @@ static QVector<StartupDialogRoute> startupDialogRoutes()
        [](BackendContext &backend) { backend.forwardSettingsRequest(QStringLiteral("process")); }},
       {{QStringLiteral("config-wizard"), QStringLiteral("wizard")},
        [](BackendContext &backend) { backend.showConfigWizard(); }},
+      {{QStringLiteral("preferences"), QStringLiteral("settings"), QStringLiteral("prefs")},
+       [](BackendContext &backend) { backend.showPreferencesDialog(); }},
       {{QStringLiteral("bed-shape"), QStringLiteral("bed")},
        [](BackendContext &backend) { backend.showBedShapeDialog(); }},
       {{QStringLiteral("ams-settings"), QStringLiteral("ams")},
