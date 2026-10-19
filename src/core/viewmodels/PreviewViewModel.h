@@ -562,6 +562,16 @@ private:
   /// new interval so a speed change lands immediately during playback; an
   /// idle timer just stores the interval for the next playAnimation().
   void applyPlaybackInterval();
+  /// PREV-PLAY: rebuild layerFirstMove_/layerLastMove_ from segments_ (call
+  /// once after each parse completes; segments_ and layerCount_ are final).
+  void rebuildLayerMoveBounds();
+  /// PREV-PLAY: inclusive first move index inside [currentLayerMin_,
+  /// currentLayerMax_] (0 when no bounds exist -- full-range fallback).
+  int playbackRangeStart() const;
+  /// PREV-PLAY: exclusive last move index inside the visible layer range
+  /// (moveCount_ fallback). The live range is read per tick so narrowing
+  /// the rail mid-playback halts at the band edge.
+  int playbackRangeEndExclusive() const;
   void rebuildFromGCode(const QString &filePath);
   void syncPreviewWithActiveResult();
   void recolorAndPackSegments();
@@ -597,6 +607,14 @@ private:
   bool singleLayer_ = false;
   int moveCount_ = 0;
   int currentMove_ = 0;
+  /// PREV-PLAY: first/last inclusive move index per layer, rebuilt after
+  /// each parse and cleared with the segments. Playback start/stop bounds
+  /// derive from these so the tool marker traces exactly the visible
+  /// layer-range band (fresh load parks currentMove_ at moveCount_, i.e.
+  /// "everything shown"; without the bounds, pressing play from there
+  /// ticked once and died instead of replaying the range).
+  QVector<int> layerFirstMove_;
+  QVector<int> layerLastMove_;
   QByteArray gcodePreviewData_;
   QVariantList legendItems_;
   int m_legendType = 0;  ///< 0=discrete, 1=gradient, 2=extruder

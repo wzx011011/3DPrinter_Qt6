@@ -787,7 +787,11 @@ PreviewViewModel::PreviewViewModel(ProjectService *projectService, SliceService 
           {
     if (moveCount_ <= 0)
       return;
-    if (currentMove_ >= moveCount_)
+    // PREV-PLAY: the stop bound follows the LIVE layer range (full range
+    // degrades to the legacy moveCount_ end), so narrowing the rail
+    // mid-playback halts the marker at the visible band's edge.
+    const int end = playbackRangeEndExclusive();
+    if (currentMove_ >= end)
     {
       playTimer_->stop();
       // R-P1.B: notify the UI that playback finished -- without this emit
@@ -796,7 +800,7 @@ PreviewViewModel::PreviewViewModel(ProjectService *projectService, SliceService 
       emit stateChanged();
       return;
     }
-    currentMove_ = qMin(currentMove_ + 12, moveCount_);
+    currentMove_ = qMin(currentMove_ + 12, end);
     updateToolPositionData();
     rebuildGcodeLineWindow();
     emit stateChanged(); });
@@ -1517,6 +1521,16 @@ void PreviewViewModel::playAnimation()
 {
   if (moveCount_ <= 0)
     return;
+  // PREV-PLAY: both parse paths park currentMove_ at moveCount_ ("everything
+  // shown"), so a fresh preview used to tick once and stop without moving
+  // the marker at all. Media-player semantics instead: pressing play with
+  // the playhead at/past the visible range end (or stranded outside a
+  // narrowed layer range) restarts from the range's first move so the
+  // marker traces exactly the visible band.
+  const int start = playbackRangeStart();
+  const int end = playbackRangeEndExclusive();
+  if (currentMove_ >= end || currentMove_ < start)
+    setCurrentMove(start);
   playTimer_->start();
   emit stateChanged();
 }
@@ -1561,6 +1575,60 @@ void PreviewViewModel::applyPlaybackInterval()
     playTimer_->start(interval);
   else
     playTimer_->setInterval(interval);
+}
+
+// PREV-PLAY: one O(n) sweep per parse (n = move count; 40k on the gate
+// models) building the per-layer first/last move indices. Segments carry
+// their layer from both parse paths (seg.layer), and layers without any
+// move keep -1 so the range helpers can skip them.
+void PreviewViewModel::rebuildLayerMoveBounds()
+{
+  layerFirstMove_.clear();
+  layerLastMove_.clear();
+  if (layerCount_ <= 0 || segments_.empty())
+    return;
+  layerFirstMove_.resize(layerCount_, -1);
+  layerLastMove_.resize(layerCount_, -1);
+  const int count = static_cast<int>(segments_.size());
+  for (int i = 0; i < count; ++i)
+  {
+    const int layer = segments_[i].layer;
+    if (layer < 0 || layer >= layerCount_)
+      continue;
+    if (layerFirstMove_[layer] < 0)
+      layerFirstMove_[layer] = i;
+    layerLastMove_[layer] = i;
+  }
+}
+
+// PREV-PLAY: first move inside the visible layer band (skipping empty
+// layers whose tick never produced a segment); 0 when no bounds exist.
+int PreviewViewModel::playbackRangeStart() const
+{
+  if (layerFirstMove_.isEmpty())
+    return 0;
+  const int lastLayer = qMin(currentLayerMax_, layerFirstMove_.size() - 1);
+  for (int l = qMax(0, currentLayerMin_); l <= lastLayer; ++l)
+  {
+    if (layerFirstMove_[l] >= 0)
+      return layerFirstMove_[l];
+  }
+  return 0;
+}
+
+// PREV-PLAY: exclusive end = last move inside the band + 1; moveCount_
+// when no bounds exist (full-range playback identical to the legacy end).
+int PreviewViewModel::playbackRangeEndExclusive() const
+{
+  if (layerLastMove_.isEmpty())
+    return moveCount_;
+  const int firstLayer = qMax(0, currentLayerMin_);
+  for (int l = qMin(currentLayerMax_, layerLastMove_.size() - 1); l >= firstLayer; --l)
+  {
+    if (layerLastMove_[l] >= 0)
+      return layerLastMove_[l] + 1;
+  }
+  return moveCount_;
 }
 
 void PreviewViewModel::setViewModeIndex(int index)
@@ -2025,6 +2093,9 @@ void PreviewViewModel::resetPreviewState()
   currentLayerMin_ = 0;
   currentLayerMax_ = 0;
   singleLayer_ = false;
+  // PREV-PLAY: stale per-layer bounds must not outlive their segments.
+  layerFirstMove_.clear();
+  layerLastMove_.clear();
   estimatedTime_ = QStringLiteral("--:--:--");
   totalTime_ = QStringLiteral("--:--:--");
   filamentUsed_ = QStringLiteral("--");
@@ -3085,6 +3156,9 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
   currentLayerMin_ = 0;
   currentLayerMax_ = layerCount_ - 1;
   currentMove_ = moveCount_;
+  // PREV-PLAY: bounds land with the finalized segments so the first play
+  // press can restart from the visible range start.
+  rebuildLayerMoveBounds();
   extrudeMoveCount_ = extrudeMoveCount;
   travelMoveCount_ = travelMoveCount;
   toolChangeCount_ = toolChangeCount;
@@ -3500,6 +3574,8 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
   currentLayerMin_ = 0;
   currentLayerMax_ = layerCount_ - 1;
   currentMove_ = moveCount_;
+  // PREV-PLAY: bounds land with the finalized segments (text-parse path).
+  rebuildLayerMoveBounds();
   extrudeMoveCount_ = extrudeMoveCount;
   travelMoveCount_ = travelMoveCount;
   toolChangeCount_ = toolChangeCount;
