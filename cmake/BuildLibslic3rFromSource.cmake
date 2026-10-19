@@ -812,12 +812,16 @@ if(TARGET cr_tpms_imported)
     list(APPEND _delayload_libs "/DELAYLOAD:cr_tpms_library.dll")
 endif()
 
-# assimp-vc142-mt.dll is absent from the pre-built deps package (only the
-# import lib ships). AssimpImport.cpp (upstream 0a3724ed2f) references assimp
-# symbols for .glb/.gltf/.fbx import, so delay-load keeps startup safe; those
-# formats stay unavailable until the DLL is provisioned (cr_tpms pattern).
+# The pre-built deps package ships only the assimp import lib (no DLL);
+# AssimpImport.cpp (upstream 0a3724ed2f) references assimp symbols for
+# .glb/.gltf/.fbx import, so delay-load keeps startup safe; those formats
+# stay unavailable until the DLL is provisioned (cr_tpms pattern). The DLL
+# name derives from whichever import lib BuildDepsFromSource found
+# (vc142 pre-built vs vc143 fresh superbuild).
 if(TARGET assimp_imported)
-    list(APPEND _delayload_libs "/DELAYLOAD:assimp-vc142-mt.dll")
+    get_target_property(_owzx_assimp_lib assimp_imported IMPORTED_LOCATION)
+    get_filename_component(_owzx_assimp_dll "${_owzx_assimp_lib}" NAME_WE)
+    list(APPEND _delayload_libs "/DELAYLOAD:${_owzx_assimp_dll}.dll")
 endif()
 
 # ─── 8. Link all dependencies to libslic3r_from_source ───────────────────────
