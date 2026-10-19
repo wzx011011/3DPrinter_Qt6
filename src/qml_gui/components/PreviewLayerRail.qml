@@ -206,6 +206,14 @@ Item {
                 second.onPressedChanged: if (second.pressed) layerRangeSlider.lowerHandleSelected = false
                 first.onMoved: root.commitRange(first.value, second.value)
                 second.onMoved: root.commitRange(first.value, second.value)
+                // RACE hardening: when `to` (lastLayerIndex) updates after the
+                // stateChanged-driven syncFromVm already wrote the values, Qt
+                // re-clamps them against the stale `to` -- the slider then
+                // sits desynced from the VM (observed live: second.value
+                // stuck at 0 with the VM at full range; dragging the upper
+                // handle could no longer move the range up). Re-sync on the
+                // bound change settles the final state deterministically.
+                onToChanged: syncFromVm()
                 // IMSlider::on_mouse_wheel changes the active handle. The rail
                 // itself owns wheel input so the Backend remains the source of truth.
                 WheelHandler {
@@ -225,24 +233,24 @@ Item {
             // IMSlider.cpp:32 -- the range_fill span on the vertical layers
             // slider, drawn at 912-914). Sibling order places it above the
             // RangeSlider's opaque groove and below the tick marks. Geometry
-            // derives from the slider VALUES against the host track metrics.
+            // reads the VIEWMODEL range directly (the slider values can lag
+            // the VM by a binding race -- see onToChanged above); the band is
+            // inclusive (a single-layer range still shows a visible fill).
             // Mouse-transparent so drag/wheel interactions pass through to
             // the slider underneath.
             Rectangle {
                 id: rangeSpanFill
-                readonly property real spanRange:
-                    Math.max(1, layerRangeSlider.to - layerRangeSlider.from)
-                readonly property real vMax: layerRangeSlider.second.value
-                readonly property real vMin: layerRangeSlider.first.value
+                readonly property real vMax: root.previewVm ? root.previewVm.currentLayerMax : 0
+                readonly property real vMin: root.previewVm ? root.previewVm.currentLayerMin : 0
+                readonly property real spanRange: Math.max(1, root.lastLayerIndex)
                 visible: root.previewVm && root.totalLayers > 0
                 x: railTrackHost.width / 2 - width / 2
                 y: railTrackHost.trackMargin
-                   + railTrackHost.trackHeight * (1 - (vMax - layerRangeSlider.from) / spanRange)
+                   + railTrackHost.trackHeight * (1 - vMax / spanRange)
                 width: 6
-                height: Math.max(2, railTrackHost.trackHeight * (vMax - vMin) / spanRange)
+                height: Math.max(3, railTrackHost.trackHeight * (vMax - vMin + 1) / spanRange)
                 radius: 3
                 color: "#009688"
-                MouseArea { anchors.fill: parent; enabled: false }
             }
 
             // layer-rail-z-labels: passive hover proxies over the two real
