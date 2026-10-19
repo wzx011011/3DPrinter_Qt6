@@ -230,7 +230,8 @@ public:
       | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts | DirtyNavigator;
   static constexpr quint32 kPreviewCanvasChannelMask =
       DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
-      | DirtyPreviewCap | DirtyNavigator | DirtyBedBuffers;
+      | DirtyPreviewCap | DirtyNavigator | DirtyBedBuffers
+      | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts;
 
   static_assert((kRendererChannelMask & kScenePayloadMask) == 0,
                 "channel bits and payload bits must not collide");

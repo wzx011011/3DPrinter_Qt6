@@ -136,11 +136,10 @@ class PreviewViewModel final : public QObject
   Q_PROPERTY(bool showSeamMarks READ showSeamMarks WRITE setShowSeamMarks NOTIFY stateChanged)
   /// ToolChanges ("Filament changes") legend row toggle aligned with the
   /// upstream m_options ToolChanges branch (GCodeViewer.cpp:3901-3904 calls
-  /// toggle_option_visibility). Upstream renders tool-change points; the Qt6
-  /// line pipeline emits no tool-change geometry (documented delta at
-  /// appendMarkerSegment, PreviewViewModel.cpp appendMarkerSegment comment),
-  /// so the flag currently has no render-side segment kind to gate -- the row
-  /// exists so the FeatureType legend structure matches upstream 1:1.
+  /// toggle_option_visibility). PREVIEW-ALIGN 2026-10-19: the parse now
+  /// emits a KindToolChange tick marker at every T-command position (the
+  /// same kMarkerTickHeight stand-in the other point kinds use), gated by
+  /// this flag -- the row is no longer a legend-only shell.
   Q_PROPERTY(bool showToolChanges READ showToolChanges WRITE setShowToolChanges NOTIFY stateChanged)
   /// Phase 238 (PREV-05): filament usage split aligned with the upstream
   /// statistics columns Model/Support/Flushed/Tower
@@ -429,7 +428,7 @@ public:
   /// GCodeProcessor::EMoveType classification relevant to preview
   /// (GCodeProcessor.cpp:2954-2968): 0=Extrude, 1=Travel, 2=Retract,
   /// 3=Unretract, 4=Wipe, 5=Seam.
-  enum MoveKind { KindExtrude = 0, KindTravel = 1, KindRetract = 2, KindUnretract = 3, KindWipe = 4, KindSeam = 5 };
+  enum MoveKind { KindExtrude = 0, KindTravel = 1, KindRetract = 2, KindUnretract = 3, KindWipe = 4, KindSeam = 5, KindToolChange = 6 };
   Q_ENUM(MoveKind)
   /// Phase 238 (PREV-03): parsed segment count of a MoveKind (regression
   /// anchor for the retract/unretract/wipe/seam parser paths).

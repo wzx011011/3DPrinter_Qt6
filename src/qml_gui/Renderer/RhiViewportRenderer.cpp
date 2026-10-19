@@ -474,11 +474,20 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // DirtyBedTexture channel here is what makes a texture-only change reach
   // the GPU on the next frame instead of stranding until an unrelated scene
   // dirty flag opens the old scene gate.
-  if (viewport->m_bedTextureDirty) {
-    viewport->m_bedTextureDirty = false;
-    const QString path = viewport->m_bedTextureUrl.toLocalFile();
-    if (path != m_pendingBedTexturePath) {
-      m_pendingBedTexturePath = path;
+  // PREVIEW-BEDTEX 2026-10-19: this is now a PATH-DIFF mirror, not a
+  // one-shot latch -- resetPreviewGpuState (fired by window maximize /
+  // resize) wipes the loaded texture AND the remembered path, and the GUI
+  // never changes the URL again, so the one-shot latch stranded the preview
+  // without its branded bed texture for the rest of the session. Diffing
+  // the live viewport URL against the renderer-side memory re-arms after
+  // every GPU reset for free.
+  {
+    const QString liveTexPath = viewport->m_bedTextureUrl.toLocalFile();
+    if (liveTexPath != m_pendingBedTexturePath
+        || (viewport->m_bedTextureDirty && liveTexPath == m_pendingBedTexturePath
+            && m_bedTextureImage.isNull() && !liveTexPath.isEmpty())) {
+      viewport->m_bedTextureDirty = false;
+      m_pendingBedTexturePath = liveTexPath;
       m_bedTextureDirty = true;
       m_prepareScene.markDirty(PrepareSceneData::DirtyBedTexture);
     }
@@ -1023,6 +1032,26 @@ quint32 RhiViewportRenderer::uploadPendingChannels(QRhiResourceUpdateBatch *upda
         && uploadBedBuffers(updates, dirtyFlags)) {
       handled |= PrepareSceneData::DirtyBedBuffers;
     }
+    // PREVIEW-BED surface channels: the printer's rounded bed STL model,
+    // the branded bed texture (svg/png) and the BBL bed-type overlays route
+    // exactly as on the prepare canvas (same uploaders, same granularity);
+    // without these the preview bed stayed a bare grid. ORDER MATTERS: the
+    // model upload runs FIRST so m_bedModelTopY is fresh when the texture
+    // quad re-anchors on the same frame (a fresh gcode session arms both on
+    // the seeding frame).
+    if ((channels & PrepareSceneData::DirtyBedModel)
+        && uploadBedModelMesh(updates)) {
+      handled |= PrepareSceneData::DirtyBedModel;
+    }
+    if ((channels & PrepareSceneData::DirtyBedTexture)
+        && uploadBedTexture(updates)) {
+      handled |= PrepareSceneData::DirtyBedTexture;
+    }
+    if (channels & PrepareSceneData::DirtyBedTypeParts) {
+      if (!m_bedTypeActive || prepareBedTypeParts(updates)) {
+        handled |= PrepareSceneData::DirtyBedTypeParts;
+      }
+    }
   }
 
   // P17.7/Q3: sequential-range cap (preview only in practice, canvas-agnostic
@@ -1233,12 +1262,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
     // v5.15 (BEDTEX): printer bed texture image drawn over the background +
     // grid, layered exactly like upstream render_logo (blended, no depth
-    // writes). Drawn before the model so the mesh (which does depth-test)
-    // still occludes it from below-camera angles. For BBL vendors the
-    // bed-type overlay parts replace the single image (upstream
-    // PartPlate::render_logo bedtype branch). v5.16 (BEDBOTTOM): upstream
-    // gates render_logo with `!bottom && m_selected`, so from below the logo
-    // is skipped too.
+    // writes). PREVIEW-ALIGN 2026-10-19: the bed MODEL now draws FIRST (see
+    // the matching swap below) so its opaque top face cannot write depth over
+    // the texture quad. For BBL vendors the bed-type overlay parts replace
+    // the single image (upstream PartPlate::render_logo bedtype branch).
+    // v5.16 (BEDBOTTOM): upstream gates render_logo with `!bottom &&
+    // m_selected`, so from below the logo is skipped too.
+    if (lookingDown)
+      renderBedModel(cb);
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown) {
       if (m_bedTypeActive)
         renderBedTypeParts(cb);
@@ -1249,11 +1280,6 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // render_icons inside the plate render, above the bed texture).
     if (lookingDown)
       renderPlateIcons(cb);
-    // v5.16 (BEDMODEL): printer frame STL under the working mesh.
-    // v5.16 (BEDBOTTOM): upstream Bed3D::render_system draws the bed model
-    // only when !bottom (3DBed.cpp render_system), skipped from below.
-    if (lookingDown)
-      renderBedModel(cb);
     // P15.7 (AXES): X/Y/Z origin arrows after the bed texture/model so the
     // no-depth-test texture pass cannot paint over them (upstream
     // Bed3D::Axes::render runs inside the bed render with depth test).
@@ -1391,6 +1417,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &bottomLineBinding);
       cb->draw(m_bedBottomLineVertexCount);
     }
+    // PREVIEW-ALIGN draw order: upstream paints the bed MODEL first
+    // (GLCanvas3D._render_bed -> Bed3D::render_internal render_system) and
+    // the branded TEXTURE/logo afterwards (PartPlate::render render_logo) --
+    // reversed here (texture quad under the model top face) the opaque bed
+    // STL wrote depth over the texture and the CREALITY artwork vanished.
+    if (lookingDown)
+      renderBedModel(cb);
     if (m_prepareScene.showBed() && lookingDown) {
       if (m_bedTypeActive)
         renderBedTypeParts(cb);
@@ -1401,8 +1434,6 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // thumbnails show the icon column).
     if (lookingDown)
       renderPlateIcons(cb);
-    if (lookingDown)
-      renderBedModel(cb);
     // P15.7 (AXES): upstream Bed3D::render_internal gates the axes on
     // show_axes only, not on the bottom flag (3DBed.cpp:377/458-462).
     renderAxes(cb);
@@ -1635,6 +1666,7 @@ void RhiViewportRenderer::releaseResources()
   m_bedModelVertexCount = 0;
   m_bedModelMeshBytes.clear();
   m_bedModelUploaded = false;
+  m_bedModelTopY = 0.f;
   releaseBedTypeParts();
   // Phase 68: gizmo pipelines + vertex buffer.
   m_gizmoLinePipeline.reset();
@@ -2379,6 +2411,7 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
   if (!m_bedTexture) {
     m_bedTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8, m_bedTextureImage.size()));
     if (!m_bedTexture->create()) {
+      fprintf(stderr, "[TEX-DIAG] texture create FAILED\n");
       m_bedTexture.reset();
       return false;  // keeps the channel pending; the next frame retries
     }
@@ -2386,6 +2419,7 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
         QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
         QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
     if (!m_bedTextureSampler->create()) {
+      fprintf(stderr, "[TEX-DIAG] sampler create FAILED\n");
       m_bedTextureSampler.reset();
       m_bedTexture.reset();
       return false;
@@ -2410,8 +2444,12 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
   quad.reserve(6);
   // QRhi texture uploads keep the image's top row at v=0, so v grows with
   // the bed's +depth axis (image top edge maps to the bed's top edge).
+  // PREVIEW-BEDTEX: the hover height rides the loaded bed-model top surface
+  // (+0.02mm) instead of a fixed 0.02 -- vendor bed STLs put their print
+  // face up to ~0.3 above the ground plane, which used to bury the quad.
+  const float hoverY = m_bedModelTopY + 0.02f;
   const auto append = [&](float x, float z, float u, float v) {
-    quad.append(BedTextureVertex{x, 0.02f, z, u, v});
+    quad.append(BedTextureVertex{x, hoverY, z, u, v});
   };
   append(left,  top,    0.f, 0.f);
   append(right, top,    1.f, 0.f);
@@ -2427,6 +2465,9 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
   }
   updates->uploadStaticBuffer(m_bedTextureVertexBuffer.get(), 0, bytes, quad.constData());
   m_bedTextureVertexCount = quint32(quad.size());
+  if (rhiPreviewPerfEnabled())
+    fprintf(stderr, "[TEX-DIAG] quad rebuilt verts=%u hoverY=%.3f rect=(%.1f,%.1f)-(%.1f,%.1f)\n",
+            m_bedTextureVertexCount, hoverY, left, top, right, bottom);
   return true;
 }
 
@@ -2434,8 +2475,21 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
 {
   if (cb == nullptr || !m_prepareScene.showBed())
     return;
-  if (!m_bedTexturePipeline || !m_bedTextureVertexBuffer || m_bedTextureVertexCount == 0)
+  if (!m_bedTexturePipeline || !m_bedTextureVertexBuffer || m_bedTextureVertexCount == 0) {
+    static bool warnedOnce = false;
+    if (!warnedOnce) {
+      warnedOnce = true;
+      fprintf(stderr, "[TEX-DIAG] render SKIP pipeline=%d buffer=%d verts=%u\n",
+              m_bedTexturePipeline != nullptr, m_bedTextureVertexBuffer != nullptr,
+              m_bedTextureVertexCount);
+    }
     return;
+  }
+  static bool drawnOnce = false;
+  if (!drawnOnce) {
+    drawnOnce = true;
+    fprintf(stderr, "[TEX-DIAG] render DRAW verts=%u\n", m_bedTextureVertexCount);
+  }
   if (!ensureBedTexturePipeline())
     return;
   cb->setGraphicsPipeline(m_bedTexturePipeline.get());
@@ -2726,6 +2780,16 @@ bool RhiViewportRenderer::uploadBedModelMesh(QRhiResourceUpdateBatch *updates)
   }
   m_bedModelVertexCount = quint32(vertices.size());
   m_bedModelUploaded = true;
+  // PREVIEW-BEDTEX: remember the model's top surface so the branded
+  // texture quad (uploadBedTexture) can sit just ABOVE it -- vendor STLs
+  // carry their print face well above y=0 (K1 Max: +0.75 before the
+  // -0.44 sit offset), and a fixed-height quad ended up buried inside the
+  // bed solid, depth-rejected into invisibility.
+  m_bedModelTopY = 0.f;
+  for (const Vertex &v : vertices) {
+    if (v.y > m_bedModelTopY)
+      m_bedModelTopY = v.y;
+  }
   return true;
 }
 
@@ -6109,9 +6173,11 @@ bool RhiViewportRenderer::uploadGhostShellBuffer(QRhiResourceUpdateBatch *update
     return true;
 
   // Ghost alpha override (upstream renders the shell volumes in Transparent
-  // mode so toolpaths stay readable on top; shell_transparency 0.15,
-  // GCodeViewer.cpp:3076-3186 m_shells.alpha).
-  constexpr float kGhostAlpha = 0.15f;
+  // mode with per-volume color alpha 0.5 -- load_shells
+  // GCodeViewer.cpp:2330-2337 `volume->color.a(0.5f)`; render_shells
+  // :2522-2545 blends with glDepthMask(GL_FALSE)). PREVIEW-ALIGN 2026-10-19:
+  // 0.15 -> 0.50, matching the upstream shell opacity.
+  constexpr float kGhostAlpha = 0.5f;
 
   QVector<Vertex> ghost;
   const QList<PrepareSceneData::ModelBatch> &batches = m_prepareScene.modelBatches();

@@ -354,6 +354,9 @@ private:
   std::unique_ptr<QRhiBuffer> m_bedModelNormalBuffer;
   quint32 m_bedModelVertexBytes = 0;
   quint32 m_bedModelNormalBytes = 0;
+  // PREVIEW-BEDTEX: top surface of the loaded bed STL in scene space (0
+  // when no model), the hover plane the branded texture quad rides on.
+  float m_bedModelTopY = 0.f;
   quint32 m_bedModelVertexCount = 0;
   QByteArray m_bedModelMeshBytes;
   bool m_bedModelUploaded = false;

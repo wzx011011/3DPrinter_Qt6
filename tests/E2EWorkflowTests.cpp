@@ -803,7 +803,9 @@ G1 X50 Y20 E0.60
 
   QCOMPARE(preview.extrudeMoveCount(), 8);
   QCOMPARE(preview.travelMoveCount(), 3);
-  QCOMPARE(preview.moveCount(), 11);
+  // PREVIEW-ALIGN: the tool change emits its own tick segment, which counts
+  // toward moveCount (8 extrusions + 3 travels + 1 tick).
+  QCOMPARE(preview.moveCount(), 12);
   QVERIFY2(preview.layerCount() >= 2,
            qPrintable(QStringLiteral("layer count should be >= 2, got %1").arg(preview.layerCount())));
   QCOMPARE(preview.toolChangeCount(), 1);
@@ -817,8 +819,10 @@ G1 X50 Y20 E0.60
            "preview payload should use the GCV1 segment format");
   // showTravelMoves defaults to false (upstream Travels/Wipes=false + CONTEXT.md
   // "travel and wipe hidden after first view"), so the GCV1 payload packs only
-  // the extrusion segments on first load. The toggle assertions below cover both.
-  QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.extrudeMoveCount());
+  // the extrusion segments plus the (default-visible) tool-change ticks on
+  // first load. The toggle assertions below cover both.
+  QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()),
+           preview.extrudeMoveCount() + preview.toolChangePositionCount());
   QVERIFY2(preview.previewReady(), "loaded fixture should make Preview ready");
   QVERIFY2(preview.gcodeLineCount() > 0, "Preview should expose a bounded G-code text window");
   QVERIFY2(!preview.gcodeLines().isEmpty(), "Preview G-code text window should be non-empty");
@@ -834,7 +838,9 @@ G1 X50 Y20 E0.60
   QVERIFY2(preview.legendItems().size() >= 2, "filament mode should expose both extruders in the legend");
 
   preview.setShowTravelMoves(false);
-  QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.extrudeMoveCount());
+  // Extrusions + (default-visible) tool-change ticks; travels stay out.
+  QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()),
+           preview.extrudeMoveCount() + preview.toolChangePositionCount());
 
   preview.setShowTravelMoves(true);
   QCOMPARE(gcv1SegmentCount(preview.gcodePreviewData()), preview.moveCount());
@@ -915,7 +921,8 @@ G1 X30 Y10 E0.10 F1800
 
   QCOMPARE(preview.extrudeMoveCount(), 3);
   QCOMPARE(preview.travelMoveCount(), 3);
-  QCOMPARE(preview.moveCount(), 6);
+  // PREVIEW-ALIGN: the tool change tick occupies its own move slot (+1).
+  QCOMPARE(preview.moveCount(), 7);
   QCOMPARE(preview.layerCount(), 2);
   QCOMPARE(preview.toolChangeCount(), 1);
   QCOMPARE(preview.extruderCount(), 2);

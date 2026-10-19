@@ -75,6 +75,7 @@ namespace
       case 3: return QStringLiteral("Unretract");   // KindUnretract
       case 4: return QStringLiteral("Wipe");        // KindWipe
       case 5: return QStringLiteral("Seam");        // KindSeam
+      case 6: return QStringLiteral("Tool change"); // KindToolChange
       default: return QStringLiteral("Unknown");
     }
   }
@@ -311,6 +312,9 @@ namespace
   static const float kRetractColor[3] = {0.803f, 0.135f, 0.839f};
   static const float kUnretractColor[3] = {0.287f, 0.679f, 0.810f};
   static const float kSeamColor[3]    = {0.900f, 0.900f, 0.900f};
+  // Tool change tick color -- upstream Custom_Color_5 (lime, GCodeViewer.cpp
+  // ColorPlatter section rendering Filament changes points).
+  static const float kToolChangeColor[3] = {0.373f, 0.914f, 0.537f};
   static const float kWipeColor[3]    = {1.000f, 1.000f, 0.000f};
 
   // Height of the vertical tick segment used to render zero-displacement
@@ -327,6 +331,7 @@ namespace
       case 3: return kUnretractColor; // Unretract
       case 4: return kWipeColor;      // Wipe
       case 5: return kSeamColor;      // Seam
+      case 6: return kToolChangeColor; // Tool change (upstream Custom_Color_5)
       default: return kRoleColors[0]; // None
     }
   }
@@ -378,6 +383,7 @@ namespace
       case 3: return QStringLiteral("Unretract");
       case 4: return QStringLiteral("Wipe");
       case 5: return QStringLiteral("Seam");
+      case 6: return QStringLiteral("Tool change");
       default: return QString::fromUtf8(kRoleLabels[0]);
     }
   }
@@ -2637,8 +2643,13 @@ void PreviewViewModel::rebuildFromGCode(const QString &filePath)
       {
         if (tid != currentExtruder) {
           ++toolChangeCount;
-          // Record the tool-change position for the upstream-style colored band.
-          m_toolChangePositions.push_back({moveIndex, tid});
+          // PREVIEW-ALIGN: emit a visible KindToolChange tick at the change
+          // position (upstream renders Filament changes points,
+          // GCodeViewer.cpp ToolChanges option) -- replaces the legend-only
+          // shell. The tick occupies its own move slot, and the colored
+          // band records THAT index.
+          appendMarkerSegment(KindToolChange, x, y, z, sourceLineNumber);
+          m_toolChangePositions.push_back({moveIndex - 1, tid});
         }
         currentExtruder = tid;
       }
@@ -3475,10 +3486,46 @@ bool PreviewViewModel::loadFromProcessorResult(const Slic3r::GCodeProcessorResul
 
     // Tool-change bookkeeping (text: T lines whose id differs from the
     // current extruder; upstream stores those transitions on the vertices).
+    // PREVIEW-ALIGN: emit the KindToolChange tick like the text path -- the
+    // processor result only flips extruder_id between moves, so the tick
+    // anchors at the PREVIOUS move's endpoint (the physical nozzle spot
+    // where the swap happens). Constructed inline (the text path's
+    // appendMarkerSegment lambda lives in the other parse function).
     if (int(mv.extruder_id) != lastExtruderId)
     {
       ++toolChangeCount;
-      m_toolChangePositions.push_back({moveIndex, int(mv.extruder_id)});
+      StoredSegment tickSeg;
+      tickSeg.x1 = prevX;
+      tickSeg.y1 = prevY;
+      tickSeg.z1 = prevZ;
+      tickSeg.x2 = prevX;
+      tickSeg.y2 = prevY;
+      tickSeg.z2 = prevZ + kMarkerTickHeight;
+      const float *tkc = kindBaseColor(KindToolChange);
+      tickSeg.baseR = tkc[0];
+      tickSeg.baseG = tkc[1];
+      tickSeg.baseB = tkc[2];
+      tickSeg.feedrate = 0.f;
+      tickSeg.fan_speed = 0.f;
+      tickSeg.temperature = 0.f;
+      tickSeg.width = 0.f;
+      tickSeg.height = 0.f;
+      tickSeg.layer_time = 0.f;
+      tickSeg.acceleration = 0.f;
+      tickSeg.extruder_id = int(mv.extruder_id);
+      tickSeg.layer = layer;
+      tickSeg.move = moveIndex;
+      tickSeg.isTravel = true;
+      tickSeg.role = 0;
+      tickSeg.kind = KindToolChange;
+      tickSeg.gcodeLine = 0;
+      segments_.push_back(tickSeg);
+      m_kindCounts[KindToolChange] += 1;
+      featureCount_[kindFeatureLabel(KindToolChange)] += 1;
+      const float prevAcc = m_moveAccumulatedTime.empty() ? 0.f : m_moveAccumulatedTime.back();
+      m_moveAccumulatedTime.push_back(prevAcc);
+      ++moveIndex;
+      m_toolChangePositions.push_back({moveIndex - 1, int(mv.extruder_id)});
       lastExtruderId = int(mv.extruder_id);
     }
 
@@ -4070,9 +4117,10 @@ void PreviewViewModel::recolorAndPackSegments(bool fullColor)
       case KindUnretract:  visible = showUnretractMoves_;   break;
       case KindWipe:       visible = showWipeMoves_;        break;
       case KindSeam:       visible = showSeamMarks_;        break;
+      case KindToolChange: visible = showToolChanges_;      break;
       default:             visible = true;                  break;
     }
-    if (visible && mode == VT_Filament)
+    if (visible && mode == VT_Filament && s.kind != KindToolChange)
       visible = isExtruderVisible(s.extruder_id);
     if (visible)
       visibleIndices.push_back(i);
