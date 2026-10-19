@@ -99,6 +99,7 @@ qt_add_qml_module(owzx_qml
         controls/CxStepButton.qml
         controls/CxSwitch.qml
         controls/CxDialog.qml
+        controls/CxDialogHost.qml
         controls/CxPopup.qml
         controls/CxMenu.qml
         controls/CxMenuItem.qml

@@ -4875,7 +4875,10 @@ void QmlUiAuditTests::settingsRestorationMilestoneHasFinalVerificationCoverage()
                && mainQml.contains(QStringLiteral("materialSettingsDialog.show()"))
                && mainQml.contains(QStringLiteral("processSettingsDialog.show()")),
            "Final settings milestone must keep printer/material/process dialog dispatch");
-  const QRegularExpression settingsDialogInstancePattern(QStringLiteral("(^|\\n)\\s+SettingsDialog \\{"));
+  // 2026-10-19: the three SettingsDialog hosts moved into CxDialogHost
+  // sourceComponents (STARTUP-DEFER stage 2) — count the instantiation token
+  // wherever it sits on a line, still exactly three of them.
+  const QRegularExpression settingsDialogInstancePattern(QStringLiteral("(^|\\n)\\s+sourceComponent: SettingsDialog \\{"));
   int settingsDialogInstanceCount = 0;
   auto instanceMatches = settingsDialogInstancePattern.globalMatch(mainQml);
   while (instanceMatches.hasNext()) {
@@ -10876,7 +10879,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("TroubleshootDialog.qml"), QStringLiteral("troubleshootDialog.open()")},
       {QStringLiteral("SelectMachineDialog.qml"), QStringLiteral("selectMachineDialog.open()")},
       {QStringLiteral("RecenterDialog.qml"), QStringLiteral("recenterPromptRequested")},
-      {QStringLiteral("FileArchiveDialog.qml"), QStringLiteral("fileArchiveDialog.openFor(")},
+      {QStringLiteral("FileArchiveDialog.qml"), QStringLiteral("fileArchiveDialog.invoke(\"openFor\"")},
       {QStringLiteral("ObjColorDialog.qml"), QStringLiteral("objColorMappingRequested")},
       {QStringLiteral("SysInfoDialog.qml"), QStringLiteral("showSysInfoDialog()")},
   };

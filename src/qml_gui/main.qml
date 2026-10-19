@@ -34,6 +34,10 @@ ApplicationWindow {
     // below) — or immediately when the user actually enters the prepare/
     // preview pages, whichever comes first.
     property bool deferredUiReady: false
+    // STARTUP-DEFER stage 2: the ~30 shell dialogs build after Plater, off
+    // the critical path (~490ms measured). CxDialogHost.open()/invoke() still
+    // force synchronous on-demand builds, so early opens keep working.
+    property bool dialogsReady: false
 
     // Null-safe access to the (possibly not-yet-loaded) Plater's prepare
     // page; every plater.preparePageRef call site routes through this.
@@ -47,7 +51,19 @@ ApplicationWindow {
         interval: 100
         repeat: false
         running: false
-        onTriggered: root.deferredUiReady = true
+        onTriggered: {
+            root.deferredUiReady = true
+            // stage 2: dialogs build 250ms after Plater started building —
+            // sequenced so the two constructions never share one frame.
+            dialogsTimer.start()
+        }
+    }
+    Timer {
+        id: dialogsTimer
+        interval: 250
+        repeat: false
+        running: false
+        onTriggered: root.dialogsReady = true
     }
     // Frame margin is 0 by default: the shell fills the whole window so the
     // app content goes edge-to-edge (matching the OrcaSlicer screenshot).
@@ -131,8 +147,10 @@ ApplicationWindow {
             openProjectDialog.open()
     }
 
-    FileDialog {
+    CxDialogHost {
         id: openModelDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileDialog {
         title: qsTr("打开模型文件")
         nameFilters: [
             qsTr("3MF 文件 (*.3mf)"),
@@ -149,7 +167,7 @@ ApplicationWindow {
             // (upstream FileArchiveDialog) instead of a direct import.
             var modelPath = selectedFile.toString()
             if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".zip") {
-                fileArchiveDialog.openFor(modelPath)
+                fileArchiveDialog.invoke("openFor", modelPath)
                 return
             }
             // GAP-6: an externally sliced .gcode opens as a new project in
@@ -161,28 +179,37 @@ ApplicationWindow {
             }
             Backend.topbarImportModel(selectedFile.toString())
         }
+        }
     }
 
-    FileDialog {
+    CxDialogHost {
         id: openProjectDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileDialog {
         title: qsTr("打开项目")
         nameFilters: [qsTr("项目文件 (*.3mf *.cxprj *.json)"), qsTr("所有文件 (*)")]
         onAccepted: root.requestOpenProject(selectedFile.toString())
         onRejected: root.openDialogGuardApproved = false
+        }
     }
 
-    FileDialog {
+    CxDialogHost {
         id: saveProjectAsDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileDialog {
         title: qsTr("项目另存为")
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("项目文件 (*.3mf *.cxprj)"), qsTr("项目元数据 (*.json)")]
         onAccepted: {
             Backend.topbarSaveProjectAs(selectedFile.toString())
         }
+        }
     }
 
-    FileDialog {
+    CxDialogHost {
         id: exportModelDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileDialog {
         title: qsTr("导出模型")
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("STL (*.stl)"), qsTr("3MF (*.3mf)"), qsTr("OBJ (*.obj)")]
@@ -193,16 +220,20 @@ ApplicationWindow {
             if (Backend.editorViewModel)
                 Backend.editorViewModel.exportModel(path, ext)
         }
+        }
     }
 
     // Phase 237 (VIEW-02): Import Configs file dialog (upstream MainFrame::
     // load_config_file, MainFrame.cpp:3209-3211). Only *.json has a real Qt6
     // importer (PresetService::importBundle).
-    FileDialog {
+    CxDialogHost {
         id: importConfigsDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileDialog {
         title: qsTr("导入配置")
         nameFilters: [qsTr("配置文件 (*.json)"), qsTr("所有文件 (*)")]
         onAccepted: Backend.topbarImportConfigs(selectedFile.toString())
+        }
     }
 
     // Phase 237 (VIEW-06): export the plate sliced file as .gcode.3mf
@@ -210,8 +241,10 @@ ApplicationWindow {
     // Plater.cpp:11436-11448). No defaultSuffix: the target carries a
     // double extension (.gcode.3mf) and the ViewModel appends it when
     // missing (upstream appends .3mf the same way, Plater.cpp:11546-11547).
-    FileDialog {
+    CxDialogHost {
         id: exportGcode3mfDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileDialog {
         title: qsTr("保存切片文件")
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("切片文件 (*.gcode.3mf)")]
@@ -219,16 +252,20 @@ ApplicationWindow {
             if (Backend.editorViewModel)
                 Backend.editorViewModel.requestExportGcode3mf(selectedFile.toString())
         }
+        }
     }
 
     // Latency 跟踪迁移：endLatency 在 currentPage 改变后触发
     // (替代旧 onFrameSwapped + pendingSwitchTargetPage 逻辑 — Pitfall 3)
-    FolderDialog {
+    CxDialogHost {
         id: exportAllGcodeDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FolderDialog {
         title: qsTr("导出全部平板 G-code")
         onAccepted: {
             if (Backend.editorViewModel)
                 Backend.editorViewModel.requestExportAllGCode(selectedFolder.toString())
+        }
         }
     }
 
@@ -266,12 +303,15 @@ ApplicationWindow {
     // "All objects will be removed, continue?" message, Plater.cpp:11107;
     // confirm runs EditorViewModel::clearWorkspace, the OWzx equivalent of
     // delete_all_objects_from_model, Plater.cpp:4939).
-    ConfirmDialog {
+    CxDialogHost {
         id: deleteAllConfirm
+        deferredGate: root.dialogsReady
+        sourceComponent: ConfirmDialog {
         dialogTitle: qsTr("全部删除")
         message: qsTr("将移除所有对象，是否继续？")
         confirmText: qsTr("删除")
         onAccepted: if (Backend.editorViewModel) Backend.editorViewModel.clearWorkspace()
+        }
     }
 
     // Phase 237 (VIEW-04): unit-conversion confirm (upstream "Object too
@@ -279,8 +319,10 @@ ApplicationWindow {
     // authored mesh to millimeters). The conversion type maps the hint to
     // the upstream ConversionType (1 = CONV_FROM_INCH x25.4,
     // 3 = CONV_FROM_METER x1000).
-    ConfirmDialog {
+    CxDialogHost {
         id: unitConvertConfirm
+        deferredGate: root.dialogsReady
+        sourceComponent: ConfirmDialog {
         property int targetObjectIndex: -1
         property int targetUnitHint: 0
         property string targetObjectName: ""
@@ -294,6 +336,7 @@ ApplicationWindow {
                 Backend.editorViewModel.applyUnitConversion(
                             targetObjectIndex, targetUnitHint === 1 ? 3 : 1)
             }
+        }
         }
     }
 
@@ -394,7 +437,7 @@ ApplicationWindow {
             // Zip archives open the Phase 236 FileArchiveDialog tree instead
             // of a direct import (same routing as the import dialog).
             if (paths.length === 1 && paths[0].toLowerCase().endsWith(".zip")) {
-                fileArchiveDialog.openFor(paths[0])
+                fileArchiveDialog.invoke("openFor", paths[0])
                 return
             }
             if (Backend.editorViewModel)
@@ -404,17 +447,23 @@ ApplicationWindow {
 
     // Keyboard shortcuts dialog (extracted to dialogs/KBShortcutsDialog.qml,
     // Phase 195 UI-02; 5-group layout aligned with upstream KBShortcutsDialog.cpp).
-    KBShortcutsDialog {
+    CxDialogHost {
         id: shortcutDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: KBShortcutsDialog {
+        }
     }
 
     // Preferences dialog (2026-10-19): upstream hosts Preferences as a modal
     // dialog opened from the menu, not as a workflow tab. Opened via the
     // topbar preferencesRequested signal, Ctrl+P, the command palette, and
     // Backend.showPreferencesDialog() (--open-dialog preferences).
-    PreferencesDialog {
+    CxDialogHost {
         id: preferencesDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: PreferencesDialog {
         settingsVm: Backend.settingsViewModel
+        }
     }
 
     // U7: the "?" global entry the dialog always advertised is now real
@@ -433,8 +482,11 @@ ApplicationWindow {
     // shared AboutDialog component so the Help menu surfaces the corrected
     // AGPL-3.0 license + open-source components list from one place; the
     // Preferences "About" category opens the same component).
-    AboutDialog {
+    CxDialogHost {
         id: aboutDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: AboutDialog {
+        }
     }
 
     // New project confirmation dialog. GAP-7: carries the upstream
@@ -1178,8 +1230,10 @@ ApplicationWindow {
     }
 
     // P8.1 — First-run ConfigWizard
-    ConfigWizardDialog {
+    CxDialogHost {
         id: configWizardDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: ConfigWizardDialog {
         onWizardFinished: {
             // R-P1.J (upstream ConfigWizard::apply_config): completing the
             // wizard must APPLY the chosen printer/filament presets, not just
@@ -1188,7 +1242,7 @@ ApplicationWindow {
             // G-02: upstream load_presets also chains the print (process)
             // preset; Qt6 selects the first available print preset, mirroring
             // the chain's default pick.
-            var dlg = configWizardDialog
+            var dlg = configWizardDialog.item
             if (Backend.configViewModel) {
                 if (dlg.selectedPrinter && dlg.selectedPrinter.length > 0)
                     Backend.configViewModel.requestCurrentPrinterPreset(dlg.selectedPrinter)
@@ -1199,6 +1253,7 @@ ApplicationWindow {
                     Backend.configViewModel.requestCurrentPrintPreset(printNames[0])
             }
         }
+        }
     }
 
     // Dialog request signals
@@ -1207,9 +1262,9 @@ ApplicationWindow {
         function onShowConfigWizardRequested() { configWizardDialog.open() }
         function onShowBedShapeDialogRequested() { bedShapeDialog.open() }
         function onShowEditGCodeDialogRequested(key, value) {
-            editGCodeDialog.dialogTitle = qsTr("编辑自定义 G-code (%1)").arg(key || "")
-            editGCodeDialog.optionKey = key || ""
-            editGCodeDialog.initialGCode = value || ""
+            editGCodeDialog.setProp("dialogTitle", qsTr("编辑自定义 G-code (%1)").arg(key || ""))
+            editGCodeDialog.setProp("optionKey", key || "")
+            editGCodeDialog.setProp("initialGCode", value || "")
             editGCodeDialog.open()
         }
         function onShowAMSSettingsDialogRequested() { amsSettingsDialog.open() }
@@ -1235,14 +1290,19 @@ ApplicationWindow {
     }
 
     // P8.2 — Bed shape dialog
-    BedShapeDialog {
+    CxDialogHost {
         id: bedShapeDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: BedShapeDialog {
         editorVm: Backend.editorViewModel
+        }
     }
 
     // P8.3 — G-code editor dialog
-    EditGCodeDialog {
+    CxDialogHost {
         id: editGCodeDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: EditGCodeDialog {
         onGcodeAccepted: function(gcode) {
             // Phase 236 (DLG-02): write the edited text back onto the source
             // option key. ConfigViewModel::setValue routes through the owning
@@ -1255,47 +1315,64 @@ ApplicationWindow {
                                  editGCodeDialog.optionKey)
             }
         }
+        }
     }
 
     // P8.4 — AMS settings dialog
     // Phase 201 (v5.6): bound to AmsMaterialsViewModel (mock data + QSettings persistence).
-    AMSSettingsDialog {
+    CxDialogHost {
         id: amsSettingsDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: AMSSettingsDialog {
         amsVm: Backend.amsMaterialsViewModel
+        }
     }
 
     // P8.5 — Firmware dialog
-    FirmwareDialog { id: firmwareDialog }
+    CxDialogHost { id: firmwareDialog; deferredGate: root.dialogsReady
+        sourceComponent: FirmwareDialog { } }
 
     // P8.6b — Wipe tower dialog
-    WipeTowerDialog { id: wipeTowerDialog }
+    CxDialogHost { id: wipeTowerDialog; deferredGate: root.dialogsReady
+        sourceComponent: WipeTowerDialog { } }
 
     // P8.6c — Print host dialog
-    PrintHostDialog { id: printHostDialog }
+    CxDialogHost { id: printHostDialog; deferredGate: root.dialogsReady
+        sourceComponent: PrintHostDialog { } }
 
     // P10.1 — Plugin manager dialog (Phase 202: PluginService real Backend)
-    PluginManagerDialog {
+    CxDialogHost {
         id: pluginManagerDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: PluginManagerDialog {
         pluginService: Backend.pluginService
+        }
     }
 
     // P10.2 — Enable lite mode dialog
-    EnableLiteModeDialog { id: enableLiteModeDialog }
+    CxDialogHost { id: enableLiteModeDialog; deferredGate: root.dialogsReady
+        sourceComponent: EnableLiteModeDialog { } }
 
     // Phase 236 (DLG-01) — Export Preset Bundle (File > 导出预设包...).
-    ExportPresetBundleDialog {
+    CxDialogHost {
         id: exportPresetBundleDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: ExportPresetBundleDialog {
         configVm: Backend.configViewModel
+        }
     }
 
     // Phase 236 (DLG-03) — system information dump (Help > 系统信息).
-    SysInfoDialog { id: sysInfoDialog }
+    CxDialogHost { id: sysInfoDialog; deferredGate: root.dialogsReady
+        sourceComponent: SysInfoDialog { } }
 
     // Dead-control elimination — Help > 每日提示 (upstream Show Tip of the
     // Day, MainFrame.cpp:2149 dailytips open). Content comes from the same
     // hints.json database the HomePage Daily Tips card reads.
-    CxDialog {
+    CxDialogHost {
         id: dailyTipDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: CxDialog {
         modal: true
         dialogTitle: qsTr("每日提示")
         anchors.centerIn: parent
@@ -1345,48 +1422,61 @@ ApplicationWindow {
                 }
             }
         }
+        }
     }
 
     // Dead-control elimination — Help > 网络测试 (upstream Open Network Test,
     // MainFrame.cpp:2167 NetworkTestDialog). Own instance so the entry works
     // from any page (Preferences hosts the other instance).
-    NetworkTestDialog {
+    CxDialogHost {
         id: topbarNetworkTestDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: NetworkTestDialog {
         parent: Overlay.overlay
         networkVm: Backend.monitorViewModel
+        }
     }
 
     // Phase 236 (DLG-03) — out-of-bed objects prompt. Opened via
     // Backend.recenterPromptRequested after a load; "全部居中" routes through
     // EditorViewModel::recenterObjectsOutsideBed.
-    RecenterDialog {
+    CxDialogHost {
         id: recenterDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: RecenterDialog {
         editorVm: Backend.editorViewModel
         onRecenterRequested: {
             if (Backend.editorViewModel)
                 Backend.editorViewModel.recenterObjectsOutsideBed()
         }
+        }
     }
 
     // Phase 236 (DLG-03) — zip archive import tree. openFor() lists the
     // model entries; confirm extracts + loads the checked entries.
-    FileArchiveDialog {
+    CxDialogHost {
         id: fileArchiveDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: FileArchiveDialog {
         editorVm: Backend.editorViewModel
         onImportRequested: function(archivePath, selectedEntries) {
             if (Backend.editorViewModel && selectedEntries.length > 0)
                 Backend.editorViewModel.importArchiveEntries(archivePath, selectedEntries)
         }
+        }
     }
 
     // Phase 236 (DLG-03) — OBJ mtl color → extruder mapping. Opened via
     // editorVm.objColorMappingRequested after a multi-color .obj import.
-    ObjColorDialog {
+    CxDialogHost {
         id: objColorDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: ObjColorDialog {
         editorVm: Backend.editorViewModel
         onApplyRequested: function(extruderId) {
             if (Backend.editorViewModel)
                 Backend.editorViewModel.applyPendingObjColors(extruderId)
+        }
         }
     }
 
@@ -1408,23 +1498,32 @@ ApplicationWindow {
     // PresetCollection scope). Opened from the Prepare sidebar via the
     // onSettingsRequested handler above. Each is an ApplicationWindow that
     // stays focusable alongside the main window (CONTEXT.md decision).
-    SettingsDialog {
+    CxDialogHost {
         id: printerSettingsDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: SettingsDialog {
         configVm: Backend.configViewModel
         presetTier: "printer"
         optionModel: Backend.configViewModel ? Backend.configViewModel.machineOptions : null
+        }
     }
-    SettingsDialog {
+    CxDialogHost {
         id: materialSettingsDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: SettingsDialog {
         configVm: Backend.configViewModel
         presetTier: "filament"
         optionModel: Backend.configViewModel ? Backend.configViewModel.filamentOptions : null
+        }
     }
-    SettingsDialog {
+    CxDialogHost {
         id: processSettingsDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: SettingsDialog {
         configVm: Backend.configViewModel
         presetTier: "print"
         optionModel: Backend.configViewModel ? Backend.configViewModel.printOptions : null
+        }
     }
 
     // Phase 173 (P3): command palette (Ctrl+Shift+P). Cross-industry
