@@ -4150,9 +4150,10 @@ void PreviewViewModel::recolorAndPackSegments(bool fullColor)
 
     // P17.7: top_layer_only — while the sequential view is scrubbed
     // (moveEnd short of the full toolpath), segments outside the top layer
-    // render in the upstream Neutral_Color dark gray
-    // (GV.cpp:3285 + :750 Neutral_Color = 0.18 gray). The "current top
-    // layer" is the LAYER OF THE SCRUB POSITION (toolLayer_), NOT the
+    // render in the upstream DUMMY_COLOR dark gray {64,64,64}
+    // (libvgcode Types.hpp:213, applied by update_colors_texture
+    // ViewerImpl.cpp:1275 -- the "deep gray solid print" look). The "current
+    // top layer" is the LAYER OF THE SCRUB POSITION (toolLayer_), NOT the
     // layer-rail max handle -- with the rail parked at full range the old
     // proxy grayed every segment except the last layer, so pressing play
     // (which restarts at the range start) turned the whole model gray.
@@ -4172,9 +4173,9 @@ void PreviewViewModel::recolorAndPackSegments(bool fullColor)
       // FeatureType: use the baked per-role base color (kRoleColors).
       if (topLayerGray && !dimmed)
       {
-        p.r = 0.18f;
-        p.g = 0.18f;
-        p.b = 0.18f;
+        p.r = 64.0f / 255.0f;
+        p.g = 64.0f / 255.0f;
+        p.b = 64.0f / 255.0f;
       } else {
         p.r = s.baseR;
         p.g = s.baseG;
@@ -4188,9 +4189,9 @@ void PreviewViewModel::recolorAndPackSegments(bool fullColor)
       ColorResult tc = effectiveExtruderColor(s.extruder_id, configuredColors);
       if (topLayerGray && !dimmed)
       {
-        tc.r = 0.18f;
-        tc.g = 0.18f;
-        tc.b = 0.18f;
+        tc.r = 64.0f / 255.0f;
+        tc.g = 64.0f / 255.0f;
+        tc.b = 64.0f / 255.0f;
       }
       p.r = tc.r; p.g = tc.g; p.b = tc.b;
     }
@@ -4209,9 +4210,9 @@ void PreviewViewModel::recolorAndPackSegments(bool fullColor)
       ColorResult c = valueToGradient(value, minV, maxV);
       if (topLayerGray && !dimmed)
       {
-        c.r = 0.18f;
-        c.g = 0.18f;
-        c.b = 0.18f;
+        c.r = 64.0f / 255.0f;
+        c.g = 64.0f / 255.0f;
+        c.b = 64.0f / 255.0f;
       }
       p.r = c.r; p.g = c.g; p.b = c.b;
     }

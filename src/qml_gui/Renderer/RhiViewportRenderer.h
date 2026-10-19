@@ -718,6 +718,16 @@ private:
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;
   bool m_previewSegmentBufferUploaded = false;
+  // PREVIEW-SOLID: opaque lit pipeline for extrusion prisms (upstream
+  // render_toolpaths draws volume instances opaquely with gouraud lighting --
+  // the solid-print look). Parallel normal buffer, index-aligned 1:1 with
+  // m_previewVertices (3 floats per vertex; line-span vertices carry an
+  // unused (0,1,0) filler).
+  std::unique_ptr<QRhiGraphicsPipeline> m_previewLitPipeline;
+  std::unique_ptr<QRhiBuffer> m_previewNormalBuffer;
+  quint32 m_previewNormalBufferBytes = 0;
+  QVector<float> m_previewNormals;       // CPU staging, 3 per preview vertex
+  bool ensurePreviewLitPipeline();
 
   // ── Phase 238 (PREV-01/02): preview ghost-shell + tool-marker GPU state ──
   std::unique_ptr<QRhiBuffer> m_ghostShellBuffer;

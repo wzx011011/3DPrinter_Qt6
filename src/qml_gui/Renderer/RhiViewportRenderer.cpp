@@ -563,11 +563,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // P15.3 (OUTOFBED): upstream _render_background swaps the background to
   // ERROR_BG_LIGHT_COLOR {0.753, 0.192, 0.039} while any model-part volume
   // sits outside the print volume (GLCanvas3D.cpp:7069-7097, _is_any_volume_outside;
-  // error color defined at :84-85, identical in the dark theme). The preview
-  // canvas keeps its fixed dark clear (upstream preview uses its own
-  // background path).
+  // error color defined at :84-85, identical in the dark theme).
+  // PREVIEW-ALIGN 2026-10-19: the preview canvas uses the upstream light
+  // background (DEFAULT_BG_LIGHT_COLOR {0.906,0.906,0.906}, GLCanvas3D.cpp:93
+  // -- user ruling: preview matches the upstream screenshot) so the DUMMY
+  // gray solid print reads like upstream.
   if (m_canvasType == RhiViewport::CanvasPreview)
-    m_clearColor = QColor(8, 12, 20);
+    m_clearColor = QColor(231, 231, 231);
   else if (m_prepareScene.anyVolumeOutside())
     m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
   else
@@ -1418,22 +1420,35 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     }
 
     // P17.2: spans carry their topology — extrusion prisms draw through the
-    // no-depth-write translucent fill pipeline (lit shading, matching the
-    // upstream toolpath gouraud_light look), lines through the line
-    // pipeline. One shared vertex buffer, two pipelines, span-ordered.
+    // PREVIEW-SOLID opaque lit pipeline (upstream render_toolpaths volume
+    // look), falling back to the translucent fill pipeline when the normal
+    // buffer is unavailable; lines through the line pipeline. One shared
+    // vertex buffer, span-ordered.
     if (m_previewSegmentBuffer && m_previewSegmentVertexCount > 0) {
       const QVector<PreviewDrawRange> drawRanges = computePreviewDrawRanges();
       if (!drawRanges.isEmpty()) {
+        const bool litReady = m_modelLitEnabled && ensurePreviewLitPipeline()
+            && m_previewNormalBuffer;
         const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
+        const QRhiCommandBuffer::VertexInput litBindings[2] = {
+            QRhiCommandBuffer::VertexInput(m_previewSegmentBuffer.get(), 0),
+            QRhiCommandBuffer::VertexInput(m_previewNormalBuffer.get(), 1),
+        };
         QRhiGraphicsPipeline *currentPipeline = nullptr;
         for (const PreviewDrawRange &range : drawRanges) {
           if (range.vertexCount <= 0)
             continue;
           QRhiGraphicsPipeline *wanted =
-              range.triangles ? m_translucentFillPipeline.get() : m_linePipeline.get();
+              range.triangles
+                  ? (litReady ? m_previewLitPipeline.get()
+                              : m_translucentFillPipeline.get())
+                  : m_linePipeline.get();
           if (wanted != currentPipeline) {
             cb->setGraphicsPipeline(wanted);
-            cb->setVertexInput(0, 1, &segBinding);
+            if (wanted == m_previewLitPipeline.get())
+              cb->setVertexInput(0, 2, litBindings);
+            else
+              cb->setVertexInput(0, 1, &segBinding);
             currentPipeline = wanted;
           }
           cb->draw(range.vertexCount, 1, range.firstVertex);
@@ -2022,6 +2037,8 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
 {
   m_previewSegmentBuffer.reset();
   m_previewSegmentBufferBytes = 0;
+  m_previewNormalBuffer.reset();
+  m_previewNormalBufferBytes = 0;
   m_previewSegmentBufferUploaded = false;
   // P17.7: sequential-range cap buffer.
   m_previewCapBuffer.reset();
@@ -2040,6 +2057,7 @@ void RhiViewportRenderer::resetPreviewGpuState(bool keepCpuStaging)
 
   if (!keepCpuStaging) {
     m_previewVertices.clear();
+    m_previewNormals.clear();
     m_previewDrawSpans.clear();
     m_previewSegmentVertexCount = 0;
     m_previewRangeCacheKey = 0;
@@ -5851,6 +5869,22 @@ void RhiViewportRenderer::parsePreviewSegments()
         m_previewVertices.append(v0);
         m_previewVertices.append(v1);
         m_previewVertices.append(v2);
+        // PREVIEW-SOLID: flat per-face normal in scene space for the lit
+        // pipeline (the model_lit shader maxes N/-N, so winding sign is
+        // irrelevant).
+        const QVector3D e1(v1.x - v0.x, v1.y - v0.y, v1.z - v0.z);
+        const QVector3D e2(v2.x - v0.x, v2.y - v0.y, v2.z - v0.z);
+        QVector3D n = QVector3D::crossProduct(e1, e2);
+        const float len = n.length();
+        if (len > 1e-9f)
+          n /= len;
+        else
+          n = QVector3D(0.f, 1.f, 0.f);
+        for (int k = 0; k < 3; ++k) {
+          m_previewNormals.append(n.x());
+          m_previewNormals.append(n.y());
+          m_previewNormals.append(n.z());
+        }
       };
       const auto gv = [&](float gx, float gy, float gz) {
         Vertex v;
@@ -5891,6 +5925,14 @@ void RhiViewportRenderer::parsePreviewSegments()
 
     m_previewVertices.append(a);
     m_previewVertices.append(b);
+    // PREVIEW-SOLID: filler normals keep the parallel buffer index-aligned
+    // (line spans render through the unlit line pipeline).
+    m_previewNormals.append(0.f);
+    m_previewNormals.append(1.f);
+    m_previewNormals.append(0.f);
+    m_previewNormals.append(0.f);
+    m_previewNormals.append(1.f);
+    m_previewNormals.append(0.f);
 
     const quint32 vertexOffset = quint32(m_previewVertices.size() - 2);
     m_previewDrawSpans.append({seg[i].layer, seg[i].move, vertexOffset, 2, seg[i].role, false});
@@ -5968,8 +6010,69 @@ bool RhiViewportRenderer::uploadPreviewSegmentBuffer(QRhiResourceUpdateBatch *up
 
   updates->uploadStaticBuffer(m_previewSegmentBuffer.get(), 0, byteSize,
                               m_previewVertices.constData());
+  // PREVIEW-SOLID: parallel normal buffer for the lit prism pipeline
+  // (index-aligned 3 floats per vertex).
+  if (m_previewNormals.size() == int(m_previewSegmentVertexCount) * 3) {
+    const quint32 normalBytes = m_previewSegmentVertexCount * 3 * sizeof(float);
+    if (ensureBuffer(m_previewNormalBuffer, normalBytes, m_previewNormalBufferBytes,
+                     QRhiBuffer::VertexBuffer)) {
+      updates->uploadStaticBuffer(m_previewNormalBuffer.get(), 0, normalBytes,
+                                  m_previewNormals.constData());
+    }
+  }
   // Phase 27 (PERF-01): capture upload timing.
   m_previewLastUploadMs = 0; // uploadStaticBuffer is deferred; actual timing measured at frame level
+  return true;
+}
+
+// PREVIEW-SOLID: opaque lit pipeline for the extrusion prisms -- mirrors
+// ensureModelLitPipeline's two-binding layout (Vertex + parallel normal3)
+// and depth test+write, matching the upstream toolpath volume rendering
+// (ViewerImpl render_segments: opaque instanced boxes with gouraud
+// lighting, Shaders.hpp:13-143). Falls back to the translucent pipeline
+// in the draw loop when the normal buffer is unavailable.
+bool RhiViewportRenderer::ensurePreviewLitPipeline()
+{
+  if (m_previewLitPipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr || m_srb == nullptr)
+    return false;
+
+  const QShader vertexShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_lit.vert.qsb"));
+  const QShader fragmentShader = loadShader(
+      QStringLiteral(":/rhi_viewport/shaders/model_lit.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({
+      QRhiVertexInputBinding(sizeof(Vertex)),          // pos3 + color4
+      QRhiVertexInputBinding(3 * sizeof(float)),       // normal3 (parallel)
+  });
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(Vertex, x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float4, offsetof(Vertex, r)),
+      QRhiVertexInputAttribute(1, 2, QRhiVertexInputAttribute::Float3, 0),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+  m_previewLitPipeline.reset(rhi()->newGraphicsPipeline());
+  m_previewLitPipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_previewLitPipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_previewLitPipeline->setShaderResourceBindings(m_srb.get());
+  m_previewLitPipeline->setVertexInputLayout(inputLayout);
+  m_previewLitPipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_previewLitPipeline->setDepthTest(true);
+  m_previewLitPipeline->setDepthWrite(true);
+  m_previewLitPipeline->setTargetBlends({});
+  if (!m_previewLitPipeline->create()) {
+    m_previewLitPipeline.reset();
+    return false;
+  }
   return true;
 }
 

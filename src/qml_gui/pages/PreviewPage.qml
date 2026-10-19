@@ -399,6 +399,37 @@ Item {
                     viewport: previewViewport
                 }
 
+                // PREVIEW-ALIGN: current plate number badge at the bed's
+                // lower-right (upstream PartPlate::render_only_numbers,
+                // PartPlate.cpp:1242-1273 -- text texture in
+                // wxColour(0xF2,0x75,0x4E) orange, generated per plate at
+                // :4388-4407). Viewport-anchored overlay approximation of
+                // the on-plate 3D label; the gcode deep-link session still
+                // reports plate 0 as the active print.
+                Rectangle {
+                    visible: root.hasPreviewData
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 18
+                    width: plateNumberText.implicitWidth + 14
+                    height: 24
+                    radius: 4
+                    color: "#F2754E"
+                    Text {
+                        id: plateNumberText
+                        anchors.centerIn: parent
+                        text: {
+                            const idx = root.editorVm
+                                    ? root.editorVm.currentPlateIndex : 0
+                            const n = idx + 1
+                            return n < 10 ? ("0" + n) : ("" + n)
+                        }
+                        color: "white"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+                }
+
                 // preview-7 (ref shotScreen/预览页.png): the current-plate
                 // summary floats at the canvas TOP-LEFT as a ~125x125 rounded
                 // square card (teal border, plate badge embedded top-left,

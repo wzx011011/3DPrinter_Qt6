@@ -220,6 +220,31 @@ Item {
                 }
             }
 
+            // PREVIEW-ALIGN: brand-color range fill over the slider groove
+            // (upstream IMSlider BRAND_COLOR IM_COL32(0,150,136,255),
+            // IMSlider.cpp:32 -- the range_fill span on the vertical layers
+            // slider, drawn at 912-914). Sibling order places it above the
+            // RangeSlider's opaque groove and below the tick marks. Geometry
+            // derives from the slider VALUES against the host track metrics.
+            // Mouse-transparent so drag/wheel interactions pass through to
+            // the slider underneath.
+            Rectangle {
+                id: rangeSpanFill
+                readonly property real spanRange:
+                    Math.max(1, layerRangeSlider.to - layerRangeSlider.from)
+                readonly property real vMax: layerRangeSlider.second.value
+                readonly property real vMin: layerRangeSlider.first.value
+                visible: root.previewVm && root.totalLayers > 0
+                x: railTrackHost.width / 2 - width / 2
+                y: railTrackHost.trackMargin
+                   + railTrackHost.trackHeight * (1 - (vMax - layerRangeSlider.from) / spanRange)
+                width: 6
+                height: Math.max(2, railTrackHost.trackHeight * (vMax - vMin) / spanRange)
+                radius: 3
+                color: "#009688"
+                MouseArea { anchors.fill: parent; enabled: false }
+            }
+
             // layer-rail-z-labels: passive hover proxies over the two real
             // handles. The geometry is mapped from the actual handle item the
             // same way pointOnHandle maps the handle center, and the bindings
