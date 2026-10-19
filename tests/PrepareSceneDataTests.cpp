@@ -994,9 +994,11 @@ void PrepareSceneDataTests::uploadRegistryRoutingFollowsCanvasAndPayload()
   // the navigator, and nothing else.
   QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyCamera),
            quint32(P::DirtyCameraUniform | P::DirtyNavigator));
-  // ...and a bed change routes only that pair there (print volume + cube).
+  // ...and a bed change routes the camera pair plus the preview bed-vertex
+  // channel (PREVIEW-BED: the preview canvas otherwise never uploads its bed
+  // buffers, so an externally-opened G-code preview had no plate at all).
   QCOMPARE(P::uploadChannelsForCanvas(P::kCanvasPreview, P::DirtyBed),
-           quint32(P::DirtyCameraUniform | P::DirtyNavigator));
+           quint32(P::DirtyCameraUniform | P::DirtyNavigator | P::DirtyBedBuffers));
 
   // Stored scene-canvas bits never route on preview and vice versa: a
   // seeded-but-unroutable bit cannot cause a per-frame batch.

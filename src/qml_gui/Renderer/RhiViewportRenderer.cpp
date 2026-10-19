@@ -312,16 +312,28 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     }
   }
   const bool modelGenerationChanged = m_modelGeneration != viewport->m_modelGeneration;
+  // PREVIEW-BED: bed params ride every synchronize instead of only the
+  // sceneGeneration change -- an externally-opened G-code session never
+  // loads a model, so the generation never bumped and setBed never ran,
+  // leaving the PrepareSceneData default (zero-size) bed: the preview
+  // rendered the toolpath over a void with no plate grid. The setters are
+  // diff-guarded (rebuild only on a real change), so this costs nothing on
+  // a steady frame.
+  if (rhiPreviewPerfEnabled())
+    fprintf(stderr, "[BED-DIAG] sync bed=(%.1f x %.1f) origin=(%.1f, %.1f) shape=%d show=%d gen %u->%u\n",
+            viewport->m_bedWidth, viewport->m_bedDepth, viewport->m_bedOriginX,
+            viewport->m_bedOriginY, viewport->m_bedShapeType, int(viewport->m_showBed),
+            m_sceneGeneration, viewport->m_sceneGeneration);
+  m_prepareScene.setBed(viewport->m_bedWidth,
+                        viewport->m_bedDepth,
+                        viewport->m_bedOriginX,
+                        viewport->m_bedOriginY,
+                        viewport->m_bedShapeType,
+                        viewport->m_bedDiameter);
+  m_prepareScene.setBedExcludeAreas(viewport->m_bedExcludeAreas);
+  m_prepareScene.setShowBed(viewport->m_showBed);
   if (m_sceneGeneration != viewport->m_sceneGeneration) {
     m_sceneGeneration = viewport->m_sceneGeneration;
-    m_prepareScene.setBed(viewport->m_bedWidth,
-                          viewport->m_bedDepth,
-                          viewport->m_bedOriginX,
-                          viewport->m_bedOriginY,
-                          viewport->m_bedShapeType,
-                          viewport->m_bedDiameter);
-    m_prepareScene.setBedExcludeAreas(viewport->m_bedExcludeAreas);
-    m_prepareScene.setShowBed(viewport->m_showBed);
   }
   // v5.16 (HTLIMIT): diff-checked like the bedtype gates (no scene churn).
   m_prepareScene.setHeightLimit(viewport->m_bedHeightLimitActive
@@ -999,6 +1011,15 @@ quint32 RhiViewportRenderer::uploadPendingChannels(QRhiResourceUpdateBatch *upda
     if ((channels & PrepareSceneData::DirtyToolMarker)
         && uploadToolMarkerBuffer(updates)) {
       handled |= PrepareSceneData::DirtyToolMarker;
+    }
+    // PREVIEW-BED: bed fill/grid/bottom-line/axes/limits vertex upload. The
+    // prepare canvas runs this inside DirtySceneBuffers; the preview canvas
+    // routes its own channel here (armed by the DirtyBed/DirtyPlate payload
+    // projection and by first-frame seeding), otherwise the buffers stay
+    // empty and the preview draws its toolpath over a void.
+    if ((channels & PrepareSceneData::DirtyBedBuffers)
+        && uploadBedBuffers(updates, dirtyFlags)) {
+      handled |= PrepareSceneData::DirtyBedBuffers;
     }
   }
 

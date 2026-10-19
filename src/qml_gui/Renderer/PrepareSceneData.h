@@ -183,6 +183,9 @@ public:
     DirtyPreviewCap = 1u << 27,         // Q3 seam arms this (was a boolean latch)
     DirtyNavigator = 1u << 28,
     DirtyCameraUniform = 1u << 29,      // derived from kCameraFeedMask by routing
+    DirtyBedBuffers = 1u << 30,         // PREVIEW-BED: bed vertex upload on the
+                                        // preview canvas (derived from the
+                                        // DirtyBed/DirtyPlate payload by routing)
   };
 
   // Registry layout constants (pure data, locked by static_asserts below and
@@ -212,7 +215,7 @@ public:
       | DirtySequentialClearance | DirtyPlateIconAtlas | DirtyPlateIconQuads
       | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts
       | DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
-      | DirtyPreviewCap | DirtyNavigator;
+      | DirtyPreviewCap | DirtyNavigator | DirtyBedBuffers;
   // Channels routable per canvas family. Canvas values mirror
   // RhiViewport::CanvasType (equality is locked by static_assert in
   // RhiViewport.h — PrepareSceneData cannot include that header).
@@ -227,7 +230,7 @@ public:
       | DirtyBedTexture | DirtyBedModel | DirtyBedTypeParts | DirtyNavigator;
   static constexpr quint32 kPreviewCanvasChannelMask =
       DirtyPreviewSegment | DirtyGhostShell | DirtyToolMarker
-      | DirtyPreviewCap | DirtyNavigator;
+      | DirtyPreviewCap | DirtyNavigator | DirtyBedBuffers;
 
   static_assert((kRendererChannelMask & kScenePayloadMask) == 0,
                 "channel bits and payload bits must not collide");

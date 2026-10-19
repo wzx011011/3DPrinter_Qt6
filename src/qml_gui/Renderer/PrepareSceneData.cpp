@@ -732,6 +732,13 @@ quint32 PrepareSceneData::uploadChannelsForCanvas(int canvasType, quint32 dirtyF
     // before the first synchronize (or set by shared mirror code) stay
     // stored but never route, so they cannot cause a per-frame batch.
     channels &= kPreviewCanvasChannelMask;
+    // PREVIEW-BED: project the bed payload onto the preview's bed-vertex
+    // channel (the prepare canvas routes these through DirtySceneBuffers,
+    // which the preview canvas never runs). First-frame seeding arms the
+    // payload, so the buffers upload once even when the bed equals the
+    // PrepareSceneData defaults.
+    if ((payload & (DirtyBed | DirtyPlate)) != 0)
+      channels |= DirtyBedBuffers;
     if (cameraFeed) {
       channels |= DirtyCameraUniform;
       channels |= DirtyNavigator;

@@ -1254,7 +1254,13 @@ void PreviewViewModel::updateToolPositionData()
     hasToolPosition_ = false;
     return;
   }
-  const int idx = qMin(currentMove_, static_cast<int>(segments_.size()) - 1);
+  // PREV-MARKER: at the loaded/finished rest position (currentMove_ ==
+  // moveCount_) the last move is the slicer's presentation macro -- anchor
+  // the resting marker to the final printing move instead so it stays on
+  // the model.
+  int idx = qMin(currentMove_, static_cast<int>(segments_.size()) - 1);
+  if (currentMove_ >= moveCount_ && m_lastPrintingMoveIndex >= 0)
+    idx = qMin(m_lastPrintingMoveIndex, static_cast<int>(segments_.size()) - 1);
   const auto &seg = segments_[idx];
   // Upstream GCodeViewer::Marker uses the endpoint of the current move.
   hasToolPosition_ = true;
@@ -1617,6 +1623,7 @@ void PreviewViewModel::rebuildLayerMoveBounds()
 {
   layerFirstMove_.clear();
   layerLastMove_.clear();
+  m_lastPrintingMoveIndex = -1;
   if (layerCount_ <= 0 || segments_.empty())
     return;
   layerFirstMove_.resize(layerCount_, -1);
@@ -1630,6 +1637,16 @@ void PreviewViewModel::rebuildLayerMoveBounds()
     if (layerFirstMove_[layer] < 0)
       layerFirstMove_[layer] = i;
     layerLastMove_[layer] = i;
+  }
+  // PREV-MARKER: last non-travel move = the final printing position (the
+  // file tail is the presentation macro, a pure-travel run).
+  for (int i = count - 1; i >= 0; --i)
+  {
+    if (segments_[i].kind != KindTravel)
+    {
+      m_lastPrintingMoveIndex = i;
+      break;
+    }
   }
 }
 

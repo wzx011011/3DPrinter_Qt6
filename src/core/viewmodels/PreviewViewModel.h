@@ -629,6 +629,12 @@ private:
   /// ticked once and died instead of replaying the range).
   QVector<int> layerFirstMove_;
   QVector<int> layerLastMove_;
+  /// PREV-MARKER: last non-travel move index (the final printing position).
+  /// Every sliced file ends with the slicer's presentation macro (bed-exit
+  /// travel + Z lift), so the loaded playhead parks on a move far off the
+  /// model; the at-rest marker anchors to this move instead so it rests on
+  /// the model. -1 = unknown (no segments / pure-travel file).
+  int m_lastPrintingMoveIndex = -1;
   QByteArray gcodePreviewData_;
   QVariantList legendItems_;
   int m_legendType = 0;  ///< 0=discrete, 1=gradient, 2=extruder
