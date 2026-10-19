@@ -720,6 +720,11 @@ private:
   std::unique_ptr<QRhiBuffer> m_previewSegmentBuffer;
   quint32 m_previewSegmentBufferBytes = 0;
   quint32 m_previewSegmentVertexCount = 0;
+  // PREVIEW-ALIGN (OUTOFBED): any preview segment endpoint outside the bed
+  // rectangle -- the preview-canvas analogue of upstream _is_any_volume_outside
+  // (GLCanvas3D.cpp:7913 swaps the background to the error color). Computed
+  // once per parsePreviewSegments; no model volumes exist on this canvas.
+  bool m_previewToolpathOutsideBed = false;
   bool m_previewSegmentBufferUploaded = false;
   // PREVIEW-SOLID: opaque lit pipeline for extrusion prisms (upstream
   // render_toolpaths draws volume instances opaquely with gouraud lighting --

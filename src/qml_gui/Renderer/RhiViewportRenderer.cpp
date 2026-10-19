@@ -576,9 +576,12 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // PREVIEW-ALIGN 2026-10-19: the preview canvas uses the upstream light
   // background (DEFAULT_BG_LIGHT_COLOR {0.906,0.906,0.906}, GLCanvas3D.cpp:93
   // -- user ruling: preview matches the upstream screenshot) so the DUMMY
-  // gray solid print reads like upstream.
+  // gray solid print reads like upstream; a toolpath escaping the plate
+  // swaps to the upstream error color (m_toolpath_outside).
   if (m_canvasType == RhiViewport::CanvasPreview)
-    m_clearColor = QColor(231, 231, 231);
+    m_clearColor = m_previewToolpathOutsideBed
+        ? QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f))
+        : QColor(231, 231, 231);
   else if (m_prepareScene.anyVolumeOutside())
     m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
   else
@@ -2475,23 +2478,20 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
 {
   if (cb == nullptr || !m_prepareScene.showBed())
     return;
-  if (!m_bedTexturePipeline || !m_bedTextureVertexBuffer || m_bedTextureVertexCount == 0) {
-    static bool warnedOnce = false;
-    if (!warnedOnce) {
-      warnedOnce = true;
-      fprintf(stderr, "[TEX-DIAG] render SKIP pipeline=%d buffer=%d verts=%u\n",
-              m_bedTexturePipeline != nullptr, m_bedTextureVertexBuffer != nullptr,
-              m_bedTextureVertexCount);
-    }
+  // PREVIEW-BEDTEX fix: the pipeline is CREATED here (ensure below) — the
+  // old gate required m_bedTexturePipeline to already exist before calling
+  // its own factory, a textbook deadlock: buffer+verts sat ready, the SKIP
+  // branch returned on pipeline==null, and ensureBedTexturePipeline was
+  // unreachable. Vertex/pipeline gates now follow the factory call.
+  if (!m_bedTextureVertexBuffer || m_bedTextureVertexCount == 0)
     return;
-  }
+  if (!ensureBedTexturePipeline())
+    return;
   static bool drawnOnce = false;
   if (!drawnOnce) {
     drawnOnce = true;
     fprintf(stderr, "[TEX-DIAG] render DRAW verts=%u\n", m_bedTextureVertexCount);
   }
-  if (!ensureBedTexturePipeline())
-    return;
   cb->setGraphicsPipeline(m_bedTexturePipeline.get());
   cb->setShaderResources(m_bedTextureSrb.get());
   const QRhiCommandBuffer::VertexInput binding(m_bedTextureVertexBuffer.get(), 0);
@@ -6009,6 +6009,25 @@ void RhiViewportRenderer::parsePreviewSegments()
   // computePreviewDrawRanges call will repopulate the cache.
   m_previewRangeCacheKey = 0;
   m_cachedPreviewRanges.clear();
+
+  // PREVIEW-ALIGN (OUTOFBED): sweep the expanded vertices against the bed
+  // rectangle (upstream _is_any_volume_outside drives the same background
+  // swap for model volumes; the preview canvas has no volumes, so the
+  // toolpath itself is what can leave the plate -- GLCanvas3D.cpp:7913-7918
+  // m_toolpath_outside).
+  m_previewToolpathOutsideBed = false;
+  if (!m_previewVertices.isEmpty()) {
+    const float bedLeft = m_prepareScene.bedOriginX();
+    const float bedTop = m_prepareScene.bedOriginY();
+    const float bedRight = bedLeft + m_prepareScene.bedWidth();
+    const float bedBottom = bedTop + m_prepareScene.bedDepth();
+    for (const Vertex &v : m_previewVertices) {
+      if (v.x < bedLeft || v.x > bedRight || v.z < bedTop || v.z > bedBottom) {
+        m_previewToolpathOutsideBed = true;
+        break;
+      }
+    }
+  }
 }
 
 // P17.7: the sequential-range cap (upstream SequentialRangeCap generation,
