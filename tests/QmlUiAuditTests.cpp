@@ -1890,8 +1890,13 @@ void QmlUiAuditTests::previewNormalPathCoversFullWorkflowBindingsAndDiagnostics(
     // Phase 238 (PREV-02): the binding now gates on hasToolPosition (the
     // marker renders only when a real tool position exists); the raw
     // showMarker property stays part of the binding expression.
+    // PREV-PLAY-AUDIT: the marker also hides at the everything-shown rest
+    // position (upstream GCodeViewer.cpp:1642 parity) -- the loaded playhead
+    // parks on the slicer's ending macro far off the model.
     QStringLiteral("showMarker: root.previewVm"),
-    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData)"),
+    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition\n"
+                   "                                   && root.previewVm.currentMove < root.previewVm.moveCount\n"
+                   "                                   && root.hasPreviewData)"),
     QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
     QStringLiteral("markerX: root.previewVm.toolX"),
     QStringLiteral("markerY: root.previewVm.toolY"),
@@ -2535,8 +2540,12 @@ void QmlUiAuditTests::previewRestorationMilestoneHasFinalCleanupCoverage()
     QStringLiteral("showBed: root.previewVm.showBed"),
     // Phase 238 (PREV-02): the binding gates on hasToolPosition now; the
     // raw showMarker property remains part of the binding expression.
+    // PREV-PLAY-AUDIT: also hidden at the everything-shown rest position
+    // (upstream GCodeViewer.cpp:1642 parity).
     QStringLiteral("showMarker: root.previewVm"),
-    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData)"),
+    QStringLiteral("(root.previewVm.showMarker && root.previewVm.hasToolPosition\n"
+                   "                                   && root.previewVm.currentMove < root.previewVm.moveCount\n"
+                   "                                   && root.hasPreviewData)"),
     QStringLiteral("gcodeViewMode: root.previewVm.viewModeIndex"),
     QStringLiteral("markerX: root.previewVm.toolX"),
     QStringLiteral("markerY: root.previewVm.toolY"),

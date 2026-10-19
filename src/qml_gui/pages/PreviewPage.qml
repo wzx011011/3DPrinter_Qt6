@@ -380,8 +380,16 @@ Item {
                     // Phase 238 (PREV-02): the marker renders only when a real
                     // tool position exists (upstream Marker visibility is tied
                     // to a current sequential move).
+                    // PREV-PLAY-AUDIT: upstream additionally hides the marker
+                    // at the everything-shown rest position (current range ==
+                    // full range, GCodeViewer.cpp:1642) -- the loaded playhead
+                    // parks on the slicer's "present print" ending macro
+                    // (bed-exit Y + high Z lift), which left the marker
+                    // floating far off the model right after load.
                     showMarker: root.previewVm
-                                ? (root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData)
+                                ? (root.previewVm.showMarker && root.previewVm.hasToolPosition
+                                   && root.previewVm.currentMove < root.previewVm.moveCount
+                                   && root.hasPreviewData)
                                 : false
                     gcodeViewMode: root.previewVm.viewModeIndex
                     markerX: root.previewVm.toolX
