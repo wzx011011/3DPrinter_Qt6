@@ -12,6 +12,8 @@
 
 #include "ProjectService.h"
 
+#include "core/util/PrintableArea.h"  // owzx::flatPointCoords (MP8 bed geometry parse)
+
 #include "PresetService.h"  // G-13: project-embedded presets
 
 #include <QFileInfo>
@@ -80,6 +82,13 @@
 // root-cause writeup) is below near qimageToThumbnailData. The model-load
 // read blocks (loadFile/loadProject) call it before the definition site.
 static QImage extractPlateThumbnailFrom3mf(const QString &archivePath, int plateIndex);
+// MP8 (dev plan 多盘 2026-10-20): the embedded bed geometry (the save-side
+// overlay writes printable_area into Metadata/project_settings.config as
+// JSON, bbs_3mf.cpp:172/7870). Narrow-scope archive read -- deliberately
+// NOT a LoadConfig read_from_file, which drags the whole embedded-preset
+// parse into the plain-import path.
+static bool extractBedGeometryFrom3mf(const QString &archivePath,
+                                      int &widthMm, int &depthMm);
 
 struct OwzxPlateFilamentState
 {
@@ -1100,6 +1109,24 @@ bool ProjectService::loadFile(const QString &filePath)
     Slic3r::PlateDataPtrs plateDataList;
     QStringList loadedPlateNames;
     QList<QList<int>> loadedPlateObjectIndices;
+    // MP8 (dev plan 多盘 2026-10-20): true instance-level membership
+    // (PlateData::objects_and_instances pairs) -- the object-index list
+    // above collapses an object that spans several plates onto whichever
+    // plate was read first (upstream reload_all_objects rebuilds from the
+    // full per-instance set, PartPlate.cpp:6532-6689).
+    QList<QList<std::pair<int, int>>> loadedPlateInstancePairs;
+    // MP8: true only when the archive carried a real <plate> list -- the
+    // single-plate FALLBACK below also sets loadedPlateCount=1, and treating
+    // that as "has plate data" skips the plain-import auto-arrange (which is
+    // also what ever set the plate-list bed size, so the size stayed 0 and
+    // every position decode collapsed onto plate 0).
+    bool loadedRealPlateData = false;
+    // MP8: the embedded bed geometry (upstream load_project ->
+    // set_bed_shape, Plater.cpp:12996-12998) -- without it the imported
+    // plate list keeps a zero size and every position decode collapses
+    // onto plate 0, wiping the restored multi-plate membership.
+    int loadedBedWidthMm = 0;
+    int loadedBedDepthMm = 0;
     // G-11: per-plate state is collected into WORKER-LOCAL containers and
     // handed to the GUI thread through the delivery-lambda capture. The
     // receiver's pendingPlate* members are plain QList/QImage (non-atomic);
@@ -1166,6 +1193,10 @@ bool ProjectService::loadFile(const QString &filePath)
                                                             nullptr,
                                                             progressFn);
       *loadedModel = std::move(loaded);
+      // MP8: the bed geometry comes from the archive's project_settings
+      // overlay (narrow miniz read), not a LoadConfig parse.
+      if (!plateDataList.empty())
+        extractBedGeometryFrom3mf(localPath, loadedBedWidthMm, loadedBedDepthMm);
 
       if (!loadedModel->objects.empty())
       {
@@ -1198,6 +1229,7 @@ bool ProjectService::loadFile(const QString &filePath)
         {
           ok = true;
           loadedPlateCount = int(plateDataList.size());
+          loadedRealPlateData = !plateDataList.empty();
 
           // v3.0 Phase 18 (D-12): capture locked + bed-type + print-seq + spiral from
           // PlateData onto the receiver so the later rebuild lambda can restore them.
@@ -1237,6 +1269,7 @@ bool ProjectService::loadFile(const QString &filePath)
           {
             loadedPlateNames.reserve(loadedPlateCount);
             loadedPlateObjectIndices.reserve(loadedPlateCount);
+            loadedPlateInstancePairs.reserve(loadedPlateCount);
 
             const int modelObjCount = int(loadedModel->objects.size());
             for (int plateIdx = 0; plateIdx < loadedPlateCount; ++plateIdx)
@@ -1344,12 +1377,30 @@ bool ProjectService::loadFile(const QString &filePath)
 
               QSet<int> uniq;
               QList<int> objList;
+              QSet<qint64> uniqPairs;
+              QList<std::pair<int, int>> pairList;
               if (plate)
               {
                 for (const auto &pair : plate->objects_and_instances)
                 {
                   const int objIndex = pair.first;
-                  if (objIndex >= 0 && objIndex < modelObjCount && !uniq.contains(objIndex))
+                  const int instIndex = pair.second;
+                  if (objIndex < 0 || objIndex >= modelObjCount)
+                    continue;
+                  // MP8: keep the per-instance pair (validated against the
+                  // loaded object's real instance count) alongside the
+                  // legacy deduped object list.
+                  const int instCount = int(loadedModel->objects[size_t(objIndex)]
+                                                ->instances.size());
+                  if (instIndex >= 0 && instIndex < instCount) {
+                    const qint64 key = (qint64(objIndex) << 32)
+                        | quint32(instIndex);
+                    if (!uniqPairs.contains(key)) {
+                      uniqPairs.insert(key);
+                      pairList.append({objIndex, instIndex});
+                    }
+                  }
+                  if (!uniq.contains(objIndex))
                   {
                     uniq.insert(objIndex);
                     objList.append(objIndex);
@@ -1357,7 +1408,9 @@ bool ProjectService::loadFile(const QString &filePath)
                 }
               }
               std::sort(objList.begin(), objList.end());
+              std::sort(pairList.begin(), pairList.end());
               loadedPlateObjectIndices.append(objList);
+              loadedPlateInstancePairs.append(pairList);
             }
           }
           else
@@ -1370,10 +1423,18 @@ bool ProjectService::loadFile(const QString &filePath)
             pendingSpiral.append(0);
 
             QList<int> allObjects;
+            QList<std::pair<int, int>> allPairs;
             allObjects.reserve(int(loadedModel->objects.size()));
-            for (int i = 0; i < int(loadedModel->objects.size()); ++i)
+            for (int i = 0; i < int(loadedModel->objects.size()); ++i) {
               allObjects.append(i);
+              // MP8: instance-complete membership for the no-plate-data
+              // fallback (upstream reload_all_objects adds every instance).
+              const int instCount = int(loadedModel->objects[size_t(i)]->instances.size());
+              for (int k = 0; k < instCount; ++k)
+                allPairs.append({i, k});
+            }
             loadedPlateObjectIndices.append(allObjects);
+            loadedPlateInstancePairs.append(allPairs);
           }
 
           if (receiver)
@@ -1430,7 +1491,7 @@ bool ProjectService::loadFile(const QString &filePath)
       return;
     }
 
-    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
+    QMetaObject::invokeMethod(receiver, [receiver, loadedModel, ok, canceled, errorText, loadedProjectName, loadedPlateCount, localPath, loadedPlateNames, loadedPlateObjectIndices, loadedPlateInstancePairs, loadedRealPlateData, loadedBedWidthMm, loadedBedDepthMm, embeddedPayload, pendingLocked, pendingBedType, pendingPrintSeq, pendingSpiral, pendingFirstLayerSeq, pendingOtherLayersSeq, pendingOtherLayersSeqNums, pendingThumbnails, pendingFilamentMaps, pendingFilamentMapMode]() {
       if (!receiver)
       {
         delete loadedModel;
@@ -1494,13 +1555,21 @@ bool ProjectService::loadFile(const QString &filePath)
             plateObjs.append(all);
           }
 
-          // Reconstruct the PartPlateList from the per-plate object-index lists.
-          // (Instance-level membership is added as (objectIndex, 0) per object — the
-          // previous per-object representation. Phase 18 will populate true instance
-          // pairs from PlateData::objects_and_instances.)
+          // Reconstruct the PartPlateList from the per-plate membership.
+          // MP8 (dev plan 多盘 2026-10-20): the true (object, instance)
+          // pairs from PlateData::objects_and_instances restore instance-
+          // level membership (upstream load_from_3mf_structure +
+          // reload_all_objects, PartPlate.cpp:6532-6689); the legacy
+          // object-index list stays as the fallback for paths that never
+          // carried pairs (each object joins as instance 0).
           receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
           receiver->attachPlateInstanceBounds();
+          // MP8: apply the embedded bed geometry BEFORE any decode -- the
+          // position-based membership rebuild below depends on the stride.
+          if (loadedBedWidthMm > 0 && loadedBedDepthMm > 0)
+            receiver->m_plateList->setPlateSize(loadedBedWidthMm, loadedBedDepthMm, 0);
           receiver->m_plateList->resetToSinglePlate();
+          const bool havePairs = loadedPlateInstancePairs.size() == plateObjs.size();
           for (int pi = 0; pi < plateObjs.size(); ++pi) {
             OWzx::PartPlate *p = (pi == 0) ? receiver->m_plateList->plate(0)
                                            : receiver->m_plateList->createPlate();
@@ -1508,8 +1577,13 @@ bool ProjectService::loadFile(const QString &filePath)
             if (pi < plateNames.size())
               p->setName(plateNames[pi].toStdString());
             p->clearInstances();
-            for (int objIdx : plateObjs[pi])
-              p->addInstance(objIdx, 0);
+            if (havePairs) {
+              for (const auto &pair : loadedPlateInstancePairs[pi])
+                p->addInstance(pair.first, pair.second);
+            } else {
+              for (int objIdx : plateObjs[pi])
+                p->addInstance(objIdx, 0);
+            }
             // v3.0 Phase 18 (D-12): restore locked + bed-type/print-seq/spiral captured
             // from PlateData so multi-plate state round-trips.
             if (pi < receiver->pendingPlateLocked_.size()) p->setLocked(receiver->pendingPlateLocked_[pi]);
@@ -1559,9 +1633,18 @@ bool ProjectService::loadFile(const QString &filePath)
         // data restores exact membership instead of re-arranging (which
         // collapsed non-locked plates to plate 0 and recycled empty tail
         // plates). Plain imports (STL/OBJ/STEP) keep the auto-arrange.
-        const bool hadPlateData = loadedPlateCount > 0;
+        // MP8: gate on the REAL plate-data flag — the single-plate fallback
+        // also reports loadedPlateCount 1 and must keep the auto-arrange
+        // (it is what sizes the plate list). The position rebuild also
+        // needs a known bed size; without one the archive's own
+        // (object, instance) pairs are the truth and the geometry pass
+        // would only wipe them.
+        const bool hadPlateData = loadedRealPlateData;
         if (hadPlateData)
-          receiver->rebuildPlateMembership(/*exceptLocked=*/true);
+        {
+          if (receiver->m_plateList && receiver->m_plateList->plateWidth() > 0)
+            receiver->rebuildPlateMembership(/*exceptLocked=*/true);
+        }
         else
           receiver->arrangeObjects(5.0f, false, false,
                                    QStringLiteral("0,0,220,0,220,220,0,220"));
@@ -1825,14 +1908,67 @@ bool ProjectService::setCurrentPlateIndex(int index)
   return true;
 }
 
+// MP6 (dev plan 多盘 2026-10-20): upstream moves every plate's instances
+// with the plate whenever the grid reflows (update_all_plates_pos_and_size
+// with_instance_move=true, PartPlate.cpp:5141-5161; the Orca reflow
+// reload_all_objects note at :4684-4686). The Qt6 membership sets already
+// travel with the plates (erase+reindex), but the OBJECTS' world positions
+// are the visual and decode truth -- without this shift a deleted middle
+// plate leaves its successors' models floating at stale grid slots, and any
+// later position-decoded rebuild (arrange / membership pass) would re-home
+// them onto the wrong plates. Positions are (x, height, z=slic3r Y) -- the
+// same convention the delete-plate dock teleport uses.
+void ProjectService::shiftObjectsForPlateReflow(
+    int oldCount, const QList<int> &oldToNewPlateIndex)
+{
+  if (!m_plateList || oldToNewPlateIndex.size() != oldCount)
+    return;
+  const int newCount = m_plateList->plateCount();
+  const double w = m_plateList->plateWidth();
+  const double d = m_plateList->plateDepth();
+  if (w <= 0.0 || d <= 0.0)
+    return;
+  for (int oldIdx = 0; oldIdx < oldCount; ++oldIdx) {
+    const int newIdx = oldToNewPlateIndex.value(oldIdx, -1);
+    if (newIdx < 0 || newIdx >= newCount || newIdx == oldIdx)
+      continue;
+    double oldX = 0.0, oldY = 0.0, newX = 0.0, newY = 0.0;
+    OWzx::PartPlateGridLayout::gridOffset(oldIdx, oldCount, w, d, &oldX, &oldY);
+    OWzx::PartPlateGridLayout::gridOffset(newIdx, newCount, w, d, &newX, &newY);
+    const float dx = float(newX - oldX);
+    const float dy = float(newY - oldY);
+    if (std::abs(dx) < 1e-6f && std::abs(dy) < 1e-6f)
+      continue;
+    // Read AFTER the list update -- the membership sets already sit at the
+    // new indexes, so this plate's members are the survivors to move.
+    // gridOffset Y is the slic3r-space row stride while objectPosition()
+    // reports GL coords (slic3r.y = -GL.z, setObjectPosition), so the row
+    // delta NEGATES on the way into the GL z slot.
+    const QList<int> objects = m_plateList->objectIndicesOnPlate(newIdx);
+    for (int objIdx : objects) {
+      const QVector3D pos = objectPosition(objIdx);
+      setObjectPosition(objIdx, pos.x() + dx, pos.y(), pos.z() - dy);
+    }
+  }
+}
+
 bool ProjectService::addPlate()
 {
   if (loading_ || !m_plateList)
     return false;
 
+  const int oldCount = m_plateList->plateCount();
   OWzx::PartPlate *p = m_plateList->createPlate();
   if (!p)
     return false;  // kMaxPlateCount reached
+  // MP6: appending a plate can flip the sudoku column count (e.g. 4 -> 5
+  // plates re-wraps the grid); every surviving plate keeps its index but
+  // its slot may move -- shift the member objects with it.
+  QList<int> identity;
+  identity.reserve(oldCount);
+  for (int k = 0; k < oldCount; ++k)
+    identity.append(k);
+  shiftObjectsForPlateReflow(oldCount, identity);
   // GAP-7 (upstream PartPlate.cpp:3581): new plates are UNNAMED -- upstream
   // leaves m_name empty and the UI falls back to a positional label. The Qt6
   // consumers already do that (PreparePage plate card shows "Plate N +
@@ -1864,6 +2000,18 @@ bool ProjectService::deletePlate(int plateIndex)
     orphanedInstances = dying->objToInstanceSet();
   if (!m_plateList->deletePlate(plateIndex))
     return false;  // refuses last plate / invalid index
+
+  // MP6: plates after the deleted one slide down an index (and the column
+  // count may re-wrap) -- shift their member objects to the new slots so
+  // world positions keep matching the plates they belong to.
+  {
+    const int oldCount = m_plateList->plateCount() + 1;
+    QList<int> remap;
+    remap.reserve(oldCount);
+    for (int k = 0; k < oldCount; ++k)
+      remap.append(k < plateIndex ? k : (k == plateIndex ? -1 : k - 1));
+    shiftObjectsForPlateReflow(oldCount, remap);
+  }
 
 #ifdef HAS_LIBSLIC3R
   // Physically move each fully-orphaned object to the dock slot one grid
@@ -2274,7 +2422,19 @@ bool ProjectService::movePlate(int oldIndex, int newIndex)
 {
   if (loading_ || !m_plateList) return false;
   const int prevCurrent = m_plateList->currentPlateIndex();
+  const int count = m_plateList->plateCount();
+  // MP6: the reorder map the index shift produces (mirrors the in-between
+  // element shifts PartPlateList::movePlate performs).
+  QList<int> remap;
+  remap.reserve(count);
+  for (int k = 0; k < count; ++k) {
+    if (k == oldIndex) remap.append(newIndex);
+    else if (oldIndex < newIndex && k > oldIndex && k <= newIndex) remap.append(k - 1);
+    else if (oldIndex > newIndex && k >= newIndex && k < oldIndex) remap.append(k + 1);
+    else remap.append(k);
+  }
   if (!m_plateList->movePlate(oldIndex, newIndex)) return false;
+  shiftObjectsForPlateReflow(count, remap);
   emit projectChanged();
   emit plateDataLoaded(m_plateList->plateCount());
   if (m_plateList->currentPlateIndex() != prevCurrent)
@@ -4824,23 +4984,122 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
         // through the two-list overload instead of the no-excludes
         // arrange_objects convenience wrapper (ArrangeJob.cpp:248-251, :337-359;
         // PartPlate.cpp:4586, :1739-1777).
-        Slic3r::ModelInstancePtrs arrangeInstances;
-        auto arrangeInput = Slic3r::get_arrange_polys(*model_, arrangeInstances);
+        // MP7 (dev plan 多盘 2026-10-20): the full upstream arrange pipeline
+        // as a translation layer around the fork-locked engine. The nester
+        // core already assigns multi-bed bin ids (Arrange.cpp:1144
+        // binId() -> bed_idx); the fork only dropped the world-stride
+        // writeback (ModelArrange.cpp:99-107). So, exactly like upstream:
+        // 1. preprocess -- virtualize every instance into bed-0 coords by
+        //    subtracting its plate's grid offset (preprocess_arrange_polygon,
+        //    PartPlate.cpp:5654-5697); locked plates' instances join the
+        //    FIXED list instead (upstream pins their bed_idx,
+        //    PartPlate.cpp:5388-5396 -- they neither move nor rearrange).
+        // 2. arrange once against the bed bounding box; the core packs
+        //    overflow onto virtual bed 1..N.
+        // 3. postprocess -- bed_idx N maps back to world by adding slot N's
+        //    grid offset; plates are created to cover the used beds (cap
+        //    kMaxPlateCount, upstream create_plate returns -1 at the cap).
+        //    A BIN_ID_UNFIT item (bed_idx < 0, larger than the bed alone)
+        //    gets a fresh plate at the bed corner (upstream parks it on a
+        //    new plate, postprocess_arrange_polygon PartPlate.cpp:5930-5954);
+        //    only when the cap is exhausted does the tolerant behavior
+        //    (keep the original transform) remain.
+        // 4. rebuild membership from the new world positions -- the existing
+        //    rebuildPlatesAfterArrangement recycles trailing empty plates
+        //    (upstream ArrangeJob::finalize, PartPlate.cpp:6371-6417).
+        Slic3r::ModelInstancePtrs allInstances;
+        auto allInput = Slic3r::get_arrange_polys(*model_, allInstances);
         Slic3r::ArrangePolygons fixedObstacles;
         appendArrangeExcludeAreas(m_plateList.get(), fixedObstacles);
         appendArrangeWipeTowers(m_plateList.get(), model_, wipeTowerContext,
                                 fixedObstacles);
+        Slic3r::ArrangePolygons arrangeInput;
+        Slic3r::ModelInstancePtrs arrangeInstances;
+        for (qsizetype i = 0; i < allInput.size(); ++i)
+        {
+          auto &ap = allInput[i];
+          const Slic3r::Vec2d offset = allInstances[size_t(i)]->get_offset().head<2>();
+          const int plateIdx = m_plateList
+              ? m_plateList->computePlateIndex(offset.x(), offset.y()) : 0;
+          const bool locked = m_plateList && plateIdx >= 0
+              && plateIdx < m_plateList->plateCount()
+              && m_plateList->plate(plateIdx)->isLocked();
+          double offX = 0.0, offY = 0.0;
+          if (m_plateList && plateIdx >= 0 && plateIdx < m_plateList->plateCount())
+            OWzx::PartPlateGridLayout::gridOffset(
+                plateIdx, m_plateList->plateCount(),
+                m_plateList->plateWidth(), m_plateList->plateDepth(),
+                &offX, &offY);
+          // Virtualize into the bed-0 frame (gridOffset Y is already the
+          // slic3r negative-row convention).
+          ap.translation -= Slic3r::Vec2crd(scale_(offX), scale_(offY));
+          if (locked)
+            fixedObstacles.emplace_back(ap);  // pinned in place
+          else {
+            arrangeInput.emplace_back(ap);
+            arrangeInstances.emplace_back(allInstances[size_t(i)]);
+          }
+        }
+        if (arrangeInput.empty())
+          return false;  // nothing movable (everything locked/off-plate)
         Slic3r::arrangement::arrange(arrangeInput, fixedObstacles, bed_bb, params);
-        const bool arranged =
-            Slic3r::apply_arrange_polys(arrangeInput, arrangeInstances, tolerantVfn);
-        // D-29-12: only rebuild plate membership when arrange succeeded
-        // (all-locked returns false → no rebuild, no membership changes).
-        if (arranged && m_plateList)
+
+        // Create the plates the nester actually used (upstream
+        // postprocess_bed_index_for_selected's create_plate loop,
+        // PartPlate.cpp:5832-5878).
+        int maxBedIdx = 0;
+        for (const auto &ap : arrangeInput)
+          maxBedIdx = std::max(maxBedIdx, ap.bed_idx);
+        if (m_plateList)
+          while (m_plateList->plateCount() <= maxBedIdx
+                 && m_plateList->plateCount() < OWzx::kMaxPlateCount)
+            m_plateList->createPlate();
+        const int plateCapacity = m_plateList ? m_plateList->plateCount() : 1;
+        const double plateW = m_plateList ? m_plateList->plateWidth() : 0.0;
+        const double plateD = m_plateList ? m_plateList->plateDepth() : 0.0;
+
+        bool allPlaced = true;
+        for (qsizetype i = 0; i < arrangeInput.size(); ++i)
+        {
+          auto &ap = arrangeInput[i];
+          int bed = ap.bed_idx;
+          if (bed < 0)
+          {
+            // BIN_ID_UNFIT: park on a fresh plate at the corner (upstream
+            // gives an oversized item its own plate).
+            if (m_plateList && m_plateList->plateCount() < OWzx::kMaxPlateCount)
+            {
+              m_plateList->createPlate();
+              bed = m_plateList->plateCount() - 1;
+              ap.translation = Slic3r::Vec2crd(
+                  bed_bb.min.x() + scale_(6.0),
+                  bed_bb.min.y() + scale_(6.0));
+            }
+            else
+            {
+              allPlaced = false;  // cap exhausted: keep the original transform
+              continue;
+            }
+          }
+          if (bed >= plateCapacity)
+          {
+            allPlaced = false;
+            continue;
+          }
+          double offX = 0.0, offY = 0.0;
+          OWzx::PartPlateGridLayout::gridOffset(bed, plateCapacity, plateW, plateD,
+                                                &offX, &offY);
+          const Slic3r::Vec2crd world(ap.translation.x() + scale_(offX),
+                                      ap.translation.y() + scale_(offY));
+          arrangeInstances[size_t(i)]->apply_arrange_result(
+              world.cast<double>(), ap.rotation);
+        }
+        if (m_plateList && allPlaced)
         {
           m_plateList->rebuildPlatesAfterArrangement(/*exceptLocked=*/true, /*recyclePlates=*/true);
           emit plateDataLoaded(m_plateList->plateCount());
         }
-        return arranged;
+        return allPlaced;
       }
     }
 
@@ -10526,6 +10785,70 @@ static QImage extractPlateThumbnailFrom3mf(const QString &archivePath, int plate
   }
   Slic3r::close_zip_reader(&archive);
   return thumb;
+}
+
+static bool extractBedGeometryFrom3mf(const QString &archivePath,
+                                      int &widthMm, int &depthMm)
+{
+  widthMm = 0;
+  depthMm = 0;
+  if (archivePath.isEmpty())
+    return false;
+
+  mz_zip_archive archive;
+  mz_zip_zero_struct(&archive);
+  if (!Slic3r::open_zip_reader(&archive, QDir::toNativeSeparators(archivePath).toStdString()))
+    return false;
+
+  QByteArray payload;
+  const int index = mz_zip_reader_locate_file(&archive, "Metadata/project_settings.config",
+                                              nullptr, 0);
+  if (index >= 0) {
+    mz_zip_archive_file_stat stat;
+    if (mz_zip_reader_file_stat(&archive, static_cast<mz_uint>(index), &stat)
+        && stat.m_uncomp_size <= 1024 * 1024) {
+      payload.resize(static_cast<int>(stat.m_uncomp_size));
+      if (!mz_zip_reader_extract_to_mem(&archive, static_cast<mz_uint>(index),
+                                        payload.data(), payload.size(), 0))
+        payload.clear();
+    }
+  }
+  Slic3r::close_zip_reader(&archive);
+  if (payload.isEmpty())
+    return false;
+
+  // ConfigOptionPoints serializes as "XxY" points (string or per-point
+  // array); the shared normalizer handles every entry form.
+  const QJsonDocument doc = QJsonDocument::fromJson(payload);
+  if (!doc.isObject())
+    return false;
+  const QJsonValue area = doc.object().value(QLatin1String("printable_area"));
+  QVariant areaVariant;
+  if (area.isString())
+    areaVariant = area.toString();
+  else if (area.isArray()) {
+    QVariantList points;
+    for (const QJsonValue &point : area.toArray())
+      points.append(point.isString() ? point.toString()
+                                     : QStringLiteral("%1x%2").arg(point.toArray().at(0).toDouble())
+                                                                .arg(point.toArray().at(1).toDouble()));
+    areaVariant = points;
+  }
+  const QList<float> coords = owzx::flatPointCoords(areaVariant);
+  if (coords.size() < 6)
+    return false;
+  float minX = coords.first(), maxX = minX, minY = coords.at(1), maxY = minY;
+  for (int i = 0; i + 1 < coords.size(); i += 2) {
+    minX = std::min(minX, coords.at(i));
+    maxX = std::max(maxX, coords.at(i));
+    minY = std::min(minY, coords.at(i + 1));
+    maxY = std::max(maxY, coords.at(i + 1));
+  }
+  if (maxX <= minX || maxY <= minY)
+    return false;
+  widthMm = int(maxX - minX + 0.5);
+  depthMm = int(maxY - minY + 0.5);
+  return true;
 }
 
 static constexpr const char *kOwzxPlateStateEntry = "Metadata/owzx_plate_state.json";

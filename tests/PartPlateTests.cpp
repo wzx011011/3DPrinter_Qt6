@@ -66,6 +66,10 @@ class PartPlateTests final : public QObject {
   // ── ARRANGE-02/03 integration tests (through arrangeObjects) ────────────
 #ifdef HAS_LIBSLIC3R
   void arrangeDistributesAcrossPlates();
+  // MP7 (dev plan 多盘 2026-10-20): arrange overflow auto-creates plates
+  // (upstream postprocess_bed_index_for_selected + ArrangeJob::finalize,
+  // PartPlate.cpp:5832-5878/6371-6417).
+  void arrangeOverflowCreatesNewPlates();
   // PLATE-PRINT-LIFECYCLE (batch 5): arrange must keep objects off the fixed
   // wipe-tower rectangle (ArrangeJob.cpp:337-359, PartPlate.cpp:1739-1777)
   // and off the bed_exclude_area rectangles (PartPlate.cpp:4586-4623).
@@ -98,6 +102,7 @@ class PartPlateTests final : public QObject {
   void plateGridLayoutSharedHelperParity();
 #else
   void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void arrangeOverflowCreatesNewPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeAvoidsWipeTowerAndExcludeAreas() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeWipeTowerBedTempGateTruthTable() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void lockedPlateExclusion() { QSKIP("Requires HAS_LIBSLIC3R"); }
@@ -118,6 +123,9 @@ class PartPlateTests final : public QObject {
   void plateBedShapeRoundTripsThroughProject();
   // ── B2: delete-plate instance migration (upstream PartPlate.cpp:3708-3810) ──
   void deletePlateMigratesInstancesToNeighbor();
+  // ── MP6 (dev plan 多盘 2026-10-20): reflow object shift + current rule ──
+  void deleteMiddleCurrentPlateFallsBackToPredecessor();
+  void deletePlateReflowsSurvivorObjectsToNewSlots();
   // ── B3: all-plates print/export readiness aggregates (PartPlate.cpp:4989-5044) ──
   void allPlatesAggregateReadinessTruthTables();
   // ── PLATE-PRINT-LIFECYCLE batch 1: print-volume geometry + findInstance ──
@@ -159,10 +167,14 @@ class PartPlateTests final : public QObject {
   void thumbnailRoundTrip();                 // THUMB-02 (in-memory cache)
   void thumbnailSaveReloadRoundTrip();       // Phase 97 (THUMBRT-01/02): save->reload 3MF pixel round-trip
   void thumbnailMultiPlateSaveReloadRoundTrip();  // Phase 98 (REVIEW MEDIUM-3): multi-plate write side
+  // MP8 (dev plan 多盘 2026-10-20): instance-level membership round-trip
+  // (one object instanced onto two plates survives save->reload).
+  void multiInstanceMembershipSaveReloadRoundTrip();
 #else
   void thumbnailRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void thumbnailSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void thumbnailMultiPlateSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void multiInstanceMembershipSaveReloadRoundTrip() { QSKIP("Requires HAS_LIBSLIC3R"); }
 #endif
 
   // ── FMAP-01/03 tests (v3.2 Phase 31) ────────────────────────────────────
@@ -385,14 +397,20 @@ void PartPlateTests::computePlateIndexRoundTrip() {
   // Translation (+stride, -stride): col 1, row 1 → index 4.
   QCOMPARE(list.computePlateIndex(240.0, -240.0), 4);
 
-  // round() boundary characterization (std::round = round-half-away-from-zero).
-  // x=240.0 (clean boundary) → col_value=1.0 → round=1 → col 1 → index 1.
+  // round() boundary characterization. MP7 (dev plan 多盘 2026-10-20)
+  // moved the decode to slot-CENTER rounding ((coord - size/2)/stride):
+  // slots span [col*stride, col*stride+size], so x=120 on the 200mm bed
+  // (stride 240) sits 60% across PLATE 0 -- the old round(x/stride)
+  // expectation of plate 1 was the dead-zone class of bug (it assigned
+  // x in (120,240) -- over half of plate 0's span -- to plate 1, whose
+  // area only starts at 240).
   QCOMPARE(list.computePlateIndex(240.0, 0.0), 1);
-  // x=239.9 → col_value=0.9996 → round(0.9996)=1 → col 1 → index 1.
+  // x=239.9: inside the inter-plate gap (plate 0 ends at 200); the nearest
+  // slot center is plate 1's (340), so it decodes to plate 1.
   QCOMPARE(list.computePlateIndex(239.9, 0.0), 1);
-  // x=120.0 → col_value=0.5 → std::round(0.5)=1 (round-half-away-from-zero)
-  // → col 1 → index 1.
-  QCOMPARE(list.computePlateIndex(120.0, 0.0), 1);
+  // x=120: 60% across plate 0 -- plate 0 (the case that locked the old
+  // dead-zone semantics).
+  QCOMPARE(list.computePlateIndex(120.0, 0.0), 0);
 }
 
 void PartPlateTests::updatePlateOriginsWritesToPlates() {
@@ -444,12 +462,12 @@ void PartPlateTests::arrangeDistributesAcrossPlates() {
   // wraps rebuildPlatesAfterArrangement — same code path arrangeObjects uses
   // post-arrange).
   //
-  // Note on why we don't drive this through arrangeObjects directly:
-  // arrange_objects packs into a SINGLE bed bounding-box, and
-  // ModelArrange.cpp:98 resets bed_idx to 0, so arrange on one bed never
-  // produces cross-plate placements on its own. The rebuild's value is
-  // preserving cross-plate state for 3MF-loaded projects (which already span
-  // plates) — this test exercises that path.
+  // Note on why this test still uses manual placement: MP7 (dev plan 多盘
+  // 2026-10-20) gave arrangeObjects the full upstream multi-bed pipeline
+  // (see arrangeOverflowCreatesNewPlates for the real-path overflow test);
+  // this one stays deterministic-placement-driven because its subject is
+  // the REBUILD decode itself (3MF-loaded projects that already span
+  // plates), independent of what the nester packs where.
   ProjectService service;
   QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
   QVERIFY(service.loadFile(kStlPath));
@@ -488,6 +506,46 @@ void PartPlateTests::arrangeDistributesAcrossPlates() {
   QVERIFY2(service.plateObjectIndices(2).contains(2),
            "object 2 (x=240) should be on plate 2");
   QVERIFY2(spy.count() >= 1, "plateDataLoaded should fire after rebuild");
+}
+
+void PartPlateTests::arrangeOverflowCreatesNewPlates() {
+  // MP7 (dev plan 多盘 2026-10-20): arrange that cannot fit everything on
+  // one bed overflows onto CREATED plates (upstream postprocess_bed_index_
+  // for_selected's create_plate loop, PartPlate.cpp:5832-5878, then
+  // ArrangeJob::finalize -> rebuild_plates_after_arrangement recycling,
+  // :6371-6417). Before MP7 the fork-locked engine path returned false and
+  // kept every position (the old tolerant-vfn contract).
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  while (service.modelCount() < 8) {
+    QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  }
+  QCOMPARE(service.modelCount(), 8);
+
+  // hotend.stl objects are ~3.5x3.5mm; a 10mm bed with 6mm spacing fits
+  // exactly one object per bed, so the nester must overflow eight objects
+  // onto created plates (whether by packing overflow or per-object unfit
+  // plates, both create real plates).
+  const QString bed = QStringLiteral("0,0,10,0,10,10,0,10");
+  QVERIFY(service.arrangeObjects(6.0f, false, false, bed, {}));
+  QVERIFY2(service.plateCount() >= 2,
+           "eight objects on a 10mm bed must overflow onto created plates");
+  // Every object ends up a member of some printable plate (nothing docked,
+  // nothing lost).
+  for (int idx = 0; idx < service.modelCount(); ++idx) {
+    QVERIFY2(service.plateIndexForObject(idx) >= 0,
+             "every arranged object must belong to a plate");
+  }
+  // The world positions decode back onto the plates they were assigned to
+  // (the writeback added each bed's grid offset).
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+  for (int idx = 0; idx < service.modelCount(); ++idx) {
+    QVERIFY2(service.plateIndexForObject(idx) >= 0,
+             "membership must survive a fresh position-decoded rebuild");
+  }
+  QVERIFY(service.plateCount() >= 2);
 }
 
 void PartPlateTests::arrangeAvoidsWipeTowerAndExcludeAreas() {
@@ -940,6 +998,75 @@ void PartPlateTests::plateBedShapeRoundTripsThroughProject() {
 #endif
 }
 
+void PartPlateTests::deleteMiddleCurrentPlateFallsBackToPredecessor()
+{
+  // MP6 (dev plan 多盘 2026-10-20): upstream delete_plate current-plate rule
+  // (PartPlate.cpp:4888-4900) -- the deleted plate's successor must not
+  // silently inherit "current": current == index falls back to the
+  // predecessor, current > index shifts down with the list.
+  OWzx::PartPlateList list;
+  QVERIFY(list.createPlate() != nullptr);
+  QVERIFY(list.createPlate() != nullptr);
+  QVERIFY(list.createPlate() != nullptr);  // plates 0,1,2
+  list.setCurrentPlateIndex(1);
+  QVERIFY(list.deletePlate(1));
+  QCOMPARE(list.currentPlateIndex(), 0);  // predecessor, not the successor
+
+  list.setCurrentPlateIndex(1);           // plates 0,1
+  QVERIFY(list.deletePlate(0));           // delete BEFORE current
+  QCOMPARE(list.currentPlateIndex(), 0);  // shifted down with the list
+}
+
+void PartPlateTests::deletePlateReflowsSurvivorObjectsToNewSlots()
+{
+  // MP6 (dev plan 多盘 2026-10-20): upstream update_all_plates_pos_and_size
+  // with_instance_move=true (PartPlate.cpp:5141-5161) -- deleting a middle
+  // plate slides the successors down an index and may re-wrap the grid
+  // columns; the member objects must move with their plates, or their world
+  // offsets decode onto the wrong plates at the next membership pass.
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  while (service.modelCount() < 3)
+    QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  service.setPlateSize(100, 100, 0);  // stride = 120mm, deterministic slots
+
+  // compute_colum_count(3) = 2, so the grid slots are p0=(0,0), p1=(120,0),
+  // p2=(0,-120) in slic3r space. Place each object ON its plate's print
+  // area: obj0 near p0's (10,10), obj1 near p1's (130,10), obj2 near p2's
+  // (10,-110). setObjectPosition maps slic3r.y = -GL.z (AXES-ROT), so the
+  // z argument carries the NEGATED slic3r Y.
+  QVERIFY(service.setObjectPosition(0, 10.0f, 0.0f, -10.0f));
+  QVERIFY(service.setObjectPosition(1, 130.0f, 0.0f, -10.0f));
+  QVERIFY(service.setObjectPosition(2, 10.0f, 0.0f, 110.0f));
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+  QCOMPARE(service.plateCount(), 3);
+  QCOMPARE(service.plateIndexForObject(0), 0);
+  QCOMPARE(service.plateIndexForObject(1), 1);
+  QCOMPARE(service.plateIndexForObject(2), 2);
+
+  // Delete middle plate 1: obj 2 (its member) keeps its LOCAL offset on the
+  // successor plate -- new slot for old plate 2 is index 1 (120,0), delta
+  // (120,120) from (0,-120), so slic3r (10,-110) lands on (130,10); obj 0's
+  // slot is unchanged (delta 0). objectPosition returns GL coords
+  // (slic3r.y = -GL.z), so the expected z components negate back.
+  QVERIFY(service.deletePlate(1));
+  QCOMPARE(service.plateCount(), 2);
+  QCOMPARE(service.plateIndexForObject(2), 1);
+  QCOMPARE(service.objectPosition(2).x(), 130.0f);
+  QCOMPARE(service.objectPosition(2).z(), -10.0f);
+  QCOMPARE(service.objectPosition(0).x(), 10.0f);
+  QCOMPARE(service.objectPosition(0).z(), -10.0f);
+
+  // The shifted position survives a fresh position-decoded membership pass
+  // (the decode this very invariant protects).
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+  QCOMPARE(service.plateCount(), 2);
+  QCOMPARE(service.plateIndexForObject(0), 0);
+  QCOMPARE(service.plateIndexForObject(2), 1);
+}
+
 void PartPlateTests::deletePlateMigratesInstancesToNeighbor() {
   // PLATE-DELETE-DOCK (GAP-2, upstream delete_plate PartPlate.cpp:3710-3816):
   // the deleted plate's instances dock OFF every printable plate -- upstream
@@ -1324,16 +1451,20 @@ void PartPlateTests::servicePlateIndexAtPointUsesInstanceBounds() {
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY(service.modelCount() >= 1);
 
-  // The world bbox of object 0 (GL coords: x = slic3r X, z = slic3r Y per the
-  // ProjectService GL<->slic3r swap). Its CENTER is inside the instance
-  // box by construction, so the point must resolve to plate 0.
+  // The world bbox of object 0 (GL coords: x = slic3r X, z = -slic3r Y per
+  // the AXES-ROT mapping in setObjectPosition). plateIndexAtPoint consumes
+  // a SLIC3R-space point, so the GL z center negates on the way in. Its
+  // CENTER is inside the instance box by construction, so the point must
+  // resolve to plate 0. (The old object-at-origin layout made the sign
+  // invisible; the plain-import auto-arrange that MP8 restored places the
+  // object off-axis and pins the convention.)
   const QVariantMap box = service.selectionWorldBoundingBox({0});
   QVERIFY2(!box.isEmpty(), "loaded object must expose a world bounding box");
   const double cx = (box.value(QStringLiteral("minX")).toDouble() +
                      box.value(QStringLiteral("maxX")).toDouble()) / 2.0;
-  const double cy = (box.value(QStringLiteral("minZ")).toDouble() +
-                     box.value(QStringLiteral("maxZ")).toDouble()) / 2.0;
-  QCOMPARE(service.plateIndexAtPoint(cx, cy), 0);
+  const double cyGl = (box.value(QStringLiteral("minZ")).toDouble() +
+                       box.value(QStringLiteral("maxZ")).toDouble()) / 2.0;
+  QCOMPARE(service.plateIndexAtPoint(cx, -cyGl), 0);
 
   // A far-away bed point matches nothing.
   QCOMPARE(service.plateIndexAtPoint(1.0e9, -1.0e9), -1);
@@ -1341,7 +1472,7 @@ void PartPlateTests::servicePlateIndexAtPointUsesInstanceBounds() {
   // An unprintable plate is skipped even though its instance covers the point
   // (upstream: the unprintable shared plate is not in m_plate_list).
   QVERIFY(service.setPlatePrintable(0, false));
-  QCOMPARE(service.plateIndexAtPoint(cx, cy), -1);
+  QCOMPARE(service.plateIndexAtPoint(cx, -cyGl), -1);
 }
 #endif  // HAS_LIBSLIC3R
 
@@ -1472,6 +1603,64 @@ void PartPlateTests::thumbnailRoundTrip() {
   service.plateListMut()->plate(0)->addInstance(0, 0);
   QVERIFY2(!service.plateListConst()->plate(0)->hasThumbnail(),
            "cache must be invalidated by content change");
+}
+
+void PartPlateTests::multiInstanceMembershipSaveReloadRoundTrip() {
+  // MP8 (dev plan 多盘 2026-10-20): a 3MF that instances ONE object onto
+  // TWO plates reloads with both (object, instance) memberships intact.
+  // This locks the OBSERVABLE contract end-to-end: the importer collects
+  // the true pairs (objects_and_instances, upstream
+  // PartPlate.cpp:6532-6689) AND the position-based membership rebuild
+  // (reload_all_objects semantics) must agree -- the old deduped
+  // (objIdx,0) reconstruction strided the two mechanisms apart.
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  QCOMPARE(service.modelCount(), 1);
+
+  // Give object 0 a second real instance (the rawModel test seam, same as
+  // upstream duplicate's add_instance copy), parked ON plate 1's area: the
+  // imported bed is the default 220x220 (stride 264), so plate 1 spans
+  // x in [264,484] -- (280,10) decodes to plate 1. The load delivery
+  // re-derives membership from instance positions (upstream
+  // reload_all_objects semantics), so a coherent geometry is part of the
+  // contract under test.
+  Slic3r::Model *model = service.rawModel();
+  QVERIFY(model != nullptr && !model->objects.empty());
+  model->objects[0]->add_instance(*model->objects[0]->instances.front());
+  model->objects[0]->instances.back()->set_offset(Slic3r::Vec3d(280.0, 10.0, 0.0));
+  QCOMPARE(int(model->objects[0]->instances.size()), 2);
+
+  // Membership: plate 0 keeps instance 0; a new plate 1 holds instance 1.
+  OWzx::PartPlateList *plates = service.plateListMut();
+  QVERIFY(plates != nullptr);
+  plates->plate(0)->clearInstances();
+  plates->plate(0)->addInstance(0, 0);
+  OWzx::PartPlate *second = plates->createPlate();
+  QVERIFY(second != nullptr);
+  second->addInstance(0, 1);
+
+  const QString tempPath = QDir::tempPath() + QStringLiteral(
+      "/owzx_instance_roundtrip_%1.3mf").arg(QDateTime::currentMSecsSinceEpoch());
+  QVERIFY(service.saveProject(tempPath));
+  QVERIFY(QFileInfo::exists(tempPath));
+
+  ProjectService reloaded;
+  QSignalSpy reloadSpy(&reloaded, &ProjectService::loadFinished);
+  QVERIFY(reloaded.loadFile(tempPath));
+  QTRY_VERIFY_WITH_TIMEOUT(reloadSpy.count() > 0, 10000);
+  QCOMPARE(reloaded.plateCount(), 2);
+  QCOMPARE(reloaded.objectInstanceCount(0), 2);
+  QCOMPARE(reloaded.plateObjectIndices(0), QList<int>{0});
+  QCOMPARE(reloaded.plateObjectIndices(1), QList<int>{0});
+  QVERIFY2(reloaded.plateListConst()->findInstance(0, 0) == 0,
+           "plate 0 must hold (object 0, instance 0)");
+  QVERIFY2(reloaded.plateListConst()->findInstance(0, 1) == 1,
+           "plate 1 must hold (object 0, instance 1) -- the collapsed load "
+           "stranded this instance");
+
+  QFile::remove(tempPath);
 }
 
 void PartPlateTests::thumbnailSaveReloadRoundTrip() {

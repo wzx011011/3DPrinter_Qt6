@@ -1074,6 +1074,13 @@ signals:
   void savingChanged();
 
 private:
+  /// MP6 (dev plan 多盘 2026-10-20): shift member objects to their plates'
+  /// new grid slots after addPlate/deletePlate/movePlate reflow the grid
+  /// (upstream update_all_plates_pos_and_size with_instance_move,
+  /// PartPlate.cpp:5141-5161). oldToNewPlateIndex[k] = new index of old
+  /// plate k (-1 = the plate was deleted; its objects are docked elsewhere).
+  void shiftObjectsForPlateReflow(int oldCount,
+                                  const QList<int> &oldToNewPlateIndex);
   /// v2.4: 当前项目保存路径（saveProjectAs 后更新）
   QString currentProjectPath_;
   /// Phase 236 (DLG-03): generator version string parsed from the loaded

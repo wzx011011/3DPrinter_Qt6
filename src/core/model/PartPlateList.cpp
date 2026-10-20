@@ -67,7 +67,14 @@ bool PartPlateList::deletePlate(int index) {
   m_plate_list.erase(m_plate_list.begin() + index);
 
   reindex();
-  // Keep current plate index valid after deletion.
+  // MP6 (dev plan 多盘 2026-10-20): upstream delete_plate current-plate rule
+  // (PartPlate.cpp:4888-4900) -- the deleted plate's successor must not
+  // silently inherit "current": current > index shifts down with the list,
+  // current == index falls back to the predecessor (plate 0 keeps 0).
+  if (m_current_plate > index)
+    --m_current_plate;
+  else if (m_current_plate == index && index > 0)
+    m_current_plate = index - 1;
   if (m_current_plate >= plateCount()) {
     m_current_plate = plateCount() - 1;
   }
@@ -339,25 +346,28 @@ Slic3r::Vec3d PartPlateList::computeOrigin(int index, int cols) const {
 #endif
 
 int PartPlateList::computePlateIndex(double translationX_mm, double translationY_mm) const {
-  // Decodes the negative-Y-row encoding of computeShapePosition (PartPlate.cpp:5365-5376).
-  //
-  // Source truth (PartPlate.cpp:5369-5370) operates on the ArrangePolygon
-  // translation space, which is already shifted by one stride relative to the
-  // raw world offset (the row decode `(stride_y - t_y)/stride_y` reflects that
-  // shifted space). Qt6 reads the raw world offset from ModelInstance::get_offset()
-  // directly, so the correct decode is the unshifted inverse of computeShapePosition:
-  //   col_value = world_x / stride_x        (computeShapePosition used  col*stride_x)
-  //   row_value = -world_y / stride_y       (computeShapePosition used -row*stride_y)
-  // This keeps plate 0 (world origin) decoding to row 0 / col 0.
+  // Decodes the grid slot each world offset lands on. Slots span
+  // [col*stride, col*stride + width] / [row*-stride, row*-stride + depth]
+  // (computeShapePosition PartPlate.cpp:5365-5376 + the 1/5 gap), so the
+  // cell center is slot + size/2: round((coord - center)/stride). The old
+  // unshifted round(coord/stride) left a DEAD ZONE -- an object in the far
+  // 40% of its plate (coord > stride/2 = 0.6 * size) decoded to the
+  // neighboring (or negative) row and docked. MP7 (dev plan 多盘 2026-10-20)
+  // made this visible: the nester legitimately places items across the
+  // whole bed, and every far-half placement vanished from its plate.
   const double strideX = plateStrideX();
   const double strideY = plateStrideY();
   // Defensive: if plate size was never set (stride 0), everything is on plate 0.
   if (strideX <= 0.0 || strideY <= 0.0) return 0;
-  float col_value = static_cast<float>(translationX_mm / strideX);
-  float row_value = static_cast<float>(-translationY_mm / strideY);
+  const float col_value = static_cast<float>(
+      (translationX_mm - m_plate_width * 0.5) / strideX);
+  const float row_value = static_cast<float>(
+      (m_plate_depth * 0.5 - translationY_mm) / strideY);
   int row = static_cast<int>(std::round(row_value));
   int col = static_cast<int>(std::round(col_value));
-  return row * m_plate_cols + col;
+  if (row < 0 || col < 0) return -1;  // left/above the grid: the dock
+  const int index = row * m_plate_cols + col;
+  return index < kMaxPlateCount ? index : -1;  // past the cap: the dock
 }
 
 void PartPlateList::updatePlateCols() {
