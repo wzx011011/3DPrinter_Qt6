@@ -41,6 +41,7 @@
 #include "core/model/PartPlate.h"
 #include "core/model/SceneTreeModel.h"
 #include "core/model/PartPlateList.h"
+#include "core/util/PrintableArea.h"
 #include "core/services/CameraServiceMock.h"
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/DeviceServiceMock.h"
@@ -308,6 +309,12 @@ private slots:
   // from the current printer preset instead of a mock constant.
   void extruderCountReadsPrinterPresetNozzleEntries();
   void appSettingsAndEditorBedShapePersistDeterministically();
+  // MP1 (dev plan 多盘 2026-10-20): printable_area "XxY" preset points
+  // normalize to the flat x1,y1,... polygon every consumer parses -- the
+  // shared flatPointCoords form that replaced the inline parsers which
+  // silently rejected every "0x0" token (K1 Max stayed on the 220x220
+  // default bed while its STL/texture/gcode are all 300x300).
+  void printableAreaPointNormalizationCoversAllEntryForms();
   // GAP-4/5/6/7 review-loop additions.
   void platerHotkeysBackendAnchorsPresent();
   void multiSelectPostsInfoNotification();
@@ -5298,6 +5305,33 @@ void ViewModelSmokeTests::extruderCountReadsPrinterPresetNozzleEntries()
                                     QStringLiteral("Q10 Single Nozzle Printer"), single));
   config.setCurrentPrinterPreset(QStringLiteral("Q10 Single Nozzle Printer"));
   QCOMPARE(editor.extruderCount(), 1);
+}
+
+void ViewModelSmokeTests::printableAreaPointNormalizationCoversAllEntryForms()
+{
+  // The three entry forms the preset ecosystem, CLI configs and AI tools
+  // hand over: per-point "XxY" list, flat "XxY" string, plain coordinates.
+  const QVariantList pointList{QStringLiteral("0x0"), QStringLiteral("300x0"),
+                                QStringLiteral("300x300"), QStringLiteral("0x300")};
+  const QVariant flatXy = QVariant(QStringLiteral("0x0,300x0,300x300,0x300"));
+  const QVariant flatCoords = QVariant(QStringLiteral("0,0,300,0,300,300,0,300"));
+  const QList<float> expected{0, 0, 300, 0, 300, 300, 0, 300};
+
+  QCOMPARE(owzx::flatPointCoords(pointList), expected);
+  QCOMPARE(owzx::flatPointCoords(flatXy), expected);
+  QCOMPARE(owzx::flatPointCoords(flatCoords), expected);
+
+  // The arrange bed polygon string every arrangeObjects entry point must
+  // produce regardless of how the preset serialized the value.
+  const QString polygon = QStringLiteral("0,0,300,0,300,300,0,300");
+  QCOMPARE(owzx::flatPointCoordsString(pointList), polygon);
+  QCOMPARE(owzx::flatPointCoordsString(flatXy), polygon);
+  QCOMPARE(owzx::flatPointCoordsString(flatCoords), polygon);
+
+  // Malformed or empty values yield an empty polygon (consumers fall back
+  // to their defaults), never a half-parsed list.
+  QVERIFY(owzx::flatPointCoords(QVariant(QStringLiteral("0x0,300x0,300x,0x300"))).isEmpty());
+  QVERIFY(owzx::flatPointCoords(QVariant(QString())).isEmpty());
 }
 
 void ViewModelSmokeTests::appSettingsAndEditorBedShapePersistDeterministically()

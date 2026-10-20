@@ -11837,7 +11837,7 @@ void EditorViewModel::arrangeAllObjects()
   if (configViewModel_)
   {
     const auto merged = configViewModel_->mergedConfigValues();
-    printableArea = merged.value(QStringLiteral("printable_area")).toString();
+    printableArea = owzx::flatPointCoordsString(merged.value(QStringLiteral("printable_area")));
   }
   // U9: 排布前置整景快照（上游 Plater::arrange / fill_bed 系均先
   // take_snapshot("Arrange")，Plater.cpp:17945/17954/20589）。注意双轨：
@@ -11916,7 +11916,8 @@ bool EditorViewModel::arrangePlateObjects(int plateIndex)
   const float spacing = (m_arrangeDistance > 0.f) ? m_arrangeDistance : 6.0f;
   QString printableArea;
   if (configViewModel_)
-    printableArea = configViewModel_->mergedConfigValues().value(QStringLiteral("printable_area")).toString();
+    printableArea = owzx::flatPointCoordsString(
+        configViewModel_->mergedConfigValues().value(QStringLiteral("printable_area")));
 
   // U4: same synchronous long run as arrangeAllObjects -- same busy scope.
   const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
