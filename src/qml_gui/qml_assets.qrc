@@ -151,6 +151,31 @@
         <file>assets/icons/dark/split_objects.svg</file>
         <file>assets/icons/dark/split_parts.svg</file>
         <file>assets/icons/dark/box.svg</file>
+        <!-- TBLC-selected (2026-10-20): upstream expresses the selected
+             gizmo via a state ICON TILE (native accent colors), never a
+             filled button capsule (GLGizmosManager.cpp:1360-1366 tile 2,
+             GLTexture.cpp pressed_data). accent/ = monochrome brand-green
+             glyphs for the active-tool state. -->
+        <file>assets/icons/accent/toolbar_open.svg</file>
+        <file>assets/icons/accent/toolbar_add_plate.svg</file>
+        <file>assets/icons/accent/toolbar_orient.svg</file>
+        <file>assets/icons/accent/toolbar_arrange.svg</file>
+        <file>assets/icons/accent/toolbar_variable_layer_height.svg</file>
+        <file>assets/icons/accent/toolbar_move.svg</file>
+        <file>assets/icons/accent/toolbar_rotate.svg</file>
+        <file>assets/icons/accent/toolbar_scale.svg</file>
+        <file>assets/icons/accent/toolbar_flatten.svg</file>
+        <file>assets/icons/accent/toolbar_cut.svg</file>
+        <file>assets/icons/accent/toolbar_support.svg</file>
+        <file>assets/icons/accent/toolbar_seam.svg</file>
+        <file>assets/icons/accent/toolbar_measure.svg</file>
+        <file>assets/icons/accent/toolbar_meshboolean.svg</file>
+        <file>assets/icons/accent/toolbar_text.svg</file>
+        <file>assets/icons/accent/instance_add.svg</file>
+        <file>assets/icons/accent/instance_remove.svg</file>
+        <file>assets/icons/accent/split_objects.svg</file>
+        <file>assets/icons/accent/split_parts.svg</file>
+        <file>assets/icons/accent/box.svg</file>
         <file>assets/icons/custom-gcode_slicing-state_global.svg</file>
         <file>assets/icons/lock_closed.svg</file>
         <file>assets/icons/lock_open.svg</file>

@@ -1637,7 +1637,11 @@ void QmlUiAuditTests::rhiViewportRendererUsesModelBuffersAndCameraUniforms()
   QVERIFY2(viewportSource.contains(QStringLiteral("rotateLocalAroundTarget"))
                && viewportSource.contains(QStringLiteral("recoverFromFreeCamera"))
                && viewportSource.contains(QStringLiteral("m_camera.orbitAround"))
-               && viewportSource.contains(QStringLiteral("m_camera.bedCenter"))
+               // MP-NAV (2026-10-20): the plain-orbit pivot moved from the
+               // scene-box center (m_camera.bedCenter) to the CURRENT plate
+               // center via the shared grid offset -- multi-plate scenes
+               // orbit each plate around its own center.
+               && viewportSource.contains(QStringLiteral("PrepareSceneData::plateGridOffset(m_currentPlateIndex"))
                && viewportSource.contains(QStringLiteral("m_ctrlRotationCenter"))
                && viewportSource.contains(QStringLiteral("groundPointOnPlane"))
                && viewportSource.contains(QStringLiteral("translateWorld")),
@@ -3972,7 +3976,10 @@ void QmlUiAuditTests::prepareViewportControlsMatchRestorationContract()
     QStringLiteral("anchors.horizontalCenter: parent.horizontalCenter"),
     QStringLiteral("anchors.topMargin: 8"),
     QStringLiteral("id: viewportActionToolbar"),
-    QStringLiteral("iconSource: iconForTool(toolId)")
+    // TBLC-selected (2026-10-20): the gizmo icon now resolves through
+    // iconForTool(toolId, toolActive) -- the active tool swaps to the
+    // monochrome accent variant instead of the retired solid capsule.
+    QStringLiteral("iconSource: root.iconForTool(toolId, toolActive)")
   };
   for (const QString &token : toolbarTokens) {
     QVERIFY2(glToolbars.contains(token),

@@ -2424,7 +2424,20 @@ void RhiViewport::applyCameraOrbit(float dxPx, float dyPx)
       // (GLCanvas3D.cpp:4661-4662 rotates on the selection bbox center).
       // Selection-following made the bed sweep around a model dragged
       // off-center, which read as a broken rotation axis.
-      pivot = m_camera.bedCenter();
+      // MP-NAV follow-up (2026-10-20): bedCenter() is the SCENE-BOX
+      // center -- with multiple plates that is the gap BETWEEN plates, and
+      // orbiting on plate 2 swept the whole grid around a dead point (the
+      // intermittent multi-plate rotation complaint). Compute the true
+      // current-plate center from the same grid offset the bed quads use;
+      // camera space negates scene Z (AXES-ROT), single plate degenerates
+      // to bedCenter() exactly.
+      float plateOffX = 0.0f;
+      float plateOffZ = 0.0f;
+      PrepareSceneData::plateGridOffset(m_currentPlateIndex, qMax(1, m_plateCount),
+                                        m_bedWidth, m_bedDepth,
+                                        plateOffX, plateOffZ);
+      pivot = QVector3D(m_bedOriginX + plateOffX + m_bedWidth * 0.5f, 0.0f,
+                        -(m_bedOriginY + plateOffZ + m_bedDepth * 0.5f));
     }
     m_camera.orbitAround(dxPx * 0.8f, dyPx * 0.8f, pivot);
   }
@@ -2476,9 +2489,24 @@ void RhiViewport::updateSceneExtent()
   const float width = roundBed ? m_bedDiameter : m_bedWidth;
   const float depth = roundBed ? m_bedDiameter : m_bedDepth;
   const float height = m_bedHeightToLid > 0.0f ? m_bedHeightToLid : 100.0f;
+  // MP-NAV (dev plan 多盘 follow-up 2026-10-20): the scene box must span the
+  // whole plate GRID, not one bed -- a single-bed box fed clampTarget a 3x
+  // footprint around plate 0, so orbiting/panning near plate 2 snapped the
+  // camera target back (the intermittent "rotation sometimes misbehaves"
+  // report on multi-plate projects). Single plate degenerates to the old
+  // extent exactly (cols = rows = 1).
+  const int plateCount = qMax(1, m_plateCount);
+  const int columns = OWzx::compute_colum_count(plateCount);
+  const int rows = (plateCount + columns - 1) / columns;
+  const float gridWidth =
+      width + float(columns - 1) * float(OWzx::PartPlateGridLayout::strideX(width));
+  const float gridDepth =
+      depth + float(rows - 1) * float(OWzx::PartPlateGridLayout::strideY(depth));
   // AXES-ROT: the bed rect occupies scene Z in [-(originY+depth), -originY]
-  // (raw slic3r originY negates into scene Z).
-  m_camera.setSceneExtent(width, depth, height, -(m_bedOriginY + depth));
+  // (raw slic3r originY negates into scene Z). The minZ argument stays the
+  // single-bed near edge; the enlarged depth argument extends the far side
+  // over the extra grid rows.
+  m_camera.setSceneExtent(gridWidth, gridDepth, height, -(m_bedOriginY + depth));
   m_cameraDirty = true;
 }
 

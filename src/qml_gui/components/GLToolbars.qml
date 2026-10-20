@@ -76,30 +76,33 @@ Item {
     // dedicated case and take the generic box.svg fallback below -- their
     // upstream assets (toolbar_fuzzy_skin_paint.svg) are not embedded in
     // qml_assets.qrc yet.
-    function iconForTool(toolId) {
+    function iconForTool(toolId, accentVariant) {
+        const base = accentVariant
+                ? "qrc:/qml/assets/icons/accent/"
+                : root.iconBase
         switch (toolId) {
         case GLViewport.GizmoMove:
-            return root.iconBase + "toolbar_move.svg"
+            return base + "toolbar_move.svg"
         case GLViewport.GizmoRotate:
-            return root.iconBase + "toolbar_rotate.svg"
+            return base + "toolbar_rotate.svg"
         case GLViewport.GizmoScale:
-            return root.iconBase + "toolbar_scale.svg"
+            return base + "toolbar_scale.svg"
         case GLViewport.GizmoFlatten:
-            return root.iconBase + "toolbar_flatten.svg"
+            return base + "toolbar_flatten.svg"
         case GLViewport.GizmoCut:
-            return root.iconBase + "toolbar_cut.svg"
+            return base + "toolbar_cut.svg"
         case GLViewport.GizmoSupportPaint:
-            return root.iconBase + "toolbar_support.svg"
+            return base + "toolbar_support.svg"
         case GLViewport.GizmoSeamPaint:
-            return root.iconBase + "toolbar_seam.svg"
+            return base + "toolbar_seam.svg"
         case GLViewport.GizmoMeshBoolean:
-            return root.iconBase + "toolbar_meshboolean.svg"
+            return base + "toolbar_meshboolean.svg"
         case GLViewport.GizmoEmboss:
-            return root.iconBase + "toolbar_text.svg"
+            return base + "toolbar_text.svg"
         case GLViewport.GizmoMeasure:
-            return root.iconBase + "toolbar_measure.svg"
+            return base + "toolbar_measure.svg"
         default:
-            return root.iconBase + "box.svg"
+            return base + "box.svg"
         }
     }
 
@@ -291,21 +294,21 @@ Item {
             // at hpp:96) and were removed on 2026-10-09 -- their gizmo
             // modes stay registered in RhiViewport pending an OWzx-only
             // product decision.
-            GizmoToolButton { toolId: GLViewport.GizmoMove; textTip: qsTr("Move"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoRotate; textTip: qsTr("Rotate"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoScale; textTip: qsTr("Scale"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoFlatten; textTip: qsTr("Place on face"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoCut; textTip: qsTr("Cut"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoSupportPaint; textTip: qsTr("Support painting"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoSeamPaint; textTip: qsTr("Seam painting"); iconSource: iconForTool(toolId) }
+            GizmoToolButton { toolId: GLViewport.GizmoMove; textTip: qsTr("Move") }
+            GizmoToolButton { toolId: GLViewport.GizmoRotate; textTip: qsTr("Rotate") }
+            GizmoToolButton { toolId: GLViewport.GizmoScale; textTip: qsTr("Scale") }
+            GizmoToolButton { toolId: GLViewport.GizmoFlatten; textTip: qsTr("Place on face") }
+            GizmoToolButton { toolId: GLViewport.GizmoCut; textTip: qsTr("Cut") }
+            GizmoToolButton { toolId: GLViewport.GizmoMeshBoolean; textTip: qsTr("Mesh boolean") }
+            GizmoToolButton { toolId: GLViewport.GizmoSupportPaint; textTip: qsTr("Support painting") }
+            GizmoToolButton { toolId: GLViewport.GizmoSeamPaint; textTip: qsTr("Seam painting") }
             // Upstream EType order: Seam(7) -> FuzzySkin(8) -> MmSegmentation(9).
             // Upstream name GLGizmoFuzzySkin::on_get_name
             // (GLGizmoFuzzySkin.cpp:28) "Paint-on fuzzy skin".
-            GizmoToolButton { toolId: GLViewport.GizmoFuzzySkin; textTip: qsTr("Paint-on fuzzy skin"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoMmuSegmentation; textTip: qsTr("Multicolor painting"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss"); iconSource: iconForTool(toolId) }
-            GizmoToolButton { toolId: GLViewport.GizmoMeasure; textTip: qsTr("Measure"); iconSource: iconForTool(toolId) }
+            GizmoToolButton { toolId: GLViewport.GizmoFuzzySkin; textTip: qsTr("Paint-on fuzzy skin") }
+            GizmoToolButton { toolId: GLViewport.GizmoMmuSegmentation; textTip: qsTr("Multicolor painting") }
+            GizmoToolButton { toolId: GLViewport.GizmoEmboss; textTip: qsTr("Emboss") }
+            GizmoToolButton { toolId: GLViewport.GizmoMeasure; textTip: qsTr("Measure") }
         }
     }
 
@@ -329,11 +332,19 @@ Item {
         property int toolId: -1
         property string textTip: ""
 
+        // TBLC-selected (2026-10-20): upstream marks the active gizmo by
+        // swapping the icon to its accent state tile (GLGizmosManager.cpp
+        // :1274 current -> tile 2, the native-accent sprite; the toolbar
+        // background is shared and NO button capsule is drawn). The former
+        // solid-accent CxIconButton capsule drowned the light-gray glyph
+        // and read as an empty green block; the active tool now shows the
+        // monochrome brand-green icon on the same transparent Ghost button.
+        readonly property bool toolActive: root.viewport3d
+                                           && root.viewport3d.gizmoMode === toolId
         cxStyle: CxIconButton.Style.Ghost
         buttonSize: root.targetToolbarButtonSize
         iconSize: 20
-        iconSource: ""
-        selected: root.viewport3d && root.viewport3d.gizmoMode === toolId
+        iconSource: root.iconForTool(toolId, toolActive)
         enabled: root.canUseGizmo(toolId)
         toolTipText: root.gizmoTip(textTip, toolId)
         onClicked: root.activateGizmo(toolId)
