@@ -2373,12 +2373,17 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
           QSize sz = svg.defaultSize();
           if (sz.isEmpty())
             sz = QSize(1024, 1024);
-          // Upstream caps the rasterized logo texture at 2048px
-          // (logo_tex_size in PartPlate::render_logo).
-          const int kMaxTex = 2048;
-          if (sz.width() > kMaxTex || sz.height() > kMaxTex) {
-            const float s = float(kMaxTex) / float(std::max(sz.width(), sz.height()));
-            sz = QSize(int(sz.width() * s), int(sz.height() * s));
+          // Upstream GLTexture::load_from_svg scales the raster so its
+          // LONGEST side equals max_size_px (2048, PartPlate.cpp:824) -- an
+          // unconditional up-or-down scale, NOT a cap. The port used to only
+          // cap, leaving the K1 Max texture at its 300x300 viewBox = 1px/mm
+          // over the whole plate (the blur report).
+          const int kTexSize = 2048;
+          const int longest = std::max(sz.width(), sz.height());
+          if (longest > 0 && longest != kTexSize) {
+            const float s = float(kTexSize) / float(longest);
+            sz = QSize(qMax(1, int(sz.width() * s)),
+                       qMax(1, int(sz.height() * s)));
           }
           QImage raster(sz, QImage::Format_RGBA8888);
           raster.fill(Qt::transparent);
@@ -2413,14 +2418,18 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
 
   // 2. Create + upload the GPU texture.
   if (!m_bedTexture) {
-    m_bedTexture.reset(rhi()->newTexture(QRhiTexture::RGBA8, m_bedTextureImage.size()));
+    // Upstream loads the bed/logo SVG with use_mipmaps=true
+    // (PartPlate.cpp:825) -- minified hard at glancing angles otherwise.
+    m_bedTexture.reset(rhi()->newTexture(
+        QRhiTexture::RGBA8, m_bedTextureImage.size(),
+        1, QRhiTexture::MipMapped | QRhiTexture::UsedWithGenerateMips));
     if (!m_bedTexture->create()) {
       fprintf(stderr, "[TEX-DIAG] texture create FAILED\n");
       m_bedTexture.reset();
       return false;  // keeps the channel pending; the next frame retries
     }
     m_bedTextureSampler.reset(rhi()->newSampler(
-        QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+        QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::Linear,
         QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
     if (!m_bedTextureSampler->create()) {
       fprintf(stderr, "[TEX-DIAG] sampler create FAILED\n");
@@ -2429,6 +2438,7 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
       return false;
     }
     updates->uploadTexture(m_bedTexture.get(), m_bedTextureImage);
+    updates->generateMips(m_bedTexture.get());
   }
 
   // 3. Re-anchor the bed quad on the current bed rect. The quad uses the
