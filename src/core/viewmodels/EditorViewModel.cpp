@@ -448,6 +448,8 @@ void EditorViewModel::invalidateAllSliceResults()
   }
 
   m_slicedPlateIndices.clear();
+  // MP9-followup: a full invalidation is a fresh slate for the rail badges.
+  m_failedPlateIndices.clear();
   m_sliceResultPlateIndex = -1;
   if (sliceService_)
     sliceService_->clearResults();
@@ -5927,7 +5929,9 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
   connect(sliceService_, &SliceService::progressUpdated, this, [this](int percent, const QString &label)
           {
         statusText_ = QStringLiteral("%1... %2%").arg(label).arg(percent);
-        emit stateChanged(); });
+        emit stateChanged();
+        // MP9-followup: live percentage for the rail's slicing badge.
+        emit sliceProgressChanged(); });
   connect(sliceService_, &SliceService::sliceFailed, this, [this](const QString &message)
           {
       m_sliceResultPlateIndex = -1;
@@ -5938,13 +5942,26 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       // notification visible).
       m_pendingPreviewAfterSlice = false;
       m_previewReusedPreviousGcode = false;
+      // MP9-followup: latch the persistent failure badge onto the plate the
+      // failed slice belonged to (upstream SLICE_FAILED clears only on a
+      // successful re-slice).
+      if (m_activeSlicePlateIndex >= 0
+          && !m_failedPlateIndices.contains(m_activeSlicePlateIndex)) {
+        m_failedPlateIndices.insert(m_activeSlicePlateIndex);
+        emit plateChanged();
+      }
         statusText_ = message;
         emit stateChanged(); });
   // MP9 (dev plan 多盘 2026-10-20): the Select Plate rail's per-plate
   // badges (slicing spinner / sliced check) ride the plate cluster
   // carrier -- slice start/stop changes the current plate's badge state.
   connect(sliceService_, &SliceService::sliceStateChanged, this, [this]()
-          { emit plateChanged(); });
+          {
+            emit plateChanged();
+            // MP9-followup: progress resets to 0 on state transitions so the
+            // rail's percentage does not linger at the old run's value.
+            emit sliceProgressChanged();
+          });
   // U14: the duration label stays in SliceService's per-plate record (the
   // worker fills estimatedTimeLabel_ before this signal); the VM no longer
   // keeps its own copy. sliceEstimatedTime() reads the active record.
@@ -5955,6 +5972,9 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
     if (m_sliceResultPlateIndex >= 0) {
       m_slicedPlateIndices.insert(m_sliceResultPlateIndex);
       m_stalePlateIndices.remove(m_sliceResultPlateIndex);
+      // MP9-followup: success clears the plate's persistent failure badge.
+      if (m_failedPlateIndices.remove(m_sliceResultPlateIndex))
+        emit plateChanged();
       if (projectService_ && projectService_->currentPlateIndex() == m_sliceResultPlateIndex)
         sliceService_->activatePlateResult(m_sliceResultPlateIndex);
       // MP9: the rail's SLICED badge appears now.
@@ -6387,6 +6407,7 @@ QVariantList EditorViewModel::plateRailModel() const
     entry.insert(QStringLiteral("name"), plateName(i));
     entry.insert(QStringLiteral("locked"), isPlateLocked(i));
     entry.insert(QStringLiteral("sliced"), isPlateSliced(i));
+    entry.insert(QStringLiteral("failed"), m_failedPlateIndices.contains(i));
     entry.insert(QStringLiteral("objectCount"), plateObjectCount(i));
     entry.insert(QStringLiteral("current"), i == projectService_->currentPlateIndex());
     entry.insert(QStringLiteral("slicing"),
@@ -11231,6 +11252,8 @@ void EditorViewModel::requestSlice()
   m_sliceResultPlateIndex = -1;
   // Phase 239 (ENGN-02): a fresh model slice is not a previous-G-code reuse.
   m_previewReusedPreviousGcode = false;
+  // MP9-followup: a single slice always belongs to the current plate.
+  m_activeSlicePlateIndex = projectService_->currentPlateIndex();
   sliceService_->startSlice(projectService_->projectName());
 }
 
@@ -11765,6 +11788,8 @@ void EditorViewModel::continueSliceAllQueue()
     return;
   }
   const int plate = m_sliceAllQueue.takeFirst();
+  // MP9-followup: the queue advances the active-slice plate with the run.
+  m_activeSlicePlateIndex = plate;
   statusText_ = tr("正在切片平板 %1/%2...").arg(plate + 1).arg(plate + m_sliceAllQueue.size() + 1);
   emit stateChanged();
   // MP5: every slice-all advance hands the view to the new plate (upstream

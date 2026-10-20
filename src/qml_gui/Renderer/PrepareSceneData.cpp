@@ -269,12 +269,20 @@ void PrepareSceneData::setPlateContext(int currentPlateIndex,
   }
 
   m_currentPlateIndex = normalizedCurrentPlate;
+  // MP-FIX (dev plan 多盘 2026-10-20): the plate count changes the
+  // union-of-plates the outside check classifies against (a model uploaded
+  // while the context still said 1 plate keeps its stale outside verdict
+  // forever -- red background with the model parked inside plate 2). Bed
+  // geometry already rebuilds here; the outside state must follow.
+  const bool plateCountChanged = m_plateCount != normalizedPlateCount;
   m_plateCount = normalizedPlateCount;
   m_activeObjectIndices = normalizedObjects;
   // v5.16: the plate grid layout/selection colors follow the plate context,
   // so the bed geometry rebuilds with it (upstream repositions PartPlates on
   // every plate-count change).
   rebuildBedGeometry();
+  if (plateCountChanged)
+    recomputeOutsideState();
   markDirty(DirtyPlate | DirtyBed | DirtyGpu);
 }
 

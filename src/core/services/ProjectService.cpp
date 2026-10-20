@@ -13186,12 +13186,30 @@ QByteArray ProjectService::meshData() const
     }
 
     // Plate normalization -- same formula as the legacy bake (keep relative
-    // arrangement, center at (110, *, -110), lowest Y on the plate). Frozen
+    // arrangement, center the union, lowest Y on the plate). Frozen
     // for the transform channel until the next production.
+    // MP-FIX (dev plan 多盘 2026-10-20): the legacy bake hardcoded the
+    // 220-bed center (110, -110). On any other bed size (the K1 Max 300
+    // default preset lands the whole object set 40mm off its plates) and in
+    // multi-plate grids (the union spans several plates; centering it on
+    // plate 0's center drags plate 2+ objects into the inter-plate gap ->
+    // outside-bed red background), the center must follow the real bed and
+    // plate grid. A single 220 plate still reproduces (110, -110) exactly.
+    const int normPlateCount = m_plateList ? std::max(1, m_plateList->plateCount()) : 1;
+    const float normPlateW = float((m_plateList && m_plateList->plateWidth() > 0)
+                                       ? m_plateList->plateWidth() : 220);
+    const float normPlateD = float((m_plateList && m_plateList->plateDepth() > 0)
+                                       ? m_plateList->plateDepth() : 220);
+    const int normCols = OWzx::compute_colum_count(normPlateCount);
+    const int normRows = (normPlateCount + normCols - 1) / normCols;
+    const float gridCenterX = float(
+        (normCols - 1) * OWzx::PartPlateGridLayout::strideX(normPlateW) + normPlateW) * 0.5f;
+    const float gridCenterZ = -float(
+        (normRows - 1) * OWzx::PartPlateGridLayout::strideY(normPlateD) + normPlateD) * 0.5f;
     const float centerX = (bminX + bmaxX) * 0.5f;
     const float centerZ = (bminZ + bmaxZ) * 0.5f;
-    const float offsetX = 110.0f - centerX;
-    const float offsetZ = -110.0f - centerZ;
+    const float offsetX = gridCenterX - centerX;
+    const float offsetZ = gridCenterZ - centerZ;
     const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
 
     m_instanceChannelPlateShift = QVector3D(offsetX, offsetY, offsetZ);

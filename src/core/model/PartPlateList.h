@@ -6,9 +6,12 @@
 // PURE DOMAIN object (no QObject) per v3.0 Phase 16 decision D-01/D-05.
 //
 // EXCLUDED (deferred per CONTEXT D-02 / Phase 16 scope):
-//   - m_print_list / m_gcode_result_list (per-plate Print + GCode result maps → Phase 19)
+//   - m_print_list / m_gcode_result_list: the per-plate Print + GCode results
+//     now live in SliceService's per-plate records (Phase 19 landed; the
+//     slice-all queue drives them) — this list stays state-only.
 //   - GLTexture members, wxGetApp, std::mutex (Qt single-threaded GUI for plate mgmt)
-//   - Bed geometry (m_plate_width/depth/height, m_shape, m_extruder_areas → list-level config, future)
+//   - Bed geometry (m_plate_width/depth/height landed with the multi-plate
+//     grid, v3.2 Phase 29; m_shape / m_extruder_areas stay list-level config)
 //
 // This container owns the PartPlate objects and is the single source of truth that
 // ProjectService re-backs its plate Q_PROPERTY/Q_INVOKABLE API onto (D-05 big-bang).

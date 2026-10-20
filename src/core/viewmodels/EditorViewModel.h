@@ -1649,6 +1649,7 @@ public:
   Q_PROPERTY(QString exportActionHint READ exportActionHint NOTIFY stateChanged)
   Q_PROPERTY(QString sliceActionLabel READ sliceActionLabel NOTIFY stateChanged)
   Q_PROPERTY(QString sliceActionHint READ sliceActionHint NOTIFY stateChanged)
+  Q_PROPERTY(int sliceProgress READ sliceProgress NOTIFY sliceProgressChanged)
   Q_INVOKABLE int sliceProgress() const;
   Q_INVOKABLE bool isSlicing() const;
   /// G-13 followup (E2E timing): true while an async G-code export worker is
@@ -2122,6 +2123,11 @@ signals:
   /// Plater.cpp:12761-12782) -- the viewport answers with a topfront
   /// zoom onto that plate.
   void sliceAllAdvanced(int plateIndex);
+  /// MP9-followup (dev plan 多盘 2026-10-20): per-slice progress ticks for
+  /// the rail's live percentage label — a dedicated carrier so the hot
+  /// per-percent updates do NOT ride plateChanged (which rebuilds the rail's
+  /// thumbnail model).
+  void sliceProgressChanged();
   void sceneTopologyChanged();
   void busyStateChanged();
   void paintDataChanged();
@@ -2456,6 +2462,13 @@ private:
   QList<int> m_sliceAllQueue; ///< plate indices queued for Slice All
   bool m_slicingAll = false;
   QSet<int> m_slicedPlateIndices; ///< tracks which plates have valid slice results
+  /// MP9-followup: plates whose last slice FAILED — the rail's persistent
+  /// SLICE_FAILED badge (upstream keeps the failure flag until the plate is
+  /// re-sliced successfully). Cleared on success and on full invalidation.
+  QSet<int> m_failedPlateIndices;
+  /// MP9-followup: the plate the running slice belongs to (the slice-all
+  /// queue advances it per plate; single slices pin the current plate).
+  int m_activeSlicePlateIndex = -1;
   QSet<int> m_stalePlateIndices; ///< tracks plates whose previous slice result no longer matches current inputs
   /// Phase 239 (ENGN-01): set by switchToPreview() when the current plate's
   /// result is stale (kick reslice) or valid (kick previous-G-code reuse);

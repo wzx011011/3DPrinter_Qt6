@@ -8,9 +8,11 @@ import OWzx
 // rail on the canvas' left edge with a "Slice All" header and one thumbnail
 // button per plate. Layout follows upstream (left edge, 100px-class
 // thumbnails, state badges, empty plates dimmed); colors are brand Theme
-// tokens per the 2026-10-07 ruling. Known v1 deviations, recorded in the
-// dev plan: no per-plate progress percentage and no persistent
-// SLICE_FAILED badge (SliceService keeps no per-plate failure record).
+// tokens per the 2026-10-07 ruling. MP9-followup completes the badge set:
+// the slicing badge shows the live percent (editorVm.sliceProgress property,
+// NOT the plateRailModel — per-percent model rebuilds would re-decode every
+// thumbnail) and a persistent 切片失败 badge rides the VM's failed-plate set
+// (latched at sliceFailed, cleared on that plate's next success).
 Rectangle {
     id: root
 
@@ -113,7 +115,9 @@ Rectangle {
                 }
 
                 // State badge (upstream SLICED / SLICING overlays,
-                // GLCanvas3D.cpp:9281-9310).
+                // GLCanvas3D.cpp:9281-9310). The slicing variant carries the
+                // live percent; upstream renders the percentage inside the
+                // spinner badge (:9296-9304).
                 Rectangle {
                     visible: plateButton.modelData.sliced || plateButton.modelData.slicing
                     anchors.top: parent.top
@@ -127,7 +131,33 @@ Rectangle {
                         id: badgeText
                         anchors.centerIn: parent
                         text: plateButton.modelData.sliced
-                              ? qsTr("已切片") : qsTr("切片中")
+                              ? qsTr("已切片")
+                              : (root.editorVm && root.editorVm.isSlicing()
+                                     ? qsTr("%1%").arg(root.editorVm.sliceProgress)
+                                     : qsTr("切片中"))
+                        color: "white"
+                        font.pixelSize: Theme.fontSizeXS
+                    }
+                }
+
+                // Persistent failure badge (upstream SLICE_FAILED, latched
+                // until the plate re-slices successfully). Hidden while a
+                // new run is in flight or a valid result exists.
+                Rectangle {
+                    visible: plateButton.modelData.failed
+                             && !plateButton.modelData.slicing
+                             && !plateButton.modelData.sliced
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: 4
+                    width: failedText.implicitWidth + 10
+                    height: 16
+                    radius: 8
+                    color: "#d94040"
+                    Text {
+                        id: failedText
+                        anchors.centerIn: parent
+                        text: qsTr("切片失败")
                         color: "white"
                         font.pixelSize: Theme.fontSizeXS
                     }
