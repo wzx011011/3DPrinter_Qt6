@@ -9,6 +9,7 @@
 
 #include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
+#include "core/util/PrintableArea.h" // owzx::flatPointCoordsString (XxY preset points)
 #include "core/viewmodels/ConfigViewModel.h"
 #include "core/viewmodels/EditorViewModel.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
@@ -86,23 +87,10 @@ QJsonArray intListToJson(const QList<int> &list) {
 }
 
 QString normalizePrintableArea(const QVariant &value) {
-  QString serialized;
-  if (value.typeId() == QMetaType::QVariantList) {
-    const QVariantList points = value.toList();
-    QStringList parts;
-    parts.reserve(points.size());
-    for (const QVariant &point : points)
-      parts.append(point.toString());
-    serialized = parts.join(QLatin1Char(','));
-  } else if (value.typeId() == QMetaType::QStringList) {
-    serialized = value.toStringList().join(QLatin1Char(','));
-  } else {
-    serialized = value.toString();
-  }
-
-  // Preset imports historically serialize points as "0x0,300x0,..." while
-  // arrangeObjects consumes flat coordinate pairs separated by commas.
-  return serialized.replace(QLatin1Char('x'), QLatin1Char(','));
+  // Preset points serialize as "0x0,300x0,..." (QVariantList or flat string)
+  // while arrangeObjects consumes flat coordinate pairs separated by commas
+  // — shared normalization in core/util/PrintableArea.h.
+  return owzx::flatPointCoordsString(value);
 }
 
 }  // namespace

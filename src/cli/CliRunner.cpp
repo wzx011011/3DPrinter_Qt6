@@ -2,6 +2,7 @@
 #include "core/services/ProjectService.h"
 #include "core/services/SliceService.h"
 #include "core/services/PresetService.h"
+#include "core/util/PrintableArea.h" // owzx::flatPointCoordsString (XxY preset points)
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QTextStream>
@@ -89,29 +90,23 @@ QHash<QString, QVariant> buildMergedPresetConfig(
 }
 
 // Q8(6): the arrange bed polygon from the merged preset config. The preset
-// ecosystem keys the bed as printable_area (Printer preset, comma-separated
-// point pairs — the same key EditorViewModel::syncBedFromPrinterPreset
-// consumes); upstream CLI configs may also carry the legacy bed_shape key.
-// Both serialize as x1,y1,x2,y2,... which arrangeObjects parses. Returns an
-// empty string when neither key carries a usable >=4-point polygon.
+// ecosystem keys the bed as printable_area (Printer preset, "XxY" point
+// pairs — the same key EditorViewModel::syncBedFromPrinterPreset consumes;
+// normalized through owzx::flatPointCoordsString); upstream CLI configs may
+// also carry the legacy bed_shape key (already flat "x1,y1,x2,y2,...").
+// Returns an empty string when neither key carries a usable >=4-point
+// polygon.
 QString arrangeBedPolygonFromConfig(const QHash<QString, QVariant> &mergedConfig)
 {
     for (const QString &key : {QStringLiteral("printable_area"),
                                QStringLiteral("bed_shape")}) {
-        const QString raw = mergedConfig.value(key).toString().trimmed();
-        if (raw.isEmpty())
+        const QString polygon =
+            owzx::flatPointCoordsString(mergedConfig.value(key));
+        if (polygon.isEmpty())
             continue;
-        const QStringList coords = raw.split(QLatin1Char(','));
-        if (coords.size() < 8 || (coords.size() % 2) != 0)
-            continue;
-        bool ok = true;
-        for (const QString &coord : coords) {
-            bool valid = false;
-            coord.trimmed().toDouble(&valid);
-            if (!valid) { ok = false; break; }
-        }
-        if (ok)
-            return raw;
+        const QStringList coords = polygon.split(QLatin1Char(','));
+        if (coords.size() >= 8 && (coords.size() % 2) == 0)
+            return polygon;
     }
     return QString();
 }

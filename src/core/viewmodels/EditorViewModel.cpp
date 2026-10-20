@@ -31,6 +31,7 @@
 // mesh source (volumeMeshTriangleMesh, the aliasing shared_ptr that keeps the
 // TriangleMesh alive for the selector's reference).
 #include "core/rendering/PaintEngine.h"
+#include "core/util/PrintableArea.h" // owzx::flatPointCoords (XxY preset point normalization)
 #include <libslic3r/Geometry.hpp>  // Geometry::assemble_transform (canonical TRS)
 #include <libslic3r/Point.hpp>     // Vec3d / Transform3d for world-transform rebuild
 #include <libslic3r/QuadricEdgeCollapse.hpp>
@@ -4083,26 +4084,21 @@ void EditorViewModel::syncBedFromPrinterPreset()
     return;
   m_bedSyncedPreset = preset;
 
-  // printable_area: "x1,y1,x2,y2,..." (polygon). Use the bounding box as the
+  // printable_area: polygon of "XxY" points. Use the bounding box as the
   // viewport bed rect (upstream BedShape::Type::RECT / bounding_box()).
-  const QString area = configViewModel_->mergedConfigValues()
-      .value(QStringLiteral("printable_area")).toString();
-  if (!area.isEmpty()) {
-    const QStringList parts = area.split(QLatin1Char(','), Qt::SkipEmptyParts);
-    if (parts.size() >= 8 && (parts.size() % 2) == 0) {
+  {
+    const QList<float> coords = owzx::flatPointCoords(configViewModel_->mergedConfigValues()
+        .value(QStringLiteral("printable_area")));
+    if (coords.size() >= 8 && (coords.size() % 2) == 0) {
       float minX = std::numeric_limits<float>::max();
       float minY = std::numeric_limits<float>::max();
       float maxX = std::numeric_limits<float>::lowest();
       float maxY = std::numeric_limits<float>::lowest();
-      bool ok = true;
-      for (int i = 0; i + 1 < parts.size() && ok; i += 2) {
-        const float x = parts[i].trimmed().toFloat(&ok);
-        const float y = parts[i + 1].trimmed().toFloat(&ok);
-        if (!ok) break;
-        minX = std::min(minX, x); maxX = std::max(maxX, x);
-        minY = std::min(minY, y); maxY = std::max(maxY, y);
+      for (int i = 0; i + 1 < coords.size(); i += 2) {
+        minX = std::min(minX, coords[i]); maxX = std::max(maxX, coords[i]);
+        minY = std::min(minY, coords[i + 1]); maxY = std::max(maxY, coords[i + 1]);
       }
-      if (ok && maxX > minX && maxY > minY) {
+      if (maxX > minX && maxY > minY) {
         setBedOriginX(minX);
         setBedOriginY(minY);
         setBedWidth(maxX - minX);
@@ -4113,31 +4109,23 @@ void EditorViewModel::syncBedFromPrinterPreset()
   }
 
   // v5.16 (EXCLAREA): bed_exclude_area polygons (upstream coPoints,
-  // Plater.cpp:8169 -> PartPlate::set_shapes). Same comma-separated point
+  // Plater.cpp:8169 -> PartPlate::set_shapes). Same "XxY" point
   // serialization as printable_area; kept FLAT — upstream groups every 4
   // consecutive points into one rectangle (init_exclude_bounding_box).
   {
     QVariantList excludeFlat;
-    const QString excludeRaw = configViewModel_->mergedConfigValues()
-        .value(QStringLiteral("bed_exclude_area")).toString();
-    if (!excludeRaw.isEmpty()) {
-      const QStringList coords = excludeRaw.split(QLatin1Char(','), Qt::SkipEmptyParts);
-      bool ok = true;
-      for (const QString &coord : coords) {
-        bool okCoord = false;
-        const double value = coord.trimmed().toDouble(&okCoord);
-        if (!okCoord || !qIsFinite(value)) {
-          ok = false;
-          break;
-        }
-        excludeFlat.append(value);
-      }
-      // Trailing points that cannot complete a rectangle are dropped
-      // (mirrors the strict index % 4 grouping upstream).
-      const int usable = (excludeFlat.size() / 8) * 8;
-      if (usable != excludeFlat.size())
-        excludeFlat.resize(usable);
-    }
+    const QList<float> coords = owzx::flatPointCoords(configViewModel_->mergedConfigValues()
+        .value(QStringLiteral("bed_exclude_area")));
+    excludeFlat.reserve(coords.size());
+    for (float coord : coords)
+      excludeFlat.append(double(coord));
+    // Trailing points that cannot complete a rectangle are dropped
+    // (mirrors the strict index % 4 grouping upstream); a lone sentinel
+    // point ("0x0" — Creality presets ship it to mean "no zones") is not a
+    // rectangle at all and stays empty.
+    const int usable = (excludeFlat.size() / 8) * 8;
+    if (usable != excludeFlat.size())
+      excludeFlat.resize(usable);
     m_bedExcludeAreas = excludeFlat;
   }
 
