@@ -576,12 +576,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // PREVIEW-ALIGN 2026-10-19: the preview canvas uses the upstream light
   // background (DEFAULT_BG_LIGHT_COLOR {0.906,0.906,0.906}, GLCanvas3D.cpp:93
   // -- user ruling: preview matches the upstream screenshot) so the DUMMY
-  // gray solid print reads like upstream; a toolpath escaping the plate
-  // swaps to the upstream error color (m_toolpath_outside).
+  // gray solid print reads like upstream. NOTE: the upstream
+  // anyVolumeOutside error-red swap applies to MODEL volumes only
+  // (_is_any_volume_outside); a gcode-only session has no volumes, and its
+  // presentation macro legitimately travels past the plate edge, so the
+  // preview background stays light unconditionally.
   if (m_canvasType == RhiViewport::CanvasPreview)
-    m_clearColor = m_previewToolpathOutsideBed
-        ? QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f))
-        : QColor(231, 231, 231);
+    m_clearColor = QColor(231, 231, 231);
   else if (m_prepareScene.anyVolumeOutside())
     m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
   else
@@ -6009,25 +6010,6 @@ void RhiViewportRenderer::parsePreviewSegments()
   // computePreviewDrawRanges call will repopulate the cache.
   m_previewRangeCacheKey = 0;
   m_cachedPreviewRanges.clear();
-
-  // PREVIEW-ALIGN (OUTOFBED): sweep the expanded vertices against the bed
-  // rectangle (upstream _is_any_volume_outside drives the same background
-  // swap for model volumes; the preview canvas has no volumes, so the
-  // toolpath itself is what can leave the plate -- GLCanvas3D.cpp:7913-7918
-  // m_toolpath_outside).
-  m_previewToolpathOutsideBed = false;
-  if (!m_previewVertices.isEmpty()) {
-    const float bedLeft = m_prepareScene.bedOriginX();
-    const float bedTop = m_prepareScene.bedOriginY();
-    const float bedRight = bedLeft + m_prepareScene.bedWidth();
-    const float bedBottom = bedTop + m_prepareScene.bedDepth();
-    for (const Vertex &v : m_previewVertices) {
-      if (v.x < bedLeft || v.x > bedRight || v.z < bedTop || v.z > bedBottom) {
-        m_previewToolpathOutsideBed = true;
-        break;
-      }
-    }
-  }
 }
 
 // P17.7: the sequential-range cap (upstream SequentialRangeCap generation,
