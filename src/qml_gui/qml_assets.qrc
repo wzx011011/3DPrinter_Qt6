@@ -126,6 +126,31 @@
         <file>assets/icons/instance_remove.svg</file>
         <file>assets/icons/split_objects.svg</file>
         <file>assets/icons/split_parts.svg</file>
+        <!-- TBLC (2026-10-20): dark-surface variants of the viewport strip
+             icons (glyph body #2b3436 -> textSecondary #c9c9c9, teal accent
+             #009688 -> brand accent #18c75e); GLToolbars.qml swaps the base
+             directory on Theme.isDark. The base files stay untouched as the
+             light-surface (upstream-native) set. -->
+        <file>assets/icons/dark/toolbar_open.svg</file>
+        <file>assets/icons/dark/toolbar_add_plate.svg</file>
+        <file>assets/icons/dark/toolbar_orient.svg</file>
+        <file>assets/icons/dark/toolbar_arrange.svg</file>
+        <file>assets/icons/dark/toolbar_variable_layer_height.svg</file>
+        <file>assets/icons/dark/toolbar_move.svg</file>
+        <file>assets/icons/dark/toolbar_rotate.svg</file>
+        <file>assets/icons/dark/toolbar_scale.svg</file>
+        <file>assets/icons/dark/toolbar_flatten.svg</file>
+        <file>assets/icons/dark/toolbar_cut.svg</file>
+        <file>assets/icons/dark/toolbar_support.svg</file>
+        <file>assets/icons/dark/toolbar_seam.svg</file>
+        <file>assets/icons/dark/toolbar_measure.svg</file>
+        <file>assets/icons/dark/toolbar_meshboolean.svg</file>
+        <file>assets/icons/dark/toolbar_text.svg</file>
+        <file>assets/icons/dark/instance_add.svg</file>
+        <file>assets/icons/dark/instance_remove.svg</file>
+        <file>assets/icons/dark/split_objects.svg</file>
+        <file>assets/icons/dark/split_parts.svg</file>
+        <file>assets/icons/dark/box.svg</file>
         <file>assets/icons/custom-gcode_slicing-state_global.svg</file>
         <file>assets/icons/lock_closed.svg</file>
         <file>assets/icons/lock_open.svg</file>

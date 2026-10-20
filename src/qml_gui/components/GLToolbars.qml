@@ -32,7 +32,14 @@ Item {
     // (Colors stay brand-owned per the 2026-10-07 truth ruling; only layout
     // follows upstream.)
     readonly property color actionToolbarSurface: Theme.bgBase
+    // TBLC (2026-10-20): the upstream icon assets are two-tone for a LIGHT
+    // toolbar surface (glyph #2b3436 + teal #009688) -- on the dark strip
+    // the glyph body matched the surface and the icons vanished. The dark/
+    // variants remap the body to textSecondary and the accent to the brand
+    // green; the base files remain the light-theme set (Theme.isDark flips
+    // with the theme and re-resolves every iconSource binding).
     readonly property string iconBase: "qrc:/qml/assets/icons/"
+                                       + (Theme.isDark ? "dark/" : "")
 
     signal addModelRequested()
     signal sliceRequested()
