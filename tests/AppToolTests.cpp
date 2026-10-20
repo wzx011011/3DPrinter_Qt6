@@ -110,6 +110,7 @@ class AppToolTests final : public QObject {
   void appStateSceneObjectInfoRoundTrip();
   void configListAndSetValueRoundTrip();
   void transformDuplicateDeleteRoundTrip();
+  void plateToolsRoundTrip();
   void sliceGatesRejectInvalidRequests();
   void mcpServerInitializeListAndCall();
   void mcpServerAuthAndErrorRouting();
@@ -211,7 +212,8 @@ void AppToolTests::toolDefinitionsExposeSchemaForEveryTool() {
   // Core coverage: visible + invisible control both present.
   for (const char *expected :
        {"get_app_state", "get_scene", "list_config_keys", "set_config_value",
-        "slice_plate", "export_gcode", "switch_page", "undo", "clear_project"}) {
+        "slice_plate", "export_gcode", "switch_page", "undo", "clear_project",
+        "select_plate", "create_plate", "delete_plate", "move_objects_to_plate"}) {
     QVERIFY2(registry_->hasTool(QString::fromLatin1(expected)),
              qPrintable(QStringLiteral("missing core tool: %1").arg(expected)));
   }
@@ -370,6 +372,110 @@ void AppToolTests::transformDuplicateDeleteRoundTrip() {
       QStringLiteral("arrange_objects"),
       QJsonObject{{QStringLiteral("spacingMm"), 10.0}});
   QVERIFY2(arranged.ok, "arrange_objects must succeed through the bed-shape path");
+}
+
+void AppToolTests::plateToolsRoundTrip() {
+  // The fixture above never adds plates: loadFile starts with exactly one.
+  const int platesBefore = project_->plateCount();
+  QCOMPARE(platesBefore, 1);
+  const int srcPlate = project_->plateIndexForObject(0);
+  QCOMPARE(srcPlate, 0);
+
+  // create_plate appends at the end through the undoable VM flow.
+  const OWzx::AppToolResult added =
+      registry_->execute(QStringLiteral("create_plate"), {});
+  QVERIFY2(added.ok, qPrintable(QStringLiteral("create_plate failed: %1").arg(added.error)));
+  const int newPlate = added.data.value(QStringLiteral("plateIndex")).toInt();
+  QCOMPARE(newPlate, platesBefore);
+  QCOMPARE(project_->plateCount(), platesBefore + 1);
+
+  // select_plate switches the current plate; out-of-range index fails.
+  const OWzx::AppToolResult sel = registry_->execute(
+      QStringLiteral("select_plate"),
+      QJsonObject{{QStringLiteral("plateIndex"), newPlate}});
+  QVERIFY2(sel.ok, qPrintable(QStringLiteral("select_plate failed: %1").arg(sel.error)));
+  QCOMPARE(project_->currentPlateIndex(), newPlate);
+  const OWzx::AppToolResult badSel = registry_->execute(
+      QStringLiteral("select_plate"),
+      QJsonObject{{QStringLiteral("plateIndex"), 999}});
+  QVERIFY2(!badSel.ok, "select_plate must reject out-of-range plates");
+
+  // move_objects_to_plate: membership follows AND the world position is
+  // translated by the plate-grid offset delta so the target stays slice-ready.
+  const QVector3D posBefore = project_->objectPosition(0);
+  const OWzx::AppToolResult move = registry_->execute(
+      QStringLiteral("move_objects_to_plate"),
+      QJsonObject{{QStringLiteral("indices"), QJsonArray{0}},
+                  {QStringLiteral("plateIndex"), newPlate}});
+  QVERIFY2(move.ok, qPrintable(QStringLiteral("move_objects_to_plate failed: %1").arg(move.error)));
+  QCOMPARE(project_->plateIndexForObject(0), newPlate);
+  QCOMPARE(move.data.value(QStringLiteral("movedCount")).toInt(), 1);
+  QVERIFY2(project_->isPlateReadyForSlice(newPlate),
+           "moved member must leave the target plate slice-ready");
+  {
+    const OWzx::PartPlateList *plates = project_->plateListConst();
+    const int count = project_->plateCount();
+    // Same extent priority as the tool: VM bedWidth/bedDepth (renderer grid
+    // source), plate-list size only as fallback.
+    double w = double(editor_->bedWidth());
+    double d = double(editor_->bedDepth());
+    if (w <= 0.0) w = double(plates->plateWidth());
+    if (d <= 0.0) d = double(plates->plateDepth());
+    double sx = 0, sy = 0, dx = 0, dy = 0;
+    OWzx::PartPlateGridLayout::gridOffset(srcPlate, count, w, d, &sx, &sy);
+    OWzx::PartPlateGridLayout::gridOffset(newPlate, count, w, d, &dx, &dy);
+    QVERIFY2((dx - sx) != 0.0 || (dy - sy) != 0.0,
+             "plates 0->1 must exercise a non-zero grid delta");
+    const QVector3D posAfter = project_->objectPosition(0);
+    QVERIFY2(qAbs(posAfter.x() - (posBefore.x() + (dx - sx))) < 0.001,
+             "position X must follow the plate-grid offset delta");
+    QVERIFY2(qAbs(posAfter.z() - (posBefore.z() + (dy - sy))) < 0.001,
+             "position Z must follow the plate-grid offset delta");
+  }
+
+  // Idempotent re-move of the same index reports movedCount 0 but stays ok.
+  const OWzx::AppToolResult again = registry_->execute(
+      QStringLiteral("move_objects_to_plate"),
+      QJsonObject{{QStringLiteral("indices"), QJsonArray{0}},
+                  {QStringLiteral("plateIndex"), newPlate}});
+  QVERIFY2(again.ok, "moving an object already on the target must stay ok");
+  QCOMPARE(again.data.value(QStringLiteral("movedCount")).toInt(), 0);
+
+  // Bad gates: empty indices / out-of-range index / out-of-range plate.
+  QVERIFY2(!registry_->execute(
+               QStringLiteral("move_objects_to_plate"),
+               QJsonObject{{QStringLiteral("indices"), QJsonArray{}},
+                           {QStringLiteral("plateIndex"), 0}}).ok,
+           "empty indices must fail");
+  QVERIFY2(!registry_->execute(
+               QStringLiteral("move_objects_to_plate"),
+               QJsonObject{{QStringLiteral("indices"), QJsonArray{999}},
+                           {QStringLiteral("plateIndex"), 0}}).ok,
+           "out-of-range index must fail");
+  QVERIFY2(!registry_->execute(
+               QStringLiteral("move_objects_to_plate"),
+               QJsonObject{{QStringLiteral("indices"), QJsonArray{0}},
+                           {QStringLiteral("plateIndex"), 999}}).ok,
+           "out-of-range plate must fail");
+
+  // Move back so the delete below leaves the fixture's object intact.
+  QVERIFY2(registry_->execute(
+               QStringLiteral("move_objects_to_plate"),
+               QJsonObject{{QStringLiteral("indices"), QJsonArray{0}},
+                           {QStringLiteral("plateIndex"), srcPlate}}).ok,
+           "move back must succeed");
+  QCOMPARE(project_->plateIndexForObject(0), srcPlate);
+
+  // delete_plate removes the extra plate; the last remaining plate is protected.
+  const OWzx::AppToolResult del = registry_->execute(
+      QStringLiteral("delete_plate"),
+      QJsonObject{{QStringLiteral("plateIndex"), newPlate}});
+  QVERIFY2(del.ok, qPrintable(QStringLiteral("delete_plate failed: %1").arg(del.error)));
+  QCOMPARE(project_->plateCount(), platesBefore);
+  const OWzx::AppToolResult delLast = registry_->execute(
+      QStringLiteral("delete_plate"),
+      QJsonObject{{QStringLiteral("plateIndex"), 0}});
+  QVERIFY2(!delLast.ok, "the last remaining plate must not be deletable");
 }
 
 void AppToolTests::sliceGatesRejectInvalidRequests() {

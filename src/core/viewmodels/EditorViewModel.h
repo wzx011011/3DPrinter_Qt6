@@ -1404,6 +1404,11 @@ public:
   /// 移动选中对象到指定平板（对齐上游 Plater::priv::on_arrange 跨平板拖拽）
   Q_INVOKABLE bool canMoveSelectionToPlate(int targetPlateIndex) const;
   Q_INVOKABLE bool moveSelectedObjectToPlate(int targetPlateIndex);
+  /// 按源索引跨盘移动整个对象，不依赖当前盘选择（上面选择版只能选当前盘
+  /// 对象列表内的成员）。同时把世界位置按盘网格偏移平移到目标盘打印区
+  /// 内（仅改归属会把对象留在源盘区域，落入 outside 检查导致盘不可切片）。
+  /// 不入 undo 栈（与选择版一致）；AI move_objects_to_plate 工具走此入口。
+  Q_INVOKABLE bool moveObjectsToPlate(const QList<int> &sourceIndices, int targetPlateIndex);
   /// 平板缩略图颜色（Mock 模式：基于平板对象数生成独特颜色，对齐上游 PartPlate thumbnail）
   Q_INVOKABLE QString plateThumbnailColor(int plateIndex) const;
   // Phase 98 (THUMBVERIFY-01): persisted-thumbnail accessor for QML. Empty

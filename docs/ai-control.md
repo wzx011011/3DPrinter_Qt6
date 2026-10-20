@@ -36,12 +36,16 @@ EditorViewModel / ConfigViewModel / SliceService / ProjectServiceMock
   （Claude Code / Cursor / 任意 MCP 客户端），同一 McpHttpServer 直接可用，
   工具层零改动。
 
-## 工具面（AppToolRegistry，v1 = 25 个）
+## 工具面（AppToolRegistry，v2 = 29 个）
 
 - 查询：`get_app_state` `get_scene` `get_plate_info` `get_slice_status`
   `get_object_info` `list_config_keys`（含当前值/类型/枚举/范围）
 - 场景：`load_model` `delete_object`(⚠) `duplicate_object`
   `set_object_transform` `arrange_objects` `orient_objects`
+- 平盘（多盘操作，2026-10-20 v2 新增）：`select_plate`（切片中拒绝）
+  `create_plate`（undoable）`delete_plate`(⚠，末盘不可删) 
+  `move_objects_to_plate`（按索引跨盘移动，世界位置按盘网格偏移平移到
+  目标盘打印区内保持可切片；不入 undo，描述已注明）
 - 配置：`set_config_value`（走 ConfigViewModel::setValue 同一管线）
   `select_preset`
 - 切片（异步，轮询 `get_slice_status`）：`slice_plate` `slice_all_plates`
@@ -181,3 +185,30 @@ main() 里经 QLibrary 动态初始化（静态链接会在部分机器上 pre-m
 load_model 工具卡（✓ + "test_cube.stl 已加载"）；delete_object 权限卡
 （"将删除第 1 个对象，可撤销" + 拒绝/允许）拒绝全链路（卡收敛为"已拒绝"
 灰条、忙碌条消失、AI 回复确认）；✕ 关闭 + 重开 pageReady 历史回放完整。
+
+## 多盘操作工具（2026-10-20，v2）
+
+MP1-MP10 多盘落地后工具面只读不写（能看 plateCount/归属，不能操作）。
+v2 补 4 个操作工具，位置平移语义放在 VM 层新入口
+`EditorViewModel::moveObjectsToPlate(QList<int>, int)`（AI 工具仍是薄包装）：
+仅改归属会把对象留在源盘网格区域、落入 outside 检查使盘不可切片，故移动时
+按 `PartPlateGridLayout::gridOffset`（渲染器同一公式，AXES-ROT 场景 X/Z）
+平移世界位置，并对源/目标盘做切片结果失效 + 条目重建。选择版
+`moveSelectedObjectToPlate` 受当前盘对象列表限制，跨盘索引版与其并存。
+回归锁定：`AppToolTests::plateToolsRoundTrip`（创建/选盘/移动含网格平移与
+就绪断言/幂等/坏参数门/末盘保护）。
+
+### v2 真机验收（2026-10-21）
+
+- 运行中的应用经 MCP loopback（`build/ai_acceptance.ps1`，token 走注册表）
+  实测 29 工具：create_plate → select_plate → move_objects_to_plate
+  （position (0,0,0)→(360,0,0)，步距 = 床 300 × 1.2）→ get_plate_info
+  readyForSlice=true → delete_plate，全链路 PASS。注意盘网格平移量的床宽
+  取 VM bedWidth/bedDepth（渲染器同源）；PartPlateList 的尺寸副本只有
+  arrange/3MF 路径才被喂，裸会话为 0——首测平移量为 0 即此因，已修。
+- `AppToolTests` 11/0、`QmlSmokeTests` 27/0、切片门禁（正确性+效率+步骤
+  画像）全绿。
+- GLM 真回合未跑成：提供的 key 在大模型开放平台两套端点均返回
+  1113"余额不足或无可用资源包"（含 coding 端点、多模型矩阵），非限流。
+  待充值/续资源包或换 key 后，用 `build/ai_glm_turn.py`（sidecar 独立进程
+  驱动，密钥走注册表不落日志）补一轮即可。

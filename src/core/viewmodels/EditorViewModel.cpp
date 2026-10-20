@@ -10108,6 +10108,72 @@ bool EditorViewModel::canMoveSelectionToPlate(int targetPlateIndex) const
   return false;
 }
 
+bool EditorViewModel::moveObjectsToPlate(const QList<int> &sourceIndices, int targetPlateIndex)
+{
+  if (!projectService_ || targetPlateIndex < 0 || targetPlateIndex >= plateCount())
+    return false;
+
+  QList<int> indices;
+  QSet<int> seen;
+  for (int idx : sourceIndices)
+  {
+    if (idx < 0 || idx >= projectService_->modelCount())
+      return false;
+    if (!seen.contains(idx))
+    {
+      seen.insert(idx);
+      indices.append(idx);
+    }
+  }
+  if (indices.isEmpty())
+    return false;
+
+  // Grid layout follows the shared PartPlateGridLayout formula (same one the
+  // renderer consumes), so a moved object lands inside the target plate's bed
+  // region. gridOffset's outputs are scene X/Z under the AXES-ROT mapping
+  // (PrepareSceneData::plateGridOffset uses them the same way). Bed extent:
+  // the VM's bedWidth/bedDepth (synced from the printer preset, same source
+  // the renderer grid uses); the plate-list copy only gets fed by arrange/3MF
+  // load, so a fresh session without an arrange still translates correctly.
+  const OWzx::PartPlateList *plates = projectService_->plateListConst();
+  double plateW = bedWidth();
+  double plateD = bedDepth();
+  if (plateW <= 0.0 && plates)
+    plateW = double(plates->plateWidth());
+  if (plateD <= 0.0 && plates)
+    plateD = double(plates->plateDepth());
+  const int plateTotal = projectService_->plateCount();
+
+  std::sort(indices.begin(), indices.end());
+  QSet<int> sourcePlates;
+  for (int idx : indices)
+  {
+    const int sourcePlate = projectService_->plateIndexForObject(idx);
+    if (sourcePlate == targetPlateIndex)
+      continue;  // already a member — idempotent no-op
+    if (sourcePlate >= 0)
+      sourcePlates.insert(sourcePlate);
+
+    double srcX = 0.0, srcY = 0.0, dstX = 0.0, dstY = 0.0;
+    OWzx::PartPlateGridLayout::gridOffset(sourcePlate, plateTotal, plateW, plateD, &srcX, &srcY);
+    OWzx::PartPlateGridLayout::gridOffset(targetPlateIndex, plateTotal, plateW, plateD, &dstX, &dstY);
+    const QVector3D pos = projectService_->objectPosition(idx);
+    projectService_->setObjectPosition(
+        idx, float(pos.x() + (dstX - srcX)), pos.y(), float(pos.z() + (dstY - srcY)));
+    projectService_->setObjectPlateForIndex(idx, targetPlateIndex);
+  }
+
+  for (int sourcePlate : sourcePlates)
+    invalidateSliceResultsForPlate(sourcePlate);
+  invalidateSliceResultsForPlate(targetPlateIndex);
+  rebuildObjectEntriesFromService();
+  ensureValidObjectSelection(true);
+  // S3: cross-plate moves are plate membership, not mesh topology — same
+  // refresh posture as moveSelectedObjectToPlate above.
+  emit stateChanged();
+  return true;
+}
+
 QString EditorViewModel::plateThumbnailColor(int plateIndex) const
 {
   // Mock 模式：基于平板索引生成独特颜色（对齐上游 PartPlate thumbnail 视觉区分）

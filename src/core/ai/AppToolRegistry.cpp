@@ -554,6 +554,121 @@ void AppToolRegistry::buildTools() {
         return AppToolResult::success(d);
       }});
 
+  // ── Plate actions (multi-plate operations) ────────────────────────────────
+  tools_.push_back(AppTool{
+      QStringLiteral("select_plate"),
+      QStringLiteral("Switch the current plate (drives the plate rail, object "
+                     "list and viewport). Refused while a slice is running."),
+      objSchema(
+          {{QStringLiteral("plateIndex"), intProp(QStringLiteral("Plate to make current"))}},
+          {QStringLiteral("plateIndex")}),
+      false,
+      [this](const QJsonObject &args) -> AppToolResult {
+        const int plate = args.value(QStringLiteral("plateIndex")).toInt(-1);
+        if (plate < 0 || plate >= project_->plateCount())
+          return AppToolResult::failure(QStringLiteral("plateIndex out of range"));
+        if (!editor_->setCurrentPlateIndex(plate))
+          return AppToolResult::failure(
+              QStringLiteral("switch rejected (a slice may be running)"));
+        QJsonObject d;
+        d.insert(QStringLiteral("currentPlateIndex"), project_->currentPlateIndex());
+        return AppToolResult::success(d);
+      }});
+
+  tools_.push_back(AppTool{
+      QStringLiteral("create_plate"),
+      QStringLiteral("Append a new empty plate at the end of the plate list "
+                     "(undoable). Returns the new plate's index."),
+      objSchema({}), false,
+      [this](const QJsonObject &) -> AppToolResult {
+        if (!editor_->canAddPlate())
+          return AppToolResult::failure(QStringLiteral("plate limit reached"));
+        const int newIndex = project_->plateCount();
+        if (!editor_->addPlate())
+          return AppToolResult::failure(QStringLiteral("addPlate failed"));
+        QJsonObject d;
+        d.insert(QStringLiteral("plateIndex"), newIndex);
+        d.insert(QStringLiteral("plateCountAfter"), project_->plateCount());
+        d.insert(QStringLiteral("undoable"), true);
+        return AppToolResult::success(d);
+      }});
+
+  tools_.push_back(AppTool{
+      QStringLiteral("delete_plate"),
+      QStringLiteral("Delete one plate and everything on it (undoable). The "
+                     "last remaining plate cannot be deleted."),
+      objSchema(
+          {{QStringLiteral("plateIndex"), intProp(QStringLiteral("Plate to delete"))}},
+          {QStringLiteral("plateIndex")}),
+      true,
+      [this](const QJsonObject &args) -> AppToolResult {
+        const int plate = args.value(QStringLiteral("plateIndex")).toInt(-1);
+        if (!editor_->canDeletePlate(plate))
+          return AppToolResult::failure(
+              QStringLiteral("cannot delete plate %1 (out of range or it is the "
+                             "last plate)").arg(plate));
+        if (!editor_->deletePlate(plate))
+          return AppToolResult::failure(QStringLiteral("deletePlate failed"));
+        QJsonObject d;
+        d.insert(QStringLiteral("deleted"), true);
+        d.insert(QStringLiteral("plateIndex"), plate);
+        d.insert(QStringLiteral("plateCountAfter"), project_->plateCount());
+        d.insert(QStringLiteral("currentPlateIndex"), project_->currentPlateIndex());
+        return AppToolResult::success(d);
+      }});
+
+  tools_.push_back(AppTool{
+      QStringLiteral("move_objects_to_plate"),
+      QStringLiteral("Move whole objects to another plate by object index "
+                     "(regardless of which plate is current). World positions "
+                     "are translated into the target plate's bed region so it "
+                     "stays slice-ready. Not undoable — move back if needed."),
+      objSchema(
+          {{QStringLiteral("indices"),
+            [] {
+              QJsonObject items;
+              items.insert(QStringLiteral("type"), QStringLiteral("integer"));
+              QJsonObject p = prop(QStringLiteral("array"),
+                                   QStringLiteral("Object indices to move (see get_scene)"));
+              p.insert(QStringLiteral("items"), items);
+              return p;
+            }()},
+           {QStringLiteral("plateIndex"), intProp(QStringLiteral("Target plate"))}},
+          {QStringLiteral("indices"), QStringLiteral("plateIndex")}),
+      false,
+      [this](const QJsonObject &args) -> AppToolResult {
+        const QJsonArray rawIndices = args.value(QStringLiteral("indices")).toArray();
+        if (rawIndices.isEmpty())
+          return AppToolResult::failure(QStringLiteral("indices must be a non-empty array"));
+        QList<int> indices;
+        for (const QJsonValue &v : rawIndices)
+          indices.append(v.toInt(-1));
+        const int plate = args.value(QStringLiteral("plateIndex")).toInt(-1);
+        if (plate < 0 || plate >= project_->plateCount())
+          return AppToolResult::failure(QStringLiteral("plateIndex out of range"));
+        QList<int> beforePlates;
+        for (int i : indices)
+          beforePlates.append(project_->plateIndexForObject(i));
+        if (!editor_->moveObjectsToPlate(indices, plate))
+          return AppToolResult::failure(
+              QStringLiteral("move rejected (an index is out of range)"));
+        QJsonArray finalPlates;
+        int movedCount = 0;
+        for (int k = 0; k < indices.size(); ++k)
+        {
+          const int finalPlate = project_->plateIndexForObject(indices.at(k));
+          finalPlates.append(QJsonObject{{QStringLiteral("index"), indices.at(k)},
+                                         {QStringLiteral("plateIndex"), finalPlate}});
+          if (beforePlates.at(k) != plate)
+            ++movedCount;
+        }
+        QJsonObject d;
+        d.insert(QStringLiteral("plateIndex"), plate);
+        d.insert(QStringLiteral("movedCount"), movedCount);
+        d.insert(QStringLiteral("objects"), finalPlates);
+        return AppToolResult::success(d);
+      }});
+
   // ── Config actions ────────────────────────────────────────────────────────
   tools_.push_back(AppTool{
       QStringLiteral("set_config_value"),
