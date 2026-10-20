@@ -5955,7 +5955,12 @@ void RhiViewportRenderer::parsePreviewSegments()
         Vertex v;
         v.x = gx;
         v.y = gz;  // axis swap: GCode z -> scene y
-        v.z = gy;  // GCode y -> scene z
+        v.z = -gy; // AXES-ROT: GCode y -> scene z is a NEGATED swap (the
+                   // line/marker path negates too). The prism build missed
+                   // the sign, mirroring every extrusion solid across z=0:
+                   // near-origin fixtures still landed on the bed (visible),
+                   // anything placed toward the bed middle rendered mirrored
+                   // behind the plate -- invisible.
         v.r = r;
         v.g = g;
         v.b = bb;
