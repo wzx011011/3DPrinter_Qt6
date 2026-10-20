@@ -1537,6 +1537,19 @@ Item {
                     viewport: viewport3d
                 }
 
+                // MP9 (dev plan 多盘 2026-10-20): the Select Plate rail
+                // (upstream ImGui select-plate toolbar, GLCanvas3D.cpp:8909+)
+                // on the canvas' left edge. Layout upstream; brand tokens.
+                SelectPlateRail {
+                    z: 99
+                    anchors.left: parent.left
+                    anchors.leftMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    editorVm: root.editorVm
+                    plateActivated: (plateIndex) =>
+                        viewportArea.handleRailPlateActivated(plateIndex)
+                }
+
                 // ── PLATEICONS-GL (2026-10-10): the per-plate identity
                 // cluster moved INTO the 3D scene. Upstream
                 // PartPlate::render_icons (PartPlate.cpp:1128-1230) draws the
@@ -1550,10 +1563,27 @@ Item {
                 // routes plateIconActivated to the same ViewModel actions the
                 // former QML cluster buttons ran. The screen-space
                 // plateCluster overlay (plateAnchors projection) is retired.
-                function handlePlateIconActivated(plateIndex, iconId) {
+                // MP9 (dev plan 多盘 2026-10-20): Select Plate rail
+                // activation — upstream select_sliced_plate semantics
+                // (Plater.cpp:21184-21202): a sliced plate switches and
+                // jumps to its Preview; an unsliced non-empty plate
+                // switches and starts its slice; an empty plate only
+                // switches. Failed plates stay on 3D (no failure record
+                // yet -- see the rail's deviation note).
+                function handleRailPlateActivated(plateIndex) {
                     if (!root.editorVm || plateIndex < 0)
                         return
-                    // Q2: icon ids dispatch on the GLViewport-exposed alias of
+                    const sliced = root.editorVm.isPlateSliced(plateIndex)
+                    root.editorVm.setCurrentPlateIndex(plateIndex)
+                    if (sliced)
+                        Backend.setCurrentPage(2)
+                    else if (root.editorVm.plateObjectCount(plateIndex) > 0)
+                        root.editorVm.requestSlice()
+                }
+
+                function handlePlateIconActivated(plateIndex, iconId) {
+                    if (!root.editorVm || plateIndex < 0)
+                        return                    // Q2: icon ids dispatch on the GLViewport-exposed alias of
                     // PrepareSceneData::PlateIconId (single source), not magic
                     // numbers.
                     switch (iconId) {
@@ -1692,6 +1722,11 @@ Item {
                     plateIconStates: viewportArea.plateIconStates
                     onPlateIconActivated: (plateIndex, iconId) =>
                         viewportArea.handlePlateIconActivated(plateIndex, iconId)
+                    // MP4 (dev plan 多盘 2026-10-20): plain click on another
+                    // plate's bed surface switches plates (upstream select_plate
+                    // action 0); the VM's B1 guard still refuses mid-slice.
+                    onPlateBodyPicked: (plateIndex) =>
+                        root.editorVm.setCurrentPlateIndex(plateIndex)
                     uniformScale: root.editorVm ? root.editorVm.uniformScale : true
                     meshData: root.editorVm ? root.editorVm.meshData : null
                     bedWidth: root.editorVm ? root.editorVm.bedWidth : 220
@@ -4302,6 +4337,9 @@ Item {
             function onPreviewRequested() { Backend.setCurrentPage(2) }
             // 平板切换或对象变更时请求 GL 缩略图更新（对齐上游 Plater::update_plate_thumbnails）
             function onCurrentPlateIndexChanged() { root.requestGLThumbnail() }
+            // MP5 (dev plan 多盘 2026-10-20): slice-all advance hands the
+            // view to the newly-current plate (upstream select_plate_view).
+            function onSliceAllAdvanced(plateIndex) { viewport3d.requestZoomToPlate(plateIndex) }
             // Phase 156 (CLOS-03): on state change (covers project content
             // changes — arrange/add/move all emit stateChanged), schedule a
             // session-capture sweep for any plate missing a thumbnail. The

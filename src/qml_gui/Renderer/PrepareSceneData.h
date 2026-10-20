@@ -331,7 +331,7 @@ public:
   static PlateIconRect plateIndexBadgeRect(int plateIndex, int plateCount,
                                            float bedWidth, float bedDepth,
                                            float originX, float originY);
-  // ── Q2 (PLATEICONS-WIP): pure decision seams for the icon pipeline ─────
+  // ── Q2 (PLATEICONS): pure decision seams for the icon pipeline ─────
   // The renderer must not hand-roll these conditions: the upload gate and
   // the hover early-exit are the two contracts that used to be "written but
   // never read" (m_plateIconAtlasCacheKey, hit-flag-only hover guard), and

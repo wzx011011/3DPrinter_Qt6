@@ -71,6 +71,7 @@ qt_add_qml_module(owzx_qml
         panels/ChatSidebar.qml
         panels/ObjectListPanel.qml
         components/NavigatorLabels.qml
+        components/SelectPlateRail.qml
         components/ErrorToast.qml
         components/CommandPalette.qml
         components/ErrorBanner.qml

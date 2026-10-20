@@ -560,7 +560,10 @@ Rectangle {
         } else if (row.nodeType === root.nodeInstance) {
             root.editorVm.selectSourceObject(row.sourceObjectIndex)
         } else if (row.nodeType === root.nodePlate) {
-            root.editorVm.setCurrentPlateIndex(row.plateIndex)
+            // MP6 (dev plan 多盘 2026-10-20): the synthetic Outside group
+            // (plateIndex -1) is not a switchable plate.
+            if (row.plateIndex >= 0)
+                root.editorVm.setCurrentPlateIndex(row.plateIndex)
         }
     }
 }

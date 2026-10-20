@@ -404,10 +404,15 @@ Item {
                 // PartPlate.cpp:1242-1273 -- text texture in
                 // wxColour(0xF2,0x75,0x4E) orange, generated per plate at
                 // :4388-4407). Viewport-anchored overlay approximation of
-                // the on-plate 3D label; the gcode deep-link session still
-                // reports plate 0 as the active print.
+                // the on-plate 3D label. MP10 (dev plan 多盘 2026-10-20):
+                // an external-gcode deep-link session has no plate context
+                // (openExternalGcode clears the workspace), so the badge
+                // hides instead of reporting a phantom plate 0.
                 Rectangle {
                     visible: root.hasPreviewData
+                             && root.editorVm
+                             && root.editorVm.plateObjectCount(
+                                    root.editorVm.currentPlateIndex) > 0
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.margins: 18

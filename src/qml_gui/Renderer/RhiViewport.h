@@ -558,7 +558,7 @@ public:
   };
   Q_ENUM(GCodeViewMode)
 
-  // Q2 (PLATEICONS-WIP): QML-facing alias of the single-source icon ids
+  // Q2 (PLATEICONS): QML-facing alias of the single-source icon ids
   // (PrepareSceneData::PlateIconId). Q_ENUM can only expose member enums, so
   // GLViewport re-exports the values as a pure conduit -- every initializer
   // IS the PrepareSceneData enumerator, never a literal, so the ids cannot
@@ -877,7 +877,15 @@ public:
   // Ground-plane hit test against the icon rects. Returns true when the
   // position hits one; plateIndex/iconId receive the hit.
   bool plateIconAt(const QPointF &position, int &plateIndex, int &iconId) const;
+  // MP4 (dev plan 多盘 2026-10-20): ground-plane hit test against a plate's
+  // bed rectangle (upstream LeftUp over a plate body is select_plate action
+  // 0, Plater.cpp:21651-21660). Icon rects keep priority -- callers check
+  // plateIconAt first.
+  bool plateBodyAt(const QPointF &position, int &plateIndex) const;
   void updatePlateIconHover(const QPointF &position);
+  // MP5: fit the camera to the whole plate grid (bed rect inflated by the
+  // grid strides + the icon-column overhang).
+  void fitCameraToPlateGrid();
   // Phase 237 (VIEW-01): orthographic projection toggle (see the
   // orthographicCamera Q_PROPERTY above).
   bool orthographicCamera() const { return m_camera.useOrtho(); }
@@ -891,6 +899,15 @@ public:
   Q_INVOKABLE void requestFitView(float cx, float cy, float cz, float r);
   Q_INVOKABLE void requestPreviewFit();
   Q_INVOKABLE void requestViewPreset(int preset);
+  // MP5 (dev plan 多盘 2026-10-20): upstream zoom-to-plate trio semantics.
+  // requestFitAllPlates = REQUIRES_ZOOM_TO_ALL_PLATE (Plater.cpp:12812,
+  // fired after add_plate); requestZoomToPlate = select_plate_view
+  // (PartPlate.cpp:6057-6065, topfront look at one plate -- slice-all
+  // advances). The add-plate case is also self-wired: setPlateCount sees
+  // the count increase and defers a grid fit (below), so every plate-adding
+  // path (toolbar, menu, arrange overflow) gets the zoom.
+  Q_INVOKABLE void requestFitAllPlates();
+  Q_INVOKABLE void requestZoomToPlate(int plateIndex);
   // GAP-4 (upstream KBShortcutsDialog.cpp:262-263 "I"/"O" = Zoom in/out):
   // centered keyboard zoom through the same Camera::zoom path the wheel
   // uses (CameraController::zoom, upstream update_zoom Camera.cpp:83 with
@@ -943,6 +960,9 @@ signals:
   void plateIconStatesChanged();
   void plateIconHoverChanged();
   void plateIconActivated(int plateIndex, int iconId);
+  // MP4: a plain left click on another plate's (icon-free) bed surface;
+  // QML routes it to setCurrentPlateIndex (upstream action 0).
+  void plateBodyPicked(int plateIndex);
   // S6: the darkTheme Q_PROPERTY NOTIFY — re-emitted per instance when the
   // shared ThemeState flips (this item re-rasters its atlas in the handler).
   void darkThemeChanged();
@@ -1279,6 +1299,10 @@ private:
   int m_currentPlateBedType = 0;
   int m_currentPlateIndex = 0;
   int m_plateCount = 1;
+  // MP5: deferred REQUIRES_ZOOM_TO_ALL_PLATE latch -- consumed on the GUI
+  // thread after the QML property batch settles (singleShot), so the fit
+  // sees the final bed/plate geometry regardless of binding order.
+  bool m_zoomToAllPlatesPending = false;
   QVariantList m_activePlateObjectIndices;
   QVariantList m_meshBatchSourceObjectIndices;
   QVariantList m_meshBatchVolumeIndices;

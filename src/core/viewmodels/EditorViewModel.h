@@ -71,6 +71,12 @@ class EditorViewModel final : public QObject
   /// dialog.closed manual refresh layers -- a plateChanged emission (relay or
   /// VM-local) re-evaluates the binding.
   Q_PROPERTY(QVariantList plateIconStates READ plateIconStates NOTIFY plateChanged)
+  // MP9 (dev plan 多盘 2026-10-20): Select Plate rail entries (upstream
+  // _update_imgui_select_plate_toolbar, GLCanvas3D.cpp:7022+) -- thumbnail,
+  // sliced state, object count, lock, current. Rides the same plateChanged
+  // carrier as plateIconStates (thumbnail writes, plate switches, and --
+  // wired with the rail -- slice start/finish all emit it).
+  Q_PROPERTY(QVariantList plateRailModel READ plateRailModel NOTIFY plateChanged)
   /// Current plate's session thumbnail as base64 (PreviewPage plate card).
   /// Property-ized (S1) with the same plateChanged carrier: thumbnail cache
   /// writes emit plateChanged from the VM write paths.
@@ -312,6 +318,7 @@ public:
   QVariantList activePlateObjectIndices() const;
   // S1 plate cluster property getters (see the Q_PROPERTY block).
   QVariantList plateIconStates() const;
+  QVariantList plateRailModel() const;
   QString currentPlateThumbnailBase64() const;
   QVariantList meshBatchSourceObjectIndices() const;
   QVariantList meshBatchVolumeIndices() const;
@@ -2110,6 +2117,11 @@ signals:
   /// the per-switch GL-thumbnail re-request (PreparePage
   /// onCurrentPlateIndexChanged) does not fire on every plate-scoped edit.
   void currentPlateIndexChanged();
+  /// MP5 (dev plan 多盘 2026-10-20): slice-all advanced to the next plate
+  /// (upstream on_process_completed -> select_plate + select_plate_view,
+  /// Plater.cpp:12761-12782) -- the viewport answers with a topfront
+  /// zoom onto that plate.
+  void sliceAllAdvanced(int plateIndex);
   void sceneTopologyChanged();
   void busyStateChanged();
   void paintDataChanged();

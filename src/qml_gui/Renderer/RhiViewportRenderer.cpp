@@ -223,6 +223,19 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   batchSourceObjectIndices.reserve(viewport->m_meshBatchSourceObjectIndices.size());
   for (const QVariant &value : viewport->m_meshBatchSourceObjectIndices)
     batchSourceObjectIndices.append(value.toInt());
+  // MP3 (dev plan 多盘 2026-10-20): the prepare canvas renders every
+  // plate's objects (upstream draws all plates side by side -- only the
+  // plate beds differ, PartPlateList::render walks the full list). The
+  // preview canvas keeps the active-plate scope: upstream preview is
+  // only_current (GLCanvas3D.cpp:2090-2095) and its ghost shells must not
+  // gain the other plates' models.
+  QList<int> renderSources = activeObjectIndices;
+  if (viewport->m_previewData.isEmpty()) {
+    renderSources.clear();
+    for (int source : batchSourceObjectIndices)
+      if (source >= 0 && !renderSources.contains(source))
+        renderSources.append(source);
+  }
   QList<int> batchVolumeIndices;
   batchVolumeIndices.reserve(viewport->m_meshBatchVolumeIndices.size());
   for (const QVariant &value : viewport->m_meshBatchVolumeIndices)
@@ -389,7 +402,7 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
                                     batchSourceObjectIndices,
                                     batchVolumeIndices,
                                     batchInstanceIndices,
-                                    activeObjectIndices,
+                                    renderSources,
                                     batchVolumeTypes,
                                     batchExtruderIds,
                                     batchPrintableFlags,
@@ -2424,7 +2437,7 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
         QRhiTexture::RGBA8, m_bedTextureImage.size(),
         1, QRhiTexture::MipMapped | QRhiTexture::UsedWithGenerateMips));
     if (!m_bedTexture->create()) {
-      fprintf(stderr, "[TEX-DIAG] texture create FAILED\n");
+      qWarning("[BEDTEX] texture create failed");
       m_bedTexture.reset();
       return false;  // keeps the channel pending; the next frame retries
     }
@@ -2432,7 +2445,7 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
         QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::Linear,
         QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
     if (!m_bedTextureSampler->create()) {
-      fprintf(stderr, "[TEX-DIAG] sampler create FAILED\n");
+      qWarning("[BEDTEX] sampler create failed");
       m_bedTextureSampler.reset();
       m_bedTexture.reset();
       return false;
@@ -2480,7 +2493,7 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
   updates->uploadStaticBuffer(m_bedTextureVertexBuffer.get(), 0, bytes, quad.constData());
   m_bedTextureVertexCount = quint32(quad.size());
   if (rhiPreviewPerfEnabled())
-    fprintf(stderr, "[TEX-DIAG] quad rebuilt verts=%u hoverY=%.3f rect=(%.1f,%.1f)-(%.1f,%.1f)\n",
+    fprintf(stderr, "[RHI-PERF] bed quad rebuilt verts=%u hoverY=%.3f rect=(%.1f,%.1f)-(%.1f,%.1f)\n",
             m_bedTextureVertexCount, hoverY, left, top, right, bottom);
   return true;
 }
@@ -2498,11 +2511,6 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
     return;
   if (!ensureBedTexturePipeline())
     return;
-  static bool drawnOnce = false;
-  if (!drawnOnce) {
-    drawnOnce = true;
-    fprintf(stderr, "[TEX-DIAG] render DRAW verts=%u\n", m_bedTextureVertexCount);
-  }
   cb->setGraphicsPipeline(m_bedTexturePipeline.get());
   cb->setShaderResources(m_bedTextureSrb.get());
   const QRhiCommandBuffer::VertexInput binding(m_bedTextureVertexBuffer.get(), 0);

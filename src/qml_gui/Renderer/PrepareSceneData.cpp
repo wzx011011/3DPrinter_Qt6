@@ -645,9 +645,13 @@ void PrepareSceneData::setModelMeshData(const QByteArray &meshData,
   }
 
   m_meshGeneration = meshData.size();
-  // Functional source-truth mapping: upstream GLCanvas3D/PartPlate render only
-  // current plate model volumes. QRhi keeps transport-specific buffers separate
-  // from this source-object-aware scene contract.
+  // Functional source-truth mapping: upstream renders every plate's volumes
+  // side by side on the 3D canvas (PartPlateList::render walks all plates;
+  // the preview canvas is the only_current exception, GLCanvas3D.cpp:2090).
+  // Which subset reaches the GPU is the caller's decision -- the prepare
+  // renderer passes every source, the pick/preview scenes stay scoped to
+  // the active plate. QRhi keeps transport-specific buffers separate from
+  // this source-object-aware scene contract.
   markDirty(DirtyMesh | DirtyGpu);
 }
 
@@ -1111,7 +1115,7 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateIndexBadgeRect(
   return rect;
 }
 
-// ── Q2 (PLATEICONS-WIP): pure decision seams (see PrepareSceneData.h) ────────
+// ── Q2 (PLATEICONS): pure decision seams (see PrepareSceneData.h) ────────
 PrepareSceneData::PlateIconAtlasUpload PrepareSceneData::plateIconAtlasUploadDecision(
     quint64 pendingCacheKey, quint64 uploadedCacheKey,
     bool textureValid, const QSize &textureSize, const QSize &atlasSize)
@@ -1815,6 +1819,39 @@ void PrepareSceneData::recomputeOutsideState()
     }
   }
 
+  // MP3 (dev plan 多盘 2026-10-20): the prepare canvas renders every
+  // plate's objects, so "inside" = fully inside ANY plate's print volume
+  // (upstream membership is intersect_instance against the plates;
+  // instances parked beyond every plate -- the dock -- warn). A
+  // single-plate scene degenerates to the previous single-volume check.
+  const int plateCount = m_plateCount > 0 ? m_plateCount : 1;
+  struct PlateVolume
+  {
+    bool circle = false;
+    float x0 = 0.0f, z0 = 0.0f, x1 = 0.0f, z1 = 0.0f;  // padded rect
+    float cx = 0.0f, cz = 0.0f, r = 0.0f;              // padded circle
+  };
+  PlateVolume plates[OWzx::kMaxPlateCount];
+  for (int p = 0; p < plateCount && p < OWzx::kMaxPlateCount; ++p) {
+    float offX = 0.0f;
+    float offY = 0.0f;
+    plateGridOffset(p, plateCount, m_bedWidth, m_bedDepth, offX, offY);
+    PlateVolume &vol = plates[p];
+    if (m_bedShapeType == 1) {
+      vol.circle = true;
+      vol.cx = m_bedOriginX + offX + m_bedWidth * 0.5f;
+      vol.cz = m_bedOriginY + offY + m_bedDepth * 0.5f;
+      vol.r = m_bedDiameter * 0.5f + kSceneEpsilon;
+    } else {
+      // Same rect rebuildBedGeometry draws: z spans [origin' + offY,
+      // +depth] (setBed already normalized origin' to the scene far edge).
+      vol.x0 = m_bedOriginX + offX - kSceneEpsilon;
+      vol.z0 = m_bedOriginY + offY - kSceneEpsilon;
+      vol.x1 = m_bedOriginX + offX + m_bedWidth + kSceneEpsilon;
+      vol.z1 = m_bedOriginY + offY + m_bedDepth + kSceneEpsilon;
+    }
+  }
+
   for (auto it = instances.constBegin(); it != instances.constEnd(); ++it) {
     const InstanceBounds &inst = it.value();
     // Below the print bed (volume_state_bbox first clause).
@@ -1822,36 +1859,33 @@ void PrepareSceneData::recomputeOutsideState()
       m_anyVolumeOutside = true;
       break;
     }
-    if (m_printVolume.type == 1) {
-      const float cx = m_printVolume.xyData.x();
-      const float cz = m_printVolume.xyData.y();
-      const float r = m_printVolume.xyData.z();
-      const float cornersX[4] = {inst.box.minX, inst.box.maxX, inst.box.minX, inst.box.maxX};
-      const float cornersZ[4] = {inst.box.minZ, inst.box.minZ, inst.box.maxZ, inst.box.maxZ};
-      bool allInside = true;
-      for (int c = 0; c < 4 && allInside; ++c) {
-        const float d2 = (cornersX[c] - cx) * (cornersX[c] - cx)
-            + (cornersZ[c] - cz) * (cornersZ[c] - cz);
-        allInside = d2 <= r * r;
+    const bool heightOk = inst.box.maxY <= m_printVolume.zMax;
+    // Inside only when contained; Colliding and Outside both count as
+    // "not inside" for the error background.
+    bool insideAny = false;
+    for (int p = 0; p < plateCount && p < OWzx::kMaxPlateCount && !insideAny; ++p) {
+      const PlateVolume &vol = plates[p];
+      if (vol.circle) {
+        const float cornersX[4] = {inst.box.minX, inst.box.maxX, inst.box.minX, inst.box.maxX};
+        const float cornersZ[4] = {inst.box.minZ, inst.box.minZ, inst.box.maxZ, inst.box.maxZ};
+        bool allInside = true;
+        for (int c = 0; c < 4 && allInside; ++c) {
+          const float d2 = (cornersX[c] - vol.cx) * (cornersX[c] - vol.cx)
+              + (cornersZ[c] - vol.cz) * (cornersZ[c] - vol.cz);
+          allInside = d2 <= vol.r * vol.r;
+        }
+        insideAny = allInside && heightOk;
+      } else {
+        insideAny = inst.box.minX >= vol.x0
+            && inst.box.minZ >= vol.z0
+            && inst.box.maxX <= vol.x1
+            && inst.box.maxZ <= vol.z1
+            && heightOk;
       }
-      const bool heightOk = inst.box.maxY < m_printVolume.zMax + kSceneEpsilon;
-      // Inside only when contained; Colliding and Outside both count as
-      // "not inside" for the error background.
-      if (!(allInside && heightOk)) {
-        m_anyVolumeOutside = true;
-        break;
-      }
-    } else {
-      const bool insideRect =
-          inst.box.minX >= m_printVolume.xyData.x()
-          && inst.box.minZ >= m_printVolume.xyData.y()
-          && inst.box.maxX <= m_printVolume.xyData.z()
-          && inst.box.maxZ <= m_printVolume.xyData.w()
-          && inst.box.maxY <= m_printVolume.zMax;
-      if (!insideRect) {
-        m_anyVolumeOutside = true;
-        break;
-      }
+    }
+    if (!insideAny) {
+      m_anyVolumeOutside = true;
+      break;
     }
   }
 }

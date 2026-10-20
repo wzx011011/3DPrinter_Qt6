@@ -479,6 +479,10 @@ signals:
                           int paintState,
                           int smartFill);
   void plateIconActivated(int plateIndex, int iconId);
+  // MP4 (dev plan 多盘 2026-10-20): RhiViewport signal mirror -- the page
+  // binds onPlateBodyPicked on whichever viewport hosts it, and the
+  // SoftwareViewport fallback must not abort the page at startup.
+  void plateBodyPicked(int plateIndex);
   void smartFillPickRequested(QVector3D worldOrigin,
                               QVector3D worldDirection,
                               QVector3D cameraForward,

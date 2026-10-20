@@ -99,6 +99,8 @@ private slots:
   // P15.3 (OUTOFBED): print volume uniforms + error-background state
   // (gouraud.fs:154-171 data, GLCanvas3D.cpp:7069-7097).
   void printVolumeUniformAndErrorBackgroundState();
+  // MP3: multi-plate outside classification against any plate.
+  void multiPlateOutsideStateClassifiesAgainstAnyPlate();
   // P15.5 (SINK): bed-plane contour bands of sinking batches
   // (3DScene.cpp:108-161).
   void sinkingContoursSliceSinkingBatchesAtBedPlane();
@@ -793,6 +795,44 @@ void PrepareSceneDataTests::printVolumeUniformAndErrorBackgroundState()
                              QList<QVector4D>{QVector4D(1.0f, 0.0f, 0.0f, 1.0f)});
   QVERIFY2(!modifiers.anyVolumeOutside(),
            "negative volumes must not participate in the outside check");
+}
+
+// MP3 (dev plan 多盘 2026-10-20): with every plate's objects rendered, the
+// error background classifies each instance against ANY plate's print
+// volume (upstream membership = intersect_instance over the plates); an
+// object parked beyond the whole grid warns like the dock does.
+void PrepareSceneDataTests::multiPlateOutsideStateClassifiesAgainstAnyPlate()
+{
+  PrepareSceneData scene;
+  scene.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
+  // Two plates -> compute_colum_count(2) = 2 columns, so plate 1 sits one
+  // stride right of plate 0 (stride = 220 * 1.2 = 264): x in [264, 484].
+  scene.setPlateContext(0, 2, {});
+
+  auto triangleAt = [](float x0, float z0, float x1, float z1) {
+    return QList<float>{x0, 0.0f, z0, x1, 0.0f, z0, x0, 10.0f, z1};
+  };
+  const auto setSingleObject = [&scene](const QByteArray &mesh) {
+    scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0},
+                           QList<int>{0}, QList<int>{0});
+  };
+
+  // Object fully on plate 1 (the NON-current plate) -> no error background.
+  setSingleObject(packedMeshWithBatches(
+      QList<int>{1}, QList<QList<float>>{triangleAt(280.0f, -10.0f, 300.0f, -40.0f)}));
+  QVERIFY2(!scene.anyVolumeOutside(),
+           "an instance parked on another plate is a member of that plate, not outside");
+
+  // Object beyond the whole grid -> error background (the dock warning).
+  setSingleObject(packedMeshWithBatches(
+      QList<int>{1}, QList<QList<float>>{triangleAt(500.0f, -10.0f, 520.0f, -40.0f)}));
+  QVERIFY2(scene.anyVolumeOutside(),
+           "an instance beyond every plate must turn the background red");
+
+  // Object fully on plate 0 still classifies inside.
+  setSingleObject(packedMeshWithBatches(
+      QList<int>{1}, QList<QList<float>>{triangleAt(10.0f, -10.0f, 30.0f, -40.0f)}));
+  QVERIFY2(!scene.anyVolumeOutside(), "single-plate behavior must not regress");
 }
 
 // P15.5 (SINK): sinking batches (bbox dips under the bed without being fully

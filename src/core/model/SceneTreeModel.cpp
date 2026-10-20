@@ -147,6 +147,27 @@ void SceneTreeModel::rebuild()
         buildObjectChildren(objectNode, sourceObjectIndex, p);
       }
     }
+    // MP6 (dev plan 多盘 2026-10-20): upstream keeps a fixed "Outside"
+    // group after the plates (ObjectDataViewModel.cpp:539) so docked /
+    // unprintable objects stay reachable in the list; without it they
+    // vanish entirely. The synthetic group carries plateIndex -1.
+    if (plateCount > 0)
+    {
+      QList<int> outsideObjects;
+      for (int idx = 0; idx < m_service->modelCount(); ++idx)
+        if (m_service->plateIndexForObject(idx) < 0)
+          outsideObjects.append(idx);
+      if (!outsideObjects.isEmpty())
+      {
+        Node *outsideNode = makeNode(NodePlate, m_root, m_root->children.size());
+        outsideNode->plateIndex = -1;
+        for (int sourceObjectIndex : outsideObjects)
+        {
+          Node *objectNode = makeNode(NodeObject, outsideNode, outsideNode->children.size());
+          buildObjectChildren(objectNode, sourceObjectIndex, -1);
+        }
+      }
+    }
   }
 
   endResetModel();
@@ -253,6 +274,10 @@ QVariant SceneTreeModel::data(const QModelIndex &index, int role) const
     switch (node->type)
     {
     case NodePlate:
+      // MP6: the synthetic dock group (plateIndex -1) keeps upstream's
+      // fixed label (_L("Outside"), ObjectDataViewModel.cpp:539).
+      if (node->plateIndex < 0)
+        return QStringLiteral("Outside");
       return m_viewModel ? m_viewModel->plateName(node->plateIndex) : QString();
     case NodeObject:
       return m_service->objectNames().value(node->sourceObjectIndex);

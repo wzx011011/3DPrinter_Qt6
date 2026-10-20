@@ -5940,6 +5940,11 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       m_previewReusedPreviousGcode = false;
         statusText_ = message;
         emit stateChanged(); });
+  // MP9 (dev plan 多盘 2026-10-20): the Select Plate rail's per-plate
+  // badges (slicing spinner / sliced check) ride the plate cluster
+  // carrier -- slice start/stop changes the current plate's badge state.
+  connect(sliceService_, &SliceService::sliceStateChanged, this, [this]()
+          { emit plateChanged(); });
   // U14: the duration label stays in SliceService's per-plate record (the
   // worker fills estimatedTimeLabel_ before this signal); the VM no longer
   // keeps its own copy. sliceEstimatedTime() reads the active record.
@@ -5952,6 +5957,8 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       m_stalePlateIndices.remove(m_sliceResultPlateIndex);
       if (projectService_ && projectService_->currentPlateIndex() == m_sliceResultPlateIndex)
         sliceService_->activatePlateResult(m_sliceResultPlateIndex);
+      // MP9: the rail's SLICED badge appears now.
+      emit plateChanged();
     }
     if (m_slicingAll && !m_sliceAllQueue.isEmpty())
     {
@@ -6357,6 +6364,37 @@ QVariantList EditorViewModel::plateIconStates() const
     states.append(state);
   }
   return states;
+}
+
+// MP9 (dev plan 多盘 2026-10-20): the Select Plate rail's per-plate entries.
+// The upstream ImGui rail drives itself from the per-plate slice state
+// machine (SliceState + thumbnail textures); the Qt side reads the same
+// facts from the plate cluster (PartPlate thumbnails via
+// plateThumbnailBase64, m_slicedPlateIndices via isPlateSliced, the busy
+// slice from SliceService::slicing on the current plate).
+QVariantList EditorViewModel::plateRailModel() const
+{
+  QVariantList model;
+  if (!projectService_)
+    return model;
+  const int count = projectService_->plateCount();
+  model.reserve(count);
+  const bool slicing = sliceService_ && sliceService_->slicing();
+  for (int i = 0; i < count; ++i)
+  {
+    QVariantMap entry;
+    entry.insert(QStringLiteral("index"), i);
+    entry.insert(QStringLiteral("name"), plateName(i));
+    entry.insert(QStringLiteral("locked"), isPlateLocked(i));
+    entry.insert(QStringLiteral("sliced"), isPlateSliced(i));
+    entry.insert(QStringLiteral("objectCount"), plateObjectCount(i));
+    entry.insert(QStringLiteral("current"), i == projectService_->currentPlateIndex());
+    entry.insert(QStringLiteral("slicing"),
+                 slicing && i == projectService_->currentPlateIndex());
+    entry.insert(QStringLiteral("thumb"), plateThumbnailBase64(i));
+    model.append(entry);
+  }
+  return model;
 }
 
 // PreviewPage plate-card thumbnail, property-ized with the same carrier.
@@ -11729,6 +11767,9 @@ void EditorViewModel::continueSliceAllQueue()
   const int plate = m_sliceAllQueue.takeFirst();
   statusText_ = tr("正在切片平板 %1/%2...").arg(plate + 1).arg(plate + m_sliceAllQueue.size() + 1);
   emit stateChanged();
+  // MP5: every slice-all advance hands the view to the new plate (upstream
+  // select_plate_view after each plate completes).
+  emit sliceAllAdvanced(plate);
   if (sliceService_)
     sliceService_->startSlicePlate(plate);
 }

@@ -401,12 +401,27 @@ void RhiViewport::setPlateCount(int value)
 {
   if (m_plateCount == value)
     return;
+  // MP5 (dev plan 多盘 2026-10-20): a count INCREASE means a plate was
+  // added -- upstream latches REQUIRES_ZOOM_TO_ALL_PLATE (Plater.cpp:12812)
+  // and the render loop consumes it. Here a zero-shot timer plays the
+  // render-loop role so the fit runs after the whole property batch (bed
+  // size included) settles. Decreases (delete/load-shrink) never re-fit.
+  const bool addedPlate = value > m_plateCount;
   m_plateCount = value;
   ++m_sceneGeneration;
   ++m_modelGeneration;
   update();
   // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
   rebuildPlateIcons();
+  if (addedPlate && !m_zoomToAllPlatesPending) {
+    m_zoomToAllPlatesPending = true;
+    QTimer::singleShot(0, this, [this]() {
+      if (!m_zoomToAllPlatesPending)
+        return;
+      m_zoomToAllPlatesPending = false;
+      fitCameraToPlateGrid();
+    });
+  }
 }
 
 void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)
@@ -914,6 +929,65 @@ void RhiViewport::requestFitView(float cx, float cy, float cz, float r)
   emit navigatorLabelsChanged();
 }
 
+// MP5 (dev plan 多盘 2026-10-20): shared grid fit -- the bed rect inflated
+// by the plate-grid strides (gap 1/5, stride = size * 1.2, PartPlate.hpp:38
+// compute_colum_count) plus the ~4.5% icon-column overhang. A single-plate
+// scene degenerates to the plain bed rect the preset always used.
+void RhiViewport::fitCameraToPlateGrid()
+{
+  const int plateCount = qMax(1, m_plateCount);
+  const int columns = OWzx::compute_colum_count(plateCount);
+  const int rows = (plateCount + columns - 1) / columns;
+  const float bedW = qMax(1.0f, m_bedShapeType == 1 ? m_bedDiameter : m_bedWidth);
+  const float bedD = qMax(1.0f, m_bedShapeType == 1 ? m_bedDiameter : m_bedDepth);
+  const float w = (bedW + float(columns - 1) * bedW * 1.2f) * 1.045f;
+  const float d = bedD + float(rows - 1) * bedD * 1.2f;
+  if (m_bedShapeType == 1 && plateCount <= 1)
+  {
+    m_camera.fitView(m_bedOriginX, 0.f, -m_bedOriginY, bedW * 0.5f);
+    m_cameraDirty = true;
+    update();
+    emit navigatorLabelsChanged();
+    return;
+  }
+  m_camera.fitView(m_bedOriginX + w * 0.5f, 0.f,
+                   -(m_bedOriginY + d * 0.5f),
+                   0.5f * std::sqrt(w * w + d * d));
+  m_cameraDirty = true;
+  update();
+  emit navigatorLabelsChanged();
+}
+
+void RhiViewport::requestFitAllPlates()
+{
+  fitCameraToPlateGrid();
+  ++m_fitRequestCount;
+}
+
+// MP5: upstream select_plate_view (PartPlate.cpp:6057-6065) -- look at one
+// plate from the topfront angle. Slice-all advances fire this so each
+// finished plate hands the view to the next (Plater.cpp:12761-12782).
+void RhiViewport::requestZoomToPlate(int plateIndex)
+{
+  const int count = qMax(1, m_plateCount);
+  if (plateIndex < 0 || plateIndex >= count)
+    return;
+  float offX = 0.0f;
+  float offY = 0.0f;
+  PrepareSceneData::plateGridOffset(plateIndex, count, m_bedWidth, m_bedDepth,
+                                    offX, offY);
+  const float w = qMax(1.0f, m_bedWidth);
+  const float d = qMax(1.0f, m_bedDepth);
+  m_camera.viewPlate();
+  m_camera.fitView(m_bedOriginX + w * 0.5f + offX, 0.f,
+                   -(m_bedOriginY + d * 0.5f) + offY,
+                   0.5f * std::sqrt(w * w + d * d));
+  m_cameraDirty = true;
+  ++m_fitRequestCount;
+  update();
+  emit navigatorLabelsChanged();
+}
+
 void RhiViewport::requestPreviewFit()
 {
   if (m_canvasType != CanvasPreview) {
@@ -1000,23 +1074,13 @@ void RhiViewport::selectView(const QString &direction)
   {
     // zoom_to_bed equivalent: fit the camera to the bed rectangle. The bed
     // lives in the GL XZ plane (Y up); bedOriginX/bedOriginY are raw slic3r
-    // X/Y, and scene Z negates slic3r Y (AXES-ROT rotation mapping). The
-    // fit includes the bed icon column overhang (~2.2% of the width) so the
-    // upstream plate icon strip stays in frame (icons hang just outside the
-    // bed edge, PartPlate.cpp:641-655).
-    const float w = qMax(1.0f, m_bedWidth) * 1.045f;
-    const float d = qMax(1.0f, m_bedDepth);
-    if (m_bedShapeType == 1)
-    {
-      const float radius = qMax(1.0f, m_bedDiameter);
-      m_camera.fitView(m_bedOriginX, 0.f, -m_bedOriginY, radius * 0.5f);
-    }
-    else
-    {
-      m_camera.fitView(m_bedOriginX + w * 0.5f, 0.f,
-                       -(m_bedOriginY + d * 0.5f),
-                       0.5f * std::sqrt(w * w + d * d));
-    }
+    // X/Y, and scene Z negates slic3r Y (AXES-ROT rotation mapping).
+    // MP5 (dev plan 多盘 2026-10-20): with several plates the preset fits
+    // the WHOLE grid (upstream zoom_to_bed expands the PartPlateList box,
+    // GLCanvas3D.cpp:1741-1743); the shared math lives in
+    // fitCameraToPlateGrid, which also keeps the icon column overhang
+    // (~2.2% of the width, PartPlate.cpp:641-655) in frame.
+    fitCameraToPlateGrid();
   }
   m_viewPreset = 3; // isometric family; legacy int preset stays for GLToolbars
   m_cameraDirty = true;
@@ -1601,6 +1665,39 @@ bool RhiViewport::plateIconAt(const QPointF &position, int &plateIndex,
         iconId = icon;
         return true;
       }
+    }
+  }
+  return false;
+}
+
+  // MP4 (dev plan 多盘 2026-10-20): ground hit against a plate's bed rect
+  // (upstream LeftUp on a plate body = select_plate action 0), mirroring
+  // rebuildBedGeometry's rect: scene far edge + the grid offset's direct
+  // additive. Circle beds use the bounding rect -- the icon column lives
+  // inside it either way.
+  bool RhiViewport::plateBodyAt(const QPointF &position, int &plateIndex) const
+{
+  plateIndex = -1;
+  if (m_canvasType != CanvasView3D || !m_showBed || m_plateCount <= 0)
+    return false;
+  const float aspect = height() > 0 ? float(width()) / float(height()) : 1.0f;
+  QVector3D hit;
+  if (!CameraController::groundPointOnPlane(cameraMvp(aspect),
+                                            QSizeF(width(), height()),
+                                            position, &hit))
+    return false;
+  const float zFar = -(m_bedOriginY + m_bedDepth);
+  for (int p = 0; p < m_plateCount; ++p) {
+    float offX = 0.0f;
+    float offY = 0.0f;
+    PrepareSceneData::plateGridOffset(p, m_plateCount, m_bedWidth, m_bedDepth,
+                                      offX, offY);
+    const float x0 = m_bedOriginX + offX;
+    const float z0 = zFar + offY;
+    if (hit.x() >= x0 && hit.x() <= x0 + m_bedWidth
+        && hit.z() >= z0 && hit.z() <= z0 + m_bedDepth) {
+      plateIndex = p;
+      return true;
     }
   }
   return false;
@@ -2508,8 +2605,27 @@ void RhiViewport::mouseReleaseEvent(QMouseEvent *event)
     const bool isClick = std::hypot(releaseDelta.x(), releaseDelta.y()) <= 4.0;
     const bool ctrlHeld = (m_pressModifiers & Qt::ControlModifier) != 0;
     const bool gizmoGuardsSelection = ctrlHeld && m_selectedSourceObjectIndex >= 0;
-    if (isClick && !m_layerEditingInputActive && !gizmoGuardsSelection)
-      emit objectPickedSource(-1);
+    if (isClick && !m_layerEditingInputActive && !gizmoGuardsSelection) {
+      // MP4 (dev plan 多盘 2026-10-20): a plain click on ANOTHER plate's
+      // bed surface switches plates (upstream select_plate_by_hover_id
+      // action 0, GLCanvas3D.cpp:4763-4771 -> Plater.cpp:21651-21660; the
+      // plate switch itself rebuilds the per-plate selection). Icon rects
+      // keep priority, and any modifier click stays a deselect so the
+      // Ctrl/Shift selection semantics are untouched.
+      int bodyPlate = -1;
+      int iconPlate = -1;
+      int iconId = -1;
+      const bool plainClick = (m_pressModifiers
+          & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier)) == 0;
+      if (plainClick
+          && !plateIconAt(event->position(), iconPlate, iconId)
+          && plateBodyAt(event->position(), bodyPlate)
+          && bodyPlate != m_currentPlateIndex) {
+        emit plateBodyPicked(bodyPlate);
+      } else {
+        emit objectPickedSource(-1);
+      }
+    }
   }
   m_dragButton = Qt::NoButton;
   m_paintButton = 0;
