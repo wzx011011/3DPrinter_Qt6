@@ -9378,6 +9378,9 @@ bool EditorViewModel::convertSelectedObjectUnits(int conversionType)
   if (changed) {
     refreshMeshCacheAndFitHint();
     invalidateSliceResultsForCurrentPlate();
+    // F8: same as applyUnitConversion -- the swapped-in ModelObject carries
+    // new geometry; only sceneTopologyChanged re-reads the meshData binding.
+    emit sceneTopologyChanged();
   } else {
     statusText_ = projectService_->lastError();
   }
@@ -11404,6 +11407,14 @@ bool EditorViewModel::applyUnitConversion(int objectIndex, int conversionType)
     rebuildObjectEntriesFromService();
     refreshMeshCacheAndFitHint();
     invalidateSliceResultsForCurrentPlate();
+    // F8: convertObjectUnits swaps in a NEW ModelObject (scaled geometry).
+    // RhiViewport re-uploads only via the meshData Q_PROPERTY binding, whose
+    // NOTIFY is sceneTopologyChanged -- stateChanged alone left the stale
+    // mesh batch rendering and the info-toast dims never re-evaluated.
+    emit sceneTopologyChanged();
+    // The info toast reads selectedObjectInfoText (NOTIFY selectionChanged);
+    // its dims memo rebuilds on the next read after the refresh above.
+    emit selectionChanged();
     statusText_ = tr("Units converted");
   }
   else

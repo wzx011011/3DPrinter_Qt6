@@ -979,6 +979,21 @@ Item {
                 enabled: Backend.editorViewModel && Backend.editorViewModel.hasClipboardContent
                 onTriggered: Backend.editorViewModel.pasteObjects()
             }
+            // R15: upstream Edit menu carries Clone Selected (Ctrl+K,
+            // MainFrame.cpp:3088) and Duplicate Current Plate (3101). The
+            // handlers exist in main.qml (editCloneRequested /
+            // editDuplicatePlateRequested) but only the macOS stub menu had
+            // the entries -- the Windows CxMenu never emitted the signals.
+            CxMenuItem {
+                text: qsTr("克隆选中") + "\tCtrl+K"
+                enabled: Backend.editorViewModel && Backend.editorViewModel.hasSelection
+                onTriggered: root.editCloneRequested()
+            }
+            CxMenuItem {
+                text: qsTr("克隆当前平板")
+                enabled: Backend.editorViewModel && Backend.editorViewModel.modelCount > 0
+                onTriggered: root.editDuplicatePlateRequested()
+            }
             MenuSeparator {}
             CxMenuItem {
                 text: qsTr("删除选中")
