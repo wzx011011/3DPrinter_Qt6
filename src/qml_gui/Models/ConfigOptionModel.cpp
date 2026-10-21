@@ -1011,14 +1011,11 @@ namespace
       {QStringLiteral("filament_colour"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
       {QStringLiteral("filament_density"),        {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
       {QStringLiteral("filament_cost"),           {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_spool_weight"),   {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
       {QStringLiteral("filament_flow_ratio"),     {QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
       {QStringLiteral("filament_max_volumetric_speed"),{QStringLiteral("Filament"), QStringLiteral("Volumetric speed limitation")}},
-      {QStringLiteral("filament_min_speed"),      {QStringLiteral("Filament"), QStringLiteral("Volumetric speed limitation")}},
       // Temperature groups
       {QStringLiteral("nozzle_temperature"),      {QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
       {QStringLiteral("nozzle_temperature_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
-      {QStringLiteral("nozzle_temperature_range"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
       {QStringLiteral("hot_plate_temp"),          {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
       {QStringLiteral("hot_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
       {QStringLiteral("cool_plate_temp"),         {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
@@ -1028,7 +1025,6 @@ namespace
       {QStringLiteral("slow_down_min_speed"),     {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
       {QStringLiteral("fan_min_speed"),           {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
       {QStringLiteral("fan_max_speed"),           {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("default_fan_speed"),      {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
       {QStringLiteral("overhang_fan_speed"),     {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
       {QStringLiteral("close_fan_the_first_x_layers"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
       // Retraction
@@ -1044,7 +1040,11 @@ namespace
       // Page: "Advanced"
       {QStringLiteral("filament_start_gcode"),    {QStringLiteral("Advanced"), QStringLiteral("Filament start G-code")}},
       {QStringLiteral("filament_end_gcode"),      {QStringLiteral("Advanced"), QStringLiteral("Filament end G-code")}},
-      {QStringLiteral("filament_change_gcode"),   {QStringLiteral("Advanced"), QStringLiteral("Change extrusion role G-code")}},
+      // R6: upstream key is filament_change_extrusion_role_gcode
+      // (PrintConfig.cpp:7350, TabFilament::build Tab.cpp:4548); the former
+      // "filament_change_gcode" entry named a key that has no def and was
+      // silently dropped by loadSchemaFromKeys.
+      {QStringLiteral("filament_change_extrusion_role_gcode"),{QStringLiteral("Advanced"), QStringLiteral("Change extrusion role G-code")}},
       // Page: "Notes"
       {QStringLiteral("filament_notes"),          {QStringLiteral("Notes"), QStringLiteral("Notes")}},
     };
@@ -1085,7 +1085,7 @@ namespace
             {QStringLiteral("Seam"), processKeys({"seam_position", "staggered_inner_seams", "seam_gap", "seam_slope_type", "seam_slope_conditional", "scarf_angle_threshold", "scarf_overhang_threshold", "scarf_joint_speed", "seam_slope_start_height", "seam_slope_entire_loop", "seam_slope_min_length", "seam_slope_steps", "scarf_joint_flow_ratio", "seam_slope_inner_walls", "role_based_wipe_speed", "wipe_speed", "wipe_on_loops", "wipe_before_external_loop"})},
             {QStringLiteral("Precision"), processKeys({"slice_closing_radius", "resolution", "enable_arc_fitting", "xy_hole_compensation", "xy_contour_compensation", "elefant_foot_compensation", "elefant_foot_layers_density", "elefant_foot_compensation_layers", "precise_outer_wall", "precise_z_height", "hole_to_polyhole", "hole_to_polyhole_threshold", "hole_to_polyhole_twisted", "hole_to_polyhole_max_edges"})},
             {QStringLiteral("Ironing"), processKeys({"ironing_type", "ironing_pattern", "ironing_flow", "ironing_spacing", "ironing_inset", "ironing_angle", "ironing_angle_fixed"})},
-            {QStringLiteral("Z contouring"), processKeys({"zaa_enabled", "zaa_minimize_perimeter_height", "zaa_min_z", "zaa_dont_alternate_fill_direction", "ironing_expansion"})},
+            {QStringLiteral("Z contouring"), processKeys({"zaa_enabled", "zaa_minimize_perimeter_height", "zaa_min_z", "zaa_dont_alternate_fill_direction"})},
             {QStringLiteral("Wall generator"), processKeys({"wall_generator", "wall_transition_angle", "wall_transition_filter_deviation", "wall_transition_length", "wall_distribution_count", "initial_layer_min_bead_width", "min_bead_width", "min_feature_size", "min_length_factor", "wall_maximum_resolution", "wall_maximum_deviation"})},
             {QStringLiteral("Walls and surfaces"), processKeys({"wall_sequence", "is_infill_first", "wall_direction", "print_flow_ratio", "top_solid_infill_flow_ratio", "bottom_solid_infill_flow_ratio", "set_other_flow_ratios", "first_layer_flow_ratio", "outer_wall_flow_ratio", "inner_wall_flow_ratio", "overhang_flow_ratio", "sparse_infill_flow_ratio", "internal_solid_infill_flow_ratio", "gap_fill_flow_ratio", "support_flow_ratio", "support_interface_flow_ratio", "only_one_wall_first_layer", "only_one_wall_top", "min_width_top_surface", "reduce_crossing_wall", "max_travel_detour_distance", "small_area_infill_flow_compensation", "small_area_infill_flow_compensation_model"})},
             {QStringLiteral("Bridging"), processKeys({"bridge_flow", "internal_bridge_flow", "bridge_density", "internal_bridge_density", "thick_bridges", "thick_internal_bridges", "enable_extra_bridge_layer", "dont_filter_internal_bridges", "counterbore_hole_bridging"})},
@@ -1108,11 +1108,11 @@ namespace
             {QStringLiteral("Advanced"), processKeys({"max_volumetric_extrusion_rate_slope", "max_volumetric_extrusion_rate_slope_segment_length", "extrusion_rate_smoothing_external_perimeter_only"})},
         }},
         {QStringLiteral("Support"), {
-            {QStringLiteral("Support"), processKeys({"enable_support", "support_type", "support_style", "support_threshold_angle", "support_threshold_overlap", "raft_first_layer_density", "raft_first_layer_expansion", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang", "enforce_support_layers"})},
+            {QStringLiteral("Support"), processKeys({"enable_support", "support_type", "support_style", "support_threshold_angle", "support_threshold_overlap", "raft_first_layer_density", "raft_first_layer_expansion", "support_on_build_plate_only", "support_critical_regions_only", "support_remove_small_overhang"})},
             {QStringLiteral("Raft"), processKeys({"raft_layers", "raft_contact_distance"})},
             {QStringLiteral("Filament for Supports"), processKeys({"support_filament", "support_interface_filament", "support_interface_not_for_body"})},
             {QStringLiteral("Support ironing"), processKeys({"support_ironing", "support_ironing_pattern", "support_ironing_flow", "support_ironing_spacing"})},
-            {QStringLiteral("Advanced"), processKeys({"support_top_z_distance", "support_bottom_z_distance", "tree_support_wall_count", "support_base_pattern", "support_base_pattern_spacing", "support_angle", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_bottom_interface_spacing", "support_expansion", "support_interface_loop_pattern", "support_object_xy_distance", "support_object_first_layer_gap", "bridge_no_support", "max_bridge_length", "independent_support_layer_height"})},
+            {QStringLiteral("Advanced"), processKeys({"support_top_z_distance", "support_bottom_z_distance", "tree_support_wall_count", "support_base_pattern", "support_base_pattern_spacing", "support_angle", "support_interface_top_layers", "support_interface_bottom_layers", "support_interface_pattern", "support_interface_spacing", "support_bottom_interface_spacing", "support_expansion", "support_object_xy_distance", "support_object_first_layer_gap", "bridge_no_support", "max_bridge_length", "independent_support_layer_height"})},
             {QStringLiteral("Tree supports"), processKeys({"tree_support_tip_diameter", "tree_support_branch_distance", "tree_support_branch_distance_organic", "tree_support_top_rate", "tree_support_branch_diameter", "tree_support_branch_diameter_organic", "tree_support_branch_diameter_angle", "tree_support_branch_angle", "tree_support_branch_angle_organic", "tree_support_angle_slow", "tree_support_auto_brim", "tree_support_brim_width"})},
         }},
         {QStringLiteral("Multimaterial"), {
@@ -1193,6 +1193,11 @@ namespace
         QStringLiteral("raft_expansion"),
         QStringLiteral("support_interface_loop_pattern"),
         QStringLiteral("interface_shells"),
+        // R6: ironing_expansion is a print_options() field upstream keeps out
+        // of TabPrint::build as well (Tab.cpp:2706 commented, "not used yet").
+        // It used to sit in the Z contouring whitelist, showing what upstream
+        // deliberately hides.
+        QStringLiteral("ironing_expansion"),
         QStringLiteral("compatible_printers"),
         QStringLiteral("compatible_printers_condition"),
         QStringLiteral("inherits"),
@@ -1297,19 +1302,18 @@ static const char *kMachineKeys[] = {
 static const char *kFilamentKeys[] = {
   // Basic
   "filament_type", "filament_vendor", "filament_colour",
-  "filament_density", "filament_cost", "filament_spool_weight",
+  "filament_density", "filament_cost",
   // Temperature
   "nozzle_temperature", "nozzle_temperature_initial_layer",
   "hot_plate_temp", "hot_plate_temp_initial_layer",
   "chamber_temperature", "cool_plate_temp",
-  "nozzle_temperature_range",
   // Cooling
   "fan_cooling_layer_time", "slow_down_min_speed",
-  "fan_min_speed", "fan_max_speed", "default_fan_speed",
+  "fan_min_speed", "fan_max_speed",
   "overhang_fan_speed", "close_fan_the_first_x_layers",
   // Speed / Quality
   "filament_max_volumetric_speed", "filament_flow_ratio",
-  "filament_min_speed", "filament_retract_lift_above",
+  "filament_retract_lift_above",
   "filament_retract_lift_below",
   // Retraction
   "filament_retraction_length", "filament_retraction_speed",
@@ -1319,7 +1323,7 @@ static const char *kFilamentKeys[] = {
   "filament_retract_restart_extra_toolchange",
   // G-code
   "filament_start_gcode", "filament_end_gcode",
-  "filament_change_gcode",
+  "filament_change_extrusion_role_gcode",
   // Notes
   "filament_notes",
   nullptr
