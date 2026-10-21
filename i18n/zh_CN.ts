@@ -9086,7 +9086,8 @@
         <location filename="../src/qml_gui/main.qml" line="268"/>
         <source>将创建新项目，当前未保存的更改将丢失。
 是否继续？</source>
-        <translation>+ 导入模型</translation>
+        <translation>将创建新项目，当前未保存的更改将丢失。
+是否继续？</translation>
     </message>
     <message>
         <location filename="../src/qml_gui/main.qml" line="281"/>

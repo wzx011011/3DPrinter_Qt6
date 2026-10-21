@@ -341,12 +341,15 @@ ApplicationWindow {
     }
 
     // Phase 237 (VIEW-04): editor prompt relayed by BackendContext.
+    // setProp, not direct writes: the CxDialogHost exposes only deferredGate,
+    // so `host.prop = x` throws TypeError and the open() below never runs
+    // (the prompt was dead on every import path before this fix).
     Connections {
         target: Backend
         function onUnitConversionPromptRequested(objectIndex, unitHint, objectName) {
-            unitConvertConfirm.targetObjectIndex = objectIndex
-            unitConvertConfirm.targetUnitHint = unitHint
-            unitConvertConfirm.targetObjectName = objectName || ""
+            unitConvertConfirm.setProp("targetObjectIndex", objectIndex)
+            unitConvertConfirm.setProp("targetUnitHint", unitHint)
+            unitConvertConfirm.setProp("targetObjectName", objectName || "")
             unitConvertConfirm.open()
         }
     }
@@ -712,7 +715,7 @@ ApplicationWindow {
         sequence: "Ctrl+G"
         enabled: Backend.editorViewModel && Backend.editorViewModel.canExportGCode
         onActivated: {
-            exportGcode3mfDialog.currentFile = defaultSlicedFileUrl()
+            exportGcode3mfDialog.setProp("currentFile", defaultSlicedFileUrl())
             exportGcode3mfDialog.open()
         }
     }
@@ -899,7 +902,7 @@ ApplicationWindow {
                 }
                 onSaveAsRequested: saveProjectAsDialog.open()
                 onImportModelRequested: function(nameFilter) {
-                    openModelDialog.nameFilters = [nameFilter, qsTr("所有文件 (*)")]
+                    openModelDialog.setProp("nameFilters", [nameFilter, qsTr("所有文件 (*)")])
                     openModelDialog.open()
                 }
                 onExportGcodeRequested: { const p = root.preparePage(); if (p) p.openExportDialog() }
@@ -936,13 +939,13 @@ ApplicationWindow {
                 // Phase 237 (VIEW-02): zip import reuses the Phase 236
                 // FileArchiveDialog flow (openModelDialog's zip branch).
                 onImportZipRequested: {
-                    openModelDialog.nameFilters = [qsTr("压缩包 (*.zip)"), qsTr("所有文件 (*)")]
+                    openModelDialog.setProp("nameFilters", [qsTr("压缩包 (*.zip)"), qsTr("所有文件 (*)")])
                     openModelDialog.open()
                 }
                 onImportConfigsRequested: importConfigsDialog.open()
                 // Phase 237 (VIEW-06): export plate sliced file (.gcode.3mf).
                 onExportSlicedFileRequested: {
-                    exportGcode3mfDialog.currentFile = defaultSlicedFileUrl()
+                    exportGcode3mfDialog.setProp("currentFile", defaultSlicedFileUrl())
                     exportGcode3mfDialog.open()
                 }
                 onBellClicked: notificationCenterPopup.open()

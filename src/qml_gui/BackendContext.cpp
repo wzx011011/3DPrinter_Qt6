@@ -1310,10 +1310,14 @@ QVariantMap BackendContext::systemInfo() const
 void BackendContext::topbarNewProject()
 {
   const qint64 start = m_latencyClock.elapsed();
-  if (projectViewModel_)
-    projectViewModel_->newProject();
+  // clearWorkspace BEFORE newProject: clearProject() emits projectChanged and
+  // the blanket markDirty() handler below would re-dirty the fresh empty
+  // project, making the very next open/quit prompt a bogus unsaved-changes
+  // guard. newProject() runs last so isDirty=false is the final state.
   if (editorViewModel_)
     editorViewModel_->clearWorkspace();
+  if (projectViewModel_)
+    projectViewModel_->newProject();
   setCurrentPage(1);
   pushLatencySample(QStringLiteral("topbar-new-project"), int(m_latencyClock.elapsed() - start), QString());
 }
