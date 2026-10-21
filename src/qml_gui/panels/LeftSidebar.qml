@@ -620,10 +620,18 @@ Rectangle {
         // Params area: full-height container outlined by a 1px accent border
         // (ref layout), filling the sidebar remainder; only the option list
         // scrolls (params-1/layout-6).
+        //
+        // The explicit preferredHeight is load-bearing: Qt Quick Layouts
+        // splits space between fillHeight siblings in proportion to their
+        // preferred sizes, so a plain Rectangle (implicitHeight 0) receives
+        // nothing against the object list's preferred quarter and collapses
+        // to a sliver. h/4 vs 3h/4 here encodes the upstream 1:3 sizer
+        // weights (Plater.cpp:3243-3245).
         Rectangle {
             id: paramsInlinePanel
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.preferredHeight: sidebarContent.height * 3 / 4
             radius: 0
             color: "transparent"
             border.width: 1
