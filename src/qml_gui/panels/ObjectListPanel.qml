@@ -107,7 +107,7 @@ Rectangle {
         // while everything below them is still collapsed.
         const plateCount = root.editorVm.plateCount
         for (let row = 0; row < plateCount && row < treeView.rows; ++row) {
-            const idx = treeView.modelIndex(row, 0)
+            const idx = treeView.index(row, 0)
             if (m.nodeTypeAt(idx) !== root.nodePlate)
                 continue
             const key = root._expansionKey(root.nodePlate, m.plateIndexAt(idx), -1)
@@ -124,7 +124,7 @@ Rectangle {
         while (expandedSomething) {
             expandedSomething = false
             for (let row = 0; row < treeView.rows; ++row) {
-                const idx = treeView.modelIndex(row, 0)
+                const idx = treeView.index(row, 0)
                 const type = m.nodeTypeAt(idx)
                 if (type !== root.nodeObject && type !== root.nodeInstanceRoot)
                     continue
@@ -162,7 +162,7 @@ Rectangle {
         const visualRow = Math.floor(pos.y / root.rowHeight)
         if (visualRow < 0 || visualRow >= treeView.rows)
             return
-        const idx = treeView.modelIndex(visualRow, 0)
+        const idx = treeView.index(visualRow, 0)
         const m = treeView.model
         if (m.nodeTypeAt(idx) !== root.nodeObject)
             return
@@ -182,7 +182,7 @@ Rectangle {
         root.dropTargetRow = -1
         if (targetRow < 0 || from < 0 || !treeView.model || !root.editorVm)
             return
-        const idx = treeView.modelIndex(targetRow, 0)
+        const idx = treeView.index(targetRow, 0)
         root.editorVm.moveObject(from, treeView.model.sourceObjectIndexAt(idx))
     }
 
@@ -222,7 +222,7 @@ Rectangle {
                 const m = treeView.model
                 if (!m)
                     return
-                const idx = treeView.modelIndex(row, 0)
+                const idx = treeView.index(row, 0)
                 const key = root._expansionKey(m.nodeTypeAt(idx), m.plateIndexAt(idx),
                                                m.sourceObjectIndexAt(idx))
                 if (key !== "")
@@ -232,7 +232,7 @@ Rectangle {
                 const m = treeView.model
                 if (!m)
                     return
-                const idx = treeView.modelIndex(row, 0)
+                const idx = treeView.index(row, 0)
                 const key = root._expansionKey(m.nodeTypeAt(idx), m.plateIndexAt(idx),
                                                m.sourceObjectIndexAt(idx))
                 if (key !== "")
@@ -266,6 +266,9 @@ Rectangle {
                 required property string volumeTypeLabel
 
                 implicitHeight: root.rowHeight
+                // F4: TableView warns on zero delegate implicitWidth ("needs
+                // to be greater than zero") -- width alone is not enough.
+                implicitWidth: treeView.width
                 width: treeView.width
 
                 readonly property bool isDragSource:

@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QThread>
 #include <QTimer>
 
 namespace OWzx {
@@ -55,10 +56,22 @@ bool McpHttpServer::start(quint16 port, const QString &token) {
   if (!registry_ || token.isEmpty())
     return false;
   token_ = token;
-  if (!server_.listen(QHostAddress::LocalHost, port))
-    return false;
-  emit started();
-  return true;
+  // F1: scripted relaunches (smoke.ps1 kills the old instance then starts a
+  // new one ~600ms later) can reach here while the previous process is still
+  // tearing its listener down, and the first listen() fails with
+  // "address in use" -> the "AI MCP 服务器启动失败（端口被占用？）" toast.
+  // A short backoff covers that teardown race; QTcpServer has no
+  // SO_REUSEADDR control, and a busy port from a LIVE instance must keep
+  // failing (that race is what the toast is for).
+  for (int attempt = 0; attempt < 5; ++attempt) {
+    if (server_.listen(QHostAddress::LocalHost, port))
+    {
+      emit started();
+      return true;
+    }
+    QThread::msleep(150);
+  }
+  return false;
 }
 
 void McpHttpServer::stop() {
