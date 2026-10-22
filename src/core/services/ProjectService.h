@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <array>
 #include <QVariant>
 #include <QStringList>
 #include <QList>
@@ -87,6 +88,11 @@ public:
   QString projectName() const;
   int modelCount() const;
   int plateCount() const;
+  // FB-R7-01: true when the most recent loadFile merged the imported model
+  // into an already-populated scene (instead of replacing it). Callers that
+  // need "the objects that belong to the file just loaded" start at the
+  // pre-load model count in that case.
+  bool lastImportMergedIntoScene() const { return m_lastImportMergedIntoScene; }
   int currentPlateIndex() const;
   // v3.2 Phase 29 D-29-15: plate-grid geometry (read-only, derived from
   // PartPlateList). Null-guarded for safety before m_plateList is constructed.
@@ -119,6 +125,19 @@ public:
   void setPlateSize(int width, int depth, int height) {
     if (m_plateList) m_plateList->setPlateSize(width, depth, height);
   }
+  /// FB-R2-06: the ONE authoritative print-bed footprint (mm) the service
+  /// works with. The host (EditorViewModel) feeds it from the selected
+  /// printer preset's printable_area (upstream: the bed always comes from the
+  /// current printer preset). It drives (a) the plate list geometry -- the
+  /// grid stride that places plate N in the world, (b) the auto-arrange rect
+  /// used right after a model import, and (c) the plate normalisation of
+  /// meshData(). Without a host (CLI / bare-service tests) it stays at the
+  /// historical 220x220 default.
+  void setBedSize(int width, int depth);
+  int bedWidthMm() const { return m_bedWidthMm; }
+  int bedDepthMm() const { return m_bedDepthMm; }
+  /// "0,0,W,0,W,D,0,D" -- the corner-origin rect arrangeObjects() consumes.
+  QString bedPrintableAreaString() const;
 
   /// Reconstruct per-plate instance membership from current model world offsets
   /// (v3.2 Phase 29, ARRANGE-02). Public test/load-path hook: useful for
@@ -342,6 +361,16 @@ public:
   Q_INVOKABLE int plateIndexForObject(int objectIndex) const;
   /// 移动对象到指定平板（对齐上游跨平板拖拽）
   void setObjectPlateForIndex(int objectIndex, int plateIndex);
+  /// FB-R6 (cross-plate move): re-seat an object's plate membership from where
+  /// its instances now sit (upstream Plater::priv::on_object_move ->
+  /// partplate_list.notify_instance_update). Membership is registered at
+  /// import/arrange time and is NOT derived from position afterwards, so
+  /// dragging / typing an object onto another plate left it owned by the old
+  /// plate (object list, slicing scope, outside-bed check all wrong). Locked
+  /// or unprintable plates are never a source or destination; a centre that
+  /// lies in the inter-plate gap keeps the current membership. Returns true
+  /// when any instance changed plate (projectChanged is emitted then).
+  bool reassignPlateByPosition(int objectIndex);
   Q_INVOKABLE bool objectPrintable(int index) const;
   Q_INVOKABLE bool setObjectPrintable(int index, bool printable);
   /// P16.11 per-instance printable granularity (对齐上游
@@ -353,6 +382,11 @@ public:
   /// (对齐上游 ModelInstance::get_mirror / set_mirror).
   QVector3D objectMirror(int index) const;
   bool setObjectMirror(int index, float x, float y, float z);
+  /// Exact instance transformation (row-major 4x4, slic3r frame). Mirror edits
+  /// compose with rotation (mirror X + mirror Y == rotation by 180 deg), so a
+  /// per-axis mirror vector cannot restore them; undo snapshots the matrix.
+  std::array<double, 16> objectInstanceMatrix(int index) const;
+  bool setObjectInstanceMatrix(int index, const std::array<double, 16> &matrix);
   Q_INVOKABLE bool objectVisible(int index) const;
   Q_INVOKABLE bool setObjectVisible(int index, bool visible);
   Q_INVOKABLE int objectVolumeCount(int index) const;
@@ -500,9 +534,14 @@ public:
   /// the plate config): enable_prime_tower(bool), timelapse_type(int),
   /// prime_tower_width/prime_volume/prime_tower_brim_width(floats) and the
   /// per-plate wipe_tower_x/wipe_tower_y floats. Empty map = no tower.
+  /// onlyPlateIndex >= 0 scopes the arrange to that ONE plate (upstream
+  /// "Arrange objects on selected plates"): the other plates' objects are not
+  /// touched, overflow goes onto NEW plates appended after the existing ones,
+  /// and no empty plate is recycled. -1 (default) is the all-plates arrange.
   Q_INVOKABLE bool arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                     const QString &printableArea = QString(),
-                                    const QVariantMap &wipeTowerContext = {});  /// WIPE-TOWER-BEDTEMP-GATE test seam: the per-plate "does this plate need
+                                    const QVariantMap &wipeTowerContext = {},
+                                    int onlyPlateIndex = -1);  /// WIPE-TOWER-BEDTEMP-GATE test seam: the per-plate "does this plate need
   /// the wipe-tower arrange obstacle" decision over the same context map
   /// arrangeObjects consumes. Truth-table unit tests exercise the gate
   /// (enable gate, seq print, smooth timelapse, multi-extruder object,
@@ -758,6 +797,11 @@ public:
                      bool drcFormat);
   /// Import model files into one explicit plate without changing other plates.
   bool addFilesToPlate(int plateIndex, const QStringList &filePaths);
+  /// FB-R7-01 (P0): append an already-parsed plain model's objects onto the
+  /// current plate (centered on it, addFilesToPlate semantics) instead of
+  /// replacing the whole project. Used by loadFile when the project already
+  /// holds objects and the file carried no plate data.
+  bool mergeImportedModelIntoCurrentPlate(Slic3r::Model *loadedModel);
   /// Import one upstream handy-model bundle from deployed resources/handy_models.
   bool addHandyModelToPlate(int plateIndex, const QString &modelId);
   bool replaceAllOnPlateWithFiles(int plateIndex, const QStringList &filePaths);
@@ -1149,6 +1193,7 @@ private:
   /// the GUI thread (set in startAsyncSave, cleared in the delivery lambda),
   /// so no atomicity is required; the worker never touches it.
   bool saving_ = false;
+  bool m_lastImportMergedIntoScene = false;
   /// R-P0.4: OWzx plate filament-state sidecar shared by saveProject and
   /// saveProjectAs so every save path writes the identical project payload.
   /// Returns false on failure (lastError_ set).
@@ -1236,6 +1281,10 @@ private:
   // production so meshBatchInstanceTransforms() pairs with the resident blob.
   mutable QVector3D m_instanceChannelPlateShift{0.0f, 0.0f, 0.0f};
   mutable bool m_instanceChannelShiftValid = false;
+  // FB-R2-06: authoritative bed footprint (see setBedSize()).
+  int m_bedWidthMm = 220;
+  int m_bedDepthMm = 220;
+  bool m_bedSizeKnown = false;  // true once a host pushed the preset bed
 #endif
   /// Phase 222: active filament colours synced from PresetService.
   /// Read first by plateFilamentColours()/filamentCount() (plate config fallback).

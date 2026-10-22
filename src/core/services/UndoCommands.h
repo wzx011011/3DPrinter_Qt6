@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QUndoCommand>
+#include <array>
 #include <QByteArray>
 #include <QVector3D>
 #include <QSet>
@@ -466,6 +467,8 @@ private:
   int m_volumeCountBefore;
   ProjectService *m_service;
   EditorViewModel *m_viewModel;
+  /// QUndoStack::push() calls redo() once while the volume is already added.
+  bool m_firstRedoDone = false;
 };
 
 // ── PlateCommand ────────────────────────────────────────────────────────────
@@ -561,20 +564,21 @@ private:
 class MirrorCommand : public QUndoCommand
 {
 public:
-  /// Captures old/new mirror vectors; push after the mirror was applied.
+  /// Captures the full instance matrix before/after the flip; push after the
+  /// mirror was applied. A flip pivots on the bbox centre (moves the offset)
+  /// and composes with rotation (mirror X + Y == 180 deg), so neither a mirror
+  /// vector nor a position pair restores it -- the exact matrix does.
   MirrorCommand(int objectIndex,
-                const QVector3D &oldMirror, const QVector3D &newMirror,
+                const std::array<double, 16> &oldMatrix, const std::array<double, 16> &newMatrix,
                 ProjectService *service,
                 QUndoCommand *parent = nullptr);
-
   void undo() override;
   void redo() override;
   int id() const override { return 13; }
-
 private:
   int m_objectIndex;
-  QVector3D m_oldMirror;
-  QVector3D m_newMirror;
+  std::array<double, 16> m_oldMatrix;
+  std::array<double, 16> m_newMatrix;
   ProjectService *m_service;
 };
 

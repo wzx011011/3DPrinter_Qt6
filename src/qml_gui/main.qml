@@ -215,7 +215,25 @@ ApplicationWindow {
         nameFilters: [qsTr("STL (*.stl)"), qsTr("3MF (*.3mf)"), qsTr("OBJ (*.obj)")]
         defaultSuffix: "stl"
         onAccepted: {
-            var path = selectedFile.toString().replace("file:///", "")
+            // FB-R7-07 (P1): replace("file:///", "") stripped the LEADING
+            // SLASH, so the export ran against a relative path
+            // ("home/...") that its_write_stl_binary could not open --
+            // silently. Decode the URL the same way the drop handler above
+            // does (substring(8) keeps the root slash, decodeURIComponent
+            // resolves %20-style escapes).
+            var exportUrl = selectedFile.toString()
+            var path
+            if (exportUrl.indexOf("file:///") === 0)
+                path = decodeURIComponent(exportUrl.substring(8))
+            else if (exportUrl.indexOf("file://") === 0)
+                path = decodeURIComponent(exportUrl.substring(7))
+            else
+                path = exportUrl
+            // FB-R7-07 follow-up: the QtQuick dialog can accept with a
+            // scheme-less breadcrumb path that lost the root slash
+            // ("home/..."); the exporter needs an absolute path.
+            if (path.length > 0 && path.charAt(0) !== "/")
+                path = "/" + path
             var ext = path.split(".").pop().toLowerCase()
             if (Backend.editorViewModel)
                 Backend.editorViewModel.exportModel(path, ext)
@@ -594,14 +612,12 @@ ApplicationWindow {
                 saveProjectAsDialog.open()
         }
     }
+    // Redo chords are listed explicitly in ONE Shortcut: StandardKey.Redo
+    // already expands to Ctrl+Shift+Z (and Ctrl+Y on some platforms), so the
+    // former StandardKey.Redo + separate "Ctrl+Shift+Z" pair registered the
+    // same chord twice and Qt dropped it as ambiguous.
     Shortcut {
-        sequences: [StandardKey.Redo]
-        enabled: Backend.currentPage === Backend.tp3DEditor
-                 && !root.textEditHoldFocus
-        onActivated: { const p = root.preparePage(); if (p) p.redoFromTopbar() }
-    }
-    Shortcut {
-        sequence: "Ctrl+Shift+Z"
+        sequences: ["Ctrl+Y", "Ctrl+Shift+Z"]
         enabled: Backend.currentPage === Backend.tp3DEditor
                  && !root.textEditHoldFocus
         onActivated: { const p = root.preparePage(); if (p) p.redoFromTopbar() }

@@ -308,7 +308,10 @@ CxDialog {
 
     function reloadHistory() {
         var all = []
-        var n = calibrationVm ? calibrationVm.historyCount() : 0
+        // FB-R10-01: historyCount is a Q_PROPERTY (READ historyCount), not a
+        // Q_INVOKABLE -- calling it as a function threw a TypeError and the
+        // history dialog never populated.
+        var n = calibrationVm ? calibrationVm.historyCount : 0
         for (var i = 0; i < n; ++i) {
             all.push({
                 srcIndex: i,

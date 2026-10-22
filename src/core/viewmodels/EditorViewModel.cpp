@@ -50,6 +50,7 @@
 #include <QQuaternion> // Phase 240 (GIZ-03): QQuaternion::rotationTo
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QScopeGuard> // refreshMeshCacheAndFitHint: transform-channel notify on every exit
 #include <QCoreApplication>
 #include <QtConcurrent/QtConcurrentRun> // Phase 240 (GIZ-06): simplify preview job / U13 export worker
 #include <QFutureWatcher> // P15.11: drag-time clearance preview compute delivery
@@ -532,6 +533,21 @@ void EditorViewModel::refreshMeshCacheAndFitHint()
   // instead and never reaches here; the transform-derived readouts (fitHint,
   // measure) derive live from the channel.
   m_cachedMeshData = projectService_->meshData();
+  // The blob production above re-freezes the service's plate-normalization
+  // shift, and the table refresh below replaces the per-batch tables, so both
+  // the per-batch tables (meshBatchSourceObjectIndices & co, NOTIFY
+  // sceneTopologyChanged) and the transform channel (NOTIFY transformChanged)
+  // change HERE. ProjectService::projectChanged (which fans the S1 clusters)
+  // fires BEFORE this refresh, i.e. while both still pair with the previous
+  // blob; topology mutators that only emit the stateChanged umbrella
+  // afterwards (clone / paste / delete / ...) left the QML-bound viewport with
+  // an N-batch blob next to M-entry tables -- the renderer filtered every
+  // batch out and drew nothing (selection gizmo fell back to the origin).
+  // Re-notify both on every exit once the caches are coherent.
+  const auto notifyBatchCaches = qScopeGuard([this] {
+    emit sceneTopologyChanged();
+    emit transformChanged();
+  });
   // S3: ONE walk for all six per-batch tables (was six full model walks).
   const ProjectService::MeshBatchRenderTables tables = projectService_->meshBatchRenderTables();
   m_cachedMeshBatchSourceObjectIndices = tables.sourceObjectIndices;
@@ -885,6 +901,7 @@ void EditorViewModel::setObjectPosX(float v)
   if (qFuzzyCompare(oldPos.x(), v))
     return;
   projectService_->setObjectPosition(idx, v, oldPos.y(), oldPos.z());
+  syncPlateMembershipAfterMove(idx);
   if (m_undoManager)
   {
     auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
@@ -906,6 +923,7 @@ void EditorViewModel::setObjectPosY(float v)
   if (qFuzzyCompare(oldPos.z(), glZ))
     return;
   projectService_->setObjectPosition(idx, oldPos.x(), oldPos.y(), glZ);
+  syncPlateMembershipAfterMove(idx);
   if (m_undoManager)
   {
     auto *cmd = new TransformCommand(idx, oldPos, projectService_->objectRotation(idx),
@@ -962,6 +980,7 @@ void EditorViewModel::nudgeSelectedObjects(double dxMm, double dyMm)
     const QVector3D newPos(float(oldPos.x() + dxMm), oldPos.y(),
                            float(oldPos.z() - dyMm));
     projectService_->setObjectPosition(idx, newPos.x(), newPos.y(), newPos.z());
+    syncPlateMembershipAfterMove(idx);
     moved = true;
     if (m_undoManager)
     {
@@ -1169,9 +1188,25 @@ void EditorViewModel::endGizmoMoveDrag()
   }
 
   m_gizmoMoveDragStartPos = {};
+  syncPlateMembershipAfterMove(idx);
   // S1: move end -- single coalesced projectChanged (via the command push)
   // + transform cluster + umbrella close the drag.
   emitTransformEdited();
+}
+void EditorViewModel::syncPlateMembershipAfterMove(int sourceIndex)
+{
+  if (!projectService_ || sourceIndex < 0)
+    return;
+  const int before = projectService_->plateIndexForObject(sourceIndex);
+  if (!projectService_->reassignPlateByPosition(sourceIndex))
+    return;
+  const int after = projectService_->plateIndexForObject(sourceIndex);
+  if (before >= 0)
+    invalidateSliceResultsForPlate(before);
+  if (after >= 0)
+    invalidateSliceResultsForPlate(after);
+  rebuildObjectEntriesFromService();
+  emit stateChanged();
 }
 
 void EditorViewModel::beginGizmoRotateDrag()
@@ -3175,58 +3210,39 @@ bool EditorViewModel::advCutSelected()
   emit stateChanged();
 
 #ifdef HAS_LIBSLIC3R
-  int cutNewIdx = -1;
-
-  if (m_cutMode == 1)
-  {
-    // Tongue and Groove mode (对齐上游 CutMode::cutTongueAndGroove).
-    // v5.12 gap-closure: use independent groove params if set (>0), else fall
-    // back to the connectorSize-derived defaults (对齐上游 Cut::Groove struct).
-    const float grooveDepth = m_grooveDepth > 0.f ? m_grooveDepth : m_connectorSize;
-    const float grooveWidth = m_grooveWidth > 0.f ? m_grooveWidth : m_connectorSize * 4.0f;
-    // grooveFlapsAngle stored in degrees from QML; convert to radians. 0 = default 60°.
-    const float grooveFlapsAngleDeg = m_grooveFlapsAngle > 0.f ? m_grooveFlapsAngle : 60.0f;
-    const float grooveFlapsAngle = grooveFlapsAngleDeg * float(M_PI) / 180.0f;
-    const float grooveAngle = 0.0f;
-
-    cutNewIdx = projectService_->cutObjectWithGroove(
-        srcIdx, m_advCutAxis, m_advCutPosition, keepMode,
-        grooveDepth, grooveWidth, grooveFlapsAngle, grooveAngle);
-  }
-  else if (m_advCutConnectors)
-  {
-    // v5.13 gap-closure: discrete connector-pin mode（对齐上游
-    // GLGizmoAdvancedCut connectors 分支）。若有已放置连接器，先物化为负
-    // 体积再走 perform_with_plane（process_connector_cut 消费）。
-    cutNewIdx = projectService_->cutObjectWithConnectors(
-        srcIdx, m_advCutAxis, m_advCutPosition, keepMode);
-  }
-  else
-  {
-    // Planar cut mode (对齐上游 CutMode::cutPlanar)
-    cutNewIdx = projectService_->cutObject(srcIdx, m_advCutAxis, m_advCutPosition, keepMode);
-  }
-
-  if (cutNewIdx >= 0)
-  {
-    projectService_->syncTransformsFromModel();
-    m_selectedSourceIndices.clear();
-    if (keepMode == 0) // Keep both: select both parts
+  return runCutOperation(
+      [&]() -> int {
+    if (m_cutMode == 1)
     {
-      m_selectedSourceIndices.insert(srcIdx);
-      if (cutNewIdx != srcIdx)
-        m_selectedSourceIndices.insert(cutNewIdx);
+      // Tongue and Groove mode (对齐上游 CutMode::cutTongueAndGroove).
+      // v5.12 gap-closure: use independent groove params if set (>0), else fall
+      // back to the connectorSize-derived defaults (对齐上游 Cut::Groove struct).
+      const float grooveDepth = m_grooveDepth > 0.f ? m_grooveDepth : m_connectorSize;
+      const float grooveWidth = m_grooveWidth > 0.f ? m_grooveWidth : m_connectorSize * 4.0f;
+      // grooveFlapsAngle stored in degrees from QML; convert to radians. 0 = default 60°.
+      const float grooveFlapsAngleDeg = m_grooveFlapsAngle > 0.f ? m_grooveFlapsAngle : 60.0f;
+      const float grooveFlapsAngle = grooveFlapsAngleDeg * float(M_PI) / 180.0f;
+      const float grooveAngle = 0.0f;
+
+      return projectService_->cutObjectWithGroove(
+          srcIdx, m_advCutAxis, m_advCutPosition, keepMode,
+          grooveDepth, grooveWidth, grooveFlapsAngle, grooveAngle);
+    }
+    else if (m_advCutConnectors)
+    {
+      // v5.13 gap-closure: discrete connector-pin mode（对齐上游
+      // GLGizmoAdvancedCut connectors 分支）。若有已放置连接器，先物化为负
+      // 体积再走 perform_with_plane（process_connector_cut 消费）。
+      return projectService_->cutObjectWithConnectors(
+          srcIdx, m_advCutAxis, m_advCutPosition, keepMode);
     }
     else
     {
-      m_selectedSourceIndices.insert(srcIdx);
+      // Planar cut mode (对齐上游 CutMode::cutPlanar)
+      return projectService_->cutObject(srcIdx, m_advCutAxis, m_advCutPosition, keepMode);
     }
-    statusText_ = tr("已切割对象");
-    rebuildObjectEntriesFromService();
-    refreshMeshCacheAndFitHint();
-    emit stateChanged();
-    return true;
-  }
+      },
+      srcIdx, keepMode);
 #endif
 
   statusText_ = tr("切割失败");
@@ -3500,41 +3516,14 @@ bool EditorViewModel::cutSelectedWithRotation()
     return false;
   }
   const int srcIdx = *m_selectedSourceIndices.constBegin();
-  auto *cmd = new CutCommand(srcIdx, m_cutAxis, m_cutPosition, m_cutKeepMode,
-                             projectService_, this);
-  const int cutNewIdx = projectService_->cutObjectWithRotation(
-      srcIdx, m_cutAxis, m_cutPosition, m_cutRotationX, m_cutRotationY,
-      m_cutRotationZ, m_cutKeepMode);
-  if (cutNewIdx < 0)
-  {
-    delete cmd;
-    statusText_ = projectService_->lastError().isEmpty()
-                      ? tr("Cut failed")
-                      : projectService_->lastError();
-    emit stateChanged();
-    return false;
-  }
-  cmd->setResult(cutNewIdx, projectService_->objectNames().value(cutNewIdx));
-  if (m_undoManager)
-    m_undoManager->push(cmd);
-  projectService_->syncTransformsFromModel();
-  m_selectedSourceIndices.clear();
-  if (m_cutKeepMode != 2)
-  {
-    m_selectedSourceIndices.insert(srcIdx);
-    m_selectedSourceIndices.insert(cutNewIdx);
-  }
-  else
-  {
-    m_selectedSourceIndices.insert(srcIdx);
-  }
-  statusText_ = tr("Object cut");
-  rebuildObjectEntriesFromService();
-  refreshMeshCacheAndFitHint();
-  emit stateChanged();
-  return true;
+  return runCutOperation(
+      [&]() {
+        return projectService_->cutObjectWithRotation(srcIdx, m_cutAxis, m_cutPosition,
+                                                      m_cutRotationX, m_cutRotationY, m_cutRotationZ,
+                                                      m_cutKeepMode);
+      },
+      srcIdx, m_cutKeepMode);
 }
-
 void EditorViewModel::flipCutPlane()
 {
   // 翻转切割位置到对称侧 (对齐上游 GLGizmoCut::flip_cut_plane)
@@ -3544,13 +3533,13 @@ void EditorViewModel::flipCutPlane()
 
 void EditorViewModel::centerCutPlane()
 {
-  // 将切割位置居中到选中对象中心 (对齐上游 cut plane reset)
-  const int idx = primarySelectedSourceIndex(this);
-  if (idx < 0 || !projectService_)
+  // 将切割位置居中到选中对象中心 (对齐上游 cut plane reset). The cut position
+  // is the offset from the object's bounding-box centre, so "centre" is 0
+  // (it used to copy the object's world coordinate, which pushed the plane far
+  // outside the object).
+  if (!projectService_ || primarySelectedSourceIndex(this) < 0)
     return;
-  const QVector3D pos = projectService_->objectPosition(idx);
-  m_cutPosition = (m_cutAxis == 0) ? pos.x() : (m_cutAxis == 1) ? pos.y()
-                                                                : pos.z();
+  m_cutPosition = 0.0;
   emit stateChanged();
 }
 
@@ -3558,32 +3547,14 @@ void EditorViewModel::flattenSelected()
 {
   if (!projectService_ || m_selectedSourceIndices.isEmpty())
     return;
-
   // Phase 129 (POLISH-02): real flatten via orientObject, which calls
-  // Slic3r::orientation::orient(ModelObject*) (ProjectService.cpp:2664-2675).
-  // This computes the best orientation (largest flat face down) upstream-style,
-  // replacing the former mock that hardcoded 6 candidate faces + reset rotation.
-  statusText_ = tr("Computing best flat orientation...");
-  // S1: paint/flatten plane rides the paintDataChanged carrier.
-  emitPaintClusterChanged();
-
-  const int idx = *m_selectedSourceIndices.constBegin();
-  bool ok = false;
-#ifdef HAS_LIBSLIC3R
-  if (projectService_)
-    ok = projectService_->orientObject(idx);
-#else
-  Q_UNUSED(idx);
-#endif
-
-  statusText_ = ok ? tr("Flattened to best face")
-                   : tr("Flatten not available (libslic3r required)");
-  if (ok) {
-    rebuildObjectEntriesFromService();
-    refreshMeshCacheAndFitHint();
-  }
-  // S1: paint/flatten plane rides the paintDataChanged carrier.
-  emitPaintClusterChanged();
+  // Slic3r::orientation::orient (ProjectService::orientObject) -- the largest
+  // flat face goes down, replacing the former mock.
+  // Routed through autoOrientSelected(): orientObject rotates the instance
+  // (like upstream OrientJob) and that path owns the "Orient" undo macro and
+  // the transform-channel notification. The former private copy had no undo
+  // command, so the flattened pose could not be undone.
+  autoOrientSelected();
 }
 
 // ===========================================================================
@@ -3783,6 +3754,47 @@ bool EditorViewModel::flattenPickFace(int pickedSourceIndex,
 #endif
 }
 
+// Shared tail of the plane-cut entry points. Cut replaces the object's volumes
+// and appends the second piece, so the undo step is a whole-scene snapshot
+// (the same fidelity as Split / Mesh boolean; upstream takes
+// Plater::TakeSnapshot "Cut by Plane" and swaps whole objects). The former
+// CutCommand only snapshotted one mesh and its undo spun forever (FB-R4-03).
+bool EditorViewModel::runCutOperation(const std::function<int()> &performCut, int srcIdx, int keepMode)
+{
+#ifdef HAS_LIBSLIC3R
+  auto *cmd = m_undoManager ? new SceneSnapshotCommand(tr("Cut"), projectService_) : nullptr;
+  const int cutNewIdx = performCut();
+  if (cutNewIdx < 0)
+  {
+    delete cmd;
+    statusText_ = projectService_->lastError().isEmpty() ? tr("Cut failed")
+                                                         : projectService_->lastError();
+    emit stateChanged();
+    return false;
+  }
+  if (cmd)
+  {
+    cmd->setAfterState();
+    m_undoManager->push(cmd);
+  }
+  // The cut object is replaced by its pieces, appended at the end of the
+  // object list (cutNewIdx = first piece): select exactly those.
+  Q_UNUSED(srcIdx); Q_UNUSED(keepMode);
+  m_selectedSourceIndices.clear();
+  for (int i = cutNewIdx; i < projectService_->modelCount(); ++i)
+    m_selectedSourceIndices.insert(i);
+  m_primarySelectedSourceIndex = cutNewIdx;
+  statusText_ = tr("Object cut");
+  rebuildObjectEntriesFromService();
+  invalidateSliceResultsForCurrentPlate();
+  refreshMeshCacheAndFitHint();
+  emit stateChanged();
+  return true;
+#else
+  Q_UNUSED(performCut); Q_UNUSED(srcIdx); Q_UNUSED(keepMode);
+  return false;
+#endif
+}
 void EditorViewModel::cutSelected(int axis, double position)
 {
   if (!projectService_ || m_selectedSourceIndices.isEmpty())
@@ -3804,42 +3816,13 @@ void EditorViewModel::cutSelected(int axis, double position)
   statusText_ = tr("正在切割对象...");
   emit stateChanged();
 
+#ifdef HAS_LIBSLIC3R
+  runCutOperation([&]() { return projectService_->cutObject(srcIdx, axis, position, m_cutKeepMode); },
+                  srcIdx, m_cutKeepMode);
+  return;
+#endif
   // Capture undo command before cut (captures source mesh snapshot and object count)
   auto *cmd = new CutCommand(srcIdx, axis, position, m_cutKeepMode, projectService_, this);
-
-#ifdef HAS_LIBSLIC3R
-  // 真实网格切割（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
-  {
-    const int cutNewIdx = projectService_->cutObject(srcIdx, axis, position, m_cutKeepMode);
-    if (cutNewIdx >= 0)
-    {
-      // Record result for redo
-      const QStringList namesAfter = projectService_->objectNames();
-      cmd->setResult(cutNewIdx, namesAfter.value(cutNewIdx));
-
-      if (m_undoManager)
-        m_undoManager->push(cmd);
-
-      projectService_->syncTransformsFromModel();
-      m_selectedSourceIndices.clear();
-      if (m_cutKeepMode != 2) // Keep upper: select both parts
-      {
-        m_selectedSourceIndices.insert(srcIdx);
-        m_selectedSourceIndices.insert(cutNewIdx);
-      }
-      else // Keep lower only
-      {
-        m_selectedSourceIndices.insert(srcIdx);
-      }
-      statusText_ = tr("已切割对象");
-      rebuildObjectEntriesFromService();
-      refreshMeshCacheAndFitHint();
-      emit stateChanged();
-      return;
-    }
-  }
-#endif
-
   // Mock mode: 将对象沿指定轴切割为上下两部分
   const int newIdx = projectService_->addObject(origName + tr("_upper"));
   if (newIdx >= 0)
@@ -5766,11 +5749,43 @@ QVariantList EditorViewModel::extrudersColors() const
 // does NOT instantiate the deleter at the header's point of incomplete type.
 EditorViewModel::~EditorViewModel() = default;
 
+namespace
+{
+  // Identity of the render batches the mesh blob is built from: model object
+  // count plus the object/volume/instance tuple of every batch, in blob order.
+  // Two equal signatures mean the resident blob still pairs with the live
+  // model; a different one means the scene topology moved.
+  QList<int> renderBatchSignature(const ProjectService *service)
+  {
+    QList<int> signature;
+    if (!service)
+      return signature;
+    const ProjectService::MeshBatchRenderTables tables = service->meshBatchRenderTables();
+    signature.reserve(1 + tables.sourceObjectIndices.size() * 3);
+    signature.append(service->modelCount());
+    for (int i = 0; i < tables.sourceObjectIndices.size(); ++i)
+    {
+      signature.append(tables.sourceObjectIndices.at(i));
+      signature.append(tables.volumeIndices.at(i));
+      signature.append(tables.instanceIndices.at(i));
+    }
+    return signature;
+  }
+}
 void EditorViewModel::undo()
 {
   if (m_undoManager)
   {
+    const QList<int> signatureBefore = renderBatchSignature(projectService_);
     m_undoManager->undo();
+    // Commands that add / remove / reorder objects or instances (clone, add,
+    // move, snapshot restore, instance count ...) act on the service directly
+    // and do not re-produce the mesh blob; without this the resident blob and
+    // the live per-batch channel disagree in batch count and the renderer
+    // draws nothing. Pure transform undo keeps the signature and stays on the
+    // transform channel (S3 contract), so it never re-freezes the plate shift.
+    if (renderBatchSignature(projectService_) != signatureBefore)
+      rebuildAndNotify();
     // v5.16 (CIRC-01): upstream invalidates slicing on any undo (TakeSnapshot
     // restore marks plates dirty). The command writes service state directly,
     // so the invalidation must happen here, not inside the command.
@@ -5782,7 +5797,10 @@ void EditorViewModel::redo()
 {
   if (m_undoManager)
   {
+    const QList<int> signatureBefore = renderBatchSignature(projectService_);
     m_undoManager->redo();
+    if (renderBatchSignature(projectService_) != signatureBefore)
+      rebuildAndNotify();
     invalidateAllSliceResults();
   }
 }
@@ -6106,15 +6124,19 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       // Phase 237 (VIEW-04): saved-unit inference for the freshly imported
       // objects (upstream checks the whole loaded-file model and prompts
       // once per file, Plater.cpp:4237-4253; meters is checked before
-      // imperial, which loadedObjectUnitHint mirrors). loadFile REPLACES the
-      // scene model, so every current object belongs to the file just
-      // loaded. Only the first tripping object is surfaced — the confirm
-      // dialog applies per object.
+      // imperial, which loadedObjectUnitHint mirrors). FB-R7-01: a plain
+      // import into a non-empty project now MERGES into the scene instead
+      // of replacing it, so the objects belonging to the file just loaded
+      // start at the pre-load count; on the replace path every current
+      // object belongs to the file. Only the first tripping object is
+      // surfaced — the confirm dialog applies per object.
       if (wasModelImport && projectService_)
       {
         const QStringList names = projectService_->objectNames();
         const int modelCount = projectService_->modelCount();
-        for (int i = 0; i < modelCount; ++i)
+        const int firstImportedObject = projectService_->lastImportMergedIntoScene()
+            ? qMax(0, m_preLoadModelCount) : 0;
+        for (int i = firstImportedObject; i < modelCount; ++i)
         {
           const int unitHint = projectService_->loadedObjectUnitHint(i);
           if (unitHint != 0)
@@ -6175,6 +6197,21 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
     m_bedShapeType = s.value(QStringLiteral("bed/shapeType"), 0).toInt();
     m_bedDiameter = s.value(QStringLiteral("bed/diameter"), 220.0f).toFloat();
   }
+  // FB-R2-06: single bed source -- every bed edit (preset sync, BedShapeDialog,
+  // restore) reaches the project service's plate geometry through this one hook.
+  connect(this, &EditorViewModel::bedShapeChanged, this,
+          [this]() { syncProjectBedSize(); });
+  syncProjectBedSize();
+}
+void EditorViewModel::syncProjectBedSize()
+{
+  // Circle / custom beds keep the previous plate footprint (the viewport is
+  // driven by bedDiameter / the imported outline; the fork has no polygon
+  // plate mesh -- registered delta, unchanged).
+  if (!projectService_ || m_bedShapeType != 0)
+    return;
+  projectService_->setBedSize(int(std::lround(m_bedWidth)),
+                              int(std::lround(m_bedDepth)));
 }
 
 // ── S1 (2026-10-15): cluster emission helpers ──────────────────────────────
@@ -6830,9 +6867,22 @@ int EditorViewModel::synchronizeViewportContext(int targetKind,
     m_contextInstanceIndex = instanceIndex;
     m_contextPlateIndex = currentPlate;
 
+    // A plain object with a single ordinary volume is not a "part" selection:
+    // the viewport hit classifier reports its only volume as a Part target, but
+    // upstream selects the whole object there (the volume row only becomes the
+    // selection for multi-volume objects or Text/SVG emboss volumes). Treating
+    // it as a volume selection set hasSelectedVolume(), which turned
+    // canTransformSelection()/canDuplicateSelectedObjects() false and left
+    // Clone / Fix / Simplify / Center / Mirror / Printable / Reload disabled in
+    // the object context menu.
     const bool hasPartTarget = target == ViewportContextTarget::Part
         && volumeIndex >= 0
-        && volumeIndex < projectService_->objectVolumeCount(sourceObjectIndex);
+        && volumeIndex < projectService_->objectVolumeCount(sourceObjectIndex)
+        && (projectService_->objectVolumeCount(sourceObjectIndex) > 1
+            || projectService_->objectVolumeType(sourceObjectIndex, volumeIndex)
+                   == int(MockVolumeType::TextEmboss)
+            || projectService_->objectVolumeType(sourceObjectIndex, volumeIndex)
+                   == int(MockVolumeType::SvgEmboss));
     if (hasPartTarget) {
       m_selectedVolumeObjectSourceIndex = sourceObjectIndex;
       m_selectedVolumeIndices.clear();
@@ -8180,14 +8230,14 @@ void EditorViewModel::mirrorSelectedObjects(int axis)
   // Sync real model mirror state. P16.8: each mirrored object enters the undo
   // stack as a MirrorCommand (upstream Selection::mirror rides on a
   // Plater::take_snapshot; GUI_Factories.cpp:1109-1125 menu).
-  struct MirrorPair { int index; QVector3D oldMirror, newMirror; };
+  struct MirrorPair { int index; std::array<double, 16> oldMatrix, newMatrix; };
   QList<MirrorPair> pairs;
   for (int srcIdx : m_selectedSourceIndices)
   {
-    const QVector3D oldMirror = projectService_->objectMirror(srcIdx);
+    const std::array<double, 16> oldMatrix = projectService_->objectInstanceMatrix(srcIdx);
     if (!projectService_->mirrorObject(srcIdx, axis))
       continue;
-    pairs.append(MirrorPair{srcIdx, oldMirror, projectService_->objectMirror(srcIdx)});
+    pairs.append(MirrorPair{srcIdx, oldMatrix, projectService_->objectInstanceMatrix(srcIdx)});
   }
   projectService_->syncTransformsFromModel();
 
@@ -8195,15 +8245,15 @@ void EditorViewModel::mirrorSelectedObjects(int axis)
   {
     if (pairs.size() == 1)
     {
-      m_undoManager->push(new MirrorCommand(pairs[0].index, pairs[0].oldMirror,
-                                            pairs[0].newMirror, projectService_));
+      m_undoManager->push(new MirrorCommand(pairs[0].index, pairs[0].oldMatrix,
+                                            pairs[0].newMatrix, projectService_));
     }
     else
     {
       m_undoManager->beginMacro(tr("Mirror"));
       for (const MirrorPair &pair : pairs)
-        m_undoManager->push(new MirrorCommand(pair.index, pair.oldMirror,
-                                              pair.newMirror, projectService_));
+        m_undoManager->push(new MirrorCommand(pair.index, pair.oldMatrix,
+                                              pair.newMatrix, projectService_));
       m_undoManager->endMacro();
     }
   }
@@ -9934,6 +9984,15 @@ bool EditorViewModel::movePlate(int oldIndex, int newIndex)
       m_undoManager->push(cmd);
     }
     invalidateAllSliceResults();
+    // A reorder reflows the member objects onto their new plate slots, so
+    // the resident mesh blob (which freezes the plate-normalization shift) and
+    // the per-batch tables must be re-paired with the transform channel --
+    // exactly what the undo path (rebuildAndNotify) already does. Without it
+    // the viewport kept the pre-move blob next to post-move transforms: the
+    // moved plate's objects rendered off their plate and the canvas turned
+    // the out-of-bed red.
+    rebuildObjectEntriesFromService();
+    refreshMeshCacheAndFitHint();
     emit stateChanged();
   }
   else
@@ -10832,13 +10891,24 @@ EditorViewModel::BedOutsideScan EditorViewModel::scanObjectsAgainstBed(float mar
   const float originY = bedOriginY();
 
   const int count = projectService_->modelCount();
+  const int plateTotal = qMax(1, projectService_->plateCount());
   for (int i = 0; i < count; ++i)
   {
     const QVector3D pos = projectService_->objectPosition(i);
     float halfW = 0.f, halfD = 0.f;
     objectBedFootprint(i, &halfW, &halfD);
-    const float x = pos.x();
-    const float y = -pos.z(); // slic3r depth axis
+    // FB-R2-06/R6: every plate has its own bed rectangle at its grid slot
+    // (upstream tests a volume against ITS plate's build volume). Comparing
+    // plate N's absolute world position with plate 0's rectangle flagged every
+    // object on plates 2+ as "outside the bed" (banner + RecenterDialog would
+    // drag it back onto plate 1). Make the position plate-relative first.
+    double plateOffX = 0.0, plateOffY = 0.0;
+    const int plateIdx = projectService_->plateIndexForObject(i);
+    if (plateIdx >= 0)
+      OWzx::PartPlateGridLayout::gridOffset(plateIdx, plateTotal, double(bedW),
+                                            double(bedD), &plateOffX, &plateOffY);
+    const float x = pos.x() - float(plateOffX);
+    const float y = -pos.z() - float(plateOffY); // slic3r depth axis
     const bool xOutside = (x - halfW < originX - marginMm) ||
                           (x + halfW > originX + bedW + marginMm);
     const bool yOutside = (y - halfD < originY - marginMm) ||
@@ -11280,6 +11350,33 @@ bool EditorViewModel::consumePendingExportSnapshot(bool success, const QString &
   return true;
 }
 
+void EditorViewModel::pushSliceConfigToService()
+{
+  if (!configViewModel_ || !sliceService_)
+    return;
+  sliceService_->setMergedPresetConfig(configViewModel_->mergedConfigValues());
+  // v2.7 P0: ensure bed_shape is set (mirror CLI). R-P1.I: use the printer
+  // preset's bed (syncBedFromPrinterPreset keeps bedWidth/bedDepth/origins in
+  // sync from printable_area) instead of an unconditional 220x220 -- non-220
+  // printers sliced against the wrong bed. 220x220 stays the fallback when no
+  // preset bed is known. setBedShape uses set_key_value(ConfigOptionPoints)
+  // directly, bypassing the unreliable printable_area/set_deserialize_strict
+  // path.
+  const float w = bedWidth(), d = bedDepth();
+  if (w > 0.f && d > 0.f)
+  {
+    const QPointF origin(bedOriginX(), bedOriginY());
+    sliceService_->setBedShape({origin,
+                                origin + QPointF(w, 0),
+                                origin + QPointF(w, d),
+                                origin + QPointF(0, d)});
+  }
+  else
+  {
+    sliceService_->setBedShape({QPointF(0,0), QPointF(220,0), QPointF(220,220), QPointF(0,220)});
+  }
+}
+
 void EditorViewModel::requestSlice()
 {
   if (!canRequestSlice())
@@ -11291,32 +11388,7 @@ void EditorViewModel::requestSlice()
 
   // Inject merged preset config into SliceService before slicing
   // (对齐上游 PresetBundle::full_fff_config → BackgroundSlicingProcess)
-  if (configViewModel_ && sliceService_)
-  {
-    sliceService_->setMergedPresetConfig(configViewModel_->mergedConfigValues());
-    // v2.7 P0: ensure bed_shape is set (mirror CLI). R-P1.I: use the printer
-    // preset's bed (syncBedFromPrinterPreset keeps bedWidth/bedDepth/origins in
-    // sync from printable_area) instead of an unconditional 220x220 -- non-220
-    // printers sliced against the wrong bed. 220x220 stays the fallback when no
-    // preset bed is known. setBedShape uses set_key_value(ConfigOptionPoints)
-    // directly, bypassing the unreliable printable_area/set_deserialize_strict
-    // path.
-    {
-      const float w = bedWidth(), d = bedDepth();
-      if (w > 0.f && d > 0.f)
-      {
-        const QPointF origin(bedOriginX(), bedOriginY());
-        sliceService_->setBedShape({origin,
-                                    origin + QPointF(w, 0),
-                                    origin + QPointF(w, d),
-                                    origin + QPointF(0, d)});
-      }
-      else
-      {
-        sliceService_->setBedShape({QPointF(0,0), QPointF(220,0), QPointF(220,220), QPointF(0,220)});
-      }
-    }
-  }
+  pushSliceConfigToService();
 
   m_sliceResultPlateIndex = -1;
   // Phase 239 (ENGN-02): a fresh model slice is not a previous-G-code reuse.
@@ -11872,6 +11944,11 @@ void EditorViewModel::continueSliceAllQueue()
   // MP5: every slice-all advance hands the view to the new plate (upstream
   // select_plate_view after each plate completes).
   emit sliceAllAdvanced(plate);
+  // FB-R7-05 (P1): inject the merged preset config + bed shape here too --
+  // startSlicePlate used to run on factory defaults whenever slice-all was
+  // the first slicing action of the session (layer_height 0.2 instead of
+  // the selected preset's value).
+  pushSliceConfigToService();
   if (sliceService_)
     sliceService_->startSlicePlate(plate);
 }
@@ -12064,9 +12141,11 @@ bool EditorViewModel::arrangePlateObjects(int plateIndex)
 
   // U4: same synchronous long run as arrangeAllObjects -- same busy scope.
   const SyncBusyScope busy(this, &EditorViewModel::m_arranging);
+  // Scoped to this plate: the other plates' objects stay put and no plate is
+  // recycled (the all-plates arrange is arrangeAllObjects).
   const bool arranged = projectService_->arrangeObjects(spacing, m_arrangeRotation,
                                                          m_arrangeAlignY, printableArea,
-                                                         arrangeWipeTowerContext());
+                                                         arrangeWipeTowerContext(), plateIndex);
   if (arranged) {
     projectService_->syncTransformsFromModel();
     invalidateSliceResultsForPlate(plateIndex);
@@ -12519,16 +12598,11 @@ void EditorViewModel::commitBedShape(double widthMm, double depthMm,
   setBedDiameter(float(diameterMm));
   setBedMaxHeight(float(maxHeightMm));
   // printable_area write-back analog: the rectangle footprint lands in the
-  // plate-list geometry, which ProjectService embeds as printable_area
-  // on project save (:11001-11013) and arrange reads as its bed bbox
-  // (:4790-4797). Circle/custom shapes keep the previous plate footprint
-  // (the viewport is driven by bedDiameter / the imported outline instead) —
-  // registered delta, the fork has no polygon plate mesh.
-  if (shapeType == 0 && projectService_)
-  {
-    projectService_->setPlateSize(int(std::lround(widthMm)),
-                                  int(std::lround(depthMm)), 0);
-  }
+  // plate-list geometry (ProjectService::setBedSize, driven by the
+  // bedShapeChanged hook -> syncProjectBedSize), which ProjectService embeds
+  // as printable_area on project save and arrange reads as its bed bbox.
+  // Circle/custom shapes keep the previous plate footprint.
+  syncProjectBedSize();
   emit stateChanged();
 }
 

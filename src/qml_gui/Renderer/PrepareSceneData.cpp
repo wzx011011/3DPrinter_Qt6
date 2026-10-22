@@ -1360,9 +1360,11 @@ void PrepareSceneData::rebuildSinkingContours()
   }
 }
 
-// S3: recompose one batch's vertex range in place through a new world
-// matrix. World matrix with det<0 flips triangle winding per triple (the
-// same compose-time flip the parse path applies to decomposed payloads).
+// S3: recompose one batch's vertex range in place through `world`, which is
+// the DELTA from the matrix the vertices are currently composed with to the
+// new one (setInstanceTransforms passes next * previous^-1). swapWinding flips
+// triangle winding per triple (the same compose-time flip the parse path
+// applies to decomposed payloads) and is requested on a handedness change.
 // Translate-only matrices (the gizmo-drag dominant case) take the exact
 // float-add fast path -- see isTranslateOnlyMatrix.
 void PrepareSceneData::recomposeBatchRange(ModelBatch &batch,
@@ -1434,8 +1436,21 @@ void PrepareSceneData::setInstanceTransforms(
     if (!fullRecompose && next == m_batchWorldTransforms.at(batchIndex))
       continue; // untouched batch: no vertex recompose, no bounds rebuild
     ModelBatch &batch = m_modelBatches[batchIndex];
-    const bool swapWinding = next.determinant() < 0.0f;
-    recomposeBatchRange(batch, next, swapWinding);
+    // m_modelVertices already hold the batch composed through the PREVIOUS
+    // channel matrix, so the in-place recompose must apply only the change
+    // from previous to next (next * previous^-1). Applying `next` itself
+    // composed the instance transform a second time: any edit after the
+    // initial parse -- whose channel matrix is never identity once the
+    // object sits at its plate position -- displaced the batch (a mirror
+    // flipped the already-positioned vertices about the world origin).
+    const QMatrix4x4 previous = m_batchWorldTransforms.value(batchIndex);
+    bool previousInvertible = false;
+    const QMatrix4x4 previousInverse = previous.inverted(&previousInvertible);
+    const QMatrix4x4 delta = previousInvertible ? next * previousInverse : next;
+    // Winding was flipped at parse/recompose time for a mirroring previous
+    // matrix; flip again only when the handedness changes.
+    const bool swapWinding = (next.determinant() < 0.0f) != (previous.determinant() < 0.0f);
+    recomposeBatchRange(batch, delta, swapWinding);
     anyChanged = true;
     m_batchWorldTransforms[batchIndex] = next;
   }

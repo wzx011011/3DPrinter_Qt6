@@ -401,7 +401,18 @@ CxDialog {
         onAccepted: {
             // v5.16 (PSET2-04): per-preset upstream-shape JSON export
             // (configVm.exportBundleIni → PresetService::exportBundleIni).
-            var path = selectedFolder.toString().replace("file:///", "")
+            // FB-R7-07 family: keep the root slash when decoding the
+            // folder URL (the old replace() yielded "home/...").
+            var folderUrl = selectedFolder.toString()
+            var path
+            if (folderUrl.indexOf("file:///") === 0)
+                path = decodeURIComponent(folderUrl.substring(8))
+            else if (folderUrl.indexOf("file://") === 0)
+                path = decodeURIComponent(folderUrl.substring(7))
+            else
+                path = folderUrl
+            if (path.length > 0 && path.charAt(0) !== "/")
+                path = "/" + path
             if (root.configVm && path.length > 0) {
                 var selected = []
                 for (var name in root.selectedPresets)

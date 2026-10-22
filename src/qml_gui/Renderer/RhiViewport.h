@@ -886,6 +886,8 @@ public:
   // MP5: fit the camera to the whole plate grid (bed rect inflated by the
   // grid strides + the icon-column overhang).
   void fitCameraToPlateGrid();
+  // Latches one deferred fitCameraToPlateGrid() (coalesces a property batch).
+  void scheduleZoomToAllPlates();
   // Phase 237 (VIEW-01): orthographic projection toggle (see the
   // orthographicCamera Q_PROPERTY above).
   bool orthographicCamera() const { return m_camera.useOrtho(); }

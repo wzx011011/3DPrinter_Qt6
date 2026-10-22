@@ -120,6 +120,52 @@ RhiViewportRenderer::~RhiViewportRenderer()
   releaseResources();
 }
 
+// ── Pipeline / shader-resource binding order (backend contract) ─────────────
+// QRhiCommandBuffer::setGraphicsPipeline() must come before any other set/draw
+// command, and on OpenGL the shader resources are bound *through* the current
+// pipeline: GL has no real uniform buffers here, so QRhi applies the srb as
+// glUniform* calls on the pipeline's program, and the uniforms of a program
+// are only written when setShaderResources() runs with that pipeline current
+// (Qt's own comment in QRhiGles2::setShaderResources: "with GL we have a
+// strong dependency between the pipeline (== program) and the srb, unlike
+// other APIs"). D3D11/D3D12/Vulkan/Metal bind descriptors independently of the
+// pipeline, so this renderer used to call setShaderResources() once at the top
+// of a pass and rely on the binding persisting across pipeline switches.
+// On OpenGL that records a BindShaderResources command with neither a graphics
+// nor a compute pipeline, and QRhiGles2::executeCommandBuffer() dereferences
+// the null compute pipeline (segfault in QRhi::endFrame on the render thread).
+// It would also leave every later program without its camera uniforms.
+//
+// setSrb() records the srb the pass wants; setPipeline() selects the pipeline
+// and, on OpenGL, re-applies the wanted srb right after it. Other backends keep
+// the exact original call sequence.
+void RhiViewportRenderer::resetPassBindings()
+{
+  m_activeSrb = nullptr; // nullptr == the pipeline's own srb
+  m_pipelineSet = false;
+}
+void RhiViewportRenderer::setPipeline(QRhiCommandBuffer *cb, QRhiGraphicsPipeline *ps,
+                                      QRhiShaderResourceBindings *srb)
+{
+  cb->setGraphicsPipeline(ps);
+  m_pipelineSet = true;
+  if (srb != nullptr) {
+    m_activeSrb = srb;
+    cb->setShaderResources(srb);
+  } else if (rhi() != nullptr && rhi()->backend() == QRhi::OpenGLES2) {
+    cb->setShaderResources(m_activeSrb);
+  }
+}
+void RhiViewportRenderer::setSrb(QRhiCommandBuffer *cb, QRhiShaderResourceBindings *srb)
+{
+  m_activeSrb = srb;
+  // OpenGL: nothing to bind until a program has been selected in this pass;
+  // setPipeline() applies m_activeSrb as soon as it is.
+  if (!m_pipelineSet && rhi() != nullptr && rhi()->backend() == QRhi::OpenGLES2)
+    return;
+  cb->setShaderResources(srb);
+}
+
 void RhiViewportRenderer::initialize(QRhiCommandBuffer *cb)
 {
   Q_UNUSED(cb);
@@ -1207,12 +1253,18 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     if (updates == nullptr)
       updates = rhi()->nextResourceUpdateBatch();
     updates->merge(m_pendingReadbackUpdates);
-    delete m_pendingReadbackUpdates;
+    // QRhi batches live in a fixed pool (64 slots); release() is the only way
+    // to hand one back. `delete` frees the object but leaves its pool slot
+    // marked in use (and the pool entry dangling), so every thumbnail capture
+    // leaked a slot until nextResourceUpdateBatch() returned nullptr and this
+    // merge() crashed (reproduced by adding ~32 plates, each capturing one).
+    m_pendingReadbackUpdates->release();
     m_pendingReadbackUpdates = nullptr;
     rhiTrace("seamA-folded");
   }
 
   cb->beginPass(renderTarget(), m_clearColor, {1.0f, 0}, updates);
+  resetPassBindings();
   rhiTrace("beginPass-done");
   // v5.16 (BEDBOTTOM): upstream bottom gate for every bed surface. Computed
   // once per frame from the synchronized view matrix.
@@ -1230,19 +1282,19 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   if (m_canvasType != RhiViewport::CanvasPreview && ensurePipelines()) {
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
-    cb->setShaderResources(m_srb.get());
+    setSrb(cb, m_srb.get());
     rhiTrace("setShaderResources-done");
     // Upstream PartPlate::render skips render_background (plate fill +
     // exclude areas) entirely when viewed from below (`if (!bottom)`), so the
     // opaque fill never occludes the model from below-horizon angles.
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
-      cb->setGraphicsPipeline(m_fillPipeline.get());
+      setPipeline(cb, m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
-      cb->setGraphicsPipeline(m_linePipeline.get());
+      setPipeline(cb, m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
@@ -1252,7 +1304,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // (PartPlate.cpp:892-912: 1px fine then 2px bolder, same line color).
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown
         && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0) {
-      cb->setGraphicsPipeline(m_fillPipeline.get());
+      setPipeline(cb, m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput boldBinding(m_bedBoldFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &boldBinding);
       cb->draw(m_bedBoldFillVertexCount);
@@ -1263,7 +1315,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // top-only because upstream renders them inside render_background.
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && !lookingDown
         && m_bedBottomLineBuffer && m_bedBottomLineVertexCount > 0) {
-      cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+      setPipeline(cb, m_translucentLinePipeline.get());
       const QRhiCommandBuffer::VertexInput bottomLineBinding(m_bedBottomLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &bottomLineBinding);
       cb->draw(m_bedBottomLineVertexCount);
@@ -1272,7 +1324,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // render_height_limit runs inside PartPlate::render; preview's
     // GCodeViewer::_render_bed does not draw them).
     if (m_prepareScene.showBed() && m_bedLimitBuffer && m_bedLimitVertexCount > 0) {
-      cb->setGraphicsPipeline(m_linePipeline.get());
+      setPipeline(cb, m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput limitBinding(m_bedLimitBuffer.get(), 0);
       cb->setVertexInput(0, 1, &limitBinding);
       cb->draw(m_bedLimitVertexCount);
@@ -1306,14 +1358,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       // per-face normal buffer. Falls back to the flat vertex-color pipeline
       // when the lit pipeline or normal buffer is unavailable.
       if (m_modelLitEnabled && ensureModelLitPipeline() && m_modelNormalBuffer) {
-        cb->setGraphicsPipeline(m_modelLitPipeline.get());
+        setPipeline(cb, m_modelLitPipeline.get());
         const QRhiCommandBuffer::VertexInput modelBindings[2] = {
             QRhiCommandBuffer::VertexInput(m_modelVertexBuffer.get(), 0),
-            QRhiCommandBuffer::VertexInput(m_modelNormalBuffer.get(), 1),
+            QRhiCommandBuffer::VertexInput(m_modelNormalBuffer.get(), 0),
         };
         cb->setVertexInput(0, 2, modelBindings);
       } else {
-        cb->setGraphicsPipeline(m_fillPipeline.get());
+        setPipeline(cb, m_fillPipeline.get());
         const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
         cb->setVertexInput(0, 1, &modelBinding);
       }
@@ -1346,7 +1398,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       // :2558-2654): line topology through the opaque line pipeline with
       // depth test+write, exactly like the upstream "flat" shader draw.
       // (The previous yellow/cyan full-volume tint was an OWzx invention.)
-      cb->setGraphicsPipeline(m_linePipeline.get());
+      setPipeline(cb, m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput highlightBinding(m_highlightVertexBuffer.get(), 0);
       cb->setVertexInput(0, 1, &highlightBinding);
       cb->draw(m_highlightVertexCount);
@@ -1398,7 +1450,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // Camera uniform was already uploaded before beginPass (BUG-V31-1 fix).
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
-    cb->setShaderResources(m_srb.get());
+    setSrb(cb, m_srb.get());
     // v5.15 (BEDTEX): upstream Preview also renders the print bed
     // (GCodeViewer -> _render_bed) behind the toolpath segments, including
     // the bed texture image. v5.16 (BEDBOTTOM): the CanvasPreview bed render
@@ -1407,13 +1459,13 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // skipped from below-horizon angles, keeping the toolpaths visible; the
     // grid alone remains through the bottom-line buffer.
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedFillBuffer && m_bedFillVertexCount > 0) {
-      cb->setGraphicsPipeline(m_fillPipeline.get());
+      setPipeline(cb, m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
     if (m_prepareScene.showBed() && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
-      cb->setGraphicsPipeline(m_linePipeline.get());
+      setPipeline(cb, m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
@@ -1422,14 +1474,14 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // (upstream GCodeViewer::_render_bed renders the same PartPlate grid).
     if (m_prepareScene.showBed() && lookingDown
         && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0) {
-      cb->setGraphicsPipeline(m_fillPipeline.get());
+      setPipeline(cb, m_fillPipeline.get());
       const QRhiCommandBuffer::VertexInput boldBinding(m_bedBoldFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &boldBinding);
       cb->draw(m_bedBoldFillVertexCount);
     }
     if (m_prepareScene.showBed() && !lookingDown
         && m_bedBottomLineBuffer && m_bedBottomLineVertexCount > 0) {
-      cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+      setPipeline(cb, m_translucentLinePipeline.get());
       const QRhiCommandBuffer::VertexInput bottomLineBinding(m_bedBottomLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &bottomLineBinding);
       cb->draw(m_bedBottomLineVertexCount);
@@ -1461,7 +1513,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // for preview, :983-988). Translucent fill pipeline = blended, depth test
     // but no depth write -- mirrors the upstream glDepthMask(GL_FALSE).
     if (m_ghostShellBuffer && m_ghostShellVertexCount > 0) {
-      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      setPipeline(cb, m_translucentFillPipeline.get());
       const QRhiCommandBuffer::VertexInput ghostBinding(m_ghostShellBuffer.get(), 0);
       cb->setVertexInput(0, 1, &ghostBinding);
       cb->draw(m_ghostShellVertexCount);
@@ -1480,7 +1532,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
         const QRhiCommandBuffer::VertexInput segBinding(m_previewSegmentBuffer.get(), 0);
         const QRhiCommandBuffer::VertexInput litBindings[2] = {
             QRhiCommandBuffer::VertexInput(m_previewSegmentBuffer.get(), 0),
-            QRhiCommandBuffer::VertexInput(m_previewNormalBuffer.get(), 1),
+            QRhiCommandBuffer::VertexInput(m_previewNormalBuffer.get(), 0),
         };
         QRhiGraphicsPipeline *currentPipeline = nullptr;
         for (const PreviewDrawRange &range : drawRanges) {
@@ -1492,7 +1544,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
                               : m_translucentFillPipeline.get())
                   : m_linePipeline.get();
           if (wanted != currentPipeline) {
-            cb->setGraphicsPipeline(wanted);
+            setPipeline(cb, wanted);
             if (wanted == m_previewLitPipeline.get())
               cb->setVertexInput(0, 2, litBindings);
             else
@@ -1511,7 +1563,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // updates batch through the DirtyPreviewCap registry channel.
     if (m_moveEnd > 0 && m_moveEnd < m_previewDrawSpans.size()
         && m_previewCapBuffer && m_previewCapVertexCount > 0) {
-      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      setPipeline(cb, m_translucentFillPipeline.get());
       const QRhiCommandBuffer::VertexInput capBinding(m_previewCapBuffer.get(), 0);
       cb->setVertexInput(0, 1, &capBinding);
       cb->draw(m_previewCapVertexCount);
@@ -1524,7 +1576,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
     // G-code axis convention (x,y,z) maps to scene (x,z,y), matching the
     // segment axis swap in parsePreviewSegments.
     if (m_showMarker && m_toolMarkerBuffer && m_toolMarkerVertexCount > 0) {
-      cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+      setPipeline(cb, m_translucentFillPipeline.get());
       const QRhiCommandBuffer::VertexInput markerBinding(m_toolMarkerBuffer.get(), 0);
       cb->setVertexInput(0, 1, &markerBinding);
       cb->draw(m_toolMarkerVertexCount);
@@ -1624,7 +1676,7 @@ void RhiViewportRenderer::releaseResources()
   // Drop deferred readback commands before destroying the texture they refer
   // to. The batch is render-thread owned and is returned to QRhi's pool here.
   if (m_pendingReadbackUpdates != nullptr) {
-    delete m_pendingReadbackUpdates;
+    m_pendingReadbackUpdates->release();
     m_pendingReadbackUpdates = nullptr;
   }
   // Phase 95 (THUMBCAP-01): release offscreen thumbnail RT + pipelines.
@@ -1987,20 +2039,21 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
                                     corrected.constData());
 
   cb->beginPass(m_thumbnailRenderTarget.get(), m_clearColor, {1.0f, 0}, thumbUpdates);
+  resetPassBindings();
   cb->setViewport(QRhiViewport(0, 0, float(m_thumbnailLastBuiltSize),
                                float(m_thumbnailLastBuiltSize)));
-  cb->setShaderResources(m_thumbnailSrb.get());
+  setSrb(cb, m_thumbnailSrb.get());
 
   // Bed fill (triangles).
   if (m_prepareScene.showBed() && m_bedFillBuffer && m_bedFillVertexCount > 0) {
-    cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+    setPipeline(cb, m_thumbnailFillPipeline.get());
     const QRhiCommandBuffer::VertexInput fillBinding(m_bedFillBuffer.get(), 0);
     cb->setVertexInput(0, 1, &fillBinding);
     cb->draw(m_bedFillVertexCount);
   }
   // Bed grid lines.
   if (m_prepareScene.showBed() && m_bedLineBuffer && m_bedLineVertexCount > 0) {
-    cb->setGraphicsPipeline(m_thumbnailLinePipeline.get());
+    setPipeline(cb, m_thumbnailLinePipeline.get());
     const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
     cb->setVertexInput(0, 1, &lineBinding);
     cb->draw(m_bedLineVertexCount);
@@ -2012,13 +2065,13 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
     // fragment path renders the upstream pick_thumbnail family
     // (Plater.cpp:12086-12094).
     if (m_pickVertexBuffer && m_pickVertexCount > 0) {
-      cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+      setPipeline(cb, m_thumbnailFillPipeline.get());
       const QRhiCommandBuffer::VertexInput pickBinding(m_pickVertexBuffer.get(), 0);
       cb->setVertexInput(0, 1, &pickBinding);
       cb->draw(m_pickVertexCount);
     }
   } else if (m_modelVertexBuffer && m_modelVertexCount > 0) {
-    cb->setGraphicsPipeline(m_thumbnailFillPipeline.get());
+    setPipeline(cb, m_thumbnailFillPipeline.get());
     const QRhiCommandBuffer::VertexInput modelBinding(m_modelVertexBuffer.get(), 0);
     cb->setVertexInput(0, 1, &modelBinding);
     cb->draw(m_modelVertexCount);
@@ -2511,13 +2564,12 @@ void RhiViewportRenderer::renderBedTexture(QRhiCommandBuffer *cb)
     return;
   if (!ensureBedTexturePipeline())
     return;
-  cb->setGraphicsPipeline(m_bedTexturePipeline.get());
-  cb->setShaderResources(m_bedTextureSrb.get());
+  setPipeline(cb, m_bedTexturePipeline.get(), m_bedTextureSrb.get());
   const QRhiCommandBuffer::VertexInput binding(m_bedTextureVertexBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_bedTextureVertexCount);
   // Restore the shared camera-only SRB for the draws that follow.
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
 }
 
 // ── PLATEICONS-GL: bed icon atlas upload (mirrors uploadBedTexture) ─────────
@@ -2690,13 +2742,12 @@ void RhiViewportRenderer::renderPlateIcons(QRhiCommandBuffer *cb)
     return;
   if (!ensurePlateIconPipeline())
     return;
-  cb->setGraphicsPipeline(m_plateIconPipeline.get());
-  cb->setShaderResources(m_plateIconSrb.get());
+  setPipeline(cb, m_plateIconPipeline.get(), m_plateIconSrb.get());
   const QRhiCommandBuffer::VertexInput binding(m_plateIconVertexBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_plateIconVertexCount);
   // Restore the shared camera-only SRB for the draws that follow.
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
 }
 
 // ── v5.15 (MODELLIT): two-light gouraud pipeline for model meshes ──────────
@@ -2822,20 +2873,20 @@ void RhiViewportRenderer::renderBedModel(QRhiCommandBuffer *cb)
   // bed plane (-0.41 + GROUND_Z). The stream positions are authored in bed
   // coordinates, so the y offset is baked at upload via a stream rewrite in
   // synchronize (see the bed-model sync block); here it is a plain lit draw.
-  cb->setGraphicsPipeline(m_modelLitPipeline.get());
+  // The hotbed UBO variant (when available) must be bound together with the
+  // pipeline: OpenGL needs the srb applied after the program is selected.
+  setPipeline(cb, m_modelLitPipeline.get(), m_bedLitSrb.get());
   const QRhiCommandBuffer::VertexInput bindings[2] = {
       QRhiCommandBuffer::VertexInput(m_bedModelVertexBuffer.get(), 0),
-      QRhiCommandBuffer::VertexInput(m_bedModelNormalBuffer.get(), 1),
+      QRhiCommandBuffer::VertexInput(m_bedModelNormalBuffer.get(), 0),
   };
   cb->setVertexInput(0, 2, bindings);
   // SHADER-PORT v6: hotbed.fs:43 -- the frame mixes toward WHITE outside the
   // print volume (upstream draws it with the hotbed shader), so it binds the
   // mixTarget=1 UBO variant. Falls back to the shared UBO (ZERO mix) if the
   // variant could not be created.
-  if (m_bedLitSrb)
-    cb->setShaderResources(m_bedLitSrb.get());
   cb->draw(m_bedModelVertexCount);
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
 }
 
 // ── v5.16 (BEDTYPE-TEX): BBL bed-type overlay parts ────────────────────────
@@ -2855,16 +2906,17 @@ void RhiViewportRenderer::renderAxes(QRhiCommandBuffer *cb)
     // Fallback: flat unlit arrows keep the orientation cue visible.
     if (m_fillPipeline == nullptr)
       return;
-    cb->setGraphicsPipeline(m_fillPipeline.get());
+    setPipeline(cb, m_fillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_bedAxesVertexBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_bedAxesVertexCount);
     return;
   }
-  cb->setGraphicsPipeline(m_modelLitPipeline.get());
+  setPipeline(cb, m_modelLitPipeline.get(),
+              m_axesLitSrb ? m_axesLitSrb.get() : m_srb.get());
   const QRhiCommandBuffer::VertexInput bindings[2] = {
       QRhiCommandBuffer::VertexInput(m_bedAxesVertexBuffer.get(), 0),
-      QRhiCommandBuffer::VertexInput(m_bedAxesNormalBuffer.get(), 1),
+      QRhiCommandBuffer::VertexInput(m_bedAxesNormalBuffer.get(), 0),
   };
   cb->setVertexInput(0, 2, bindings);
   // SHADER-PORT v6: upstream draws the axes with gouraud_light, which has no
@@ -2872,13 +2924,12 @@ void RhiViewportRenderer::renderAxes(QRhiCommandBuffer *cb)
   // 3DScene.cpp:260) -- bind the variant UBO so the arrows at GROUND_Z
   // (-0.04, below the zMin=0 bed plane) are not darkened by the model
   // volumes' outside mix. Falls back to the shared UBO if unavailable.
-  cb->setShaderResources(m_axesLitSrb ? m_axesLitSrb.get() : m_srb.get());
   cb->draw(m_bedAxesVertexCount);
   // Restore the shared camera UBO: setShaderResources bindings persist across
   // setGraphicsPipeline, and the next draws (model body in the View3D branch;
   // ghost shells / preview segments / tool marker in the preview branch) bind
   // no SRB of their own -- they must not inherit printVolumeType=-1.
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
 }
 
 // P15.5 (SINK): sinking-contour bands (upstream GLVolume::SinkingContours,
@@ -2897,9 +2948,9 @@ void RhiViewportRenderer::renderSinkingContours(QRhiCommandBuffer *cb)
     return;
   const int hovered = m_prepareScene.hoveredSourceObjectIndex();
 
-  auto drawRange = [cb](QRhiGraphicsPipeline *pipeline, QRhiBuffer *buffer,
-                        quint32 firstVertex, quint32 vertexCount) {
-    cb->setGraphicsPipeline(pipeline);
+  auto drawRange = [this, cb](QRhiGraphicsPipeline *pipeline, QRhiBuffer *buffer,
+                              quint32 firstVertex, quint32 vertexCount) {
+    setPipeline(cb, pipeline);
     const QRhiCommandBuffer::VertexInput binding(buffer, 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(vertexCount, 1, firstVertex, 0);
@@ -3075,13 +3126,12 @@ void RhiViewportRenderer::renderBedTypeParts(QRhiCommandBuffer *cb)
     BedTypePartGpu *gpu = it.value();
     if (gpu == nullptr || gpu->vertexCount == 0 || !gpu->pipeline)
       continue;
-    cb->setGraphicsPipeline(gpu->pipeline.get());
-    cb->setShaderResources(gpu->srb.get());
+    setPipeline(cb, gpu->pipeline.get(), gpu->srb.get());
     const QRhiCommandBuffer::VertexInput binding(gpu->vertexBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(gpu->vertexCount);
   }
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
 }
 
 bool RhiViewportRenderer::ensureModelLitPipeline()
@@ -3193,7 +3243,7 @@ void RhiViewportRenderer::renderModelTranslucentPass(QRhiCommandBuffer *cb)
     // the lit pipeline cannot be built.
     if (m_translucentFillPipeline == nullptr)
       return;
-    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    setPipeline(cb, m_translucentFillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_modelTranslucentBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_modelTranslucentVertexCount);
@@ -3211,13 +3261,13 @@ void RhiViewportRenderer::renderModelTranslucentPass(QRhiCommandBuffer *cb)
                const QPair<float, const TranslucentBatchRange *> &b) {
               return a.first < b.first; // far (small z) first
             });
-  cb->setGraphicsPipeline(m_modelLitBlendPipeline.get());
+  setPipeline(cb, m_modelLitBlendPipeline.get());
   const QRhiCommandBuffer::VertexInput bindings[2] = {
       QRhiCommandBuffer::VertexInput(m_modelTranslucentBuffer.get(), 0),
-      QRhiCommandBuffer::VertexInput(m_modelTranslucentNormalBuffer.get(), 1),
+      QRhiCommandBuffer::VertexInput(m_modelTranslucentNormalBuffer.get(), 0),
   };
   cb->setVertexInput(0, 2, bindings);
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
   for (const auto &entry : drawOrder) {
     if (entry.second->vertexCount > 0)
       cb->draw(entry.second->vertexCount, 1, entry.second->firstVertex, 0);
@@ -3620,7 +3670,7 @@ void RhiViewportRenderer::renderSequentialClearance(QRhiCommandBuffer *cb)
   if (m_gizmoDragging && !m_sequentialClearancePreviewMode)
     return;
   if (m_sequentialClearanceOutlineBuffer && m_sequentialClearanceOutlineVertexCount > 0) {
-    cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+    setPipeline(cb, m_translucentLinePipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_sequentialClearanceOutlineBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_sequentialClearanceOutlineVertexCount);
@@ -3629,13 +3679,13 @@ void RhiViewportRenderer::renderSequentialClearance(QRhiCommandBuffer *cb)
   // the drag hulls, so the collision fill fan only renders for the
   // post-validate overlay.
   if (!m_sequentialClearancePreviewMode && m_sequentialClearanceFillBuffer && m_sequentialClearanceFillVertexCount > 0) {
-    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    setPipeline(cb, m_translucentFillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_sequentialClearanceFillBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_sequentialClearanceFillVertexCount);
   }
   if (m_sequentialHeightFillBuffer && m_sequentialHeightFillVertexCount > 0) {
-    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    setPipeline(cb, m_translucentFillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_sequentialHeightFillBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_sequentialHeightFillVertexCount);
@@ -3987,8 +4037,8 @@ void RhiViewportRenderer::renderAssemblyConnectors(QRhiCommandBuffer *cb)
       || m_assemblyConnectorVertexCount == 0 || m_linePipeline == nullptr)
     return;
 
-  cb->setShaderResources();
-  cb->setGraphicsPipeline(m_linePipeline.get());
+  setSrb(cb);
+  setPipeline(cb, m_linePipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_assemblyConnectorBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_assemblyConnectorVertexCount);
@@ -4190,12 +4240,12 @@ void RhiViewportRenderer::renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb)
   if (cb == nullptr)
     return;
 
-  cb->setShaderResources();
+  setSrb(cb);
   // Dimension line (white dashes).
   if (m_assemblyMeasureLineBuffer && m_assemblyMeasureLineVertexCount > 0
       && m_linePipeline)
   {
-    cb->setGraphicsPipeline(m_linePipeline.get());
+    setPipeline(cb, m_linePipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_assemblyMeasureLineBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_assemblyMeasureLineVertexCount);
@@ -4206,7 +4256,7 @@ void RhiViewportRenderer::renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb)
   if (m_assemblyMeasureTriBuffer && m_assemblyMeasureTriVertexCount > 0
       && m_fillPipeline)
   {
-    cb->setGraphicsPipeline(m_fillPipeline.get());
+    setPipeline(cb, m_fillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_assemblyMeasureTriBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_assemblyMeasureTriVertexCount);
@@ -4215,7 +4265,7 @@ void RhiViewportRenderer::renderAssemblyMeasureOverlay(QRhiCommandBuffer *cb)
   if (m_assemblyMeasureValueBuffer && m_assemblyMeasureValueVertexCount > 0
       && m_translucentFillPipeline)
   {
-    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    setPipeline(cb, m_translucentFillPipeline.get());
     const QRhiCommandBuffer::VertexInput binding(m_assemblyMeasureValueBuffer.get(), 0);
     cb->setVertexInput(0, 1, &binding);
     cb->draw(m_assemblyMeasureValueVertexCount);
@@ -4867,8 +4917,8 @@ void RhiViewportRenderer::renderSelectionCenter(QRhiCommandBuffer *cb)
   // the selected bounds as the transformed scene is synchronized, and the
   // shared gizmo pipeline is depth-independent like the upstream GL draw.
   const QRhiCommandBuffer::VertexInput binding(m_gizmoVertexBuffer.get(), 0);
-  cb->setShaderResources();
-  cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+  setSrb(cb);
+  setPipeline(cb, m_gizmoTriPipeline.get());
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_selectionCenterVertexCount, 1, m_selectionCenterVertexBase);
 }
@@ -4883,8 +4933,8 @@ void RhiViewportRenderer::renderSidebarHints(QRhiCommandBuffer *cb)
     return;
 
   const QRhiCommandBuffer::VertexInput binding(m_gizmoVertexBuffer.get(), 0);
-  cb->setShaderResources();
-  cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+  setSrb(cb);
+  setPipeline(cb, m_gizmoTriPipeline.get());
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_sidebarHintVertexCount, 1, m_sidebarHintVertexBase);
 }
@@ -4902,12 +4952,12 @@ void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)
     return;
 
   const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
-  cb->setShaderResources();
+  setSrb(cb);
 
   // Shafts (GL_LINES).
   if (m_gizmoLinePipeline)
   {
-    cb->setGraphicsPipeline(m_gizmoLinePipeline.get());
+    setPipeline(cb, m_gizmoLinePipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
       cb->draw(m_moveGizmoOffsets.shaftVertCount, 1, m_moveGizmoOffsets.shaftBase[ax]);
@@ -4915,7 +4965,7 @@ void RhiViewportRenderer::renderMoveGizmo(QRhiCommandBuffer *cb)
   // Cones (GL_TRIANGLES).
   if (m_gizmoTriPipeline)
   {
-    cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+    setPipeline(cb, m_gizmoTriPipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
       cb->draw(m_moveGizmoOffsets.coneVertCount, 1, m_moveGizmoOffsets.coneBase[ax]);
@@ -4935,8 +4985,8 @@ void RhiViewportRenderer::renderRotateGizmo(QRhiCommandBuffer *cb)
   if (m_gizmoTriPipeline)
   {
     const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
-    cb->setShaderResources();
-    cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+    setSrb(cb);
+    setPipeline(cb, m_gizmoTriPipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
       cb->draw(m_rotateGizmoOffsets.ringVertCount, 1, m_rotateGizmoOffsets.ringBase[ax]);
@@ -4954,11 +5004,11 @@ void RhiViewportRenderer::renderScaleGizmo(QRhiCommandBuffer *cb)
     return;
 
   const QRhiCommandBuffer::VertexInput gizmoBinding(m_gizmoVertexBuffer.get(), 0);
-  cb->setShaderResources();
+  setSrb(cb);
 
   if (m_gizmoLinePipeline)
   {
-    cb->setGraphicsPipeline(m_gizmoLinePipeline.get());
+    setPipeline(cb, m_gizmoLinePipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
       cb->draw(m_scaleGizmoOffsets.shaftVertCount, 1, m_scaleGizmoOffsets.shaftBase[ax]);
@@ -4966,7 +5016,7 @@ void RhiViewportRenderer::renderScaleGizmo(QRhiCommandBuffer *cb)
 
   if (m_gizmoTriPipeline)
   {
-    cb->setGraphicsPipeline(m_gizmoTriPipeline.get());
+    setPipeline(cb, m_gizmoTriPipeline.get());
     cb->setVertexInput(0, 1, &gizmoBinding);
     for (int ax = 0; ax < 3; ++ax)
       cb->draw(m_scaleGizmoOffsets.boxVertCount, 1, m_scaleGizmoOffsets.boxBase[ax]);
@@ -4991,8 +5041,8 @@ void RhiViewportRenderer::renderCutPlane(QRhiCommandBuffer *cb)
 
   if (m_translucentFillPipeline && m_cutPlaneFillBuffer && m_cutPlaneFillVertexCount > 0)
   {
-    cb->setShaderResources(m_srb.get());
-    cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+    setSrb(cb, m_srb.get());
+    setPipeline(cb, m_translucentFillPipeline.get());
     const QRhiCommandBuffer::VertexInput fillBinding(m_cutPlaneFillBuffer.get(), 0);
     cb->setVertexInput(0, 1, &fillBinding);
     cb->draw(m_cutPlaneFillVertexCount);
@@ -5000,8 +5050,8 @@ void RhiViewportRenderer::renderCutPlane(QRhiCommandBuffer *cb)
 
   if (m_translucentLinePipeline && m_cutPlaneOutlineBuffer && m_cutPlaneOutlineVertexCount > 0)
   {
-    cb->setShaderResources(m_srb.get());
-    cb->setGraphicsPipeline(m_translucentLinePipeline.get());
+    setSrb(cb, m_srb.get());
+    setPipeline(cb, m_translucentLinePipeline.get());
     const QRhiCommandBuffer::VertexInput outlineBinding(m_cutPlaneOutlineBuffer.get(), 0);
     cb->setVertexInput(0, 1, &outlineBinding);
     cb->draw(m_cutPlaneOutlineVertexCount);
@@ -5018,8 +5068,8 @@ void RhiViewportRenderer::renderWipeTower(QRhiCommandBuffer *cb)
       m_wipeTowerVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
-  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  setSrb(cb, m_srb.get());
+  setPipeline(cb, m_translucentFillPipeline.get());
   const QRhiCommandBuffer::VertexInput wipeBinding(m_wipeTowerBuffer.get(), 0);
   cb->setVertexInput(0, 1, &wipeBinding);
   cb->draw(m_wipeTowerVertexCount);
@@ -5181,9 +5231,9 @@ void RhiViewportRenderer::renderPaintOverlay(QRhiCommandBuffer *cb)
       m_paintOverlayVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
   // Reuse m_fillPipeline (opaque vertex-color fill, same as the model mesh).
-  cb->setGraphicsPipeline(m_fillPipeline.get());
+  setPipeline(cb, m_fillPipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_paintOverlayBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_paintOverlayVertexCount);
@@ -5260,9 +5310,9 @@ void RhiViewportRenderer::renderHollowMarkers(QRhiCommandBuffer *cb)
       m_hollowMarkerVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
+  setSrb(cb, m_srb.get());
   // Translucent fill: depth-tested, no depth write (discs don't occlude mesh).
-  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  setPipeline(cb, m_translucentFillPipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_hollowMarkerBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_hollowMarkerVertexCount);
@@ -5333,8 +5383,8 @@ void RhiViewportRenderer::renderAdvancedCutMarkers(QRhiCommandBuffer *cb)
       m_advancedCutMarkerVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
-  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  setSrb(cb, m_srb.get());
+  setPipeline(cb, m_translucentFillPipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_advancedCutMarkerBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_advancedCutMarkerVertexCount);
@@ -5406,8 +5456,8 @@ void RhiViewportRenderer::renderMeasureOverlay(QRhiCommandBuffer *cb)
       m_measureOverlayVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
-  cb->setGraphicsPipeline(m_linePipeline.get());
+  setSrb(cb, m_srb.get());
+  setPipeline(cb, m_linePipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_measureOverlayBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_measureOverlayVertexCount);
@@ -5480,8 +5530,8 @@ void RhiViewportRenderer::renderFlattenHover(QRhiCommandBuffer *cb)
       m_flattenHoverVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
-  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  setSrb(cb, m_srb.get());
+  setPipeline(cb, m_translucentFillPipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_flattenHoverBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_flattenHoverVertexCount);
@@ -5810,8 +5860,8 @@ void RhiViewportRenderer::renderNavigator(QRhiCommandBuffer *cb)
     return;
   if (m_translucentFillPipeline == nullptr || m_navigatorFillBuffer == nullptr)
     return;
-  cb->setShaderResources(m_srb.get());
-  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  setSrb(cb, m_srb.get());
+  setPipeline(cb, m_translucentFillPipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_navigatorFillBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_navigatorFillVertexCount);
@@ -5830,8 +5880,8 @@ void RhiViewportRenderer::renderBrushCursor(QRhiCommandBuffer *cb)
       m_brushCursorVertexCount == 0)
     return;
 
-  cb->setShaderResources(m_srb.get());
-  cb->setGraphicsPipeline(m_translucentFillPipeline.get());
+  setSrb(cb, m_srb.get());
+  setPipeline(cb, m_translucentFillPipeline.get());
   const QRhiCommandBuffer::VertexInput binding(m_brushCursorBuffer.get(), 0);
   cb->setVertexInput(0, 1, &binding);
   cb->draw(m_brushCursorVertexCount);

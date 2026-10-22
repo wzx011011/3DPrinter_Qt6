@@ -319,7 +319,8 @@ endif()
 # 39180909374 (LNK2019 x8 from AssimpImport.cpp). Glob either.
 file(GLOB _owzx_assimp_libs
      "${DEPS_PREFIX}/lib/assimp-vc*.lib"
-     "${DEPS_PREFIX}/lib/assimp.lib")
+     "${DEPS_PREFIX}/lib/assimp.lib"
+     "${DEPS_PREFIX}/lib/libassimp.a")
 if(_owzx_assimp_libs)
     list(GET _owzx_assimp_libs 0 _owzx_assimp_lib)
     add_library(assimp_from_source STATIC IMPORTED GLOBAL)
@@ -327,7 +328,7 @@ if(_owzx_assimp_libs)
         IMPORTED_LOCATION "${_owzx_assimp_lib}"
     )
 else()
-    message(WARNING "assimp lib not found in ${DEPS_PREFIX}/lib (looked for assimp-vc*.lib / assimp.lib)")
+    message(WARNING "assimp lib not found in ${DEPS_PREFIX}/lib (looked for assimp-vc*.lib / assimp.lib / libassimp.a)")
 endif()
 
 # cr_tpms_library (closed source)

@@ -31,6 +31,8 @@ void TransformCommand::undo()
     m_service->setObjectPosition(m_objectIndex, m_oldPos.x(), m_oldPos.y(), m_oldPos.z());
     m_service->setObjectRotation(m_objectIndex, m_oldRot.x(), m_oldRot.y(), m_oldRot.z());
     m_service->setObjectScale(m_objectIndex, m_oldScale.x(), m_oldScale.y(), m_oldScale.z());
+    // A move across plates is undone together with its plate membership.
+    m_service->reassignPlateByPosition(m_objectIndex);
   }
 }
 
@@ -41,6 +43,7 @@ void TransformCommand::redo()
     m_service->setObjectPosition(m_objectIndex, m_newPos.x(), m_newPos.y(), m_newPos.z());
     m_service->setObjectRotation(m_objectIndex, m_newRot.x(), m_newRot.y(), m_newRot.z());
     m_service->setObjectScale(m_objectIndex, m_newScale.x(), m_newScale.y(), m_newScale.z());
+    m_service->reassignPlateByPosition(m_objectIndex);
   }
 }
 
@@ -734,11 +737,16 @@ void CutCommand::undo()
     m_service->restoreObjectMeshSnapshot(m_srcObjectIndex, m_srcMeshSnapshot);
 
   // Remove any objects added by the cut (objects beyond m_objectCountBefore)
-  const QStringList currentNames = m_service->objectNames();
-  while (currentNames.size() > m_objectCountBefore)
+  // Re-read the name list every iteration: it used to be a one-shot const
+  // copy, so the loop condition never changed and Ctrl+Z after a cut
+  // spun the GUI thread at 100% CPU forever (FB-R4-03).
+  while (m_service->objectNames().size() > m_objectCountBefore)
   {
+    const int before = m_service->objectNames().size();
     // Remove the last added object (cut result)
-    m_service->deleteObject(currentNames.size() - 1);
+    m_service->deleteObject(before - 1);
+    if (m_service->objectNames().size() >= before)
+      break; // deleteObject refused: do not spin
   }
 
   if (m_viewModel)
@@ -889,7 +897,14 @@ void UpdateVolumeMeshCommand::redo()
 void AddVolumeCommand::redo()
 {
   // The initial redo is a no-op (volume was already added before push).
-  // For subsequent redos after undo, re-execute the add operation.
+  // For subsequent redos after undo, re-execute the add operation. The skip
+  // used to be only a comment, so every text/emboss/SVG add was applied twice
+  // (FB-R4-06: duplicate "AB" volume right after the first Execute).
+  if (!m_firstRedoDone)
+  {
+    m_firstRedoDone = true;
+    return;
+  }
   if (!m_service)
     return;
 
@@ -1038,11 +1053,12 @@ bool PaintCommand::mergeWith(const QUndoCommand *other)
 // ── MirrorCommand (P16.8) ──────────────────────────────────────────────────
 
 MirrorCommand::MirrorCommand(int objectIndex,
-                             const QVector3D &oldMirror, const QVector3D &newMirror,
+                             const std::array<double, 16> &oldMatrix,
+                             const std::array<double, 16> &newMatrix,
                              ProjectService *service,
                              QUndoCommand *parent)
     : QUndoCommand(QObject::tr("Mirror")), m_objectIndex(objectIndex),
-      m_oldMirror(oldMirror), m_newMirror(newMirror), m_service(service)
+      m_oldMatrix(oldMatrix), m_newMatrix(newMatrix), m_service(service)
 {
   Q_UNUSED(parent)
 }
@@ -1050,13 +1066,13 @@ MirrorCommand::MirrorCommand(int objectIndex,
 void MirrorCommand::undo()
 {
   if (m_service && m_objectIndex >= 0)
-    m_service->setObjectMirror(m_objectIndex, m_oldMirror.x(), m_oldMirror.y(), m_oldMirror.z());
+    m_service->setObjectInstanceMatrix(m_objectIndex, m_oldMatrix);
 }
 
 void MirrorCommand::redo()
 {
   if (m_service && m_objectIndex >= 0)
-    m_service->setObjectMirror(m_objectIndex, m_newMirror.x(), m_newMirror.y(), m_newMirror.z());
+    m_service->setObjectInstanceMatrix(m_objectIndex, m_newMatrix);
 }
 
 // ── SceneSnapshotCommand (P16.8) ───────────────────────────────────────────

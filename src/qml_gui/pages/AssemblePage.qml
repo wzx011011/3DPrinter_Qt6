@@ -154,7 +154,10 @@ Item {
     // (PreparePage.qml), but AssemblePage owns it within its focus scope.
     Shortcut {
         sequences: ["Ctrl+Y"]
-        enabled: root.editorVm !== null && root.editorVm !== undefined
+        // Only while this page is the visible one: a hidden AssemblePage
+        // instance used to keep Ctrl+Y armed, which made the chord ambiguous
+        // with the Prepare-page redo and silenced both.
+        enabled: root.visible && root.editorVm !== null && root.editorVm !== undefined
         onActivated: {
             if (!root.editorVm)
                 return

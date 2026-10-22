@@ -40,13 +40,32 @@ Item {
     Rectangle { anchors.fill: parent; color: Theme.bgBase }
 
     // PAGE-01: Project operation file dialogs.
+    // FB-R7-07 family: "file:///x" minus "file:///" is "x" -- the leading
+    // slash must survive (the old replace() silently produced relative
+    // paths like "home/..."). decodeURIComponent resolves %20-style escapes
+    // (same idiom as main.qml's drop handler).
+    function urlToLocalPath(url) {
+        var s = url.toString()
+        if (s.indexOf("file:///") === 0)
+            s = decodeURIComponent(s.substring(8))
+        if (s.indexOf("file://") === 0)
+            s = decodeURIComponent(s.substring(7))
+        // FB-R7-07 follow-up: the QtQuick SaveFile dialog can hand out a
+        // SCHEME-LESS breadcrumb path ("home/.../x.stl") that lost the root
+        // slash (same root-default-dir defect as the "/" default folder);
+        // every consumer needs an absolute path, so re-anchor it.
+        if (s.length > 0 && s.charAt(0) !== "/")
+            s = "/" + s
+        return s
+    }
+
     FileDialog {
         id: importModelDlg
         title: qsTr("导入模型")
         nameFilters: [qsTr("模型 (*.stl *.3mf *.obj *.amf *.step *.stp)"), qsTr("所有文件 (*)")]
         onAccepted: {
             if (root.editorVm)
-                root.editorVm.loadFile(currentFile.toString().replace("file:///", ""))
+                root.editorVm.loadFile(urlToLocalPath(currentFile))
         }
     }
 
@@ -58,7 +77,7 @@ Item {
         defaultSuffix: "3mf"
         onAccepted: {
             // v2.4 IO-03: Save through EditorViewModel and ProjectService.
-            var path = currentFile.toString().replace("file:///", "")
+            var path = urlToLocalPath(currentFile)
             if (root.editorVm) {
                 var ok = root.editorVm.saveProjectAs(path)
                 if (Backend)
@@ -76,7 +95,7 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: [qsTr("STL (*.stl)"), qsTr("3MF (*.3mf)"), qsTr("OBJ (*.obj)")]
         onAccepted: {
-            var path = currentFile.toString().replace("file:///", "")
+            var path = urlToLocalPath(currentFile)
             // Infer the export format from the file extension.
             var ext = path.split('.').pop().toLowerCase()
             if (root.editorVm) {

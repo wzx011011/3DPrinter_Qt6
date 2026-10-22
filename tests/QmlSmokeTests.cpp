@@ -134,6 +134,7 @@ private slots:
   // 或直接固化为 QmlSmokeTests 断言" — the固化 option).
   void s1ClusterNotifyContract();
   void s1TransformClusterReevaluation();
+  void cloneKeepsTransformChannelInSync();
   void s1PlateClusterReevaluation();
   void s1SelectionClusterReevaluation();
   void s1TopologyClusterReevaluation();
@@ -825,6 +826,42 @@ void QmlSmokeTests::s1ClusterNotifyContract()
   }
 }
 
+// Regression (R2 feature pass): Ctrl+K / paste re-produce the mesh blob and the
+// per-batch tables AFTER ProjectService::projectChanged already fanned the S1
+// clusters, so the last sceneTopologyChanged / transformChanged the QML-bound
+// batch tables and meshBatchInstanceTransforms saw still paired with the
+// previous (1-batch) blob and the viewport drew nothing. The final emission of
+// each cluster of a topology edit must observe tables index-aligned with the
+// new blob.
+void QmlSmokeTests::cloneKeepsTransformChannelInSync()
+{
+  auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));
+  QVERIFY2(vm != nullptr, "editorViewModel must be an EditorViewModel");
+  QVERIFY(vm->addPrimitiveToPlate(0)); // 0 = cube
+  vm->selectObject(0);
+  QCOMPARE(vm->property("hasSelection").toBool(), true);
+  int lastTopoBatches = -1;
+  int lastChannel = -1;
+  int lastChannelBatches = -1;
+  const QMetaObject::Connection topoConn =
+      connect(vm, &EditorViewModel::sceneTopologyChanged, this, [&]() {
+        lastTopoBatches = vm->meshBatchSourceObjectIndices().size();
+      });
+  const QMetaObject::Connection transformConn =
+      connect(vm, &EditorViewModel::transformChanged, this, [&]() {
+        lastChannel = vm->meshBatchInstanceTransforms().size();
+        lastChannelBatches = vm->meshBatchSourceObjectIndices().size();
+      });
+  const int batchesBefore = vm->meshBatchSourceObjectIndices().size();
+  vm->duplicateSelectedObjects();
+  disconnect(topoConn);
+  disconnect(transformConn);
+  const int batchesAfter = vm->meshBatchSourceObjectIndices().size();
+  QVERIFY(batchesAfter > batchesBefore);
+  QCOMPARE(lastTopoBatches, batchesAfter);
+  QCOMPARE(lastChannelBatches, batchesAfter);
+  QCOMPARE(lastChannel, batchesAfter);
+}
 void QmlSmokeTests::s1TransformClusterReevaluation()
 {
   auto *vm = qobject_cast<EditorViewModel *>(backendProperty("editorViewModel"));

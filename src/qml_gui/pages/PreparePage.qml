@@ -138,9 +138,13 @@ Item {
         onRequestRenameSelected: leftSidebar.beginObjectListRename()
         onRequestRenamePlate: {
             if (!root.editorVm || root.editorVm.contextPlateIndex < 0) return
-            var dialog = plateRenameDialog.createObject(root)
-            dialog.plateIndex = root.editorVm.contextPlateIndex
-            dialog.currentName = root.editorVm.plateName(root.editorVm.contextPlateIndex)
+            // plateIndex / currentName are `required property` on the dialog:
+            // Qt 6 only accepts them as createObject() initial properties
+            // (assigning afterwards fails creation and returns null).
+            var dialog = plateRenameDialog.createObject(root, {
+                plateIndex: root.editorVm.contextPlateIndex,
+                currentName: root.editorVm.plateName(root.editorVm.contextPlateIndex)
+            })
             dialog.open()
         }
         onRequestExport: function(separateFiles, drcFormat) {
@@ -1605,9 +1609,12 @@ Item {
                         break
                     case GLViewport.PlateIconSettings:  // plate settings (picking id 5)
                     {
-                        var dialog = plateSettingsDialogComp.createObject(root)
-                        dialog.plateIndex = plateIndex
-                        dialog.plateName = root.editorVm.plateName(plateIndex)
+                        // plateIndex is a `required property`: pass it as an
+                        // initial property or creation fails (null dialog).
+                        var dialog = plateSettingsDialogComp.createObject(root, {
+                            plateIndex: plateIndex,
+                            plateName: root.editorVm.plateName(plateIndex)
+                        })
                         // S1: no dialog.closed re-probe -- the plate settings
                         // write path reaches viewportArea.plateIconStates via
                         // the plateChanged cluster.
@@ -1620,9 +1627,10 @@ Item {
                         break
                     case GLViewport.PlateIconNameEdit:  // rename pencil (picking id 6)
                     {
-                        var rename = plateRenameDialog.createObject(root)
-                        rename.plateIndex = plateIndex
-                        rename.currentName = root.editorVm.plateName(plateIndex)
+                        var rename = plateRenameDialog.createObject(root, {
+                            plateIndex: plateIndex,
+                            currentName: root.editorVm.plateName(plateIndex)
+                        })
                         // S1: no dialog.closed re-probe -- renamePlate rides
                         // the plateChanged cluster.
                         rename.open()
@@ -2158,15 +2166,11 @@ Item {
                     paintOnOverhangsOnly: root.editorVm ? root.editorVm.supportPaintOnOverhangsOnly : false
                     paintOverhangAngle: root.editorVm ? root.editorVm.supportPaintOverhangAngle : 0
 
-                    // Undo/Redo shortcuts (QML Shortcuts work better than Keys for Ctrl combos)
-                    Shortcut {
-                        sequences: ["Ctrl+Z"]
-                        onActivated: root.undoFromTopbar()
-                    }
-                    Shortcut {
-                        sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
-                        onActivated: root.redoFromTopbar()
-                    }
+                    // Undo/Redo chords are owned by main.qml (StandardKey.Undo /
+                    // StandardKey.Redo, gated on the Prepare page and
+                    // textEditHoldFocus). A second Shortcut for the same
+                    // sequence here made Qt resolve the chord as ambiguous
+                    // (activatedAmbiguously) so neither handler ever fired.
 
                     // Upstream Plater::load_model does NOT touch the camera on
                     // import — the bed view stays as-is, and the camera only

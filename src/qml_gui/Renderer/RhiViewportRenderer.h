@@ -58,6 +58,15 @@ private:
   // channel keeps its bit and retries next frame).
   quint32 uploadPendingChannels(QRhiResourceUpdateBatch *updates,
                                 quint32 channels, quint32 dirtyFlags);
+  // Pipeline/srb binding order helpers; see the comment above their
+  // definitions in RhiViewportRenderer.cpp (OpenGL needs the srb applied
+  // after every setGraphicsPipeline()).
+  void resetPassBindings();
+  void setPipeline(QRhiCommandBuffer *cb, QRhiGraphicsPipeline *ps,
+                   QRhiShaderResourceBindings *srb = nullptr);
+  void setSrb(QRhiCommandBuffer *cb, QRhiShaderResourceBindings *srb = nullptr);
+  QRhiShaderResourceBindings *m_activeSrb = nullptr;
+  bool m_pipelineSet = false;
   bool ensurePipelines();
   bool ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &pipeline,
                       QRhiGraphicsPipeline::Topology topology,

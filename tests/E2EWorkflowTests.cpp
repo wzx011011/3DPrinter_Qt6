@@ -349,10 +349,23 @@ void E2EWorkflowTests::test_import_format_coverage_matrix_real_fixtures()
   const auto stepFiles = recursiveFixtureMatches(root,
                                                  QStringList{QStringLiteral("*.step"),
                                                              QStringLiteral("*.stp")});
-  QVERIFY2(stepFiles.isEmpty(),
-           qPrintable(QStringLiteral("STEP/STP is expected to be classified in Phase 43 "
-                                     "verification unless a committed fixture is added; found: %1")
-                          .arg(stepFiles.join(QStringLiteral(", ")))));
+  // STEP/STP imports through Model::read_from_step (OCCT). Every committed
+  // fixture must load; before that routing existed the file dialog advertised
+  // STEP while ProjectService rejected it as an unknown format.
+  QVERIFY2(!stepFiles.isEmpty(), "a committed STEP fixture is expected (tests/data/cube_10mm.step)");
+  for (const QString &stepFile : stepFiles)
+  {
+    ProjectService stepProject;
+    QSignalSpy stepSpy(&stepProject, &ProjectService::loadFinished);
+    QVERIFY(stepSpy.isValid());
+    QVERIFY2(stepProject.loadFile(stepFile), qPrintable(stepFile));
+    QTRY_VERIFY_WITH_TIMEOUT(stepSpy.count() > 0, 20000);
+    const QList<QVariant> stepArgs = stepSpy.takeFirst();
+    QVERIFY2(stepArgs.at(0).toBool(),
+             qPrintable(QStringLiteral("STEP fixture should load: %1 (%2)")
+                            .arg(stepFile, stepArgs.at(1).toString())));
+    QVERIFY(stepProject.modelCount() >= 1);
+  }
 }
 
 void E2EWorkflowTests::test_slice_produces_gcode_file()
@@ -761,6 +774,14 @@ void E2EWorkflowTests::test_backend_switches_to_preview_after_slice()
 
 void E2EWorkflowTests::test_preview_parser_handles_extrusion_modes_and_travel_filter()
 {
+  // PreviewViewModel persists the option-visibility flags in QSettings (upstream
+  // app_config parity), and earlier tests in this suite leave
+  // preview/showTravelMoves=true behind. This test asserts the first-load
+  // defaults, so start from a clean persisted preview group.
+  {
+    QSettings settings;
+    settings.remove(QStringLiteral("preview"));
+  }
   ProjectService project;
   SliceService slice(&project);
   PreviewViewModel preview(&project, &slice);

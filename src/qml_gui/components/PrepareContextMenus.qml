@@ -19,6 +19,17 @@ Item {
     // texts below reference this tick so their one-shot Q_INVOKABLE bindings
     // re-evaluate at every popup instead of keeping creation-time values.
     property int menuRefreshTick: 0
+    // Context-dependent enable gates. contextActionAvailable() is a plain
+    // Q_INVOKABLE reading the viewport/list context captured at popup time, so
+    // a bare binding on it is evaluated once at creation (context still
+    // empty -> permanently disabled). Routing it through this helper makes the
+    // binding depend on menuRefreshTick, which every menu bumps in
+    // onAboutToShow, so the gates are re-evaluated at each popup (same
+    // contract as the G-07 texts / plate-menu gates).
+    function ctxAvail(action) {
+        void menuRefreshTick
+        return !!editorVm && editorVm.contextActionAvailable(action)
+    }
 
     signal requestAddModels()
     signal requestReplacePart()
@@ -57,7 +68,7 @@ Item {
         // (:2266-2267, :2289).
         title: (root.editorVm && root.editorVm.selectedObjectCount > 1)
                    ? qsTr("Set Filament for selected items") : qsTr("Change Filament")
-        enabled: root.editorVm && root.editorVm.contextActionAvailable("changeFilament")
+        enabled: root.ctxAvail("changeFilament")
         onAboutToShow: ++root.menuRefreshTick
         Instantiator {
             model: root.editorVm ? root.editorVm.configFilamentCount() + 1 : 1
@@ -101,7 +112,7 @@ Item {
     // (flushOptionValue per popup via G-07 tick).
     component FlushOptionsSubmenu: CxMenu {
         title: qsTr("Flush Options")
-        enabled: root.editorVm && root.editorVm.contextActionAvailable("flushOptions")
+        enabled: root.ctxAvail("flushOptions")
         onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
             checkable: true
@@ -219,7 +230,7 @@ Item {
         delegate: CxMenuItem {
             required property var modelData
             text: modelData.name
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("convertUnits")
+            enabled: root.ctxAvail("convertUnits")
             onTriggered: root.editorVm.convertSelectedObjectUnits(modelData.conv)
         }
     }
@@ -237,7 +248,7 @@ Item {
              : volumeType === 2 ? qsTr("Add Modifier")
              : volumeType === 3 ? qsTr("Add Support Blocker")
              : qsTr("Add Support Enforcer")
-        enabled: root.editorVm && root.editorVm.contextActionAvailable("addVolume")
+        enabled: root.ctxAvail("addVolume")
         onAboutToShow: ++root.menuRefreshTick
         CxMenuItem {
             text: qsTr("Load...")
@@ -310,7 +321,7 @@ Item {
         // separator, then the Show Labels check item (:1413-1417).
         CxMenu {
             title: qsTr("Add Primitive")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("addPrimitive")
+            enabled: root.ctxAvail("addPrimitive")
             // INVALID-typed append_submenu_add_generic (:556-572): no
             // "Load..." row, six primitives in upstream order, then the
             // Text/SVG gizmo rows (:575-576 + :689-697 whitelist INVALID).
@@ -379,22 +390,22 @@ Item {
         // :2018-2035); upstream labels carry the +/- shortcut annotations.
         CxMenuItem {
             text: qsTr("Add instance") + "\t+"
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("addInstance")
+            enabled: root.ctxAvail("addInstance")
             onTriggered: root.editorVm.addSelectedInstance()
         }
         CxMenuItem {
             text: qsTr("Remove instance") + "\t-"
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("removeInstance")
+            enabled: root.ctxAvail("removeInstance")
             onTriggered: root.editorVm.removeSelectedInstance()
         }
         CxMenuItem {
             text: qsTr("Set number of instances...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("setInstances")
+            enabled: root.ctxAvail("setInstances")
             onTriggered: instanceCountDialog.open()
         }
         CxMenuItem {
             text: qsTr("Fill bed with instances...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("fillBedInstances")
+            enabled: root.ctxAvail("fillBedInstances")
             onTriggered: root.editorVm.fillBedWithInstances()
         }
         MenuSeparator { }
@@ -407,7 +418,7 @@ Item {
                            ? qsTr("Set as Individual Objects")
                            : qsTr("Set as An Individual Object")
             }
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("instanceToObject")
+            enabled: root.ctxAvail("instanceToObject")
             onTriggered: root.editorVm.instanceToObject(-1)
         }
         MenuSeparator { }
@@ -415,25 +426,25 @@ Item {
         // :2084-2099).
         CxMenuItem {
             text: qsTr("Clone") + "\t" + qsTr("Ctrl+") + "K"
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("duplicate")
+            enabled: root.ctxAvail("duplicate")
             onTriggered: root.editorVm.duplicateSelectedObjects()
         }
         // Fix Model / Simplify Model / Subdivision mesh (Lost color)
         // (:1473-1475; labels :963/:2103/:2111).
         CxMenuItem {
             text: qsTr("Fix Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            enabled: root.ctxAvail("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Simplify Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("simplify")
+            enabled: root.ctxAvail("simplify")
                      && (root.editorVm.availableGizmoMask & (1 << 9)) !== 0
             onTriggered: root.editorVm.simplifyMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Subdivision mesh") + qsTr("(Lost color)")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("subdivide")
+            enabled: root.ctxAvail("subdivide")
             onTriggered: root.editorVm.subdivideSelectedMesh()
         }
         // append_menu_item_merge_parts_to_single_part opens with its own
@@ -441,7 +452,7 @@ Item {
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Mesh boolean")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("meshBoolean")
+            enabled: root.ctxAvail("meshBoolean")
             onTriggered: root.editorVm.booleanExecute()
         }
         CxMenuItem {
@@ -451,29 +462,28 @@ Item {
         }
         CxMenuItem {
             text: qsTr("Drop")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
+            enabled: root.ctxAvail("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
         // Split submenu with the upstream "To Objects"/"To Parts" labels
         // (:1484-1503).
         CxMenu {
             title: qsTr("Split")
-            enabled: root.editorVm && (root.editorVm.contextActionAvailable("splitObjects")
-                                       || root.editorVm.contextActionAvailable("splitParts"))
+            enabled: root.ctxAvail("splitObjects") || root.ctxAvail("splitParts")
             CxMenuItem {
                 text: qsTr("To Objects")
-                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitObjects")
+                enabled: root.ctxAvail("splitObjects")
                 onTriggered: root.editorVm.splitSelectedToObjects()
             }
             CxMenuItem {
                 text: qsTr("To Parts")
-                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitParts")
+                enabled: root.ctxAvail("splitParts")
                 onTriggered: root.editorVm.splitSelectedToParts()
             }
         }
         CxMenu {
             title: qsTr("Mirror")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
+            enabled: root.ctxAvail("mirror")
             CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
             CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
             CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
@@ -482,7 +492,7 @@ Item {
         // (append_menu_item_delete, :534-545).
         CxMenuItem {
             text: qsTr("Delete") + "\t" + qsTr("Del")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
+            enabled: root.ctxAvail("delete")
             onTriggered: root.requestConfirmDelete()
         }
         MenuSeparator { }
@@ -495,7 +505,7 @@ Item {
         AddVolumeTypeSubmenu { volumeType: 4 }
         CxMenuItem {
             text: qsTr("Height Range Modifier")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.requestObjectLayers()
         }
         MenuSeparator { }
@@ -508,7 +518,7 @@ Item {
                 return !!root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
             }
             text: qsTr("Printable") + "\tV"
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("printable")
+            enabled: root.ctxAvail("printable")
             onTriggered: root.editorVm.setSelectedObjectsPrintable(
                              !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
         }
@@ -531,49 +541,49 @@ Item {
         // (append_menu_item_per_object_process :2149-2187, called :1521).
         CxMenuItem {
             text: qsTr("Edit Process Settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
         CxMenuItem {
             text: qsTr("Copy process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("copyProcessSettings")
+            enabled: root.ctxAvail("copyProcessSettings")
             onTriggered: root.editorVm.copyContextProcessSettings()
         }
         CxMenuItem {
             text: qsTr("Paste process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("pasteProcessSettings")
+            enabled: root.ctxAvail("pasteProcessSettings")
             onTriggered: root.editorVm.pasteContextProcessSettings()
         }
         CxMenuItem {
             text: qsTr("Edit in Parameter Table")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Reload from disk")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("reload")
+            enabled: root.ctxAvail("reload")
             onTriggered: root.editorVm.reloadSelectedFromDisk()
         }
         // Replace 3D file... / Replace all with 3D files... (:1527-1528).
         CxMenuItem {
             text: qsTr("Replace 3D file...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            enabled: root.ctxAvail("replaceWithStl")
             onTriggered: root.requestReplacePart()
         }
         CxMenuItem {
             text: qsTr("Replace all with 3D files...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            enabled: root.ctxAvail("replaceWithStl")
             onTriggered: root.requestReplaceAll()
         }
         CxMenuItem {
             text: qsTr("Export as one STL...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            enabled: root.ctxAvail("export")
             onTriggered: root.requestExport(false, false)
         }
         CxMenuItem {
             text: qsTr("Export as one DRC...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            enabled: root.ctxAvail("export")
             onTriggered: root.requestExport(false, true)
         }
         // object_menu() dynamic tail (:1851-1860): convert entries, Flush
@@ -585,7 +595,7 @@ Item {
         FlushOptionsSubmenu { }
         CxMenuItem {
             text: qsTr("Invalidate cut info")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("invalidateCutInfo")
+            enabled: root.ctxAvail("invalidateCutInfo")
             onTriggered: root.editorVm.invalidateSelectedCutInfo()
         }
         ChangeFilamentSubmenu { }
@@ -601,23 +611,23 @@ Item {
         // in the Qt6 menu family.
         CxMenuItem {
             text: qsTr("Delete") + "\t" + qsTr("Del")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
+            enabled: root.ctxAvail("delete")
             onTriggered: root.requestConfirmDelete()
         }
         CxMenuItem {
             text: qsTr("Fix Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            enabled: root.ctxAvail("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Simplify Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("simplify")
+            enabled: root.ctxAvail("simplify")
                      && (root.editorVm.availableGizmoMask & (1 << 9)) !== 0
             onTriggered: root.editorVm.simplifyMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Subdivision mesh") + qsTr("(Lost color)")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("subdivide")
+            enabled: root.ctxAvail("subdivide")
             onTriggered: root.editorVm.subdivideSelectedMesh()
         }
         CxMenuItem {
@@ -627,12 +637,12 @@ Item {
         }
         CxMenuItem {
             text: qsTr("Drop")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
+            enabled: root.ctxAvail("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
         CxMenu {
             title: qsTr("Mirror")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
+            enabled: root.ctxAvail("mirror")
             CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
             CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
             CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
@@ -683,51 +693,50 @@ Item {
         }
         CxMenu {
             title: qsTr("Split")
-            enabled: root.editorVm && (root.editorVm.contextActionAvailable("splitObjects")
-                                       || root.editorVm.contextActionAvailable("splitParts"))
+            enabled: root.ctxAvail("splitObjects") || root.ctxAvail("splitParts")
             CxMenuItem {
                 text: qsTr("To Objects")
-                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitObjects")
+                enabled: root.ctxAvail("splitObjects")
                 onTriggered: root.editorVm.splitSelectedToObjects()
             }
             CxMenuItem {
                 text: qsTr("To Parts")
-                enabled: root.editorVm && root.editorVm.contextActionAvailable("splitParts")
+                enabled: root.ctxAvail("splitParts")
                 onTriggered: root.editorVm.splitSelectedToParts()
             }
         }
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Edit Process Settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
         CxMenuItem {
             text: qsTr("Copy process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("copyProcessSettings")
+            enabled: root.ctxAvail("copyProcessSettings")
             onTriggered: root.editorVm.copyContextProcessSettings()
         }
         CxMenuItem {
             text: qsTr("Paste process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("pasteProcessSettings")
+            enabled: root.ctxAvail("pasteProcessSettings")
             onTriggered: root.editorVm.pasteContextProcessSettings()
         }
         ChangeTypeSubmenu { }
         CxMenuItem {
             text: qsTr("Reload from disk")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("reload")
+            enabled: root.ctxAvail("reload")
             onTriggered: root.editorVm.reloadSelectedFromDisk()
         }
         // Upstream label "Replace 3D file..." (append_menu_item_replace_with_stl,
         // :1019-1024, called :1641), same as the object menu.
         CxMenuItem {
             text: qsTr("Replace 3D file...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("replacePart")
+            enabled: root.ctxAvail("replacePart")
             onTriggered: root.requestReplacePart()
         }
         CxMenuItem {
             text: qsTr("Replace all with 3D files...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            enabled: root.ctxAvail("replaceWithStl")
             onTriggered: root.requestReplaceAll()
         }
         // part_menu() tail (:1873-1879).
@@ -748,23 +757,23 @@ Item {
         // "Edit in Parameter Table" re-mounted last.
         CxMenuItem {
             text: qsTr("Edit text")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("textEdit")
+            enabled: root.ctxAvail("textEdit")
                      && (root.editorVm.availableGizmoMask & (1 << 16)) !== 0
             onTriggered: root.requestActivateGizmo(16)
         }
         CxMenuItem {
             text: qsTr("Delete") + "\t" + qsTr("Del")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
+            enabled: root.ctxAvail("delete")
             onTriggered: root.requestConfirmDelete()
         }
         CxMenuItem {
             text: qsTr("Fix Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            enabled: root.ctxAvail("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Simplify Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("simplify")
+            enabled: root.ctxAvail("simplify")
                      && (root.editorVm.availableGizmoMask & (1 << 9)) !== 0
             onTriggered: root.editorVm.simplifyMeshSelected()
         }
@@ -775,7 +784,7 @@ Item {
         }
         CxMenu {
             title: qsTr("Mirror")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
+            enabled: root.ctxAvail("mirror")
             CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
             CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
             CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
@@ -783,24 +792,24 @@ Item {
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Edit Process Settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
         CxMenuItem {
             text: qsTr("Copy process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("copyProcessSettings")
+            enabled: root.ctxAvail("copyProcessSettings")
             onTriggered: root.editorVm.copyContextProcessSettings()
         }
         CxMenuItem {
             text: qsTr("Paste process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("pasteProcessSettings")
+            enabled: root.ctxAvail("pasteProcessSettings")
             onTriggered: root.editorVm.pasteContextProcessSettings()
         }
         ChangeTypeSubmenu { }
         ChangeFilamentSubmenu { }
         CxMenuItem {
             text: qsTr("Edit in Parameter Table")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
     }
@@ -813,29 +822,29 @@ Item {
         // text menu, :1588 has it but the SVG menu does not).
         CxMenuItem {
             text: qsTr("Edit SVG")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("svgEdit")
+            enabled: root.ctxAvail("svgEdit")
                      && (root.editorVm.availableGizmoMask & (1 << 17)) !== 0
             onTriggered: root.requestActivateGizmo(17)
         }
         CxMenuItem {
             text: qsTr("Delete") + "\t" + qsTr("Del")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
+            enabled: root.ctxAvail("delete")
             onTriggered: root.requestConfirmDelete()
         }
         CxMenuItem {
             text: qsTr("Fix Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            enabled: root.ctxAvail("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Simplify Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("simplify")
+            enabled: root.ctxAvail("simplify")
                      && (root.editorVm.availableGizmoMask & (1 << 9)) !== 0
             onTriggered: root.editorVm.simplifyMeshSelected()
         }
         CxMenu {
             title: qsTr("Mirror")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("mirror")
+            enabled: root.ctxAvail("mirror")
             CxMenuItem { text: qsTr("Along X Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(0) }
             CxMenuItem { text: qsTr("Along Y Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(1) }
             CxMenuItem { text: qsTr("Along Z Axis"); onTriggered: root.editorVm.mirrorSelectedObjects(2) }
@@ -843,24 +852,24 @@ Item {
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Edit Process Settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
         CxMenuItem {
             text: qsTr("Copy process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("copyProcessSettings")
+            enabled: root.ctxAvail("copyProcessSettings")
             onTriggered: root.editorVm.copyContextProcessSettings()
         }
         CxMenuItem {
             text: qsTr("Paste process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("pasteProcessSettings")
+            enabled: root.ctxAvail("pasteProcessSettings")
             onTriggered: root.editorVm.pasteContextProcessSettings()
         }
         ChangeTypeSubmenu { }
         ChangeFilamentSubmenu { }
         CxMenuItem {
             text: qsTr("Edit in Parameter Table")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
     }
@@ -885,17 +894,17 @@ Item {
         }
         CxMenuItem {
             text: qsTr("Drop")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("drop")
+            enabled: root.ctxAvail("drop")
             onTriggered: root.editorVm.dropSelectedObjectsToBed()
         }
         CxMenuItem {
             text: qsTr("Fix Model")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("repair")
+            enabled: root.ctxAvail("repair")
             onTriggered: root.editorVm.fixMeshSelected()
         }
         CxMenuItem {
             text: qsTr("Delete") + "\t" + qsTr("Del")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("delete")
+            enabled: root.ctxAvail("delete")
             onTriggered: root.requestConfirmDelete()
         }
         MenuSeparator { }
@@ -906,7 +915,7 @@ Item {
                 return !!root.editorVm && root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex)
             }
             text: qsTr("Printable") + "\tV"
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("printable")
+            enabled: root.ctxAvail("printable")
             onTriggered: root.editorVm.setSelectedObjectsPrintable(
                              !root.editorVm.objectPrintable(root.editorVm.selectedObjectIndex))
         }
@@ -926,46 +935,46 @@ Item {
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Edit Process Settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("settings")
+            enabled: root.ctxAvail("settings")
             onTriggered: root.editorVm.requestSelectionSettings()
         }
         CxMenuItem {
             text: qsTr("Copy process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("copyProcessSettings")
+            enabled: root.ctxAvail("copyProcessSettings")
             onTriggered: root.editorVm.copyContextProcessSettings()
         }
         CxMenuItem {
             text: qsTr("Paste process settings")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("pasteProcessSettings")
+            enabled: root.ctxAvail("pasteProcessSettings")
             onTriggered: root.editorVm.pasteContextProcessSettings()
         }
         MenuSeparator { }
         ConvertUnitsItems { }
         CxMenuItem {
             text: qsTr("Replace all with 3D files...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("replaceWithStl")
+            enabled: root.ctxAvail("replaceWithStl")
             onTriggered: root.requestReplaceAll()
         }
         ChangeFilamentSubmenu { }
         MenuSeparator { }
         CxMenuItem {
             text: qsTr("Export as one STL...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            enabled: root.ctxAvail("export")
             onTriggered: root.requestExport(false, false)
         }
         CxMenuItem {
             text: qsTr("Export as STLs...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            enabled: root.ctxAvail("export")
             onTriggered: root.requestExport(true, false)
         }
         CxMenuItem {
             text: qsTr("Export as one DRC...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            enabled: root.ctxAvail("export")
             onTriggered: root.requestExport(false, true)
         }
         CxMenuItem {
             text: qsTr("Export as DRCs...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("export")
+            enabled: root.ctxAvail("export")
             onTriggered: root.requestExport(true, true)
         }
     }
@@ -1025,13 +1034,16 @@ Item {
         }
         CxMenuItem {
             text: qsTr("Delete Plate")
-            enabled: root.editorVm && root.editorVm.canDeletePlate(root.editorVm.contextPlateIndex)
+            enabled: {
+                void root.menuRefreshTick  // G-07: re-evaluate per popup
+                return !!root.editorVm && root.editorVm.canDeletePlate(root.editorVm.contextPlateIndex)
+            }
             onTriggered: root.requestConfirmDeletePlate()
         }
         MenuSeparator { }
         CxMenu {
             title: qsTr("Add Primitive")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateAddPrimitive")
+            enabled: root.ctxAvail("plateAddPrimitive")
             // Same INVALID-typed submenu as the default menu (upstream
             // create_plate_menu reuses append_submenu_add_generic with
             // ModelVolumeType::INVALID, :1789): six primitives plus Text/SVG.
@@ -1057,7 +1069,7 @@ Item {
         }
         CxMenu {
             title: qsTr("Add Handy models")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateHandyModels")
+            enabled: root.ctxAvail("plateHandyModels")
             CxMenuItem { text: qsTr("Orca Cube"); onTriggered: root.addHandyModel("orca-cube") }
             CxMenuItem { text: qsTr("OrcaSliced Combo"); onTriggered: root.addHandyModel("orca-sliced-combo") }
             CxMenuItem { text: qsTr("Orca Badge"); onTriggered: root.addHandyModel("orca-badge") }
@@ -1071,12 +1083,12 @@ Item {
         }
         CxMenuItem {
             text: qsTr("Add Models")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateAddModels")
+            enabled: root.ctxAvail("plateAddModels")
             onTriggered: root.requestAddModels()
         }
         CxMenuItem {
             text: qsTr("Replace all with 3D files...")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateReplaceAll")
+            enabled: root.ctxAvail("plateReplaceAll")
             onTriggered: root.requestReplaceAll()
         }
         CxMenuItem {
@@ -1085,12 +1097,12 @@ Item {
                 return (root.editorVm && root.editorVm.isPlateLocked(root.editorVm.contextPlateIndex))
                        ? qsTr("Unlock") : qsTr("Lock")
             }
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateLock")
+            enabled: root.ctxAvail("plateLock")
             onTriggered: root.editorVm.togglePlateLocked(root.editorVm.contextPlateIndex)
         }
         CxMenuItem {
             text: qsTr("Edit Plate Name")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("plateRename")
+            enabled: root.ctxAvail("plateRename")
             onTriggered: root.requestRenamePlate()
         }
         // Qt6-only tail retained under test locks (upstream has none of
@@ -1099,7 +1111,7 @@ Item {
         // because :3025-3029 requires clonePlate(/movePlate(/setPlatePrintable(.
         CxMenuItem {
             text: qsTr("Paste")
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("paste")
+            enabled: root.ctxAvail("paste")
             onTriggered: root.editorVm.pasteToContextPlate()
         }
         CxMenuItem {
@@ -1108,7 +1120,7 @@ Item {
                 return (root.editorVm && root.editorVm.isPlatePrintable(root.editorVm.contextPlateIndex))
                        ? qsTr("Set plate unprintable") : qsTr("Set plate printable")
             }
-            enabled: root.editorVm && root.editorVm.contextActionAvailable("platePrintable")
+            enabled: root.ctxAvail("platePrintable")
             onTriggered: root.editorVm.setPlatePrintable(root.editorVm.contextPlateIndex,
                 !root.editorVm.isPlatePrintable(root.editorVm.contextPlateIndex))
         }
@@ -1193,9 +1205,21 @@ Item {
             title: qsTr("Select a model file to import as a part")
             nameFilters: ["Model files (*.stl *.obj *.3mf)", "All files (*)"]
             onAccepted: {
+                // FB-R7-07 family: decode the file URL without eating the
+                // root slash (main.qml drop-handler idiom).
+                var partUrl = selectedFile.toString()
+                var partPath
+                if (partUrl.indexOf("file:///") === 0)
+                    partPath = decodeURIComponent(partUrl.substring(8))
+                else if (partUrl.indexOf("file://") === 0)
+                    partPath = decodeURIComponent(partUrl.substring(7))
+                else
+                    partPath = partUrl
+                if (partPath.length > 0 && partPath.charAt(0) !== "/")
+                    partPath = "/" + partPath
                 if (root.editorVm)
                     root.editorVm.addVolumeFromFile(root.editorVm.selectedObjectIndex,
-                                                    selectedFile.toString().replace("file:///", ""),
+                                                    partPath,
                                                     volumeType)
                 destroy()
             }

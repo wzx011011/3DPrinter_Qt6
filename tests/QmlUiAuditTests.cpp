@@ -1698,7 +1698,9 @@ void QmlUiAuditTests::importEntryPointsAdvertiseConsistentModelFormats()
            "Topbar import dialog must route through BackendContext::topbarImportModel");
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.loadFile(selectedFile.toString())")),
            "Prepare import dialog must route through EditorViewModel::loadFile");
-  QVERIFY2(projectPage.contains(QStringLiteral("root.editorVm.loadFile(currentFile.toString().replace(\"file:///\", \"\"))")),
+  // FB-R7-07: the raw-URL replace stripped the root slash; the import now
+  // decodes through ProjectPage.urlToLocalPath (still loadFile-routed).
+  QVERIFY2(projectPage.contains(QStringLiteral("root.editorVm.loadFile(urlToLocalPath(currentFile))")),
            "Project import dialog must route through EditorViewModel::loadFile");
 }
 
@@ -3287,6 +3289,25 @@ void QmlUiAuditTests::plateContextMenuItemsWiredAndNonEmpty()
   QVERIFY2(!preparePage.contains(QStringLiteral("onTriggered: {}"))
                && !menuComponent.contains(QStringLiteral("onTriggered: {}")),
            "Prepare context menu routes must not contain empty onTriggered handlers");
+  // R5 (FB-R5-01): the plate rename / plate settings dialogs declare
+  // `required property`s. Qt 6 only accepts those as createObject() initial
+  // properties; a bare createObject(root) followed by assignments fails creation
+  // ("Required property ... was not initialized") and returns null, which made
+  // "Edit Plate Name" and the plate-icon settings/rename a silent no-op.
+  QVERIFY2(!QRegularExpression(
+               QStringLiteral(R"(plate(Rename|Settings)Dialog(Comp)?\.createObject\(\s*root\s*\))"))
+               .match(preparePage).hasMatch(),
+           "plate rename/settings dialogs must be created with initial properties "
+           "(required property plateIndex/currentName)");
+  // R5 (FB-R5-05): QRhi resource update batches come from a fixed 64-slot pool
+  // and are returned with release(); `delete` leaks the slot, and after 64
+  // thumbnail captures nextResourceUpdateBatch() returned null and the
+  // deferred-readback merge dereferenced it (render-thread segfault).
+  const QString rhiRenderer = readSource(QStringLiteral("src/qml_gui/Renderer/RhiViewportRenderer.cpp"));
+  QVERIFY2(!rhiRenderer.isEmpty(), "Unable to read RhiViewportRenderer.cpp");
+  QVERIFY2(!rhiRenderer.contains(QStringLiteral("delete m_pendingReadbackUpdates"))
+               && rhiRenderer.contains(QStringLiteral("m_pendingReadbackUpdates->release()")),
+           "deferred readback batches must be returned to the QRhi pool with release(), not delete");
 }
 
 // Phase 51-03 (SHELL-03): shell actions bind to BackendContext gates.
@@ -3915,9 +3936,31 @@ void QmlUiAuditTests::prepareWorkflowActionsBindCppGates()
   // -- accepted as the canDeleteSelection equivalent carrier.
   QVERIFY2(preparePage.contains(QStringLiteral("canDeleteSelection"))
                || glToolbars.contains(QStringLiteral("canDeleteSelection"))
-               || contextMenus.contains(QStringLiteral("contextActionAvailable(\"delete\")")),
+               || contextMenus.contains(QStringLiteral("contextActionAvailable(\"delete\")"))
+               // The menus route the per-action check through the tick-tracked
+               // ctxAvail() helper so the gate re-evaluates at every popup.
+               || contextMenus.contains(QStringLiteral("ctxAvail(\"delete\")")),
            "Prepare object actions must bind to canDeleteSelection (or the menus' "
-           "contextActionAvailable(\"delete\") equivalent carrier)");
+           "contextActionAvailable(\"delete\") / ctxAvail(\"delete\") equivalent carrier)");
+  // Undo/redo chords must have exactly one owner (main.qml). Qt drops a chord
+  // registered by two enabled Shortcut objects as ambiguous, which silenced
+  // Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z: the Prepare page repeated them, main.qml
+  // listed Ctrl+Shift+Z twice (StandardKey.Redo + explicit) and a hidden
+  // AssemblePage kept Ctrl+Y armed.
+  {
+    const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
+    const QString assemblePage = readSource(QStringLiteral("src/qml_gui/pages/AssemblePage.qml"));
+    QVERIFY2(!mainQml.isEmpty() && !assemblePage.isEmpty(), "Unable to read main.qml / AssemblePage.qml");
+    QVERIFY2(!preparePage.contains(QStringLiteral("sequences: [\"Ctrl+Z\"]"))
+                 && !preparePage.contains(QStringLiteral("\"Ctrl+Shift+Z\", \"Ctrl+Y\"")),
+             "PreparePage must not re-register the undo/redo chords owned by main.qml");
+    QVERIFY2(mainQml.contains(QStringLiteral("sequences: [\"Ctrl+Y\", \"Ctrl+Shift+Z\"]"))
+                 && !mainQml.contains(QStringLiteral("sequences: [StandardKey.Redo]"))
+                 && !mainQml.contains(QStringLiteral("sequence: \"Ctrl+Shift+Z\"")),
+             "main.qml must register the redo chords once, explicitly");
+    QVERIFY2(assemblePage.contains(QStringLiteral("enabled: root.visible && root.editorVm !== null")),
+             "AssemblePage Ctrl+Y must only be armed while the page is visible");
+  }
 }
 
 // -- Phase 55-04 (GCODE-04/05): Preview renderer source-audit guards --
@@ -4437,8 +4480,8 @@ void QmlUiAuditTests::rhiViewportThumbnailUsesSynchronizedCameraSnapshot()
   const int releaseEnd = rendererSource.indexOf(QStringLiteral("RhiViewportRenderer::releaseThumbnailResources()"), releaseStart);
   const QString releaseBody = rendererSource.mid(releaseStart,
                                                  releaseEnd > releaseStart ? releaseEnd - releaseStart : -1);
-  QVERIFY2(releaseBody.indexOf(QStringLiteral("delete m_pendingReadbackUpdates")) >= 0
-               && releaseBody.indexOf(QStringLiteral("delete m_pendingReadbackUpdates"))
+  QVERIFY2(releaseBody.indexOf(QStringLiteral("m_pendingReadbackUpdates->release()")) >= 0
+               && releaseBody.indexOf(QStringLiteral("m_pendingReadbackUpdates->release()"))
                       < releaseBody.indexOf(QStringLiteral("releaseThumbnailResources();")),
            "Pending thumbnail readback must be dropped before thumbnail resources");
   QVERIFY2(rendererSource.contains(QStringLiteral("m_measureOverlayBuffer.reset()"))

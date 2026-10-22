@@ -133,6 +133,7 @@ private slots:
   void decomposedBlobComposesInstanceTransformsAtParse();
   void decomposedBlobMirrorMatrixFlipsTriangleWindingAtCompose();
   void setInstanceTransformsRecomposesChangedBatchesAndBumpsGeneration();
+  void setInstanceTransformsComposesAgainstPreviousChannelOnly();
   void legacyBlobIgnoresInstanceTransformChannel();
 };
 
@@ -1279,6 +1280,43 @@ void PrepareSceneDataTests::setInstanceTransformsRecomposesChangedBatchesAndBump
   QVERIFY((scene.peekDirtyFlags() & PrepareSceneData::DirtyMesh) != 0);
 }
 
+// The resident vertices are already composed through the previous channel
+// matrix: a later channel update must apply only the change (next *
+// previous^-1), not compose the instance transform a second time, and must
+// flip winding only on a handedness change.
+void PrepareSceneDataTests::setInstanceTransformsComposesAgainstPreviousChannelOnly()
+{
+  PrepareSceneData scene;
+  scene.clearDirtyFlags();
+  const QByteArray mesh = packedDecomposedMesh(
+      QList<int>{101},
+      QList<QList<float>>{
+          QList<float>{0.0f, 0.0f, 0.0f, 10.0f, 0.0f, 0.0f, 0.0f, 20.0f, 0.0f}});
+  QMatrix4x4 placed;
+  placed.translate(100.0f, 0.0f, 0.0f);
+  scene.setModelMeshData(mesh, QList<int>{0}, QList<int>{0}, QList<int>{0},
+                         QList<int>{0}, QList<int>(), QList<int>(),
+                         QList<int>(), QList<QVector4D>(),
+                         QList<QMatrix4x4>{placed});
+  QCOMPARE(scene.modelVertices().at(1).x, 110.0f);
+  // Move the instance on by +20 total (new matrix is the full world matrix).
+  QMatrix4x4 moved;
+  moved.translate(120.0f, 0.0f, 0.0f);
+  scene.setInstanceTransforms(QList<QMatrix4x4>{moved});
+  QCOMPARE(scene.modelVertices().at(0).x, 120.0f);
+  QCOMPARE(scene.modelVertices().at(1).x, 130.0f);
+  // Mirror about the instance origin at x=120: local x maps to 120 - x, and
+  // the handedness flip swaps the 2nd/3rd vertex of the triple once.
+  QMatrix4x4 mirrored;
+  mirrored.translate(120.0f, 0.0f, 0.0f);
+  mirrored.scale(-1.0f, 1.0f, 1.0f);
+  scene.setInstanceTransforms(QList<QMatrix4x4>{mirrored});
+  QCOMPARE(scene.modelVertices().at(0).x, 120.0f);
+  QCOMPARE(scene.modelVertices().at(1).x, 120.0f);
+  QCOMPARE(scene.modelVertices().at(1).y, 20.0f);
+  QCOMPARE(scene.modelVertices().at(2).x, 110.0f);
+  QCOMPARE(scene.modelVertices().at(2).y, 0.0f);
+}
 // Legacy world-baked blobs carry their transforms inside the vertices: the
 // channel must be inert on them (no double transform, no generation bump).
 void PrepareSceneDataTests::legacyBlobIgnoresInstanceTransformChannel()

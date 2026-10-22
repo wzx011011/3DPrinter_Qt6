@@ -1,0 +1,17 @@
+diff --git a/src/libslic3r/CSGMesh/CSGMesh.hpp b/src/libslic3r/CSGMesh/CSGMesh.hpp
+index ea16eae5..b15c5471 100644
+--- a/src/libslic3r/CSGMesh/CSGMesh.hpp
++++ b/src/libslic3r/CSGMesh/CSGMesh.hpp
+@@ -1,8 +1,12 @@
+ #ifndef CSGMESH_HPP
+ #define CSGMESH_HPP
+ 
++#include <libslic3r/Point.hpp>
++#include <libslic3r/TriangleMesh.hpp>
+ #include <libslic3r/AnyPtr.hpp>
+ #include <admesh/stl.h>
++#include <string>
++#include <utility>
+ 
+ namespace Slic3r { namespace csg {
+ 

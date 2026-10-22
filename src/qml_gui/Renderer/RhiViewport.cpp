@@ -226,6 +226,10 @@ void RhiViewport::setBedWidth(float value)
   updateSceneExtent();
   // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
   rebuildPlateIcons();
+  // FB-R2-06: a new bed (printer preset switch / BedShapeDialog) re-frames the
+  // plate grid -- upstream set_bed_shape zooms to the bed, otherwise a 450 bed
+  // opens mostly outside the 220-era default camera.
+  scheduleZoomToAllPlates();
 }
 
 void RhiViewport::setBedDepth(float value)
@@ -238,6 +242,7 @@ void RhiViewport::setBedDepth(float value)
   updateSceneExtent();
   // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
   rebuildPlateIcons();
+  scheduleZoomToAllPlates();  // FB-R2-06 (see setBedWidth)
 }
 
 void RhiViewport::setBedOriginX(float value)
@@ -413,15 +418,20 @@ void RhiViewport::setPlateCount(int value)
   update();
   // PLATEICONS-GL: the icon batch re-anchors with the bed layout/count.
   rebuildPlateIcons();
-  if (addedPlate && !m_zoomToAllPlatesPending) {
-    m_zoomToAllPlatesPending = true;
-    QTimer::singleShot(0, this, [this]() {
-      if (!m_zoomToAllPlatesPending)
-        return;
-      m_zoomToAllPlatesPending = false;
-      fitCameraToPlateGrid();
-    });
-  }
+  if (addedPlate)
+    scheduleZoomToAllPlates();
+}
+void RhiViewport::scheduleZoomToAllPlates()
+{
+  if (m_zoomToAllPlatesPending)
+    return;
+  m_zoomToAllPlatesPending = true;
+  QTimer::singleShot(0, this, [this]() {
+    if (!m_zoomToAllPlatesPending)
+      return;
+    m_zoomToAllPlatesPending = false;
+    fitCameraToPlateGrid();
+  });
 }
 
 void RhiViewport::setActivePlateObjectIndices(const QVariantList &value)

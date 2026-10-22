@@ -427,6 +427,8 @@ private slots:
   // G-11 follow-up: loadProject publishes every pending plate field on the GUI
   // thread and replaces, rather than leaks, sequence state across reloads.
   void loadProjectReplacesPlateSequenceState();
+  void loadProjectAcceptsCxprjAndFailedLoadKeepsScene();
+  void stepFileImportsThroughOcct();
   // Phase 138 (ASM-01): per-instance assemble transform survives a real 3MF
   // save (saveProjectAs -> store_3mf) + reload (loadProject) through the upstream
   // <assemble> block (bbs_3mf.cpp:8070-8088 write, 4734-4741 read). Proves the
@@ -469,6 +471,14 @@ private slots:
   void prepareMoveSelectionToPlateUsesSourceSelection();
   void prepareVisibleObjectActionsMapToSourceObjects();
   void viewportContextSelectionSynchronizesBeforeMenuRouting();
+  void mirroredInstanceKeepsPlateShiftInWorldFrame();
+  void mirrorPivotsOnBoundingBoxCenterAndKeepsObjectOnBed();
+  void undoRedoOfCloneKeepsRenderBatchesCoherent();
+  void movePlateRefreshesRenderBlobAndMovesObjectToItsPlate();
+  void addFilesToPlateLandsOnTheTargetPlate();
+  void plainImportIntoMultiPlateProjectKeepsOtherPlates();
+  void sliceAllInjectsPresetConfigBeforeFirstSlice();
+  void presetBedIsTheSingleSourceForPlateListAndImportArrange();
   void prepareContextMenuActionsAreRealAndPlateScoped();
   void prepareContextPlateReplacementIsScopedToTargetPlate();
   void prepareContextTargetedImportAndHandyModelsStayOnPlate();
@@ -705,6 +715,9 @@ private slots:
   // :15717 "Import Object(s)").
   void arrangeUndoRestoresLayout();
   void autoOrientUndoRestoresRotation();
+  void orientAndFlattenRotateInstanceAndUndoRestoreWorldGeometry();
+  void cutKeepModesReplaceSplitAndUndoRestore();
+  void embossAddsMillimetreTextOnceAndUndoRemovesIt();
   void splitUndoRestoresMergedObject();
   void importAndDropRideUndoStack();
 
@@ -3988,7 +4001,14 @@ void ViewModelSmokeTests::meshInstanceChannelKeepsBlobStableUnderTransforms()
   // The blob is transform-free: even an explicit re-production (topology
   // refresh path) yields byte-identical volume-local geometry. (The legacy
   // world-bake blob changed with every transform; v2 cannot go stale.)
-  QCOMPARE(project.meshData(), blobA);
+  // The 24-byte trailer is the WORLD bbox at production time and therefore
+  // follows the +17 mm edit (the render bake no longer re-centres the scene,
+  // FB-R5-06); the volume-local geometry before it stays byte-identical.
+  const QByteArray blobAgain = project.meshData();
+  const qsizetype trailerBytes = qsizetype(6 * sizeof(float));
+  QCOMPARE(blobAgain.size(), blobA.size());
+  QCOMPARE(blobAgain.left(blobAgain.size() - trailerBytes),
+           blobA.left(blobA.size() - trailerBytes));
 
   // Rotation behaves the same way: channel moves, no re-production involved.
   QVERIFY(project.setObjectRotation(0, 90.0f, 0.0f, 0.0f));
@@ -5675,11 +5695,19 @@ void ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting(
   QCOMPARE(editor.contextPlateIndex(), 0);
   QCOMPARE(editor.selectedSourceObjectIndex(), 0);
 
+  // The viewport classifier reports the only volume of a plain single-volume
+  // object as a Part target. That is still a whole-object selection (upstream
+  // semantics): no volume is selected and the object-scoped menu actions
+  // (Clone / Mirror / Fix / Center ...) stay available.
   QCOMPARE(editor.synchronizeViewportContext(1, 0, 0, 0, 0), 1);
   QCOMPARE(editor.contextSourceObjectIndex(), 0);
-  QCOMPARE(editor.contextVolumeIndex(), 0);
+  QCOMPARE(editor.contextVolumeIndex(), -1);
   QCOMPARE(editor.selectedSourceObjectIndex(), 0);
-  QVERIFY(editor.hasSelectedVolume());
+  QVERIFY(!editor.hasSelectedVolume());
+  QVERIFY(editor.canTransformSelection());
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("duplicate")));
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("mirror")));
+  QVERIFY(editor.contextActionAvailable(QStringLiteral("repair")));
 
   QVERIFY(editor.addPlate());
   QCOMPARE(editor.synchronizeViewportContext(2, -1, -1, -1, 1), 4);
@@ -5694,6 +5722,396 @@ void ViewModelSmokeTests::viewportContextSelectionSynchronizesBeforeMenuRouting(
   QCOMPARE(editor.selectedSourceObjectIndex(), -1);
 }
 
+void ViewModelSmokeTests::undoRedoOfCloneKeepsRenderBatchesCoherent()
+{
+#ifdef HAS_LIBSLIC3R
+  // CloneCommand acts on the service directly. After undo/redo the resident
+  // mesh blob + per-batch tables (EditorViewModel cache) must again pair with
+  // the live transform channel, otherwise the renderer finds N blob batches
+  // against M channel entries and draws nothing.
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.selectObject(0);
+  QVERIFY(editor.hasSelection());
+  editor.duplicateSelectedObjects();
+  QCOMPARE(editor.meshBatchSourceObjectIndices().size(), 2);
+  QCOMPARE(project.meshBatchInstanceTransforms().size(), 2);
+  QVERIFY(editor.canUndo());
+  editor.undo();
+  QCOMPARE(project.meshBatchInstanceTransforms().size(), 1);
+  QCOMPARE(editor.meshBatchSourceObjectIndices().size(), 1);
+  editor.redo();
+  QCOMPARE(project.meshBatchInstanceTransforms().size(), 2);
+  QCOMPARE(editor.meshBatchSourceObjectIndices().size(), 2);
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::movePlateRefreshesRenderBlobAndMovesObjectToItsPlate()
+{
+#ifdef HAS_LIBSLIC3R
+  // R5 (FB-R5-03): reordering plates reflows the member objects onto their new
+  // plate slots and re-freezes the service's plate-normalization shift. The
+  // resident mesh blob the viewport renders from must be rebuilt with it;
+  // before the fix EditorViewModel::movePlate only emitted stateChanged, so the
+  // viewport paired the pre-move blob with post-move transforms (the moved
+  // plate's object drew off its plate and the canvas went out-of-bed red).
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  project.setPlateSize(220, 220, 250);  // reflow needs a real plate extent
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  QVERIFY(editor.addPlate());
+  QCOMPARE(project.plateCount(), 2);
+  QVERIFY(project.plateObjectIndices(0).contains(0));
+  const float xBefore = project.objectPosition(0).x();
+  QVERIFY(editor.movePlate(0, 1));
+  // The object followed its plate into slot 1 (one grid stride to the right).
+  QVERIFY(project.plateObjectIndices(1).contains(0));
+  QVERIFY2(project.objectPosition(0).x() > xBefore + 100.0f,
+           "the moved plate's object must be shifted onto the new plate slot");
+  QVERIFY2(editor.meshData() == project.meshData(),
+           "movePlate must re-pair the resident mesh blob with the reflowed objects");
+  QCOMPARE(editor.meshBatchSourceObjectIndices().size(), 1);
+  {
+    // R6 (FB-R5-06): the object must be DRAWN on its plate. The render bake
+    // used to re-centre the union of all objects on the grid centre, so a lone
+    // plate-2 object was drawn in the gap between the plates (blob trailer =
+    // world bbox in the render frame: minX,minY,minZ,maxX,maxY,maxZ).
+    const QByteArray blob = editor.meshData();
+    QVERIFY(blob.size() > int(6 * sizeof(float)));
+    float bbox[6] = {};
+    memcpy(bbox, blob.constData() + blob.size() - sizeof(bbox), sizeof(bbox));
+    double slotX = 0.0, slotY = 0.0;
+    OWzx::PartPlateGridLayout::gridOffset(1, 2, 220.0, 220.0, &slotX, &slotY);
+    const double drawnCx = 0.5 * (double(bbox[0]) + double(bbox[3]));
+    QVERIFY2(drawnCx > slotX && drawnCx < slotX + 220.0,
+             qPrintable(QStringLiteral("object drawn at x=%1 but its plate spans [%2,%3]")
+                            .arg(drawnCx).arg(slotX).arg(slotX + 220.0)));
+  }
+  // Undo restores the order and the pairing again.
+  editor.undo();
+  QCOMPARE(project.plateObjectIndices(0).value(0, -1), 0);
+  QVERIFY2(editor.meshData() == project.meshData(),
+           "undoing a plate move must keep the mesh blob paired too");
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::presetBedIsTheSingleSourceForPlateListAndImportArrange()
+{
+#ifdef HAS_LIBSLIC3R
+  // R5/R6 (FB-R2-06): the printer preset's bed (EditorViewModel bedWidth/Depth)
+  // used to reach only the viewport. The plate list stayed at its own size and
+  // the import-time auto-arrange used a hard-coded 220 rect, so on a 450 bed
+  // the object landed at (110,110) and the next arrange silently re-sized the
+  // plate list -- objects then sat outside the plates the canvas draws.
+  ScopedSettingsSnapshot bedKeys({
+      QStringLiteral("bed/width"),
+      QStringLiteral("bed/depth"),
+      QStringLiteral("bed/maxHeight"),
+      QStringLiteral("bed/originX"),
+      QStringLiteral("bed/originY"),
+      QStringLiteral("bed/shapeType"),
+      QStringLiteral("bed/diameter"),
+  });
+  bedKeys.clear();
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/test_models/Block20XY.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Block20XY fixture must exist");
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  editor.setBedWidth(450.0f);
+  editor.setBedDepth(450.0f);
+  QCOMPARE(project.bedWidthMm(), 450);
+  QCOMPARE(project.bedDepthMm(), 450);
+  QCOMPARE(project.bedPrintableAreaString(), QStringLiteral("0,0,450,0,450,450,0,450"));
+  QVERIFY(project.plateListConst());
+  QCOMPARE(project.plateListConst()->plateWidth(), 450);
+  QCOMPARE(project.plateListConst()->plateDepth(), 450);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(loadSpy.isValid());
+  QVERIFY2(project.loadFile(fixturePath), qPrintable(project.lastError()));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 30000);
+  QCOMPARE(project.plateListConst()->plateWidth(), 450);
+  QCOMPARE(project.plateListConst()->plateDepth(), 450);
+  // objectPosition is (x, height, slic3r-Y); the 20x20 block's origin sits at
+  // its min corner, so a block centred on the 450 bed reads (215, _, 215).
+  const QVector3D pos = project.objectPosition(0);
+  QVERIFY2(qAbs(pos.x() - 215.0f) < 12.0f && qAbs(-pos.z() - 215.0f) < 12.0f,
+           qPrintable(QStringLiteral("imported object at (%1,%2) must be centred on the 450 bed")
+                          .arg(pos.x()).arg(pos.z())));
+  // Multi-plate: the object must stay inside ITS plate after the plate order
+  // changes -- drawn on the plate (render bake) and not reported as outside the
+  // bed (the scan compared plate-N positions with plate 0's rectangle).
+  QCOMPARE(editor.checkObjectsOutsideBed(), 0);
+  QVERIFY(editor.addPlate());
+  QVERIFY(editor.movePlate(0, 1));
+  QCOMPARE(project.plateObjectIndices(1).value(0, -1), 0);
+  {
+    const QByteArray blob = editor.meshData();
+    QVERIFY(blob.size() > int(6 * sizeof(float)));
+    float bbox[6] = {};
+    memcpy(bbox, blob.constData() + blob.size() - sizeof(bbox), sizeof(bbox));
+    double slotX = 0.0, slotY = 0.0;
+    OWzx::PartPlateGridLayout::gridOffset(1, 2, 450.0, 450.0, &slotX, &slotY);
+    const double drawnCx = 0.5 * (double(bbox[0]) + double(bbox[3]));
+    QVERIFY2(drawnCx > slotX && drawnCx < slotX + 450.0,
+             qPrintable(QStringLiteral("drawn at x=%1, plate 2 spans [%2,%3]")
+                            .arg(drawnCx).arg(slotX).arg(slotX + 450.0)));
+  }
+  QCOMPARE(editor.checkObjectsOutsideBed(), 0);
+  // Cross-plate move by typing the X position: ownership follows the object
+  // (it used to stay registered on the old plate), and undo restores both.
+  editor.selectObject(0);
+  editor.setObjectPosX(215.0f);  // plate 1's slot centre
+  QCOMPARE(project.plateIndexForObject(0), 0);
+  QCOMPARE(editor.checkObjectsOutsideBed(), 0);
+  editor.undo();
+  QCOMPARE(project.plateIndexForObject(0), 1);
+  QCOMPARE(editor.checkObjectsOutsideBed(), 0);
+  // A fresh project keeps the preset bed (the plate list is rebuilt).
+  project.clearProject();
+  QVERIFY(project.plateListConst());
+  QCOMPARE(project.plateListConst()->plateWidth(), 450);
+  // A later BedShapeDialog-style edit flows through the same single source.
+  editor.setBedWidth(300.0f);
+  QCOMPARE(project.bedWidthMm(), 300);
+  QCOMPARE(project.plateListConst()->plateWidth(), 300);
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::addFilesToPlateLandsOnTheTargetPlate()
+{
+#ifdef HAS_LIBSLIC3R
+  // R5 (FB-R5-04): "add models to plate N" registered the instances on plate N
+  // but left them at their authored coordinates (around plate 0). Plate
+  // membership is position-derived, so the next membership rebuild moved them
+  // to plate 0 and plate N stayed empty.
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/test_models/Block20XY.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Block20XY fixture must exist");
+  ProjectService project;
+  project.setPlateSize(220, 220, 250);
+  QVERIFY(project.addPlate());
+  QVERIFY(project.addPlate());
+  QCOMPARE(project.plateCount(), 3);
+  QVERIFY2(project.addFilesToPlate(2, {fixturePath}), qPrintable(project.lastError()));
+  const int added = project.modelCount() - 1;
+  QVERIFY(added >= 0);
+  project.rebuildPlateMembership(false);
+  QVERIFY2(project.plateObjectIndices(2).contains(added),
+           "an object added to plate 2 must still belong to plate 2 after membership is rebuilt from positions");
+  QVERIFY(project.plateObjectIndices(0).isEmpty());
+  // Centred on the plate: its slot is the third grid cell (col 0, row 1 of 2 cols).
+  double slotX = 0.0, slotY = 0.0;
+  OWzx::PartPlateGridLayout::gridOffset(2, 3, 220.0, 220.0, &slotX, &slotY);
+  const QVector3D pos = project.objectPosition(added);
+  QVERIFY2(qAbs(double(pos.x()) - (slotX + 110.0)) < 12.0,
+           qPrintable(QStringLiteral("x %1 not centred on the plate slot %2").arg(pos.x()).arg(slotX + 110.0)));
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::plainImportIntoMultiPlateProjectKeepsOtherPlates()
+{
+#ifdef HAS_LIBSLIC3R
+  // FB-R7-01 (P0): a plain-model import (Ctrl+I / --load-model) into a
+  // project that already holds objects went through loadFile's full-replace
+  // path and swapped in a fresh Model + PartPlateList, wiping every other
+  // plate with its objects. The import must MERGE into the current scene
+  // (upstream Plater::load_files) and leave the other plates untouched.
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/test_models/Block20XY.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Block20XY fixture must exist");
+
+  ProjectService project;
+  project.setPlateSize(220, 220, 250);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(project.loadFile(fixturePath));
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY2(loadSpy.last().at(0).toBool(), qPrintable(project.lastError()));
+  const int firstObjectCount = project.modelCount();
+  QVERIFY(firstObjectCount >= 1);
+  QCOMPARE(project.plateCount(), 1);
+
+  // Multi-plate scene: a second plate holding its own imported object.
+  QVERIFY(project.addPlate());
+  QCOMPARE(project.plateCount(), 2);
+  QVERIFY2(project.addFilesToPlate(1, {fixturePath}), qPrintable(project.lastError()));
+  const int objectsBeforeSecondImport = project.modelCount();
+  QVERIFY(project.plateObjectIndices(1).contains(objectsBeforeSecondImport - 1));
+
+  // The bug: this second import used to reset the project to a single plate.
+  loadSpy.clear();
+  QVERIFY(project.loadFile(fixturePath));
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY2(loadSpy.last().at(0).toBool(), qPrintable(project.lastError()));
+
+  QCOMPARE(project.plateCount(), 2);
+  QCOMPARE(project.modelCount(), objectsBeforeSecondImport + 1);
+  // The second plate's object must still be registered on plate 1...
+  QVERIFY2(project.plateObjectIndices(1).contains(objectsBeforeSecondImport - 1),
+           "the object imported onto plate 1 must survive a later plain import");
+  // ...and the newly merged object must belong to some plate (position
+  // derived membership must stay consistent).
+  project.rebuildPlateMembership(false);
+  const int mergedObject = project.modelCount() - 1;
+  QVERIFY2(project.plateObjectIndices(0).contains(mergedObject)
+               || project.plateObjectIndices(1).contains(mergedObject),
+           "the merged object must be registered on a plate");
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::sliceAllInjectsPresetConfigBeforeFirstSlice()
+{
+#ifdef HAS_LIBSLIC3R
+  // FB-R7-05 (P1): requestSliceAll dispatched startSlicePlate without pushing
+  // the merged preset config, so a slice-all that was the FIRST slicing
+  // action of a session sliced with factory defaults (layer_height 0.2).
+  // The expected layer count is derived from the EFFECTIVE selected preset's
+  // layer_height (the test catalog's default preset applies when the 0.16mm
+  // profile is unavailable); any non-factory value proves the injection.
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/test_models/Block20XY.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Block20XY fixture must exist");
+
+  PresetService presets;
+  ProjectService project;
+  SliceService slice(&project);
+  ConfigViewModel config(&presets, &project);
+  EditorViewModel editor(&project, &slice);
+  editor.setConfigViewModel(&config);
+  config.setCurrentPrintPreset(QStringLiteral("0.16mm Fine"));
+
+  bool lhOk = false;
+  const double presetLayerHeight =
+      config.mergedConfigValues().value(QStringLiteral("layer_height")).toDouble(&lhOk);
+  if (!lhOk || presetLayerHeight <= 0.0)
+    QSKIP("merged config carries no layer_height; cannot verify injection");
+  const int expectedLayers = qRound(20.0 / presetLayerHeight);
+  if (expectedLayers == 100)
+    QSKIP("effective preset layer height equals the factory default (0.2); "
+          "injection cannot be distinguished");
+
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(editor.loadFile(fixturePath));
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY2(loadSpy.last().at(0).toBool(), qPrintable(project.lastError()));
+  QVERIFY(project.addPlate());
+  QVERIFY2(project.addFilesToPlate(1, {fixturePath}), qPrintable(project.lastError()));
+
+  // No requestSlice beforehand: slice-all must inject the preset config
+  // itself, for every queue entry.
+  editor.requestSliceAll();
+  QSignalSpy finishedSpy(&slice, &SliceService::sliceFinished);
+  QSignalSpy failedSpy(&slice, &SliceService::sliceFailed);
+  QVERIFY(finishedSpy.isValid());
+  QTRY_VERIFY_WITH_TIMEOUT(finishedSpy.count() >= 2 || failedSpy.count() > 0, 240000);
+  if (failedSpy.count() > 0)
+    QSKIP(qPrintable(QStringLiteral("slice-all failed (env-dependent): %1")
+                         .arg(failedSpy.first().at(0).toString())));
+  QVERIFY2(slice.resultLayerCount() == expectedLayers,
+           qPrintable(QStringLiteral("slice-all must use the preset layer height "
+                                     "(%1 layers at %2mm), got %3 (factory default would be 100)")
+                          .arg(expectedLayers)
+                          .arg(presetLayerHeight)
+                          .arg(slice.resultLayerCount())));
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::mirrorPivotsOnBoundingBoxCenterAndKeepsObjectOnBed()
+{
+#ifdef HAS_LIBSLIC3R
+  // Block20XY is not centred on its instance origin (local 0..20), so the
+  // former sign-flip-only mirror reflected the object across its origin: it
+  // jumped by one object size (off the plate for a corner-placed object) and a
+  // Z flip sank it below the bed. Mirroring must keep the world bbox centre in
+  // X/Y and the bottom on the bed, and undo/redo must restore it exactly.
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/test_models/Block20XY.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Block20XY fixture must exist");
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(editor.loadFile(fixturePath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  editor.selectObject(0);
+  QVERIFY(editor.hasSelection());
+  const QVector4D fitBefore = editor.fitHint();
+  const QVector3D posBefore = project.objectPosition(0);
+  for (int axis = 0; axis < 3; ++axis)
+  {
+    editor.mirrorSelectedObjects(axis);
+    const QVector4D fit = editor.fitHint();
+    QVERIFY2(qAbs(fit.x() - fitBefore.x()) < 0.01f && qAbs(fit.y() - fitBefore.y()) < 0.01f
+                 && qAbs(fit.z() - fitBefore.z()) < 0.01f,
+             qPrintable(QStringLiteral("axis %1: world bbox centre moved %2,%3,%4 -> %5,%6,%7")
+                            .arg(axis).arg(fitBefore.x()).arg(fitBefore.y()).arg(fitBefore.z())
+                            .arg(fit.x()).arg(fit.y()).arg(fit.z())));
+  }
+  QVERIFY(undoManager.canUndo());
+  editor.undo();
+  editor.undo();
+  editor.undo();
+  const QVector3D posUndone = project.objectPosition(0);
+  QVERIFY2((posUndone - posBefore).length() < 0.01f, "undoing the mirrors must restore the instance position");
+  const QVector4D fitUndone = editor.fitHint();
+  QVERIFY2(qAbs(fitUndone.x() - fitBefore.x()) < 0.01f && qAbs(fitUndone.z() - fitBefore.z()) < 0.01f,
+           qPrintable(QStringLiteral("fit %1,%2,%3 -> %4,%5,%6 pos %7,%8,%9 -> %10,%11,%12")
+                          .arg(fitBefore.x()).arg(fitBefore.y()).arg(fitBefore.z())
+                          .arg(fitUndone.x()).arg(fitUndone.y()).arg(fitUndone.z())
+                          .arg(posBefore.x()).arg(posBefore.y()).arg(posBefore.z())
+                          .arg(posUndone.x()).arg(posUndone.y()).arg(posUndone.z())));
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+void ViewModelSmokeTests::mirroredInstanceKeepsPlateShiftInWorldFrame()
+{
+#ifdef HAS_LIBSLIC3R
+  // The instance channel is T(plateShift) * A * instMat * A^-1: plateShift is a
+  // WORLD offset. Composing it through QMatrix4x4::translate() (right multiply)
+  // pushed it through the instance linear part, so a mirrored instance whose
+  // plate shift was non-zero rendered at the mirrored offset (off the plate).
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QVERIFY(editor.addPrimitiveToPlate(0)); // cube
+  editor.selectObject(0);
+  QVERIFY(editor.hasSelection());
+  // Move the cube away from the plate centre so plate normalization yields a
+  // clearly non-zero shift.
+  editor.setObjectPosX(editor.objectPosX() - 60.0f);
+  // Mirroring pivots on the bbox centre, so the world bbox (derived live
+  // from the transform channel + frozen plate shift) must not move.
+  const QVector4D fitBefore = editor.fitHint();
+  editor.mirrorSelectedObjects(0);
+  const QVector4D fitAfter = editor.fitHint();
+  QVERIFY2(qAbs(fitAfter.x() - fitBefore.x()) < 0.01f && qAbs(fitAfter.y() - fitBefore.y()) < 0.01f
+               && qAbs(fitAfter.z() - fitBefore.z()) < 0.01f,
+           qPrintable(QStringLiteral("world bbox centre moved %1,%2,%3 -> %4,%5,%6")
+                          .arg(fitBefore.x()).arg(fitBefore.y()).arg(fitBefore.z())
+                          .arg(fitAfter.x()).arg(fitAfter.y()).arg(fitAfter.z())));
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
 void ViewModelSmokeTests::prepareContextMenuActionsAreRealAndPlateScoped()
 {
 #ifdef HAS_LIBSLIC3R
@@ -6499,6 +6917,71 @@ void ViewModelSmokeTests::multiPlate3mfRoundTripPreservesState()
 #endif
 }
 
+void ViewModelSmokeTests::loadProjectAcceptsCxprjAndFailedLoadKeepsScene()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("project load requires libslic3r");
+#else
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/test_model.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "fixture must exist");
+  const QString cxprjPath = QDir(QDir::tempPath()).filePath(
+      QStringLiteral("owzx_cxprj_roundtrip.cxprj"));
+  const QString badPath = QDir(QDir::tempPath()).filePath(
+      QStringLiteral("owzx_corrupt_project.3mf"));
+  QFile::remove(cxprjPath);
+  QFile::remove(badPath);
+  // .cxprj is written as a 3MF container by saveProject; it must load back.
+  ProjectService writer;
+  QSignalSpy writerLoad(&writer, &ProjectService::loadFinished);
+  QVERIFY(writer.loadFile(fixturePath));
+  QTRY_VERIFY_WITH_TIMEOUT(writerLoad.count() > 0, 10000);
+  QVERIFY(writer.saveProject(cxprjPath));
+  ProjectService project;
+  QSignalSpy projectLoad(&project, &ProjectService::loadFinished);
+  QVERIFY(project.loadFile(fixturePath));
+  QTRY_COMPARE_WITH_TIMEOUT(projectLoad.count(), 1, 10000);
+  const int objectsBefore = project.modelCount();
+  QVERIFY(objectsBefore > 0);
+  QVERIFY(project.loadProject(cxprjPath));
+  QTRY_COMPARE_WITH_TIMEOUT(projectLoad.count(), 2, 10000);
+  QVERIFY2(projectLoad.last().at(0).toBool(),
+           qPrintable(QStringLiteral("cxprj load failed: %1").arg(project.lastError())));
+  QCOMPARE(project.modelCount(), objectsBefore);
+  // A corrupt project must fail without wiping the scene that is open.
+  {
+    QFile bad(badPath);
+    QVERIFY(bad.open(QIODevice::WriteOnly));
+    bad.write("this is not a zip archive");
+  }
+  QVERIFY(project.loadProject(badPath));
+  QTRY_COMPARE_WITH_TIMEOUT(projectLoad.count(), 3, 10000);
+  QVERIFY(!projectLoad.last().at(0).toBool());
+  QCOMPARE(project.modelCount(), objectsBefore);
+  QVERIFY(project.plateCount() >= 1);
+  QFile::remove(cxprjPath);
+  QFile::remove(badPath);
+#endif
+}
+void ViewModelSmokeTests::stepFileImportsThroughOcct()
+{
+#ifndef HAS_LIBSLIC3R
+  QSKIP("STEP import requires libslic3r");
+#else
+  // 10 mm AP214 cube (tests/data/cube_10mm.step). Model::read_from_file does
+  // not know STEP; the import must go through Model::read_from_step (OCCT).
+  const QString stepPath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/data/cube_10mm.step"));
+  QVERIFY2(QFileInfo::exists(stepPath), "STEP fixture must exist");
+  ProjectService project;
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(project.loadFile(stepPath));
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY2(loadSpy.last().at(0).toBool(),
+           qPrintable(QStringLiteral("STEP import failed: %1").arg(project.lastError())));
+  QVERIFY(project.modelCount() >= 1);
+#endif
+}
 void ViewModelSmokeTests::loadProjectReplacesPlateSequenceState()
 {
 #ifndef HAS_LIBSLIC3R
@@ -9260,19 +9743,27 @@ void ViewModelSmokeTests::editorUnitInferenceDetectsSavedUnits()
   QVERIFY2(promptSpy.count() == 1, "a meters-authored import must raise the unit prompt");
   QCOMPARE(promptSpy.takeFirst().at(1).toInt(), 1);
 
+  // FB-R7-01: a plain import into a non-empty project now MERGES into the
+  // scene, so the second file's object is appended and the unit prompt must
+  // fire for the NEWLY appended object (not the pre-existing ones).
   QVERIFY(editor.loadFile(imperialStl));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "imperial cube must import");
-  QCOMPARE(editor.modelCount(), 1);
-  QCOMPARE(project.loadedObjectUnitHint(0), 2);
+  const int imperialIndex = editor.modelCount() - 1;
+  QVERIFY(imperialIndex >= 1);
+  QCOMPARE(project.loadedObjectUnitHint(imperialIndex), 2);
   QVERIFY2(promptSpy.count() == 1, "an imperial-authored import must raise the unit prompt");
-  QCOMPARE(promptSpy.takeFirst().at(1).toInt(), 2);
+  const QList<QVariant> imperialPrompt = promptSpy.takeFirst();
+  QCOMPARE(imperialPrompt.at(0).toInt(), imperialIndex);
+  QCOMPARE(imperialPrompt.at(1).toInt(), 2);
+  QCOMPARE(editor.loadedObjectUnitHint(imperialIndex), 2);
 
   QVERIFY(editor.loadFile(normalStl));
   QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
   QVERIFY2(loadSpy.takeFirst().at(0).toBool(), "normal cube must import");
-  QCOMPARE(editor.modelCount(), 1);
-  QCOMPARE(project.loadedObjectUnitHint(0), 0);
+  const int normalIndex = editor.modelCount() - 1;
+  QVERIFY(normalIndex > imperialIndex);
+  QCOMPARE(project.loadedObjectUnitHint(normalIndex), 0);
   QCOMPARE(promptSpy.count(), 0);
 }
 
@@ -10055,9 +10546,13 @@ void ViewModelSmokeTests::assembleBakesVolumeWorldTransforms()
   // only X is asserted here.)
   const QVariantMap merged = project.selectionWorldBoundingBox({0});
   QVERIFY(!merged.isEmpty());
-  QVERIFY(qAbs(merged.value("minX").toDouble() - box0.value("minX").toDouble()) < 1e-3);
-  QVERIFY(qAbs(merged.value("maxX").toDouble() - box1.value("maxX").toDouble()) < 1e-3);
-  QVERIFY(merged.value("maxX").toDouble() > 30.0);
+  // (New primitives now land on the plate centre, so the parked sphere can be
+  // either side of the cube: compare against the true union on X.)
+  const double unionMinX = qMin(box0.value("minX").toDouble(), box1.value("minX").toDouble());
+  const double unionMaxX = qMax(box0.value("maxX").toDouble(), box1.value("maxX").toDouble());
+  QVERIFY(qAbs(merged.value("minX").toDouble() - unionMinX) < 1e-3);
+  QVERIFY(qAbs(merged.value("maxX").toDouble() - unionMaxX) < 1e-3);
+  QVERIFY(unionMaxX - unionMinX > 30.0);
 }
 #else
 void ViewModelSmokeTests::assembleBakesVolumeWorldTransforms()
@@ -10578,6 +11073,146 @@ void ViewModelSmokeTests::autoOrientUndoRestoresRotation()
   QCOMPARE(project.objectRotation(0), rotAfter);
 }
 
+void ViewModelSmokeTests::orientAndFlattenRotateInstanceAndUndoRestoreWorldGeometry()
+{
+  // FB-R4-02: orientObject used the ModelObject overload of orientation::orient,
+  // which rotates the *volumes*. The instance rotation never changed, so the
+  // "Orient" undo macro restored nothing (and, on an already rotated
+  // instance, left the object tilted). Upstream (OrientJob) rotates the
+  // instance. Assert on the world-space box, not only on objectRotation.
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  editor.rebuildAndNotify();
+  editor.selectObject(0);
+  const QVector3D rotBefore(33.0f, 0.0f, 0.0f);
+  QVERIFY(project.setObjectRotation(0, rotBefore.x(), rotBefore.y(), rotBefore.z()));
+  const auto worldSize = [&project]() {
+    const QVariantMap b = project.selectionWorldBoundingBox({0});
+    return QVector3D(float(b.value(QStringLiteral("maxX")).toDouble() - b.value(QStringLiteral("minX")).toDouble()),
+                     float(b.value(QStringLiteral("maxY")).toDouble() - b.value(QStringLiteral("minY")).toDouble()),
+                     float(b.value(QStringLiteral("maxZ")).toDouble() - b.value(QStringLiteral("minZ")).toDouble()));
+  };
+  const auto near = [](const QVector3D &a, const QVector3D &b) {
+    return (a - b).length() < 1e-3f;
+  };
+  const QVector3D sizeBefore = worldSize();
+  for (int pass = 0; pass < 2; ++pass)
+  {
+    if (pass == 0)
+      editor.autoOrientSelected();
+    else
+      editor.flattenSelected();
+    const QVector3D rotAfter = project.objectRotation(0);
+    const QVector3D sizeAfter = worldSize();
+    QVERIFY2(rotAfter != rotBefore, "orient/flatten must change the instance rotation");
+    QVERIFY2(!near(sizeAfter, sizeBefore), "orient/flatten must change the world box of a tilted cube");
+    QVERIFY(undoManager.canUndo());
+    undoManager.undo();
+    QCOMPARE(project.objectRotation(0), rotBefore);
+    QVERIFY2(near(worldSize(), sizeBefore),
+             "undo must restore the world geometry, not only the Euler readout");
+    undoManager.redo();
+    QVERIFY(near(worldSize(), sizeAfter));
+    undoManager.undo();
+    QVERIFY(near(worldSize(), sizeBefore));
+  }
+}
+void ViewModelSmokeTests::cutKeepModesReplaceSplitAndUndoRestore()
+{
+  // FB-R4-03/04: the Cut gizmo's "execute" used a bare cut_mesh that left the
+  // uncut original for "keep upper", made an empty mock object for "keep
+  // lower" and parked the upper half outside every plate; the rotated variant
+  // passed KeepAsParts without KeepUpper (infinite loop inside
+  // Cut::perform_with_plane for "keep lower"); and CutCommand::undo spun
+  // forever on a const copy of the object list.
+  struct Box { double w, h, d, minY, minX, maxX; };
+  for (int path = 0; path < 2; ++path)
+  {
+    for (int keep = 0; keep < 3; ++keep)
+    {
+      ProjectService project;
+      SliceService slice(&project);
+      EditorViewModel editor(&project, &slice);
+      UndoRedoManager undoManager;
+      editor.setUndoRedoManager(&undoManager);
+      QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+      editor.rebuildAndNotify();
+      editor.selectObject(0);
+      editor.setCutKeepMode(keep);
+      const auto box = [&project](int index) {
+        const QVariantMap b = project.selectionWorldBoundingBox({index});
+        const auto v = [&b](const char *k) { return b.value(QLatin1String(k)).toDouble(); };
+        return Box{v("maxX") - v("minX"), v("maxY") - v("minY"), v("maxZ") - v("minZ"),
+                   v("minY"), v("minX"), v("maxX")};
+      };
+      const QString tag = QStringLiteral("path %1 keep %2").arg(path).arg(keep);
+      QCOMPARE(project.modelCount(), 1);
+      const Box before = box(0);
+      QVERIFY2(before.h > 19.0, qPrintable(tag));
+      if (path == 0)
+        editor.cutSelected(2, 0.0);
+      else
+        QVERIFY2(editor.cutSelectedWithRotation(), qPrintable(tag));
+      QVERIFY2(undoManager.canUndo(), qPrintable(tag));
+      const int expectedCount = keep == 0 ? 2 : 1;
+      QCOMPARE(project.modelCount(), expectedCount);
+      for (int i = 0; i < expectedCount; ++i)
+      {
+        const Box part = box(i);
+        QVERIFY2(qAbs(part.h - before.h / 2.0) < 0.05, qPrintable(tag + " half height"));
+        QVERIFY2(qAbs(part.minY) < 0.05, qPrintable(tag + " rests on the bed"));
+      }
+      if (keep == 0)
+      {
+        const Box a = box(0);
+        const Box b = box(1);
+        QVERIFY2(a.maxX <= b.minX + 1e-6 || b.maxX <= a.minX + 1e-6,
+                 qPrintable(tag + " the two pieces must not overlap"));
+      }
+      undoManager.undo();
+      QCOMPARE(project.modelCount(), 1);
+      QVERIFY2(qAbs(box(0).h - before.h) < 0.05,
+               qPrintable(tag + QStringLiteral(" undo restores the full object, h=%1 minY=%2").arg(box(0).h).arg(box(0).minY)));
+      undoManager.redo();
+      QCOMPARE(project.modelCount(), expectedCount);
+      QVERIFY2(qAbs(box(0).h - before.h / 2.0) < 0.05, qPrintable(tag + " redo re-applies the cut"));
+    }
+  }
+}
+void ViewModelSmokeTests::embossAddsMillimetreTextOnceAndUndoRemovesIt()
+{
+  // FB-R4-05/06: the emboss mesh was left in shape units (~1e6 per mm: a 2 mm
+  // "AB" was kilometres wide) and AddVolumeCommand re-applied the add on the
+  // very push() that registered it (two identical text volumes).
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  editor.rebuildAndNotify();
+  editor.selectObject(0);
+  editor.setEmbossText(QStringLiteral("AB"));
+  editor.setEmbossHeight(4.0f);
+  editor.setEmbossDepth(1.0f);
+  const int volumesBefore = project.objectVolumeCount(0);
+  QVERIFY2(editor.embossSelected(), qPrintable(project.lastError()));
+  QCOMPARE(project.objectVolumeCount(0), volumesBefore + 1);
+  const QVariantMap box = project.selectionWorldBoundingBox({0});
+  const double width = box.value(QStringLiteral("maxX")).toDouble() - box.value(QStringLiteral("minX")).toDouble();
+  const double height = box.value(QStringLiteral("maxY")).toDouble() - box.value(QStringLiteral("minY")).toDouble();
+  QVERIFY2(width > 1.0 && width < 100.0, qPrintable(QStringLiteral("width %1").arg(width)));
+  QVERIFY2(height > 1.0 && height < 100.0, qPrintable(QStringLiteral("height %1").arg(height)));
+  QVERIFY(undoManager.canUndo());
+  undoManager.undo();
+  QCOMPARE(project.objectVolumeCount(0), volumesBefore);
+  undoManager.redo();
+  QCOMPARE(project.objectVolumeCount(0), volumesBefore + 1);
+}
 void ViewModelSmokeTests::splitUndoRestoresMergedObject()
 {
   ProjectService project;
@@ -10663,6 +11298,12 @@ void ViewModelSmokeTests::autoOrientUndoRestoresRotation()
 {
   QSKIP("U9 orient undo requires HAS_LIBSLIC3R");
 }
+void ViewModelSmokeTests::orientAndFlattenRotateInstanceAndUndoRestoreWorldGeometry()
+{
+  QSKIP("FB-R4-02 orient requires HAS_LIBSLIC3R");
+}
+void ViewModelSmokeTests::cutKeepModesReplaceSplitAndUndoRestore() { QSKIP("FB-R4-04 cut requires libslic3r"); }
+void ViewModelSmokeTests::embossAddsMillimetreTextOnceAndUndoRemovesIt() { QSKIP("needs libslic3r"); }
 void ViewModelSmokeTests::splitUndoRestoresMergedObject()
 {
   QSKIP("U9 split undo requires HAS_LIBSLIC3R");

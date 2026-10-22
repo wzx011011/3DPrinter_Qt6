@@ -70,6 +70,7 @@ class PartPlateTests final : public QObject {
   // (upstream postprocess_bed_index_for_selected + ArrangeJob::finalize,
   // PartPlate.cpp:5832-5878/6371-6417).
   void arrangeOverflowCreatesNewPlates();
+  void arrangeScopedToOnePlateLeavesOtherPlatesAlone();
   // PLATE-PRINT-LIFECYCLE (batch 5): arrange must keep objects off the fixed
   // wipe-tower rectangle (ArrangeJob.cpp:337-359, PartPlate.cpp:1739-1777)
   // and off the bed_exclude_area rectangles (PartPlate.cpp:4586-4623).
@@ -103,6 +104,7 @@ class PartPlateTests final : public QObject {
 #else
   void arrangeDistributesAcrossPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeOverflowCreatesNewPlates() { QSKIP("Requires HAS_LIBSLIC3R"); }
+  void arrangeScopedToOnePlateLeavesOtherPlatesAlone() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeAvoidsWipeTowerAndExcludeAreas() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void arrangeWipeTowerBedTempGateTruthTable() { QSKIP("Requires HAS_LIBSLIC3R"); }
   void lockedPlateExclusion() { QSKIP("Requires HAS_LIBSLIC3R"); }
@@ -508,6 +510,42 @@ void PartPlateTests::arrangeDistributesAcrossPlates() {
   QVERIFY2(spy.count() >= 1, "plateDataLoaded should fire after rebuild");
 }
 
+void PartPlateTests::arrangeScopedToOnePlateLeavesOtherPlatesAlone() {
+  // R5 (FB-R5-07): "Arrange objects on selected plates" (and the arrange that
+  // follows a handy-model import) used to be the all-plates arrange: every
+  // plate's objects were re-packed into bed 0 and trailing empty plates were
+  // recycled. Plate-scoped arrange must only touch the chosen plate.
+  ProjectService service;
+  QSignalSpy loadSpy(&service, &ProjectService::loadFinished);
+  QVERIFY(service.loadFile(kStlPath));
+  QTRY_VERIFY_WITH_TIMEOUT(loadSpy.count() > 0, 10000);
+  while (service.modelCount() < 3) {
+    QVERIFY(service.duplicateObject(service.modelCount() - 1) >= 0);
+  }
+  service.setPlateSize(100, 100, 0);
+  QVERIFY(service.setObjectPosition(0, 0.0f, 0.0f, 0.0f));
+  QVERIFY(service.setObjectPosition(1, 120.0f, 0.0f, 0.0f));
+  QVERIFY(service.setObjectPosition(2, 240.0f, 0.0f, 0.0f));
+  service.rebuildPlateMembership(/*exceptLocked=*/true);
+  QCOMPARE(service.plateCount(), 3);
+  QVERIFY(service.addPlate());  // trailing EMPTY plate
+  QCOMPARE(service.plateCount(), 4);
+  const QVector3D p0 = service.objectPosition(0);
+  const QVector3D p2 = service.objectPosition(2);
+  const int plate0Before = service.plateIndexForObject(0);
+  const int plate2Before = service.plateIndexForObject(2);
+  const QString bed = QStringLiteral("0,0,100,0,100,100,0,100");
+  QVERIFY(service.arrangeObjects(6.0f, false, false, bed, {}, /*onlyPlateIndex=*/1));
+  QCOMPARE(service.plateCount(), 4);  // the empty trailing plate is NOT recycled
+  QCOMPARE(service.objectPosition(0), p0);
+  QCOMPARE(service.objectPosition(2), p2);
+  QCOMPARE(service.plateIndexForObject(0), plate0Before);
+  QCOMPARE(service.plateIndexForObject(2), plate2Before);
+  QCOMPARE(service.plateIndexForObject(1), 1);
+  // The all-plates arrange is unchanged: it re-packs everything and recycles.
+  QVERIFY(service.arrangeObjects(6.0f, false, false, bed, {}));
+  QVERIFY2(service.plateCount() < 4, "all-plates arrange still recycles trailing empty plates");
+}
 void PartPlateTests::arrangeOverflowCreatesNewPlates() {
   // MP7 (dev plan 多盘 2026-10-20): arrange that cannot fit everything on
   // one bed overflows onto CREATED plates (upstream postprocess_bed_index_

@@ -484,6 +484,24 @@ namespace
     return false;
   }
 
+  // STEP/STP model files. Model::read_from_file only dispatches stl/obj/amf/3mf
+  // (it throws "Unknown file format ..." for STEP); upstream routes them
+  // through Model::read_from_step (OCCT) from Plater::load_files, and the
+  // file dialogs / drag-drop of this app advertise STEP as importable.
+  bool isStepModelPath(const QString &path)
+  {
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    return suffix == QStringLiteral("step") || suffix == QStringLiteral("stp");
+  }
+  // Upstream Plater::load_files STEP branch with the app_config defaults
+  // (linear_deflection 0.003, angle_deflection 0.5, is_split_compound false,
+  // enable_step_mesh_setting off -> no StepMeshDialog).
+  Slic3r::Model readStepModel(const QString &path, Slic3r::LoadStrategy strategy)
+  {
+    return Slic3r::Model::read_from_step(path.toStdString(), strategy,
+                                         nullptr, nullptr, nullptr,
+                                         0.003, 0.5, false);
+  }
   QList<MeshBatchIdentity> collectMeshBatchIdentities(const Slic3r::Model *model)
   {
     QList<MeshBatchIdentity> identities;
@@ -551,7 +569,18 @@ namespace
     };
     QMatrix4x4 world(values);
     if (!plateShift.isNull())
-      world.translate(plateShift);
+    {
+      // plateShift is a WORLD-frame offset (meshData derives it from the
+      // post-instance-transform scene bbox), so it must be composed AFTER the
+      // instance matrix: T(shift) * world. QMatrix4x4::translate() would
+      // right-multiply, i.e. push the offset through the instance
+      // rotation/scale/mirror (a mirrored or rotated instance then landed
+      // off the plate and out of the bed). Identical for pure-translation
+      // instances, which is why only mirror/rotate edits exposed it.
+      QMatrix4x4 shiftMatrix;
+      shiftMatrix.translate(plateShift);
+      world = shiftMatrix * world;
+    }
     return world;
   }
 }
@@ -1183,15 +1212,19 @@ bool ProjectService::loadFile(const QString &filePath)
         }, Qt::QueuedConnection);
       }
 
-      Slic3r::Model loaded = Slic3r::Model::read_from_file(localPath.toStdString(),
-                                                            nullptr,
-                                                            nullptr,
-                                                            Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel,
-                                                            &plateDataList,
-                                                            nullptr,
-                                                            nullptr,
-                                                            nullptr,
-                                                            progressFn);
+      const Slic3r::LoadStrategy loadStrategy =
+          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel;
+      Slic3r::Model loaded = isStepModelPath(localPath)
+          ? readStepModel(localPath, loadStrategy)
+          : Slic3r::Model::read_from_file(localPath.toStdString(),
+                                          nullptr,
+                                          nullptr,
+                                          loadStrategy,
+                                          &plateDataList,
+                                          nullptr,
+                                          nullptr,
+                                          nullptr,
+                                          progressFn);
       *loadedModel = std::move(loaded);
       // MP8: the bed geometry comes from the archive's project_settings
       // overlay (narrow miniz read), not a LoadConfig parse.
@@ -1527,6 +1560,34 @@ bool ProjectService::loadFile(const QString &filePath)
 
       if (ok && !canceled)
       {
+        // FB-R7-01 (P0): a plain-model import (no plate data) into a project
+        // that already holds objects must ADD to the current scene (upstream
+        // Plater::load_files); the unconditional full-replace below used to
+        // wipe every other plate with its objects and slice results. The
+        // replace path stays for the empty/first-load case (startup
+        // positional import, fresh project) and for archives with real
+        // plate data. NOTE: the merge call mutates receiver->model_ (it
+        // appends the parsed objects) and is deliberately the last operand.
+        const bool mergeIntoProject =
+            !loadedRealPlateData
+            && receiver->model_ && !receiver->model_->objects.empty()
+            && receiver->m_plateList && receiver->m_plateList->plateCount() > 0
+            && receiver->mergeImportedModelIntoCurrentPlate(loadedModel);
+        if (mergeIntoProject)
+        {
+          delete loadedModel;  // objects were deep-copied into receiver->model_
+          receiver->lastError_.clear();
+          receiver->m_lastImportMergedIntoScene = true;
+          // projectName_ / sourceFilePath_ stay on the open project: a model
+          // import neither renames it nor re-points its project source.
+          qInfo("[ProjectService] import merged path=%s objects=%d plates=%d",
+                localPath.toUtf8().constData(),
+                receiver->modelCount_,
+                receiver->m_plateList->plateCount());
+        }
+        else
+        {
+          receiver->m_lastImportMergedIntoScene = false;
         if (receiver->model_)
           delete receiver->model_;
         receiver->model_ = loadedModel;
@@ -1646,8 +1707,12 @@ bool ProjectService::loadFile(const QString &filePath)
             receiver->rebuildPlateMembership(/*exceptLocked=*/true);
         }
         else
+          // FB-R2-06: arrange on the preset bed (was a hard-coded 220 rect,
+          // which parked the object at (110,110) on a 450 bed and re-sized
+          // the plate list to 220).
           receiver->arrangeObjects(5.0f, false, false,
-                                   QStringLiteral("0,0,220,0,220,220,0,220"));
+                                   receiver->bedPrintableAreaString());
+        }  // FB-R7-01: end of the full-replace branch (merge path skips it)
 
         // Phase 97 fix (THUMBRT-01): restore persisted thumbnails AFTER
         // arrangeObjects. arrangeObjects -> rebuildPlatesAfterArrangement
@@ -1674,6 +1739,7 @@ bool ProjectService::loadFile(const QString &filePath)
       {
         delete loadedModel;
         receiver->modelCount_ = 0;
+        receiver->m_lastImportMergedIntoScene = false;
         // Reset plate storage to a fresh single-plate list (D-05).
         receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
         receiver->attachPlateInstanceBounds();
@@ -2578,6 +2644,65 @@ void ProjectService::setObjectPlateForIndex(int objectIndex, int plateIndex)
   emit plateDataLoaded(m_plateList->plateCount());
 }
 
+bool ProjectService::reassignPlateByPosition(int objectIndex)
+{
+#ifdef HAS_LIBSLIC3R
+  if (!m_plateList || !model_ || m_plateList->plateCount() <= 1)
+    return false;
+  if (m_plateList->plateWidth() <= 0 || m_plateList->plateDepth() <= 0)
+    return false;
+  if (objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+    return false;
+  const Slic3r::ModelObject *obj = model_->objects[size_t(objectIndex)];
+  if (!obj)
+    return false;
+  const int plateCount = m_plateList->plateCount();
+  bool changed = false;
+  for (size_t inst = 0; inst < obj->instances.size(); ++inst)
+  {
+    const Slic3r::BoundingBoxf3 box = obj->instance_bounding_box(inst, false);
+    if (!box.defined)
+      continue;
+    const Slic3r::Vec3d c = box.center();
+    // Grid slot decode with the SAME stride/dead-zone-free formula the arrange
+    // and load paths use (PartPlateList::computePlateIndex).
+    const int target = m_plateList->computePlateIndex(c.x(), c.y());
+    if (target < 0 || target >= plateCount)
+      continue;  // docked / gap / past the cap: keep the current owner
+    int current = -1;
+    for (int i = 0; i < plateCount; ++i)
+    {
+      const OWzx::PartPlate *p = m_plateList->plate(i);
+      if (p && p->containsInstance(objectIndex, int(inst)))
+      {
+        current = i;
+        break;
+      }
+    }
+    if (current == target)
+      continue;
+    OWzx::PartPlate *dst = m_plateList->plate(target);
+    OWzx::PartPlate *src = current >= 0 ? m_plateList->plate(current) : nullptr;
+    if (!dst || dst->isLocked() || !dst->isPrintable())
+      continue;
+    if (src && (src->isLocked() || !src->isPrintable()))
+      continue;
+    if (src)
+      src->removeInstance(objectIndex, int(inst));
+    dst->addInstance(objectIndex, int(inst));
+    changed = true;
+  }
+  if (changed)
+  {
+    emit projectChanged();
+    emit plateDataLoaded(m_plateList->plateCount());
+  }
+  return changed;
+#else
+  Q_UNUSED(objectIndex);
+  return false;
+#endif
+}
 bool ProjectService::objectPrintable(int index) const
 {
   if (index < 0 || index >= objectPrintableStates_.size())
@@ -2714,6 +2839,51 @@ bool ProjectService::setObjectMirror(int index, float x, float y, float z)
     if (inst)
       inst->set_mirror(Slic3r::Vec3d(x, y, z));
   }
+#endif
+  emit projectChanged();
+  return true;
+}
+
+std::array<double, 16> ProjectService::objectInstanceMatrix(int index) const
+{
+  std::array<double, 16> out{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+#ifdef HAS_LIBSLIC3R
+  if (model_ && index >= 0 && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    if (const auto *inst = model_->objects[size_t(index)]->instances.front())
+    {
+      const Slic3r::Transform3d &m = inst->get_transformation().get_matrix();
+      for (int row = 0; row < 4; ++row)
+        for (int col = 0; col < 4; ++col)
+          out[size_t(row * 4 + col)] = m.matrix()(row, col);
+    }
+  }
+#else
+  Q_UNUSED(index);
+#endif
+  return out;
+}
+
+bool ProjectService::setObjectInstanceMatrix(int index, const std::array<double, 16> &matrix)
+{
+  if (index < 0 || index >= objectNames_.size())
+    return false;
+#ifdef HAS_LIBSLIC3R
+  if (model_ && size_t(index) < model_->objects.size() &&
+      model_->objects[size_t(index)] && !model_->objects[size_t(index)]->instances.empty())
+  {
+    if (auto *inst = model_->objects[size_t(index)]->instances.front())
+    {
+      Slic3r::Transform3d m = Slic3r::Transform3d::Identity();
+      for (int row = 0; row < 4; ++row)
+        for (int col = 0; col < 4; ++col)
+          m.matrix()(row, col) = matrix[size_t(row * 4 + col)];
+      inst->set_transformation(Slic3r::Geometry::Transformation(m));
+    }
+  }
+#else
+  Q_UNUSED(matrix);
 #endif
   emit projectChanged();
   return true;
@@ -3629,7 +3799,9 @@ bool ProjectService::addVolumeFromFile(int objectIndex, const QString &filePath,
 
   try
   {
-    Slic3r::Model loaded = Slic3r::Model::read_from_file(filePath.toStdString());
+    Slic3r::Model loaded = isStepModelPath(filePath)
+        ? readStepModel(filePath, Slic3r::LoadStrategy::Default)
+        : Slic3r::Model::read_from_file(filePath.toStdString());
     Slic3r::TriangleMesh mesh;
 
     for (const auto *loadedObj : loaded.objects)
@@ -3831,6 +4003,27 @@ QVariantList ProjectService::embossFontList() const
   return result;
 }
 
+#ifdef HAS_LIBSLIC3R
+namespace {
+// polygons2model() returns the glyph mesh in *shape units* (font units times
+// 1/SHAPE_SCALE, i.e. ~1e6 per mm at a 2 mm font size). Upstream
+// (EmbossJob.cpp try_create_mesh) projects with depth/scale and then applies
+// Eigen::Scaling(scale), scale = get_text_shape_scale(), to land in
+// millimetres. Without it a 2 mm "AB" came out ~2.6 km wide and the object
+// vanished from the viewport (FB-R4-05).
+indexed_triangle_set embossTextMesh(const Slic3r::ExPolygons &shape,
+                                    const Slic3r::FontProp &fontProp,
+                                    const Slic3r::Emboss::FontFileWithCache &font,
+                                    double depthMm)
+{
+  const double scale = Slic3r::Emboss::get_text_shape_scale(fontProp, *font.font_file);
+  auto projectZ = std::make_unique<Slic3r::Emboss::ProjectZ>(depthMm / scale);
+  const Slic3r::Transform3d toMillimetres{Eigen::Scaling(scale)};
+  Slic3r::Emboss::ProjectTransform project(std::move(projectZ), toMillimetres);
+  return Slic3r::Emboss::polygons2model(shape, project);
+}
+} // namespace
+#endif
 bool ProjectService::addTextVolume(int objectIndex, const QString &text)
 {
   // Phase 145 (EMB-03): thin wrapper around performEmbossVolumeAdd so the
@@ -3973,8 +4166,7 @@ bool ProjectService::performEmbossVolumeAdd(int objectIndex, const QString &text
 
       // Phase 144 (EMB-02): depth from m_embossDepth Q_PROPERTY (was hardcoded 2.0).
       const double depth = static_cast<double>(m_embossDepth > 0.0f ? m_embossDepth : 2.0f);
-      Slic3r::Emboss::ProjectZ projection(depth);
-      auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
+      auto its = embossTextMesh(shapes.expolygons, font_prop, font_cache, depth);
 
       if (its.vertices.empty())
       {
@@ -4116,8 +4308,7 @@ void ProjectService::addTextVolumeAsync(int objectIndex, const QString &text)
               else
               {
                 const double dz = static_cast<double>(depth > 0.0f ? depth : 2.0f);
-                Slic3r::Emboss::ProjectZ projection(dz);
-                auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
+                auto its = embossTextMesh(shapes.expolygons, font_prop, font_cache, dz);
                 if (its.vertices.empty())
                 {
                   errMsg = QStringLiteral("polygons2model returned empty");
@@ -4498,8 +4689,7 @@ bool ProjectService::updateTextVolume(int objectIndex, int volumeIndex,
       return false;
     }
     const double depth = static_cast<double>(m_embossDepth > 0.0f ? m_embossDepth : 2.0);
-    Slic3r::Emboss::ProjectZ projection(depth);
-    auto its = Slic3r::Emboss::polygons2model(shapes.expolygons, projection);
+    auto its = embossTextMesh(shapes.expolygons, font_prop, font_cache, depth);
     if (its.vertices.empty())
     {
       lastError_ = tr("Text volume update failed: mesh generation failed");
@@ -4548,7 +4738,17 @@ bool ProjectService::orientObject(int objectIndex)
     return false;
   try
   {
-    Slic3r::orientation::orient(obj);
+    // Upstream applies the computed orientation to every ModelInstance
+    // (OrientJob::get_orient_mesh setter -> instance->rotate() +
+    // ensure_on_bed, OrientJob.cpp:295-299). The ModelObject overload of
+    // orient() rotates the *volumes* instead, which bakes the pose into the
+    // mesh: the instance rotation shown in the sidebar and tracked by
+    // TransformCommand never changes, so Ctrl+Z could not restore it (and
+    // after an earlier instance rotation, undo left the object tilted).
+    for (Slic3r::ModelInstance *instance : obj->instances)
+      Slic3r::orientation::orient(instance);
+    obj->invalidate_bounding_box();
+    obj->ensure_on_bed();
     return true;
   }
   catch (const std::exception &e)
@@ -4902,9 +5102,27 @@ bool ProjectService::arrangeWipeTowerNeededForPlate(
 #endif
 }
 
+void ProjectService::setBedSize(int width, int depth)
+{
+  if (width <= 0 || depth <= 0)
+    return;
+  m_bedWidthMm = width;
+  m_bedDepthMm = depth;
+  m_bedSizeKnown = true;
+  // Keep the plate list's grid geometry on the very same footprint, otherwise
+  // plate N is placed on a stride the renderer (which draws the preset bed)
+  // does not use. Height is preserved (printable_height is not the bed rect).
+  if (m_plateList)
+    m_plateList->setPlateSize(width, depth, m_plateList->plateHeight());
+}
+QString ProjectService::bedPrintableAreaString() const
+{
+  return QStringLiteral("0,0,%1,0,%1,%2,0,%2").arg(m_bedWidthMm).arg(m_bedDepthMm);
+}
 bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alignY,
                                           const QString &printableArea,
-                                          const QVariantMap &wipeTowerContext)
+                                          const QVariantMap &wipeTowerContext,
+                                          int onlyPlateIndex)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || model_->objects.empty())
@@ -4968,7 +5186,8 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
           const double width_mm = unscale_(bed_bb.size().x());
           const double depth_mm = unscale_(bed_bb.size().y());
           m_plateList->setModel(model_);  // backref for rebuildPlatesAfterArrangement
-          m_plateList->setPlateSize(static_cast<int>(width_mm), static_cast<int>(depth_mm), 0);
+          m_plateList->setPlateSize(static_cast<int>(std::lround(width_mm)),
+                                    static_cast<int>(std::lround(depth_mm)), 0);
         }
         // Locked exclusion (D-29-10/D-29-9): upstream pins ArrangePolygon.bed_idx
         // to locked plate index before arrange (PartPlate.cpp:5388-5396). Qt6's
@@ -5021,6 +5240,11 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
           const Slic3r::Vec2d offset = allInstances[size_t(i)]->get_offset().head<2>();
           const int plateIdx = m_plateList
               ? m_plateList->computePlateIndex(offset.x(), offset.y()) : 0;
+          // Plate-scoped arrange (upstream "selected plates"): instances on
+          // any other plate are neither moved nor treated as obstacles -- they
+          // are not on the bed being packed.
+          if (onlyPlateIndex >= 0 && plateIdx != onlyPlateIndex)
+            continue;
           const bool locked = m_plateList && plateIdx >= 0
               && plateIdx < m_plateList->plateCount()
               && m_plateList->plate(plateIdx)->isLocked();
@@ -5047,13 +5271,34 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
         // Create the plates the nester actually used (upstream
         // postprocess_bed_index_for_selected's create_plate loop,
         // PartPlate.cpp:5832-5878).
+        // Virtual bed N -> real plate. All-plates arrange: bed N is plate N.
+        // Plate-scoped arrange: bed 0 is the chosen plate and the overflow beds
+        // 1..N become NEW plates appended after the existing ones, so no other
+        // plate's objects are disturbed.
+        const int plateCountBefore = m_plateList ? m_plateList->plateCount() : 1;
+        const auto plateOfBed = [&](int bed) {
+          if (onlyPlateIndex < 0)
+            return bed;
+          return bed == 0 ? onlyPlateIndex : plateCountBefore + bed - 1;
+        };
         int maxBedIdx = 0;
         for (const auto &ap : arrangeInput)
-          maxBedIdx = std::max(maxBedIdx, ap.bed_idx);
+          maxBedIdx = std::max(maxBedIdx, plateOfBed(std::max(ap.bed_idx, 0)));
         if (m_plateList)
           while (m_plateList->plateCount() <= maxBedIdx
                  && m_plateList->plateCount() < OWzx::kMaxPlateCount)
             m_plateList->createPlate();
+        if (onlyPlateIndex >= 0 && m_plateList
+            && m_plateList->plateCount() != plateCountBefore)
+        {
+          // Appending plates can re-wrap the grid (sudoku column count); the
+          // untouched plates keep their index but their slot may move.
+          QList<int> identity;
+          identity.reserve(plateCountBefore);
+          for (int k = 0; k < plateCountBefore; ++k)
+            identity.append(k);
+          shiftObjectsForPlateReflow(plateCountBefore, identity);
+        }
         const int plateCapacity = m_plateList ? m_plateList->plateCount() : 1;
         const double plateW = m_plateList ? m_plateList->plateWidth() : 0.0;
         const double plateD = m_plateList ? m_plateList->plateDepth() : 0.0;
@@ -5081,13 +5326,14 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
               continue;
             }
           }
-          if (bed >= plateCapacity)
+          const int targetPlate = (ap.bed_idx < 0) ? bed : plateOfBed(bed);
+          if (targetPlate >= plateCapacity)
           {
             allPlaced = false;
             continue;
           }
           double offX = 0.0, offY = 0.0;
-          OWzx::PartPlateGridLayout::gridOffset(bed, plateCapacity, plateW, plateD,
+          OWzx::PartPlateGridLayout::gridOffset(targetPlate, plateCapacity, plateW, plateD,
                                                 &offX, &offY);
           const Slic3r::Vec2crd world(ap.translation.x() + scale_(offX),
                                       ap.translation.y() + scale_(offY));
@@ -5096,7 +5342,9 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
         }
         if (m_plateList && allPlaced)
         {
-          m_plateList->rebuildPlatesAfterArrangement(/*exceptLocked=*/true, /*recyclePlates=*/true);
+          // A plate-scoped arrange must not delete other plates (empty or not).
+          m_plateList->rebuildPlatesAfterArrangement(/*exceptLocked=*/true,
+                                                     /*recyclePlates=*/onlyPlateIndex < 0);
           emit plateDataLoaded(m_plateList->plateCount());
         }
         return allPlaced;
@@ -5129,136 +5377,107 @@ bool ProjectService::arrangeObjects(float spacing, bool allowRotation, bool alig
 #endif
 }
 
-int ProjectService::cutObject(int objectIndex, int axis, double position, int keepMode)
-{
 #ifdef HAS_LIBSLIC3R
-  if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size())
+namespace {
+// Upstream plane-cut attributes for the gizmo's keep mode (0=both, 1=upper,
+// 2=lower). KeepAsParts is deliberately NOT set: it merges the pieces into one
+// object and, without KeepUpper, makes Cut::perform_with_plane dereference a
+// null "upper" object and spin forever (FB-R4-04).
+Slic3r::ModelObjectCutAttributes planeCutAttributes(int keepMode)
+{
+  using MCA = Slic3r::ModelObjectCutAttribute;
+  return Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
+         Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower);
+}
+// Plater::apply_cut_object_to_model for the in-place object list: the cut
+// results are appended as NEW objects (placed side by side so the pieces do
+// not overlap, each resting on the bed, on the plate that held the cut
+// object) and the original is deleted. Replacing the original in place would
+// be invisible to the whole-scene undo snapshot, which keeps surviving
+// objects untouched. Returns the index of the first new object, or -1.
+int replaceObjectWithCutResults(ProjectService &svc, int objectIndex,
+                                const Slic3r::ModelObjectPtrs &results)
+{
+  Slic3r::Model *model = svc.rawModel();
+  if (!model || objectIndex < 0 || size_t(objectIndex) >= model->objects.size())
     return -1;
-  auto *obj = model_->objects[size_t(objectIndex)];
-  if (!obj || obj->volumes.empty())
-    return -1;
-
-  try
+  OWzx::PartPlateList *plates = svc.plateListMut();
+  int homePlate = -1;
+  if (plates && plates->plateCount() > 0)
   {
-    // Collect all model_part volumes into a single mesh
-    indexed_triangle_set combined;
-    for (auto *vol : obj->volumes)
+    for (int pi = 0; pi < plates->plateCount() && homePlate < 0; ++pi)
     {
-      if (vol->is_model_part())
-        Slic3r::its_merge(combined, vol->mesh().its);
-    }
-    if (combined.indices.empty())
-      return -1;
-
-    // Transform mesh to align cut axis with Z:
-    // Z axis: no rotation, cut at z=position
-    // X axis: rotate 90° around Y (X→Z), cut at z=position
-    // Y axis: rotate -90° around X (Y→Z), cut at z=position
-    Eigen::Matrix3f rot;
-    float cutZ = float(position);
-    if (axis == 1)
-    {
-      // Y→Z: rotate -90° around X
-      rot = Eigen::AngleAxisf(float(-M_PI / 2.0), Eigen::Vector3f::UnitX()).toRotationMatrix();
-    }
-    else if (axis == 0)
-    {
-      // X→Z: rotate 90° around Y
-      rot = Eigen::AngleAxisf(float(M_PI / 2.0), Eigen::Vector3f::UnitY()).toRotationMatrix();
-    }
-    else
-    {
-      rot = Eigen::Matrix3f::Identity();
-    }
-
-    // Apply rotation to all vertices
-    for (auto &v : combined.vertices)
-    {
-      Eigen::Vector3f p(v.x(), v.y(), v.z());
-      p = rot * p;
-      v.x() = p.x(); v.y() = p.y(); v.z() = p.z();
-    }
-
-    // Perform the cut at the Z height
-    indexed_triangle_set upper, lower;
-    Slic3r::cut_mesh(combined, cutZ, &upper, &lower, true);
-
-    // Rotate results back
-    auto rotInv = rot.transpose();
-    auto rotateBack = [&rotInv](indexed_triangle_set &its)
-    {
-      for (auto &v : its.vertices)
-      {
-        Eigen::Vector3f p(v.x(), v.y(), v.z());
-        p = rotInv * p;
-        v.x() = p.x(); v.y() = p.y(); v.z() = p.z();
-      }
-    };
-
-    // Determine what to keep based on keepMode: 0=all, 1=upper, 2=lower
-    bool keepUpper = (keepMode == 0 || keepMode == 1);
-    bool keepLower = (keepMode == 0 || keepMode == 2);
-
-    if (!keepUpper && !keepLower)
-      return -1;
-
-    // Replace original object's mesh with the lower part
-    if (keepLower && !lower.indices.empty())
-    {
-      rotateBack(lower);
-      // Replace first model_part volume mesh
-      for (auto *vol : obj->volumes)
-      {
-        if (vol->is_model_part())
+      OWzx::PartPlate *candidate = plates->plate(pi);
+      if (!candidate)
+        continue;
+      for (const auto &pair : candidate->objToInstanceSet())
+        if (pair.first == objectIndex)
         {
-          vol->set_mesh(Slic3r::TriangleMesh(std::move(lower)));
+          homePlate = pi;
           break;
         }
-      }
     }
-    else if (!keepLower)
-    {
-      // Only keeping upper — delete the original object's mesh (will be replaced by upper)
-    }
-
-    // Add upper part as a new object if keeping it
-    if (keepUpper && !upper.indices.empty())
-    {
-      rotateBack(upper);
-      auto *newObj = model_->add_object();
-      newObj->name = obj->name + "_upper";
-      newObj->add_volume(Slic3r::TriangleMesh(std::move(upper)));
-      // Copy instance transforms from original object
-      for (auto *inst : obj->instances)
-        newObj->add_instance(*inst);
-
-      // Rebuild metadata arrays for the new object
-      objectNames_.append(QString::fromStdString(newObj->name));
-      objectPositions_.append({0, 0, 0});
-      objectRotations_.append({0, 0, 0});
-      objectScales_.append({1, 1, 1});
-      objectPrintableStates_.append(true);
-      objectVisibleStates_.append(true);
-
-      return objectNames_.size() - 1;
-    }
-
-    return -1; // No new object created (only original modified)
+    if (homePlate < 0)
+      homePlate = plates->currentPlateIndex();
   }
-  catch (const std::exception &e)
+  const int oldCount = int(model->objects.size());
+  double shift = 0.0;
+  int firstNew = -1;
+  for (Slic3r::ModelObject *result : results)
   {
-    qDebug() << "cut failed for object" << objectIndex << ":" << e.what();
+    if (!result || result->volumes.empty())
+      continue;
+    Slic3r::ModelObject *added = model->add_object(*result);
+    if (!added)
+      continue;
+    if (shift > 0.0 && !added->instances.empty())
+      added->instances.front()->set_offset(added->instances.front()->get_offset() + Slic3r::Vec3d(shift, 0.0, 0.0));
+    added->invalidate_bounding_box();
+    added->ensure_on_bed();
+    shift += added->instance_bounding_box(0).size().x() + 5.0;
+    const int idx = int(model->objects.size()) - 1;
+    if (firstNew < 0)
+      firstNew = idx;
+    if (plates && homePlate >= 0)
+      if (OWzx::PartPlate *plate = plates->plate(homePlate))
+        plate->addInstance(idx, 0);
+  }
+  if (firstNew < 0)
+    return -1;
+  if (!svc.deleteObject(objectIndex))
+  {
+    // Roll the appended pieces back so a refused delete leaves the scene as it was.
+    while (int(model->objects.size()) > oldCount)
+      model->delete_object(model->objects.size() - 1);
+    if (plates)
+      for (int pi = 0; pi < plates->plateCount(); ++pi)
+        if (OWzx::PartPlate *plate = plates->plate(pi))
+        {
+          std::set<std::pair<int, int>> keep;
+          for (const auto &pair : plate->objToInstanceSet())
+            if (pair.first < oldCount)
+              keep.insert(pair);
+          plate->clearInstances();
+          for (const auto &pair : keep)
+            plate->addInstance(pair.first, pair.second);
+        }
+    svc.syncObjectMetadataMirrors();
     return -1;
   }
-#else
-  Q_UNUSED(objectIndex);
-  Q_UNUSED(axis);
-  Q_UNUSED(position);
-  Q_UNUSED(keepMode);
-  return -1;
-#endif
+  // deleteObject shifted every higher index (and the plate membership) down.
+  return firstNew - 1;
 }
-
+} // namespace
+#endif
+int ProjectService::cutObject(int objectIndex, int axis, double position, int keepMode)
+{
+  // FB-R4-04: the former bare cut_mesh implementation ignored the instance
+  // transform, left the uncut original in place for "keep upper", spawned an
+  // empty mock object for "keep lower" and appended parts outside every
+  // plate. The axis-aligned cut is exactly the upstream plane cut with a
+  // zero tilt (see cutObjectWithRotation), so share that single code path.
+  return cutObjectWithRotation(objectIndex, axis, position, 0.f, 0.f, 0.f, keepMode);
+}
 int ProjectService::cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
                                             float grooveDepth, float grooveWidth, float grooveFlapsAngle, float grooveAngle)
 {
@@ -5359,44 +5578,10 @@ int ProjectService::cutObjectWithGroove(int objectIndex, int axis, double positi
     if (new_objects.empty())
       return -1;
 
-    // Replace original object with the first cut result, add subsequent results as new objects
-    bool firstResult = true;
-    int newObjectIdx = -1;
-
-    for (auto *newObj : new_objects)
-    {
-      if (!newObj || newObj->volumes.empty())
-        continue;
-
-      if (firstResult)
-      {
-        // Replace original object's volumes with the first result
-        // (upper part replaces original, or lower part depending on keep mode)
-        obj->clear_volumes();
-        for (auto *vol : newObj->volumes)
-        {
-          auto *newVol = obj->add_volume(*vol);
-          Q_UNUSED(newVol);
-        }
-        obj->name = newObj->name;
-        firstResult = false;
-        newObjectIdx = objectIndex;
-      }
-      else
-      {
-        // Add subsequent results as new objects
-        auto *addedObj = model_->add_object(*newObj);
-        // Rebuild metadata arrays for the new object
-        objectNames_.append(QString::fromStdString(addedObj->name));
-        objectPositions_.append({0, 0, 0});
-        objectRotations_.append({0, 0, 0});
-        objectScales_.append({1, 1, 1});
-        objectPrintableStates_.append(true);
-        objectVisibleStates_.append(true);
-        newObjectIdx = objectNames_.size() - 1;
-      }
-    }
-
+    // Same result handling as the plane cut (new objects + delete original).
+    const int newObjectIdx = replaceObjectWithCutResults(*this, objectIndex, new_objects);
+    if (newObjectIdx >= 0)
+      syncTransformsFromModel();
     return newObjectIdx;
   }
   catch (const std::exception &e)
@@ -5433,8 +5618,25 @@ bool ProjectService::mirrorObject(int objectIndex, int axis)
     if (axis < 0 || axis > 2)
       return false;
     auto *inst = obj->instances.front();
+    // Mirror about the object's own bounding-box centre, not about the
+    // instance origin: imported meshes are not centred on the instance origin
+    // (Block20XY sits at local 0..20), so flipping the sign alone reflected
+    // the whole object across its origin -- it jumped by up to one object
+    // size and out of the plate. Upstream Selection::mirror pivots on the
+    // selection centre and keeps the object on the bed (ensure_on_bed for a
+    // Z flip): keep the world bbox centre in X/Y and the bbox bottom in Z.
+    const Slic3r::BoundingBoxf3 before = obj->instance_bounding_box(0);
     const double current = inst->get_mirror(axes[axis]);
     inst->set_mirror(axes[axis], -current); // Toggle: 1→-1 or -1→1
+    const Slic3r::BoundingBoxf3 after = obj->instance_bounding_box(0);
+    if (before.defined && after.defined)
+    {
+      const Slic3r::Vec3d beforeCenter = before.center();
+      const Slic3r::Vec3d afterCenter = after.center();
+      inst->set_offset(inst->get_offset() + Slic3r::Vec3d(beforeCenter.x() - afterCenter.x(),
+                                                         beforeCenter.y() - afterCenter.y(),
+                                                         before.min.z() - after.min.z()));
+    }
     return true;
   }
   catch (const std::exception &e)
@@ -7738,6 +7940,8 @@ bool ProjectService::deleteObject(int index)
       // No objects left: reset to a single empty plate, current unset.
       m_plateList = std::make_unique<OWzx::PartPlateList>();
       attachPlateInstanceBounds();
+      if (m_bedSizeKnown)
+        m_plateList->setPlateSize(m_bedWidthMm, m_bedDepthMm, 0);
       m_plateList->setCurrentPlateIndex(-1);
     }
     else
@@ -8833,51 +9037,37 @@ int ProjectService::cutObjectWithConnectors(int objectIndex, int axis, double po
     // cut_matrix 构造与 cutObjectWithGroove 相同（axis → Z 对齐旋转 + 平移）。
     Slic3r::Transform3d rotation_m = Slic3r::Transform3d::Identity();
     Slic3r::Vec3d cut_translation = Slic3r::Vec3d::Zero();
+    // The gizmo position is the offset from the object's bounding-box centre
+    // (0.0 mm = through the middle, the panel default). Cut interprets the
+    // plane relative to the instance origin, which is not the centre of the
+    // mesh for objects whose volume carries an offset (a plane through the
+    // origin then just grazed the bottom face and produced no lower part).
+    const Slic3r::Vec3d centerRel =
+        obj->instance_bounding_box(0).center() - obj->instances.front()->get_offset();
     if (axis == 0) {
       rotation_m = Eigen::AngleAxisd(-M_PI / 2.0, Slic3r::Vec3d::UnitY()) * Slic3r::Transform3d::Identity();
-      cut_translation = Slic3r::Vec3d(position, 0.0, 0.0);
+      cut_translation = Slic3r::Vec3d(centerRel.x() + position, 0.0, 0.0);
     } else if (axis == 1) {
       rotation_m = Eigen::AngleAxisd(M_PI / 2.0, Slic3r::Vec3d::UnitX()) * Slic3r::Transform3d::Identity();
-      cut_translation = Slic3r::Vec3d(0.0, position, 0.0);
+      cut_translation = Slic3r::Vec3d(0.0, centerRel.y() + position, 0.0);
     } else {
-      cut_translation = Slic3r::Vec3d(0.0, 0.0, position);
+      cut_translation = Slic3r::Vec3d(0.0, 0.0, centerRel.z() + position);
     }
     Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * rotation_m;
 
-    using MCA = Slic3r::ModelObjectCutAttribute;
-    Slic3r::ModelObjectCutAttributes attributes =
-        Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
-        Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
-        MCA::KeepAsParts;
-
+    const Slic3r::ModelObjectCutAttributes attributes = planeCutAttributes(keepMode);
     const int instance_idx = 0;
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
     const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_plane();
     if (new_objects.empty())
       return -1;
 
-    // 结果回填模式与 cutObjectWithGroove 相同：第一个结果替换原对象，
-    // 后续结果追加为新对象。
-    bool firstResult = true;
-    int newObjectIdx = -1;
-    for (auto *newObj : new_objects) {
-      if (!newObj || newObj->volumes.empty())
-        continue;
-      if (firstResult) {
-        obj->clear_volumes();
-        for (auto *vol : newObj->volumes)
-          obj->add_volume(*vol);
-        obj->invalidate_bounding_box();
-        obj->ensure_on_bed();
-        newObjectIdx = objectIndex;
-        firstResult = false;
-      } else {
-        auto *added = model_->add_object(*newObj);
-        if (added) {
-          added->ensure_on_bed();
-          newObjectIdx = int(model_->objects.size()) - 1;
-        }
-      }
+    const int newObjectIdx = replaceObjectWithCutResults(*this, objectIndex, new_objects);
+    if (newObjectIdx < 0)
+    {
+      if (lastError_.isEmpty())
+        lastError_ = tr("Cut produced no geometry");
+      return -1;
     }
     syncTransformsFromModel();
     lastError_.clear();
@@ -8918,14 +9108,21 @@ int ProjectService::cutObjectWithRotation(int objectIndex, int axis,
     // Base axis alignment (same as cutObjectWithConnectors).
     Slic3r::Transform3d rotation_m = Slic3r::Transform3d::Identity();
     Slic3r::Vec3d cut_translation = Slic3r::Vec3d::Zero();
+    // The gizmo position is the offset from the object's bounding-box centre
+    // (0.0 mm = through the middle, the panel default). Cut interprets the
+    // plane relative to the instance origin, which is not the centre of the
+    // mesh for objects whose volume carries an offset (a plane through the
+    // origin then just grazed the bottom face and produced no lower part).
+    const Slic3r::Vec3d centerRel =
+        obj->instance_bounding_box(0).center() - obj->instances.front()->get_offset();
     if (axis == 0) {
       rotation_m = Eigen::AngleAxisd(-M_PI / 2.0, Slic3r::Vec3d::UnitY()) * Slic3r::Transform3d::Identity();
-      cut_translation = Slic3r::Vec3d(position, 0.0, 0.0);
+      cut_translation = Slic3r::Vec3d(centerRel.x() + position, 0.0, 0.0);
     } else if (axis == 1) {
       rotation_m = Eigen::AngleAxisd(M_PI / 2.0, Slic3r::Vec3d::UnitX()) * Slic3r::Transform3d::Identity();
-      cut_translation = Slic3r::Vec3d(0.0, position, 0.0);
+      cut_translation = Slic3r::Vec3d(0.0, centerRel.y() + position, 0.0);
     } else {
-      cut_translation = Slic3r::Vec3d(0.0, 0.0, position);
+      cut_translation = Slic3r::Vec3d(0.0, 0.0, centerRel.z() + position);
     }
 
     // User tilt (Euler XYZ degrees around the world axes, upstream
@@ -8940,40 +9137,19 @@ int ProjectService::cutObjectWithRotation(int objectIndex, int axis,
     const Slic3r::Transform3d plane_rotation = tilt * rotation_m;
     Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * plane_rotation;
 
-    using MCA = Slic3r::ModelObjectCutAttribute;
-    Slic3r::ModelObjectCutAttributes attributes =
-        Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
-        Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
-        MCA::KeepAsParts;
-
+    const Slic3r::ModelObjectCutAttributes attributes = planeCutAttributes(keepMode);
     const int instance_idx = 0;
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
     const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_plane();
     if (new_objects.empty())
       return -1;
 
-    // Result backfill mirrors cutObjectWithConnectors: first result replaces
-    // the original object, the rest append as new objects.
-    bool firstResult = true;
-    int newObjectIdx = -1;
-    for (auto *newObj : new_objects) {
-      if (!newObj || newObj->volumes.empty())
-        continue;
-      if (firstResult) {
-        obj->clear_volumes();
-        for (auto *vol : newObj->volumes)
-          obj->add_volume(*vol);
-        obj->invalidate_bounding_box();
-        obj->ensure_on_bed();
-        newObjectIdx = objectIndex;
-        firstResult = false;
-      } else {
-        auto *added = model_->add_object(*newObj);
-        if (added) {
-          added->ensure_on_bed();
-          newObjectIdx = int(model_->objects.size()) - 1;
-        }
-      }
+    const int newObjectIdx = replaceObjectWithCutResults(*this, objectIndex, new_objects);
+    if (newObjectIdx < 0)
+    {
+      if (lastError_.isEmpty())
+        lastError_ = tr("Cut produced no geometry");
+      return -1;
     }
     syncTransformsFromModel();
     lastError_.clear();
@@ -9122,9 +9298,12 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
       return false;
     }
     try {
-      Slic3r::Model imported = Slic3r::Model::read_from_file(
-          fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr,
-          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel);
+      const Slic3r::LoadStrategy loadStrategy =
+          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel;
+      Slic3r::Model imported = isStepModelPath(localPath)
+          ? readStepModel(fileInfo.absoluteFilePath(), loadStrategy)
+          : Slic3r::Model::read_from_file(
+                fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr, loadStrategy);
       const bool hasImportableObject = std::any_of(imported.objects.cbegin(), imported.objects.cend(),
           [](const Slic3r::ModelObject *object) { return object != nullptr; });
       if (!hasImportableObject) {
@@ -9146,6 +9325,9 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
     return false;
   }
 
+  // Every instance this call adds, so the batch can be placed on the target
+  // plate once the loop is done (see the placement block below).
+  std::vector<std::pair<Slic3r::ModelObject *, size_t>> addedInstances;
   for (const Slic3r::Model &imported : importedModels) {
     for (const Slic3r::ModelObject *importedObject : imported.objects) {
       if (!importedObject)
@@ -9155,6 +9337,8 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
         continue;
       if (addedObject->instances.empty())
         addedObject->add_instance();
+      for (size_t instanceIdx = 0; instanceIdx < addedObject->instances.size(); ++instanceIdx)
+        addedInstances.emplace_back(addedObject, instanceIdx);
 
       const int objectIndex = int(model_->objects.size()) - 1;
       objectNames_.append(addedObject->name.empty()
@@ -9177,6 +9361,33 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
     }
   }
 
+  // Plate membership is derived from world position (computePlateIndex /
+  // rebuildPlateMembership, and the arrange pipeline re-buckets by position), so
+  // registering the instances on `targetPlate` alone is not enough: a model
+  // keeps the coordinates it was authored with (around the first plate), the
+  // next membership rebuild moves it to plate 0, and "add to plate N" silently
+  // landed on plate 1. Upstream Plater::load_files centres the imported batch
+  // on the target plate (center_instances_around_point of the plate); do the
+  // same, keeping the batch's relative layout.
+  const double plateW = m_plateList->plateWidth();
+  const double plateD = m_plateList->plateDepth();
+  if (!addedInstances.empty() && plateW > 0.0 && plateD > 0.0) {
+    Slic3r::BoundingBoxf3 batchBox;
+    for (const auto &entry : addedInstances)
+      batchBox.merge(entry.first->instance_bounding_box(entry.second, false));
+    if (batchBox.defined) {
+      double plateOffsetX = 0.0, plateOffsetY = 0.0;
+      OWzx::PartPlateGridLayout::gridOffset(plateIndex, m_plateList->plateCount(),
+                                            plateW, plateD, &plateOffsetX, &plateOffsetY);
+      const Slic3r::Vec3d batchCenter = batchBox.center();
+      const Slic3r::Vec3d delta(plateOffsetX + plateW * 0.5 - batchCenter.x(),
+                                plateOffsetY + plateD * 0.5 - batchCenter.y(), 0.0);
+      for (const auto &entry : addedInstances) {
+        Slic3r::ModelInstance *instance = entry.first->instances[entry.second];
+        instance->set_offset(instance->get_offset() + delta);
+      }
+    }
+  }
   modelCount_ = objectNames_.size();
   // Keep the source path in sync with addFilesToPlate(). SliceService uses
   // this field as the real-model gate before cloning the current plate.
@@ -9192,6 +9403,79 @@ bool ProjectService::addFilesToPlate(int plateIndex, const QStringList &filePath
   lastError_ = tr("Plate import requires libslic3r");
   return false;
 #endif
+}
+
+// FB-R7-01 (P0, 2026-10-22): a plain-model import into a NON-EMPTY project
+// used to go through loadFile's full-replace path, which swapped in a fresh
+// Model + PartPlateList and wiped every other plate with its objects and
+// slice results. Upstream Plater::load_files ADDS the file's objects to the
+// current scene instead (load_model; the batch is centred on the target
+// plate). Mirror that here with addFilesToPlate's append + centring
+// semantics; the caller keeps ownership of loadedModel.
+bool ProjectService::mergeImportedModelIntoCurrentPlate(Slic3r::Model *loadedModel)
+{
+  if (!loadedModel || loadedModel->objects.empty() || !model_ || !m_plateList
+      || m_plateList->plateCount() <= 0)
+    return false;
+
+  int targetPlateIndex = m_plateList->currentPlateIndex();
+  if (targetPlateIndex < 0 || targetPlateIndex >= m_plateList->plateCount())
+    targetPlateIndex = 0;
+  OWzx::PartPlate *targetPlate = m_plateList->plate(targetPlateIndex);
+  if (!targetPlate)
+    return false;
+
+  // Every instance this call adds, so the batch can be centred on the
+  // target plate once the loop is done (same shape as addFilesToPlate).
+  std::vector<std::pair<Slic3r::ModelObject *, size_t>> addedInstances;
+  for (const Slic3r::ModelObject *importedObject : loadedModel->objects) {
+    if (!importedObject)
+      continue;
+    Slic3r::ModelObject *addedObject = model_->add_object(*importedObject);
+    if (!addedObject)
+      continue;
+    if (addedObject->instances.empty())
+      addedObject->add_instance();
+    for (size_t instanceIdx = 0; instanceIdx < addedObject->instances.size(); ++instanceIdx)
+      addedInstances.emplace_back(addedObject, instanceIdx);
+
+    const int objectIndex = int(model_->objects.size()) - 1;
+    for (int instanceIndex = 0;
+         instanceIndex < int(addedObject->instances.size()); ++instanceIndex) {
+      if (addedObject->instances[size_t(instanceIndex)])
+        targetPlate->addInstance(objectIndex, instanceIndex);
+    }
+  }
+  if (addedInstances.empty())
+    return false;
+
+  // Plate membership is derived from world position, so the batch keeps the
+  // coordinates it was authored with unless it is centred on the target
+  // plate's grid cell (upstream center_instances_around_point, mirrored from
+  // addFilesToPlate -- see the long rationale there).
+  const double plateW = m_plateList->plateWidth();
+  const double plateD = m_plateList->plateDepth();
+  if (plateW > 0.0 && plateD > 0.0) {
+    Slic3r::BoundingBoxf3 batchBox;
+    for (const auto &entry : addedInstances)
+      batchBox.merge(entry.first->instance_bounding_box(entry.second, false));
+    if (batchBox.defined) {
+      double plateOffsetX = 0.0, plateOffsetY = 0.0;
+      OWzx::PartPlateGridLayout::gridOffset(targetPlateIndex, m_plateList->plateCount(),
+                                            plateW, plateD, &plateOffsetX, &plateOffsetY);
+      const Slic3r::Vec3d batchCenter = batchBox.center();
+      const Slic3r::Vec3d delta(plateOffsetX + plateW * 0.5 - batchCenter.x(),
+                                plateOffsetY + plateD * 0.5 - batchCenter.y(), 0.0);
+      for (const auto &entry : addedInstances) {
+        Slic3r::ModelInstance *instance = entry.first->instances[entry.second];
+        instance->set_offset(instance->get_offset() + delta);
+      }
+    }
+  }
+
+  syncObjectMetadataMirrors();
+  modelCount_ = objectNames_.size();
+  return true;
 }
 
 bool ProjectService::addHandyModelToPlate(int plateIndex, const QString &modelId)
@@ -9282,9 +9566,12 @@ bool ProjectService::replaceAllOnPlateWithFiles(int plateIndex, const QStringLis
       return false;
     }
     try {
-      Slic3r::Model imported = Slic3r::Model::read_from_file(
-          fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr,
-          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel);
+      const Slic3r::LoadStrategy loadStrategy =
+          Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel;
+      Slic3r::Model imported = isStepModelPath(localPath)
+          ? readStepModel(fileInfo.absoluteFilePath(), loadStrategy)
+          : Slic3r::Model::read_from_file(
+                fileInfo.absoluteFilePath().toStdString(), nullptr, nullptr, loadStrategy);
       const bool hasImportableObject = std::any_of(imported.objects.cbegin(), imported.objects.cend(),
           [](const Slic3r::ModelObject *object) { return object != nullptr; });
       if (!hasImportableObject) {
@@ -9437,8 +9724,28 @@ int ProjectService::addPrimitiveToPlate(int type)
     }
 
     obj->add_volume(Slic3r::TriangleMesh(std::move(its)));
-    obj->add_instance();
-
+    Slic3r::ModelInstance *primInstance = obj->add_instance();
+    // FB-R5-06: instance offsets are absolute plate-grid coordinates (the
+    // render path no longer re-centres the scene), so a new primitive must be
+    // placed on the CURRENT plate's centre like every other creation path
+    // (upstream adds new objects at the plate centre). It used to stay at the
+    // world origin and rely on the render-side union re-centring.
+    if (primInstance)
+    {
+      const int plateTotal = m_plateList ? std::max(1, m_plateList->plateCount()) : 1;
+      const int plateIdx = m_plateList ? std::clamp(m_plateList->currentPlateIndex(), 0, plateTotal - 1) : 0;
+      const double plateW = (m_plateList && m_plateList->plateWidth() > 0)
+                                ? double(m_plateList->plateWidth()) : double(m_bedWidthMm);
+      const double plateD = (m_plateList && m_plateList->plateDepth() > 0)
+                                ? double(m_plateList->plateDepth()) : double(m_bedDepthMm);
+      double plateOffX = 0.0, plateOffY = 0.0;
+      OWzx::PartPlateGridLayout::gridOffset(plateIdx, plateTotal, plateW, plateD,
+                                            &plateOffX, &plateOffY);
+      const Slic3r::Vec3d c = obj->instance_bounding_box(0, false).center();
+      primInstance->set_offset(primInstance->get_offset()
+          + Slic3r::Vec3d(plateOffX + plateW * 0.5 - c.x(),
+                          plateOffY + plateD * 0.5 - c.y(), 0.0));
+    }
     int newIdx = int(model_->objects.size()) - 1;
     objectNames_.push_back(QString::fromUtf8(primNames[type]));
     objectModuleNames_.push_back("default");
@@ -10669,6 +10976,8 @@ void ProjectService::clearProject()
   // previous "no project loaded" state (plateCount=0, currentPlateIndex=-1).
   m_plateList = std::make_unique<OWzx::PartPlateList>();
   attachPlateInstanceBounds();
+  if (m_bedSizeKnown)
+    m_plateList->setPlateSize(m_bedWidthMm, m_bedDepthMm, 0);
   m_plateList->setCurrentPlateIndex(-1);
   sourceFilePath_.clear();
   // S5: one clear helper for the seven per-object metadata mirrors.
@@ -12152,16 +12461,54 @@ bool ProjectService::loadProject(const QString &filePath)
         }, Qt::QueuedConnection);
 
         Slic3r::En3mfType fileType = Slic3r::En3mfType::From_Other;
+        // load_bbs_3mf binds `*project_presets` to a reference without a null
+        // check (bbs_3mf.cpp load_bbs_3mf) and, under LoadConfig, push_back()s
+        // one heap Preset per Metadata/{process,filament,machine}_settings_N
+        // entry into it. Passing nullptr made every project this app itself
+        // writes (G-13 embedded presets) segfault on load. The embedded presets
+        // are read separately via readProjectEmbeddedPresets(), so the importer's
+        // copies are only an out-parameter we must own and free here.
+        std::vector<Slic3r::Preset *> importerPresets;
+        struct ImporterPresetsGuard
+        {
+          std::vector<Slic3r::Preset *> &presets;
+          ~ImporterPresetsGuard()
+          {
+            for (Slic3r::Preset *preset : presets)
+              delete preset;
+            presets.clear();
+          }
+        } importerPresetsGuard{importerPresets};
+        // .cxprj is this app's own project extension: saveProject writes a
+        // regular 3MF (zip) container under it, but the upstream reader
+        // dispatches on the file-name suffix and only knows .3mf/.zip.amf.
+        // Hand it a .3mf-named copy of the container and point the objects'
+        // input_file back at the real project path afterwards.
+        std::unique_ptr<QTemporaryDir> archiveAliasDir;
+        std::string archivePath = localPath.toStdString();
+        if (QFileInfo(localPath).suffix().compare(QStringLiteral("cxprj"), Qt::CaseInsensitive) == 0)
+        {
+          archiveAliasDir = std::make_unique<QTemporaryDir>();
+          const QString aliasPath = archiveAliasDir->isValid()
+              ? archiveAliasDir->filePath(QFileInfo(localPath).completeBaseName() + QStringLiteral(".3mf"))
+              : QString();
+          if (aliasPath.isEmpty() || !QFile::copy(localPath, aliasPath))
+            throw std::runtime_error("cannot stage the .cxprj container for reading");
+          archivePath = aliasPath.toStdString();
+        }
         Slic3r::Model loaded = Slic3r::Model::read_from_archive(
-            localPath.toStdString(),
+            archivePath,
             &loadedConfig,
             &configSubstCtx,
             fileType,
             Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel | Slic3r::LoadStrategy::LoadConfig,
             &plateDataList,
-            nullptr,
+            &importerPresets,
             &fileVersion,
             progressFn);
+        if (archiveAliasDir)
+          for (Slic3r::ModelObject *object : loaded.objects)
+            object->input_file = localPath.toStdString();
         *loadedModel = std::move(loaded);
 
         // PLATE-PRINT-LIFECYCLE (batch 4): parse the embedded bed geometry
@@ -12630,26 +12977,15 @@ bool ProjectService::loadProject(const QString &filePath)
         else
         {
           delete loadedModel;
-          receiver->modelCount_ = 0;
-          receiver->m_plateList = std::make_unique<OWzx::PartPlateList>();
-          receiver->attachPlateInstanceBounds();
-          receiver->m_plateList->setCurrentPlateIndex(-1);
-          receiver->sourceFilePath_.clear();
-          // S5: clear ALL seven metadata mirrors (the old copy only cleared
-          // four and left stale positions/rotations/scales behind).
-          receiver->clearObjectMetadataMirrors();
-          // Phase 236 (DLG-03): failed load leaves no version behind.
-          if (!receiver->m_projectVersionInfo.isEmpty())
-          {
-            receiver->m_projectVersionInfo.clear();
-            QMetaObject::invokeMethod(receiver, [receiver]() {
-              emit receiver->projectVersionInfoChanged();
-            }, Qt::QueuedConnection);
-          }
+          // A failed or cancelled load must leave the CURRENT project exactly
+          // as it was: the new model was only ever built in the worker-local
+          // loadedModel, receiver->model_ was never replaced. The old branch
+          // still zeroed modelCount_, reset the plate list and cleared the
+          // metadata mirrors while model_ kept its objects -- the scene
+          // vanished, the title kept the old project name and the project
+          // read as modified. Only report the error.
           receiver->lastError_ = errorText;
           emit receiver->projectChanged();
-          emit receiver->plateDataLoaded(0);
-          emit receiver->plateSelectionChanged();
           emit receiver->loadFinished(false, errorText);
         }
       }, Qt::QueuedConnection);
@@ -13185,31 +13521,18 @@ QByteArray ProjectService::meshData() const
       }
     }
 
-    // Plate normalization -- same formula as the legacy bake (keep relative
-    // arrangement, center the union, lowest Y on the plate). Frozen
-    // for the transform channel until the next production.
-    // MP-FIX (dev plan 多盘 2026-10-20): the legacy bake hardcoded the
-    // 220-bed center (110, -110). On any other bed size (the K1 Max 300
-    // default preset lands the whole object set 40mm off its plates) and in
-    // multi-plate grids (the union spans several plates; centering it on
-    // plate 0's center drags plate 2+ objects into the inter-plate gap ->
-    // outside-bed red background), the center must follow the real bed and
-    // plate grid. A single 220 plate still reproduces (110, -110) exactly.
-    const int normPlateCount = m_plateList ? std::max(1, m_plateList->plateCount()) : 1;
-    const float normPlateW = float((m_plateList && m_plateList->plateWidth() > 0)
-                                       ? m_plateList->plateWidth() : 220);
-    const float normPlateD = float((m_plateList && m_plateList->plateDepth() > 0)
-                                       ? m_plateList->plateDepth() : 220);
-    const int normCols = OWzx::compute_colum_count(normPlateCount);
-    const int normRows = (normPlateCount + normCols - 1) / normCols;
-    const float gridCenterX = float(
-        (normCols - 1) * OWzx::PartPlateGridLayout::strideX(normPlateW) + normPlateW) * 0.5f;
-    const float gridCenterZ = -float(
-        (normRows - 1) * OWzx::PartPlateGridLayout::strideY(normPlateD) + normPlateD) * 0.5f;
-    const float centerX = (bminX + bmaxX) * 0.5f;
-    const float centerZ = (bminZ + bmaxZ) * 0.5f;
-    const float offsetX = gridCenterX - centerX;
-    const float offsetZ = gridCenterZ - centerZ;
+    // Plate normalization (FB-R5-06): ONLY the lowest-Y-on-the-bed lift remains.
+    // Instance offsets are absolute coordinates in the plate-grid world frame
+    // (arrange / addFilesToPlate / movePlate / 3MF load all place objects at
+    // their plate's grid slot, and the renderer draws plate N at
+    // gridOffset(N) in that very frame), so X/Z must be an identity.
+    // The legacy bake re-centred the UNION of all objects on the grid centre:
+    // harmless while every object sat symmetrically around it, but it drew a
+    // plate-2-only object in the gap between the plates (red "outside bed"
+    // canvas, panel X=755 vs drawn ~495) and re-centred a lone object on
+    // every re-production regardless of its real position.
+    const float offsetX = 0.0f;
+    const float offsetZ = 0.0f;
     const float offsetY = (bminY < 0.0f) ? (-bminY) : 0.0f;
 
     m_instanceChannelPlateShift = QVector3D(offsetX, offsetY, offsetZ);

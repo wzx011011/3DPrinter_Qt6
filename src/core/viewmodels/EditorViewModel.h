@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <QObject>
 #include <QList>
 #include <QRectF>
@@ -1764,6 +1765,13 @@ public:
   /// v5.15: pull printable_area + bed_texture from the selected printer
   /// preset into the viewport bed state (mirrors upstream set_bed_shape).
   void syncBedFromPrinterPreset();
+  /// FB-R2-06: push the viewport bed (preset printable_area, or the user's
+  /// BedShapeDialog edit) into ProjectService so the plate list / import
+  /// arrange / plate normalisation use the SAME footprint the renderer draws.
+  void syncProjectBedSize();
+  /// FB-R6: after a user move (panel / nudge / gizmo drag end) re-seat the
+  /// object's plate membership from its new position (cross-plate move).
+  void syncPlateMembershipAfterMove(int sourceIndex);
   /// v5.16 (BEDMODEL): load the printer's bed_model STL into the triangle
   /// stream consumed by the viewport (defined in the .cpp).
   QByteArray loadBedModelMesh(const QString &stlPath) const;
@@ -2234,6 +2242,16 @@ private:
   /// results and reuses onSequentialPrintClearanceReady for delivery.
   void dispatchDragSequentialClearanceCompute();
   void rebuildObjectEntriesFromService();
+  /// FB-R7-05 (P1): push the merged preset config + bed shape into
+  /// SliceService before ANY slice dispatch. requestSlice used to be the only
+  /// caller, so a slice-all that ran before the first single-plate slice
+  /// sliced with factory defaults (layer_height 0.2 instead of the preset).
+  void pushSliceConfigToService();
+  /// Shared tail of every plane-cut entry point (cutSelected, the rotated cut
+  /// and the advanced cut): whole-scene undo snapshot around \a performCut,
+  /// selection, refresh. \a performCut returns the index of the last
+  /// resulting object or -1 on failure.
+  bool runCutOperation(const std::function<int()> &performCut, int srcIdx, int keepMode);
   /// Phase 240 (GIZ-02): shared paint commit path. Mirrors the painted
   /// TriangleSelector into the Qt data layer (setTriangleSupportState),
   /// writes the FacetsAnnotation back to the ModelVolume (so the slice

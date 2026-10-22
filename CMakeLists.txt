@@ -353,6 +353,13 @@ endif()
     find_library(PAHO_MQTT_LIB NAMES paho-mqtt3a-static paho-mqtt3as-static
                  PATHS "${DEPS_PREFIX}/lib" "${PAHO_MQTT_PREFIX}/lib" "${VCPKG_STATIC_MD_INSTALLED_DIR}/lib" "${VCPKG_INSTALLED_DIR}/lib"
                  NO_DEFAULT_PATH)
+    if(NOT PAHO_MQTT_LIB AND UNIX AND NOT APPLE)
+        # Linux: libpaho-mqtt-dev (or a DEPS_PREFIX build) ships libpaho-mqtt3as
+        # (async + TLS; MqttClient.cpp uses MQTTAsync_SSLOptions) -- no
+        # "-static" suffix naming as on Windows.
+        find_library(PAHO_MQTT_LIB NAMES paho-mqtt3as paho-mqtt3a
+                     PATHS "${DEPS_PREFIX}/lib")
+    endif()
     if(PAHO_MQTT_LIB)
         target_link_libraries(owzx_app_core PUBLIC ${PAHO_MQTT_LIB})
         if(EXISTS "${PAHO_MQTT_PREFIX}/include/MQTTAsync.h")

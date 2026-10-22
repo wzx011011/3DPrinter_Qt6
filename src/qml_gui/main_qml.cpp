@@ -355,8 +355,15 @@ int main(int argc, char *argv[])
       // degrades, app runs" path into a hard pre-main loader dependency.
       // A future Qt that renames/collapses the export now FAILS LOUDLY here
       // instead of silently skipping AA_ShareOpenGLContexts.
+#if defined(Q_OS_WIN)
       const QString kInitMangled =
           QStringLiteral("?initialize@QtWebEngineQuick@@YAXXZ");
+#else
+      // Itanium C++ ABI (Linux/macOS) name of the same function; verified
+      // against libQt6WebEngineQuick.so 6.12.0 (nm -D).
+      const QString kInitMangled =
+          QStringLiteral("_ZN16QtWebEngineQuick10initializeEv");
+#endif
       if (auto *init = reinterpret_cast<WebEngineInit>(
               webEngineQuick.resolve(kInitMangled.toUtf8().constData())))
         init();

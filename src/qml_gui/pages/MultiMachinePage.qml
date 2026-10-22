@@ -810,7 +810,13 @@ Item {
             property bool _canSelect: _status === 0 || _status === 1  // pending or sending
             property bool _canCancel: _status === 0 || _status === 1  // pending or sending
 
-            width: localTaskList.width
+            // FB-R0-02: localTaskList (the Column id inside the Task-Sending
+            // tab component) is OUT of lexical scope from this sibling
+            // delegate component -- the ReferenceError aborted every
+            // delegate instantiation and left the task table permanently
+            // empty. The Repeater parents each delegate to that Column, so
+            // parent.width is the same width without the cross-scope lookup.
+            width: parent.width
             height: 50
             // Hover draws a 1px accent outline only (upstream
             // MultiTaskManagerPage.cpp:453-457); selected state shows on the
@@ -934,7 +940,7 @@ Item {
                     color: _hovered && _canCancel ? Theme.bgHover : Theme.bgElevated
                     border.color: Theme.borderDefault
                     border.width: 1
-                    anchors.verticalCenter: parent.verticalCenter
+                    Layout.alignment: Qt.AlignVCenter
                     visible: _canCancel
                     opacity: _canCancel ? 1.0 : 0.4
                     Text {
