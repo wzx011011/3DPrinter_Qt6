@@ -7641,10 +7641,12 @@ void QmlUiAuditTests::calibrationRangeInputAndKValueReadback()
 
 void QmlUiAuditTests::legacyDeadCodePagesRemoved()
 {
-  // Wave 3 (MALL-01): Model Mall remains blocked. The upstream feature relies
-  // on a Web host, remote service contract, and authentication flow that are
-  // outside the approved scope. Do not substitute static models or simulated
-  // downloads for the unavailable workflow.
+  // Wave 3 (MALL-01): simulated Model Mall implementations remain banned. The
+  // real integration was unblocked on 2026-10-23 via the official open-source
+  // contract (docs/依赖与协议边界审计.md, Model Mall 解除阻塞决策记录) and uses
+  // the CloudModelLibrary*/CrealityCloud* naming. This lock still bans the
+  // legacy ModelMall* names, any static catalog, and any timer-driven fake
+  // download completion.
   const QString qrc = qmlQrcSources();
   const QString mainQml = readSource(QStringLiteral("src/qml_gui/main.qml"));
   const QString topbar = readSource(QStringLiteral("src/qml_gui/BBLTopbar.qml"));
