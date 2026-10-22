@@ -296,6 +296,16 @@ endif()
         src/core/services/FtpUploader.h
         src/core/services/FtpUploader.cpp
     )
+    # 创想云接入基座（feature/cloud-model-library M1，协议移植自官方开源
+    # CrealityPrint，AGPL-3.0；决策记录见 docs/依赖与协议边界审计.md）：
+    # CrealityCloudConfig = 端点/请求头/OAuth clientId/UA/DUID 唯一配置层；
+    # CloudHttpClient = QNetworkAccessManager 异步薄封装（归一化响应）。
+    target_sources(owzx_app_core PRIVATE
+        src/core/services/CrealityCloudConfig.h
+        src/core/services/CrealityCloudConfig.cpp
+        src/core/services/CloudHttpClient.h
+        src/core/services/CloudHttpClient.cpp
+    )
     # AI 助手（OWzx-only 决策，docs/ai-control.md）：
     # AppToolRegistry 把应用操作暴露为 JSON-Schema 工具；
     # McpHttpServer 在 127.0.0.1 上以 MCP Streamable HTTP 子集对外提供，
@@ -615,6 +625,24 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME ServiceSeamTests COMMAND ServiceSeamTests)
     set_tests_properties(ServiceSeamTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # 创想云配置层与 HTTP 封装单测（feature/cloud-model-library M1）：
+    # 端点矩阵/请求头协议/语言索引/UA/DUID 离线断言 +
+    # CloudHttpClient 对 127.0.0.1 回环 stub 的 GET/POST/超时/HTTP 错误。
+    # 不发任何外网请求。只链 owzx_app_core，需要 Qt6::Network。
+    qt_add_executable(CrealityCloudConfigTests tests/CrealityCloudConfigTests.cpp)
+    target_link_libraries(CrealityCloudConfigTests PRIVATE owzx_app_core
+        Qt6::Core Qt6::Gui Qt6::Network Qt6::Test
+    )
+    if(MSVC)
+        target_link_options(CrealityCloudConfigTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(CrealityCloudConfigTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME CrealityCloudConfigTests COMMAND CrealityCloudConfigTests)
+    set_tests_properties(CrealityCloudConfigTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
