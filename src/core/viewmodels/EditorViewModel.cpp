@@ -5955,6 +5955,9 @@ EditorViewModel::EditorViewModel(ProjectService *projectService, SliceService *s
       m_sliceResultPlateIndex = -1;
       m_sliceAllQueue.clear();
       m_slicingAll = false;
+      // FB-R7-09: deterministic failure signal for the print dialog's
+      // on-demand slice (replaces the stateChanged polling that raced).
+      emit sliceFailed(message);
       // Phase 239 (ENGN-01): a failed auto-reslice/reuse must not strand the
       // pending preview switch (upstream stays on the plater with the error
       // notification visible).
@@ -11216,7 +11219,10 @@ bool EditorViewModel::exportModel(const QString &filePath, const QString &format
     if (ext == QLatin1String("3mf"))
     {
       m_pendingExportSnapshotPath = filePath;
-      const bool dispatched = projectService_->writeProjectSnapshotAsync(filePath);
+      // FB-R11-02: the export must carry the OWzx plate-state sidecar so a
+      // re-open restores plate membership (the plain snapshot writer omits
+      // it); bookkeeping stays off — exporting is not a Save-As.
+      const bool dispatched = projectService_->export3mfAsync(filePath);
       if (!dispatched)
       {
         m_pendingExportSnapshotPath.clear();

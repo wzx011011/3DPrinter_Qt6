@@ -251,6 +251,11 @@ public:
   /// currentProjectPath_ / sourceFilePath_ stay untouched). Outcome via
   /// snapshotFinished.
   Q_INVOKABLE bool writeProjectSnapshotAsync(const QString &filePath);
+  /// FB-R11-02: Export-3MF save — carries the OWzx plate-state sidecar (so a
+  /// re-open restores plate membership) but performs NO project bookkeeping
+  /// (exporting must not rename/re-point the open project). Outcome via
+  /// snapshotFinished, same contract as the auto-backup snapshot.
+  bool export3mfAsync(const QString &filePath);
   /// U8: true while an async save/snapshot job is in flight (dispatch →
   /// GUI-thread delivery). BackendContext folds this into canSave() so a
   /// Ctrl+S during an in-flight write is a silent no-op instead of a
@@ -1172,7 +1177,7 @@ private:
   /// U8: what the async save books on success. Snapshot = write only
   /// (auto-backup semantics, no project identity change); Project =
   /// sourceFilePath_ + projectName_; ProjectAs = those + currentProjectPath_.
-  enum class AsyncSaveKind { Project, ProjectAs, Snapshot };
+  enum class AsyncSaveKind { Project, ProjectAs, Snapshot, Export3mf };
   /// U8: single async engine behind saveProjectAsync / saveProjectAsAsync /
   /// writeProjectSnapshotAsync. Builds the writer snapshot on the calling
   /// (GUI) thread, then runs store_bbs_3mf + the OWzx sidecar write on a

@@ -454,9 +454,11 @@ Item {
                     anchors.margins: 8
                     spacing: 8
 
-                    readonly property string plateThumbBase64:
-                        root.editorVm ? root.editorVm.currentPlateThumbnailBase64 : ""
-                    property int plateIndex: root.editorVm ? root.editorVm.currentPlateIndex : 0
+                    // FB-R8-01: one card per plate (was: only the current
+                    // plate), so a sliced plate can be re-opened from the
+                    // preview without a round-trip through Prepare.
+                    readonly property int plateCount:
+                        root.editorVm ? root.editorVm.plateCount : 0
 
                     // 26x26 "</>" square button above the card (ref x~398-423,
                     // y~69-92); the "</>" glyph toggles the G-code window
@@ -488,65 +490,90 @@ Item {
                         }
                     }
 
-                    Rectangle {
-                        id: plateSummaryCard
-                        width: 125
-                        height: 125
-                        radius: 8
-                        // Floating-card floor: dark translucent, sampled from
-                        // the same float-overlay family as the empty-state
-                        // pill (ref card interior over the canvas).
-                        color: "#20242bd0"
-                        // Teal card border, ref measured RGB(0,150,136).
-                        border.width: 1.5
-                        border.color: "#009688"
-                        clip: true
+                    // FB-R8-01: one card per plate (was: only the current
+                    // plate) — a sliced plate can be re-opened from the
+                    // preview without a round-trip through Prepare; the
+                    // current plate's card carries the accent border.
+                    Repeater {
+                        model: plateCardCluster.plateCount
 
-                        Image {
-                            id: plateThumbImage
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            fillMode: Image.PreserveAspectFit
-                            source: plateCardCluster.plateThumbBase64.length > 0
-                                ? (plateCardCluster.plateThumbBase64.indexOf("data:image/") === 0
-                                   ? plateCardCluster.plateThumbBase64
-                                   : "data:image/png;base64," + plateCardCluster.plateThumbBase64)
-                                : ""
-                            visible: plateCardCluster.plateThumbBase64.length > 0
-                            asynchronous: true
-                        }
+                        delegate: Rectangle {
+                            id: plateSummaryCard
 
-                        // Thumbnail fallback: the plate color block (same
-                        // accessor the Prepare plate cards use as fallback).
-                        Rectangle {
-                            anchors.fill: parent
-                            anchors.margins: 4
-                            visible: plateCardCluster.plateThumbBase64.length === 0
-                            color: root.editorVm
-                                ? root.editorVm.plateThumbnailColor(plateCardCluster.plateIndex)
-                                : Theme.bgPanel
-                            radius: 3
-                        }
+                            required property int index
+                            readonly property int plateIndex: index
+                            readonly property bool isCurrent:
+                                root.editorVm
+                                && root.editorVm.currentPlateIndex === plateIndex
+                            readonly property string plateThumbBase64:
+                                root.editorVm
+                                ? root.editorVm.plateThumbnailBase64(plateIndex) : ""
 
-                        // Plate number badge embedded INSIDE the card's
-                        // top-left corner (ref "1" badge).
-                        Rectangle {
-                            id: plateBadge
-                            anchors.left: parent.left
-                            anchors.top: parent.top
-                            anchors.margins: 4
-                            width: plateBadgeLabel.implicitWidth + 10
-                            height: plateBadgeLabel.implicitHeight + 4
-                            radius: 3
+                            width: 125
+                            height: 125
+                            radius: 8
+                            // Floating-card floor: dark translucent, sampled from
+                            // the same float-overlay family as the empty-state
+                            // pill (ref card interior over the canvas).
                             color: "#20242bd0"
-                            Label {
-                                id: plateBadgeLabel
-                                anchors.centerIn: parent
-                                text: root.editorVm
-                                    ? qsTr("盘 %1").arg(plateCardCluster.plateIndex + 1)
-                                    : qsTr("盘")
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeXS
+                            // Teal card border, ref measured RGB(0,150,136);
+                            // accent border marks the CURRENT plate.
+                            border.width: 1.5
+                            border.color: isCurrent ? Theme.accent : "#009688"
+                            clip: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: if (root.editorVm)
+                                    root.editorVm.setCurrentPlateIndex(plateIndex)
+                            }
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 4
+                                fillMode: Image.PreserveAspectFit
+                                source: plateSummaryCard.plateThumbBase64.length > 0
+                                    ? (plateSummaryCard.plateThumbBase64.indexOf("data:image/") === 0
+                                       ? plateSummaryCard.plateThumbBase64
+                                       : "data:image/png;base64," + plateSummaryCard.plateThumbBase64)
+                                    : ""
+                                visible: plateSummaryCard.plateThumbBase64.length > 0
+                                asynchronous: true
+                            }
+
+                            // Thumbnail fallback: the plate color block (same
+                            // accessor the Prepare plate cards use as fallback).
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: 4
+                                visible: plateSummaryCard.plateThumbBase64.length === 0
+                                color: root.editorVm
+                                    ? root.editorVm.plateThumbnailColor(plateIndex)
+                                    : Theme.bgPanel
+                                radius: 3
+                            }
+
+                            // Plate number badge embedded INSIDE the card's
+                            // top-left corner (ref "1" badge).
+                            Rectangle {
+                                id: plateBadge
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.margins: 4
+                                width: plateBadgeLabel.implicitWidth + 10
+                                height: plateBadgeLabel.implicitHeight + 4
+                                radius: 3
+                                color: "#20242bd0"
+                                Label {
+                                    id: plateBadgeLabel
+                                    anchors.centerIn: parent
+                                    text: root.editorVm
+                                        ? qsTr("盘 %1").arg(plateIndex + 1)
+                                        : qsTr("盘")
+                                    color: Theme.textPrimary
+                                    font.pixelSize: Theme.fontSizeXS
+                                }
                             }
                         }
                     }

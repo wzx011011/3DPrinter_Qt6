@@ -453,7 +453,12 @@ Item {
             property int _progress: _vm.machineProgress(index)
             property string _remaining: _vm.machineRemaining(index)
 
-            width: deviceList.width
+            // FB-R11-01 follow-up: same out-of-scope-id defect as the task
+            // rows -- deviceList lives in the tab component while this
+            // delegate is a sibling Component; the ReferenceError aborted
+            // every device-row instantiation (empty table). parent IS the
+            // deviceList Column at instantiation time.
+            width: parent.width
             height: 50
             // Hover draws a 1px accent outline only (upstream SetPen(0,150,136)
             // + transparent brush, DrawRoundedRectangle r3,

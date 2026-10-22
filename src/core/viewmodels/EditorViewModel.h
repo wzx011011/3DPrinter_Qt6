@@ -2149,6 +2149,10 @@ signals:
   /// after an on-demand slice (upstream Plater.cpp:7172 slices from the
   /// print flow; BackgroundSlicingProcess finished -> send).
   void printSliceReady(const QString &gcodePath);
+  /// FB-R7-09: re-emitted from SliceService::sliceFailed so QML flows (the
+  /// print dialog's on-demand slice) can react to a real failure
+  /// deterministically instead of polling stateChanged.
+  void sliceFailed(const QString &message);
   void hollowDataChanged();
   void advancedCutConnectorDataChanged();
   void bedShapeChanged();

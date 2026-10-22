@@ -23,6 +23,11 @@ CxDialog {
     // G-03: true while an on-demand slice requested from this dialog is in
     // flight; printSliceReady() then refreshes the in-dialog slice info.
     property bool slicingForPrint: false
+    // FB-R7-09: latches "the on-demand slice actually started" — the
+    // failure panel below must not latch during the window between the
+    // 发送 click and SliceService raising slicing_ (stateChanged noise in
+    // that window used to latch a bogus failure with a stale statusText).
+    property bool slicingSeen: false
 
     // Upstream caption _L("Send to Printer storage") (SendToPrinter.cpp:215),
     // zh_CN po:10078-10079 -> "发送到打印机存储". The wxCAPTION frame carries
@@ -715,9 +720,14 @@ CxDialog {
                         Layout.bottomMargin: 10
                         Layout.preferredHeight: 32
                         radius: Theme.radiusSM
-                        readonly property bool active: root.canSend || (!root.hasSlicePath
-                            && root.printerSelected && !root.slicingForPrint
-                            && root.sendState === 0 && !root.connecting)
+                        // FB-R7-09: activeness mirrors upstream
+                        // Enable_Send_Button — click-enabled unless a flow is
+                        // already running; startSend() then routes to the
+                        // slice-on-demand or shows the blocking reason
+                        // (device printing/offline) instead of a dead button.
+                        readonly property bool active: root.printerSelected
+                            && !root.slicingForPrint
+                            && root.sendState === 0 && !root.connecting
                         color: !active ? Theme.bgPressed
                               : sendMa.containsMouse ? Theme.accentDark : Theme.accent
                         Text {
@@ -933,25 +943,22 @@ CxDialog {
         enabled: root.slicingForPrint
         function onPrintSliceReady(gcodePath) {
             root.slicingForPrint = false
+            root.slicingSeen = false
             root.thumbTick++
             if (gcodePath)
                 root.showStatus(qsTr("切片完成，选择打印机后发送。"), false)
         }
-        // A failed or cancelled slice releases the on-demand state and opens
-        // the failed-info panel with the real service message (upstream
-        // shows the panel on send/slice errors, SendToPrinter.cpp:461-463).
-        function onStateChanged() {
-            if (!root.editorVm)
+        // FB-R7-09: deterministic failure path (replaces the old
+        // stateChanged polling, which raced the completion delivery and
+        // latched a bogus failure with a stale statusText).
+        function onSliceFailed(message) {
+            if (!root.slicingForPrint)
                 return
-            if (!root.editorVm.isSlicing() && (root.editorVm.lastGcodePath || "") === "") {
-                if (root.slicingForPrint) {
-                    root.slicingForPrint = false
-                    root.sendFailed = true
-                    root.failedCode = ""
-                    root.failedDesc = root.editorVm.statusText
-                    root.failedExtra = ""
-                }
-            }
+            root.slicingForPrint = false
+            root.sendFailed = true
+            root.failedCode = ""
+            root.failedDesc = message
+            root.failedExtra = ""
         }
     }
 

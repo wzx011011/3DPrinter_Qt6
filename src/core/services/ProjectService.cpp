@@ -11991,6 +11991,11 @@ bool ProjectService::writeProjectSnapshotAsync(const QString &filePath)
   return startAsyncSave(filePath, AsyncSaveKind::Snapshot);
 }
 
+bool ProjectService::export3mfAsync(const QString &filePath)
+{
+  return startAsyncSave(filePath, AsyncSaveKind::Export3mf);
+}
+
 // U8 复核（中 3）: the ONE success-bookkeeping body behind saveProject
 // (3MF + JSON branches), saveProjectAs and the async delivery lambda — a
 // future field lands on all of them or none (the byte-level sync/async
@@ -12037,19 +12042,19 @@ bool ProjectService::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
   if (loading_)
   {
     lastError_ = tr("加载中，无法保存");
-    if (kind != AsyncSaveKind::Snapshot)
+    if (kind != AsyncSaveKind::Snapshot && kind != AsyncSaveKind::Export3mf)
       emit projectChanged();  // saveProject/saveProjectAs parity
     return false;
   }
   if (saving_)
   {
     lastError_ = saveBusyReason();
-    if (kind != AsyncSaveKind::Snapshot)
+    if (kind != AsyncSaveKind::Snapshot && kind != AsyncSaveKind::Export3mf)
       emit projectChanged();
     return false;
   }
 
-  if (kind == AsyncSaveKind::Snapshot)
+  if (kind == AsyncSaveKind::Snapshot || kind == AsyncSaveKind::Export3mf)
   {
     // writeProjectSnapshot parity: no Model → no backup (qWarning, false).
     if (!model_)
@@ -12131,9 +12136,11 @@ bool ProjectService::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
       emit receiver->savingChanged();
       if (ok)
       {
-        if (kind == AsyncSaveKind::Snapshot)
+        if (kind == AsyncSaveKind::Snapshot || kind == AsyncSaveKind::Export3mf)
         {
-          // writeProjectSnapshot parity: bookkeeping-free, log only.
+          // writeProjectSnapshot parity: bookkeeping-free, log only
+          // (FB-R11-02: the Export-3MF save carries the plate-state sidecar
+          // but — like a snapshot — must not rename/re-point the project).
           qDebug("[Project] async project snapshot written: %s",
                  filePath.toUtf8().constData());
         }
@@ -12150,10 +12157,10 @@ bool ProjectService::startAsyncSave(const QString &filePath, AsyncSaveKind kind)
       else
       {
         receiver->lastError_ = errText;
-        if (kind != AsyncSaveKind::Snapshot)
+        if (kind != AsyncSaveKind::Snapshot && kind != AsyncSaveKind::Export3mf)
           emit receiver->projectChanged();  // sync-failure parity
       }
-      if (kind == AsyncSaveKind::Snapshot)
+      if (kind == AsyncSaveKind::Snapshot || kind == AsyncSaveKind::Export3mf)
         emit receiver->snapshotFinished(ok, filePath, errText);
       else
         emit receiver->saveFinished(ok, filePath, errText);
