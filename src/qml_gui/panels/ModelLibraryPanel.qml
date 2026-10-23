@@ -66,8 +66,6 @@ Rectangle {
         settings.focusOnNavigationEnabled: true
 
         onLoadingChanged: function (loadRequest) {
-            console.log("[ModelLibraryPanel] loading status=", loadRequest.status,
-                        "qwc.js len=", root.qwebchannelSource.length)
             if (loadRequest.status === WebEngineView.LoadStartedStatus
                 || loadRequest.status === WebEngineView.LoadSucceededStatus)
                 webView.injectBridgeScripts()
@@ -103,9 +101,7 @@ Rectangle {
         })();"
 
         function injectBridgeScripts() {
-            webView.runJavaScript(
-                qwebchannelSource + cxShimSource
-                + "; '[cx-shim] installed=' + window.__cxShimInstalled + ' qwc=' + (typeof QWebChannel)")
+            webView.runJavaScript(qwebchannelSource + cxShimSource)
         }
         onNavigationRequested: function (request) {
             const s = String(request.url)
