@@ -60,19 +60,24 @@ QString CrealityCloudConfig::modelLibrarySearch(Region region, Channel channel, 
 
 QString CrealityCloudConfig::loginPageUrl(Region region, Channel channel)
 {
-    // Upstream GUI_App.cpp:6581/6634 — the login page lives on the main
-    // creality.com site; only the oauth redirect (not this URL) is regional.
-    Q_UNUSED(channel);
-    return region == Region::CN ? QStringLiteral("https://www.creality.com/pages/login")
-                                : QStringLiteral("https://www.creality.com/pages/login");
+    // 登录走模型库站点页内完成（官方 WebModelLibraryView 同构设计）：商城
+    // 头部自带"登录/注册"，登录态落在共享 WebEngineProfile 的 cookie 上，
+    // 模型库面板直接复用。上游硬编码的 www.creality.com/pages/login 独立
+    // 登录页已随官网改版下线（/pages/login 与 /login 均 404/SPA-404，验证
+    // 于 2026-10-23）——这正是审计文档登记的端点漂移风险，改动收敛在本
+    // 配置层。loopback OAuth 回调链路保留（oauth 换 token 端点仍然有效，
+    // 供后续云预设同步账号面使用）。
+    return webAddress(region, channel);
 }
 
 QString CrealityCloudConfig::oauthRedirectUri(Region region, Channel channel, int localPort)
 {
     // Upstream HttpServer.cpp creality_handle_request: the public oauth page
-    // bounces the code back to our loopback listener via back_url. The
-    // reference client uses www.crealitycloud.cn (CN) / .com (intl).
-    return QStringLiteral("https://www.crealitycloud.")
+    // bounces the code back to our loopback listener via back_url.
+    // Release → www.crealitycloud.<tld>, Alpha → pre.crealitycloud.<tld>.
+    const char *prefix = channel == Channel::Alpha ? "pre" : "www";
+    return QStringLiteral("https://%1.crealitycloud.")
+           .arg(QLatin1String(prefix))
            + (region == Region::CN ? QStringLiteral("cn") : QStringLiteral("com"))
            + QStringLiteral("/oauth?back_url=http://localhost:%1/login").arg(localPort);
 }

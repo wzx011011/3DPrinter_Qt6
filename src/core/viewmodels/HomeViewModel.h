@@ -3,7 +3,7 @@
 #include <QVariantList>
 #include <QString>
 
-class CloudServiceMock;
+class ICloudDataPlane;
 class ProjectViewModel;
 
 class HomeViewModel : public QObject
@@ -20,7 +20,9 @@ class HomeViewModel : public QObject
   Q_PROPERTY(QString cloudLastSyncTime READ cloudLastSyncTime NOTIFY cloudStateChanged)
 
 public:
-  explicit HomeViewModel(CloudServiceMock *cloudService, QObject *parent = nullptr);
+  /// X1 seam: takes the ICloudDataPlane interface (mock or real Creality
+  /// backend — BackendContext decides the assembly).
+  explicit HomeViewModel(ICloudDataPlane *cloudService, QObject *parent = nullptr);
 
   /// Phase 241 (PAGE-01): inject the recent-projects source viewmodel. The
   /// persisted recent list lives in ProjectViewModel (shared with the topbar
@@ -65,7 +67,7 @@ public slots:
   void refreshRecentProjects();
 
 private:
-  CloudServiceMock *cloudService_ = nullptr;
+  ICloudDataPlane *cloudService_ = nullptr;
   ProjectViewModel *projectViewModel_ = nullptr;
 
   // Stored as plain structs to avoid QVariantList member corruption by V4 GC

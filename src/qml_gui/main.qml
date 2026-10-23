@@ -1050,6 +1050,7 @@ ApplicationWindow {
                             onOpenProjectRequested: function(filePath) {
                                 root.requestOpenProject(filePath)
                             }
+                            onCrealityLoginRequested: crealityLoginLoader.active = true
                         }
                     }
                 }
@@ -1245,6 +1246,23 @@ ApplicationWindow {
 
             source: Qt.resolvedUrl("panels/ChatSidebar.qml")
             onLoaded: item.closed.connect(function () { root.aiChatOpen = false })
+        }
+    }
+
+    // feature/cloud-model-library (M2): 创想云 OAuth 登录对话框。source-URL
+    // Loader（同 aiChatPanelLoader 理由）：QtWebEngine import 失败或
+    // OWZX_DISABLE_WEBENGINE=1 时只有这个 Loader 塌陷，应用其余部分照常。
+    Loader {
+        id: crealityLoginLoader
+        active: false
+        anchors.centerIn: parent
+        z: 60
+        source: Qt.resolvedUrl("dialogs/CrealityLoginDialog.qml")
+        onLoaded: {
+            item.dismissed.connect(function () { crealityLoginLoader.active = false })
+            // Dialog 实例化默认是关闭态，必须显式 open()（onOpened 里启动
+            // OAuth 回调监听并加载登录页）。
+            item.open()
         }
     }
 

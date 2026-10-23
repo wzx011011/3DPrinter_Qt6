@@ -1,10 +1,10 @@
 #include "HomeViewModel.h"
 
-#include "core/services/CloudServiceMock.h"
+#include "core/services/CloudServiceMock.h" // ICloudDataPlane seam lives here
 #include "core/viewmodels/ProjectViewModel.h"
 #include <QFileInfo>
 
-HomeViewModel::HomeViewModel(CloudServiceMock *cloudService, QObject *parent)
+HomeViewModel::HomeViewModel(ICloudDataPlane *cloudService, QObject *parent)
     : QObject(parent), cloudService_(cloudService)
 {
   // Phase 241 (PAGE-01): the hardcoded mock recent list is gone. Entries now
@@ -13,13 +13,13 @@ HomeViewModel::HomeViewModel(CloudServiceMock *cloudService, QObject *parent)
   // source viewmodel is injected via setProjectViewModel.
 
   if (cloudService_) {
-    connect(cloudService_, &CloudServiceMock::loginStateChanged,
+    connect(cloudService_, &ICloudDataPlane::loginStateChanged,
             this, &HomeViewModel::cloudStateChanged);
-    connect(cloudService_, &CloudServiceMock::devicesChanged,
+    connect(cloudService_, &ICloudDataPlane::devicesChanged,
             this, &HomeViewModel::cloudStateChanged);
-    connect(cloudService_, &CloudServiceMock::syncStateChanged,
+    connect(cloudService_, &ICloudDataPlane::syncStateChanged,
             this, &HomeViewModel::cloudStateChanged);
-    connect(cloudService_, &CloudServiceMock::loginFailed,
+    connect(cloudService_, &ICloudDataPlane::loginFailed,
             this, [this](const QString &err) { emit cloudLoginFailed(err); });
   }
 }

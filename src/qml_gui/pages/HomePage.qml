@@ -10,6 +10,10 @@ Item {
     required property var homeVm
     signal newProjectRequested()
     signal openProjectRequested(string filePath)
+    // feature/cloud-model-library (M2): the Creality backend logs in through
+    // the OAuth web dialog (main.qml source-URL Loader), not the mock
+    // username/password dialog below.
+    signal crealityLoginRequested()
     // Pure-JS copy - avoids Qt6 V4 VariantAssociationObject lifetime crash
     // Initialized to [] so Repeater componentComplete() sees empty model.
     // Phase 241 (PAGE-01): mirrors homeVm's real recent list, which itself
@@ -109,9 +113,14 @@ Item {
                     visible: !root.homeVm.cloudLoggedIn
 
                     CxButton {
-                        text: qsTr("登录账号")
+                        text: Backend.cloudBackendKind === "creality" ? qsTr("登录创想账号") : qsTr("登录账号")
                         cxStyle: CxButton.Style.Primary
-                        onClicked: loginDialog.open()
+                        onClicked: {
+                            if (Backend.cloudBackendKind === "creality")
+                                root.crealityLoginRequested()
+                            else
+                                loginDialog.open()
+                        }
                     }
                 }
 
@@ -286,8 +295,11 @@ Item {
                     }
                 }
 
-                // Add device button
+                // Add device button (mock backend only: the creality backend's
+                // device face is honest-empty until the device-list milestone,
+                // so the bind entry stays reachable in demo mode only)
                 Rectangle {
+                    visible: Backend.cloudBackendKind !== "creality"
                     width: 180; height: 64; radius: Theme.radiusXL
                     color: addDevMA.containsMouse ? Theme.bgHover : Theme.bgPanel
                     border.width: 1
@@ -375,6 +387,7 @@ Item {
                 // mocks (real `bambu_networking` is externally blocked), so a
                 // "success" here is a demo flow, not a real account login.
                 Label {
+                    visible: Backend.cloudBackendKind !== "creality"
                     text: qsTr("演示模式：登录/绑定为本地模拟，不会连接真实云服务（依赖 bambu_networking，外部阻塞）。")
                     color: Theme.textTertiary
                     font.pixelSize: Theme.fontSizeXS

@@ -5,7 +5,11 @@
 #include "core/services/DeviceServiceMock.h"
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/CameraServiceMock.h"
+#include <QSettings>
+
 #include "core/services/CloudServiceMock.h"
+#include "core/services/CrealityAuthService.h"
+#include "core/services/CrealityCloudService.h"
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
@@ -95,6 +99,8 @@ static_assert(std::is_base_of_v<ICameraStreamService, CameraServiceMock>,
 
 IDeviceDataPlane *BackendContext::deviceDataPlane() const { return deviceService_; }
 ICloudDataPlane *BackendContext::cloudDataPlane() const { return cloudService_; }
+
+QObject *BackendContext::crealityAuthService() const { return crealityAuthService_; }
 ICameraStreamService *BackendContext::cameraStreamService() const { return cameraService_; }
 
 BackendContext::BackendContext(QObject *parent)
@@ -117,7 +123,30 @@ BackendContext::BackendContext(QObject *parent)
   networkService_ = new NetworkServiceMock(this);
   cameraService_ = new CameraServiceMock(this);
   // X1: 云数据面装配（接口访问器 cloudDataPlane() 出口；此前为构造函数局部量）
-  cloudService_ = new CloudServiceMock(this);
+  // feature/cloud-model-library (M2): Cloud/Backend 装配开关 —— "mock"
+  // （默认，演示模式不变）或 "creality"（真后端：OAuth 账号面 + 诚实的
+  // 空/空闲设备与同步面）。AppSettingsService 提前到本处创建仅为读取
+  // cloudRegion（原本 v2.8 W3 的注入点行为不变）。
+  appSettings_ = new AppSettingsService(this);
+  crealityAuthService_ = new CrealityAuthService(this);
+  crealityAuthService_->setRegion(appSettings_->cloudRegion()
+                                          == QStringLiteral("CN")
+                                      ? CrealityCloudConfig::Region::CN
+                                      : CrealityCloudConfig::Region::International);
+  {
+    QSettings backendSettings;
+    const QString backend = backendSettings
+                                .value(QStringLiteral("Cloud/Backend"),
+                                       QStringLiteral("mock"))
+                                .toString();
+    cloudBackendKind_ = (backend == QStringLiteral("creality"))
+                            ? QStringLiteral("creality")
+                            : QStringLiteral("mock");
+  }
+  if (cloudBackendKind_ == QStringLiteral("creality"))
+    cloudService_ = new CrealityCloudService(crealityAuthService_, this);
+  else
+    cloudService_ = new CloudServiceMock(this);
 
   // U11: 发送链路真实性桥。DeviceServiceMock 的 FTP+MQTT 真发送路径此前
   // 只在 uploadFinished 里打日志：publish 失败仍无条件把设备置 "printing"，
@@ -249,8 +278,8 @@ BackendContext::BackendContext(QObject *parent)
   // Phase 201 (v5.6 AMS Architecture Cleanup): mock data + persistence for
   // AMSSettingsDialog. Data source stays mock; persistence is local QSettings.
   amsMaterialsViewModel_ = new AmsMaterialsViewModel(this);
-  // v2.8 W3: application-level persisted settings.
-  appSettings_ = new AppSettingsService(this);
+  // v2.8 W3: application-level persisted settings (instance created before
+  // the cloud data-plane assembly above; see the Cloud/Backend comment).
   // v2.8 W3: inject settings into SliceService for persisted bed size lookup.
   sliceService_->setAppSettings(appSettings_);
   // Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry + mock

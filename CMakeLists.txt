@@ -148,6 +148,15 @@ endif()
         src/core/services/CameraServiceMock.h
         src/core/services/CloudServiceMock.cpp
         src/core/services/CloudServiceMock.h
+        # feature/cloud-model-library (M2): 创想云账号面（OAuth 回调服务器 +
+        # 令牌交换/持久化）与 ICloudDataPlane 真实现（账号面真、设备/同步面
+        # 诚实空置——见审计文档决策记录）。
+        src/core/services/OAuthCallbackServer.h
+        src/core/services/OAuthCallbackServer.cpp
+        src/core/services/CrealityAuthService.h
+        src/core/services/CrealityAuthService.cpp
+        src/core/services/CrealityCloudService.h
+        src/core/services/CrealityCloudService.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp
@@ -643,6 +652,24 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME CrealityCloudConfigTests COMMAND CrealityCloudConfigTests)
     set_tests_properties(CrealityCloudConfigTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # 创想云账号面单测（feature/cloud-model-library M2）：OAuthCallbackServer
+    # 回环取码 + CrealityAuthService 完整令牌交换（本地 token stub，隔离
+    # QSettings）+ CrealityCloudService 诚实契约（密码登录失败指引/设备面
+    # 空置/同步面空闲/账号面委托）。不发任何外网请求。
+    qt_add_executable(CrealityCloudServiceTests tests/CrealityCloudServiceTests.cpp)
+    target_link_libraries(CrealityCloudServiceTests PRIVATE owzx_app_core
+        Qt6::Core Qt6::Gui Qt6::Network Qt6::Test
+    )
+    if(MSVC)
+        target_link_options(CrealityCloudServiceTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(CrealityCloudServiceTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME CrealityCloudServiceTests COMMAND CrealityCloudServiceTests)
+    set_tests_properties(CrealityCloudServiceTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

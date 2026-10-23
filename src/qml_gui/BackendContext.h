@@ -128,6 +128,15 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   // state. installPlugin is a mock (no real download source).
   Q_PROPERTY(QObject *pluginService READ pluginService CONSTANT)
   Q_PROPERTY(QObject *appSettings READ appSettings CONSTANT)
+  // feature/cloud-model-library (M2): cloud data-plane backend kind —
+  // "mock" (default, 演示模式) or "creality" (real Creality Cloud OAuth
+  // backend). QML reads it to switch the Home login/bind entries and to
+  // gate honest disclosures.
+  Q_PROPERTY(QString cloudBackendKind READ cloudBackendKind CONSTANT)
+  // Creality account service (OAuth identity + loopback callback server).
+  // Always present; Q_PROPERTY is QObject* like the other services. The
+  // login web dialog and the model-library panel read it.
+  Q_PROPERTY(QObject *crealityAuthService READ crealityAuthService CONSTANT)
   // AI 助手（OWzx-only，docs/ai-control.md）：聊天侧栏 ViewModel + 控制面
   // 活跃状态（MCP 服务器 + sidecar 是否已按偏好设置启动）。
   // aiChatBridge 是暴露给 WebEngine 聊天页的 QWebChannel 对象（网页版
@@ -376,6 +385,9 @@ public:
   QObject *presetService() const;
   QObject *sliceService() const;
   QObject *appSettings() const;
+  // feature/cloud-model-library (M2): backend-kind + Creality OAuth service.
+  QString cloudBackendKind() const { return cloudBackendKind_; }
+  QObject *crealityAuthService() const;
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
   // ── X1: 数据面窄接口访问器（注入缝的装配点出口）──
@@ -816,7 +828,11 @@ private:
   /// Upstream-aligned QML API.
   CameraServiceMock *cameraService_ = nullptr;
   /// X1: 云数据面成员（此前为构造函数局部变量；入成员以支撑接口访问器）。
-  class CloudServiceMock *cloudService_ = nullptr;
+  /// feature/cloud-model-library (M2): holds CloudServiceMock or
+  /// CrealityCloudService per the Cloud/Backend settings toggle.
+  class ICloudDataPlane *cloudService_ = nullptr;
+  QString cloudBackendKind_ = QStringLiteral("mock");
+  class CrealityAuthService *crealityAuthService_ = nullptr;
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
   /// Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry +

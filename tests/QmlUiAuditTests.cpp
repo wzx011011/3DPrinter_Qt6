@@ -10937,6 +10937,11 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("FileArchiveDialog.qml"), QStringLiteral("fileArchiveDialog.invoke(\"openFor\"")},
       {QStringLiteral("ObjColorDialog.qml"), QStringLiteral("objColorMappingRequested")},
       {QStringLiteral("SysInfoDialog.qml"), QStringLiteral("showSysInfoDialog()")},
+      // feature/cloud-model-library (M2): Creality OAuth login dialog —
+      // source-URL Loader in main.qml (WebEngine import isolation), opened
+      // from the HomePage creality login entry.
+      {QStringLiteral("CrealityLoginDialog.qml"),
+       QStringLiteral("crealityLoginLoader.active = true")},
   };
 
   // 1. Every dialogs/*.qml on disk is qrc-registered and present in the table.
@@ -10966,10 +10971,17 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
 
     bool instantiated = false;
     bool triggered = false;
+    // WebEngine-hosting dialogs (CrealityLoginDialog) are instantiated via a
+    // source-URL Loader instead of an inline element so a missing WebEngine
+    // module only collapses that Loader (see main.qml aiChatPanelLoader /
+    // crealityLoginLoader). The resolvedUrl string is the sanctioned
+    // instantiation witness for that pattern.
+    const QString loaderWitness =
+        QStringLiteral("Qt.resolvedUrl(\"dialogs/") + file + QStringLiteral("\")");
     for (auto it = corpus.cbegin(); it != corpus.cend(); ++it) {
       if (it.key() == ownPath)
         continue;
-      if (it.value().contains(instantiationToken))
+      if (it.value().contains(instantiationToken) || it.value().contains(loaderWitness))
         instantiated = true;
       if (it.value().contains(triggerTable.value(file)))
         triggered = true;

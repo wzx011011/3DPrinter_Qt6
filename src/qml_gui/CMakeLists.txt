@@ -111,6 +111,7 @@ qt_add_qml_module(owzx_qml
         dialogs/CalibrationDialog.qml
         dialogs/CaliHistoryDialog.qml
         dialogs/AboutDialog.qml
+        dialogs/CrealityLoginDialog.qml
         dialogs/ConfigWizardDialog.qml
         dialogs/BedShapeDialog.qml
         dialogs/EditGCodeDialog.qml
