@@ -133,6 +133,10 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   // backend). QML reads it to switch the Home login/bind entries and to
   // gate honest disclosures.
   Q_PROPERTY(QString cloudBackendKind READ cloudBackendKind CONSTANT)
+  // feature/cloud-model-library (M3): model-library webview JS bridge
+  // (CXSWGroupInterface protocol). The panel registers it on its WebChannel
+  // via attachModelLibraryChannel().
+  Q_PROPERTY(QObject *modelLibraryBridge READ modelLibraryBridge CONSTANT)
   // Creality account service (OAuth identity + loopback callback server).
   // Always present; Q_PROPERTY is QObject* like the other services. The
   // login web dialog and the model-library panel read it.
@@ -388,6 +392,13 @@ public:
   // feature/cloud-model-library (M2): backend-kind + Creality OAuth service.
   QString cloudBackendKind() const { return cloudBackendKind_; }
   QObject *crealityAuthService() const;
+  QObject *modelLibraryBridge() const;
+  /// WebView UA for the Creality web surfaces (model library panel +
+  /// login dialog share one profile identity).
+  Q_INVOKABLE QString crealityWebViewUserAgent() const;
+  /// M3: register the bridge object on the panel's QML WebChannel
+  /// (attachAiChatChannel pattern).
+  Q_INVOKABLE void attachModelLibraryChannel(QObject *channel);
   /// Camera image provider used by Monitor preview surfaces.
   CameraServiceMock *cameraService() const { return cameraService_; }
   // ── X1: 数据面窄接口访问器（注入缝的装配点出口）──
@@ -833,6 +844,7 @@ private:
   class ICloudDataPlane *cloudService_ = nullptr;
   QString cloudBackendKind_ = QStringLiteral("mock");
   class CrealityAuthService *crealityAuthService_ = nullptr;
+  class ModelLibraryBridge *modelLibraryBridge_ = nullptr;
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
   /// Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry +

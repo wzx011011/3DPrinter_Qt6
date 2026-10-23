@@ -917,6 +917,7 @@ ApplicationWindow {
                     root.requestOpenProject(filePath)
                 }
                 onSaveAsRequested: saveProjectAsDialog.open()
+                onModelStoreRequested: modelLibraryPanelLoader.active = !modelLibraryPanelLoader.active
                 onImportModelRequested: function(nameFilter) {
                     openModelDialog.setProp("nameFilters", [nameFilter, qsTr("所有文件 (*)")])
                     openModelDialog.open()
@@ -1247,6 +1248,23 @@ ApplicationWindow {
             source: Qt.resolvedUrl("panels/ChatSidebar.qml")
             onLoaded: item.closed.connect(function () { root.aiChatOpen = false })
         }
+    }
+
+    // feature/cloud-model-library (M3): 创想云模型库停靠面板。source-URL
+    // Loader（同 aiChatPanelLoader 理由）：QtWebEngine import 失败或
+    // OWZX_DISABLE_WEBENGINE=1 时只有这个 Loader 塌陷，应用其余部分照常。
+    Loader {
+        id: modelLibraryPanelLoader
+        active: false
+        visible: active && status === Loader.Ready
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: 760
+        z: 50
+
+        source: Qt.resolvedUrl("panels/ModelLibraryPanel.qml")
+        onLoaded: item.closed.connect(function () { modelLibraryPanelLoader.active = false })
     }
 
     // feature/cloud-model-library (M2): 创想云 OAuth 登录对话框。source-URL

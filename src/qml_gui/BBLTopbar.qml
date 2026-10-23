@@ -43,6 +43,9 @@ Item {
     /// project confirm, upstream MainFrame.cpp:443 close_with_confirm).
     signal quitRequested()
     signal importModelRequested(string nameFilter)
+    /// feature/cloud-model-library (M3): online model library dock toggle
+    /// (upstream ID_MODEL_STORE anchor; main.qml opens the panel Loader).
+    signal modelStoreRequested()
     signal exportGcodeRequested()
     signal exportAllGcodeRequested()
     signal exportProjectRequested()
@@ -372,15 +375,17 @@ Item {
                 visible: false
             }
 
-            // ModelStore 占位按钮 (对齐上游 ID_MODEL_STORE)
+            // ModelStore 按钮 (对齐上游 ID_MODEL_STORE) — 打开创想云模型库
+            // 停靠面板（feature/cloud-model-library M3）
             CxIconButton {
                 cxStyle: CxIconButton.Style.Chrome
                 buttonSize: 30
                 iconSize: 16
                 iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                toolTipText: ""
-                enabled: false
-                visible: false
+                toolTipText: qsTr("模型库")
+                enabled: true
+                visible: true
+                onClicked: modelStoreRequested()
             }
 
             // Publish 占位按钮 (对齐上游 ID_PUBLISH)

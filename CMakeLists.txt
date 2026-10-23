@@ -157,6 +157,9 @@ endif()
         src/core/services/CrealityAuthService.cpp
         src/core/services/CrealityCloudService.h
         src/core/services/CrealityCloudService.cpp
+        # M3: 模型库 webview JS 桥（CXSWGroupInterface 协议路由）
+        src/core/services/ModelLibraryBridge.h
+        src/core/services/ModelLibraryBridge.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp

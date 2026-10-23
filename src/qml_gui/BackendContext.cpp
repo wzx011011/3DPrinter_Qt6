@@ -6,10 +6,13 @@
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/CameraServiceMock.h"
 #include <QSettings>
+#include <QUuid>
 
 #include "core/services/CloudServiceMock.h"
 #include "core/services/CrealityAuthService.h"
 #include "core/services/CrealityCloudService.h"
+#include "core/services/CrealityCloudConfig.h"
+#include "core/services/ModelLibraryBridge.h"
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
@@ -101,6 +104,25 @@ IDeviceDataPlane *BackendContext::deviceDataPlane() const { return deviceService
 ICloudDataPlane *BackendContext::cloudDataPlane() const { return cloudService_; }
 
 QObject *BackendContext::crealityAuthService() const { return crealityAuthService_; }
+
+QObject *BackendContext::modelLibraryBridge() const { return modelLibraryBridge_; }
+
+QString BackendContext::crealityWebViewUserAgent() const
+{
+  return CrealityCloudConfig::webViewUserAgent(QCoreApplication::applicationVersion());
+}
+
+void BackendContext::attachModelLibraryChannel(QObject *channel)
+{
+  // See attachAiChatChannel: QQmlWebChannel derives from QWebChannel; the
+  // panel's injected shim resolves the object as channel.objects.cxbridge.
+  auto *webChannel = qobject_cast<QWebChannel *>(channel);
+  if (!webChannel) {
+    qWarning("[Backend] attachModelLibraryChannel: not a QWebChannel instance");
+    return;
+  }
+  webChannel->registerObject(QStringLiteral("cxbridge"), modelLibraryBridge_);
+}
 ICameraStreamService *BackendContext::cameraStreamService() const { return cameraService_; }
 
 BackendContext::BackendContext(QObject *parent)
@@ -147,6 +169,22 @@ BackendContext::BackendContext(QObject *parent)
     cloudService_ = new CrealityCloudService(crealityAuthService_, this);
   else
     cloudService_ = new CloudServiceMock(this);
+  // feature/cloud-model-library (M3): the webview JS bridge serves both
+  // backend kinds (anonymous browsing works in mock mode too).
+  modelLibraryBridge_ = new ModelLibraryBridge(crealityAuthService_, this);
+  {
+    // DUID fallback id: generated once per install (upstream get_client_id
+    // uses a first-boot UUID when no MAC is available).
+    QSettings duidSettings;
+    QString duidFallback =
+        duidSettings.value(QStringLiteral("Cloud/DuidFallback")).toString();
+    if (duidFallback.isEmpty()) {
+      duidFallback = QUuid::createUuid().toString(QUuid::WithoutBraces);
+      duidSettings.setValue(QStringLiteral("Cloud/DuidFallback"), duidFallback);
+    }
+    modelLibraryBridge_->setDuid(CrealityCloudConfig::deriveDuid(
+        CrealityCloudConfig::macAddressCandidates(), duidFallback));
+  }
 
   // U11: 发送链路真实性桥。DeviceServiceMock 的 FTP+MQTT 真发送路径此前
   // 只在 uploadFinished 里打日志：publish 失败仍无条件把设备置 "printing"，
