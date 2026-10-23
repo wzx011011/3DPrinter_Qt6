@@ -160,6 +160,9 @@ endif()
         # M3: 模型库 webview JS 桥（CXSWGroupInterface 协议路由）
         src/core/services/ModelLibraryBridge.h
         src/core/services/ModelLibraryBridge.cpp
+        # M4: 云模型下载器（*_download_start 命令的落盘与进度）
+        src/core/services/ModelDownloadService.h
+        src/core/services/ModelDownloadService.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp
@@ -673,6 +676,22 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME CrealityCloudServiceTests COMMAND CrealityCloudServiceTests)
     set_tests_properties(CrealityCloudServiceTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # 云模型下载器单测（feature/cloud-model-library M4）：回环 HTTP stub 上的
+    # 落盘/进度/重名 (n) 规则/取消清理/状态 JSON。不发任何外网请求。
+    qt_add_executable(ModelDownloadServiceTests tests/ModelDownloadServiceTests.cpp)
+    target_link_libraries(ModelDownloadServiceTests PRIVATE owzx_app_core
+        Qt6::Core Qt6::Gui Qt6::Network Qt6::Test
+    )
+    if(MSVC)
+        target_link_options(ModelDownloadServiceTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(ModelDownloadServiceTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME ModelDownloadServiceTests COMMAND ModelDownloadServiceTests)
+    set_tests_properties(ModelDownloadServiceTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

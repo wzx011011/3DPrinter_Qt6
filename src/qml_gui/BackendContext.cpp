@@ -13,6 +13,7 @@
 #include "core/services/CrealityCloudService.h"
 #include "core/services/CrealityCloudConfig.h"
 #include "core/services/ModelLibraryBridge.h"
+#include "core/services/ModelDownloadService.h"
 #include "core/services/CalibrationServiceMock.h"
 #include "core/services/PresetService.h"
 #include "core/services/ProjectService.h"
@@ -107,9 +108,21 @@ QObject *BackendContext::crealityAuthService() const { return crealityAuthServic
 
 QObject *BackendContext::modelLibraryBridge() const { return modelLibraryBridge_; }
 
+QObject *BackendContext::modelDownloadService() const { return modelDownloadService_; }
+
 QString BackendContext::crealityWebViewUserAgent() const
 {
   return CrealityCloudConfig::webViewUserAgent(QCoreApplication::applicationVersion());
+}
+
+QString BackendContext::qwebchannelScript() const
+{
+  QFile f(QStringLiteral(":/web/cx/qwebchannel.js"));
+  if (!f.open(QIODevice::ReadOnly)) {
+    qWarning("[Backend] qwebchannel.js missing from resources");
+    return {};
+  }
+  return QString::fromUtf8(f.readAll());
 }
 
 void BackendContext::attachModelLibraryChannel(QObject *channel)
@@ -169,9 +182,55 @@ BackendContext::BackendContext(QObject *parent)
     cloudService_ = new CrealityCloudService(crealityAuthService_, this);
   else
     cloudService_ = new CloudServiceMock(this);
+  // feature/cloud-model-library (M4): downloader for the mall's
+  // *_download_start commands; files land under the configured
+  // AppSettings.modelDownloadPath.
+  modelDownloadService_ = new ModelDownloadService(this);
+  modelDownloadService_->setDownloadRoot(appSettings_->modelDownloadPath());
+  connect(modelDownloadService_, &ModelDownloadService::stateChanged, this, [this]() {
+    // First active download pops the progress dialog (official opens a
+    // modal per 3mf download; one aggregate dialog covers model groups).
+    static bool dialogShown = false;
+    const bool busy = modelDownloadService_->busy();
+    if (busy && !dialogShown) {
+      dialogShown = true;
+      emit showCloudDownloadDialogRequested();
+    } else if (!busy) {
+      dialogShown = false;
+    }
+  });
+  connect(modelDownloadService_, &ModelDownloadService::downloadFinished, this,
+          [this](const QString &fileId, const QString &finalPath) {
+            // Upstream parity (CloudDownloadProgressDialog.cpp:114-126): the
+            // completed 3mf auto-imports after the dialog closes — deferred
+            // so the QML dialog observes the settled state first.
+            if (finalPath.endsWith(QStringLiteral(".3mf"), Qt::CaseInsensitive)) {
+              QTimer::singleShot(0, this, [this, finalPath]() {
+                topbarOpenProject(finalPath);
+                setCurrentPage(1);
+              });
+            } else {
+              Q_UNUSED(fileId);
+            }
+          });
   // feature/cloud-model-library (M3): the webview JS bridge serves both
   // backend kinds (anonymous browsing works in mock mode too).
-  modelLibraryBridge_ = new ModelLibraryBridge(crealityAuthService_, this);
+  modelLibraryBridge_ = new ModelLibraryBridge(crealityAuthService_, modelDownloadService_, this);
+  connect(modelLibraryBridge_, &ModelLibraryBridge::importProjectRequested, this,
+          [this](const QString &path) {
+            topbarOpenProject(path);
+            setCurrentPage(1);
+          });
+  connect(modelLibraryBridge_, &ModelLibraryBridge::importModelFilesRequested, this,
+          [this](const QStringList &paths) {
+            if (paths.isEmpty())
+              return;
+            if (paths.size() == 1)
+              topbarImportModel(paths.first());
+            else if (editorViewModel_)
+              editorViewModel_->addFilesToCurrentPlate(paths);
+            setCurrentPage(1);
+          });
   {
     // DUID fallback id: generated once per install (upstream get_client_id
     // uses a first-boot UUID when no MAC is available).

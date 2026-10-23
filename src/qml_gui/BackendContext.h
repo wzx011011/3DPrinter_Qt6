@@ -137,6 +137,10 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   // (CXSWGroupInterface protocol). The panel registers it on its WebChannel
   // via attachModelLibraryChannel().
   Q_PROPERTY(QObject *modelLibraryBridge READ modelLibraryBridge CONSTANT)
+  // feature/cloud-model-library (M4): downloader behind the mall's
+  // 3mf_download_start / models_download_start commands. The QML progress
+  // dialog binds it directly.
+  Q_PROPERTY(QObject *modelDownloadService READ modelDownloadService CONSTANT)
   // Creality account service (OAuth identity + loopback callback server).
   // Always present; Q_PROPERTY is QObject* like the other services. The
   // login web dialog and the model-library panel read it.
@@ -393,9 +397,13 @@ public:
   QString cloudBackendKind() const { return cloudBackendKind_; }
   QObject *crealityAuthService() const;
   QObject *modelLibraryBridge() const;
+  QObject *modelDownloadService() const;
   /// WebView UA for the Creality web surfaces (model library panel +
   /// login dialog share one profile identity).
   Q_INVOKABLE QString crealityWebViewUserAgent() const;
+  /// qwebchannel.js source for the model-library panel shim (sync XHR to
+  /// qrc is unreliable from QML; QFile in C++ is not).
+  Q_INVOKABLE QString qwebchannelScript() const;
   /// M3: register the bridge object on the panel's QML WebChannel
   /// (attachAiChatChannel pattern).
   Q_INVOKABLE void attachModelLibraryChannel(QObject *channel);
@@ -760,6 +768,10 @@ signals:
   /// FIRST, then emits this signal. QML side connects to show the dialog.
   void settingsRequested(const QString &category);
   void showBedShapeDialogRequested();
+  /// feature/cloud-model-library (M4): a cloud model download started —
+  /// main.qml opens the progress dialog (upstream CloudDownloadProgressDialog
+  /// per-download-modal parity).
+  void showCloudDownloadDialogRequested();
   void showEditGCodeDialogRequested(const QString &key, const QString &value);
   void showAMSSettingsDialogRequested();
   void showPreferencesDialogRequested();
@@ -845,6 +857,7 @@ private:
   QString cloudBackendKind_ = QStringLiteral("mock");
   class CrealityAuthService *crealityAuthService_ = nullptr;
   class ModelLibraryBridge *modelLibraryBridge_ = nullptr;
+  class ModelDownloadService *modelDownloadService_ = nullptr;
   /// v2.8 W3: application-level persisted settings, including bed size.
   AppSettingsService *appSettings_ = nullptr;
   /// Phase 202 (v5.6 Plugin Manager UI Real Backend): plugin registry +

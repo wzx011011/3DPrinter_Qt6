@@ -1,4 +1,7 @@
 <RCC>
+    <qresource prefix="/web/cx">
+        <file alias="qwebchannel.js">web/cx/qwebchannel.js</file>
+    </qresource>
     <qresource prefix="/web/chat">
         <file alias="index.html">web/chat/index.html</file>
         <file alias="chat.css">web/chat/chat.css</file>

@@ -10942,6 +10942,11 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       // from the HomePage creality login entry.
       {QStringLiteral("CrealityLoginDialog.qml"),
        QStringLiteral("crealityLoginLoader.active = true")},
+      // feature/cloud-model-library (M4): cloud download progress dialog,
+      // opened from the BackendContext showCloudDownloadDialogRequested
+      // signal when a mall download starts.
+      {QStringLiteral("CloudDownloadDialog.qml"),
+       QStringLiteral("cloudDownloadDialog.open()")},
   };
 
   // 1. Every dialogs/*.qml on disk is qrc-registered and present in the table.

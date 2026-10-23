@@ -1250,6 +1250,17 @@ ApplicationWindow {
         }
     }
 
+    // feature/cloud-model-library (M4): 云模型下载进度对话框
+    // （Backend.showCloudDownloadDialogRequested → 打开，绑定
+    // Backend.modelDownloadService；关窗后导入的时序在 C++ 侧）。
+    CxDialogHost {
+        id: cloudDownloadDialog
+        deferredGate: root.dialogsReady
+        sourceComponent: CloudDownloadDialog {
+            onDismissed: cloudDownloadDialog.close()
+        }
+    }
+
     // feature/cloud-model-library (M3): 创想云模型库停靠面板。source-URL
     // Loader（同 aiChatPanelLoader 理由）：QtWebEngine import 失败或
     // OWZX_DISABLE_WEBENGINE=1 时只有这个 Loader 塌陷，应用其余部分照常。
@@ -1314,6 +1325,7 @@ ApplicationWindow {
     // Dialog request signals
     Connections {
         target: Backend
+        function onShowCloudDownloadDialogRequested() { cloudDownloadDialog.open() }
         function onShowConfigWizardRequested() { configWizardDialog.open() }
         function onShowBedShapeDialogRequested() { bedShapeDialog.open() }
         function onShowEditGCodeDialogRequested(key, value) {

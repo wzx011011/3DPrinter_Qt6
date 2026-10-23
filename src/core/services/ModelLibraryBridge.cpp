@@ -1,20 +1,26 @@
 #include "ModelLibraryBridge.h"
 
 #include "CrealityAuthService.h"
+#include "ModelDownloadService.h"
 
 #include <QDesktopServices>
+#include <QDebug>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QJsonObject>
 #include <QUrl>
 
-ModelLibraryBridge::ModelLibraryBridge(CrealityAuthService *auth, QObject *parent)
-    : QObject(parent), auth_(auth)
+ModelLibraryBridge::ModelLibraryBridge(CrealityAuthService *auth,
+                                       ModelDownloadService *downloads,
+                                       QObject *parent)
+    : QObject(parent), auth_(auth), downloads_(downloads)
 {
 }
 
 void ModelLibraryBridge::postMessage(const QString &json)
 {
+  qDebug("[ModelLibraryBridge] postMessage: %s", qPrintable(json.left(300)));
   routeMessage(json);
 }
 
@@ -104,6 +110,91 @@ void ModelLibraryBridge::handleCommand(const QString &command, const QString &me
     replyMsg.insert(QStringLiteral("command"), command);
     replyMsg.insert(QStringLiteral("clientId"), duid_);
     reply(replyMsg);
+    return;
+  }
+  if (command.endsWith(QLatin1String("_download_start")) && downloads_) {
+    // Upstream GUI_App.cpp:8375/8400: message carries userId/modelId and
+    // files — a single object for 3mf_download_start, an array for
+    // models_download_start.
+    const QJsonObject msg = QJsonDocument::fromJson(messageJson.toUtf8())
+                                .object()
+                                .value(QStringLiteral("message"))
+                                .toObject();
+    const QString userId = msg.value(QStringLiteral("userId")).toString();
+    const QString modelId = msg.value(QStringLiteral("modelId")).toString();
+    QJsonArray files = msg.value(QStringLiteral("files")).toArray();
+    if (files.isEmpty()) {
+      const QJsonObject single = msg.value(QStringLiteral("files")).toObject();
+      if (!single.isEmpty())
+        files.append(single);
+    }
+    for (const QJsonValue &fv : files) {
+      const QJsonObject f = fv.toObject();
+      downloads_->startDownload(f.value(QStringLiteral("url")).toString(),
+                                userId, modelId,
+                                f.value(QStringLiteral("fileId")).toString(),
+                                f.value(QStringLiteral("fileFormat")).toString(),
+                                f.value(QStringLiteral("name")).toString());
+    }
+    QJsonObject replyMsg;
+    replyMsg.insert(QStringLiteral("command"), command);
+    replyMsg.insert(QStringLiteral("result"), 0);
+    reply(replyMsg);
+    emit switchToEditorRequested(); // upstream ModelLibraryRoutes.cpp:32
+    return;
+  }
+  if (command.endsWith(QLatin1String("_download_state"))) {
+    QJsonObject replyMsg;
+    replyMsg.insert(QStringLiteral("command"), command);
+    const QVariantMap state = downloads_ ? downloads_->downloadState()
+                                         : QVariantMap();
+    replyMsg.insert(QStringLiteral("models"),
+                    QJsonArray::fromVariantList(
+                        state.value(QStringLiteral("models")).toList()));
+    replyMsg.insert(QStringLiteral("3mfs"),
+                    QJsonArray::fromVariantList(
+                        state.value(QStringLiteral("3mfs")).toList()));
+    reply(replyMsg);
+    return;
+  }
+  if (command == QLatin1String("models_download_delete")
+      || command == QLatin1String("3mfs_download_delete")) {
+    const QJsonObject msg = QJsonDocument::fromJson(messageJson.toUtf8())
+                                .object()
+                                .value(QStringLiteral("message"))
+                                .toObject();
+    if (downloads_)
+      downloads_->forgetDownload(msg.value(QStringLiteral("fileId")).toString());
+    return;
+  }
+  if (command == QLatin1String("3mf_download_import")) {
+    // Upstream GUI_App.cpp:8490: plater->load_project(path).
+    const QJsonObject msg = QJsonDocument::fromJson(messageJson.toUtf8())
+                                .object()
+                                .value(QStringLiteral("message"))
+                                .toObject();
+    const QString path = msg.value(QStringLiteral("path")).toString();
+    if (!path.isEmpty())
+      emit importProjectRequested(path);
+    return;
+  }
+  if (command == QLatin1String("models_download_import")) {
+    // Upstream GUI_App.cpp:8510: plater->load_files(paths, LoadModel).
+    const QJsonObject msg = QJsonDocument::fromJson(messageJson.toUtf8())
+                                .object()
+                                .value(QStringLiteral("message"))
+                                .toObject();
+    QStringList paths;
+    const QJsonArray arr = msg.value(QStringLiteral("paths")).toArray();
+    for (const QJsonValue &v : arr)
+      paths << v.toString();
+    if (paths.isEmpty()) {
+      const QString single = msg.value(QStringLiteral("path")).toString();
+      if (!single.isEmpty())
+        paths << single;
+    }
+    if (!paths.isEmpty())
+      emit importModelFilesRequested(paths);
     return;
   }
   // Unknown commands are logged, not fatal (the frontend degrades).

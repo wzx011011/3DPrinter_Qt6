@@ -4,6 +4,7 @@
 #include <QString>
 
 class CrealityAuthService;
+class ModelDownloadService;
 
 /// ModelLibraryBridge (feature/cloud-model-library, M3).
 ///
@@ -29,13 +30,23 @@ class CrealityAuthService;
 ///   403 → open message.linkUrl.url in the system browser (:390-435)
 ///   404 → token expired: emits tokenExpired (panel notifies; the account
 ///         face token invalidation is the auth service's invalidate())
-/// M4 extends handleCommand() with the download/import commands.
+/// M4 download/import commands (upstream GUI_App.cpp:8375-8535 subset):
+///   3mf_download_start     → ModelDownloadService.startDownload (single file)
+///   models_download_start  → same, files[] array form
+///   models_download_state  → downloadState() reply
+///   3mfs_download_delete / models_download_delete → forgetDownload
+///   3mf_download_import    → importProjectRequested(path) (load_project
+///                            semantics)
+///   models_download_import → importModelFilesRequested(paths) (load_files
+///                            semantics)
 class ModelLibraryBridge final : public QObject
 {
   Q_OBJECT
 
 public:
-  explicit ModelLibraryBridge(CrealityAuthService *auth, QObject *parent = nullptr);
+  explicit ModelLibraryBridge(CrealityAuthService *auth,
+                              ModelDownloadService *downloads,
+                              QObject *parent = nullptr);
 
   /// Web→native entry (the CXSWGroupInterface shim forwards here).
   Q_INVOKABLE void postMessage(const QString &json);
@@ -53,6 +64,10 @@ signals:
   void openInSystemBrowser(const QString &url);
   /// linkType 404: session token expired (frontend shows its login entry).
   void tokenExpired();
+  /// M4 import surfaces (BackendContext owns the plate operations):
+  void importProjectRequested(const QString &path);
+  void importModelFilesRequested(const QStringList &paths);
+  void switchToEditorRequested();
   /// Diagnostics surface for the panel status line (M5 error states).
   void bridgeEvent(const QString &message);
 
@@ -63,5 +78,6 @@ private:
   void reply(const QString &json);
 
   CrealityAuthService *auth_;
+  ModelDownloadService *downloads_;
   QString duid_;
 };

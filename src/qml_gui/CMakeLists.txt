@@ -112,6 +112,7 @@ qt_add_qml_module(owzx_qml
         dialogs/CaliHistoryDialog.qml
         dialogs/AboutDialog.qml
         dialogs/CrealityLoginDialog.qml
+        dialogs/CloudDownloadDialog.qml
         panels/ModelLibraryPanel.qml
         dialogs/ConfigWizardDialog.qml
         dialogs/BedShapeDialog.qml

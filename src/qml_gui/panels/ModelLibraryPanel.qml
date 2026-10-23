@@ -33,13 +33,10 @@ Rectangle {
     id: root
 
     readonly property QtObject bridge: Backend ? Backend.modelLibraryBridge : null
-    /// qwebchannel.js source (Qt ships it as a qrc resource); read once.
-    readonly property string qwebchannelSource: {
-        var xhr = new XMLHttpRequest()
-        xhr.open("GET", "qrc:///qtwebchannel/qwebchannel.js", false)
-        xhr.send()
-        return xhr.responseText
-    }
+    /// qwebchannel.js source, read in C++ (sync XHR to qrc is unreliable
+    /// from QML in Qt 6 — it returned empty here).
+    readonly property string qwebchannelSource:
+        Backend ? Backend.qwebchannelScript() : ""
     signal closed()
 
     color: Theme.bgPanel
@@ -69,6 +66,8 @@ Rectangle {
         settings.focusOnNavigationEnabled: true
 
         onLoadingChanged: function (loadRequest) {
+            console.log("[ModelLibraryPanel] loading status=", loadRequest.status,
+                        "qwc.js len=", root.qwebchannelSource.length)
             if (loadRequest.status === WebEngineView.LoadStartedStatus
                 || loadRequest.status === WebEngineView.LoadSucceededStatus)
                 webView.injectBridgeScripts()
@@ -104,7 +103,9 @@ Rectangle {
         })();"
 
         function injectBridgeScripts() {
-            webView.runJavaScript(qwebchannelSource + cxShimSource)
+            webView.runJavaScript(
+                qwebchannelSource + cxShimSource
+                + "; '[cx-shim] installed=' + window.__cxShimInstalled + ' qwc=' + (typeof QWebChannel)")
         }
         onNavigationRequested: function (request) {
             const s = String(request.url)
