@@ -77,6 +77,14 @@ CxDialog {
             backgroundColor: Theme.bgSurface
             settings.focusOnNavigationEnabled: true
 
+            // SPA 会恢复上次滚动位置，把含 登录/注册 的页头留在视口外——
+            // 每次加载完成强制回顶。
+            onLoadingChanged: function (loadRequest) {
+                if (loadRequest.status === WebEngineView.LoadSucceededStatus)
+                    webView.runJavaScript("window.scrollTo(0, 0); "
+                                          + "document.documentElement.scrollTop = 0;")
+            }
+
             onNavigationRequested: function (request) {
                 // QML `url` is string-typed (no .host() method) — parse
                 // "scheme://host[:port]/path" by hand.

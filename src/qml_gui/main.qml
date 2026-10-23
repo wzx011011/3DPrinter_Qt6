@@ -1275,7 +1275,13 @@ ApplicationWindow {
         z: 50
 
         source: Qt.resolvedUrl("panels/ModelLibraryPanel.qml")
-        onLoaded: item.closed.connect(function () { modelLibraryPanelLoader.active = false })
+        onLoaded: {
+            item.closed.connect(function () { modelLibraryPanelLoader.active = false })
+            // 登录走窄窗（商城在宽面板里隐藏自家登录头部），登录后面板刷新。
+            item.loginRequested.connect(function () {
+                crealityLoginLoader.active = true
+            })
+        }
     }
 
     // feature/cloud-model-library (M2): 创想云 OAuth 登录对话框。source-URL
@@ -1292,6 +1298,9 @@ ApplicationWindow {
             // Dialog 实例化默认是关闭态，必须显式 open()（onOpened 里启动
             // OAuth 回调监听并加载登录页）。
             item.open()
+            // 登录成功后面板页刷新，拾取新 cookie 会话。
+            if (modelLibraryPanelLoader.active && modelLibraryPanelLoader.item)
+                item.dismissed.connect(function () { modelLibraryPanelLoader.item.reloadPage() })
         }
     }
 

@@ -67,7 +67,11 @@ QString CrealityCloudConfig::loginPageUrl(Region region, Channel channel)
     // 于 2026-10-23）——这正是审计文档登记的端点漂移风险，改动收敛在本
     // 配置层。loopback OAuth 回调链路保留（oauth 换 token 端点仍然有效，
     // 供后续云预设同步账号面使用）。
-    return webAddress(region, channel);
+    // 社区门户首页（www.crealitycloud.cn|com）带"登录/注册"入口，与商城
+    // （cp.*）同域——登录 cookie 直接为模型库面板所用。商城页自身在壳嵌入
+    // 模式下隐藏登录头部（实测 2026-10-23），故以门户页为登录承载页。
+    return QStringLiteral("https://www.") + host(region, "crealitycloud.cn", "crealitycloud.com")
+           + QStringLiteral("/");
 }
 
 QString CrealityCloudConfig::oauthRedirectUri(Region region, Channel channel, int localPort)

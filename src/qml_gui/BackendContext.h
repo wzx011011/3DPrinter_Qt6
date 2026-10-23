@@ -404,6 +404,10 @@ public:
   /// qwebchannel.js source for the model-library panel shim (sync XHR to
   /// qrc is unreliable from QML; QFile in C++ is not).
   Q_INVOKABLE QString qwebchannelScript() const;
+  /// Native-download landing directory (AppSettings.modelDownloadPath) and
+  /// the post-download import: 3mf → open-project, models → import-model.
+  Q_INVOKABLE QString modelDownloadDirectory() const;
+  Q_INVOKABLE bool importDownloadedFile(const QString &path);
   /// M3: register the bridge object on the panel's QML WebChannel
   /// (attachAiChatChannel pattern).
   Q_INVOKABLE void attachModelLibraryChannel(QObject *channel);

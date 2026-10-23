@@ -125,6 +125,23 @@ QString BackendContext::qwebchannelScript() const
   return QString::fromUtf8(f.readAll());
 }
 
+QString BackendContext::modelDownloadDirectory() const
+{
+  return appSettings_ ? appSettings_->modelDownloadPath() : QString();
+}
+
+bool BackendContext::importDownloadedFile(const QString &path)
+{
+  // 3mf → whole-project import (load_project semantics); anything else goes
+  // through the model import path. Both switch to the 3D editor page.
+  if (path.endsWith(QStringLiteral(".3mf"), Qt::CaseInsensitive))
+    topbarOpenProject(path);
+  else
+    topbarImportModel(path);
+  setCurrentPage(1);
+  return true;
+}
+
 void BackendContext::attachModelLibraryChannel(QObject *channel)
 {
   // See attachAiChatChannel: QQmlWebChannel derives from QWebChannel; the
