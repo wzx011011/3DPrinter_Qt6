@@ -210,7 +210,9 @@ Item {
         onManualAddRequested: function(name, ip, code, port) {
             if (root.monitorVm.addManualDevice(name, ip, code, port)) {
                 Backend.postNotification(
-                    qsTr("设备 %1 已添加（演示模式：设备数据为本地模拟，下次扫描后上线）。").arg(name),
+                    Backend.deviceBackendKind === "moonraker"
+                        ? qsTr("设备 %1 已添加，正在连接局域网打印机…").arg(name)
+                        : qsTr("设备 %1 已添加（演示模式：设备数据为本地模拟，下次扫描后上线）。").arg(name),
                     qsTr("手动添加"), 0)
             } else {
                 Backend.postNotification(
@@ -423,9 +425,12 @@ Item {
                 // docs/依赖与协议边界审计.md -- the device list, connection
                 // state, camera and print controls are local mocks; real
                 // MQTT/device links are externally blocked.
+                // feature/lan-printers L3：moonraker 后端为真实局域网设备
+                // 数据，无演示语义——披露横幅仅 mock 后端显示。
                 Rectangle {
+                    visible: Backend.deviceBackendKind !== "moonraker"
                     Layout.fillWidth: true
-                    Layout.preferredHeight: demoLabel.implicitHeight + 10
+                    Layout.preferredHeight: visible ? demoLabel.implicitHeight + 10 : 0
                     color: Theme.bgInset
 
                     Text {
