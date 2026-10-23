@@ -163,6 +163,12 @@ endif()
         # M4: 云模型下载器（*_download_start 命令的落盘与进度）
         src/core/services/ModelDownloadService.h
         src/core/services/ModelDownloadService.cpp
+        # LAN 打印机接入 L1（feature/lan-printers，协议移植自官方开源
+        # CrealityPrint，AGPL-3.0）：mDNS 发现 + /info 探测
+        src/core/services/MdnsDiscovery.h
+        src/core/services/MdnsDiscovery.cpp
+        src/core/services/LanDeviceProbe.h
+        src/core/services/LanDeviceProbe.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp
@@ -692,6 +698,23 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME ModelDownloadServiceTests COMMAND ModelDownloadServiceTests)
     set_tests_properties(ModelDownloadServiceTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # LAN 发现/探测单测（feature/lan-printers L1）：合成 mDNS 报文解析、
+    # /info 探测（回环 stub，HTTPS 失败回退 HTTP）、老机型 ssid 判定、
+    # 纯 parseInfoBody 形状。不发任何外网请求。
+    qt_add_executable(LanDiscoveryTests tests/LanDiscoveryTests.cpp)
+    target_link_libraries(LanDiscoveryTests PRIVATE owzx_app_core
+        Qt6::Core Qt6::Gui Qt6::Network Qt6::Test
+    )
+    if(MSVC)
+        target_link_options(LanDiscoveryTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(LanDiscoveryTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME LanDiscoveryTests COMMAND LanDiscoveryTests)
+    set_tests_properties(LanDiscoveryTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 
