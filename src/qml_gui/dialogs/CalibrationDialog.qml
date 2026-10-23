@@ -341,6 +341,13 @@ CxDialog {
 
                         delegate: Item {
                             id: stepDelegate
+                            // FB-R10-02: without this required property the
+                            // modelData lookups below resolved through the
+                            // Repeater's context-property fallback, which is
+                            // transiently undefined while reloadSteps()
+                            // replaces the array on every step switch (the
+                            // 'title'/'state' of undefined TypeError family).
+                            required property var modelData
                             Layout.fillWidth: true
                             Layout.preferredHeight: 35
 
@@ -350,7 +357,7 @@ CxDialog {
 
                                 Rectangle {
                                     width: 8; height: 8; radius: Theme.radiusSM
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    Layout.alignment: Qt.AlignVCenter
                                     color: stepDelegate.modelData.state >= 1 ? Theme.accent : Theme.borderSubtle
                                 }
 

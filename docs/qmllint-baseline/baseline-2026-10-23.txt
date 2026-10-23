@@ -1,0 +1,1823 @@
+src/qml_gui/BBLTopbar.qml:212 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/BBLTopbar.qml:340 [warning/unqualified] Unqualified access
+src/qml_gui/BBLTopbar.qml:414 [warning/missing-property] Member "multiNozzleConfigured" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:455 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/BBLTopbar.qml:455 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/BBLTopbar.qml:602 [warning/missing-property] Member "sliceActionHint" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:607 [warning/missing-property] Member "canRequestSlice" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:660 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/BBLTopbar.qml:660 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/BBLTopbar.qml:664 [warning/missing-property] Member "exportActionHint" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:669 [warning/missing-property] Member "canExportGCode" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:721 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/BBLTopbar.qml:721 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/BBLTopbar.qml:770 [warning/missing-property] Member "recentProjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:785 [warning/missing-property] Member "recentProjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:786 [warning/missing-property] Member "clearRecentProjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:871 [warning/missing-property] Member "canExportGCode" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:938 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:939 [warning/missing-property] Member "cutSelectedObjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:943 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:944 [warning/missing-property] Member "copySelectedObjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:948 [warning/missing-property] Member "hasClipboardContent" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:949 [warning/missing-property] Member "pasteObjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:958 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:963 [warning/missing-property] Member "modelCount" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:969 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:970 [warning/missing-property] Member "deleteSelectedObjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:978 [warning/missing-property] Member "modelCount" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:983 [warning/missing-property] Member "selectAllVisibleObjects" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:987 [warning/missing-property] Member "clearObjectSelection" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1095 [warning/missing-property] Member "showGcodeWindow" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1099 [warning/missing-property] Member "previewReady" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1101 [warning/missing-property] Member "setShowGcodeWindow" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1101 [warning/missing-property] Member "showGcodeWindow" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1109 [warning/missing-property] Member "show3DNavigator" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1113 [warning/missing-property] Member "setShow3DNavigator" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1113 [warning/missing-property] Member "show3DNavigator" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1188 [warning/missing-property] Member "selectItemById" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1195 [warning/missing-property] Member "selectItemById" not found on type "QObject"
+src/qml_gui/BBLTopbar.qml:1202 [warning/missing-property] Member "selectItemById" not found on type "QObject"
+src/qml_gui/components/CommandPalette.qml:115 [warning/unqualified] Unqualified access
+src/qml_gui/components/CommandPalette.qml:126 [warning/unqualified] Unqualified access
+src/qml_gui/components/CommandPalette.qml:135 [warning/unqualified] Unqualified access
+src/qml_gui/components/CommandPalette.qml:145 [warning/unqualified] Unqualified access
+src/qml_gui/components/CommandPalette.qml:146 [warning/unqualified] Unqualified access
+src/qml_gui/components/CustomGcodeDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/components/ErrorToast.qml:249 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:249 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:310 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:310 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:311 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:311 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:332 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:332 [warning/unqualified] Unqualified access
+src/qml_gui/components/ErrorToast.qml:528 [warning/missing-property] Member "setHintsEnabled" not found on type "BackendContext"
+src/qml_gui/components/GLToolbars.qml:3 [info/unused-imports] Unused import
+src/qml_gui/components/GLToolbars.qml:84 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:86 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:88 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:90 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:92 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:94 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:96 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:98 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:100 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:102 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:297 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:298 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:299 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:300 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:301 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:302 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:303 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:304 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:308 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:309 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:310 [warning/unqualified] Unqualified access
+src/qml_gui/components/GLToolbars.qml:311 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:18 [warning/missing-property] Member "units" not found on type "QObject"
+src/qml_gui/components/Legend.qml:228 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:229 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:230 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:231 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:266 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:267 [warning/unqualified] Unqualified access
+src/qml_gui/components/Legend.qml:268 [warning/unqualified] Unqualified access
+src/qml_gui/components/NotificationCenter.qml:96 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/components/NotificationCenter.qml:97 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/components/NotificationCenter.qml:140 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/components/PrepareContextMenus.qml:93 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/components/PrepareContextMenus.qml:257 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/components/PreviewLayerRail.qml:356 [warning/unqualified] Unqualified access
+src/qml_gui/components/PreviewLayerRail.qml:405 [warning/unqualified] Unqualified access
+src/qml_gui/components/PreviewLayerRail.qml:407 [warning/unqualified] Unqualified access
+src/qml_gui/components/PreviewLayerRail.qml:539 [warning/missing-property] Member "rowVisible" not found on type "QQuickMenu"
+src/qml_gui/components/PreviewLayerRail.qml:649 [warning/missing-property] Member "rowVisible" not found on type "QQuickMenu"
+src/qml_gui/components/SelectPlateRail.qml:3 [info/unused-imports] Unused import
+src/qml_gui/components/ToolPositionTooltip.qml:328 [warning/unqualified] Unqualified access
+src/qml_gui/components/ToolPositionTooltip.qml:337 [warning/unqualified] Unqualified access
+src/qml_gui/components/ToolPositionTooltip.qml:533 [warning/unqualified] Unqualified access
+src/qml_gui/components/ToolPositionTooltip.qml:534 [warning/unqualified] Unqualified access
+src/qml_gui/components/ToolPositionTooltip.qml:538 [warning/unqualified] Unqualified access
+src/qml_gui/components/ToolPositionTooltip.qml:539 [warning/unqualified] Unqualified access
+src/qml_gui/components/VisibilityFilter.qml:52 [warning/incompatible-type] Cannot assign binding of type QColor to QString
+src/qml_gui/controls/CxComboBox.qml:122 [warning/unqualified] Unqualified access
+src/qml_gui/controls/CxDialogHost.qml:3 [info/unused-imports] Unused import
+src/qml_gui/controls/CxDialogHost.qml:28 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/controls/CxDialogHost.qml:35 [warning/missing-property] Member "show" not found on type "QObject"
+src/qml_gui/controls/CxDialogHost.qml:36 [warning/missing-property] Member "show" not found on type "QObject"
+src/qml_gui/controls/CxDialogHost.qml:38 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/controls/CxDialogHost.qml:44 [warning/missing-property] Member "close" not found on type "QObject"
+src/qml_gui/controls/CxDialogHost.qml:61 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/controls/CxScrollView.qml:30 [warning/missing-property] Member "active" not found on type "QQuickItem"
+src/qml_gui/controls/CxScrollView.qml:50 [warning/missing-property] Member "active" not found on type "QQuickItem"
+src/qml_gui/dialogs/AMSSettingsDialog.qml:125 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/AMSSettingsDialog.qml:416 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/AMSSettingsDialog.qml:417 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AMSSettingsDialog.qml:629 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/AMSSettingsDialog.qml:630 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AMSSettingsDialog.qml:632 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:638 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:654 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:657 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:667 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:676 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:679 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:693 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:698 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:775 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:788 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:802 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:826 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/AMSSettingsDialog.qml:827 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AMSSettingsDialog.qml:829 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:835 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:851 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:855 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:864 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:866 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AMSSettingsDialog.qml:993 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AboutDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/AboutDialog.qml:107 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AboutDialog.qml:107 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/AboutDialog.qml:171 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AboutDialog.qml:194 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AboutDialog.qml:234 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AboutDialog.qml:240 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AboutDialog.qml:247 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/AboutDialog.qml:258 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/AccessCodeInputDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/BedShapeDialog.qml:386 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:394 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:395 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:396 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:419 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:425 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:469 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:470 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:478 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:479 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:480 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:481 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:482 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:483 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/BedShapeDialog.qml:484 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:161 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:278 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:315 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:336 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:345 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:346 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:353 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:354 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:388 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:388 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:460 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:483 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/dialogs/CaliHistoryDialog.qml:496 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:496 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:512 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:523 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:524 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:529 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:535 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:538 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CaliHistoryDialog.qml:554 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:563 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:563 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:578 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:578 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:584 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:592 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:592 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:594 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:601 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:601 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/CaliHistoryDialog.qml:603 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/CaliHistoryDialog.qml:616 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CalibrationDialog.qml:61 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CalibrationDialog.qml:62 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CalibrationDialog.qml:321 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CalibrationDialog.qml:352 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/CalibrationDialog.qml:352 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/CalibrationDialog.qml:353 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/dialogs/CalibrationDialog.qml:354 [warning/missing-property] Member "modelData" not found on type "Item"
+src/qml_gui/dialogs/CalibrationDialog.qml:358 [warning/missing-property] Member "modelData" not found on type "Item"
+src/qml_gui/dialogs/CalibrationDialog.qml:359 [warning/missing-property] Member "modelData" not found on type "Item"
+src/qml_gui/dialogs/CalibrationDialog.qml:360 [warning/missing-property] Member "modelData" not found on type "Item"
+src/qml_gui/dialogs/CalibrationDialog.qml:363 [warning/missing-property] Member "modelData" not found on type "Item"
+src/qml_gui/dialogs/CalibrationDialog.qml:369 [warning/missing-property] Member "modelData" not found on type "Item"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:32 [warning/missing-property] Member "busy" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:42 [warning/confusing-expression-statement] Expression statement has no obvious effect.
+src/qml_gui/dialogs/CloudDownloadDialog.qml:42 [warning/missing-property] Member "progressPercent" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:62 [warning/missing-property] Member "busy" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:63 [warning/missing-property] Member "currentName" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:74 [warning/missing-property] Member "progressPercent" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:80 [warning/missing-property] Member "progressPercent" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:91 [warning/missing-property] Member "busy" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:93 [warning/missing-property] Member "cancelLatest" not found on type "QObject"
+src/qml_gui/dialogs/CloudDownloadDialog.qml:99 [warning/missing-property] Member "busy" not found on type "QObject"
+src/qml_gui/dialogs/ConfigWizardDialog.qml:393 [warning/missing-property] Member "filamentPresetNames" not found on type "QObject"
+src/qml_gui/dialogs/ConfigWizardDialog.qml:394 [warning/missing-property] Member "setCurrentFilamentPreset" not found on type "QObject"
+src/qml_gui/dialogs/ConfigWizardDialog.qml:396 [warning/missing-property] Member "printerPresetNames" not found on type "QObject"
+src/qml_gui/dialogs/ConfigWizardDialog.qml:397 [warning/missing-property] Member "setCurrentPrinterPreset" not found on type "QObject"
+src/qml_gui/dialogs/ConfirmDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/CrealityLoginDialog.qml:38 [warning/missing-property] Member "beginLogin" not found on type "QObject"
+src/qml_gui/dialogs/CrealityLoginDialog.qml:41 [warning/missing-property] Member "loginUrl" not found on type "QObject"
+src/qml_gui/dialogs/CrealityLoginDialog.qml:44 [warning/missing-property] Member "cancelLogin" not found on type "QObject"
+src/qml_gui/dialogs/CrealityLoginDialog.qml:44 [warning/missing-property] Member "loginInProgress" not found on type "QObject"
+src/qml_gui/dialogs/CrealityLoginDialog.qml:138 [warning/missing-property] Member "loginUrl" not found on type "QObject"
+src/qml_gui/dialogs/CreatePresetsDialog.qml:147 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:158 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:159 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:160 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:176 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:177 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:180 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:181 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:193 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:194 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:195 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:204 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:205 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:247 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:315 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:316 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:336 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:337 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:401 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:403 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:447 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:449 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:493 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:515 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:516 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:522 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:523 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:1542 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:1555 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:1609 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/CreatePresetsDialog.qml:1622 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:150 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:189 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:190 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:191 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:200 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:201 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:203 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:204 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:205 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:206 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:215 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:216 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:231 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:232 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:234 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:243 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:244 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:247 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:248 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:267 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:268 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:269 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:270 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:271 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:272 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:274 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:275 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:276 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:277 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:291 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:304 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:308 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:315 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:382 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/EditGCodeDialog.qml:395 [warning/missing-property] Member "editGcodeParamGroups" not found on type "QObject"
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:51 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:52 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:132 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:133 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:134 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:134 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/EnableLiteModeDialog.qml:191 [warning/missing-property] Member "setGcodePreviewLiteMode" not found on type "BackendContext"
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:41 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:48 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:58 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:60 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:276 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:309 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:417 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:418 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ExportPresetBundleDialog.qml:420 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FilamentGroupPopup.qml:243 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/FileArchiveDialog.qml:56 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:69 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:70 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:71 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:72 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:84 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:87 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:92 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:93 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:96 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:98 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:105 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:106 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:119 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:121 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:122 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:131 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:145 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:146 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:147 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:148 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:149 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:150 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:162 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:190 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/FileArchiveDialog.qml:237 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/dialogs/KBShortcutsDialog.qml:303 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/KBShortcutsDialog.qml:313 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/NetworkTestDialog.qml:58 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/NetworkTestDialog.qml:131 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/NetworkTestDialog.qml:137 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/NetworkTestDialog.qml:143 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/NetworkTestDialog.qml:144 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/NetworkTestDialog.qml:229 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/NetworkTestDialog.qml:236 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjColorDialog.qml:91 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/dialogs/ObjColorDialog.qml:132 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/dialogs/ObjColorDialog.qml:145 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjColorDialog.qml:150 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjColorDialog.qml:151 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjColorDialog.qml:159 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjColorDialog.qml:160 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/ObjectLayersDialog.qml:81 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ObjectLayersDialog.qml:94 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/ObjectLayersDialog.qml:273 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:273 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:275 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:275 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:275 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:286 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:286 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:288 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:288 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:288 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:308 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:336 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/ObjectLayersDialog.qml:336 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/PreferencesDialog.qml:66 [warning/missing-property] Member "Backend" not found on type "PreferencesDialog"
+src/qml_gui/dialogs/PreferencesDialog.qml:123 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:124 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:126 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:128 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:175 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:175 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:178 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:200 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:200 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:203 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:366 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:366 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:370 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:436 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:440 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:441 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:449 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:491 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:507 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:512 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:556 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:556 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:559 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:581 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:581 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:584 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:603 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:685 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:685 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:688 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:813 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:813 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PreferencesDialog.qml:817 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:129 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:130 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:131 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:132 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:143 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:144 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:147 [warning/missing-property] Member "leftCombo" not found on type "QQuickItem"
+src/qml_gui/dialogs/PresetDiffDialog.qml:147 [warning/missing-property] Member "leftCombo" not found on type "QQuickItem"
+src/qml_gui/dialogs/PresetDiffDialog.qml:148 [warning/missing-property] Member "rightCombo" not found on type "QQuickItem"
+src/qml_gui/dialogs/PresetDiffDialog.qml:148 [warning/missing-property] Member "rightCombo" not found on type "QQuickItem"
+src/qml_gui/dialogs/PresetDiffDialog.qml:174 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:175 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:176 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:177 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:178 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:185 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:206 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:220 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:221 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:224 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:225 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:233 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:280 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:284 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:292 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:303 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:312 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:324 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:325 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:328 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:329 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:347 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:352 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:366 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:373 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:385 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:386 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:387 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:433 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:446 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:450 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:461 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:462 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:463 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/PresetDiffDialog.qml:474 [warning/missing-property] Member "name" not found on type "QColor"
+src/qml_gui/dialogs/PresetDiffDialog.qml:480 [warning/missing-property] Member "name" not found on type "QColor"
+src/qml_gui/dialogs/PresetDiffDialog.qml:670 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:673 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:690 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:698 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:698 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:705 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:714 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PresetDiffDialog.qml:717 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PrintDialog.qml:525 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/PrintHostDialog.qml:407 [warning/missing-property] Member "discoveredPrinters" not found on type "QObject"
+src/qml_gui/dialogs/PrintHostDialog.qml:565 [warning/missing-property] Member "discoveredPrinters" not found on type "QObject"
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:84 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:94 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:95 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:96 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:107 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:108 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:109 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:112 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:187 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:200 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:204 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:208 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:217 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:217 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:217 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:220 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:230 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:247 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SelectionSettingsDialog.qml:286 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SettingsDialog.qml:119 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SettingsDialog.qml:147 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SettingsDialog.qml:370 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/SettingsDialog.qml:533 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/SettingsDialog.qml:548 [warning/missing-property] Member "pageKey" not found on type "QQuickItem"
+src/qml_gui/dialogs/SettingsDialog.qml:635 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/SettingsDialog.qml:650 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/dialogs/SettingsDialog.qml:656 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:661 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:664 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:666 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:673 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:731 [warning/import] ConfigOptionFilterProxy was not found. Did you add all imports and dependencies?
+src/qml_gui/dialogs/SettingsDialog.qml:731 [warning/import] ConfigOptionFilterProxy was not found. Did you add all imports and dependencies?
+src/qml_gui/dialogs/SettingsDialog.qml:731 [warning/unresolved-type] Property "groupRows" has incomplete type "ConfigOptionFilterProxy". You may be missing an import.
+src/qml_gui/dialogs/SettingsDialog.qml:732 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:733 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:734 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:735 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:736 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SettingsDialog.qml:740 [warning/unresolved-type] Type "ConfigOptionFilterProxy" of property "groupRows" not found. This is likely due to a missing dependency entry or a type not being exposed declaratively.
+src/qml_gui/dialogs/SettingsDialog.qml:780 [warning/unresolved-type] Type "ConfigOptionFilterProxy" of property "groupRows" not found. This is likely due to a missing dependency entry or a type not being exposed declaratively.
+src/qml_gui/dialogs/SettingsDialog.qml:867 [warning/import] ConfigOptionFilterProxy was not found. Did you add all imports and dependencies?
+src/qml_gui/dialogs/SettingsDialog.qml:967 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/dialogs/SingleChoiceDialog.qml:83 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/dialogs/SingleChoiceDialog.qml:93 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:94 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:100 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:101 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:110 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:112 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:113 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SingleChoiceDialog.qml:113 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SysInfoDialog.qml:3 [info/unused-imports] Unused import
+src/qml_gui/dialogs/SysInfoDialog.qml:125 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SysInfoDialog.qml:133 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/SysInfoDialog.qml:159 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SysInfoDialog.qml:160 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SysInfoDialog.qml:161 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/SysInfoDialog.qml:182 [warning/missing-property] Member "text" not found on type call to method createQmlObject, returning QObject
+src/qml_gui/dialogs/SysInfoDialog.qml:183 [warning/missing-property] Member "selectAll" not found on type "QObject"
+src/qml_gui/dialogs/SysInfoDialog.qml:184 [warning/missing-property] Member "copy" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:89 [warning/missing-property] Member "screens" not found on type "QQmlApplication"
+src/qml_gui/dialogs/TroubleshootDialog.qml:93 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:94 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:125 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:156 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:179 [warning/missing-property] Member "selectedPrinterModel" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:180 [warning/missing-property] Member "vendors" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:182 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:183 [warning/missing-property] Member "printerModelsForVendor" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:195 [warning/missing-property] Member "userPresetNamesForCategory" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:196 [warning/missing-property] Member "compatiblePresetNamesForCategory" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:197 [warning/missing-property] Member "userPresetNamesForCategory" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:198 [warning/missing-property] Member "compatiblePresetNamesForCategory" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:199 [warning/missing-property] Member "userPresetNamesForCategory" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:230 [warning/missing-property] Member "currentProjectPath" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:231 [warning/missing-property] Member "isDirty" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:245 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:255 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/TroubleshootDialog.qml:283 [warning/missing-property] Member "text" not found on type call to method createQmlObject, returning QObject
+src/qml_gui/dialogs/TroubleshootDialog.qml:284 [warning/missing-property] Member "selectAll" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:285 [warning/missing-property] Member "copy" not found on type "QObject"
+src/qml_gui/dialogs/TroubleshootDialog.qml:715 [warning/missing-property] Member "currentProjectPath" not found on type "QObject"
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:96 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:97 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:134 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:135 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:138 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:141 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:142 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:153 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:154 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:155 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:157 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:158 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:161 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/UnsavedChangesDialog.qml:162 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:97 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:98 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:99 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:114 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:123 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:124 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:125 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:155 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:156 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:159 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:169 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:171 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:172 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:180 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:239 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:241 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:242 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:244 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:245 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/dialogs/WipeTowerDialog.qml:246 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:247 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:248 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:248 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:314 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:320 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:322 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:361 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:367 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:369 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:453 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:453 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:591 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:591 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:591 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:592 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:592 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:593 [warning/unqualified] Unqualified access
+src/qml_gui/dialogs/WipeTowerDialog.qml:594 [warning/unqualified] Unqualified access
+src/qml_gui/main.qml:46 [warning/missing-property] Member "preparePageRef" not found on type "QObject"
+src/qml_gui/main.qml:91 [warning/missing-property] Member "isDirty" not found on type "QObject"
+src/qml_gui/main.qml:108 [warning/missing-property] Member "isDirty" not found on type "QObject"
+src/qml_gui/main.qml:120 [warning/missing-property] Member "isDirty" not found on type "QObject"
+src/qml_gui/main.qml:137 [warning/missing-property] Member "isDirty" not found on type "QObject"
+src/qml_gui/main.qml:239 [warning/missing-property] Member "exportModel" not found on type "QObject"
+src/qml_gui/main.qml:271 [warning/missing-property] Member "requestExportGcode3mf" not found on type "QObject"
+src/qml_gui/main.qml:285 [warning/missing-property] Member "requestExportAllGCode" not found on type "QObject"
+src/qml_gui/main.qml:311 [warning/missing-property] Member "selectDeviceByIdentity" not found on type "QObject"
+src/qml_gui/main.qml:331 [warning/missing-property] Member "clearWorkspace" not found on type "QObject"
+src/qml_gui/main.qml:354 [warning/missing-property] Member "applyUnitConversion" not found on type "QObject"
+src/qml_gui/main.qml:392 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/main.qml:393 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/main.qml:401 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/main.qml:402 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/main.qml:452 [warning/missing-property] Member "svgFilePath" not found on type BackendContext::editorViewModel with type QObject
+src/qml_gui/main.qml:453 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/main.qml:454 [warning/missing-property] Member "importSVG" not found on type "QObject"
+src/qml_gui/main.qml:465 [warning/missing-property] Member "addFilesToCurrentPlate" not found on type "QObject"
+src/qml_gui/main.qml:644 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/main.qml:645 [warning/missing-property] Member "deleteSelection" not found on type "QObject"
+src/qml_gui/main.qml:657 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/main.qml:659 [warning/missing-property] Member "cutSelectedObjects" not found on type "QObject"
+src/qml_gui/main.qml:663 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/main.qml:665 [warning/missing-property] Member "copySelectedObjects" not found on type "QObject"
+src/qml_gui/main.qml:669 [warning/missing-property] Member "hasClipboardContent" not found on type "QObject"
+src/qml_gui/main.qml:671 [warning/missing-property] Member "pasteObjects" not found on type "QObject"
+src/qml_gui/main.qml:675 [warning/missing-property] Member "hasSelection" not found on type "QObject"
+src/qml_gui/main.qml:676 [warning/missing-property] Member "duplicateSelectedObjects" not found on type "QObject"
+src/qml_gui/main.qml:696 [warning/missing-property] Member "selectAllVisibleObjects" not found on type "QObject"
+src/qml_gui/main.qml:703 [warning/missing-property] Member "clearObjectSelection" not found on type "QObject"
+src/qml_gui/main.qml:712 [warning/missing-property] Member "modelCount" not found on type "QObject"
+src/qml_gui/main.qml:724 [warning/missing-property] Member "canRequestSlice" not found on type "QObject"
+src/qml_gui/main.qml:725 [warning/missing-property] Member "requestSlice" not found on type "QObject"
+src/qml_gui/main.qml:732 [warning/missing-property] Member "canExportGCode" not found on type "QObject"
+src/qml_gui/main.qml:734 [warning/unqualified] Unqualified access
+src/qml_gui/main.qml:796 [warning/missing-property] Member "cursorPosition" not found on type "QQuickItem"
+src/qml_gui/main.qml:859 [warning/missing-property] Member "defaultExportGCodeFileName" not found on type "QObject"
+src/qml_gui/main.qml:903 [warning/missing-property] Member "preparePageRef" not found on type "QObject"
+src/qml_gui/main.qml:907 [warning/missing-property] Member "previewPageRef" not found on type "QObject"
+src/qml_gui/main.qml:935 [warning/missing-property] Member "cutSelectedObjects" not found on type "QObject"
+src/qml_gui/main.qml:936 [warning/missing-property] Member "copySelectedObjects" not found on type "QObject"
+src/qml_gui/main.qml:937 [warning/missing-property] Member "pasteObjects" not found on type "QObject"
+src/qml_gui/main.qml:939 [warning/missing-property] Member "duplicateSelectedObjects" not found on type "QObject"
+src/qml_gui/main.qml:940 [warning/missing-property] Member "clonePlate" not found on type "QObject"
+src/qml_gui/main.qml:940 [warning/missing-property] Member "currentPlateIndex" not found on type "QObject"
+src/qml_gui/main.qml:950 [warning/missing-property] Member "requestSlice" not found on type "QObject"
+src/qml_gui/main.qml:965 [warning/unqualified] Unqualified access
+src/qml_gui/main.qml:990 [warning/missing-property] Member "requestSlice" not found on type "QObject"
+src/qml_gui/main.qml:994 [warning/missing-property] Member "requestSliceAll" not found on type "QObject"
+src/qml_gui/main.qml:1014 [warning/Quick.layout-positioning] Detected x on an item that is managed by a layout. This is undefined behavior; use Layout.leftMargin or Layout.rightMargin instead.
+src/qml_gui/main.qml:1015 [warning/Quick.layout-positioning] Detected y on an item that is managed by a layout. This is undefined behavior; use Layout.topMargin or Layout.bottomMargin instead.
+src/qml_gui/main.qml:1016 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/main.qml:1017 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/main.qml:1249 [warning/missing-property] Member "closed" not found on type "QObject"
+src/qml_gui/main.qml:1278 [warning/missing-property] Member "closed" not found on type "QObject"
+src/qml_gui/main.qml:1280 [warning/missing-property] Member "loginRequested" not found on type "QObject"
+src/qml_gui/main.qml:1296 [warning/missing-property] Member "dismissed" not found on type "QObject"
+src/qml_gui/main.qml:1299 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/main.qml:1302 [warning/missing-property] Member "dismissed" not found on type "QObject"
+src/qml_gui/main.qml:1302 [warning/missing-property] Member "reloadPage" not found on type "QObject"
+src/qml_gui/main.qml:1321 [warning/missing-property] Member "selectedPrinter" not found on type "QObject"
+src/qml_gui/main.qml:1321 [warning/missing-property] Member "selectedPrinter" not found on type "QObject"
+src/qml_gui/main.qml:1322 [warning/missing-property] Member "requestCurrentPrinterPreset" not found on type "QObject"
+src/qml_gui/main.qml:1322 [warning/missing-property] Member "selectedPrinter" not found on type "QObject"
+src/qml_gui/main.qml:1323 [warning/missing-property] Member "selectedFilament" not found on type "QObject"
+src/qml_gui/main.qml:1323 [warning/missing-property] Member "selectedFilament" not found on type "QObject"
+src/qml_gui/main.qml:1324 [warning/missing-property] Member "requestCurrentFilamentPreset" not found on type "QObject"
+src/qml_gui/main.qml:1324 [warning/missing-property] Member "selectedFilament" not found on type "QObject"
+src/qml_gui/main.qml:1325 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/main.qml:1325 [warning/missing-property] Member "printPresetNames" not found on type "QObject"
+src/qml_gui/main.qml:1327 [warning/missing-property] Member "requestCurrentPrintPreset" not found on type "QObject"
+src/qml_gui/main.qml:1387 [warning/missing-property] Member "optionKey" not found on type "CxDialogHost"
+src/qml_gui/main.qml:1388 [warning/missing-property] Member "optionKey" not found on type "CxDialogHost"
+src/qml_gui/main.qml:1388 [warning/missing-property] Member "setValue" not found on type "QObject"
+src/qml_gui/main.qml:1390 [warning/missing-property] Member "optionKey" not found on type "CxDialogHost"
+src/qml_gui/main.qml:1525 [warning/missing-property] Member "recenterObjectsOutsideBed" not found on type "QObject"
+src/qml_gui/main.qml:1539 [warning/missing-property] Member "importArchiveEntries" not found on type "QObject"
+src/qml_gui/main.qml:1553 [warning/missing-property] Member "applyPendingObjColors" not found on type "QObject"
+src/qml_gui/main.qml:1563 [warning/missing-property] Member "targetObjectName" not found on type
+src/qml_gui/main.qml:1582 [warning/missing-property] Member "machineOptions" not found on type "QObject"
+src/qml_gui/main.qml:1591 [warning/missing-property] Member "filamentOptions" not found on type "QObject"
+src/qml_gui/main.qml:1600 [warning/missing-property] Member "printOptions" not found on type "QObject"
+src/qml_gui/pages/AssemblePage.qml:79 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:80 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:104 [warning/missing-property] Member "selectedPresetForCategory" not found on type "QObject"
+src/qml_gui/pages/AssemblePage.qml:142 [warning/missing-property] Member "text" not found on type call to method createQmlObject, returning QObject
+src/qml_gui/pages/AssemblePage.qml:143 [warning/missing-property] Member "selectAll" not found on type "QObject"
+src/qml_gui/pages/AssemblePage.qml:144 [warning/missing-property] Member "copy" not found on type "QObject"
+src/qml_gui/pages/AssemblePage.qml:196 [warning/import] GLViewport was not found. Did you add all imports and dependencies?
+src/qml_gui/pages/AssemblePage.qml:198 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:198 [warning/unqualified] unknown grouped property scope anchors.
+src/qml_gui/pages/AssemblePage.qml:198 [warning/unresolved-type] Type anchors is used but it is not resolved
+src/qml_gui/pages/AssemblePage.qml:199 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:201 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:202 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:225 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:291 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:293 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:313 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:315 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:338 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:457 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:459 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:460 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:469 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:471 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:472 [warning/unqualified] Unqualified access
+src/qml_gui/pages/AssemblePage.qml:547 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/AssemblePage.qml:645 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/CalibrationPage.qml:35 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/CalibrationPage.qml:36 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/CalibrationPage.qml:75 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/CalibrationPage.qml:91 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:92 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:92 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:93 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:94 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:214 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:270 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:271 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:276 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:350 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:359 [warning/incompatible-type] Cannot assign binding of type QColor to QString
+src/qml_gui/pages/CalibrationPage.qml:359 [warning/incompatible-type] Cannot assign binding of type QColor to QString
+src/qml_gui/pages/CalibrationPage.qml:359 [warning/incompatible-type] Cannot assign binding of type QColor to QString
+src/qml_gui/pages/CalibrationPage.qml:359 [warning/incompatible-type] Cannot assign binding of type QColor to QString
+src/qml_gui/pages/CalibrationPage.qml:359 [warning/incompatible-type] Cannot assign binding of type QColor to QString
+src/qml_gui/pages/CalibrationPage.qml:378 [warning/missing-property] Member "statusColor" not found on type "QQuickItem"
+src/qml_gui/pages/CalibrationPage.qml:379 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:379 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:383 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:385 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:393 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:394 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:398 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:403 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:406 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:406 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:416 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:718 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/CalibrationPage.qml:718 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/CalibrationPage.qml:720 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:728 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/CalibrationPage.qml:728 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/CalibrationPage.qml:730 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:779 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/CalibrationPage.qml:779 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/CalibrationPage.qml:781 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:789 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/CalibrationPage.qml:789 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/CalibrationPage.qml:791 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:924 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/CalibrationPage.qml:968 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/CalibrationPage.qml:976 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:977 [warning/unqualified] Unqualified access
+src/qml_gui/pages/CalibrationPage.qml:985 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:5 [info/unused-imports] Unused import
+src/qml_gui/pages/HomePage.qml:37 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/HomePage.qml:86 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/HomePage.qml:87 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/HomePage.qml:133 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/HomePage.qml:133 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/HomePage.qml:165 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/HomePage.qml:165 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/HomePage.qml:195 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/HomePage.qml:195 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/HomePage.qml:248 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/HomePage.qml:248 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/HomePage.qml:250 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:259 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:268 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:285 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/HomePage.qml:290 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:303 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/HomePage.qml:303 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/HomePage.qml:328 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/HomePage.qml:373 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:374 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:409 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:444 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/HomePage.qml:480 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/HomePage.qml:489 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/HomePage.qml:695 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/HomePage.qml:974 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:974 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:975 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:976 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:987 [warning/unqualified] Unqualified access
+src/qml_gui/pages/HomePage.qml:1022 [warning/missing-property] Member "modelData" not found on type "QQuickItem"
+src/qml_gui/pages/HomePage.qml:1023 [warning/missing-property] Member "modelData" not found on type "QQuickItem"
+src/qml_gui/pages/HomePage.qml:1024 [warning/missing-property] Member "modelData" not found on type "QQuickItem"
+src/qml_gui/pages/HomePage.qml:1036 [warning/missing-property] Member "modelData" not found on type "QQuickItem"
+src/qml_gui/pages/MonitorPage.qml:38 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/MonitorPage.qml:72 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:72 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:94 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:94 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:572 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/MonitorPage.qml:583 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:594 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:594 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:595 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:607 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:617 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:637 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:638 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:639 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:640 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:643 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:649 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:650 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:651 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:652 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:653 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:656 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:657 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:658 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:659 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:669 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:677 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:692 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:693 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:694 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:695 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:696 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:698 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:704 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:709 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:723 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:786 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:786 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:1031 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:1031 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:1079 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:1079 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:1139 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1147 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1148 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1151 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1159 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1170 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1527 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1802 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1810 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1818 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1819 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1821 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1827 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1827 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1836 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1851 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:1870 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/MonitorPage.qml:1871 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/MonitorPage.qml:2055 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:2055 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:2288 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:2329 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MonitorPage.qml:2329 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MonitorPage.qml:2331 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2332 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2333 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2339 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2340 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2341 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2346 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2347 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2348 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2364 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2365 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2366 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2373 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2374 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2375 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2379 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2380 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2381 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2391 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2397 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2398 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2407 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2420 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2421 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2422 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2433 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MonitorPage.qml:2476 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/MultiMachinePage.qml:37 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:49 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:58 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:122 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:125 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:132 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:133 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:141 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:217 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:218 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:228 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:261 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:262 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:266 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:283 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:284 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:288 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:311 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:324 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:341 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:342 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:352 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:366 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:370 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:371 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:377 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:380 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:381 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:381 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:385 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:385 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:393 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:394 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:400 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:400 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:403 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:403 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:404 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:404 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:414 [warning/missing-property] Member "toString" not found on type "QJSPrimitiveValue"
+src/qml_gui/pages/MultiMachinePage.qml:414 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:416 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:420 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:421 [warning/missing-property] Member "toString" not found on type "QJSPrimitiveValue"
+src/qml_gui/pages/MultiMachinePage.qml:421 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:492 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:493 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:495 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:500 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:500 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:500 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:501 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:515 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:515 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:520 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:520 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:529 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/MultiMachinePage.qml:538 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:539 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:539 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:554 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:554 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:560 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:560 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:574 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:584 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:586 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:587 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:605 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/MultiMachinePage.qml:613 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:613 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:626 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:627 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:637 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:671 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:672 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:679 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:679 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:680 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:681 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:683 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/MultiMachinePage.qml:692 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:696 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:696 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:697 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:698 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:711 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:712 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:713 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:765 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:779 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:840 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:840 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:840 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:857 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:858 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:859 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:860 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:866 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:876 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:884 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:886 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:887 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:887 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:887 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:888 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:888 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:896 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:904 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:904 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:904 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:905 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:905 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:913 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:918 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:919 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:923 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:930 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:945 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:945 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:949 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:950 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:958 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:959 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:959 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1028 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1042 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1063 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1067 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1068 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1074 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1077 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1078 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1078 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1082 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1082 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1090 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1091 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1097 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1097 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1100 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1100 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1101 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1101 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1111 [warning/missing-property] Member "toString" not found on type "QJSPrimitiveValue"
+src/qml_gui/pages/MultiMachinePage.qml:1111 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1113 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1117 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1118 [warning/missing-property] Member "toString" not found on type "QJSPrimitiveValue"
+src/qml_gui/pages/MultiMachinePage.qml:1118 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1126 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1127 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1151 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1153 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1154 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1162 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1163 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1164 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1175 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1179 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1180 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1181 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1192 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1196 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1197 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1198 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1271 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1271 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1271 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1288 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1289 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1290 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1291 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1297 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1307 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1319 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1320 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1323 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1324 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1325 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1326 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1335 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1343 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1343 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1344 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1352 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1357 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/MultiMachinePage.qml:1358 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/MultiMachinePage.qml:1362 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1366 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1367 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1373 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1396 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1400 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1409 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1409 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1414 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1426 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1426 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1430 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1434 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1443 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1443 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1478 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1517 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1518 [warning/unqualified] Unqualified access
+src/qml_gui/pages/MultiMachinePage.qml:1525 [warning/unqualified] Unqualified access
+src/qml_gui/pages/Plater.qml:3 [info/unused-imports] Unused import
+src/qml_gui/pages/Plater.qml:4 [info/unused-imports] Unused import
+src/qml_gui/pages/Plater.qml:59 [warning/duplicated-name] Duplicated property name "sidebarWidthChanged", "sidebarWidthChanged" is already a signal.
+src/qml_gui/pages/PreparePage.qml:15 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:44 [warning/duplicated-name] Duplicated property name "sidebarWidthChanged", "sidebarWidthChanged" is already a signal.
+src/qml_gui/pages/PreparePage.qml:148 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:163 [warning/missing-property] Member "layerEditingInputActive" not found on type
+src/qml_gui/pages/PreparePage.qml:164 [warning/missing-property] Member "layerEditingInputActive" not found on type
+src/qml_gui/pages/PreparePage.qml:199 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:201 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:219 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:221 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:290 [warning/missing-property] Member "gizmoMode" not found on type
+src/qml_gui/pages/PreparePage.qml:319 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:323 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:333 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:351 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:356 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:363 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:380 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:383 [warning/unreachable-code] Unreachable code
+src/qml_gui/pages/PreparePage.qml:395 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:415 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:435 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:441 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:445 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:452 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:457 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:481 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:482 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:483 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:500 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:501 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:503 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:507 [warning/missing-property] Member "extruderDigitTimer" not found on type "PreparePage"
+src/qml_gui/pages/PreparePage.qml:510 [warning/missing-property] Member "extruderDigitTimer" not found on type "PreparePage"
+src/qml_gui/pages/PreparePage.qml:763 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:793 [warning/missing-property] Member "seqOrder" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:815 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/PreparePage.qml:815 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/PreparePage.qml:816 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:818 [warning/missing-property] Member "pillDropArea" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:821 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:825 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/PreparePage.qml:832 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:852 [warning/missing-property] Member "seqIndex" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:853 [warning/missing-property] Member "seqIndex" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:853 [warning/missing-property] Member "swapItems" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:853 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:961 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:968 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:985 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:993 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1009 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1020 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1028 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1055 [warning/missing-property] Member "seqOrder" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:1067 [warning/missing-property] Member "entryIdx" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:1075 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/PreparePage.qml:1075 [warning/Quick.layout-positioning] Detected width on an item that is managed by a layout. This is undefined behavior; use implicitWidth or Layout.preferredWidth instead.
+src/qml_gui/pages/PreparePage.qml:1076 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1078 [warning/missing-property] Member "pillOLDrop" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:1081 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1085 [warning/Quick.layout-positioning] Detected anchors on an item that is managed by a layout. This is undefined behavior; use Layout.alignment instead.
+src/qml_gui/pages/PreparePage.qml:1091 [warning/missing-property] Member "seqOrder" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:1091 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1107 [warning/missing-property] Member "entryIdx" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:1109 [warning/missing-property] Member "seqIndex" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1110 [warning/missing-property] Member "seqIndex" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1110 [warning/missing-property] Member "swapItems" not found on type "QQuickItem"
+src/qml_gui/pages/PreparePage.qml:1110 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1236 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/PreparePage.qml:1335 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/pages/PreparePage.qml:1414 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1415 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1432 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1433 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1467 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/PreparePage.qml:1469 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/PreparePage.qml:1594 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1598 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1604 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1607 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1610 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1614 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1621 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1624 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1628 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1630 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:1636 [warning/missing-property] Member "open" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1671 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1673 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1675 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1677 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1680 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1682 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1684 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1713 [warning/id-shadows-member] Id for object GLViewport shadows property "viewport3d". Rename one or the other.
+src/qml_gui/pages/PreparePage.qml:1723 [warning/import] GLViewport was not found. Did you add all imports and dependencies?
+src/qml_gui/pages/PreparePage.qml:1724 [warning/id-shadows-member] Note: Id defined here
+src/qml_gui/pages/PreparePage.qml:1725 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1725 [warning/unqualified] unknown grouped property scope anchors.
+src/qml_gui/pages/PreparePage.qml:1725 [warning/unresolved-type] Type anchors is used but it is not resolved
+src/qml_gui/pages/PreparePage.qml:1727 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1835 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1835 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1837 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1837 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1839 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1839 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1844 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1844 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1847 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1847 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1852 [warning/missing-property] Member "reverseZoom" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1853 [warning/missing-property] Member "zoomToMouse" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1854 [warning/missing-property] Member "freeCamera" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1861 [warning/missing-property] Member "show3DNavigator" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1863 [warning/missing-property] Member "cameraNavStyle" not found on type "QObject"
+src/qml_gui/pages/PreparePage.qml:1864 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1865 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1866 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1933 [warning/missing-property] Member "contextToolInputCaptured" not found on type
+src/qml_gui/pages/PreparePage.qml:1935 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1937 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1957 [warning/missing-property] Member "contextToolInputCaptured" not found on type
+src/qml_gui/pages/PreparePage.qml:1958 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1960 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:1973 [warning/missing-property] Member "contextToolInputCaptured" not found on type
+src/qml_gui/pages/PreparePage.qml:1983 [warning/missing-property] Member "contextToolInputCaptured" not found on type
+src/qml_gui/pages/PreparePage.qml:2093 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2099 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2195 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/PreparePage.qml:2303 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2304 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2305 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2329 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2331 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2341 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2341 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2343 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2348 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2351 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2358 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2360 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2368 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2368 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2370 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2372 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2375 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2382 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2384 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2392 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2392 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2394 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2396 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2399 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2406 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2408 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2417 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2438 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2685 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2718 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2815 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2833 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2852 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:2908 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3214 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3330 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3442 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3567 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3613 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3614 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3621 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3848 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3891 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3907 [warning/incompatible-type] Cannot assign binding of type GLViewport to QObject
+src/qml_gui/pages/PreparePage.qml:3909 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:3939 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4069 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4105 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4209 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4245 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4282 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4319 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreparePage.qml:4361 [warning/incompatible-type] Cannot assign binding of type GLViewport to QObject
+src/qml_gui/pages/PreparePage.qml:4529 [warning/missing-property] Member "sidebarField" not found on type
+src/qml_gui/pages/PreparePage.qml:4531 [warning/missing-property] Member "sidebarField" not found on type
+src/qml_gui/pages/PreviewPage.qml:329 [warning/import] GLViewport was not found. Did you add all imports and dependencies?
+src/qml_gui/pages/PreviewPage.qml:331 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreviewPage.qml:331 [warning/unqualified] unknown grouped property scope anchors.
+src/qml_gui/pages/PreviewPage.qml:331 [warning/unresolved-type] Type anchors is used but it is not resolved
+src/qml_gui/pages/PreviewPage.qml:332 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreviewPage.qml:335 [warning/missing-property] Member "show3DNavigator" not found on type "QObject"
+src/qml_gui/pages/PreviewPage.qml:529 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreviewPage.qml:552 [warning/unqualified] Unqualified access
+src/qml_gui/pages/PreviewPage.qml:572 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:28 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/ProjectPage.qml:68 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:80 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:82 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/ProjectPage.qml:98 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:102 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/pages/ProjectPage.qml:229 [warning/missing-property] Member "containsMouse" not found on type "HoverHandler"
+src/qml_gui/pages/ProjectPage.qml:233 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:235 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:236 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:312 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:313 [warning/unqualified] Unqualified access
+src/qml_gui/pages/ProjectPage.qml:323 [warning/Quick.layout-positioning] Detected height on an item that is managed by a layout. This is undefined behavior; use implictHeight or Layout.preferredHeight instead.
+src/qml_gui/panels/DockableSidebar.qml:3 [info/unused-imports] Unused import
+src/qml_gui/panels/DockableSidebar.qml:4 [info/unused-imports] Unused import
+src/qml_gui/panels/LeftSidebar.qml:107 [warning/missing-property] Member "refresh" not found on type "QObject"
+src/qml_gui/panels/LeftSidebar.qml:401 [warning/block-scope-var-declaration] var declaration in block scope is hoisted to function scope
+Replace it with const or let to silence the warning
+
+src/qml_gui/panels/LeftSidebar.qml:730 [warning/missing-property] Member "visited" not found on type call to method itemAt, returning QQuickItem
+src/qml_gui/panels/LeftSidebar.qml:782 [warning/import] ConfigOptionFilterProxy was not found. Did you add all imports and dependencies?
+src/qml_gui/panels/ModelLibraryPanel.qml:79 [warning/missing-property] Member "loginUrl" not found on type "QObject"
+src/qml_gui/panels/ModelLibraryPanel.qml:116 [info/multiline-strings] String contains unescaped line terminator which is deprecated.
+src/qml_gui/panels/ModelLibraryPanel.qml:136 [warning/unqualified] Unqualified access

@@ -211,7 +211,7 @@ Item {
                     Layout.preferredHeight: 28
                     Layout.preferredWidth: historyBtnRow.implicitWidth + 20
                     radius: Theme.radiusSM
-                    color: historyBtnHov.containsMouse ? Theme.bgHover : "transparent"
+                    color: historyBtnHov.hovered ? Theme.bgHover : "transparent"
                     border.color: Theme.borderSubtle
                     border.width: 1
 
@@ -347,7 +347,7 @@ Item {
                                     color: {
                                         if (root.calibrationVm.selectedIndex === modelData.sourceIndex)
                                             return Theme.bgElevated
-                                        if (itemHov.containsMouse)
+                                        if (itemHov.hovered)
                                             return Theme.bgHover
                                         return "transparent"
                                     }
@@ -965,7 +965,7 @@ Item {
                                                     height: 26
                                                     radius: Theme.radiusMD
                                                     color: root.calibrationVm.selectedFilamentPreset === modelData
-                                                           ? Theme.accent : (filHov.containsMouse ? Theme.bgHover : Theme.bgPanel)
+                                                           ? Theme.accent : (filHov.hovered ? Theme.bgHover : Theme.bgPanel)
                                                     border.width: 1
                                                     border.color: root.calibrationVm.selectedFilamentPreset === modelData
                                                                 ? Theme.accent : Theme.borderSubtle

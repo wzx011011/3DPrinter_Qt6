@@ -480,7 +480,7 @@ CxDialog {
                 width: historyListView.width
                 height: 68
                 radius: Theme.radiusMD
-                color: delegateHov.containsMouse ? Theme.bgCard : Theme.bgPanel
+                color: delegateHov.hovered ? Theme.bgCard : Theme.bgPanel
                 border.color: Theme.borderInput
                 border.width: 1
 

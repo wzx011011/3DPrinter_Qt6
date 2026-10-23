@@ -670,25 +670,36 @@ int main(int argc, char *argv[])
   // S8: `import OWzx` module resolution is unaffected by file-vs-qrc loading
   // — the engine resolves the module from the resource qmldir (:/qml/OWzx/)
   // regardless of where the root document came from.
-  QUrl mainQmlUrl(QStringLiteral("qrc:/qml/OWzx/main.qml"));
+  //
+  // Phase 5 (Qt 6.12 modernization, 2026-10-23): the production path loads
+  // the root document through the compiled module URI (loadFromModule) --
+  // string-typed qrc URLs can silently keep loading a stale/partial tree,
+  // while the module route fails loudly when the qmlcachegen registration
+  // is missing, and it keeps qmllint/qmlcachegen/engine on one module
+  // identity.
   if (startupOpenRequest.qmlDev)
   {
     const QString devMainQml = QCoreApplication::applicationDirPath()
                                + QStringLiteral("/../src/qml_gui/main.qml");
     if (QFileInfo::exists(devMainQml))
     {
-      mainQmlUrl = QUrl::fromLocalFile(QDir::cleanPath(devMainQml));
+      const QUrl devUrl = QUrl::fromLocalFile(QDir::cleanPath(devMainQml));
       // Filesystem QML reads its own qmldir/components -- keep the resource
       // import path too so OWzx-registered types and the conf stay available.
-      appendStartupLog(QStringLiteral("qml-dev: loading %1").arg(mainQmlUrl.toString()));
+      appendStartupLog(QStringLiteral("qml-dev: loading %1").arg(devUrl.toString()));
+      engine->load(devUrl);
     }
     else
     {
-      appendStartupLog(QStringLiteral("qml-dev: %1 not found, falling back to qrc")
+      appendStartupLog(QStringLiteral("qml-dev: %1 not found, falling back to module load")
                            .arg(devMainQml));
+      engine->loadFromModule(QStringLiteral("OWzx"), QStringLiteral("Main"));
     }
   }
-  engine->load(mainQmlUrl);
+  else
+  {
+    engine->loadFromModule(QStringLiteral("OWzx"), QStringLiteral("Main"));
+  }
   appendStartupLog(QStringLiteral("engine->load returned"));
 
   // Retranslate all QML qsTr() after language switch

@@ -8,6 +8,7 @@
 #include <QVector>
 #include <QPointF>
 #include <QFuture>
+#include <QPromise>
 #include <map>
 #include <memory>
 #include <atomic>
@@ -184,6 +185,30 @@ struct SliceStepTiming {
   int count = 0;
 };
 
+/// Qt 6.12 modernization phase 3 (2026-10-23): the slice worker's verdict as
+/// a value. Carried out of the worker through a QPromise so callers can
+/// consume the activation via QFuture semantics (waitForFinished / then /
+/// onFailed on a copied future) instead of reaching into service state. The
+/// signals (sliceFinished/sliceFailed/progressUpdated) remain the canonical
+/// GUI delivery; this struct is the structured-programming surface for new
+/// consumers and for the saveProjectAsync/export family to copy.
+struct SliceOutcome
+{
+  /// Non-empty on failure (exception text or "Slicing failed").
+  QString errorText;
+  /// True when the activation ended via cancelSlice().
+  bool cancelled = false;
+  /// G-code path on success ("(mock) ..." in mock builds).
+  QString outputPath;
+  /// Target plate index (-1 when unresolved).
+  int plateIndex = -1;
+  QString plateLabel;
+  /// Slice generation captured at start time (review P1-3): lets a consumer
+  /// drop an outcome that outlived a project reset.
+  quint64 generation = 0;
+  bool ok() const { return errorText.isEmpty() && !cancelled; }
+};
+
 #ifdef HAS_LIBSLIC3R
 /// PLATE-PRINT-LIFECYCLE (batch 2): persistent per-plate Print plus its
 /// applied model clone, mirroring upstream PartPlate's per-plate ownership of
@@ -277,6 +302,14 @@ public:
   Q_INVOKABLE int persistentSliceCount() const;
   Q_INVOKABLE qint64 persistentSliceReuseCount() const;
   Q_INVOKABLE qint64 persistentSliceRebuildCount() const;
+
+  /// Phase 3 (Qt 6.12 modernization): future of the most recent slice
+  /// activation's SliceOutcome. Valid once startSlice began; a copy taken
+  /// before completion can be waitForFinished()/then()-chained -- the
+  /// promise is always fulfilled (success, failure AND cancellation all
+  /// addResult), so onFailed is reserved for real breakage (never fires in
+  /// practice). The QML-facing signals stay authoritative for the UI.
+  QFuture<SliceOutcome> lastSliceOutcome() const { return lastSliceOutcome_; }
 
 #ifdef HAS_LIBSLIC3R
   /// P15.11: packs engine polygons into the SequentialPrintClearance value
@@ -500,6 +533,10 @@ private:
   /// (valid while slicing_). The destructor joins it after cancelling so a
   /// worker can never race this object's destruction.
   QFuture<void> activeSliceFuture_;
+  /// Phase 3: the promise-fulfilled outcome future mirroring the worker
+  /// above (kept separately: activeSliceFuture_ is the join handle, this is
+  /// the value channel).
+  QFuture<SliceOutcome> lastSliceOutcome_;
   /// Review P2-4: the auxiliary workers (previous-G-code preview load,
   /// export-all, single-export chunked copy) are ALSO tracked and joined by
   /// the destructor after their cancel flags are set -- the structural

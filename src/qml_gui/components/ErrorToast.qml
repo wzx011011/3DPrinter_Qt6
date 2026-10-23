@@ -80,8 +80,12 @@ Item {
     anchors.right: parent.right
     anchors.rightMargin: 10
     anchors.bottomMargin: 10
-    width: childrenRect.width
-    height: childrenRect.height
+    // Size from the column itself, NOT childrenRect: the column is anchored
+    // right/bottom, so its x/y depend on root.width/height and a childrenRect
+    // binding loops (the startup "Binding loop detected for width/height").
+    // The column's own implicit size comes from the fixed-width entries only.
+    width: toastColumn.width
+    height: toastColumn.height
     z: 200
 
     // U12: system-clipboard bridge for the copy-details buttons. QML exposes

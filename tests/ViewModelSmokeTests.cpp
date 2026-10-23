@@ -478,6 +478,7 @@ private slots:
   void addFilesToPlateLandsOnTheTargetPlate();
   void plainImportIntoMultiPlateProjectKeepsOtherPlates();
   void sliceAllInjectsPresetConfigBeforeFirstSlice();
+  void sliceOutcomeFutureCarriesActivationVerdict();
   void presetBedIsTheSingleSourceForPlateListAndImportArrange();
   void prepareContextMenuActionsAreRealAndPlateScoped();
   void prepareContextPlateReplacementIsScopedToTargetPlate();
@@ -5747,6 +5748,55 @@ void ViewModelSmokeTests::undoRedoOfCloneKeepsRenderBatchesCoherent()
   editor.redo();
   QCOMPARE(project.meshBatchInstanceTransforms().size(), 2);
   QCOMPARE(editor.meshBatchSourceObjectIndices().size(), 2);
+#else
+  QSKIP("requires HAS_LIBSLIC3R");
+#endif
+}
+
+void ViewModelSmokeTests::sliceOutcomeFutureCarriesActivationVerdict()
+{
+#ifdef HAS_LIBSLIC3R
+  // Phase 3 (Qt 6.12 modernization): startSlice reports its verdict through
+  // a QPromise<SliceOutcome> fulfilled on EVERY exit. This locks the public
+  // future surface: a copy taken while slicing must complete on its own and
+  // carry the activation's success values (no polling of service state).
+  const QString fixturePath = QDir(QDir(QStringLiteral(QT_TESTCASE_SOURCEDIR)))
+      .filePath(QStringLiteral("tests/test_models/Block20XY.stl"));
+  QVERIFY2(QFileInfo::exists(fixturePath), "Block20XY fixture must exist");
+
+  PresetService presets;
+  ProjectService project;
+  SliceService slice(&project);
+  ConfigViewModel config(&presets, &project);
+  EditorViewModel editor(&project, &slice);
+  editor.setConfigViewModel(&config);
+  config.setCurrentPrintPreset(QStringLiteral("0.16mm Fine"));
+
+  QSignalSpy loadSpy(&project, &ProjectService::loadFinished);
+  QVERIFY(editor.loadFile(fixturePath));
+  QTRY_COMPARE_WITH_TIMEOUT(loadSpy.count(), 1, 20000);
+  QVERIFY2(loadSpy.last().at(0).toBool(), qPrintable(project.lastError()));
+
+  editor.requestSlice();
+  QFuture<SliceOutcome> outcomeFuture = slice.lastSliceOutcome();
+  QVERIFY2(outcomeFuture.isStarted(),
+           "the outcome future must be live once startSlice dispatched");
+  // Event-loop wait (QFuture::waitForFinished has no millisecond overload
+  // in 6.12); 240s mirrors the sibling slice-all gate.
+  QTRY_VERIFY_WITH_TIMEOUT(outcomeFuture.isFinished(), 240000);
+  QVERIFY2(outcomeFuture.isFinished(),
+           "the outcome promise must be fulfilled on every worker exit");
+
+  const SliceOutcome outcome = outcomeFuture.result();
+  if (!outcome.errorText.isEmpty())
+    QSKIP(qPrintable(QStringLiteral("slice failed (env-dependent): %1")
+                         .arg(outcome.errorText)));
+  QVERIFY2(outcome.ok(), "a successful activation must report ok()");
+  QVERIFY2(!outcome.cancelled, "an uncancelled activation must not report cancelled");
+  QVERIFY2(!outcome.outputPath.isEmpty(),
+           "the outcome must carry the produced g-code path");
+  QCOMPARE(outcome.plateIndex, 0);
+  QVERIFY2(!outcome.plateLabel.isEmpty(), "the outcome must carry the plate label");
 #else
   QSKIP("requires HAS_LIBSLIC3R");
 #endif

@@ -80,7 +80,7 @@ CxDialog {
                     height: 30
                     radius: Theme.radiusSM
                     color: choiceList.currentIndex === index ? Theme.accentSubtle
-                           : (choiceHover.containsMouse ? Theme.bgHover : "transparent")
+                           : (choiceHover.hovered ? Theme.bgHover : "transparent")
 
                     Row {
                         anchors.verticalCenter: parent.verticalCenter

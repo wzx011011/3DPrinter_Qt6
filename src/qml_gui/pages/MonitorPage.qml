@@ -569,7 +569,7 @@ Item {
                                     radius: Theme.radiusLG
                                     color: {
                                         if (isSelected) return Theme.bgFloating
-                                        if (delegateHover.containsMouse) return Theme.bgHover
+                                        if (delegateHover.hovered) return Theme.bgHover
                                         return "transparent"
                                     }
                                     border.width: isSelected ? 1 : 0

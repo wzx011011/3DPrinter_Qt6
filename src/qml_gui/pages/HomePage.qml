@@ -63,6 +63,387 @@ Item {
         onRejected: root._pendingUnbindIndex = -1
     }
 
+    // Cloud login/bind dialogs live at page root: as children of the
+    // content ColumnLayout they got layout-managed positioning plus
+    // qmllint/runtime "anchors on layout-managed item" warnings.
+    // ── Login dialog (对齐上游 WebUserLoginDialog) ──
+    Dialog {
+        id: loginDialog
+        anchors.centerIn: parent
+        modal: true
+        title: qsTr("登录 OWzx 账号")
+        padding: Theme.spacingXL
+
+        background: Rectangle {
+            radius: Theme.radiusXL
+            color: Theme.bgElevated
+            border.color: Theme.borderSubtle
+            border.width: 1
+        }
+
+        header: Label {
+            text: qsTr("登录 OWzx 账号")
+            color: Theme.textPrimary
+            font.bold: true
+            font.pixelSize: Theme.fontSizeXL
+            padding: 12
+        }
+
+        ColumnLayout {
+            spacing: 12
+            width: 280
+
+            Label {
+                text: qsTr("用户名")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+            }
+            CxTextField {
+                id: loginUser
+                Layout.fillWidth: true
+                placeholderText: qsTr("输入用户名")
+            }
+
+            Label {
+                text: qsTr("密码")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeMD
+            }
+            CxTextField {
+                id: loginPass
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                placeholderText: qsTr("输入密码")
+                Keys.onReturnPressed: doLogin()
+                Keys.onEnterPressed: doLogin()
+            }
+
+            // Error message
+            Label {
+                text: loginDialog.loginError
+                color: Theme.statusError
+                font.pixelSize: Theme.fontSizeSM
+                visible: loginDialog.loginError !== ""
+            }
+
+            // R-P1.E: user-visible disclosure required by
+            // docs/依赖与协议边界审计.md -- cloud login/bind are local
+            // mocks (real `bambu_networking` is externally blocked), so a
+            // "success" here is a demo flow, not a real account login.
+            Label {
+                visible: Backend.cloudBackendKind !== "creality"
+                text: qsTr("演示模式：登录/绑定为本地模拟，不会连接真实云服务（依赖 bambu_networking，外部阻塞）。")
+                color: Theme.textTertiary
+                font.pixelSize: Theme.fontSizeXS
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 8
+
+                CxButton {
+                    text: qsTr("取消")
+                    onClicked: loginDialog.close()
+                }
+                CxButton {
+                    text: qsTr("登录")
+                    highlighted: true
+                    onClicked: doLogin()
+                }
+            }
+        }
+
+        property string loginError: ""
+
+        Connections {
+            target: root.homeVm
+            function onCloudLoginFailed(error) { loginDialog.loginError = error }
+            function onCloudStateChanged() {
+                if (root.homeVm.cloudLoggedIn) {
+                    loginDialog.close()
+                    loginDialog.loginError = ""
+                }
+            }
+        }
+
+        function doLogin() {
+            root.homeVm.cloudLogin(loginUser.text, loginPass.text)
+        }
+
+        onOpened: { loginUser.text = ""; loginPass.text = ""; loginError = ""; loginUser.forceActiveFocus() }
+    }
+
+    // ── Bind device dialog (对齐上游 BindDialog / PingCodeBindDialog) ──
+    // Upstream PingCodeBindDialog (BindDialog.cpp:60-172) is a 460x240
+    // white two-page simplebook: page 1 = two-line guide text (Body_14,
+    // #262E30) + "Can't find Pin Code?" wiki hyperlink + "Pin Code" title
+    // + six 38x38 single-char green inputs + Confirm/Cancel; after submit
+    // page 2 = "Binding..." + "Please confirm on the printer screen" +
+    // Close. Dark-mode mapping: white panel -> Theme.bgPanel. The extra
+    // "device name" input is a mock-flow addition kept per the page brief.
+    Dialog {
+        id: bindDialog
+        anchors.centerIn: parent
+        modal: true
+        title: qsTr("通过 PIN 码绑定")
+        padding: Theme.spacingXL
+
+        background: Rectangle {
+            radius: Theme.radiusXL
+            color: Theme.bgPanel
+            border.color: Theme.borderSubtle
+            border.width: 1
+        }
+
+        header: Label {
+            text: qsTr("通过 PIN 码绑定")
+            color: Theme.textPrimary
+            font.bold: true
+            font.pixelSize: Theme.fontSizeXL
+            padding: 12
+        }
+
+        // Upstream simplebook page index (BindDialog.cpp:163/303):
+        // 0 = request page, 1 = binding page.
+        property int bindState: 0
+        property string bindError: ""
+        // PIN cells registry, PING_CODE_LENGTH = 6 (BindDialog.hpp:42).
+        property var pinCells: []
+        // Upstream Confirm stays disabled until all 6 cells are filled
+        // (BindDialog.cpp:226-245).
+        property bool pinComplete: false
+
+        function refreshPinComplete() {
+            if (pinCells.length < 6) {
+                pinComplete = false
+                return
+            }
+            var filled = true
+            for (var i = 0; i < 6; ++i) {
+                if (pinCells[i].text === "")
+                    filled = false
+            }
+            pinComplete = filled
+        }
+
+        function pinCode() {
+            var s = ""
+            for (var i = 0; i < pinCells.length; ++i)
+                s += pinCells[i].text
+            return s
+        }
+
+        ColumnLayout {
+            spacing: Theme.spacingMD
+            // Upstream simplebook is 460x240 (BindDialog.cpp:70-72); 460
+            // is the dialog width incl. 20 padding. Height flows with the
+            // content (the mock device-name row adds one row upstream
+            // does not have).
+            width: 460
+
+            // ── Page 1: request (upstream request_bind_panel, BindDialog.cpp:74-126) ──
+            ColumnLayout {
+                visible: bindDialog.bindState === 0
+                Layout.fillWidth: true
+                spacing: Theme.spacingMD
+
+                // Guide text, upstream m_status_text (BindDialog.cpp:88-91):
+                // Body_14, #262E30, two lines.
+                Label {
+                    text: qsTr("请在打印机屏幕的『账号』页面找到 PIN 码，\n然后在下方输入。")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSize13
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+
+                // Upstream "Can't find Pin Code?" wiki hyperlink
+                // (BindDialog.cpp:94).
+                Label {
+                    text: qsTr("<a href=\"https://wiki.bambulab.com/en/bambu-studio/manual/pin-code\">找不到 PIN 码？</a>")
+                    color: Theme.accent
+                    font.pixelSize: Theme.fontSize13
+                    Layout.fillWidth: true
+                    onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+                }
+
+                // Mock-flow addition kept per page brief (upstream has no
+                // device-name input on this dialog).
+                Label {
+                    text: qsTr("设备名称")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeMD
+                }
+                CxTextField {
+                    id: bindDeviceName
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("例如：K1 Max")
+                    Keys.onReturnPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                    Keys.onEnterPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                }
+
+                // Upstream "Pin Code" input title (BindDialog.cpp:96).
+                Label {
+                    text: qsTr("PIN 码")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeMD
+                }
+
+                // Six 38x38 single-char cells (BindDialog.cpp:111-123):
+                // centered, green #228B22, Body_16, auto-advance.
+                Row {
+                    spacing: Theme.spacingMD
+
+                    Repeater {
+                        model: 6
+
+                        CxTextField {
+                            id: pinCell
+                            required property int index
+                            width: 38
+                            height: 38
+                            font.pixelSize: Theme.fontSizeXL
+                            // Upstream SetTextColour(wxColour(34,139,34))
+                            // (BindDialog.cpp:115).
+                            color: Theme.statusSuccess
+                            horizontalAlignment: TextInput.AlignHCenter
+                            verticalAlignment: TextInput.AlignVCenter
+                            leftPadding: 4
+                            rightPadding: 4
+                            maximumLength: 1
+                            // Upstream on_key_input whitelist: 0-9 a-z A-Z
+                            // (BindDialog.cpp:203-216).
+                            validator: RegularExpressionValidator { regularExpression: /[0-9a-zA-Z]/ }
+
+                            Component.onCompleted: bindDialog.pinCells.push(pinCell)
+                            onTextChanged: {
+                                // Auto-advance once one char is entered
+                                // (upstream on_text_changed,
+                                // BindDialog.cpp:226-230).
+                                if (text.length === 1 && pinCell.index < 5)
+                                    bindDialog.pinCells[pinCell.index + 1].forceActiveFocus()
+                                bindDialog.refreshPinComplete()
+                            }
+                            // Qt 6.10 Keys has no backspacePressed signal;
+                            // match Key_Backspace manually (upstream
+                            // on_key_backspace, BindDialog.cpp:255-268).
+                            Keys.onPressed: function(event) {
+                                if (event.key !== Qt.Key_Backspace)
+                                    return
+                                event.accepted = true
+                                // Move focus to the previous cell.
+                                if (pinCell.index > 0)
+                                    bindDialog.pinCells[pinCell.index - 1].forceActiveFocus()
+                            }
+                            Keys.onReturnPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                            Keys.onEnterPressed: if (bindDialog.pinComplete) bindDialog.doBind()
+                        }
+                    }
+                }
+
+                Text {
+                    text: bindDialog.bindError
+                    color: Theme.statusError
+                    font.pixelSize: Theme.fontSizeSM
+                    visible: bindDialog.bindError !== ""
+                    Layout.fillWidth: true
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+                    spacing: 8
+
+                    CxButton {
+                        text: qsTr("取消")
+                        onClicked: bindDialog.close()
+                    }
+                    CxButton {
+                        text: qsTr("绑定")
+                        highlighted: true
+                        enabled: bindDialog.pinComplete
+                        onClicked: bindDialog.doBind()
+                    }
+                }
+
+                // R-P1.E: mock bind disclosure (dependency-audit registry).
+                Label {
+                    text: qsTr("演示模式：绑定为本地模拟，不会连接真实设备（依赖 bambu_networking，外部阻塞）。")
+                    color: Theme.textTertiary
+                    font.pixelSize: Theme.fontSizeXS
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+            }
+
+            // ── Page 2: binding (upstream binding_panel, BindDialog.cpp:162-172) ──
+            ColumnLayout {
+                visible: bindDialog.bindState === 1
+                Layout.fillWidth: true
+                spacing: Theme.spacingMD
+
+                Item { Layout.fillHeight: true }
+                Label {
+                    text: qsTr("绑定中…")
+                    color: Theme.textPrimary
+                    font.bold: true
+                    font.pixelSize: Theme.fontSizeXL
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Label {
+                    text: qsTr("请在打印机屏幕上确认")
+                    color: Theme.textSecondary
+                    font.pixelSize: Theme.fontSizeLG
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Item { Layout.fillHeight: true }
+                CxButton {
+                    text: qsTr("关闭")
+                    Layout.alignment: Qt.AlignRight
+                    onClicked: bindDialog.close()
+                }
+            }
+        }
+
+        Connections {
+            target: root.homeVm
+            function onCloudLoginFailed(error) {
+                // Upstream surfaces the failure and stays on the request
+                // page (BindDialog.cpp:288-293).
+                bindDialog.bindError = error
+                bindDialog.bindState = 0
+            }
+            function onCloudStateChanged() {
+                bindDialog.close()
+                bindDialog.bindError = ""
+                bindDialog.bindState = 0
+            }
+        }
+
+        function doBind() {
+            // Upstream on_bind_printer (BindDialog.cpp:280-301): requires
+            // login + a full 6-char code; success flips the simplebook to
+            // the binding page, failure surfaces an error and stays put.
+            if (!pinComplete)
+                return
+            bindError = ""
+            bindState = 1
+            root.homeVm.cloudBindDevice(bindDeviceName.text, pinCode())
+        }
+
+        onOpened: {
+            bindState = 0
+            bindError = ""
+            bindDeviceName.text = ""
+            for (var i = 0; i < pinCells.length; ++i)
+                pinCells[i].text = ""
+            refreshPinComplete()
+            if (pinCells.length > 0)
+                pinCells[0].forceActiveFocus()
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingXXL
@@ -275,20 +656,25 @@ Item {
 
                             Item { Layout.fillWidth: true }
 
+                            // The mouse area lives INSIDE the label: as a
+                            // sibling inside the RowLayout it was layout-
+                            // managed (anchors undefined behavior, zero-size
+                            // cell = dead hover/click).
                             Text {
                                 text: qsTr("解绑")
                                 color: unbindMA.containsMouse ? Theme.statusError : Theme.textTertiary
                                 font.pixelSize: Theme.fontSizeSM
-                            }
-                            MouseArea {
-                                id: unbindMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    // Phase 171 (CL-01): confirm before unbinding (was firing immediately).
-                                    root._pendingUnbindIndex = index
-                                    unbindConfirm.open()
+
+                                MouseArea {
+                                    id: unbindMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        // Phase 171 (CL-01): confirm before unbinding (was firing immediately).
+                                        root._pendingUnbindIndex = index
+                                        unbindConfirm.open()
+                                    }
                                 }
                             }
                         }
@@ -322,383 +708,6 @@ Item {
             }
         }
 
-        // ── Login dialog (对齐上游 WebUserLoginDialog) ──
-        Dialog {
-            id: loginDialog
-            anchors.centerIn: parent
-            modal: true
-            title: qsTr("登录 OWzx 账号")
-            padding: Theme.spacingXL
-
-            background: Rectangle {
-                radius: Theme.radiusXL
-                color: Theme.bgElevated
-                border.color: Theme.borderSubtle
-                border.width: 1
-            }
-
-            header: Label {
-                text: qsTr("登录 OWzx 账号")
-                color: Theme.textPrimary
-                font.bold: true
-                font.pixelSize: Theme.fontSizeXL
-                padding: 12
-            }
-
-            ColumnLayout {
-                spacing: 12
-                width: 280
-
-                Label {
-                    text: qsTr("用户名")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                CxTextField {
-                    id: loginUser
-                    Layout.fillWidth: true
-                    placeholderText: qsTr("输入用户名")
-                }
-
-                Label {
-                    text: qsTr("密码")
-                    color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSizeMD
-                }
-                CxTextField {
-                    id: loginPass
-                    Layout.fillWidth: true
-                    echoMode: TextInput.Password
-                    placeholderText: qsTr("输入密码")
-                    Keys.onReturnPressed: doLogin()
-                    Keys.onEnterPressed: doLogin()
-                }
-
-                // Error message
-                Label {
-                    text: loginDialog.loginError
-                    color: Theme.statusError
-                    font.pixelSize: Theme.fontSizeSM
-                    visible: loginDialog.loginError !== ""
-                }
-
-                // R-P1.E: user-visible disclosure required by
-                // docs/依赖与协议边界审计.md -- cloud login/bind are local
-                // mocks (real `bambu_networking` is externally blocked), so a
-                // "success" here is a demo flow, not a real account login.
-                Label {
-                    visible: Backend.cloudBackendKind !== "creality"
-                    text: qsTr("演示模式：登录/绑定为本地模拟，不会连接真实云服务（依赖 bambu_networking，外部阻塞）。")
-                    color: Theme.textTertiary
-                    font.pixelSize: Theme.fontSizeXS
-                    wrapMode: Text.Wrap
-                    Layout.fillWidth: true
-                }
-
-                RowLayout {
-                    Layout.alignment: Qt.AlignRight
-                    spacing: 8
-
-                    CxButton {
-                        text: qsTr("取消")
-                        onClicked: loginDialog.close()
-                    }
-                    CxButton {
-                        text: qsTr("登录")
-                        highlighted: true
-                        onClicked: doLogin()
-                    }
-                }
-            }
-
-            property string loginError: ""
-
-            Connections {
-                target: root.homeVm
-                function onCloudLoginFailed(error) { loginDialog.loginError = error }
-                function onCloudStateChanged() {
-                    if (root.homeVm.cloudLoggedIn) {
-                        loginDialog.close()
-                        loginDialog.loginError = ""
-                    }
-                }
-            }
-
-            function doLogin() {
-                root.homeVm.cloudLogin(loginUser.text, loginPass.text)
-            }
-
-            onOpened: { loginUser.text = ""; loginPass.text = ""; loginError = ""; loginUser.forceActiveFocus() }
-        }
-
-        // ── Bind device dialog (对齐上游 BindDialog / PingCodeBindDialog) ──
-        // Upstream PingCodeBindDialog (BindDialog.cpp:60-172) is a 460x240
-        // white two-page simplebook: page 1 = two-line guide text (Body_14,
-        // #262E30) + "Can't find Pin Code?" wiki hyperlink + "Pin Code" title
-        // + six 38x38 single-char green inputs + Confirm/Cancel; after submit
-        // page 2 = "Binding..." + "Please confirm on the printer screen" +
-        // Close. Dark-mode mapping: white panel -> Theme.bgPanel. The extra
-        // "device name" input is a mock-flow addition kept per the page brief.
-        Dialog {
-            id: bindDialog
-            anchors.centerIn: parent
-            modal: true
-            title: qsTr("通过 PIN 码绑定")
-            padding: Theme.spacingXL
-
-            background: Rectangle {
-                radius: Theme.radiusXL
-                color: Theme.bgPanel
-                border.color: Theme.borderSubtle
-                border.width: 1
-            }
-
-            header: Label {
-                text: qsTr("通过 PIN 码绑定")
-                color: Theme.textPrimary
-                font.bold: true
-                font.pixelSize: Theme.fontSizeXL
-                padding: 12
-            }
-
-            // Upstream simplebook page index (BindDialog.cpp:163/303):
-            // 0 = request page, 1 = binding page.
-            property int bindState: 0
-            property string bindError: ""
-            // PIN cells registry, PING_CODE_LENGTH = 6 (BindDialog.hpp:42).
-            property var pinCells: []
-            // Upstream Confirm stays disabled until all 6 cells are filled
-            // (BindDialog.cpp:226-245).
-            property bool pinComplete: false
-
-            function refreshPinComplete() {
-                if (pinCells.length < 6) {
-                    pinComplete = false
-                    return
-                }
-                var filled = true
-                for (var i = 0; i < 6; ++i) {
-                    if (pinCells[i].text === "")
-                        filled = false
-                }
-                pinComplete = filled
-            }
-
-            function pinCode() {
-                var s = ""
-                for (var i = 0; i < pinCells.length; ++i)
-                    s += pinCells[i].text
-                return s
-            }
-
-            ColumnLayout {
-                spacing: Theme.spacingMD
-                // Upstream simplebook is 460x240 (BindDialog.cpp:70-72); 460
-                // is the dialog width incl. 20 padding. Height flows with the
-                // content (the mock device-name row adds one row upstream
-                // does not have).
-                width: 460
-
-                // ── Page 1: request (upstream request_bind_panel, BindDialog.cpp:74-126) ──
-                ColumnLayout {
-                    visible: bindDialog.bindState === 0
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-
-                    // Guide text, upstream m_status_text (BindDialog.cpp:88-91):
-                    // Body_14, #262E30, two lines.
-                    Label {
-                        text: qsTr("请在打印机屏幕的『账号』页面找到 PIN 码，\n然后在下方输入。")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSize13
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                    }
-
-                    // Upstream "Can't find Pin Code?" wiki hyperlink
-                    // (BindDialog.cpp:94).
-                    Label {
-                        text: qsTr("<a href=\"https://wiki.bambulab.com/en/bambu-studio/manual/pin-code\">找不到 PIN 码？</a>")
-                        color: Theme.accent
-                        font.pixelSize: Theme.fontSize13
-                        Layout.fillWidth: true
-                        onLinkActivated: function(link) { Qt.openUrlExternally(link) }
-                    }
-
-                    // Mock-flow addition kept per page brief (upstream has no
-                    // device-name input on this dialog).
-                    Label {
-                        text: qsTr("设备名称")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeMD
-                    }
-                    CxTextField {
-                        id: bindDeviceName
-                        Layout.fillWidth: true
-                        placeholderText: qsTr("例如：K1 Max")
-                        Keys.onReturnPressed: if (bindDialog.pinComplete) bindDialog.doBind()
-                        Keys.onEnterPressed: if (bindDialog.pinComplete) bindDialog.doBind()
-                    }
-
-                    // Upstream "Pin Code" input title (BindDialog.cpp:96).
-                    Label {
-                        text: qsTr("PIN 码")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeMD
-                    }
-
-                    // Six 38x38 single-char cells (BindDialog.cpp:111-123):
-                    // centered, green #228B22, Body_16, auto-advance.
-                    Row {
-                        spacing: Theme.spacingMD
-
-                        Repeater {
-                            model: 6
-
-                            CxTextField {
-                                id: pinCell
-                                required property int index
-                                width: 38
-                                height: 38
-                                font.pixelSize: Theme.fontSizeXL
-                                // Upstream SetTextColour(wxColour(34,139,34))
-                                // (BindDialog.cpp:115).
-                                color: Theme.statusSuccess
-                                horizontalAlignment: TextInput.AlignHCenter
-                                verticalAlignment: TextInput.AlignVCenter
-                                leftPadding: 4
-                                rightPadding: 4
-                                maximumLength: 1
-                                // Upstream on_key_input whitelist: 0-9 a-z A-Z
-                                // (BindDialog.cpp:203-216).
-                                validator: RegularExpressionValidator { regularExpression: /[0-9a-zA-Z]/ }
-
-                                Component.onCompleted: bindDialog.pinCells.push(pinCell)
-                                onTextChanged: {
-                                    // Auto-advance once one char is entered
-                                    // (upstream on_text_changed,
-                                    // BindDialog.cpp:226-230).
-                                    if (text.length === 1 && pinCell.index < 5)
-                                        bindDialog.pinCells[pinCell.index + 1].forceActiveFocus()
-                                    bindDialog.refreshPinComplete()
-                                }
-                                // Qt 6.10 Keys has no backspacePressed signal;
-                                // match Key_Backspace manually (upstream
-                                // on_key_backspace, BindDialog.cpp:255-268).
-                                Keys.onPressed: function(event) {
-                                    if (event.key !== Qt.Key_Backspace)
-                                        return
-                                    event.accepted = true
-                                    // Move focus to the previous cell.
-                                    if (pinCell.index > 0)
-                                        bindDialog.pinCells[pinCell.index - 1].forceActiveFocus()
-                                }
-                                Keys.onReturnPressed: if (bindDialog.pinComplete) bindDialog.doBind()
-                                Keys.onEnterPressed: if (bindDialog.pinComplete) bindDialog.doBind()
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: bindDialog.bindError
-                        color: Theme.statusError
-                        font.pixelSize: Theme.fontSizeSM
-                        visible: bindDialog.bindError !== ""
-                        Layout.fillWidth: true
-                    }
-
-                    RowLayout {
-                        Layout.alignment: Qt.AlignRight
-                        spacing: 8
-
-                        CxButton {
-                            text: qsTr("取消")
-                            onClicked: bindDialog.close()
-                        }
-                        CxButton {
-                            text: qsTr("绑定")
-                            highlighted: true
-                            enabled: bindDialog.pinComplete
-                            onClicked: bindDialog.doBind()
-                        }
-                    }
-
-                    // R-P1.E: mock bind disclosure (dependency-audit registry).
-                    Label {
-                        text: qsTr("演示模式：绑定为本地模拟，不会连接真实设备（依赖 bambu_networking，外部阻塞）。")
-                        color: Theme.textTertiary
-                        font.pixelSize: Theme.fontSizeXS
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                    }
-                }
-
-                // ── Page 2: binding (upstream binding_panel, BindDialog.cpp:162-172) ──
-                ColumnLayout {
-                    visible: bindDialog.bindState === 1
-                    Layout.fillWidth: true
-                    spacing: Theme.spacingMD
-
-                    Item { Layout.fillHeight: true }
-                    Label {
-                        text: qsTr("绑定中…")
-                        color: Theme.textPrimary
-                        font.bold: true
-                        font.pixelSize: Theme.fontSizeXL
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                    Label {
-                        text: qsTr("请在打印机屏幕上确认")
-                        color: Theme.textSecondary
-                        font.pixelSize: Theme.fontSizeLG
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-                    Item { Layout.fillHeight: true }
-                    CxButton {
-                        text: qsTr("关闭")
-                        Layout.alignment: Qt.AlignRight
-                        onClicked: bindDialog.close()
-                    }
-                }
-            }
-
-            Connections {
-                target: root.homeVm
-                function onCloudLoginFailed(error) {
-                    // Upstream surfaces the failure and stays on the request
-                    // page (BindDialog.cpp:288-293).
-                    bindDialog.bindError = error
-                    bindDialog.bindState = 0
-                }
-                function onCloudStateChanged() {
-                    bindDialog.close()
-                    bindDialog.bindError = ""
-                    bindDialog.bindState = 0
-                }
-            }
-
-            function doBind() {
-                // Upstream on_bind_printer (BindDialog.cpp:280-301): requires
-                // login + a full 6-char code; success flips the simplebook to
-                // the binding page, failure surfaces an error and stays put.
-                if (!pinComplete)
-                    return
-                bindError = ""
-                bindState = 1
-                root.homeVm.cloudBindDevice(bindDeviceName.text, pinCode())
-            }
-
-            onOpened: {
-                bindState = 0
-                bindError = ""
-                bindDeviceName.text = ""
-                for (var i = 0; i < pinCells.length; ++i)
-                    pinCells[i].text = ""
-                refreshPinComplete()
-                if (pinCells.length > 0)
-                    pinCells[0].forceActiveFocus()
-            }
-        }
 
         // PAGE-04: Daily Tips（对齐上游 DailyTips.cpp DailyTipsPanel）。
         // Upstream is a vertical collapsible card: a 16:9 image area renders

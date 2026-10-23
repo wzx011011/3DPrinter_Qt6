@@ -351,7 +351,9 @@ void QmlSmokeTests::mainQmlLoads()
 {
   const qsizetype messagesBefore = m_qmlMessages.size();
 
-  engine_->load(QUrl(QStringLiteral("qrc:/qml/OWzx/main.qml")));
+  // Phase 5 (2026-10-23): load the root exactly like the app does
+  // (loadFromModule) so the smoke gate covers the production module route.
+  engine_->loadFromModule(QStringLiteral("OWzx"), QStringLiteral("Main"));
 
   QVERIFY2(!engine_->rootObjects().isEmpty(),
            "main.qml must produce a root object (see captured QML messages)");

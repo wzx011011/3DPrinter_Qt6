@@ -234,7 +234,7 @@ CxDialog {
                     width: entryList.width
                     height: 30
                     radius: Theme.radiusSM
-                    color: rowHover.containsMouse ? Theme.bgHover : "transparent"
+                    color: rowHover.hovered ? Theme.bgHover : "transparent"
 
                     readonly property bool isChecked: modelData.isFolder
                         ? root.folderChecked[modelData.path] === true

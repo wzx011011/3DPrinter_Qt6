@@ -995,6 +995,17 @@ void SliceService::startSlice(const QString &projectName)
   const QPointer<SliceService> receiver(this);
   const auto cancelFlag = activeCancelFlag_;
 
+  // Phase 3 (Qt 6.12 modernization): the worker reports its verdict through
+  // a QPromise<SliceOutcome> in addition to the queued completion lambda.
+  // Every exit (success/failure/cancel) fulfills it, so a copied future can
+  // be waited or chained without touching service state. The MOCK
+  // simulator's progress rides the same future (setProgressValue); the real
+  // engine's progress keeps its queued signal path (already non-blocking).
+  QPromise<SliceOutcome> outcomePromise;
+  outcomePromise.setProgressRange(0, 100);
+  outcomePromise.start();
+  lastSliceOutcome_ = outcomePromise.future();
+
   // PLATE-PRINT-LIFECYCLE (batch 2): keep the future so ~SliceService can
   // cancel-then-join the worker (no orphaned worker can race destruction).
   activeSliceFuture_ = QtConcurrent::run([receiver, cancelFlag, sourcePath, targetPlateIndex, targetResultKey, targetPlateLabel
@@ -1009,6 +1020,7 @@ void SliceService::startSlice(const QString &projectName)
 #endif
                      // Review P1-3: project reset generation at start time.
                      , generation = receiver ? receiver->sliceGeneration_ : quint64(0)
+                     , outcomePromise = std::move(outcomePromise)
                      ]() mutable
                     {
     QString errorText;
@@ -1439,16 +1451,33 @@ void SliceService::startSlice(const QString &projectName)
         QObject::tr("Calculating paths"),
         QObject::tr("Exporting G-code")
       };
+      // Phase 3: Queued (was Blocking) -- the worker no longer stalls when
+      // the GUI thread is busy; the msleep below already paces the steps.
+      // Progress also rides the outcome future for future-based consumers.
+      outcomePromise.setProgressValue(pct);
       QMetaObject::invokeMethod(receiver, [receiver, pct, labels, step]() {
         if (!receiver) return;
         receiver->progress_ = pct;
         receiver->statusLabel_ = labels.value(step - 1, QObject::tr("Slicing"));
         emit receiver->progressChanged();
         emit receiver->progressUpdated(pct, receiver->statusLabel_);
-      }, Qt::BlockingQueuedConnection);
+      }, Qt::QueuedConnection);
       QThread::msleep(400);
     }
 #endif
+
+    // Phase 3: fulfill the outcome promise on EVERY exit (the early
+    // receiver-gone return below included) so a chained future never hangs.
+    {
+      SliceOutcome outcome;
+      outcome.errorText = errorText;
+      outcome.cancelled = cancelFlag && cancelFlag->load();
+      outcome.outputPath = outputPath;
+      outcome.plateIndex = resultPlateIndex;
+      outcome.plateLabel = resultPlateLabel;
+      outcome.generation = generation;
+      outcomePromise.addResult(outcome);
+    }
 
     if (!receiver)
       return;

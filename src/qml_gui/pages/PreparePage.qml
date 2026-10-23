@@ -822,7 +822,7 @@ Item {
                                                 color: "white"
                                                 font.pixelSize: Theme.fontSizeXS
                                                 font.bold: true
-                                                anchors.centerIn: parent
+                                                Layout.alignment: Qt.AlignVCenter
                                             }
                                             // 箭头（非最后一个时显示）
                                             Text {
@@ -1082,7 +1082,7 @@ Item {
                                                                 color: "white"
                                                                 font.pixelSize: Theme.fontSizeXS
                                                                 font.bold: true
-                                                                anchors.centerIn: parent
+                                                                Layout.alignment: Qt.AlignVCenter
                                                             }
                                                             Text {
                                                                 text: "›"
@@ -1464,9 +1464,9 @@ Item {
         width: 36
         height: 36
         radius: Theme.radiusHero  // clamps to width/2: full circle
-        color: actionHover.containsMouse ? Theme.bgHover : Qt.rgba(0.10, 0.10, 0.12, 0.82)
+        color: actionHover.hovered ? Theme.bgHover : Qt.rgba(0.10, 0.10, 0.12, 0.82)
         border.width: 1
-        border.color: plateActionButton.checked || actionHover.containsMouse
+        border.color: plateActionButton.checked || actionHover.hovered
                           ? Theme.accent : Theme.borderSubtle
         opacity: enabled ? 1.0 : 0.4
 

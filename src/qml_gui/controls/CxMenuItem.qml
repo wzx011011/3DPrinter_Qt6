@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import OWzx
@@ -56,21 +57,21 @@ MenuItem {
         verticalAlignment: Text.AlignVCenter
     }
 
-    arrow: Canvas {
+    // QtQuick.Shapes port (2026-10-23): the submenu chevron was hand-drawn
+    // on a Canvas; a filled triangle path renders identically without the
+    // Context2D repaint plumbing.
+    arrow: Shape {
         x: parent.width - width - Theme.spacingMD
         y: (parent.height - height) / 2
         width: 8
         height: 8
-        contextType: "2d"
         visible: root.subMenu
-        onPaint: {
-            if (!context) return
-            context.reset()
-            context.fillStyle = Theme.textMuted
-            context.moveTo(0, 0)
-            context.lineTo(width, height / 2)
-            context.lineTo(0, height)
-            context.fill()
+        antialiasing: true
+        ShapePath {
+            fillColor: Theme.textMuted
+            strokeColor: "transparent"
+            strokeWidth: 0
+            PathSvg { path: "M0 0L8 4L0 8Z" }
         }
     }
 }

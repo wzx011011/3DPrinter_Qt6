@@ -209,7 +209,7 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 36
                 Layout.preferredHeight: 32
-                color: logoHover.containsMouse ? Theme.chromeHover : "transparent"
+                color: logoHover.hovered ? Theme.chromeHover : "transparent"
 
                 Image {
                     anchors.centerIn: parent

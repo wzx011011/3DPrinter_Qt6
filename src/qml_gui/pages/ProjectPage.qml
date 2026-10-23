@@ -226,7 +226,7 @@ Item {
                                     required property var modelData
                                     width: parent.width; height: 32
                                     radius: Theme.radiusLG
-                                    color: itemHov.containsMouse ? Theme.bgHover : "transparent"
+                                    color: itemHov.hovered ? Theme.bgHover : "transparent"
                                     Row {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.left: parent.left

@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Shapes
 import OWzx
 
 // P10.1 -- PluginManagerDialog (Phase 202: real PluginService Backend).
@@ -632,38 +633,29 @@ CxDialog {
             border.color: Theme.borderDefault
             opacity: checkRoot.enabled ? 1.0 : 0.6
         }
-        Canvas {
+        // QtQuick.Shapes port (2026-10-23): check / indeterminate glyph
+        // paths (styles.css:983-1010), stroke caps replace the Canvas
+        // round line joins; state flips re-evaluate through bindings.
+        Shape {
             id: checkMark
             anchors.centerIn: parent
             width: 12
             height: 12
             antialiasing: true
             visible: checkRoot.checked || checkRoot.mixed
-            onPaint: {
-                const ctx = getContext("2d")
-                ctx.clearRect(0, 0, width, height)
-                if (!checkRoot.checked && !checkRoot.mixed)
-                    return
-                ctx.strokeStyle = Theme.textOnAccent
-                ctx.lineWidth = 1.5
-                ctx.lineCap = "round"
-                ctx.lineJoin = "round"
-                ctx.beginPath()
-                if (checkRoot.mixed) {
-                    // indeterminate: 6x1.5 bar (styles.css:1001-1010)
-                    ctx.moveTo(3, 6)
-                    ctx.lineTo(9, 6)
-                } else {
-                    // check: 3x6 polyline rotated 45deg (styles.css:983-993)
-                    ctx.moveTo(3.2, 6.4)
-                    ctx.lineTo(5.0, 8.2)
-                    ctx.lineTo(9.0, 3.8)
+            ShapePath {
+                fillColor: "transparent"
+                strokeColor: Theme.textOnAccent
+                strokeWidth: 1.5
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathSvg {
+                    path: checkRoot.mixed
+                          ? "M3 6L9 6"              // indeterminate: 6x1.5 bar
+                          : "M3.2 6.4L5.0 8.2L9.0 3.8"  // check polyline
                 }
-                ctx.stroke()
             }
         }
-        onCheckedChanged: checkMark.requestPaint()
-        onMixedChanged: checkMark.requestPaint()
     }
 
     contentItem: Item {

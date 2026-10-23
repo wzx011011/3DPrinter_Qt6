@@ -29,6 +29,11 @@ qt_add_library(owzx_qml STATIC)
 # qmldir lists Theme as an instantiable type and every Theme.* lookup in
 # deferred/style-created components resolves to undefined.
 set_source_files_properties(Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+# Phase 5 (2026-10-23): the root document must be a named module type for
+# engine->loadFromModule("OWzx", "Main") -- without an explicit source type
+# name the generated qmldir omitted main.qml (qmlcachegen still compiles it,
+# so the omission only surfaces at load time).
+set_source_files_properties(main.qml PROPERTIES QT_QML_SOURCE_TYPENAME Main)
 # QTP0004 NEW: emit "prefer :/qml" qmldir files for the module's
 # subdirectories (pages/controls/...) so filesystem-loaded QML (the
 # --qml-dev flow) resolves subdirectory types from the embedded tree.
@@ -154,9 +159,36 @@ qt_add_qml_module(owzx_qml
 # linked test exe while the module's own resources survived via qmlcache).
 target_link_libraries(owzx_qml PRIVATE
     Qt6::Qml Qt6::Quick
+    # QtQuick.Shapes (2026-10-23 phase 2): BedShapeDialog bed preview,
+    # CxMenuItem submenu chevron and PluginManagerDialog checkbox glyphs
+    # dropped their Context2D Canvases (FB-R7-08 roundRect TypeError).
+    Qt6::QuickShapes
     # BackendContext.cpp compiles against the whole viewmodel/service surface;
     # the OBJECT library's usage requirements (includes, HAS_LIBSLIC3R, Qt
     # modules) feed this target's compilation and its objects ride the link
     # closure of every owzx_qml consumer.
     owzx_app_core
 )
+
+# ── qmllint ratchet gate (Qt 6.12 modernization plan phase 1, 2026-10-23) ──
+# The auto-generated owzx_qml_qmllint_json target lints every QML file of the
+# module into one JSON report. The gate re-checks that report against
+# docs/qmllint-baseline/allowed.json (per file+category counts) and fails on
+# any NEW warning; syntax errors fail unconditionally. Not wired into `all`
+# (1285 stock warnings from the pre-gate era are ratcheted, not blocking) --
+# run `ninja owzx_qml_lint_gate` in canonical verify, or standalone after
+# owzx_qml_qmllint_json.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_custom_target(owzx_qml_lint_gate
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/tools/qmllint_gate.py
+                --json ${CMAKE_BINARY_DIR}/owzx_qml_qmllint.json
+                --allowlist ${CMAKE_SOURCE_DIR}/docs/qmllint-baseline/allowed.json
+        DEPENDS owzx_qml_qmllint_json
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "qmllint ratchet gate (docs/qmllint-baseline/allowed.json)"
+        VERBATIM)
+else()
+    message(WARNING "Python3 not found: owzx_qml_lint_gate target unavailable")
+endif()

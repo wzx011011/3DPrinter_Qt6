@@ -647,7 +647,7 @@ ApplicationWindow {
                             required property int index
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: tabHov.containsMouse ? Theme.bgHover : "transparent"
+                            color: tabHov.hovered ? Theme.bgHover : "transparent"
 
                             Rectangle {
                                 anchors.bottom: parent.bottom

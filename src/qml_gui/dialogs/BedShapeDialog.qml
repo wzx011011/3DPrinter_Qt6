@@ -2,6 +2,7 @@ import QtQuick
 pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Shapes
 import QtQuick.Dialogs
 import OWzx
 
@@ -149,7 +150,7 @@ CxDialog {
                     text: {
                         if (!root.editorVm) return "200"
                         return root.editorVm.bedShapeType === 0
-                            ? root.editorVm.bedWidth.toFixed(1) : ""
+                            ? root.editorVm.bedWidth : ""
                     }
                     onEditingFinished: {
                         if (!root.editorVm) return
@@ -168,7 +169,7 @@ CxDialog {
                     text: {
                         if (!root.editorVm) return "200"
                         return root.editorVm.bedShapeType === 0
-                            ? root.editorVm.bedDepth.toFixed(1) : ""
+                            ? root.editorVm.bedDepth : ""
                     }
                     onEditingFinished: {
                         if (!root.editorVm) return
@@ -199,7 +200,7 @@ CxDialog {
                     placeholderText: "0"
                     ToolTip.visible: originTipHover.hovered
                     ToolTip.text: qsTr("G-code 0,0 坐标距矩形左前角的距离。")
-                    text: root.editorVm ? root.editorVm.bedOriginX.toFixed(1) : "0"
+                    text: root.editorVm ? root.editorVm.bedOriginX : "0"
                     onEditingFinished: {
                         if (!root.editorVm) return
                         var v = parseFloat(text)
@@ -214,7 +215,7 @@ CxDialog {
                     placeholderText: "0"
                     ToolTip.visible: originTipHover.hovered
                     ToolTip.text: qsTr("G-code 0,0 坐标距矩形左前角的距离。")
-                    text: root.editorVm ? root.editorVm.bedOriginY.toFixed(1) : "0"
+                    text: root.editorVm ? root.editorVm.bedOriginY : "0"
                     onEditingFinished: {
                         if (!root.editorVm) return
                         var v = parseFloat(text)
@@ -243,7 +244,7 @@ CxDialog {
                     placeholderText: "200"
                     ToolTip.visible: diamTipHover.hovered
                     ToolTip.text: qsTr("打印床的直径。原点 (0,0) 假定位于圆心。")
-                    text: root.editorVm ? root.editorVm.bedDiameter.toFixed(1) : "220"
+                    text: root.editorVm ? root.editorVm.bedDiameter : "220"
                     onEditingFinished: {
                         if (!root.editorVm) return
                         var v = parseFloat(text)
@@ -349,156 +350,197 @@ CxDialog {
             }
         }
 
-        // -- Right: bed shape preview canvas (upstream Bed_2D pane) --
-        Canvas {
-            id: previewCanvas
+        // -- Right: bed shape preview (upstream Bed_2D pane) --
+        // QtQuick.Shapes port (2026-10-23, FB-R7-08): the old Canvas called
+        // ctx.roundRect(), which the Qt 6.12 Canvas 2D context does not
+        // implement -- every repaint threw a TypeError and skipped the
+        // outline. Vector shapes also react to property changes through
+        // plain bindings, so the requestPaint() plumbing is gone entirely.
+        Item {
+            id: previewPane
             Layout.preferredWidth: 170
             Layout.preferredHeight: 330
 
-            property real bedW: root.editorVm ? root.editorVm.bedWidth : 220
-            property real bedD: root.editorVm ? root.editorVm.bedDepth : 220
-            property real bedDiam: root.editorVm ? root.editorVm.bedDiameter : 220
-            property int shapeType: root.editorVm ? root.editorVm.bedShapeType : 0
-            property var outline: root.customOutline
+            readonly property real bedW: root.editorVm ? root.editorVm.bedWidth : 220
+            readonly property real bedD: root.editorVm ? root.editorVm.bedDepth : 220
+            readonly property real bedDiam: root.editorVm ? root.editorVm.bedDiameter : 220
+            readonly property int shapeType: root.editorVm ? root.editorVm.bedShapeType : 0
+            readonly property var outline: root.customOutline
 
-            onBedWChanged: requestPaint()
-            onBedDChanged: requestPaint()
-            onBedDiamChanged: requestPaint()
-            onShapeTypeChanged: requestPaint()
-            onOutlineChanged: requestPaint()
-            onPainted: {}
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
+            readonly property real pad: 10
+            readonly property real drawW: width - pad * 2
+            readonly property real drawH: height - pad * 2
+            readonly property real ox: pad + drawW / 2
+            readonly property real oy: pad + drawH / 2
 
-            function draw() {
-                requestPaint()
+            // Rectangle outline (shapeType 0), same fit as the old Canvas
+            // (300mm reference scale).
+            readonly property real rectScale: Math.min(drawW / 300, drawH / 300)
+            readonly property real rw: Math.max(1, bedW * rectScale)
+            readonly property real rh: Math.max(1, bedD * rectScale)
+            readonly property real rx: ox - rw / 2
+            readonly property real ry: oy - rh / 2
+
+            // Circle radius (shapeType 1): the old Canvas clamped the
+            // 120mm-reference radius into half the shorter draw side.
+            readonly property real maxR: Math.min(drawW, drawH) / 2
+            readonly property real circleR: Math.max(1, Math.min(maxR, (bedDiam / 2) * (maxR / 120)))
+
+            // Custom projection (shapeType 2) fitted into the inset area,
+            // exactly the old drawOutline() math (inset 10, aspect fit,
+            // centered on the origin crosshair).
+            readonly property bool hasOutline: {
+                var pts = outline
+                return pts !== undefined && pts !== null && pts.length >= 6
             }
-
-            function drawOutline(ctx, pad, drawW, drawH, ox, oy) {
-                // Fit the projected mm outline into the canvas (the custom
-                // polygon replaces the rect/circle outline, upstream
-                // Bed_2D::repaint(m_shape)).
+            function outlinePath() {
                 var pts = outline
                 if (!pts || pts.length < 6)
-                    return false
-                var minX = Infinity, minY = Infinity
-                var maxX = -Infinity, maxY = -Infinity
+                    return ""
+                var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
                 for (var i = 0; i + 1 < pts.length; i += 2) {
                     minX = Math.min(minX, pts[i]);   maxX = Math.max(maxX, pts[i])
                     minY = Math.min(minY, pts[i+1]); maxY = Math.max(maxY, pts[i+1])
                 }
                 var spanX = Math.max(1e-6, maxX - minX)
                 var spanY = Math.max(1e-6, maxY - minY)
-                var scale = Math.min(drawW / spanX, drawH / spanY)
-                ctx.beginPath()
+                var scale = Math.min((drawW - 20) / spanX, (drawH - 20) / spanY)
+                var s = ""
                 for (var j = 0; j + 1 < pts.length; j += 2) {
                     var px = ox + (pts[j] - (minX + spanX / 2)) * scale
                     var py = oy + (pts[j+1] - (minY + spanY / 2)) * scale
-                    if (j === 0) ctx.moveTo(px, py)
-                    else ctx.lineTo(px, py)
+                    s += (j === 0 ? "M" : "L") + px + " " + py
                 }
-                ctx.closePath()
-                ctx.fillStyle = "rgba(24, 199, 94, 0.08)"
-                ctx.fill()
-                ctx.stroke()
-                return true
+                return s + "Z"
             }
 
-            onPaint: {
-                var ctx = getContext("2d")
-                ctx.reset()
-                var w = width
-                var h = height
-                var pad = 10
-                var drawW = w - pad * 2
-                var drawH = h - pad * 2
+            // 15mm grid lines across the padded area.
+            function gridPath() {
+                var s = ""
+                for (var gx = pad; gx <= pad + drawW + 0.01; gx += 15)
+                    s += "M" + gx + " " + pad
+                       + "L" + gx + " " + (pad + drawH)
+                for (var gy = pad; gy <= pad + drawH + 0.01; gy += 15)
+                    s += "M" + pad + " " + gy
+                       + "L" + (pad + drawW) + " " + gy
+                return s
+            }
 
-                // Grid background
-                ctx.strokeStyle = Theme.scrollBarTrackColor
-                ctx.lineWidth = 0.5
-                for (var gx = pad; gx <= pad + drawW; gx += 15) {
-                    ctx.beginPath()
-                    ctx.moveTo(gx, pad)
-                    ctx.lineTo(gx, pad + drawH)
-                    ctx.stroke()
+            // Axis crosshair through the print origin.
+            function crosshairPath() {
+                return "M" + ox + " " + pad
+                     + "L" + ox + " " + (pad + drawH)
+                     + "M" + pad + " " + oy
+                     + "L" + (pad + drawW) + " " + oy
+            }
+
+            // Rounded rectangle as an SVG path (the Shapes replacement for
+            // the never-implemented Canvas roundRect).
+            function roundedRectPath(x, y, w, h, r) {
+                r = Math.min(r, w / 2, h / 2)
+                return "M" + (x + r) + " " + y
+                     + "H" + (x + w - r)
+                     + "A" + r + " " + r + " 0 0 1 " + (x + w) + " " + (y + r)
+                     + "V" + (y + h - r)
+                     + "A" + r + " " + r + " 0 0 1 " + (x + w - r) + " " + (y + h)
+                     + "H" + (x + r)
+                     + "A" + r + " " + r + " 0 0 1 " + x + " " + (y + h - r)
+                     + "V" + (y + r)
+                     + "A" + r + " " + r + " 0 0 1 " + (x + r) + " " + y + "Z"
+            }
+
+            // Grid + origin crosshair
+            Shape {
+                anchors.fill: parent
+                antialiasing: true
+                ShapePath {
+                    fillColor: "transparent"
+                    strokeColor: Theme.scrollBarTrackColor
+                    strokeWidth: 0.5
+                    PathSvg { path: previewPane.gridPath() }
                 }
-                for (var gy = pad; gy <= pad + drawH; gy += 15) {
-                    ctx.beginPath()
-                    ctx.moveTo(pad, gy)
-                    ctx.lineTo(pad + drawW, gy)
-                    ctx.stroke()
+                ShapePath {
+                    fillColor: "transparent"
+                    strokeColor: Theme.bgPressed
+                    strokeWidth: 0.5
+                    PathSvg { path: previewPane.crosshairPath() }
                 }
+            }
 
-                // Origin crosshair
-                var ox = pad + drawW / 2
-                var oy = pad + drawH / 2
-                ctx.strokeStyle = Theme.bgPressed
-                ctx.lineWidth = 0.5
-                ctx.beginPath()
-                ctx.moveTo(ox, pad)
-                ctx.lineTo(ox, pad + drawH)
-                ctx.moveTo(pad, oy)
-                ctx.lineTo(pad + drawW, oy)
-                ctx.stroke()
-
-                // Bed shape outline
-                ctx.strokeStyle = Theme.accent
-                ctx.lineWidth = 2
-
-                if (shapeType === 2) {
-                    // Custom: imported STL projection outline (upstream
-                    // m_loaded_shape); dashed placeholder while empty.
-                    ctx.setLineDash([4, 3])
-                    if (!drawOutline(ctx, pad, drawW - 20, drawH - 20, ox, oy)) {
-                        ctx.strokeStyle = Theme.textDisabled
-                        ctx.fillStyle = "rgba(86, 96, 112, 0.06)"
-                        ctx.beginPath()
-                        ctx.roundRect(pad + 10, pad + 10, drawW - 20, drawH - 20, 4)
-                        ctx.fill()
-                        ctx.stroke()
-                        ctx.fillStyle = Theme.textDisabled
-                        ctx.font = "11px sans-serif"
-                        ctx.textAlign = "center"
-                        ctx.fillText(qsTr("从 STL 导入"), ox, oy)
-                    }
-                    ctx.setLineDash([])
-                } else {
-                    ctx.fillStyle = "rgba(24, 199, 94, 0.08)"
-                    if (shapeType === 1) {
-                        // Circle
-                        var maxR = Math.min(drawW, drawH) / 2
-                        var r = Math.min(maxR, (bedDiam / 2) * (maxR / 120))
-                        r = Math.max(1, r)
-                        ctx.beginPath()
-                        ctx.arc(ox, oy, r, 0, 2 * Math.PI)
-                        ctx.fill()
-                        ctx.stroke()
-                    } else {
-                        // Rectangle
-                        var scaleX = drawW / 300
-                        var scaleY = drawH / 300
-                        var scale = Math.min(scaleX, scaleY)
-                        var rw = Math.max(1, bedW * scale)
-                        var rh = Math.max(1, bedD * scale)
-                        var rx = ox - rw / 2
-                        var ry = oy - rh / 2
-                        ctx.beginPath()
-                        ctx.roundRect(rx, ry, rw, rh, 3)
-                        ctx.fill()
-                        ctx.stroke()
-
-                        // Dimension labels
-                        ctx.fillStyle = Theme.textTertiary
-                        ctx.font = "9px sans-serif"
-                        ctx.textAlign = "center"
-                        ctx.fillText(bedW.toFixed(0) + "mm", ox, ry - 4)
-                        ctx.save()
-                        ctx.translate(rx - 4, oy)
-                        ctx.rotate(-Math.PI / 2)
-                        ctx.fillText(bedD.toFixed(0) + "mm", 0, 0)
-                        ctx.restore()
+            // Bed shape outline
+            Shape {
+                anchors.fill: parent
+                antialiasing: true
+                // Circle
+                ShapePath {
+                    fillColor: "#1418C75E"
+                    strokeColor: Theme.accent
+                    strokeWidth: 2
+                    PathSvg {
+                        path: previewPane.shapeType === 1
+                              ? "M" + (previewPane.ox - previewPane.circleR) + " " + previewPane.oy
+                                + "A" + previewPane.circleR + " " + previewPane.circleR
+                                + " 0 1 0 " + (previewPane.ox + previewPane.circleR) + " " + previewPane.oy
+                                + "A" + previewPane.circleR + " " + previewPane.circleR
+                                + " 0 1 0 " + (previewPane.ox - previewPane.circleR) + " " + previewPane.oy + "Z"
+                              : ""
                     }
                 }
+                // Rounded rectangle
+                ShapePath {
+                    fillColor: "#1418C75E"
+                    strokeColor: Theme.accent
+                    strokeWidth: 2
+                    PathSvg {
+                        path: previewPane.shapeType === 0
+                              ? previewPane.roundedRectPath(previewPane.rx, previewPane.ry,
+                                                            previewPane.rw, previewPane.rh, 3)
+                              : ""
+                    }
+                }
+                // Custom STL projection: dashed outline while a shape is
+                // loaded, dashed placeholder rect while empty (upstream
+                // m_loaded_shape semantics).
+                ShapePath {
+                    fillColor: previewPane.hasOutline ? "#1418C75E" : "#0F566070"
+                    strokeColor: previewPane.hasOutline ? Theme.accent : Theme.textDisabled
+                    strokeWidth: 2
+                    dashPattern: [4, 3]
+                    PathSvg {
+                        path: previewPane.shapeType === 2
+                              ? (previewPane.hasOutline
+                                   ? previewPane.outlinePath()
+                                   : previewPane.roundedRectPath(previewPane.pad + 10, previewPane.pad + 10,
+                                                                 previewPane.drawW - 20, previewPane.drawH - 20, 4))
+                              : ""
+                    }
+                }
+            }
+
+            // Dimension labels (rect bed only), kept as text items.
+            Text {
+                visible: previewPane.shapeType === 0
+                text: previewPane.bedW.toFixed(0) + "mm"
+                color: Theme.textTertiary
+                font.pixelSize: 9
+                anchors.horizontalCenter: parent.horizontalCenter
+                y: previewPane.ry - height - 2
+            }
+            Text {
+                visible: previewPane.shapeType === 0
+                text: previewPane.bedD.toFixed(0) + "mm"
+                color: Theme.textTertiary
+                font.pixelSize: 9
+                x: previewPane.rx - width - 2
+                y: previewPane.oy
+                transform: Rotation { origin.x: 0; origin.y: 0; angle: -90 }
+            }
+            Text {
+                visible: previewPane.shapeType === 2 && !previewPane.hasOutline
+                text: qsTr("从 STL 导入")
+                color: Theme.textDisabled
+                font.pixelSize: 11
+                anchors.centerIn: parent
             }
         }
     }
@@ -606,16 +648,15 @@ CxDialog {
                 outline: root.customOutline,
                 outlineName: root.customOutlineName
             }
-            sizeXField.text = editorVm.bedWidth.toFixed(1)
-            sizeYField.text = editorVm.bedDepth.toFixed(1)
-            originXField.text = editorVm.bedOriginX.toFixed(1)
-            originYField.text = editorVm.bedOriginY.toFixed(1)
-            diameterField.text = editorVm.bedDiameter.toFixed(1)
+            sizeXField.text = editorVm.bedWidth
+            sizeYField.text = editorVm.bedDepth
+            originXField.text = editorVm.bedOriginX
+            originYField.text = editorVm.bedOriginY
+            diameterField.text = editorVm.bedDiameter
             root.customTexture = editorVm.bedTextureUrl !== undefined
                 ? (editorVm.bedTextureUrl + "").replace(/^file:\/\/\//, "") : ""
             root.customModel = editorVm.bedModelUrl !== undefined
                 ? (editorVm.bedModelUrl + "").replace(/^file:\/\/\//, "") : ""
-            previewCanvas.draw()
         }
     }
 }

@@ -475,6 +475,14 @@ Item {
                 hoverEnabled: true
                 onEntered: deviceRow._hovered = true
                 onExited: deviceRow._hovered = false
+                // Double-click anywhere outside the interactive cells
+                // (name editor/status/buttons sit above in the RowLayout)
+                // enters inline rename mode. The former dedicated MouseArea
+                // lived INSIDE the RowLayout: layout-managed anchors are
+                // undefined behavior and its cell collapsed to 0x0, so
+                // double-click rename never actually worked.
+                acceptedButtons: Qt.LeftButton
+                onDoubleClicked: deviceRow._editingName = true
             }
 
             RowLayout {
@@ -524,13 +532,9 @@ Item {
                         Component.onCompleted: if (visible) forceActiveFocus()
                     }
                 }
-                // Double-click handler to enter name editing mode
-                MouseArea {
-                    anchors.fill: parent
-                    z: -1
-                    acceptedButtons: Qt.LeftButton
-                    onDoubleClicked: deviceRow._editingName = true
-                }
+                // Double-click rename moved into the row-level hover
+                // MouseArea above (this in-layout MouseArea was a 0x0 dead
+                // cell: layout-managed anchors are undefined behavior).
 
                 // Column 2: Task name (aligns with upstream subtask_name / "No task")
                 Text {
@@ -598,11 +602,11 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 90
                     Layout.preferredHeight: 38
+                    Layout.alignment: Qt.AlignVCenter
                     radius: Theme.radiusMD
                     color: Theme.bgElevated
                     border.color: Theme.borderDefault
                     border.width: 1
-                    anchors.verticalCenter: parent.verticalCenter
                     Text {
                         anchors.centerIn: parent
                         text: qsTr("View")

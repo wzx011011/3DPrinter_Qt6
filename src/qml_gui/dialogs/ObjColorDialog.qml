@@ -88,7 +88,7 @@ CxDialog {
                     color: root.colors[index] !== undefined ? root.colors[index] : Theme.bgCard
                     border.color: Theme.borderDefault
                     border.width: 1
-                    ToolTip.visible: swatchHover.containsMouse
+                    ToolTip.visible: swatchHover.hovered
                     ToolTip.text: root.colors[index] !== undefined ? root.colors[index] : ""
                     HoverHandler { id: swatchHover }
                 }
@@ -129,7 +129,7 @@ CxDialog {
                     height: 32
                     radius: Theme.radiusSM
                     color: extruderList.currentIndex === index ? Theme.accentSubtle
-                           : (extruderHover.containsMouse ? Theme.bgHover : "transparent")
+                           : (extruderHover.hovered ? Theme.bgHover : "transparent")
 
                     Row {
                         anchors.verticalCenter: parent.verticalCenter
