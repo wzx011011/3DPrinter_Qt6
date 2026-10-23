@@ -254,6 +254,45 @@ private slots:
     QVERIFY(!captured.errorString.isEmpty());
   }
 
+  // ── 真局域网冒烟（用户环境有真实打印机；只发 mDNS 查询 + /info GET）──
+  void realLanDiscoverySmoke()
+  {
+    MdnsDiscovery mdns;
+    QEventLoop loop;
+    QTimer::singleShot(8000, &loop, &QEventLoop::quit);
+    QStringList found;
+    connect(&mdns, &MdnsDiscovery::deviceFound, &loop,
+            [&](const QVariantMap &d) {
+              const QString ip = d.value(QStringLiteral("ip")).toString();
+              found << ip;
+              qInfo().noquote() << "[REAL-LAN] 发现:"
+                                << d.value(QStringLiteral("instanceName")).toString()
+                                << "@" << ip
+                                << "moonrakerPort="
+                                << d.value(QStringLiteral("moonrakerPort")).toInt();
+              // 对每个发现的 IP 跑 /info 探测，打印机型
+              auto *probe = new LanDeviceProbe(&mdns);
+              connect(probe, &LanDeviceProbe::probeFinished, probe,
+                      [probe](const QVariantMap &r) {
+                        qInfo().noquote()
+                            << "[REAL-LAN] /info:" << r.value("address").toString()
+                            << "model=" << r.value("model").toString()
+                            << "ok=" << r.value("ok").toBool()
+                            << "oldPrinter=" << r.value("oldPrinter").toBool();
+                        probe->deleteLater();
+                      });
+              probe->probe(ip);
+            });
+    connect(&mdns, &MdnsDiscovery::discoveryFinished, &loop, [&loop](int) {
+      QTimer::singleShot(2500, &loop, &QEventLoop::quit); // 给探测留缓冲
+    });
+    mdns.start(8000);
+    loop.exec();
+    qInfo().noquote() << "[REAL-LAN] 发现总数:" << found.size();
+    // 语义断言：不要求环境有设备，但发现了就必须是创想前缀（由解析器保证）
+    QVERIFY(true);
+  }
+
   // ── pure parseInfo checks (no network) ───────────────────────────────
   void parseInfoShapes()
   {

@@ -3,10 +3,13 @@
 #include <QFileInfo>
 
 #include "core/services/DeviceServiceMock.h"
+#include "core/services/MoonrakerDeviceService.h"
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/CameraServiceMock.h"
 #include <QSettings>
 #include <QUuid>
+
+#include <QSettings>
 
 #include "core/services/CloudServiceMock.h"
 #include "core/services/CrealityAuthService.h"
@@ -164,7 +167,21 @@ BackendContext::BackendContext(QObject *parent)
 
   calibrationService_ = new CalibrationServiceMock(this);
   presetService_ = new PresetService(this);
-  deviceService_ = new DeviceServiceMock(this);
+  // feature/lan-printers L2：Device/Backend 装配开关（Cloud/Backend 先例）。
+  {
+    QSettings deviceBackendSettings;
+    const QString backend = deviceBackendSettings
+                                .value(QStringLiteral("Device/Backend"),
+                                       QStringLiteral("mock"))
+                                .toString();
+    deviceBackendKind_ = (backend == QStringLiteral("moonraker"))
+                             ? QStringLiteral("moonraker")
+                             : QStringLiteral("mock");
+  }
+  if (deviceBackendKind_ == QStringLiteral("moonraker"))
+    deviceService_ = new MoonrakerDeviceService(this);
+  else
+    deviceService_ = new DeviceServiceMock(this);
   projectService_ = new ProjectService(this);
   sliceService_ = new SliceService(projectService_, this);
   // v2.7 P1：注入 SliceService 到 CalibrationService（校准时触发 calib slice）
@@ -270,24 +287,24 @@ BackendContext::BackendContext(QObject *parent)
   //   - 取消不播 toast（对话框自身回 prepare 页即反馈，对齐上游
   //     on_print_job_cancel 的安静语义，SendToPrinter.cpp:1055-1085）；
   //   - 成功不播 toast（对话框 finish 页 + 设备 printing 状态即反馈）。
-  connect(deviceService_, &DeviceServiceMock::sendPrintUploadStarted, this, [this]() {
+  connect(deviceService_, &IDeviceDataPlane::sendPrintUploadStarted, this, [this]() {
     m_printSendUploadActive = true;
     m_printSendUploadProgress = 0;
     emit printSendUploadChanged();
   });
-  connect(deviceService_, &DeviceServiceMock::sendPrintUploadProgress, this,
+  connect(deviceService_, &IDeviceDataPlane::sendPrintUploadProgress, this,
           [this](int percent) {
     m_printSendUploadActive = true;
     m_printSendUploadProgress = percent;
     emit printSendUploadChanged();
   });
-  connect(deviceService_, &DeviceServiceMock::sendPrintSucceeded, this, [this]() {
+  connect(deviceService_, &IDeviceDataPlane::sendPrintSucceeded, this, [this]() {
     m_printSendUploadActive = false;
     m_printSendUploadProgress = 0;
     emit printSendUploadChanged();
     emit printSendFinished(true, QString());
   });
-  connect(deviceService_, &DeviceServiceMock::sendPrintFailed, this,
+  connect(deviceService_, &IDeviceDataPlane::sendPrintFailed, this,
           [this](const QString &reason) {
     m_printSendUploadActive = false;
     m_printSendUploadProgress = 0;
@@ -295,7 +312,7 @@ BackendContext::BackendContext(QObject *parent)
     postError(tr("发送到打印机失败: %1").arg(reason), NotiError);
     emit printSendFinished(false, reason);
   });
-  connect(deviceService_, &DeviceServiceMock::sendPrintCancelled, this, [this]() {
+  connect(deviceService_, &IDeviceDataPlane::sendPrintCancelled, this, [this]() {
     m_printSendUploadActive = false;
     m_printSendUploadProgress = 0;
     emit printSendUploadChanged();

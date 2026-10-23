@@ -16,11 +16,11 @@
 #include <QUrl>
 #include <QVariant>
 
-#include "core/services/DeviceServiceMock.h"
+#include "core/services/DeviceServiceMock.h" // IDeviceDataPlane 缝在此头
 #include "core/services/NetworkServiceMock.h"
 #include "core/services/CameraServiceMock.h"
 
-MonitorViewModel::MonitorViewModel(DeviceServiceMock *deviceService, NetworkServiceMock *networkService,
+MonitorViewModel::MonitorViewModel(IDeviceDataPlane *deviceService, NetworkServiceMock *networkService,
                                    CameraServiceMock *cameraService, QObject *parent)
     : QObject(parent), deviceService_(deviceService), networkService_(networkService), cameraService_(cameraService)
 {
@@ -31,24 +31,24 @@ MonitorViewModel::MonitorViewModel(DeviceServiceMock *deviceService, NetworkServ
     monitorState_ = NoPrinter;
 
   if (deviceService_) {
-    connect(deviceService_, &DeviceServiceMock::devicesChanged,
+    connect(deviceService_, &IDeviceDataPlane::devicesChanged,
             this, &MonitorViewModel::devicesChanged);
 
     /// 设备列表变化时同步更新状态机（对齐上游 MonitorBasePanel on_devices_changed）
-    connect(deviceService_, &DeviceServiceMock::devicesChanged, this, [this]() {
+    connect(deviceService_, &IDeviceDataPlane::devicesChanged, this, [this]() {
       updateMonitorState();
     });
-    connect(deviceService_, &DeviceServiceMock::selectedDeviceChanged,
+    connect(deviceService_, &IDeviceDataPlane::selectedDeviceChanged,
             this, &MonitorViewModel::selectedDeviceChanged);
-    connect(deviceService_, &DeviceServiceMock::searchTextChanged,
+    connect(deviceService_, &IDeviceDataPlane::searchTextChanged,
             this, &MonitorViewModel::searchTextChanged);
-    connect(deviceService_, &DeviceServiceMock::hmsChanged,
+    connect(deviceService_, &IDeviceDataPlane::hmsChanged,
             this, &MonitorViewModel::hmsChanged);
     // SelectMachineDialog send-job state machine forward（三态条 prepare/sending/finish）
-    connect(deviceService_, &DeviceServiceMock::sendJobChanged,
+    connect(deviceService_, &IDeviceDataPlane::sendJobChanged,
             this, &MonitorViewModel::sendJobChanged);
     // SelectMachineDialog print option values forward（分段选择器 NOTIFY）
-    connect(deviceService_, &DeviceServiceMock::printOptionsChanged,
+    connect(deviceService_, &IDeviceDataPlane::printOptionsChanged,
             this, &MonitorViewModel::printOptionsChanged);
   }
   if (networkService_) {

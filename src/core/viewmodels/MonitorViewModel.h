@@ -4,7 +4,7 @@
 #include <QDateTime>
 #include <QStringList>
 
-class DeviceServiceMock;
+class IDeviceDataPlane;
 class NetworkServiceMock;
 class CameraServiceMock;
 
@@ -56,7 +56,7 @@ class MonitorViewModel final : public QObject
   Q_PROPERTY(int latencyMs READ latencyMs NOTIFY networkChanged)
 
 public:
-  explicit MonitorViewModel(DeviceServiceMock *deviceService, NetworkServiceMock *networkService,
+  explicit MonitorViewModel(IDeviceDataPlane *deviceService, NetworkServiceMock *networkService,
                             CameraServiceMock *cameraService, QObject *parent = nullptr);
 
   /// 监控状态 getter（对齐上游 StatusPanel 状态切换）
@@ -275,7 +275,7 @@ signals:
   void printOptionsChanged();
 
 private:
-  DeviceServiceMock *deviceService_ = nullptr;
+  IDeviceDataPlane *deviceService_ = nullptr;
   NetworkServiceMock *networkService_ = nullptr;
   CameraServiceMock *cameraService_ = nullptr;
 

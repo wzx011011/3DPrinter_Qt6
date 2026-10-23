@@ -111,12 +111,12 @@ endif()
         # BUILD_LIBSLIC3R=ON 时 Boost_ALL_NO_LIB 干扰 Qt 的 auto-link，
         # 需要跳过低版本检查以避免 Qt 查找失败
         # WebEngineQuick：AI 聊天面板 + 未来模型库的内嵌网页渲染（主包内置）。
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel QuickShapes)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel QuickShapes WebSockets)
     else()
         # 低版本 Qt 兼容：允许 Qt 3.21 与 Qt 6.12 配对（M2.5 G1 锚点切换，
         # 2026-10-13；Qt 6.12 官方 supported min CMake=3.25，3.21 需靠
         # QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 覆盖，configure 会有官方警告）
-        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel QuickShapes)
+        find_package(Qt6 REQUIRED COMPONENTS Qml Quick QuickControls2 LinguistTools OpenGL Concurrent Test Gui GuiPrivate ShaderTools Svg WebEngineQuick WebChannel QuickShapes WebSockets)
         set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/third_party/Qt6_12")
         set(QT_FORCE_MIN_CMAKE_VERSION_FOR_USING_QT 3.21)
     endif()
@@ -169,6 +169,9 @@ endif()
         src/core/services/MdnsDiscovery.cpp
         src/core/services/LanDeviceProbe.h
         src/core/services/LanDeviceProbe.cpp
+        # L2: Moonraker/4408 局域网设备服务（IDeviceDataPlane 真实现）
+        src/core/services/MoonrakerDeviceService.h
+        src/core/services/MoonrakerDeviceService.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp
@@ -424,7 +427,7 @@ endif()
     # QWebChannel* property for WebEngineView.webChannel). Qt6WebEngineQuick
     # itself stays out of the link — loaded via QLibrary + QML plugin.
     target_link_libraries(owzx_app_core PUBLIC
-        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::GuiPrivate Qt6::Svg
+        Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::OpenGL Qt6::Concurrent Qt6::Network Qt6::GuiPrivate Qt6::Svg Qt6::WebSockets
         Qt6::WebChannel
     )
     if(BUILD_LIBSLIC3R AND TARGET libslic3r)
@@ -715,6 +718,23 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME LanDiscoveryTests COMMAND LanDiscoveryTests)
     set_tests_properties(LanDiscoveryTests PROPERTIES
+        ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
+    )
+
+    # LAN 设备服务单测（feature/lan-printers L2）：持久化往返、未连接诚实
+    # 语义（控制无副作用/发送失败必报）、Moonraker 上传+启动全链（回环 stub）。
+    # 不发任何外网请求。
+    qt_add_executable(MoonrakerDeviceServiceTests tests/MoonrakerDeviceServiceTests.cpp)
+    target_link_libraries(MoonrakerDeviceServiceTests PRIVATE owzx_app_core
+        Qt6::Core Qt6::Gui Qt6::Network Qt6::Test
+    )
+    if(MSVC)
+        target_link_options(MoonrakerDeviceServiceTests PRIVATE /FORCE:MULTIPLE)
+    else()
+        target_link_options(MoonrakerDeviceServiceTests PRIVATE -Wl,--allow-multiple-definition)
+    endif()
+    add_test(NAME MoonrakerDeviceServiceTests COMMAND MoonrakerDeviceServiceTests)
+    set_tests_properties(MoonrakerDeviceServiceTests PROPERTIES
         ENVIRONMENT "PATH=${_qt6_bin_dir};$ENV{PATH}"
     )
 

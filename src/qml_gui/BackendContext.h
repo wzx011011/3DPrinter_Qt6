@@ -133,6 +133,9 @@ class BackendContext : public QObject, public OWzx::AppToolUiProvider
   // backend). QML reads it to switch the Home login/bind entries and to
   // gate honest disclosures.
   Q_PROPERTY(QString cloudBackendKind READ cloudBackendKind CONSTANT)
+  // feature/lan-printers：设备数据面后端类型（"mock"|"moonraker"），
+  // 监控页用它切换披露与发现入口。
+  Q_PROPERTY(QString deviceBackendKind READ deviceBackendKind CONSTANT)
   // feature/cloud-model-library (M3): model-library webview JS bridge
   // (CXSWGroupInterface protocol). The panel registers it on its WebChannel
   // via attachModelLibraryChannel().
@@ -395,6 +398,7 @@ public:
   QObject *appSettings() const;
   // feature/cloud-model-library (M2): backend-kind + Creality OAuth service.
   QString cloudBackendKind() const { return cloudBackendKind_; }
+  QString deviceBackendKind() const { return deviceBackendKind_; }
   QObject *crealityAuthService() const;
   QObject *modelLibraryBridge() const;
   QObject *modelDownloadService() const;
@@ -846,7 +850,10 @@ private:
   CalibrationServiceMock *calibrationService_ = nullptr;
   SliceService *sliceService_ = nullptr;
   PresetService *presetService_ = nullptr;
-  DeviceServiceMock *deviceService_ = nullptr;
+  /// feature/lan-printers L2：Device/Backend 装配开关
+  /// （"mock"=演示设备 | "moonraker"=局域网真打印机），照抄 Cloud/Backend 先例。
+  IDeviceDataPlane *deviceService_ = nullptr;
+  QString deviceBackendKind_ = QStringLiteral("mock");
   // U11: send-print（FTP+MQTT）桥接状态——printSendUpload* 属性的存储。
   bool m_printSendUploadActive = false;
   int m_printSendUploadProgress = 0;

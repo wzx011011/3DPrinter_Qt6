@@ -132,9 +132,78 @@ public:
   /// MQTT report payload → 遥测字段（Bambu device/<serial>/report 信封）
   virtual bool applyMqttReportPayload(const QString &payload, int deviceIndex = -1) = 0;
 
+  // ── 显示/控制扩展面（feature/lan-printers L2）──
+  // MonitorViewModel 的完整转发面。默认实现 = 该后端不支持（no-op/空/0），
+  // 遵循"不允许 mock 假成功"纪律：不支持的命令没有副作用、不产生假状态。
+  // 窄核（上方纯虚）不变，仍是数据面契约锁。
+
+  // 列表/过滤/选中
+  virtual QString deviceListJson() const { return QStringLiteral("[]"); }
+  virtual int filteredDeviceCount() const { return deviceCount(); }
+  virtual QString searchText() const { return {}; }
+  virtual void setSearchText(const QString &) {}
+  virtual int selectedDeviceIndex() const { return -1; }
+  virtual int selectedFilteredIndex() const { return -1; }
+  // 生命周期
+  virtual void scanDevices() {}
+  virtual void refresh() {}
+  virtual void connectDevice(int) {}
+  virtual void disconnectDevice(int) {}
+  // 打印控制
+  virtual void startPrint(int, const QString &) {}
+  virtual void pausePrint(int) {}
+  virtual void resumePrint(int) {}
+  virtual void stopPrint(int) {}
+  virtual void setChamberLight(bool) {}
+  virtual void setWorkLight(bool) {}
+  virtual void toggleRecording() {}
+  virtual void toggleTimelapse() {}
+  // 发送任务状态机（SelectMachineDialog/PrintDialog 面）
+  virtual void startSendJob(int, const QString &) {}
+  virtual void cancelSendJob() {}
+  virtual int sendJobState() const { return 0; }
+  virtual int sendJobProgress() const { return 0; }
+  virtual QString sendJobErrorCode() const { return {}; }
+  virtual QString sendJobErrorDesc() const { return {}; }
+  virtual QString sendJobErrorExtra() const { return {}; }
+  // 打印选项
+  virtual QVariantMap printOptions() const { return {}; }
+  virtual QString printOptionValue(const QString &) const { return {}; }
+  virtual void setPrintOptionValue(const QString &, const QString &) {}
+  virtual bool printOptionSupported(const QString &) const { return false; }
+  // 便捷 getter
+  virtual QString selectedDeviceName() const { return {}; }
+  virtual QString selectedDeviceModel() const { return {}; }
+  virtual QString selectedDeviceSerial() const { return {}; }
+  virtual int selectedDeviceProgress() const { return 0; }
+  virtual QString selectedDeviceTaskName() const { return {}; }
+  virtual int selectedDeviceSignalStrength() const { return 0; }
+  virtual bool selectedDeviceChamberLightOn() const { return false; }
+  virtual bool selectedDeviceWorkLightOn() const { return false; }
+  virtual bool selectedDeviceCameraRecording() const { return false; }
+  virtual bool selectedDeviceCameraTimelapse() const { return false; }
+  virtual bool selectedDeviceFilesystemSupported() const { return false; }
+  // 设备级打印状态（对齐上游 per-device 查询）
+  virtual QString devicePrintStage(int) const { return {}; }
+  virtual int devicePrintLayer(int) const { return 0; }
+  virtual int devicePrintTimeLeft(int) const { return 0; }
+  // HMS/AMS（mock 展示面；真后端默认空 = 诚实不支持）
+  virtual void markHmsRead(int) {}
+  virtual int selectedDeviceHmsCount() const { return 0; }
+  virtual QVariantMap selectedDeviceHmsAt(int) const { return {}; }
+  virtual int selectedDeviceUnreadHmsCount() const { return 0; }
+  virtual int selectedDeviceAmsSlotCount() const { return 0; }
+  virtual QVariantMap selectedDeviceAmsSlotAt(int) const { return {}; }
+  virtual void setSelectedDeviceAmsSlot(int) {}
+
 signals:
   void devicesChanged();
   void selectedDeviceChanged();
+  // ── 自有面信号（MonitorViewModel 连接面；mock 与 LAN 后端均可发）──
+  void searchTextChanged();
+  void hmsChanged();
+  void sendJobChanged();
+  void printOptionsChanged();
   // ── U11: send-print（FTP+MQTT）真实链路进度与终态 ──
   void sendPrintUploadStarted();
   void sendPrintUploadProgress(int percent);
@@ -372,13 +441,9 @@ public:
   Q_INVOKABLE void setSelectedDeviceAmsSlot(int slotIndex);
 
 signals:
-  // X1: devicesChanged / selectedDeviceChanged / sendPrint* 由
-  // IDeviceDataPlane 基类声明（NOTIFY/连接经元对象继承解析，已验证）。
-  // 自有面信号保留在此：
-  void searchTextChanged();
-  void hmsChanged();
-  void sendJobChanged();
-  void printOptionsChanged();
+  // X1: devicesChanged / selectedDeviceChanged / sendPrint* / searchTextChanged
+  // / hmsChanged / sendJobChanged / printOptionsChanged 均由 IDeviceDataPlane
+  // 基类声明（连接经元对象继承解析）。
 
 private:
   void buildMockDevices();
