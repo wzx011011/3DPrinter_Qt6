@@ -194,43 +194,23 @@ Rectangle {
         }
     }
 
-    // Panel chrome (no dialog chrome): 登录 entry + close affordance.
-    Row {
+    // Panel chrome: close affordance only. 登录 lives in the site's own
+    // header (plain-UA mode renders it); the former chrome 登录 button
+    // overlapped the site header and duplicated it. The loginRequested
+    // signal / login dialog stay available for the HomePage entry.
+    Rectangle {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: 6
-        spacing: 6
-
-        Rectangle {
-            width: 72; height: 26; radius: 13
-            color: loginMA.containsMouse ? Theme.bgHover : Theme.bgPanel
-            border.width: 1
-            border.color: Theme.borderSubtle
-            Text {
-                anchors.centerIn: parent
-                text: qsTr("登录")
-                color: Theme.textSecondary
-                font.pixelSize: Theme.fontSizeSM
-            }
-            MouseArea {
-                id: loginMA
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.loginRequested()
-            }
-        }
-        Rectangle {
-            width: 26; height: 26; radius: 13
-            color: closeMA.containsMouse ? Theme.bgHover : "transparent"
-            Text { anchors.centerIn: parent; text: "✕"; color: Theme.textSecondary }
-            MouseArea {
-                id: closeMA
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.closed()
-            }
+        width: 26; height: 26; radius: 13
+        color: closeMA.containsMouse ? Theme.bgHover : "transparent"
+        Text { anchors.centerIn: parent; text: "✕"; color: Theme.textSecondary }
+        MouseArea {
+            id: closeMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.closed()
         }
     }
 }

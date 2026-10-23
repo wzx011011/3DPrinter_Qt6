@@ -326,42 +326,18 @@ Item {
                 onClicked: if (Backend.currentPage === Backend.tp3DEditor && Backend.canRedo) root.redoRequested()
             }
 
-            // Calibration 快捷按钮 (对齐上游 ID_CALIB)
-            // topbar-11: upstream AddTool(ID_CALIB, "Calibration", calib_sf)
-            // renders the icon and label horizontally (BBLTopbar.cpp:314-317),
-            // so the icon-only gear button becomes an icon+text button.
-            Rectangle {
-                id: calibBtn
-                Layout.preferredHeight: 28
-                Layout.preferredWidth: Math.max(72, calibBtnRow.implicitWidth + 20)
-                radius: Theme.radiusSM
-                color: calibBtnMouse.containsMouse ? Theme.chromeHover : "transparent"
-
-                Row {
-                    id: calibBtnRow
-                    anchors.centerIn: parent
-                    spacing: 6
-                    Image {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 16; height: 16
-                        source: "qrc:/qml/assets/icons/calib_sf.svg"
-                        fillMode: Image.PreserveAspectFit
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: qsTr("校准")
-                        color: Theme.chromeText
-                        font.pixelSize: Theme.fontSizeMD
-                    }
-                }
-
-                MouseArea {
-                    id: calibBtnMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.calibrationRequested()
-                }
+            // ModelStore 按钮 (对齐上游 ID_MODEL_STORE) — 打开创想云模型库
+            // （feature/cloud-model-library）。原工具栏校准按钮已按对照结论
+            // 移除：上游校准入口在顶部 tab 栏 + 文件菜单，工具栏不放校准。
+            CxIconButton {
+                cxStyle: CxIconButton.Style.Chrome
+                buttonSize: 30
+                iconSize: 16
+                iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
+                toolTipText: qsTr("模型库")
+                enabled: true
+                visible: true
+                onClicked: modelStoreRequested()
             }
 
             // Account 占位按钮 (对齐上游 条件按钮，v2.0 仅占位 — CONTEXT.md 决策)
@@ -375,18 +351,6 @@ Item {
                 visible: false
             }
 
-            // ModelStore 按钮 (对齐上游 ID_MODEL_STORE) — 打开创想云模型库
-            // 停靠面板（feature/cloud-model-library M3）
-            CxIconButton {
-                cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
-                iconSize: 16
-                iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                toolTipText: qsTr("模型库")
-                enabled: true
-                visible: true
-                onClicked: modelStoreRequested()
-            }
 
             // Publish 占位按钮 (对齐上游 ID_PUBLISH)
             CxIconButton {

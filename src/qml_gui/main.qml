@@ -1268,10 +1268,9 @@ ApplicationWindow {
         id: modelLibraryPanelLoader
         active: false
         visible: active && status === Loader.Ready
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        width: 760
+        // 模型库打开即全屏（覆盖整个内容区）——对照创想自家与主流切片器的
+        // 在线模型库形态；✕ 退出。
+        anchors.fill: parent
         z: 50
 
         source: Qt.resolvedUrl("panels/ModelLibraryPanel.qml")
