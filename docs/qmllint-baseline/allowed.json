@@ -1,6 +1,6 @@
 {
  "src/qml_gui/BBLTopbar.qml|Quick.layout-positioning": 6,
- "src/qml_gui/BBLTopbar.qml|missing-property": 32,
+ "src/qml_gui/BBLTopbar.qml|missing-property": 33,
  "src/qml_gui/BBLTopbar.qml|unqualified": 1,
  "src/qml_gui/components/CommandPalette.qml|unqualified": 5,
  "src/qml_gui/components/CustomGcodeDialog.qml|unused-imports": 1,

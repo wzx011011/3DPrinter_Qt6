@@ -917,7 +917,6 @@ ApplicationWindow {
                     root.requestOpenProject(filePath)
                 }
                 onSaveAsRequested: saveProjectAsDialog.open()
-                onModelStoreRequested: modelLibraryPanelLoader.active = !modelLibraryPanelLoader.active
                 onImportModelRequested: function(nameFilter) {
                     openModelDialog.setProp("nameFilters", [nameFilter, qsTr("所有文件 (*)")])
                     openModelDialog.open()
@@ -1148,15 +1147,27 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                 }
-                // Page 8 (tpPreferences) — structural placeholder (same
-                // treatment as Page 7). Preferences moved to a menu-opened
-                // modal dialog (dialogs/PreferencesDialog.qml, upstream
-                // behavior) on 2026-10-19; the slot keeps the StackLayout
-                // count and the TabPosition enum range stable.
-                Item {
-                    visible: false
+                // Page 8 (tpPreferences 槽位) — 模型库页（2026-10-23 用户拍板：
+                // 模型库与校准互换后占用此页签位，作为页签内容区的正式页面，
+                // 不再是 z:50 全屏遮罩 dock。Preferences 本就是菜单弹窗，无页）。
+                // source-URL Loader（同 aiChatPanelLoader 理由）：QtWebEngine
+                // import 失败或 OWZX_DISABLE_WEBENGINE=1 时只有这个 Loader 塌陷。
+                Loader {
+                    id: modelLibraryPageLoader
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    active: Backend.currentPage === Backend.tpPreferences
+                    source: Qt.resolvedUrl("panels/ModelLibraryPanel.qml")
+                    onLoaded: {
+                        // 面板的 ✕ 在页面语境下 = 离开本页签，回首页。
+                        item.closed.connect(function () {
+                            Backend.requestSelectTab(Backend.tpHome)
+                        })
+                        // 登录走窄窗（商城面板里隐藏自家登录头部），登录后刷新。
+                        item.loginRequested.connect(function () {
+                            crealityLoginLoader.active = true
+                        })
+                    }
                 }
             }
 
@@ -1261,28 +1272,6 @@ ApplicationWindow {
         }
     }
 
-    // feature/cloud-model-library (M3): 创想云模型库停靠面板。source-URL
-    // Loader（同 aiChatPanelLoader 理由）：QtWebEngine import 失败或
-    // OWZX_DISABLE_WEBENGINE=1 时只有这个 Loader 塌陷，应用其余部分照常。
-    Loader {
-        id: modelLibraryPanelLoader
-        active: false
-        visible: active && status === Loader.Ready
-        // 模型库打开即全屏（覆盖整个内容区）——对照创想自家与主流切片器的
-        // 在线模型库形态；✕ 退出。
-        anchors.fill: parent
-        z: 50
-
-        source: Qt.resolvedUrl("panels/ModelLibraryPanel.qml")
-        onLoaded: {
-            item.closed.connect(function () { modelLibraryPanelLoader.active = false })
-            // 登录走窄窗（商城在宽面板里隐藏自家登录头部），登录后面板刷新。
-            item.loginRequested.connect(function () {
-                crealityLoginLoader.active = true
-            })
-        }
-    }
-
     // feature/cloud-model-library (M2): 创想云 OAuth 登录对话框。source-URL
     // Loader（同 aiChatPanelLoader 理由）：QtWebEngine import 失败或
     // OWZX_DISABLE_WEBENGINE=1 时只有这个 Loader 塌陷，应用其余部分照常。
@@ -1298,8 +1287,8 @@ ApplicationWindow {
             // OAuth 回调监听并加载登录页）。
             item.open()
             // 登录成功后面板页刷新，拾取新 cookie 会话。
-            if (modelLibraryPanelLoader.active && modelLibraryPanelLoader.item)
-                item.dismissed.connect(function () { modelLibraryPanelLoader.item.reloadPage() })
+            if (modelLibraryPageLoader.active && modelLibraryPageLoader.item)
+                item.dismissed.connect(function () { modelLibraryPageLoader.item.reloadPage() })
         }
     }
 

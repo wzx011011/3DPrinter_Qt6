@@ -45,7 +45,6 @@ Item {
     signal importModelRequested(string nameFilter)
     /// feature/cloud-model-library (M3): online model library dock toggle
     /// (upstream ID_MODEL_STORE anchor; main.qml opens the panel Loader).
-    signal modelStoreRequested()
     signal exportGcodeRequested()
     signal exportAllGcodeRequested()
     signal exportProjectRequested()
@@ -99,7 +98,10 @@ Item {
         { label: qsTr("设备"), pos: Backend.tpDevice },
         { label: qsTr("多设备"), pos: Backend.tpMultiDevice },
         { label: qsTr("项目"), pos: Backend.tpProject },
-        { label: qsTr("校准"), pos: Backend.tpCalibration }
+        // 2026-10-23 用户拍板互换：模型库占用页签位——复用 tpPreferences
+        // 结构占位槽做真正的页面（main.qml Page 8 承载 ModelLibraryPanel），
+        // 不再是全屏遮罩 dock；校准入工具栏下拉（上方）。
+        { label: qsTr("模型库"), pos: Backend.tpPreferences }
     ]
 
     function selectWorkflowTab(tab) {
@@ -326,18 +328,92 @@ Item {
                 onClicked: if (Backend.currentPage === Backend.tp3DEditor && Backend.canRedo) root.redoRequested()
             }
 
-            // ModelStore 按钮 (对齐上游 ID_MODEL_STORE) — 打开创想云模型库
-            // （feature/cloud-model-library）。原工具栏校准按钮已按对照结论
-            // 移除：上游校准入口在顶部 tab 栏 + 文件菜单，工具栏不放校准。
-            CxIconButton {
-                cxStyle: CxIconButton.Style.Chrome
-                buttonSize: 30
-                iconSize: 16
-                iconSource: "qrc:/qml/assets/icons/layout-grid.svg"
-                toolTipText: qsTr("模型库")
-                enabled: true
-                visible: true
-                onClicked: modelStoreRequested()
+            // 校准按钮（对齐上游 ID_CALIB 工具栏下拉，MainFrame.cpp:3360-3446
+            // GetCalibMenu 条目逐项映射到校准中心 catalog；上游有而我们没有
+            // 的 Cornering / Input Shaping 以禁用占位对齐，见 restoration_gaps
+            // RG-P6-01）。模型库入口与校准互换：从工具栏移到顶部页签条。
+            Item {
+                id: calibToolSlot
+                Layout.preferredWidth: 30
+                Layout.preferredHeight: 30
+
+                CxIconButton {
+                    anchors.fill: parent
+                    cxStyle: CxIconButton.Style.Chrome
+                    buttonSize: 30
+                    iconSize: 16
+                    iconSource: "qrc:/qml/assets/icons/calib_sf.svg"
+                    toolTipText: qsTr("校准")
+                    enabled: true
+                    visible: true
+                    onClicked: {
+                        calibMenuPopup.x = 0
+                        calibMenuPopup.y = calibToolSlot.height + 6
+                        calibMenuPopup.open()
+                    }
+                }
+
+                CxPopup {
+                    id: calibMenuPopup
+                    width: 250
+                    padding: Theme.spacingXS
+                    modal: true
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+                    component CalibMenuRow: Item {
+                        id: row
+                        required property string label
+                        required property string calibId   // "" = 只跳页
+                        property bool enabledRow: true
+                        readonly property bool hovered: rowMa.containsMouse
+                        width: parent ? parent.width : 0
+                        height: 32
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.spacingMD
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: row.label
+                            color: !row.enabledRow ? Theme.textDisabled
+                                  : row.hovered ? Theme.accent : Theme.chromeText
+                            font.pixelSize: Theme.fontSizeMD
+                        }
+                        Rectangle { anchors.fill: parent; visible: row.hovered && row.enabledRow; color: Theme.chromeHover; radius: Theme.radiusSM; z: -1 }
+                        MouseArea {
+                            id: rowMa
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: row.enabledRow
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                calibMenuPopup.close()
+                                if (row.calibId !== "")
+                                    Backend.calibrationViewModel.selectItemById(row.calibId)
+                                root.calibrationRequested()
+                            }
+                        }
+                    }
+
+                    Column {
+                        width: parent.width
+                        spacing: 2
+
+                        CalibMenuRow { label: qsTr("温度塔 (Temperature)") ; calibId: "temp_tower" }
+                        CalibMenuRow { label: qsTr("最大流量 (Max flowrate)") ; calibId: "max_volumetric_speed" }
+                        CalibMenuRow { label: qsTr("压力前进 (Pressure advance)") ; calibId: "pa_tower" }
+                        CalibMenuRow { label: qsTr("流量比 (Flow ratio)") ; calibId: "flow_rate" }
+                        CalibMenuRow { label: qsTr("回抽 (Retraction)") ; calibId: "retraction_tune" }
+                        CalibMenuRow { label: qsTr("转角 (Cornering)") ; calibId: "" ; enabledRow: false }
+                        CalibMenuRow { label: qsTr("输入整形 (Input Shaping)") ; calibId: "" ; enabledRow: false }
+                        CalibMenuRow { label: qsTr("VFA") ; calibId: "vfa_tower" }
+                        CalibMenuRow { label: qsTr("校准指南 (Calibration Guide)") ; calibId: "" }
+                        Rectangle { width: parent.width - 2 * Theme.spacingSM; height: 1; anchors.horizontalCenter: parent.horizontalCenter; color: Theme.borderSubtle }
+                        // 我们的超集条目（上游菜单没有，校准中心有）
+                        CalibMenuRow { label: qsTr("流道动力学 (Flow Dynamics)") ; calibId: "flow_dynamics" }
+                        CalibMenuRow { label: qsTr("PA 图样 (PA Pattern)") ; calibId: "pa_pattern" }
+                        CalibMenuRow { label: qsTr("床网校准 (Bed Leveling)") ; calibId: "bed_leveling" }
+                    }
+                }
             }
 
             // Account 占位按钮 (对齐上游 条件按钮，v2.0 仅占位 — CONTEXT.md 决策)

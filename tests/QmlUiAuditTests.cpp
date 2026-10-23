@@ -11868,12 +11868,22 @@ void QmlUiAuditTests::waveFourRoutesAndPageIndicesAreDiscoverable()
 
   // 2026-10-19 rewrite: upstream TAB_ID has 7 workflow tabs (MainFrame.hpp:
   // 42-52) — Preferences is a menu-opened modal dialog, not a strip
-  // destination. MultiMachine/Calibration stay strip destinations;
-  // Preferences discoverability moves to the menu entries.
+  // destination.
+  // 2026-10-23 user-directed swap (P6): the calibration/model-library buttons
+  // exchanged places — Calibration left the strip for a toolbar dropdown
+  // (upstream ID_CALIB, MainFrame.cpp:3360-3446) and ModelLibrary took the
+  // strip slot on the tpPreferences page position (main.qml Page 8 hosts
+  // ModelLibraryPanel). The strip keeps 7 tabs; Calibration stays
+  // discoverable through the toolbar dropdown items below.
   QVERIFY2(topbar.contains(QStringLiteral("pos: Backend.tpMultiDevice"))
-               && topbar.contains(QStringLiteral("pos: Backend.tpCalibration"))
-               && !topbar.contains(QStringLiteral("pos: Backend.tpPreferences")),
-           "WAVE-4: MultiMachine and Calibration must be discoverable in the workflow strip; Preferences must NOT be a strip tab (upstream hosts it as a menu dialog)");
+               && topbar.contains(QStringLiteral("pos: Backend.tpPreferences"))
+               && !topbar.contains(QStringLiteral("pos: Backend.tpCalibration")),
+           "WAVE-4/P6: MultiDevice and ModelLibrary (tpPreferences slot) must be strip destinations; Calibration must NOT be a strip tab after the swap");
+  QVERIFY2(topbar.contains(QStringLiteral("calib_sf.svg"))
+               && topbar.contains(QStringLiteral("temp_tower"))
+               && topbar.contains(QStringLiteral("retraction_tune"))
+               && topbar.contains(QStringLiteral("selectItemById")),
+           "WAVE-4/P6: the toolbar calibration dropdown must stay aligned with upstream GetCalibMenu (mapped catalog items jump + preselect)");
   QVERIFY2(topbar.contains(QStringLiteral("preferencesRequested()"))
                && topbar.contains(QStringLiteral("qsTr(\"偏好设置\")")),
            "WAVE-4: Preferences must stay discoverable via the top-menu entries");
