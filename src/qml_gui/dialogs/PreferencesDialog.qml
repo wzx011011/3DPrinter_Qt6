@@ -157,6 +157,22 @@ CxDialog {
                         }
                     }
 
+                    // Multi-device tab (upstream enable_multi_machine, default
+                    // off: MainFrame.cpp:1330 gates TAB_ID_MULTI_DEVICE the
+                    // same way; default experience shows the Device tab only).
+                    RowLayout {
+                        spacing: 16
+                        Text { text: qsTr("启用多设备页签"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD; Layout.preferredWidth: 180 }
+                        CxSwitch {
+                            function isEnabled() {
+                                const v = AppSettings.value("enable_multi_machine", false)
+                                return v === true || v === "true"
+                            }
+                            checked: isEnabled()
+                            onToggled: AppSettings.setValue("enable_multi_machine", checked)
+                        }
+                    }
+
                     // Default page
                     RowLayout {
                         spacing: 16

@@ -632,6 +632,11 @@ ApplicationWindow {
             var order = [Backend.tpHome, Backend.tp3DEditor, Backend.tpPreview,
                          Backend.tpDevice, Backend.tpMultiDevice, Backend.tpProject,
                          Backend.tpCalibration]
+            // Multi-device follows the upstream enable_multi_machine gate
+            // (hidden tab must not be reachable through the cycle either).
+            var mmEnabled = AppSettings.value("enable_multi_machine", false)
+            if (!(mmEnabled === true || mmEnabled === "true"))
+                order = order.filter(function (p) { return p !== Backend.tpMultiDevice })
             var cur = order.indexOf(Backend.currentPage)
             var next = order[(cur + 1 + order.length) % order.length]
             Backend.requestSelectTab(next)

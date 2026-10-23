@@ -91,7 +91,29 @@ Item {
     // from the menu. 2026-10-19: the 8th strip tab is removed to match; the
     // tpPreferences enum slot stays (BackendContext routing / kLastTab still
     // ends at tpPreferences, the StackLayout keeps a structural placeholder).
-    readonly property var workflowTabs: [
+    // Upstream gates the Multi-device tab on app_config
+    // enable_multi_machine (default OFF, MainFrame.cpp:1330 — the default
+    // experience shows the Device tab only; our screenshot reference agrees).
+    // Toggle: PreferencesDialog 通用 page. The page itself stays reachable
+    // (deep link --open-page multi-device), mirroring upstream.
+    // (raw QVariant bool/string compare: QML unwraps QVariant to JS
+    // primitives, which have no .toBool(); the Connections handler below
+    // re-reads on settingChanged so the strip updates without a restart)
+    property bool multiMachineEnabled: {
+        const v = AppSettings.value("enable_multi_machine", false)
+        return v === true || v === "true"
+    }
+    Connections {
+        target: AppSettings
+        function onSettingChanged(key) {
+            if (key === "enable_multi_machine") {
+                const v = AppSettings.value("enable_multi_machine", false)
+                root.multiMachineEnabled = (v === true || v === "true")
+            }
+        }
+    }
+    readonly property var workflowTabs: {
+        var tabs = [
         { label: qsTr("首页"), pos: Backend.tpHome },
         { label: qsTr("准备"), pos: Backend.tp3DEditor },
         { label: qsTr("预览"), pos: Backend.tpPreview },
@@ -102,7 +124,11 @@ Item {
         // 结构占位槽做真正的页面（main.qml Page 8 承载 ModelLibraryPanel），
         // 不再是全屏遮罩 dock；校准入工具栏下拉（上方）。
         { label: qsTr("模型库"), pos: Backend.tpPreferences }
-    ]
+        ]
+        if (!root.multiMachineEnabled)
+            tabs = tabs.filter(function (t) { return t.pos !== Backend.tpMultiDevice })
+        return tabs
+    }
 
     function selectWorkflowTab(tab) {
         if (!tab || Backend.currentPage === tab.pos)

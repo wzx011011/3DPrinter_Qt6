@@ -39,7 +39,15 @@ public:
   Q_INVOKABLE void setValue(const QString &key, const QVariant &val)
   {
     settings_.setValue(key, val);
+    // QSettings has no change notification -- QML bindings reading value()
+    // evaluate once and go stale. Emitting per key lets pages re-read
+    // immediately (e.g. the enable_multi_machine strip-tab gate, 2026-10-23)
+    // instead of waiting for a restart.
+    emit settingChanged(key);
   }
+
+signals:
+  void settingChanged(const QString &key);
 
 private:
   QSettings settings_{QStringLiteral("OWzx"), QStringLiteral("UI")};
