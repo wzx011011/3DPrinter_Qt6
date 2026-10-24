@@ -1,0 +1,29 @@
+diff --git a/src/libslic3r/GCode/ToolOrdering.cpp b/src/libslic3r/GCode/ToolOrdering.cpp
+index c6517c6e..5dacf99b 100644
+--- a/src/libslic3r/GCode/ToolOrdering.cpp
++++ b/src/libslic3r/GCode/ToolOrdering.cpp
+@@ -1208,7 +1208,23 @@ void ToolOrdering::cal_most_used_extruder(const PrintConfig &config)
+         std::set<int> layer_extruder_count;
+         //count once only
+         for (unsigned int &filament : filaments) {
+-            layer_extruder_count.insert(config.filament_map.values[filament] - 1);
++            // owzx-fix (TOOLORDER-MAP): filament_map defaults to {1} while
++            // layer_tools.extruders carries 0-based filament ids of the whole
++            // print (0..N-1 once >=3 filaments are configured) — indexing the
++            // 1-entry map out of bounds returned garbage extruder ids and the
++            // extruder_count[garbage] write corrupted the heap (SIGSEGV here
++            // on multi-color models, or delayed crashes later in export).
++            // Clamp to the configured map; unmapped filaments fall back to
++            // the first extruder.
++            if (config.filament_map.values.empty()) {
++                layer_extruder_count.insert(0);
++                continue;
++            }
++            const size_t map_idx = std::min<size_t>(filament, config.filament_map.values.size() - 1);
++            int extruder_id = int(config.filament_map.values[map_idx]) - 1;
++            if (extruder_id < 0)
++                extruder_id = 0;
++            layer_extruder_count.insert(extruder_id);
+         }
+ 
+         //record

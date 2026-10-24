@@ -718,6 +718,40 @@ namespace
         const auto list = value.toList();
         if (list.isEmpty())
           break;
+        // owzx-fix (MODEL-BED): printable_area entries are "XxY" strings
+        // (3MF project-settings dialect). The generic comma-join deserializer
+        // cannot parse that format and threw (silently swallowed), so a model
+        // authored for a 350x350 bed never delivered its bed through
+        // --load-settings and its prime tower landed outside the default bed.
+        // Parse the point pairs here; the bed_shape translation after the
+        // plate merge turns this into the engine's bed.
+        if (key == "printable_area")
+        {
+          auto *pointsOpt = dynamic_cast<Slic3r::ConfigOptionPoints *>(opt);
+          if (pointsOpt)
+          {
+            Slic3r::ConfigOptionPoints parsed;
+            bool ok = true;
+            for (const auto &item : list)
+            {
+              const QString s = item.toString();
+              const qsizetype xIdx = s.indexOf(QLatin1Char('x'));
+              if (xIdx <= 0) { ok = false; break; }
+              bool okX = false, okY = false;
+              const double x = s.left(xIdx).toDouble(&okX);
+              const double y = s.mid(xIdx + 1).toDouble(&okY);
+              if (!okX || !okY) { ok = false; break; }
+              parsed.values.emplace_back(x * 1000.0, y * 1000.0);
+            }
+            if (ok && parsed.values.size() >= 3)
+            {
+              config.set_key_value("printable_area",
+                                   new Slic3r::ConfigOptionPoints(parsed.values));
+              setOk = true;
+              break;
+            }
+          }
+        }
         QStringList parts;
         for (const auto &item : list)
           parts << item.toString();
@@ -1183,6 +1217,19 @@ void SliceService::startSlice(const QString &projectName)
             }
           }
         }
+      }
+
+      // owzx-fix (MODEL-BED): 3MF project settings carry "printable_area",
+      // not "bed_shape" — models authored for a different bed than the
+      // machine preset (e.g. 350x350 Creality models on the SPARKX 220
+      // preset) kept the preset bed, so prime-tower/wipe-tower positions
+      // from the model fell outside the bed and slice validation failed.
+      // The loaded model's own bed wins; without it the preset bed stands.
+      if (const auto *printableArea =
+              config.option<Slic3r::ConfigOptionPoints>("printable_area", false)) {
+        if (printableArea->size() >= 3)
+          config.set_key_value("bed_shape",
+                               new Slic3r::ConfigOptionPoints(printableArea->values));
       }
 
       restoreGenericEnumMaps(config);

@@ -1,0 +1,42 @@
+diff --git a/src/libslic3r/GCode/WipeTower2.cpp b/src/libslic3r/GCode/WipeTower2.cpp
+index 4e752bd7..3f1ddeb0 100644
+--- a/src/libslic3r/GCode/WipeTower2.cpp
++++ b/src/libslic3r/GCode/WipeTower2.cpp
+@@ -1222,6 +1222,19 @@ std::vector<WipeTower::ToolChangeResult> WipeTower2::prime(
+ 
+     std::vector<WipeTower::ToolChangeResult> results;
+ 
++    // owzx-fix (WT-FILPAR): the priming tool list comes from the tool
++    // ordering (raw filament ids) while m_filpar is populated by
++    // set_extruder() whose count follows the flush matrix — the two can
++    // disagree, and an out-of-bounds m_filpar[tool] then handed
++    // toolchange_Unload a garbage ramming_speed vector (float load from a
++    // wild data pointer, SIGSEGV). Size the table to cover the whole
++    // priming list with default-constructed parameters.
++    if (!tools.empty()) {
++        const size_t needed = size_t(*std::max_element(tools.begin(), tools.end())) + 1;
++        if (m_filpar.size() < needed)
++            m_filpar.resize(needed);
++    }
++
+     // Iterate over all priming toolchanges and push respective ToolChangeResults into results vector.
+     for (size_t idx_tool = 0; idx_tool < tools.size(); ++ idx_tool) {
+         size_t old_tool = m_current_tool;
+@@ -1253,7 +1266,16 @@ std::vector<WipeTower::ToolChangeResult> WipeTower2::prime(
+         toolchange_Load(writer, cleaning_box); // Prime the tool.
+         if (idx_tool + 1 == tools.size()) {
+             // Last tool should not be unloaded, but it should be wiped enough to become of a pure color.
+-            toolchange_Wipe(writer, cleaning_box, wipe_volumes[tools[idx_tool-1]][tool], false, true);
++            // owzx-fix (WT-PRIME): with a single-tool priming list (tools.size()==1)
++            // idx_tool-1 underflows to SIZE_MAX, the out-of-bounds tools[] read
++            // produced a garbage wipe_volumes row and the float load below
++            // dereferenced NULL (SIGSEGV in prime). Wipe from the same tool
++            // when no previous tool exists, and clamp both indices — an
++            // unmapped pair simply wipes with no purge volume.
++            const unsigned int prev_tool = (idx_tool > 0) ? tools[idx_tool - 1] : tool;
++            const float wipe_vol = (prev_tool < wipe_volumes.size() && tool < wipe_volumes[prev_tool].size())
++                ? wipe_volumes[prev_tool][tool] : 0.f;
++            toolchange_Wipe(writer, cleaning_box, wipe_vol, false, true);
+         } else {
+             // Ram the hot material out of the melt zone, retract the filament into the cooling tubes and let it cool.
+             //writer.travel(writer.x(), writer.y() + m_perimeter_width, 7200);

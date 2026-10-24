@@ -1,0 +1,20 @@
+diff --git a/src/libslic3r/PrintObjectSlice.cpp b/src/libslic3r/PrintObjectSlice.cpp
+index d16e3816..f03646f7 100644
+--- a/src/libslic3r/PrintObjectSlice.cpp
++++ b/src/libslic3r/PrintObjectSlice.cpp
+@@ -915,6 +915,15 @@ static inline void apply_mm_segmentation(PrintObject &print_object, ThrowOnCance
+                 bool layer_split = false;
+                 for (size_t extruder_id = 0; extruder_id < num_extruders; ++ extruder_id) {
+                     ByExtruder &region = by_extruder[extruder_id];
++                    // owzx-fix (MM-SEG-DIMS): segmentation is produced per layer
++                    // and per extruder involved in painting; neither dimension is
++                    // guaranteed to match filament_diameter.size()/layer_count in
++                    // Release (the asserts above are compiled out). Reading
++                    // out of bounds moved garbage ExPolygons into by_extruder and
++                    // SIGSEGV'd in get_extents (seen on >=3-filament painted
++                    // models). Missing entries simply contribute no region.
++                    if (layer_id >= segmentation.size() || extruder_id >= segmentation[layer_id].size())
++                        continue;
+                     append(region.expolygons, std::move(segmentation[layer_id][extruder_id]));
+                     if (! region.expolygons.empty()) {
+                         region.bbox = get_extents(region.expolygons);

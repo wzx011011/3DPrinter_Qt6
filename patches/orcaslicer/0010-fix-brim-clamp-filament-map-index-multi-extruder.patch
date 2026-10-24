@@ -1,0 +1,35 @@
+diff --git a/src/libslic3r/Brim.cpp b/src/libslic3r/Brim.cpp
+index 9cee5a0e..f3a013a9 100644
+--- a/src/libslic3r/Brim.cpp
++++ b/src/libslic3r/Brim.cpp
+@@ -636,11 +636,25 @@ static ExPolygons outer_inner_brim_area(const Print& print,
+         });
+ 
+         if (iter != objPrintVec.end()) {
+-            int extruder_id = filament_map[iter->second - 1] - 1;
+-            auto bedPoly = extruder_unprintable_area[extruder_id];
+-            auto bedExPoly   = diff_ex((offset(bedPoly, scale_(30.), jtRound, SCALED_RESOLUTION)), {bedPoly});
+-            if (!bedExPoly.empty()) {
+-                extruder_no_brim_area.push_back(bedExPoly.front());
++            // owzx-fix (BRIM-MULTI-EXTRUDER): filament_map defaults to {1} on
++            // flows that never configure filament maps, while objPrintVec can
++            // reference extruders >= 2 once >=3 filaments are configured.
++            // Indexing filament_map with (extruder-1) then read out of bounds
++            // and the garbage result indexed extruder_unprintable_area,
++            // producing a wild vector<Polygons> reference that SIGSEGV'd in
++            // the polygon copies below. Clamp both indices; unmapped or
++            // out-of-range filaments simply skip the per-extruder bed
++            // exclusion (same semantics as no exclusion area).
++            if (!filament_map.empty() && !extruder_unprintable_area.empty()) {
++                const size_t map_idx = std::min<size_t>(size_t(std::max(1u, iter->second)) - 1, filament_map.size() - 1);
++                const int    extruder_id = filament_map[map_idx] - 1;
++                if (extruder_id >= 0 && extruder_id < int(extruder_unprintable_area.size())) {
++                    auto bedPoly = extruder_unprintable_area[extruder_id];
++                    auto bedExPoly   = diff_ex((offset(bedPoly, scale_(30.), jtRound, SCALED_RESOLUTION)), {bedPoly});
++                    if (!bedExPoly.empty()) {
++                        extruder_no_brim_area.push_back(bedExPoly.front());
++                    }
++                }
+             }
+             //extruder_no_brim_area = offset2_ex(extruder_no_brim_area, scaled_flow_width, -scaled_flow_width); // connect scattered small areas to prevent generating very small brims
+ 

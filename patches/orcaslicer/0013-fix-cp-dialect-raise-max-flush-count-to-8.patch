@@ -1,0 +1,17 @@
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+index e9cdb620..b0bcad6e 100644
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -93,7 +93,11 @@ namespace Slic3r {
+ 
+ static const float g_min_purge_volume = 100.f;
+ static const float g_purge_volume_one_time = 135.f;
+-static const int g_max_flush_count = 4;
++// owzx-fix (CP-DIALECT): CrealityPrint 5-color+ models reference
++// flush_length_5..8 in change_filament_gcode; the old cap of 4 left those
++// symbols unset and the placeholder parser threw "Not a variable name"
++// (rc=156). 8 covers every CP model tier seen in the wild.
++static const int g_max_flush_count = 8;
+ static const size_t g_max_label_object = 64;
+ 
+ static bool is_bambu_x2d_printer(const FullPrintConfig &config)
