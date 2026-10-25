@@ -1232,6 +1232,39 @@ void SliceService::startSlice(const QString &projectName)
                                new Slic3r::ConfigOptionPoints(printableArea->values));
       }
 
+      // owzx-fix (CP-DIALECT-DEFAULT): multicolor_method follows upstream
+      // Orca behavior — upstream carries no guard and emits toolchange
+      // macros whenever toolchanges occur. When neither the preset nor the
+      // model set the key explicitly, derive it from the filament count
+      // (>1 filament → toolchange templates evaluate, matching upstream's
+      // unguarded behavior) instead of defaulting to false, which silently
+      // dropped the CP toolchange block for multicolor models.
+      {
+        bool explicitValue = false;
+        if (receiver && !receiver->mergedPresetConfig_.isEmpty() &&
+            receiver->mergedPresetConfig_.contains(
+                QStringLiteral("multicolor_method")))
+          explicitValue = true;
+        if (!explicitValue && receiver && receiver->projectService_) {
+          const int plateIdx2 = targetPlateIndex >= 0
+                                    ? targetPlateIndex
+                                    : receiver->projectService_->currentPlateIndex();
+          if (plateIdx2 >= 0) {
+            if (const Slic3r::DynamicPrintConfig *plateCfg2 =
+                    receiver->projectService_->plateDynamicConfig(plateIdx2))
+              explicitValue = plateCfg2->has("multicolor_method");
+          }
+        }
+        if (!explicitValue) {
+          const auto *filamentDiameters =
+              config.option<Slic3r::ConfigOptionFloats>("filament_diameter", false);
+          config.set_key_value(
+              "multicolor_method",
+              new Slic3r::ConfigOptionBool(filamentDiameters &&
+                                           filamentDiameters->size() > 1));
+        }
+      }
+
       restoreGenericEnumMaps(config);
 
       print.set_status_callback([receiver, stepRecorder](const Slic3r::PrintBase::SlicingStatus &st) {
