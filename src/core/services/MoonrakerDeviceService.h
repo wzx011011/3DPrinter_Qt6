@@ -2,6 +2,7 @@
 
 #include "DeviceServiceMock.h"
 #include "LanDeviceProbe.h"
+#include "LanErrorCodes.h"
 #include "MdnsDiscovery.h"
 
 #include <QJsonObject>
@@ -54,6 +55,8 @@ class MoonrakerDeviceService final : public IDeviceDataPlane
   Q_PROPERTY(int selectedDeviceCurrentLayerNum READ selectedDeviceCurrentLayerNum NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceRemainingTime READ selectedDeviceRemainingTime NOTIFY selectedDeviceChanged)
   Q_PROPERTY(bool mqttConnected READ isMqttConnected NOTIFY selectedDeviceChanged)
+  /// 收尾#1：设备错误文案（ws err.errcode → LanErrorCodes；空=无错误）。
+  Q_PROPERTY(QString selectedDeviceErrorText READ selectedDeviceErrorText NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY devicesChanged)
 
 public:
@@ -120,6 +123,7 @@ public:
   QString selectedDeviceSerial() const override;
   int selectedDeviceProgress() const override;
   QString selectedDeviceTaskName() const override;
+  QString selectedDeviceErrorText() const;
 
   /// Test/dev hook: override the ws/HTTP ports for loopback stubs (production
   /// derives them from mDNS//info).
@@ -130,6 +134,26 @@ public:
   }
   /// Test hook: /info 探测跳过 HTTPS 尝试（测试二进制的 OpenSSL 符号冲突）。
   void setProbeHttpsDisabled(bool disabled) { probeHttpsDisabled_ = disabled; }
+  /// Test hook：直接把设备标为 Moonraker（生产路径是 mDNS typeCode "00"
+  /// 合并，见 pendingMdns_）。
+  void markDeviceMoonraker(int filteredIndex, int moonrakerPort);
+  /// 收尾#2：发送时"打印前校准"（官方 enableSelfTest，SelectMachine 同名
+  /// 选项）。默认 false；PrintDialog 的选项面经 MonitorViewModel 传入。
+  void setEnableSelfTest(bool enabled) override { enableSelfTest_ = enabled; }
+  bool enableSelfTest() const { return enableSelfTest_; }
+  /// 收尾#4：设备文件列表（ws pFileList / Moonraker /server/files/list）。
+  Q_INVOKABLE void requestDeviceFiles();
+  /// 收尾#4：启动打印设备上的文件（ws printprt / Moonraker print/start）。
+  Q_INVOKABLE void printDeviceFile(const QString &fileName);
+  /// 收尾#4：删除设备上的文件（ws delFile / Moonraker file/delete）。
+  Q_INVOKABLE void deleteDeviceFile(const QString &fileName);
+  /// 收尾#5：打印速度四档（官方 speedMode 0=极速 1=标准 2=平稳 3=静音，
+  /// 4408 ws 语义；Moonraker 无此语义为诚实 no-op）。
+  Q_INVOKABLE void setPrintSpeedMode(int mode);
+  /// 收尾#5：舱灯（ws lightSw；接口默认 no-op 的真实现）。
+  void setChamberLight(bool on) override;
+  /// 收尾#5：喷嘴目标温度（ws setNozzleTemp）。
+  Q_INVOKABLE void setNozzleTemp(int celsius);
 
 signals:
   void scanningChanged();
@@ -154,6 +178,7 @@ private:
     int progress = 0, currentLayer = 0, totalLayer = 0;
     int remainingMin = 0;
     QString taskName;
+    int errorCode = 0; // ws err.errcode（0=无错误）
   };
 
   // ── 发现 ──
@@ -196,4 +221,9 @@ private:
   int portsOverrideWs_ = 0;
   int portsOverrideHttp_ = 0;
   bool probeHttpsDisabled_ = false;
+  bool enableSelfTest_ = false;
+  QNetworkReply *uploadReply_ = nullptr; // 收尾#3：取消句柄
+  /// mDNS 先行信息（ip → {isMoonraker, moonrakerPort}）：探测完成时合并
+  /// （mDNS 服务名编码了 Moonraker 标记与端口，/info 不含）。
+  QHash<QString, QVariantMap> pendingMdns_;
 };

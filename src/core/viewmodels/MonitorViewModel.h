@@ -29,6 +29,8 @@ class MonitorViewModel final : public QObject
   Q_PROPERTY(QString selectedDeviceSerial READ selectedDeviceSerial NOTIFY selectedDeviceChanged)
   Q_PROPERTY(bool selectedDeviceOnline READ selectedDeviceOnline NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceStatus READ selectedDeviceStatus NOTIFY selectedDeviceChanged)
+  /// LAN 收尾#1：设备错误文案（空=无错误）。
+  Q_PROPERTY(QString selectedDeviceErrorText READ selectedDeviceErrorText NOTIFY selectedDeviceChanged)
   Q_PROPERTY(int selectedDeviceProgress READ selectedDeviceProgress NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceTaskName READ selectedDeviceTaskName NOTIFY selectedDeviceChanged)
   Q_PROPERTY(QString selectedDeviceIp READ selectedDeviceIp NOTIFY selectedDeviceChanged)
@@ -72,6 +74,7 @@ public:
   QString selectedDeviceSerial() const;
   bool selectedDeviceOnline() const;
   QString selectedDeviceStatus() const;
+  QString selectedDeviceErrorText() const;
   int selectedDeviceProgress() const;
   QString selectedDeviceTaskName() const;
   QString selectedDeviceIp() const;
@@ -183,6 +186,16 @@ public:
 
   /// Device lights and recording (对齐上游 MachineObject lights / camera)
   Q_INVOKABLE void setChamberLight(bool on);
+  /// LAN 收尾#5：打印速度四档（0=极速 1=标准 2=平稳 3=静音）/ 喷嘴温度。
+  Q_INVOKABLE void setPrintSpeedMode(int mode);
+  Q_INVOKABLE void setNozzleTemp(int celsius);
+  /// LAN 收尾#2：发送时"打印前校准"选项（enableSelfTest）。
+  Q_INVOKABLE void setLanSelfTest(bool enabled);
+  /// LAN 收尾#4：设备文件管理入口（结果经 Backend 设备服务的
+  /// deviceFilesReady 信号）。
+  Q_INVOKABLE void requestDeviceFiles();
+  Q_INVOKABLE void printDeviceFile(const QString &fileName);
+  Q_INVOKABLE void deleteDeviceFile(const QString &fileName);
   Q_INVOKABLE void setWorkLight(bool on);
   Q_INVOKABLE void toggleDeviceRecording();
   Q_INVOKABLE void toggleDeviceTimelapse();

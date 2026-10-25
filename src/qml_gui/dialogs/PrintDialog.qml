@@ -688,6 +688,31 @@ CxDialog {
             }
         }
 
+        // LAN 收尾#2：发送时"打印前校准"（官方 enableSelfTest；仅 moonraker
+        // 后端可见——mock 演示链路无此语义）。
+        RowLayout {
+            visible: Backend.deviceBackendKind === "moonraker"
+            Layout.leftMargin: 30; Layout.rightMargin: 30
+            Layout.fillWidth: true
+            spacing: 8
+
+            CheckBox {
+                id: lanSelfTestCheck
+                checked: false
+                onCheckedChanged: root.monitorVm.setLanSelfTest(checked)
+            }
+            Label {
+                Layout.fillWidth: true
+                text: qsTr("打印前校准（发送后打印机先执行自检再开始打印）")
+                color: Theme.textSecondary
+                font.pixelSize: Theme.fontSizeSM
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: lanSelfTestCheck.toggle()
+                }
+            }
+        }
+
         // Gap before the schedule divider (SendToPrinter.cpp:574)
         Item { Layout.preferredHeight: 22 }
 

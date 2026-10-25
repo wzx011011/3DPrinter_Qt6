@@ -156,6 +156,15 @@ public:
   virtual void stopPrint(int) {}
   virtual void setChamberLight(bool) {}
   virtual void setWorkLight(bool) {}
+  // LAN 收尾#4/#5：文件管理与详细控制（默认诚实 no-op；moonraker 后端实现）
+  virtual void requestDeviceFiles() {}
+  virtual void printDeviceFile(const QString &) {}
+  virtual void deleteDeviceFile(const QString &) {}
+  virtual void setPrintSpeedMode(int) {}
+  virtual void setNozzleTemp(int) {}
+  /// LAN 收尾#2：发送时"打印前校准"（官方 enableSelfTest；默认 no-op）。
+  virtual void setEnableSelfTest(bool) {}
+  virtual QString selectedDeviceErrorText() const { return {}; }
   virtual void toggleRecording() {}
   virtual void toggleTimelapse() {}
   // 发送任务状态机（SelectMachineDialog/PrintDialog 面）
@@ -204,6 +213,8 @@ signals:
   void hmsChanged();
   void sendJobChanged();
   void printOptionsChanged();
+  /// LAN 收尾#4：设备文件列表就绪（moonraker 后端发出）。
+  void deviceFilesReady(const QVariantList &files);
   // ── U11: send-print（FTP+MQTT）真实链路进度与终态 ──
   void sendPrintUploadStarted();
   void sendPrintUploadProgress(int percent);

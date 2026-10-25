@@ -780,6 +780,8 @@ signals:
   /// main.qml opens the progress dialog (upstream CloudDownloadProgressDialog
   /// per-download-modal parity).
   void showCloudDownloadDialogRequested();
+  /// LAN 收尾#4：设备文件列表就绪（桥自设备服务 deviceFilesReady）。
+  void lanDeviceFilesReady(const QVariantList &files);
   void showEditGCodeDialogRequested(const QString &key, const QString &value);
   void showAMSSettingsDialogRequested();
   void showPreferencesDialogRequested();

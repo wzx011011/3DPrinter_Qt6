@@ -182,6 +182,9 @@ BackendContext::BackendContext(QObject *parent)
     deviceService_ = new MoonrakerDeviceService(this);
   else
     deviceService_ = new DeviceServiceMock(this);
+  // LAN 收尾#4：文件列表信号桥到 QML（Backend.lanDeviceFilesReady）。
+  connect(deviceService_, &IDeviceDataPlane::deviceFilesReady, this,
+          [this](const QVariantList &files) { emit lanDeviceFilesReady(files); });
   projectService_ = new ProjectService(this);
   sliceService_ = new SliceService(projectService_, this);
   // v2.7 P1：注入 SliceService 到 CalibrationService（校准时触发 calib slice）

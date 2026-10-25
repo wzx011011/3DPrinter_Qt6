@@ -181,6 +181,14 @@ void MoonrakerDeviceService::onMdnsDeviceFound(const QVariantMap &device)
     const QString ip = device.value(QStringLiteral("ip")).toString();
     if (matchingIndexByIp(ip) != -1)
         return;
+    // 记录 mDNS 先行信息：typeCode "00"=Moonraker + 端口（/info 不含这两个
+    // 字段，探测完成时合并进设备记录）。
+    QVariantMap info;
+    info.insert(QStringLiteral("isMoonraker"),
+                device.value(QStringLiteral("isMoonraker")).toBool());
+    info.insert(QStringLiteral("moonrakerPort"),
+                device.value(QStringLiteral("moonrakerPort")).toInt());
+    pendingMdns_.insert(ip, info);
     probeAndAdd(ip, QString());
 }
 
@@ -205,6 +213,12 @@ void MoonrakerDeviceService::probeAndAdd(const QString &ip, const QString &nameH
                 dev.wssPort = map.value(QStringLiteral("wssPort")).toInt();
                 dev.httpPort = dev.secure ? 443 : 80;
                 dev.oldPrinter = map.value(QStringLiteral("oldPrinter")).toBool();
+                // 合并 mDNS 先行信息（Moonraker 标记 + 端口）
+                if (pendingMdns_.contains(dev.ip)) {
+                    const QVariantMap mdns = pendingMdns_.take(dev.ip);
+                    dev.isMoonraker = mdns.value(QStringLiteral("isMoonraker")).toBool();
+                    dev.moonrakerPort = mdns.value(QStringLiteral("moonrakerPort")).toInt();
+                }
                 devices_.append(dev);
                 persist();
                 touch();
@@ -404,8 +418,23 @@ void MoonrakerDeviceService::onWsTextMessage(const QString &message)
     const QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !doc.isObject())
         return;
+    const QJsonObject root = doc.object();
+    // 收尾#4：pFileList 推送（requestDeviceFiles 的 get 应答）
+    if (root.contains(QStringLiteral("pFileList"))) {
+        QVariantList files;
+        const QJsonArray arr = root.value(QStringLiteral("pFileList")).toArray();
+        for (const QJsonValue &v : arr) {
+            const QJsonObject f = v.toObject();
+            QVariantMap row;
+            row.insert(QStringLiteral("name"), f.value(QStringLiteral("name")).toString());
+            row.insert(QStringLiteral("size"), f.value(QStringLiteral("size")).toVariant());
+            row.insert(QStringLiteral("path"), f.value(QStringLiteral("path")).toString());
+            files.append(row);
+        }
+        emit deviceFilesReady(files);
+    }
     if (Device *dev = selected()) {
-        applyStatusFields(*dev, doc.object());
+        applyStatusFields(*dev, root);
         touch();
     }
 }
@@ -413,6 +442,10 @@ void MoonrakerDeviceService::onWsTextMessage(const QString &message)
 void MoonrakerDeviceService::applyStatusFields(Device &dev, const QJsonObject &params)
 {
     dev.online = true;
+    // 收尾#1：err.errcode（0/缺失=无错误；bundle deviceMgr 同款字段）
+    const QJsonObject err = params.value(QStringLiteral("err")).toObject();
+    if (!err.isEmpty())
+        dev.errorCode = err.value(QStringLiteral("errcode")).toInt(0);
     const int state = params.value(QStringLiteral("state")).toInt(-1);
     if (state == 0)
         dev.status = QStringLiteral("idle");
@@ -558,6 +591,7 @@ bool MoonrakerDeviceService::uploadAndStart(int filteredIndex, const QString &gc
 
     QNetworkRequest request{url};
     QNetworkReply *reply = manager_->post(request, multi);
+    uploadReply_ = reply; // 收尾#3：取消句柄
 
     connect(reply, &QNetworkReply::uploadProgress, this,
             [this](qint64 sent, qint64 total) {
@@ -566,7 +600,13 @@ bool MoonrakerDeviceService::uploadAndStart(int filteredIndex, const QString &gc
             });
     connect(reply, &QNetworkReply::finished, this, [this, reply, fileName, dev]() {
         reply->deleteLater();
+        uploadReply_ = nullptr;
         uploadInFlight_ = false;
+        const bool wasAborted = reply->error() == QNetworkReply::OperationCanceledError;
+        if (wasAborted) {
+            emit sendPrintCancelled();
+            return;
+        }
         const QByteArray body = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
             emit sendPrintFailed(reply->errorString());
@@ -597,6 +637,8 @@ bool MoonrakerDeviceService::uploadAndStart(int filteredIndex, const QString &gc
         QJsonObject params;
         params.insert(QStringLiteral("opGcodeFile"),
                       QStringLiteral("printprt:/") + fileName);
+        if (enableSelfTest_)
+            params.insert(QStringLiteral("enableSelfTest"), 1);
         wsSet(params);
         emit sendPrintSucceeded();
     });
@@ -616,8 +658,10 @@ void MoonrakerDeviceService::startPrint(int filteredIndex, const QString &gcodeP
 
 void MoonrakerDeviceService::cancelSendPrint()
 {
-    // 上传取消：QNetworkReply 句柄未持久化（进度随响应自然终止）；per-task
-    // 取消列二期（下载器已有 per-fileId 先例）。
+    // 收尾#3：abort() → OperationCanceledError → finished 分支发
+    // sendPrintCancelled（与 mock 后端语义一致）。
+    if (uploadReply_ && uploadInFlight_)
+        uploadReply_->abort();
 }
 
 // ── 遥测（Moonraker 后端无 Bambu MQTT 信封——诚实 false） ────────────────
@@ -726,4 +770,134 @@ int MoonrakerDeviceService::selectedDeviceRemainingTime() const
 {
     const Device *dev = selected();
     return dev ? dev->remainingMin : 0;
+}
+
+QString MoonrakerDeviceService::selectedDeviceErrorText() const
+{
+    const Device *dev = selected();
+    return dev ? LanErrorCodes::text(dev->errorCode) : QString();
+}
+
+
+// ── 收尾#4：设备文件管理 ──────────────────────────────────────────────────
+
+void MoonrakerDeviceService::requestDeviceFiles()
+{
+    Device *dev = selected();
+    if (!dev)
+        return;
+    if (dev->isMoonraker) {
+        // Moonraker：GET /server/files/list?root=gcodes
+        QNetworkRequest req{
+            QUrl(moonrakerBase(*dev) + QStringLiteral("/server/files/list?root=gcodes"))};
+        req.setTransferTimeout(3000);
+        QNetworkReply *reply = manager_->get(req);
+        connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+            reply->deleteLater();
+            if (reply->error() != QNetworkReply::NoError)
+                return;
+            QVariantList files;
+            const QJsonArray items = QJsonDocument::fromJson(reply->readAll())
+                                         .object()
+                                         .value(QStringLiteral("result"))
+                                         .toObject()
+                                         .value(QStringLiteral("files"))
+                                         .toArray();
+            for (const QJsonValue &v : items) {
+                const QJsonObject f = v.toObject();
+                QVariantMap row;
+                row.insert(QStringLiteral("name"), f.value(QStringLiteral("name")).toString());
+                row.insert(QStringLiteral("size"), f.value(QStringLiteral("size")).toVariant());
+                row.insert(QStringLiteral("path"), f.value(QStringLiteral("path")).toString());
+                files.append(row);
+            }
+            emit deviceFilesReady(files);
+        });
+        return;
+    }
+    // 4408：ws get pFileList（结果在后续推送里带 pFileList 键 → onWsTextMessage）
+    if (ws_ && ws_->state() == QAbstractSocket::ConnectedState) {
+        QJsonObject msg;
+        msg.insert(QStringLiteral("method"), QStringLiteral("get"));
+        QJsonObject params;
+        params.insert(QStringLiteral("pFileList"), 1);
+        msg.insert(QStringLiteral("params"), params);
+        ws_->sendTextMessage(QString::fromUtf8(
+            QJsonDocument(msg).toJson(QJsonDocument::Compact)));
+    }
+}
+
+void MoonrakerDeviceService::printDeviceFile(const QString &fileName)
+{
+    Device *dev = selected();
+    if (!dev)
+        return;
+    if (dev->isMoonraker) {
+        QNetworkRequest req{
+            QUrl(moonrakerBase(*dev) + QStringLiteral("/printer/print/start?filename=")
+                 + QString::fromUtf8(QUrl::toPercentEncoding(fileName)))};
+        manager_->post(req, QByteArray());
+        return;
+    }
+    QJsonObject params;
+    params.insert(QStringLiteral("opGcodeFile"),
+                  QStringLiteral("printprt:/") + fileName);
+    if (enableSelfTest_)
+        params.insert(QStringLiteral("enableSelfTest"), 1);
+    wsSet(params);
+}
+
+void MoonrakerDeviceService::deleteDeviceFile(const QString &fileName)
+{
+    Device *dev = selected();
+    if (!dev)
+        return;
+    if (dev->isMoonraker) {
+        QNetworkRequest req{
+            QUrl(moonrakerBase(*dev) + QStringLiteral("/server/files/delete?path=gcodes/")
+                 + QString::fromUtf8(QUrl::toPercentEncoding(fileName)))};
+        manager_->deleteResource(req);
+        return;
+    }
+    QJsonObject params;
+    params.insert(QStringLiteral("delFile"), fileName);
+    wsSet(params);
+}
+
+
+// ── 收尾#5：详细控制 ─────────────────────────────────────────────────────
+
+void MoonrakerDeviceService::setPrintSpeedMode(int mode)
+{
+    // 官方 speedMode：0=极速 1=标准 2=平稳 3=静音（4408 ws 语义）。
+    if (mode < 0 || mode > 3)
+        return;
+    QJsonObject params;
+    params.insert(QStringLiteral("speedMode"), mode);
+    wsSet(params);
+}
+
+void MoonrakerDeviceService::setChamberLight(bool on)
+{
+    QJsonObject params;
+    params.insert(QStringLiteral("lightSw"), on ? 1 : 0);
+    wsSet(params);
+}
+
+void MoonrakerDeviceService::setNozzleTemp(int celsius)
+{
+    if (celsius < 0 || celsius > 300)
+        return; // 合理性守卫（官方文案：温度范围不合理）
+    QJsonObject params;
+    params.insert(QStringLiteral("setNozzleTemp"), celsius);
+    wsSet(params);
+}
+
+void MoonrakerDeviceService::markDeviceMoonraker(int filteredIndex, int moonrakerPort)
+{
+    const int real = filteredToReal(filteredIndex);
+    if (real == -1)
+        return;
+    devices_[real].isMoonraker = true;
+    devices_[real].moonrakerPort = moonrakerPort;
 }

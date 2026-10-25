@@ -1598,6 +1598,62 @@ Item {
                                         onClicked: root.monitorVm.stopPrint(0)
                                     }
 
+                                    // LAN 收尾#1：设备错误横幅（ws err 呈现）
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 30
+                                        radius: Theme.radiusSM
+                                        color: Theme.bgInset
+                                        visible: root.monitorVm.selectedDeviceErrorText !== ""
+                                        Text {
+                                            anchors.centerIn: parent
+                                            width: parent.width - 16
+                                            text: qsTr("⚠ ") + root.monitorVm.selectedDeviceErrorText
+                                            color: Theme.statusError
+                                            font.pixelSize: Theme.fontSizeSM
+                                            elide: Text.ElideMiddle
+                                        }
+                                    }
+
+                                    // LAN 收尾#5：详细控制条（moonraker 后端 +
+                                    // 已连接时显示：速度四档/舱灯/喷嘴温度预设）
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 6
+                                        visible: Backend.deviceBackendKind === "moonraker"
+                                                 && root.monitorVm.selectedDeviceOnline
+
+                                        Label {
+                                            text: qsTr("速度")
+                                            color: Theme.textTertiary
+                                            font.pixelSize: Theme.fontSizeXS
+                                        }
+                                        Repeater {
+                                            model: [qsTr("极速"), qsTr("标准"), qsTr("平稳"), qsTr("静音")]
+                                            CxButton {
+                                                required property string modelData
+                                                required property int index
+                                                text: modelData
+                                                compact: true
+                                                Layout.preferredHeight: 26
+                                                onClicked: root.monitorVm.setPrintSpeedMode(index)
+                                            }
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                        CxButton {
+                                            text: qsTr("灯光")
+                                            compact: true
+                                            Layout.preferredHeight: 26
+                                            onClicked: root.monitorVm.setChamberLight(true)
+                                        }
+                                        CxButton {
+                                            text: qsTr("预热 210°")
+                                            compact: true
+                                            Layout.preferredHeight: 26
+                                            onClicked: root.monitorVm.setNozzleTemp(210)
+                                        }
+                                    }
+
                                     // Connect offline device button
                                     CxButton {
                                         text: qsTr("连接")
@@ -1897,6 +1953,105 @@ Item {
                         spacing: 12
                         visible: tabBar.currentIndex === 1
 
+                        // LAN 收尾#4：设备文件管理（moonraker 后端 + 在线时：
+                        // 列表/打印/删除；协议 = ws pFileList / Moonraker files API）
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            visible: Backend.deviceBackendKind === "moonraker"
+                                     && root.monitorVm.selectedDeviceOnline
+                            spacing: 8
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                CxButton {
+                                    text: qsTr("刷新文件列表")
+                                    compact: true
+                                    onClicked: root.monitorVm.requestDeviceFiles()
+                                }
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            Connections {
+                                target: Backend
+                                function onLanDeviceFilesReady(files) {
+                                    lanFilesModel.clear()
+                                    for (var i = 0; i < files.length; ++i) {
+                                        var f = files[i]
+                                        lanFilesModel.append({
+                                            name: f.name || "",
+                                            size: f.size || 0,
+                                            path: f.path || ""
+                                        })
+                                    }
+                                }
+                            }
+
+                            ListView {
+                                id: lanFilesList
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                clip: true
+                                spacing: 4
+                                model: ListModel { id: lanFilesModel }
+
+                                delegate: Rectangle {
+                                    width: lanFilesList.width
+                                    height: 40
+                                    radius: Theme.radiusSM
+                                    color: fileHover.hovered ? Theme.bgHover : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 10
+                                        anchors.rightMargin: 10
+                                        spacing: 8
+
+                                        ColumnLayout {
+                                            spacing: 0
+                                            Text {
+                                                text: model.name
+                                                color: Theme.textPrimary
+                                                font.pixelSize: Theme.fontSizeSM
+                                                elide: Text.ElideMiddle
+                                                Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: model.size > 0
+                                                      ? (model.size / 1048576).toFixed(1) + " MB"
+                                                      : ""
+                                                color: Theme.textTertiary
+                                                font.pixelSize: Theme.fontSizeXS
+                                            }
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                        CxButton {
+                                            text: qsTr("打印")
+                                            compact: true
+                                            onClicked: root.monitorVm.printDeviceFile(model.name)
+                                        }
+                                        CxButton {
+                                            text: qsTr("删除")
+                                            compact: true
+                                            cxStyle: CxButton.Style.Danger
+                                            onClicked: root.monitorVm.deleteDeviceFile(model.name)
+                                        }
+                                    }
+                                    HoverHandler { id: fileHover }
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: lanFilesModel.count === 0
+                                    text: qsTr("点击「刷新文件列表」查看打印机上的文件")
+                                    color: Theme.textTertiary
+                                    font.pixelSize: Theme.fontSizeSM
+                                }
+                            }
+
+                        }
+
                         Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
@@ -1905,7 +2060,8 @@ Item {
                                 anchors.centerIn: parent
                                 width: Math.min(parent.width, 360)
                                 spacing: Theme.spacingSM
-                                visible: !root.monitorVm.selectedDeviceFilesystemSupported
+                                visible: Backend.deviceBackendKind !== "moonraker"
+                                         && !root.monitorVm.selectedDeviceFilesystemSupported
 
                                 Text {
                                     anchors.horizontalCenter: parent.horizontalCenter

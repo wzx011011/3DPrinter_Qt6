@@ -172,6 +172,9 @@ endif()
         # L2: Moonraker/4408 局域网设备服务（IDeviceDataPlane 真实现）
         src/core/services/MoonrakerDeviceService.h
         src/core/services/MoonrakerDeviceService.cpp
+        # 收尾#1: 设备错误码→文案（ws err.errcode 呈现）
+        src/core/services/LanErrorCodes.h
+        src/core/services/LanErrorCodes.cpp
         src/core/services/ProjectService.cpp
         src/core/services/ProjectService.h
         src/core/services/UndoRedoManager.cpp

@@ -1,3 +1,4 @@
+#include "core/services/LanErrorCodes.h"
 #include "core/services/MoonrakerDeviceService.h"
 
 #include <QDir>
@@ -25,6 +26,8 @@ public:
     QByteArray lastBody;
     int uploadHits = 0;
     int startHits = 0;
+    /// trickle：上传请求只应答头 + 少量 body，保持连接挂起（取消测试用）。
+    bool trickle = false;
 
     bool start()
     {
@@ -61,15 +64,23 @@ public:
                 } else if (path.startsWith("/printer/print/start")) {
                     ++startHits; // Moonraker 启动
                     payload = "{\"result\":\"ok\"}";
+                } else if (path.startsWith("/server/files/list")) {
+                    payload = "{\"result\":{\"files\":[{\"name\":\"benchy.gcode\","
+                              "\"size\":1048576,\"path\":\"gcodes/benchy.gcode\"}]}}";
                 } else {
                     payload = "{\"result\":\"ok\"}";
                 }
-                socket->write(QByteArray("HTTP/1.1 200 OK\r\nContent-Length: ")
-                              + QByteArray::number(static_cast<qlonglong>(
-                                    static_cast<int>(payload.size())))
-                              + "\r\nConnection: close\r\n\r\n"
-                              + payload);
-                socket->disconnectFromHost();
+                if (trickle && path.startsWith("/upload/")) {
+                    socket->write("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n"
+                                  "Connection: close\r\n\r\nOK..."); // body 不发完
+                } else {
+                    socket->write(QByteArray("HTTP/1.1 200 OK\r\nContent-Length: ")
+                                  + QByteArray::number(static_cast<qlonglong>(
+                                        static_cast<int>(payload.size())))
+                                  + "\r\nConnection: close\r\n\r\n"
+                                  + payload);
+                    socket->disconnectFromHost();
+                }
                 buffer_.clear();
             });
             connect(socket, &QTcpSocket::disconnected, socket,
@@ -200,6 +211,93 @@ private slots:
     // 手动添加的设备按 4408 语义：POST /upload/<name>，启动走 ws（不经 HTTP）
     QVERIFY(stub.lastRequestLine.contains("/upload/"));
     QVERIFY(progressSpy.count() >= 0); // 小文件可能 0 次 uploadProgress
+  }
+  // ── 收尾#1：错误码表 ────────────────────────────────────────────────
+  void errorCodesTable()
+  {
+    QCOMPARE(LanErrorCodes::text(0), QString());
+    QCOMPARE(LanErrorCodes::text(115), QStringLiteral("耗材断料/请检查进料"));
+    QVERIFY(LanErrorCodes::isKnown(115));
+    const QString unknown = LanErrorCodes::text(9001);
+    QVERIFY(unknown.contains(QStringLiteral("9001"))); // 未知码显示数字，不编造
+    QVERIFY(!LanErrorCodes::isKnown(9001));
+  }
+
+  // ── 收尾#2：enableSelfTest 传播 ─────────────────────────────────────
+  void selfTestFlagPropagation()
+  {
+    MoonrakerDeviceService svc;
+    svc.setProbeHttpsDisabled(true);
+    svc.addManualDevice(QStringLiteral("K1"), QStringLiteral("127.0.0.1"), QString());
+    QVERIFY(!svc.enableSelfTest());
+    svc.setEnableSelfTest(true);
+    QVERIFY(svc.enableSelfTest()); // 服务层接受选项（ws 参数在 applyStatusFields
+                                   // 之外的启动消息里，ws 未连接时无副作用）
+    svc.setEnableSelfTest(false);
+    QVERIFY(!svc.enableSelfTest());
+  }
+
+  // ── 收尾#4：Moonraker 文件列表（回环 stub） ─────────────────────────
+  void moonrakerFilesList()
+  {
+    MoonrakerStub stub;
+    QVERIFY(stub.start());
+
+    MoonrakerDeviceService svc;
+    svc.setProbeHttpsDisabled(true);
+    svc.setPortsOverride(9997, stub.port());
+    svc.addManualDevice(QStringLiteral("K1"), QStringLiteral("127.0.0.1"), QString());
+    svc.markDeviceMoonraker(0, stub.port()); // 生产路径 = mDNS typeCode "00" 合并
+    svc.selectDevice(0); // requestDeviceFiles 走选中设备
+
+    QSignalSpy filesSpy(&svc, &MoonrakerDeviceService::deviceFilesReady);
+    QEventLoop loop;
+    connect(&svc, &MoonrakerDeviceService::deviceFilesReady, &loop, &QEventLoop::quit);
+    QTimer::singleShot(3000, &loop, &QEventLoop::quit);
+    svc.requestDeviceFiles();
+    loop.exec();
+
+    QCOMPARE(filesSpy.count(), 1);
+    const QVariantList files = filesSpy.first().at(0).toList();
+    QCOMPARE(files.size(), 1);
+    QCOMPARE(files.first().toMap().value(QStringLiteral("name")).toString(),
+             QStringLiteral("benchy.gcode"));
+    QCOMPARE(files.first().toMap().value(QStringLiteral("size")).toLongLong(), 1048576LL);
+  }
+  // ── 收尾#3：上传取消（trickle stub + abort → sendPrintCancelled） ──
+  void uploadCancelEmitsCancelled()
+  {
+    MoonrakerStub stub;
+    stub.trickle = true;
+    QVERIFY(stub.start());
+
+    MoonrakerDeviceService svc;
+    svc.setProbeHttpsDisabled(true);
+    svc.setPortsOverride(9996, stub.port());
+    svc.addManualDevice(QStringLiteral("K1"), QStringLiteral("127.0.0.1"), QString());
+
+    const QString gcode = QDir(dir_.path()).filePath(QStringLiteral("big.gcode"));
+    QFile f(gcode);
+    QVERIFY(f.open(QIODevice::WriteOnly));
+    f.write(QByteArray(4 << 20, 'G')); // 4MB：慢速 stub 上来不及传完
+    f.close();
+
+    QSignalSpy startedSpy(&svc, &IDeviceDataPlane::sendPrintUploadStarted);
+    QSignalSpy canceledSpy(&svc, &IDeviceDataPlane::sendPrintCancelled);
+    QSignalSpy failedSpy(&svc, &IDeviceDataPlane::sendPrintFailed);
+    QEventLoop loop;
+    connect(&svc, &IDeviceDataPlane::sendPrintCancelled, &loop, &QEventLoop::quit);
+    connect(&svc, &IDeviceDataPlane::sendPrintFailed, &loop, &QEventLoop::quit);
+    QTimer::singleShot(8000, &loop, &QEventLoop::quit);
+    QVERIFY(svc.sendPrintViaFtp(0, gcode));
+    QVERIFY(svc.sendPrintInFlight());
+    QTimer::singleShot(300, &svc, [&svc]() { svc.cancelSendPrint(); });
+    loop.exec();
+
+    QCOMPARE(startedSpy.count(), 1);
+    QCOMPARE(canceledSpy.count(), 1);
+    QVERIFY(failedSpy.isEmpty());
+    QVERIFY(!svc.sendPrintInFlight());
   }
 };
 

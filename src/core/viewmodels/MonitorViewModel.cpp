@@ -126,6 +126,11 @@ QString MonitorViewModel::selectedDeviceStatus() const
   return deviceService_ ? deviceService_->selectedDeviceStatus() : QString();
 }
 
+QString MonitorViewModel::selectedDeviceErrorText() const
+{
+  return deviceService_ ? deviceService_->selectedDeviceErrorText() : QString();
+}
+
 int MonitorViewModel::selectedDeviceProgress() const
 {
   return deviceService_ ? deviceService_->selectedDeviceProgress() : 0;
@@ -533,6 +538,36 @@ void MonitorViewModel::takeCameraScreenshot()
 void MonitorViewModel::setChamberLight(bool on)
 {
   if (deviceService_) deviceService_->setChamberLight(on);
+}
+
+void MonitorViewModel::setPrintSpeedMode(int mode)
+{
+  if (deviceService_) deviceService_->setPrintSpeedMode(mode);
+}
+
+void MonitorViewModel::setNozzleTemp(int celsius)
+{
+  if (deviceService_) deviceService_->setNozzleTemp(celsius);
+}
+
+void MonitorViewModel::setLanSelfTest(bool enabled)
+{
+  if (deviceService_) deviceService_->setEnableSelfTest(enabled);
+}
+
+void MonitorViewModel::requestDeviceFiles()
+{
+  if (deviceService_) deviceService_->requestDeviceFiles();
+}
+
+void MonitorViewModel::printDeviceFile(const QString &fileName)
+{
+  if (deviceService_) deviceService_->printDeviceFile(fileName);
+}
+
+void MonitorViewModel::deleteDeviceFile(const QString &fileName)
+{
+  if (deviceService_) deviceService_->deleteDeviceFile(fileName);
 }
 
 void MonitorViewModel::setWorkLight(bool on)
