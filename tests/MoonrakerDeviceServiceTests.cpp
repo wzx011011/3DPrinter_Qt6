@@ -299,6 +299,37 @@ private slots:
     QVERIFY(failedSpy.isEmpty());
     QVERIFY(!svc.sendPrintInFlight());
   }
+  // ── 收尾#7：设备管理（重命名持久化 / 移除含状态清理） ───────────────
+  void deviceManagementRenameRemove()
+  {
+    MoonrakerDeviceService svc;
+    svc.setProbeHttpsDisabled(true);
+    svc.addManualDevice(QStringLiteral("原名"), QStringLiteral("192.0.2.55"), QString());
+    svc.addManualDevice(QStringLiteral("B"), QStringLiteral("192.0.2.56"), QString());
+    svc.selectDevice(0);
+
+    svc.renameDevice(0, QStringLiteral("  车间K1C  "));
+    QCOMPARE(svc.deviceAt(0).value(QStringLiteral("name")).toString(),
+             QStringLiteral("车间K1C"));
+    // 空名不改
+    svc.renameDevice(0, QStringLiteral("  "));
+    QCOMPARE(svc.deviceAt(0).value(QStringLiteral("name")).toString(),
+             QStringLiteral("车间K1C"));
+
+    // 移除选中设备：选中清空、剩余设备保留、持久化同步
+    svc.removeDevice(0);
+    QCOMPARE(svc.deviceCount(), 1);
+    QCOMPARE(svc.deviceAt(0).value(QStringLiteral("ip")).toString(),
+             QStringLiteral("192.0.2.56"));
+    QCOMPARE(svc.selectedDeviceIndex(), -1);
+    // 重启往返：剩余设备仍在
+    {
+      QSettings s;
+      const QString json = s.value(QStringLiteral("Devices/Lan")).toString();
+      QVERIFY(json.contains(QStringLiteral("192.0.2.56")));
+      QVERIFY(!json.contains(QStringLiteral("192.0.2.55")));
+    }
+  }
 };
 
 QTEST_MAIN(MoonrakerDeviceServiceTests)

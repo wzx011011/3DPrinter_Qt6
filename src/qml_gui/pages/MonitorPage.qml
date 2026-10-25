@@ -1045,11 +1045,37 @@ Item {
 
                         Column {
                             spacing: Theme.spacingXXS
-                            Text {
-                                text: root.monitorVm.selectedDeviceName || qsTr("未选择设备")
-                                color: Theme.textPrimary
-                                font.pixelSize: Theme.fontSizeXXL
-                                font.bold: true
+                            RowLayout {
+                                spacing: 6
+                                Text {
+                                    text: root.monitorVm.selectedDeviceName || qsTr("未选择设备")
+                                    color: Theme.textPrimary
+                                    font.pixelSize: Theme.fontSizeXXL
+                                    font.bold: true
+                                }
+                                // 收尾#7：重命名/移除（moonraker 后端）
+                                CxButton {
+                                    visible: Backend.deviceBackendKind === "moonraker"
+                                             && root.monitorVm.selectedDeviceName !== ""
+                                    text: qsTr("重命名")
+                                    compact: true
+                                    Layout.preferredHeight: 24
+                                    onClicked: {
+                                        lanRenameDialog.open()
+                                    }
+                                }
+                                CxButton {
+                                    visible: Backend.deviceBackendKind === "moonraker"
+                                             && root.monitorVm.selectedDeviceName !== ""
+                                    text: qsTr("移除")
+                                    compact: true
+                                    cxStyle: CxButton.Style.Danger
+                                    Layout.preferredHeight: 24
+                                    onClicked: {
+                                        root.monitorVm.removeLanDevice(
+                                            root.monitorVm.selectedDeviceIndex)
+                                    }
+                                }
                             }
                             Text {
                                 text: root.monitorVm.selectedDeviceModel || ""
@@ -1651,6 +1677,24 @@ Item {
                                             compact: true
                                             Layout.preferredHeight: 26
                                             onClicked: root.monitorVm.setNozzleTemp(210)
+                                        }
+                                        CxButton {
+                                            text: qsTr("归零")
+                                            compact: true
+                                            Layout.preferredHeight: 26
+                                            onClicked: root.monitorVm.homeLanAxes()
+                                        }
+                                        CxButton {
+                                            text: qsTr("风扇全开")
+                                            compact: true
+                                            Layout.preferredHeight: 26
+                                            onClicked: root.monitorVm.setLanFanSpeed(100)
+                                        }
+                                        CxButton {
+                                            text: qsTr("风扇关")
+                                            compact: true
+                                            Layout.preferredHeight: 26
+                                            onClicked: root.monitorVm.setLanFanSpeed(0)
                                         }
                                     }
 
@@ -2644,4 +2688,52 @@ Item {
         }
     }
     }
+
+
+// 收尾#7：LAN 设备重命名对话框（内联，最小形态）
+Dialog {
+    id: lanRenameDialog
+    anchors.centerIn: parent
+    modal: true
+    title: qsTr("重命名设备")
+    padding: 12
+
+    background: Rectangle {
+        radius: Theme.radiusLG
+        color: Theme.bgPanel
+        border.color: Theme.borderSubtle
+    }
+
+    ColumnLayout {
+        spacing: 10
+        TextField {
+            id: lanRenameInput
+            Layout.preferredWidth: 260
+            text: root.monitorVm.selectedDeviceName
+            placeholderText: qsTr("输入新名称")
+            onAccepted: {
+                root.monitorVm.renameLanDevice(root.monitorVm.selectedDeviceIndex, text)
+                lanRenameDialog.close()
+            }
+        }
+        RowLayout {
+            Layout.alignment: Qt.AlignRight
+            spacing: 8
+            CxButton {
+                text: qsTr("取消")
+                onClicked: lanRenameDialog.close()
+            }
+            CxButton {
+                text: qsTr("确定")
+                highlighted: true
+                onClicked: {
+                    root.monitorVm.renameLanDevice(
+                        root.monitorVm.selectedDeviceIndex, lanRenameInput.text)
+                    lanRenameDialog.close()
+                }
+            }
+        }
+    }
+    onOpened: lanRenameInput.forceActiveFocus()
+}
 }

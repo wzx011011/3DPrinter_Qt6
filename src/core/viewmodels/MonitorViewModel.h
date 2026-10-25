@@ -191,6 +191,12 @@ public:
   Q_INVOKABLE void setNozzleTemp(int celsius);
   /// LAN 收尾#2：发送时"打印前校准"选项（enableSelfTest）。
   Q_INVOKABLE void setLanSelfTest(bool enabled);
+  /// 收尾#7/#8：设备管理与轴/风扇控制。
+  Q_INVOKABLE void renameLanDevice(int filteredIndex, const QString &newName);
+  Q_INVOKABLE void removeLanDevice(int filteredIndex);
+  Q_INVOKABLE void moveLanAxis(const QString &axis, int offsetMm);
+  Q_INVOKABLE void homeLanAxes();
+  Q_INVOKABLE void setLanFanSpeed(int percent);
   /// LAN 收尾#4：设备文件管理入口（结果经 Backend 设备服务的
   /// deviceFilesReady 信号）。
   Q_INVOKABLE void requestDeviceFiles();

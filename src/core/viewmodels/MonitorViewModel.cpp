@@ -555,6 +555,31 @@ void MonitorViewModel::setLanSelfTest(bool enabled)
   if (deviceService_) deviceService_->setEnableSelfTest(enabled);
 }
 
+void MonitorViewModel::renameLanDevice(int filteredIndex, const QString &newName)
+{
+  if (deviceService_) deviceService_->renameDevice(filteredIndex, newName);
+}
+
+void MonitorViewModel::removeLanDevice(int filteredIndex)
+{
+  if (deviceService_) deviceService_->removeDevice(filteredIndex);
+}
+
+void MonitorViewModel::moveLanAxis(const QString &axis, int offsetMm)
+{
+  if (deviceService_) deviceService_->moveAxis(axis, offsetMm);
+}
+
+void MonitorViewModel::homeLanAxes()
+{
+  if (deviceService_) deviceService_->homeAllAxes();
+}
+
+void MonitorViewModel::setLanFanSpeed(int percent)
+{
+  if (deviceService_) deviceService_->setFanSpeed(percent);
+}
+
 void MonitorViewModel::requestDeviceFiles()
 {
   if (deviceService_) deviceService_->requestDeviceFiles();

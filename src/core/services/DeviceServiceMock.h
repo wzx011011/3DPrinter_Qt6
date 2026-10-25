@@ -164,6 +164,12 @@ public:
   virtual void setNozzleTemp(int) {}
   /// LAN 收尾#2：发送时"打印前校准"（官方 enableSelfTest；默认 no-op）。
   virtual void setEnableSelfTest(bool) {}
+  /// 收尾#7/#8：设备管理（重命名/移除）与轴/风扇控制（默认 no-op）。
+  virtual void renameDevice(int, const QString &) {}
+  virtual void removeDevice(int) {}
+  virtual void moveAxis(const QString &, int) {}
+  virtual void homeAllAxes() {}
+  virtual void setFanSpeed(int) {}
   virtual QString selectedDeviceErrorText() const { return {}; }
   virtual void toggleRecording() {}
   virtual void toggleTimelapse() {}

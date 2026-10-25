@@ -154,6 +154,14 @@ public:
   void setChamberLight(bool on) override;
   /// 收尾#5：喷嘴目标温度（ws setNozzleTemp）。
   Q_INVOKABLE void setNozzleTemp(int celsius);
+  /// 收尾#7：设备管理（重命名持久化 / 移除并清理状态通道）。
+  void renameDevice(int filteredIndex, const QString &newName) override;
+  void removeDevice(int filteredIndex) override;
+  /// 收尾#8：轴移动（ws setPosition "X100"）与归零（gcodeCmd G28）、
+  /// 模型风扇百分比（modelFanPct）。
+  void moveAxis(const QString &axis, int offsetMm) override;
+  void homeAllAxes() override;
+  void setFanSpeed(int percent) override;
 
 signals:
   void scanningChanged();

@@ -901,3 +901,65 @@ void MoonrakerDeviceService::markDeviceMoonraker(int filteredIndex, int moonrake
     devices_[real].isMoonraker = true;
     devices_[real].moonrakerPort = moonrakerPort;
 }
+
+
+// ── 收尾#7：设备管理 ─────────────────────────────────────────────────────
+
+void MoonrakerDeviceService::renameDevice(int filteredIndex, const QString &newName)
+{
+    const int real = filteredToReal(filteredIndex);
+    if (real == -1 || newName.trimmed().isEmpty())
+        return;
+    devices_[real].name = newName.trimmed();
+    persist();
+    touch();
+}
+
+void MoonrakerDeviceService::removeDevice(int filteredIndex)
+{
+    const int real = filteredToReal(filteredIndex);
+    if (real == -1)
+        return;
+    if (real == selectedIndex_) {
+        closeStatusChannel();
+        selectedIndex_ = -1;
+        QSettings settings;
+        settings.remove(QStringLiteral("Devices/LanLastIp"));
+    }
+    devices_.removeAt(real);
+    if (selectedIndex_ > real)
+        --selectedIndex_;
+    persist();
+    touch();
+}
+
+// ── 收尾#8：轴/风扇控制 ──────────────────────────────────────────────────
+
+void MoonrakerDeviceService::moveAxis(const QString &axis, int offsetMm)
+{
+    // 官方语义：{setPosition:"X100"}（绝对）；这里以带符号偏移构造（bundle
+    // setPosition:X±n 同款）。打印中由设备侧拒绝（官方文案：打印中，无法
+    // 进行该操作）。
+    if (axis.isEmpty())
+        return;
+    QJsonObject params;
+    params.insert(QStringLiteral("setPosition"),
+                  QStringLiteral("%1%2").arg(axis).arg(offsetMm));
+    wsSet(params);
+}
+
+void MoonrakerDeviceService::homeAllAxes()
+{
+    QJsonObject params;
+    params.insert(QStringLiteral("gcodeCmd"), QStringLiteral("G28"));
+    wsSet(params);
+}
+
+void MoonrakerDeviceService::setFanSpeed(int percent)
+{
+    if (percent < 0 || percent > 100)
+        return;
+    QJsonObject params;
+    params.insert(QStringLiteral("modelFanPct"), percent);
+    wsSet(params);
+}
