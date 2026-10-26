@@ -48,7 +48,9 @@ void SettingsViewModel::loadFromSettings()
   // light, see BackendContext::applyTheme), so this member keeps storing the
   // raw index and the draft/commit transaction below is untouched.
   QSettings s;
-  m_themeIndex       = s.value("themeIndex", 0).toInt();
+  // 2026-10-26 pixel audit: light is the factory default (Creality Print
+  // 5.x reference ships light sidebar / dark chrome); stored value wins.
+  m_themeIndex       = s.value("themeIndex", 1).toInt();
   m_fontSize         = s.value("fontSize", 12).toInt();
   m_uiScaleIndex     = s.value("uiScaleIndex", 0).toInt();
   m_languageIndex    = s.value("languageIndex", 0).toInt();
@@ -197,7 +199,7 @@ void SettingsViewModel::resetPreferences()
   // Restore defaults in the draft only. Apply persists them; Cancel preserves
   // the previous local commit. Credentials and the AI control token remain out
   // of this action so a visual reset cannot silently discard access material.
-  setThemeIndex(0);
+  setThemeIndex(1);  // 2026-10-26: factory default is light
   setFontSize(12);
   setUiScaleIndex(0);
   setLanguageIndex(0);

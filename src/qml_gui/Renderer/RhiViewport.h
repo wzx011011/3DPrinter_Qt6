@@ -140,17 +140,22 @@ inline const Palette &palette(bool dark)
       "#3f3f41", "#f5f5f5", "#2d2d31", "#8e8e83", "#56564f",
       {"#18c75e", "#18c75e", "#c87840", "#f05545", "#e04848",
        "#58a6ff", "#7c6aef", "#7c6aef", "#3b9cf0", "#18c75e"}};
+  // kLight recalibrated against the Creality Print 5.x reference shots
+  // (2026-10-26 pixel audit): light SIDEBAR + light viewport, but the top
+  // chrome stays DARK (title #262e30, tab row #020202) — the previous
+  // all-light chrome washed out the title/tab text and diverged from the
+  // reference. Field order mirrors Palette above.
   static const Palette kLight{
-      "#eef0f3", "#ffffff", "#f2f4f7", "#ffffff",
+      "#e7e7e7", "#ffffff", "#ffffff", "#ffffff",
       "#ffffff", "#eef1f4", "#d8dbe0", "#d5d8dd",
       "#ffffff", "#e3e6ea", "#f5f7fad9", "#e7eaee", "#dde1e6", "#fbfcfd",
       "#dcf5e7", "#c3ecd5",
       "#1b1d21", "#4d5157", "#797f87", "#a9adb4", "#8d939b",
       "#c5c9d0", "#d3d6db", "#b3b8c0", "#c8ccd2", "#a3a9b1",
-      "#e9ebee", "#f3f4f6", "#dcdfe3", "#d3d6db", "#d0d3d8", "#1a1c1f",
-      "#6d7278",
+      "#262e30", "#020202", "#3a4446", "#27292c", "#262628", "#fefefe",
+      "#b4b4b4",
       "#0f9e48", "#b9790a", "#d13a3a", "#1e78d6", "#fbe9e9", "#faf0da",
-      "#a6abb3", "#8b9099", "#ebecee",
+      "#7e8080", "#5f6161", "#ebecee",
       "#c2c6cd", "#ffffff", "#ffffff", "#c6c8c0", "#6e7068",
       {"#0f9e48", "#0f9e48", "#a05f28", "#d63c2c", "#c23a3a",
        "#2a7fd4", "#6355d6", "#6355d6", "#2379cc", "#0f9e48"}};

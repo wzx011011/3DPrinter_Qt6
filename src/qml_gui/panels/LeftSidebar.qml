@@ -352,8 +352,11 @@ Rectangle {
                 radius: Theme.radiusSM
                 color: root.sectionSurface
                 border.width: 1
-                border.color: root.slotIncompatible(filamentPixelRow.index)
-                    ? Theme.statusError : root.dividerColor
+                // 2026-10-26 pixel audit: incompatibility keeps its 8px
+                // status dot + tooltip (below) and the combo's gray-out —
+                // the row border no longer double-alarms in red for what is
+                // a common resting state (upstream leaves the row clean).
+                border.color: root.dividerColor
 
                 RowLayout {
                     anchors.fill: parent

@@ -644,6 +644,11 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
     m_clearColor = QColor(231, 231, 231);
   else if (m_prepareScene.anyVolumeOutside())
     m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
+  else if (!ThemeState::instance().isDark())
+    // 2026-10-26 pixel audit: the light theme's prepare viewport matches the
+    // upstream light background (same value as the preview branch; the old
+    // vp-5 pin predated the light theme recalibration).
+    m_clearColor = QColor(231, 231, 231);
   else
     // vp-5 (VIEWBG): design-reference clear color #363638 (prepare_ref.png
     // background sampling rgb(54,54,56)); the former QColor(86,87,93) read

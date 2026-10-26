@@ -4291,7 +4291,8 @@ void ViewModelSmokeTests::preferencesApplyCancelTransactionsAndRuntimeRestore()
   SettingsViewModel settings;
   QSignalSpy themeSpy(&settings, &SettingsViewModel::themeIndexChanged);
   QSignalSpy changedSpy(&settings, &SettingsViewModel::settingsChanged);
-  QCOMPARE(settings.themeIndex(), 0);
+  // 2026-10-26: factory default is light (themeIndex 1) per the pixel audit.
+  QCOMPARE(settings.themeIndex(), 1);
   QVERIFY(!settings.reverseZoom());
 
   // Draft changes update live consumers but cannot survive a new instance.
@@ -4303,7 +4304,7 @@ void ViewModelSmokeTests::preferencesApplyCancelTransactionsAndRuntimeRestore()
   QVERIFY(themeSpy.count() > 0);
   QVERIFY(changedSpy.count() > 0);
   SettingsViewModel uncommitted;
-  QCOMPARE(uncommitted.themeIndex(), 0);
+  QCOMPARE(uncommitted.themeIndex(), 1);
   QVERIFY(!uncommitted.reverseZoom());
 
   // Cancel restores the previously committed values and emits signals so the
@@ -4311,7 +4312,7 @@ void ViewModelSmokeTests::preferencesApplyCancelTransactionsAndRuntimeRestore()
   themeSpy.clear();
   changedSpy.clear();
   settings.cancelPreferences();
-  QCOMPARE(settings.themeIndex(), 0);
+  QCOMPARE(settings.themeIndex(), 1);
   QVERIFY(!settings.reverseZoom());
   QCOMPARE(settings.undoLimit(), 100);
   QCOMPARE(themeSpy.count(), 1);
@@ -4348,7 +4349,7 @@ void ViewModelSmokeTests::settingsResetPreservesUnownedKeysAndResetsAllPropertie
   settings.setUpdateChannel(2);
   settings.resetPreferences();
 
-  QCOMPARE(settings.themeIndex(), 0);
+  QCOMPARE(settings.themeIndex(), 1);
   QCOMPARE(settings.fontSize(), 12);
   QCOMPARE(settings.defaultNozzleIndex(), 1);
   QCOMPARE(settings.defaultBedShape(), 0);
@@ -7631,12 +7632,12 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
            "Printer pageNames() must contain 'Basic information' (TabPrinter)");
   QVERIFY2(printerPages.contains(QStringLiteral("Notes")),
            "Printer pageNames() must contain 'Notes' (TabPrinter)");
+  // 2026-10-26 i18n: GroupRole carries zh labels (zhGroupLabel, po-sourced).
   QStringList printerGroups = machineOpts->groupNames();
-  QVERIFY2(printerGroups.contains(QStringLiteral("Printable space")),
-           "Printer groupNames() must contain 'Printable space' (TabPrinter)");
-  QVERIFY2(printerGroups.contains(QStringLiteral("Extruder Clearance")) ||
-           printerGroups.contains(QStringLiteral("Retraction")),
-           "Printer groupNames() must contain at least one extruder clearance/retraction group");
+  QVERIFY2(printerGroups.contains(QStringLiteral("可打印区域")),
+           "Printer groupNames() must contain '可打印区域' (Printable space, TabPrinter)");
+  QVERIFY2(printerGroups.contains(QStringLiteral("回抽")),
+           "Printer groupNames() must contain at least one retraction group");
 
   // Filament tier: page names from TabFilament::build
   auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
@@ -7648,8 +7649,8 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
   QVERIFY2(filamentPages.contains(QStringLiteral("Cooling")),
            "Filament pageNames() must contain 'Cooling' (TabFilament)");
   QStringList filamentGroups = filamentOpts->groupNames();
-  QVERIFY2(filamentGroups.contains(QStringLiteral("Print temperature")),
-           "Filament groupNames() must contain 'Print temperature' (TabFilament)");
+  QVERIFY2(filamentGroups.contains(QStringLiteral("打印温度")),
+           "Filament groupNames() must contain '打印温度' (Print temperature, TabFilament)");
 
   // Print tier: page names from TabPrint::build
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -7661,6 +7662,8 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
   QVERIFY2(printPages.contains(QStringLiteral("Speed")),
            "Print pageNames() must contain 'Speed' (TabPrint)");
   QStringList printGroups = printOpts->groupNames();
+  // Print-tier groups stay canonical English in the model (their zh display
+  // happens at the header-row label layer, not GroupRole).
   QVERIFY2(printGroups.contains(QStringLiteral("Layer height")),
            "Print groupNames() must contain 'Layer height' (TabPrint)");
   QVERIFY2(printGroups.contains(QStringLiteral("Infill")),
