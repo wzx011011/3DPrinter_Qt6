@@ -86,10 +86,16 @@ CxDialog {
 
     onRejected: root.rollback()
 
+    // Margins live on the dialog padding: anchoring the contentItem to its
+    // own parent fought the popup's implicit sizing and clipped the last
+    // group (模型 row half-cut; 2026-10-26 acceptance catch).
+    padding: Theme.spacingXL
+    // Explicit height: the RowLayout's implicit height under-counts the left
+    // column (the 模型 group overflowed the sheet bottom before this).
+    height: 500
+
     contentItem: RowLayout {
         spacing: Theme.spacingXL
-        anchors.fill: parent
-        anchors.margins: Theme.spacingXL
         // -- Left: shape options + dimension inputs + texture/model groups --
         ColumnLayout {
             Layout.fillWidth: true

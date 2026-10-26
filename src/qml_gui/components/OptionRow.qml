@@ -134,6 +134,11 @@ Item {
 
     function formattedNumber(value) {
         var numberValue = root.normalizedNumber(value, root.oMin)
+        // Unset config floats arrive as the ±FLT_MAX sentinel (±3.4e38,
+        // e.g. an Ender-5 Max profile's retraction length). Render an empty
+        // field instead of a 39-digit number (2026-10-26 acceptance catch).
+        if (!isFinite(numberValue) || Math.abs(numberValue) > 1e30)
+            return ""
         if (root.oType === "int" || root.oType === "percent")
             return Math.round(numberValue).toString()
         var rounded = Math.round(numberValue * 1000) / 1000

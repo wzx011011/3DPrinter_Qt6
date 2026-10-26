@@ -138,6 +138,23 @@ CxDialog {
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 24; spacing: 16
 
+                // Pages scroll; the footer stays pinned below (the General
+                // page alone is ~700px against a 548px content area, which
+                // used to push 自动消失时间 onto the frame line and the
+                // 恢复默认/取消/应用 row outside the sheet entirely).
+                Flickable {
+                    id: prefPagesScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    contentHeight: pagesColumn.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    ColumnLayout {
+                        id: pagesColumn
+                        width: prefPagesScroll.availableWidth
+                        spacing: 16
+
                 // No page-level title or separator: upstream scrolls straight
                 // into the group title rows (create_item_title,
                 // Preferences.cpp:244-256).
@@ -1056,7 +1073,8 @@ CxDialog {
                     }
                 }
 
-                Item { Layout.fillHeight: true }
+                    }
+                }
 
                 // Save/Restore buttons
                 RowLayout {
