@@ -102,7 +102,7 @@ Item {
         case GLViewport.GizmoMeasure:
             return base + "toolbar_measure.svg"
         default:
-            return base + "box.svg"
+            return base + "toolbar_box.svg"
         }
     }
 
@@ -164,7 +164,7 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         width: stripRow.implicitWidth + 16
         height: root.viewportToolbarHeight
-        radius: 10
+        radius: Theme.radiusXL
         border.width: 0
         color: root.actionToolbarSurface
 
@@ -225,7 +225,7 @@ Item {
             ToolbarSeparator { vertical: true }
 
             ActionToolButton {
-                iconName: "instance_add.svg"
+                iconName: "toolbar_instance_add.svg"
                 toolTipText: root.editorVm && root.editorVm.hasSelection
                              ? qsTr("Add instance") + " [+]"
                              : qsTr("Select one or more objects")
@@ -234,7 +234,7 @@ Item {
             }
 
             ActionToolButton {
-                iconName: "instance_remove.svg"
+                iconName: "toolbar_instance_remove.svg"
                 toolTipText: root.editorVm && root.editorVm.hasSelection
                              ? qsTr("Remove instance") + " [-]"
                              : qsTr("Select one or more objects")
@@ -243,7 +243,7 @@ Item {
             }
 
             ActionToolButton {
-                iconName: "split_objects.svg"
+                iconName: "toolbar_split_objects.svg"
                 toolTipText: root.editorVm && root.editorVm.hasSelection
                              ? qsTr("Split to objects")
                              : qsTr("Select one or more objects")
@@ -252,7 +252,7 @@ Item {
             }
 
             ActionToolButton {
-                iconName: "split_parts.svg"
+                iconName: "toolbar_split_parts.svg"
                 toolTipText: root.editorVm && root.editorVm.hasSelection
                              ? qsTr("Split to parts")
                              : qsTr("Select one or more objects")

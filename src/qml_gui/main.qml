@@ -540,48 +540,40 @@ ApplicationWindow {
             Row {
                 anchors.right: parent.right
                 spacing: 8
-                Rectangle {
-                    width: 80; height: 28; radius: Theme.radiusMD
-                    color: Theme.chromePressed
-                    border.color: Theme.borderSubtle
-                    Text { anchors.centerIn: parent; text: qsTr("取消"); color: Theme.textSecondary; font.pixelSize: Theme.fontSizeMD }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.pendingGuardAction = ""
-                            root.pendingOpenPath = ""
-                            newProjectDialog.close()
-                        }
+                CxButton {
+                    cxStyle: CxButton.Style.Secondary
+                    width: 80
+                    text: qsTr("取消")
+                    onClicked: {
+                        root.pendingGuardAction = ""
+                        root.pendingOpenPath = ""
+                        newProjectDialog.close()
                     }
                 }
-                Rectangle {
-                    width: 80; height: 28; radius: Theme.radiusMD
-                    color: Theme.accent
-                    Text { anchors.centerIn: parent; text: qsTr("确定"); color: Theme.textOnAccent; font.pixelSize: Theme.fontSizeMD; font.bold: true }
-                    MouseArea {
-                        anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (rememberDiscardCheck.checked)
-                                Backend.setDirtyProjectDiscardRemembered(true)
-                            var action = root.pendingGuardAction
-                            var path = root.pendingOpenPath
-                            root.pendingGuardAction = ""
-                            root.pendingOpenPath = ""
-                            newProjectDialog.close()
-                            if (action === "quit") {
-                                root.forceClose = true
-                                Qt.quit()
-                            } else if (action === "open") {
-                                if (path !== "")
-                                    Backend.topbarOpenProject(path)
-                                else {
-                                    root.openDialogGuardApproved = true
-                                    openProjectDialog.open()
-                                }
-                            } else if (action === "new") {
-                                Backend.topbarNewProject()
+                CxButton {
+                    cxStyle: CxButton.Style.Primary
+                    width: 80
+                    text: qsTr("确定")
+                    onClicked: {
+                        if (rememberDiscardCheck.checked)
+                            Backend.setDirtyProjectDiscardRemembered(true)
+                        var action = root.pendingGuardAction
+                        var path = root.pendingOpenPath
+                        root.pendingGuardAction = ""
+                        root.pendingOpenPath = ""
+                        newProjectDialog.close()
+                        if (action === "quit") {
+                            root.forceClose = true
+                            Qt.quit()
+                        } else if (action === "open") {
+                            if (path !== "")
+                                Backend.topbarOpenProject(path)
+                            else {
+                                root.openDialogGuardApproved = true
+                                openProjectDialog.open()
                             }
+                        } else if (action === "new") {
+                            Backend.topbarNewProject()
                         }
                     }
                 }

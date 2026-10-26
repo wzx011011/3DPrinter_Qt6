@@ -1,20 +1,30 @@
-/* OWzx AI chat page — palette mirrors src/qml_gui/Theme.qml design tokens. */
+/* OWzx AI chat page — palette mirrors src/qml_gui/Theme.qml design tokens.
+ * 2026-10-25 UI-consistency sweep: values re-projected from the C++
+ * ThemeTokens dark table (Renderer/RhiViewport.h), which is the single
+ * source S6 established -- the previous literals were the retired C++
+ * kThemes palette (#0d0f12 family) that M27 removed everywhere else.
+ * Roles: panel = host Rectangle's bgPanel (seamless seam with the QML
+ * frame), elevated = hover/card surfaces, inset = code/input wells.
+ * Light-theme flip needs a bridge surface (AiChatBridge has no theme
+ * property yet) -- tracked as follow-up, panel is dark-only for now. */
 :root {
-  --bg-panel: #161a23;
-  --bg-base: #0d0f12;
-  --bg-elevated: #2a3140;
-  --bg-inset: #10131b;
-  --accent: #18c75e;
-  --accent-subtle: rgba(24, 199, 94, 0.14);
-  --warn: #f5a623;
-  --err: #e04040;
-  --err-subtle: rgba(224, 64, 64, 0.12);
-  --text-primary: #e8edf6;
-  --text-secondary: #9aa4b8;
-  --text-tertiary: #6b7487;
-  --border: rgba(255, 255, 255, 0.09);
-  --radius-lg: 8px;
-  --radius-md: 5px;
+  --bg-panel: #4b4b4d;      /* Theme.bgPanel (dark) */
+  --bg-base: #2f3034;       /* Theme.bgBase (dark) */
+  --bg-elevated: #3a3a3c;   /* Theme.bgCard (dark) */
+  --bg-hover: #555557;      /* Theme.bgHover (dark) */
+  --bg-inset: #262628;      /* Theme.bgInset (dark) */
+  --scrollbar-thumb: #959595; /* Theme.scrollBarColor */
+  --accent: #18c75e;        /* Theme.accent (static brand) */
+  --accent-subtle: #0e6636; /* Theme.accentSubtle (dark) */
+  --warn: #f5a623;          /* Theme.statusWarning */
+  --err: #e04040;           /* Theme.statusError */
+  --err-subtle: #4a1c1c;    /* Theme.bgErrorSubtle (dark) */
+  --text-primary: #f5f5f5;  /* Theme.textPrimary */
+  --text-secondary: #c9c9c9; /* Theme.textSecondary */
+  --text-tertiary: #a3a3a3; /* Theme.textTertiary */
+  --border: #525254;        /* Theme.borderSubtle */
+  --radius-lg: 8px;         /* Theme.radiusLG */
+  --radius-md: 6px;         /* Theme.radiusMD */
   --font: "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
   --font-mono: Consolas, monospace;
 }
@@ -52,7 +62,7 @@ body {
   border-radius: 6px;
   cursor: pointer;
 }
-.iconbtn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.iconbtn:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* ── notices ────────────────────────────────────────── */
 #notices { padding: 0 12px; }
@@ -74,7 +84,7 @@ body {
   gap: 6px;
 }
 #chat::-webkit-scrollbar { width: 8px; }
-#chat::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; }
+#chat::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
 
 /* welcome */
 .welcome { display: flex; flex-direction: column; gap: 10px; padding: 18px 2px; }

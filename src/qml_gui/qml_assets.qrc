@@ -25,6 +25,11 @@
         <file>assets/icons/arrow-back-up.svg</file>
         <file>assets/icons/arrow-forward-up.svg</file>
         <file>assets/icons/box.svg</file>
+        <file>assets/icons/toolbar_box.svg</file>
+        <file>assets/icons/toolbar_instance_add.svg</file>
+        <file>assets/icons/toolbar_instance_remove.svg</file>
+        <file>assets/icons/toolbar_split_objects.svg</file>
+        <file>assets/icons/toolbar_split_parts.svg</file>
         <file>assets/icons/device-floppy.svg</file>
         <file>assets/icons/dots.svg</file>
         <file>assets/icons/layout-grid.svg</file>
@@ -151,6 +156,11 @@
         <file>assets/icons/dark/split_objects.svg</file>
         <file>assets/icons/dark/split_parts.svg</file>
         <file>assets/icons/dark/box.svg</file>
+        <file>assets/icons/dark/toolbar_box.svg</file>
+        <file>assets/icons/dark/toolbar_instance_add.svg</file>
+        <file>assets/icons/dark/toolbar_instance_remove.svg</file>
+        <file>assets/icons/dark/toolbar_split_objects.svg</file>
+        <file>assets/icons/dark/toolbar_split_parts.svg</file>
         <!-- TBLC-selected (2026-10-20): upstream expresses the selected
              gizmo via a state ICON TILE (native accent colors), never a
              filled button capsule (GLGizmosManager.cpp:1360-1366 tile 2,
@@ -176,6 +186,11 @@
         <file>assets/icons/accent/split_objects.svg</file>
         <file>assets/icons/accent/split_parts.svg</file>
         <file>assets/icons/accent/box.svg</file>
+        <file>assets/icons/accent/toolbar_box.svg</file>
+        <file>assets/icons/accent/toolbar_instance_add.svg</file>
+        <file>assets/icons/accent/toolbar_instance_remove.svg</file>
+        <file>assets/icons/accent/toolbar_split_objects.svg</file>
+        <file>assets/icons/accent/toolbar_split_parts.svg</file>
         <file>assets/icons/custom-gcode_slicing-state_global.svg</file>
         <file>assets/icons/lock_closed.svg</file>
         <file>assets/icons/lock_open.svg</file>

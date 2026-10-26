@@ -1,0 +1,11 @@
+<!-- 2026-10-25 UI-consistency: toolbar family (40px solid two-tone) version of
+     the Tabler outline icons that were rendering thin strokes among solid
+     silhouettes on the floating action strip. Semantics: neutral = the object
+     body, accent = the action delta (add/remove instance, split apart). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
+  <path d="M14,4 26,10 14,16 2,10 Z" style="fill:#c9c9c9"/>
+  <path d="M2,10 14,16 14,30 2,24 Z" style="fill:#c9c9c9"/>
+  <path d="M26,10 26,24 14,30 14,16 Z" style="fill:#c9c9c9" opacity="0.72"/>
+  <rect x="25" y="28" width="13" height="4" style="fill:#18c75e"/>
+
+</svg>
