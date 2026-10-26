@@ -791,6 +791,27 @@ Rectangle {
 
                                     ScrollBar.vertical: ScrollBar {
                                         visible: paramsPage.contentHeight > paramsPage.height
+                                        // 2026-10-26 light-mode catch: the bare
+                                        // Basic bar clipped at the panel border
+                                        // (read as a stray "Y") — CxScrollView's
+                                        // themed bar, inset 3px.
+                                        anchors.top: paramsPage.top
+                                        anchors.bottom: paramsPage.bottom
+                                        anchors.right: paramsPage.right
+                                        anchors.rightMargin: Theme.spacingXS
+                                        background: Rectangle {
+                                            implicitWidth: 8
+                                            radius: Theme.radiusSM
+                                            color: Theme.scrollBarTrackColor
+                                        }
+                                        contentItem: Rectangle {
+                                            implicitWidth: 8
+                                            implicitHeight: 100
+                                            radius: Theme.radiusSM
+                                            opacity: parent.active ? 1.0 : 0.5
+                                            color: Theme.scrollBarColor
+                                            Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
+                                        }
                                     }
 
                                     delegate: Item {

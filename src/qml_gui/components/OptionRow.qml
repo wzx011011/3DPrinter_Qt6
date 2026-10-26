@@ -457,7 +457,12 @@ Item {
                 Loader {
                     id: rangeLoader
                     asynchronous: true
-                    active: root.isRangeLike
+                    // 2026-10-26 light-mode catch: in compact rows the
+                    // Min/Max summary had no room next to label + field and
+                    // rendered overlapped ("最小 0 mm" wrapped under the
+                    // spinbox). The range already lives in the row tooltip
+                    // (metadataSummary) — wide settings rows keep it.
+                    active: root.isRangeLike && !root.compact
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: numericLoader.left

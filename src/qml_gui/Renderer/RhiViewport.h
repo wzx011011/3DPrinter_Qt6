@@ -150,7 +150,7 @@ inline const Palette &palette(bool dark)
       "#ffffff", "#eef1f4", "#d8dbe0", "#d5d8dd",
       "#ffffff", "#e3e6ea", "#f5f7fad9", "#e7eaee", "#dde1e6", "#fbfcfd",
       "#dcf5e7", "#c3ecd5",
-      "#1b1d21", "#4d5157", "#797f87", "#a9adb4", "#8d939b",
+      "#1b1d21", "#4d5157", "#6b7075", "#9a9fa6", "#7f858d",
       "#c5c9d0", "#d3d6db", "#b3b8c0", "#c8ccd2", "#a3a9b1",
       "#262e30", "#020202", "#3a4446", "#27292c", "#262628", "#fefefe",
       "#b4b4b4",
