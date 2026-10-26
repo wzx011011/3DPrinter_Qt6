@@ -395,6 +395,10 @@ Item {
                     active: root.oType === "bool"
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
+                    // Explicit width: a bare Loader has no implicit size and
+                    // the fill-anchored CxCheckBox collapsed to 0x0 — bool
+                    // options rendered with no checkbox at all.
+                    width: 28
                     sourceComponent: Component {
                         CxCheckBox {
                             anchors.fill: parent
