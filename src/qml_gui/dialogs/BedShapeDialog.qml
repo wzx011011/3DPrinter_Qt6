@@ -373,9 +373,17 @@ CxDialog {
             readonly property real ox: pad + drawW / 2
             readonly property real oy: pad + drawH / 2
 
-            // Rectangle outline (shapeType 0), same fit as the old Canvas
-            // (300mm reference scale).
-            readonly property real rectScale: Math.min(drawW / 300, drawH / 300)
+            // Rectangle outline (shapeType 0): fit the ACTUAL bed into the
+            // pane (12px margin). The old Canvas used a 300mm reference
+            // scale, but that path never rendered (Canvas roundRect
+            // TypeError, FB-R7-08), so the reference was never actually
+            // exercised -- and for >300mm beds (CR-10 Max / Ender-5 Max
+            // 450mm family) it produced a 225px rect on a 150px draw area,
+            // starting at x=-27.5 and overflowing both the pane and the
+            // dialog edge (caught in the 2026-10-26 acceptance shots).
+            readonly property real rectScale: Math.min(
+                (drawW - 24) / Math.max(1, bedW),
+                (drawH - 24) / Math.max(1, bedD))
             readonly property real rw: Math.max(1, bedW * rectScale)
             readonly property real rh: Math.max(1, bedD * rectScale)
             readonly property real rx: ox - rw / 2
@@ -455,14 +463,14 @@ CxDialog {
                 antialiasing: true
                 ShapePath {
                     fillColor: "transparent"
-                    strokeColor: Theme.scrollBarTrackColor
-                    strokeWidth: 0.5
+                    strokeColor: Theme.borderSubtle
+                    strokeWidth: 1
                     PathSvg { path: previewPane.gridPath() }
                 }
                 ShapePath {
                     fillColor: "transparent"
-                    strokeColor: Theme.bgPressed
-                    strokeWidth: 0.5
+                    strokeColor: Theme.borderDefault
+                    strokeWidth: 1
                     PathSvg { path: previewPane.crosshairPath() }
                 }
             }
