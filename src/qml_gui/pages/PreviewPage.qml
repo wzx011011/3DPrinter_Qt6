@@ -561,8 +561,15 @@ Item {
                                     border.color: Theme.borderSubtle
                                 }
                                 Canvas {
+                                    id: miniBedGrid
                                     anchors.fill: parent
                                     antialiasing: false
+                                    // The stroke color bakes at paint time —
+                                    // repaint on theme flips.
+                                    Connections {
+                                        target: Theme
+                                        function onThemeChanged() { miniBedGrid.requestPaint() }
+                                    }
                                     onPaint: {
                                         const ctx = getContext("2d")
                                         ctx.clearRect(0, 0, width, height)
