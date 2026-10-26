@@ -161,7 +161,7 @@ Rectangle {
     ColumnLayout {
         id: contentColumn
         anchors.fill: parent
-        anchors.margins: 10   // upstream WindowPadding (10,10)*m_scale (:342)
+        anchors.margins: Theme.insetMD   // upstream WindowPadding (10,10)*m_scale (:342)
         spacing: 4
 
         // Property table (upstream BeginTable("Properties", 2) :523-537):
@@ -400,7 +400,7 @@ Rectangle {
         Column {
             id: profileColumn
             anchors.fill: parent
-            anchors.margins: 10
+            anchors.margins: Theme.insetMD
             spacing: 8
 
             // Actual speed plot (upstream ActualSpeedImguiWidget::plot,
@@ -526,7 +526,7 @@ Rectangle {
                                 // -> brand accent, else (0.2,0.2,0.2,0.25)
                                 color: rowInternal ? Qt.alpha(Theme.accent, 0.15) : Theme.tipGlassShadow
                                 Row {
-                                    spacing: 9
+                                    spacing: 8
                                     Label {
                                         id: profilePosLabel
                                         width: root.profileCol0Width

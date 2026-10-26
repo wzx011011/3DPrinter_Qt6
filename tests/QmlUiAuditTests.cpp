@@ -11681,9 +11681,11 @@ void QmlUiAuditTests::previewWave5GcodeWindowAndAddMenuHonesty()
                && previewVm.contains(QStringLiteral("row.insert(QStringLiteral(\"comment\"), comment)")),
            "TOKENS: rows must carry the command/parameters/comment split");
   QVERIFY2(page.contains(QStringLiteral("modelData.command"))
-               && page.contains(QStringLiteral("#CCCC00"))
+               && page.contains(QStringLiteral("Theme.markerYellow"))
                && page.contains(QStringLiteral("modelData.comment")),
-           "TOKENS: the delegate must color command (yellow) and comment parts");
+           "TOKENS: the delegate must color command (yellow, via the "
+           "Theme.markerYellow token since the 2026-10-25 style-literal "
+           "sweep) and comment parts");
 }
 
 void QmlUiAuditTests::engineSemanticsSourceAudit()

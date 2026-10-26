@@ -512,7 +512,7 @@ CxDialog {
                                 delegate: Rectangle {
                                     required property var modelData
                                     required property int index
-                                    Layout.fillWidth: true; height: 26; radius: 3
+                                    Layout.fillWidth: true; height: 26; radius: Theme.radiusSM
                                     color: index % 2 === 0 ? Theme.bgInset : "transparent"
 
                                     Row {
@@ -710,15 +710,12 @@ CxDialog {
 
                     // Check now button (dead-control elimination: drives the
                     // real Backend.checkForUpdates release query).
-                    Rectangle {
-                        Layout.preferredWidth: 140; Layout.preferredHeight: 32; radius: 6
-                        opacity: Backend.updateCheckRunning ? 0.6 : 1.0
-                        color: updateBtnMA.containsMouse ? Theme.accentDark : Theme.accentSubtle
-                        Text { anchors.centerIn: parent; text: Backend.updateCheckRunning ? qsTr("检查中…") : qsTr("检查更新"); color: "white"; font.pixelSize: Theme.fontSizeMD; font.bold: true }
-                        MouseArea {
-                            id: updateBtnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: if (!Backend.updateCheckRunning) Backend.checkForUpdates()
-                        }
+                    CxButton {
+                        Layout.preferredWidth: 140
+                        cxStyle: CxButton.Style.Primary
+                        enabled: !Backend.updateCheckRunning
+                        text: Backend.updateCheckRunning ? qsTr("检查中…") : qsTr("检查更新")
+                        onClicked: Backend.checkForUpdates()
                     }
 
                     Text {

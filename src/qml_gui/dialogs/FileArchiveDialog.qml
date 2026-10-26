@@ -278,7 +278,7 @@ CxDialog {
                                     visible: entryRow.isChecked
                                     text: "✓"
                                     color: Theme.textOnAccent
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fontSizeXS
                                 }
                             }
 

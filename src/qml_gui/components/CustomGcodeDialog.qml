@@ -40,9 +40,9 @@ CxDialog {
             font.pixelSize: Theme.fontSizeMD
             // WindowPadding(20, 10) (IMSlider.cpp:1305): 20px side gutters and
             // a 10px band above the content.
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            Layout.topMargin: 10
+            Layout.leftMargin: Theme.insetXL
+            Layout.rightMargin: Theme.insetXL
+            Layout.topMargin: Theme.insetMD
         }
 
         CxTextArea {
@@ -51,8 +51,8 @@ CxDialog {
             // width -1 fills the window, height is 6 text lines
             // (GetTextLineHeight() == font size).
             Layout.fillWidth: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.leftMargin: Theme.insetXL
+            Layout.rightMargin: Theme.insetXL
             Layout.preferredHeight: 6 * gcodeArea.font.pixelSize
             font.pixelSize: Theme.fontSizeMD
             font.family: Theme.fontMono
@@ -76,7 +76,7 @@ CxDialog {
             Layout.leftMargin: 280
             // WindowPadding(20, 10) (IMSlider.cpp:1305): 10px band below the
             // content.
-            Layout.bottomMargin: 10
+            Layout.bottomMargin: Theme.insetMD
             // ItemSpacing.x = 10 (IMSlider.cpp:1308): gap between OK and
             // Cancel.
             spacing: Theme.spacingMD

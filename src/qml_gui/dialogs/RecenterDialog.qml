@@ -93,9 +93,9 @@ CxDialog {
         Row {
             id: btnRow
             anchors.right: parent.right
-            anchors.rightMargin: 20
+            anchors.rightMargin: Theme.insetXL
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 20
+            anchors.bottomMargin: Theme.insetXL
             spacing: Theme.spacingMD   // upstream ChoiceButtonGap() = 10 (Button.hpp:12)
 
             CxButton {

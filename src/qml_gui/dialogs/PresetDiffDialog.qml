@@ -608,9 +608,9 @@ CxDialog {
         // Bold top info line (create_info_lines, 1794-1803).
         Text {
             Layout.fillWidth: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            Layout.topMargin: 20
+            Layout.leftMargin: Theme.insetXL
+            Layout.rightMargin: Theme.insetXL
+            Layout.topMargin: Theme.insetXL
             text: qsTr("请选择要对比的预设")
             color: Theme.textPrimary
             font.pixelSize: Theme.fontSizeSM
@@ -623,9 +623,9 @@ CxDialog {
         // counterpart of upstream show(Preset::Type) row filtering.
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 10
-            Layout.rightMargin: 10
-            Layout.topMargin: 10
+            Layout.leftMargin: Theme.insetMD
+            Layout.rightMargin: Theme.insetMD
+            Layout.topMargin: Theme.insetMD
             spacing: Theme.spacingXS
 
             RowLayout {
@@ -941,7 +941,7 @@ CxDialog {
                             Text {
                                 anchors.centerIn: parent
                                 text: treeRow.modelData.status || ""
-                                color: "white"
+                                color: Theme.textOnAccent
                                 font.pixelSize: Theme.fontSizeXS
                                 font.bold: true
                             }
@@ -956,10 +956,10 @@ CxDialog {
         // plus the button hover hooks at 1865-1867).
         Text {
             Layout.fillWidth: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
-            Layout.topMargin: 10
-            Layout.bottomMargin: 10
+            Layout.leftMargin: Theme.insetXL
+            Layout.rightMargin: Theme.insetXL
+            Layout.topMargin: Theme.insetMD
+            Layout.bottomMargin: Theme.insetMD
             visible: !root.treeShown
             text: root.hoverBottomInfo.length > 0 ? root.hoverBottomInfo : root.baseBottomInfo
             color: Theme.textPrimary
@@ -978,9 +978,9 @@ CxDialog {
 
             CxCheckBox {
                 id: transferCheckBox
-                Layout.leftMargin: 10
-                Layout.topMargin: 10
-                Layout.bottomMargin: 10
+                Layout.leftMargin: Theme.insetMD
+                Layout.topMargin: Theme.insetMD
+                Layout.bottomMargin: Theme.insetMD
                 text: qsTr("将值从左侧传输到右侧")
                 ToolTip.visible: hovered
                 ToolTip.text: qsTr("启用后，此对话框可用于将所选值从左侧预设传输到右侧预设。")
@@ -1013,7 +1013,7 @@ CxDialog {
             }
 
             CxButton {
-                Layout.rightMargin: 10
+                Layout.rightMargin: Theme.insetMD
                 text: qsTr("取消")
                 onClicked: root.reject()
             }

@@ -243,7 +243,7 @@ Item {
                     radius: 0
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 15  // DEVICE_LEFT_PADDING_LEFT
+                        anchors.leftMargin: Theme.insetLG  // DEVICE_LEFT_PADDING_LEFT
                         spacing: 0
                         // Device Name head button toggles name sort asc/desc
                         RowLayout {
@@ -487,7 +487,7 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 15  // DEVICE_LEFT_PADDING_LEFT
+                anchors.leftMargin: Theme.insetLG  // DEVICE_LEFT_PADDING_LEFT
                 spacing: 0
 
                 // Column 1: Device name (inline editing on double-click, 对齐上游 MultiMachineManagerPage rename)
@@ -1159,7 +1159,7 @@ Item {
                               : ""
                         color: Theme.textSecondary
                         font.pixelSize: Theme.fontSizeSM
-                        Layout.leftMargin: 15
+                        Layout.leftMargin: Theme.insetLG
                     }
                     // Neutral Pause (aligns with upstream btn_pause_all, no "All" suffix)
                     Rectangle {

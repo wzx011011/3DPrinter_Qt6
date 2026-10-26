@@ -220,6 +220,23 @@ QtObject {
     readonly property int spacingXL:  16
     readonly property int spacingXXL: 24
 
+    // ── Inset scale (2026-10-25 UI-consistency sweep)
+    // The wx-ported dialog surfaces (SelectMachineDialog, MultiMachinePage,
+    // CreatePresetsDialog, CalibrationDialog family) run their container
+    // insets on the upstream 5-multiple grid — 15px dialog content margins,
+    // 10px section padding, 5px micro insets — and restoration-map.md pins
+    // many of those values as upstream-measured (wxLEFT/wxTOP comments), so
+    // they must NOT be re-spaced onto the 7-step spacing scale above.
+    // Adjudicated (same reality-aligned logic as the Phase 170 radius
+    // rebase): the 5-grid becomes a sanctioned parallel TOKEN family for
+    // container insets in wx-ported surfaces. Pages/panels keep spacing*;
+    // within one surface the families do not mix. Bare numeric insets are
+    // a style_literal_gate finding either way.
+    readonly property int insetSM: 5
+    readonly property int insetMD: 10
+    readonly property int insetLG: 15
+    readonly property int insetXL: 20
+
     // ── Radii
     // Phase 170 (DS-03): scale redefined to the codebase-reality system
     // 2/4/6/8/12/16/24 (previously 3/5/8/12/16, which ~250 hardcoded sites
@@ -335,6 +352,36 @@ QtObject {
     readonly property var visibilityTypeColors: [
         "#FFFF00", "#CD22D6", "#49ADCE", "#E6E6E6", "#C1BE63"
     ]
+
+    // ── Canvas glass & data markers (2026-10-25 UI-consistency sweep)
+    // Live viewport/canvas colors that previously rode inline hex/Qt.rgba
+    // literals at their call sites. They stay theme-independent (canvas
+    // content, not chrome) but are now named so pages stay token-clean and
+    // the style_literal_gate can hold the line.
+    readonly property color glassWindow:      "#20242bd0"  // gcode-window glass (PreviewPage)
+    readonly property color glassWindowHover: "#20242bcc"  // gcode-window glass, hovered
+    readonly property color glassFloor:       "#262627cc"  // gcode-window floor (ref-measured)
+    readonly property color glassPanel:       "#1a1a1cd1"  // floating panel glass (AI edge panel)
+    readonly property color scrimCardBorder:  "#00000052"  // card-image border scrim (plugin cards)
+    readonly property color markerOrange:     "#f2754e"    // unsliced plate / gcode-window hot
+    readonly property color markerAmber:      "#eb8043"    // Color.hpp:136 heat marker
+    readonly property color markerRust:       "#c16737"    // gcode-window outline
+    readonly property color markerRed:        "#d94040"    // plate error / calibration fail
+    readonly property color markerYellow:     "#cccc00"    // preview data marker
+    readonly property color caliInfoBlue:     "#3b9eff"    // calibration in-progress row tint base
+    readonly property color bedShapeFill:     "#1418c75e"  // bed-shape accent fill @8% (AARRGGBB)
+    readonly property color bedShapeFillAlt:  "#0f566070"  // bed-shape inactive fill (AARRGGBB)
+
+    // Color math helpers — shared so controls stop re-implementing blends
+    // and call sites stay free of Qt.rgba/darker/lighter literals.
+    function tint(base, alpha) {
+        return Qt.rgba(base.r, base.g, base.b, alpha)
+    }
+    function blend(from, to, t) {
+        return Qt.rgba(from.r + (to.r - from.r) * t,
+                       from.g + (to.g - from.g) * t,
+                       from.b + (to.b - from.b) * t, 1)
+    }
 
     // ── Notification severity palette (Phase 160 DS-01, consumed by Phase 167).
     // One source of truth — collapses the 3 private 10-level tables in

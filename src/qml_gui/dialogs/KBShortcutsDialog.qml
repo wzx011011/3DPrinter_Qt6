@@ -250,7 +250,7 @@ CxDialog {
             // accent fill).
             Column {
                 anchors.top: parent.top
-                anchors.topMargin: 20
+                anchors.topMargin: Theme.insetXL
                 width: parent.width
                 spacing: 0
 

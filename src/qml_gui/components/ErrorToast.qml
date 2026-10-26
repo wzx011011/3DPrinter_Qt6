@@ -78,8 +78,8 @@ Item {
     // right/bottom margins (SLIDER_DEFAULT_RIGHT_MARGIN / BOTTOM_MARGIN).
     anchors.bottom: parent.bottom
     anchors.right: parent.right
-    anchors.rightMargin: 10
-    anchors.bottomMargin: 10
+    anchors.rightMargin: Theme.insetMD
+    anchors.bottomMargin: Theme.insetMD
     // Size from the column itself, NOT childrenRect: the column is anchored
     // right/bottom, so its x/y depend on root.width/height and a childrenRect
     // binding loops (the startup "Binding loop detected for width/height").
@@ -437,7 +437,7 @@ Item {
 
                     Text {
                         anchors.top: parent.bottom
-                        anchors.topMargin: 3
+                        anchors.topMargin: 2
                         anchors.left: parent.left
                         text: entry.progressValue.toFixed(2) + "%"
                         color: entry.textColor

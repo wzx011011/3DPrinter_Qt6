@@ -46,7 +46,7 @@ Rectangle {
         Rectangle {
             width: parent.width
             height: 30
-            radius: 5
+            radius: Theme.radiusMD
             readonly property bool hovered: sliceAllMouse.containsMouse
             readonly property bool pressed: sliceAllMouse.pressed
             color: pressed ? Theme.accentDark
@@ -54,7 +54,7 @@ Rectangle {
             Text {
                 anchors.centerIn: parent
                 text: qsTr("全部切片")
-                color: "white"
+                color: Theme.textOnAccent
                 font.pixelSize: Theme.fontSizeSM
                 font.bold: true
             }
@@ -126,7 +126,7 @@ Rectangle {
                     width: badgeText.implicitWidth + 10
                     height: 16
                     radius: 8
-                    color: plateButton.modelData.sliced ? Theme.accent : "#f2754e"
+                    color: plateButton.modelData.sliced ? Theme.accent : Theme.markerOrange
                     Text {
                         id: badgeText
                         anchors.centerIn: parent
@@ -135,7 +135,7 @@ Rectangle {
                               : (root.editorVm && root.editorVm.isSlicing()
                                      ? qsTr("%1%").arg(root.editorVm.sliceProgress)
                                      : qsTr("切片中"))
-                        color: "white"
+                        color: Theme.textOnAccent
                         font.pixelSize: Theme.fontSizeXS
                     }
                 }
@@ -153,12 +153,12 @@ Rectangle {
                     width: failedText.implicitWidth + 10
                     height: 16
                     radius: 8
-                    color: "#d94040"
+                    color: Theme.markerRed
                     Text {
                         id: failedText
                         anchors.centerIn: parent
                         text: qsTr("切片失败")
-                        color: "white"
+                        color: Theme.textOnAccent
                         font.pixelSize: Theme.fontSizeXS
                     }
                 }

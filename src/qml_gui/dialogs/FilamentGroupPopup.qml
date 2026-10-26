@@ -111,8 +111,8 @@ CxPopup {
         anchors.bottom: parent.bottom
         anchors.leftMargin: 16   // upstream horizontal_margin, .cpp:105
         anchors.rightMargin: 16
-        anchors.topMargin: 15    // upstream vertical_margin, .cpp:106
-        anchors.bottomMargin: 15
+        anchors.topMargin: Theme.insetLG    // upstream vertical_margin, .cpp:106
+        anchors.bottomMargin: Theme.insetLG
         spacing: Theme.spacingSM
 
         Text {
@@ -206,7 +206,7 @@ CxPopup {
                     }
 
                     Text {
-                        Layout.leftMargin: 22  // indicator 18 + gap 4
+                        Layout.leftMargin: Theme.insetXL  // indicator 18 + gap 4
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         text: modeRow.enabledMode

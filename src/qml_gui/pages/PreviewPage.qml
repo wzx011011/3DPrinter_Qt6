@@ -415,11 +415,11 @@ Item {
                                     root.editorVm.currentPlateIndex) > 0
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
-                    anchors.margins: 18
+                    anchors.margins: 16
                     width: plateNumberText.implicitWidth + 14
                     height: 24
                     radius: 4
-                    color: "#F2754E"
+                    color: Theme.markerOrange
                     Text {
                         id: plateNumberText
                         anchors.centerIn: parent
@@ -429,8 +429,8 @@ Item {
                             const n = idx + 1
                             return n < 10 ? ("0" + n) : ("" + n)
                         }
-                        color: "white"
-                        font.pixelSize: 14
+                        color: Theme.textOnAccent
+                        font.pixelSize: Theme.fontSizeLG
                         font.bold: true
                     }
                 }
@@ -469,7 +469,7 @@ Item {
                         width: 26
                         height: 26
                         radius: 4
-                        color: canvasGcodeWindowMouse.containsMouse ? Theme.bgHover : "#20242bd0"
+                        color: canvasGcodeWindowMouse.containsMouse ? Theme.bgHover : Theme.glassWindow
                         border.width: 1
                         border.color: canvasGcodeWindowMouse.containsMouse ? Theme.accentDark : Theme.borderSubtle
 
@@ -515,11 +515,11 @@ Item {
                             // Floating-card floor: dark translucent, sampled from
                             // the same float-overlay family as the empty-state
                             // pill (ref card interior over the canvas).
-                            color: "#20242bd0"
+                            color: Theme.glassWindow
                             // Teal card border, ref measured RGB(0,150,136);
                             // accent border marks the CURRENT plate.
                             border.width: 1.5
-                            border.color: isCurrent ? Theme.accent : "#009688"
+                            border.color: isCurrent ? Theme.accent : Theme.asmSelectTeal
                             clip: true
 
                             MouseArea {
@@ -551,7 +551,7 @@ Item {
                                 color: root.editorVm
                                     ? root.editorVm.plateThumbnailColor(plateIndex)
                                     : Theme.bgPanel
-                                radius: 3
+                                radius: Theme.radiusSM
                             }
 
                             // Plate number badge embedded INSIDE the card's
@@ -563,8 +563,8 @@ Item {
                                 anchors.margins: 4
                                 width: plateBadgeLabel.implicitWidth + 10
                                 height: plateBadgeLabel.implicitHeight + 4
-                                radius: 3
-                                color: "#20242bd0"
+                                radius: Theme.radiusSM
+                                color: Theme.glassWindow
                                 Label {
                                     id: plateBadgeLabel
                                     anchors.centerIn: parent
@@ -585,7 +585,7 @@ Item {
                     width: Math.min(parent.width - 32, emptyStateText.implicitWidth + 28)
                     height: 40
                     radius: 6
-                    color: "#20242bcc"
+                    color: Theme.glassWindowHover
                     border.width: 1
                     border.color: Theme.borderSubtle
 
@@ -608,7 +608,7 @@ Item {
                 ToolPositionTooltip {
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 14
+                    anchors.bottomMargin: 12
                     previewVm: root.previewVm
                     visible: root.previewVm ? (root.previewVm.showMarker && root.previewVm.hasToolPosition && root.hasPreviewData) : false
                 }
@@ -702,7 +702,7 @@ Item {
                             // WindowRounding 8 + SetNextWindowBgAlpha 0.8);
                             // ref-measured window floor #262627.
                             radius: 8
-                            color: "#262627CC"
+                            color: Theme.glassFloor
                             border.width: 1
                             border.color: Theme.borderSubtle
                             clip: true
@@ -792,7 +792,7 @@ Item {
                                         // transparent for every line.
                                         color: "transparent"
                                         border.width: gcodeRow.modelData.current ? 1 : 0
-                                        border.color: "#C16737"
+                                        border.color: Theme.markerRust
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -809,7 +809,7 @@ Item {
                                                 // ColorRGBA::ORANGE 0.923,0.504,
                                                 // 0.264 -- GCodeViewer.cpp:846 +
                                                 // :949-955, ImGuiWrapper.cpp:165).
-                                                color: "#EB8043"
+                                                color: Theme.markerAmber
                                                 horizontalAlignment: Text.AlignRight
                                                 font.pixelSize: Theme.fontSizeXS
                                                 font.family: Theme.fontMono
@@ -828,7 +828,7 @@ Item {
                                                     id: gcodeCommandText
                                                     text: gcodeRow.modelData.command
                                                     visible: text.length > 0
-                                                    color: "#CCCC00"
+                                                    color: Theme.markerYellow
                                                     font.pixelSize: Theme.fontSizeXS
                                                     font.family: Theme.fontMono
                                                 }
@@ -894,8 +894,8 @@ Item {
 
             MoveSlider {
                 anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
                 anchors.topMargin: 6
                 anchors.bottomMargin: 6
                 previewVm: root.previewVm

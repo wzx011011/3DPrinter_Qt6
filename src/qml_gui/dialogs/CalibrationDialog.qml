@@ -112,7 +112,7 @@ CxDialog {
         property string capabilityFlag: ""
 
         Layout.fillWidth: true
-        Layout.leftMargin: 15
+        Layout.leftMargin: Theme.insetLG
         height: 28
         radius: Theme.radiusSM
         color: optMA.containsMouse ? Theme.bgHover : "transparent"
@@ -143,7 +143,7 @@ CxDialog {
             Text {
                 text: optRow.label
                 color: Theme.textSecondary
-                font.pixelSize: 13
+                font.pixelSize: Theme.fontSize13
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
@@ -185,8 +185,8 @@ CxDialog {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    anchors.leftMargin: 15
-                    anchors.rightMargin: 15
+                    anchors.leftMargin: Theme.insetLG
+                    anchors.rightMargin: Theme.insetLG
                     anchors.topMargin: 25
                     spacing: Theme.spacingXS
 
@@ -278,7 +278,7 @@ CxDialog {
                     Text {
                         text: qsTr("校准程序会自动检测设备状态以减小偏差。\n它能让设备持续保持最佳性能。")
                         color: Theme.textTertiary
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.fontSize13
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -300,9 +300,9 @@ CxDialog {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.top: parent.top
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    anchors.topMargin: 14
+                    anchors.leftMargin: Theme.insetMD
+                    anchors.rightMargin: Theme.insetMD
+                    anchors.topMargin: 12
                     spacing: Theme.spacingSM
 
                     // "Calibration Flow" Head_14 in brand colour, centered
@@ -366,7 +366,7 @@ CxDialog {
                                     color: stepDelegate.modelData.state === 1 ? Theme.accent
                                          : stepDelegate.modelData.state === 2 ? Theme.textPrimary
                                          : Theme.textTertiary
-                                    font.pixelSize: 13
+                                    font.pixelSize: Theme.fontSize13
                                     font.bold: stepDelegate.modelData.state === 1
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -376,7 +376,7 @@ CxDialog {
                                     visible: stepDelegate.modelData.state === 2
                                     text: "✓"
                                     color: Theme.accent
-                                    font.pixelSize: 13
+                                    font.pixelSize: Theme.fontSize13
                                 }
                             }
                         }
@@ -392,7 +392,7 @@ CxDialog {
                 CxButton {
                     anchors.bottom: parent.bottom
                     anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottomMargin: 14
+                    anchors.bottomMargin: 12
                     width: 100
                     height: 32
                     cxStyle: CxButton.Style.Primary

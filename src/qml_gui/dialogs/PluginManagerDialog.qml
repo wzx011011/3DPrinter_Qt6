@@ -760,8 +760,8 @@ CxDialog {
                             height: 10
                             radius: Theme.radiusMD
                             color: clearMouse.containsMouse
-                                   ? Qt.rgba(127 / 255, 127 / 255, 127 / 255, 0.45)
-                                   : Qt.rgba(127 / 255, 127 / 255, 127 / 255, 0.20)
+                                   ? Theme.tint(Theme.textMuted, 0.45)
+                                   : Theme.tint(Theme.textMuted, 0.20)
                             Canvas {
                                 id: clearX
                                 anchors.centerIn: parent
@@ -953,7 +953,7 @@ CxDialog {
                             anchors.right: parent.right
                             width: 1
                             height: parent.height
-                            color: Qt.rgba(1, 1, 1, 0.25)
+                            color: Theme.tint(Theme.textOnAccent, 0.25)
                         }
                         Canvas {
                             anchors.centerIn: parent
@@ -1325,7 +1325,7 @@ CxDialog {
                                                 Row {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     anchors.left: parent.left
-                                                    anchors.leftMargin: 18
+                                                    anchors.leftMargin: 16
                                                     spacing: 6
                                                     Text {
                                                         anchors.verticalCenter: parent.verticalCenter
@@ -1397,7 +1397,7 @@ CxDialog {
                                                         }
                                                     }
                                                     border.width: 1
-                                                    border.color: Qt.rgba(0, 0, 0, 0.32)
+                                                    border.color: Theme.scrimCardBorder
                                                     Canvas {
                                                         anchors.centerIn: parent
                                                         width: 12
@@ -1430,7 +1430,7 @@ CxDialog {
                                                     radius: Theme.radiusMD
                                                     color: Theme.statusWarning
                                                     border.width: 1
-                                                    border.color: Qt.rgba(0, 0, 0, 0.32)
+                                                    border.color: Theme.scrimCardBorder
                                                     Text {
                                                         anchors.centerIn: parent
                                                         text: "!"
@@ -1699,7 +1699,7 @@ CxDialog {
                         anchors.top: parent.top
                         anchors.topMargin: 18 + headerRow.height
                         anchors.left: parent.left
-                        anchors.leftMargin: 18
+                        anchors.leftMargin: 16
                         visible: root._view.length === 0
                         text: root.searchActive()
                               ? qsTr("没有匹配 “%1” 的插件").arg(root._search)
@@ -2023,7 +2023,7 @@ CxDialog {
                                                             radius: Theme.radiusMD
                                                             color: Theme.statusWarning
                                                             border.width: 1
-                                                            border.color: Qt.rgba(0, 0, 0, 0.32)
+                                                            border.color: Theme.scrimCardBorder
                                                             Text {
                                                                 anchors.centerIn: parent
                                                                 text: "!"
@@ -2051,7 +2051,7 @@ CxDialog {
                                                                 }
                                                             }
                                                             border.width: 1
-                                                            border.color: Qt.rgba(0, 0, 0, 0.32)
+                                                            border.color: Theme.scrimCardBorder
                                                             Text {
                                                                 id: updateLabel
                                                                 anchors.centerIn: parent
@@ -2108,7 +2108,7 @@ CxDialog {
                             Item {
                                 Text {
                                     anchors.top: parent.top
-                                    anchors.topMargin: 18
+                                    anchors.topMargin: 16
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
                                     visible: root._cfgCaps.length === 0
@@ -2391,7 +2391,7 @@ CxDialog {
 
                                 Text {
                                     anchors.top: parent.top
-                                    anchors.topMargin: 18
+                                    anchors.topMargin: 16
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
                                     visible: changelogPanel.rows.length === 0
@@ -2476,7 +2476,7 @@ CxDialog {
 
                                 Text {
                                     anchors.top: parent.top
-                                    anchors.topMargin: 18
+                                    anchors.topMargin: 16
                                     anchors.left: parent.left
                                     anchors.leftMargin: 8
                                     visible: root._selected === null
@@ -2670,7 +2670,7 @@ CxDialog {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
-                        anchors.leftMargin: 10
+                        anchors.leftMargin: Theme.insetMD
                         text: ctxItem.modelData.label
                         color: ctxItem.modelData.danger
                                ? Theme.statusError
@@ -2732,12 +2732,12 @@ CxDialog {
                         anchors.fill: parent
                         color: root._installAction === exploreItem.index
                                || exploreItemMouse.containsMouse
-                               ? Qt.rgba(1, 1, 1, 0.14) : "transparent"
+                               ? Theme.tint(Theme.textOnAccent, 0.14) : "transparent"
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.left: parent.left
-                        anchors.leftMargin: 10
+                        anchors.leftMargin: Theme.insetMD
                         text: exploreItem.modelData
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSize13

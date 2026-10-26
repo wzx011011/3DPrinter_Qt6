@@ -129,8 +129,8 @@ CxDialog {
                     // m_line_top 1px（SelectMachine.cpp:156-157, 色 166,169,170）
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         Layout.preferredHeight: 1
                         color: Theme.borderSubtle
                     }
@@ -139,8 +139,8 @@ CxDialog {
                     // ── m_basic_panel（:179-361，左右边距 15）─────────────
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         spacing: 8  // :357 wxLEFT 8
 
                         // 缩略图面板 198x198（SelectMachine.cpp:190-200）
@@ -345,7 +345,7 @@ CxDialog {
                                         RowLayout {
                                             anchors.fill: parent
                                             anchors.leftMargin: 7  // :7037 wxLEFT 7
-                                            anchors.rightMargin: 7
+                                            anchors.rightMargin: 6
                                             spacing: 4
 
                                             // 只读 ComboBox 300x60（:7027-7031，
@@ -439,9 +439,9 @@ CxDialog {
                                                                     background: Rectangle {
                                                                         radius: Theme.radiusSM
                                                                         color: comboEntry.index === root.comboIndex
-                                                                               ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
+                                                                               ? Theme.tint(Theme.accent, 0.25)
                                                                                : comboEntry.hovered
-                                                                                 ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.1)
+                                                                                 ? Theme.tint(Theme.accent, 0.1)
                                                                                  : "transparent"
                                                                     }
                                                                     contentItem: RowLayout {
@@ -528,8 +528,8 @@ CxDialog {
                     // ── Filament 分节（:364-417，左右边距 15）────────────────
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         spacing: 8
                         Text {
                             text: qsTr("耗材")  // :367 _L("Filament")
@@ -569,8 +569,8 @@ CxDialog {
                                  && root.deviceVm.selectedAmsSlotCount > 0
                         Layout.preferredWidth: 637  // :409-410 Min/Max 637 宽
                         Layout.alignment: Qt.AlignHCenter
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         implicitHeight: mappingGrid.visible
                                         ? mappingGrid.implicitHeight + 20 : 0  // :414 wxALL 10
                         color: Theme.bgInset  // #F8F8F8 → 中性灰令牌
@@ -582,8 +582,8 @@ CxDialog {
                             anchors.fill: parent
                             anchors.margins: Theme.spacingMD  // :414 wxALL FromDIP(10)
                             columns: 10          // :413 wxGridSizer(0, 10, 7, 7)
-                            columnSpacing: 7
-                            rowSpacing: 7
+                            columnSpacing: 6
+                            rowSpacing: 6
 
                             Repeater {
                                 model: root.deviceVm ? root.deviceVm.selectedAmsSlotCount : 0
@@ -641,7 +641,7 @@ CxDialog {
                     Text {
                         visible: false
                         Layout.preferredWidth: 655
-                        Layout.leftMargin: 15
+                        Layout.leftMargin: Theme.insetLG
                         text: ""
                         color: Theme.textPrimary
                         font.pixelSize: Theme.fontSize13
@@ -653,7 +653,7 @@ CxDialog {
                     Text {
                         visible: false
                         Layout.preferredWidth: 580
-                        Layout.leftMargin: 15
+                        Layout.leftMargin: Theme.insetLG
                         text: qsTr("切片文件中的耗材分组方式不是最优方案。")
                         color: Theme.statusWarning
                         font.pixelSize: Theme.fontSize13
@@ -663,7 +663,7 @@ CxDialog {
                     Text {
                         visible: false
                         Layout.preferredWidth: 580
-                        Layout.leftMargin: 15
+                        Layout.leftMargin: Theme.insetLG
                         text: ""
                         color: Theme.statusWarning
                         font.pixelSize: Theme.fontSize13
@@ -673,8 +673,8 @@ CxDialog {
                     RowLayout {
                         visible: false
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         spacing: Theme.spacingMD
                         Text {
                             text: qsTr("对耗材分组不满意？重新分组并切片 ->")  // :482
@@ -698,7 +698,7 @@ CxDialog {
                     // 烘干降温警告（:544-550，色 #F09A17 → 状态警示色）
                     Text {
                         visible: false
-                        Layout.leftMargin: 15
+                        Layout.leftMargin: Theme.insetLG
                         Layout.topMargin: 2
                         text: qsTr("为保证打印质量，打印过程中将降低烘干温度。")
                         color: Theme.statusWarning
@@ -709,8 +709,8 @@ CxDialog {
                     // ── 高级选项分割线（:553-560，左右边距 15）──────────────
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         Layout.preferredHeight: 1
                         color: Theme.borderSubtle  // :555 0xEEEEEE
                     }
@@ -719,11 +719,11 @@ CxDialog {
                     // ── 高级选项 2 列网格（:616-628, vgap 5 hgap 10）─────────
                     GridLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         columns: 2
-                        columnSpacing: 10
-                        rowSpacing: 5
+                        columnSpacing: 8
+                        rowSpacing: 4
 
                         Repeater {
                             model: root.printOptionDefs
@@ -810,8 +810,8 @@ CxDialog {
                     // (tests/QmlUiAuditTests.cpp:11689 locks this disclosure.)
                     Text {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 15
-                        Layout.rightMargin: 15
+                        Layout.leftMargin: Theme.insetLG
+                        Layout.rightMargin: Theme.insetLG
                         text: qsTr("演示模式：设备列表为本地模拟数据，发送为演示流程（真实设备推送依赖 MQTT，当前为外部阻塞项）。")
                         color: Theme.textTertiary
                         font.pixelSize: Theme.fontSizeXS
@@ -850,8 +850,8 @@ CxDialog {
                 // sending 页：BBLStatusBarPrint 进度条（:676-678）
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 15
-                    anchors.rightMargin: 15
+                    anchors.leftMargin: Theme.insetLG
+                    anchors.rightMargin: Theme.insetLG
                     visible: root.sendState === 1
                     spacing: Theme.spacingMD
                     Text {
@@ -933,7 +933,7 @@ CxDialog {
 
                         // m_link_network_state（:775-778, Body_12）
                         Text {
-                            Layout.leftMargin: 5
+                            Layout.leftMargin: Theme.insetSM
                             text: qsTr("检查当前系统服务状态")
                             color: Theme.accent
                             font.pixelSize: Theme.fontSizeSM  // Body_12
@@ -946,7 +946,7 @@ CxDialog {
                         // 三行: Error code / Error desc / Extra info
                         //（:722-772, 标题列 74 / 正文 500 / 0x909090）
                         RowLayout {
-                            Layout.leftMargin: 5
+                            Layout.leftMargin: Theme.insetSM
                             spacing: 0
                             Text {
                                 Layout.preferredWidth: 74
@@ -963,7 +963,7 @@ CxDialog {
                             }
                         }
                         RowLayout {
-                            Layout.leftMargin: 5
+                            Layout.leftMargin: Theme.insetSM
                             spacing: 0
                             Text {
                                 Layout.preferredWidth: 74
@@ -980,7 +980,7 @@ CxDialog {
                             }
                         }
                         RowLayout {
-                            Layout.leftMargin: 5
+                            Layout.leftMargin: Theme.insetSM
                             spacing: 0
                             Text {
                                 Layout.preferredWidth: 74

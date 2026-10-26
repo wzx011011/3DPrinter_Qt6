@@ -326,7 +326,7 @@ Rectangle {
                             visible: treeRow.hasChildren
                             text: "▸"
                             color: Theme.textTertiary
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fontSizeXS
                             rotation: treeRow.expanded ? 90 : 0
                             Behavior on rotation { NumberAnimation { duration: Theme.motionFast } }
                         }
@@ -364,7 +364,7 @@ Rectangle {
                         Layout.preferredWidth: 6
                         Layout.preferredHeight: 6
                         Layout.alignment: Qt.AlignVCenter
-                        radius: 3
+                        radius: Theme.radiusSM
                         color: Theme.textTertiary
                     }
                     Text {
@@ -374,7 +374,7 @@ Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         text: "◆"
                         color: Theme.textTertiary
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fontSizeXS
                     }
 
                     // Name cell: inline editor while renaming this object row

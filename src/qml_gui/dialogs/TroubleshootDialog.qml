@@ -427,7 +427,7 @@ CxDialog {
                 // centered word-wrapped lines.
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 15
+                    Layout.topMargin: Theme.insetLG
                     spacing: Theme.spacingMD
                     Repeater {
                         model: root.sysPanelLines
@@ -450,16 +450,16 @@ CxDialog {
                 // sys_btn_sizer: Hide ... Copy (:316-319/:327).
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 15
+                    Layout.topMargin: Theme.insetLG
                     CxButton {
-                        Layout.leftMargin: 5
+                        Layout.leftMargin: Theme.insetSM
                         text: root.sysPanelMode ? qsTr("隐藏") : qsTr("显示")
                         toolTipText: qsTr("显示/隐藏系统信息")
                         onClicked: root.sysPanelMode = !root.sysPanelMode
                     }
                     Item { Layout.fillWidth: true }
                     CxButton {
-                        Layout.rightMargin: 5
+                        Layout.rightMargin: Theme.insetSM
                         text: qsTr("复制")
                         toolTipText: qsTr("复制系统信息到剪贴板")
                         onClicked: root.copyToClipboard(root.sysInfoAllText())
@@ -468,7 +468,7 @@ CxDialog {
 
                 // Wiki Guide link (:190/:328).
                 HyperLinkText {
-                    Layout.topMargin: 15
+                    Layout.topMargin: Theme.insetLG
                     Layout.alignment: Qt.AlignHCenter
                     text: qsTr("Wiki 指南")
                     linkUrl: "https://www.orcaslicer.com/wiki/troubleshoot_center"
@@ -491,7 +491,7 @@ CxDialog {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 5
+                    Layout.topMargin: Theme.insetSM
                     spacing: 8
                     Text {
                         Layout.fillWidth: true
@@ -548,7 +548,7 @@ CxDialog {
                     }
                 }
                 LabelRow {
-                    Layout.topMargin: 5
+                    Layout.topMargin: Theme.insetSM
                     rowLabel: qsTr("已加载预设概览")
                     rowTip: qsTr("此区域显示已加载预设的信息。")
                     CxButton {
@@ -561,7 +561,7 @@ CxDialog {
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 5
+                    Layout.topMargin: Theme.insetSM
                     spacing: Theme.spacingXS
                     RowLayout {
                         spacing: Theme.spacingXL
@@ -621,7 +621,7 @@ CxDialog {
                     }
                 }
                 LabelRow {
-                    Layout.topMargin: 5
+                    Layout.topMargin: Theme.insetSM
                     rowLabel: qsTr("日志级别")
                     CxComboBox {
                         id: logLevelCombo
@@ -638,7 +638,7 @@ CxDialog {
                     }
                 }
                 LabelRow {
-                    Layout.topMargin: 5
+                    Layout.topMargin: Theme.insetSM
                     rowLabel: qsTr("存储的日志")
                     CxButton {
                         text: qsTr("打包...")
@@ -648,7 +648,7 @@ CxDialog {
                     }
                 }
                 LabelRow {
-                    Layout.topMargin: 5
+                    Layout.topMargin: Theme.insetSM
                     rowLabel: root.logsStorageText
                     CxButton {
                         text: qsTr("清除")

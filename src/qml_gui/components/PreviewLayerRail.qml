@@ -249,8 +249,8 @@ Item {
                    + railTrackHost.trackHeight * (1 - vMax / spanRange)
                 width: 6
                 height: Math.max(3, railTrackHost.trackHeight * (vMax - vMin + 1) / spanRange)
-                radius: 3
-                color: "#009688"
+                radius: Theme.radiusSM
+                color: Theme.asmSelectTeal
             }
 
             // layer-rail-z-labels: passive hover proxies over the two real

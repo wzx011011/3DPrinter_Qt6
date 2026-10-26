@@ -889,7 +889,7 @@ CxDialog {
 
             // "Basic Information" section header, Head_16 (@676-678)
             Text {
-                Layout.leftMargin: 10
+                Layout.leftMargin: Theme.insetMD
                 text: qsTr("基本信息")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeXL
@@ -899,8 +899,8 @@ CxDialog {
             // Vendor row (@767-857)
             RowLayout {
                 Layout.fillWidth: true
-                Layout.leftMargin: 5
-                Layout.rightMargin: 5
+                Layout.leftMargin: Theme.insetSM
+                Layout.rightMargin: Theme.insetSM
                 spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("厂商") }
                 PromptComboBox {
@@ -933,8 +933,8 @@ CxDialog {
             // Type row (@859-903)
             RowLayout {
                 Layout.fillWidth: true
-                Layout.leftMargin: 5
-                Layout.rightMargin: 5
+                Layout.leftMargin: Theme.insetSM
+                Layout.rightMargin: Theme.insetSM
                 spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("类型") }
                 PromptComboBox {
@@ -954,8 +954,8 @@ CxDialog {
             // Serial row (@905-935)
             RowLayout {
                 Layout.fillWidth: true
-                Layout.leftMargin: 5
-                Layout.rightMargin: 5
+                Layout.leftMargin: Theme.insetSM
+                Layout.rightMargin: Theme.insetSM
                 spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("系列") }
                 ColumnLayout {
@@ -976,15 +976,15 @@ CxDialog {
             // divider line (@684-688)
             Rectangle {
                 Layout.fillWidth: true
-                Layout.leftMargin: 10
-                Layout.rightMargin: 10
+                Layout.leftMargin: Theme.insetMD
+                Layout.rightMargin: Theme.insetMD
                 Layout.preferredHeight: 1
                 color: Theme.borderSubtle
             }
 
             // "Add Filament Preset under this filament" header (@690-692)
             Text {
-                Layout.leftMargin: 15
+                Layout.leftMargin: Theme.insetLG
                 text: qsTr("在此耗材下添加耗材预设")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeXL
@@ -995,8 +995,8 @@ CxDialog {
             // (@937-1026)
             RowLayout {
                 Layout.fillWidth: true
-                Layout.leftMargin: 10
-                Layout.rightMargin: 5
+                Layout.leftMargin: Theme.insetMD
+                Layout.rightMargin: Theme.insetSM
                 spacing: Theme.spacingXS
                 OptionLabel { text: qsTr("耗材预设") }
                 ColumnLayout {
@@ -1027,8 +1027,8 @@ CxDialog {
 
             // Per-mode guidance text (@696 / @1311-1312)
             Text {
-                Layout.leftMargin: 15
-                Layout.rightMargin: 15
+                Layout.leftMargin: Theme.insetLG
+                Layout.rightMargin: Theme.insetLG
                 text: root.filamentFromCurrent
                       ? qsTr("我们可以为您的以下打印机创建耗材预设：")
                       : qsTr("我们将把预设重命名为 \"厂商 类型 系列 @所选打印机\"。\n要为更多打印机添加预设，请前往打印机选择")
@@ -1041,8 +1041,8 @@ CxDialog {
             // (@699-707, wxGridSizer(3, 5, 5) @1034)
             CxScrollView {
                 Layout.fillWidth: true
-                Layout.leftMargin: 10
-                Layout.rightMargin: 10
+                Layout.leftMargin: Theme.insetMD
+                Layout.rightMargin: Theme.insetMD
                 Layout.maximumHeight: 350
                 Layout.fillHeight: true
                 Rectangle {
@@ -1057,8 +1057,8 @@ CxDialog {
                         Grid {
                             id: filGrid
                             columns: 3
-                            columnSpacing: 5
-                            rowSpacing: 5
+                            columnSpacing: 4
+                            rowSpacing: 4
                             Repeater {
                                 model: ListModel {
                                     id: printerGridModel
@@ -1186,9 +1186,9 @@ CxDialog {
                             // Printer row (@1721-1861)
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.leftMargin: 10
-                                Layout.rightMargin: 10
-                                Layout.bottomMargin: 5
+                                Layout.leftMargin: Theme.insetMD
+                                Layout.rightMargin: Theme.insetMD
+                                Layout.bottomMargin: Theme.insetSM
                                 spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("打印机") }
                                 ColumnLayout {
@@ -1258,9 +1258,9 @@ CxDialog {
                             // Nozzle Diameter row (@1863-1939)
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.leftMargin: 10
-                                Layout.rightMargin: 10
-                                Layout.bottomMargin: 5
+                                Layout.leftMargin: Theme.insetMD
+                                Layout.rightMargin: Theme.insetMD
+                                Layout.bottomMargin: Theme.insetSM
                                 spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("喷嘴直径") }
                                 ColumnLayout {
@@ -1318,33 +1318,33 @@ CxDialog {
                                 // Printable Space row (@1960-1991)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.leftMargin: 10
-                                    Layout.rightMargin: 10
-                                    Layout.bottomMargin: 5
+                                    Layout.leftMargin: Theme.insetMD
+                                    Layout.rightMargin: Theme.insetMD
+                                    Layout.bottomMargin: Theme.insetSM
                                     spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("可打印空间") }
-                                    DigitsField { id: p1SpaceX; Layout.leftMargin: 5 }
+                                    DigitsField { id: p1SpaceX; Layout.leftMargin: Theme.insetSM }
                                     DigitsField { id: p1SpaceY }
                                 }
 
                                 // Origin row (@1993-2023)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.leftMargin: 10
-                                    Layout.rightMargin: 10
-                                    Layout.bottomMargin: 5
+                                    Layout.leftMargin: Theme.insetMD
+                                    Layout.rightMargin: Theme.insetMD
+                                    Layout.bottomMargin: Theme.insetSM
                                     spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("原点") }
-                                    DigitsField { id: p1OriginX; Layout.leftMargin: 5 }
+                                    DigitsField { id: p1OriginX; Layout.leftMargin: Theme.insetSM }
                                     DigitsField { id: p1OriginY }
                                 }
 
                                 // Hot Bed STL row (@2025-2049)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.leftMargin: 10
-                                    Layout.rightMargin: 10
-                                    Layout.bottomMargin: 5
+                                    Layout.leftMargin: Theme.insetMD
+                                    Layout.rightMargin: Theme.insetMD
+                                    Layout.bottomMargin: Theme.insetSM
                                     spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("热床 STL") }
                                     CxButton {
@@ -1367,9 +1367,9 @@ CxDialog {
                                 // Hot Bed SVG row (@2051-2075)
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Layout.leftMargin: 10
-                                    Layout.rightMargin: 10
-                                    Layout.bottomMargin: 5
+                                    Layout.leftMargin: Theme.insetMD
+                                    Layout.rightMargin: Theme.insetMD
+                                    Layout.bottomMargin: Theme.insetSM
                                     spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("热床 SVG") }
                                     CxButton {
@@ -1395,7 +1395,7 @@ CxDialog {
                                     Layout.margins: Theme.spacingMD
                                     spacing: Theme.spacingMD
                                     OptionLabel { text: qsTr("最大打印高度") }
-                                    DigitsField { id: p1Height; Layout.leftMargin: 5 }
+                                    DigitsField { id: p1Height; Layout.leftMargin: Theme.insetSM }
                                 }
                             }
                         }
@@ -1453,9 +1453,9 @@ CxDialog {
                             // Presets row: RadioBox pair (@2631-2648)
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.leftMargin: 10
-                                Layout.rightMargin: 10
-                                Layout.bottomMargin: 5
+                                Layout.leftMargin: Theme.insetMD
+                                Layout.rightMargin: Theme.insetMD
+                                Layout.bottomMargin: Theme.insetSM
                                 spacing: Theme.spacingMD
                                 OptionLabel { text: qsTr("预设") }
                                 ColumnLayout {
@@ -1484,8 +1484,8 @@ CxDialog {
                             // Deselect All strips (@2667-2726)
                             CxScrollView {
                                 Layout.fillWidth: true
-                                Layout.leftMargin: 10
-                                Layout.rightMargin: 10
+                                Layout.leftMargin: Theme.insetMD
+                                Layout.rightMargin: Theme.insetMD
                                 Layout.fillHeight: true
                                 Rectangle {
                                     // implicit sizes drive the ScrollView content
@@ -1508,8 +1508,8 @@ CxDialog {
                                         Grid {
                                             Layout.fillWidth: true
                                             columns: 3
-                                            columnSpacing: 5
-                                            rowSpacing: 5
+                                            columnSpacing: 4
+                                            rowSpacing: 4
                                             Repeater {
                                                 model: ListModel { id: filTplModel }
                                                 delegate: CxCheckBox {
@@ -1575,8 +1575,8 @@ CxDialog {
                                         Grid {
                                             Layout.fillWidth: true
                                             columns: 3
-                                            columnSpacing: 5
-                                            rowSpacing: 5
+                                            columnSpacing: 4
+                                            rowSpacing: 4
                                             Repeater {
                                                 model: ListModel { id: procTplModel }
                                                 delegate: CxCheckBox {

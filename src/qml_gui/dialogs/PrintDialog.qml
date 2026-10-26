@@ -474,7 +474,7 @@ CxDialog {
             Layout.leftMargin: 30; Layout.rightMargin: 30
             spacing: 0
             Text {
-                Layout.leftMargin: 5
+                Layout.leftMargin: Theme.insetSM
                 text: qsTr("打印机")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeLG
@@ -551,7 +551,7 @@ CxDialog {
             Item { Layout.preferredWidth: 5 }
             // Refresh (ButtonStyle::Confirm, SendToPrinter.cpp:289-293)
             Rectangle {
-                Layout.leftMargin: 5
+                Layout.leftMargin: Theme.insetSM
                 Layout.preferredHeight: 26
                 Layout.preferredWidth: refreshLabel.implicitWidth + 20
                 radius: Theme.radiusSM
@@ -742,7 +742,7 @@ CxDialog {
                     Item { Layout.fillHeight: true; Layout.preferredWidth: 1 }
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.bottomMargin: 10
+                        Layout.bottomMargin: Theme.insetMD
                         Layout.preferredHeight: 32
                         radius: Theme.radiusSM
                         // FB-R7-09: activeness mirrors upstream
@@ -779,7 +779,7 @@ CxDialog {
             Item {
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 5; anchors.rightMargin: 5
+                    anchors.leftMargin: Theme.insetSM; anchors.rightMargin: Theme.insetSM
                     spacing: 0
                     Item { Layout.fillHeight: true; Layout.preferredWidth: 1 }
                     Text {
@@ -808,8 +808,8 @@ CxDialog {
                             }
                         }
                         Text {
-                            Layout.leftMargin: 10
-                            Layout.rightMargin: 10
+                            Layout.leftMargin: Theme.insetMD
+                            Layout.rightMargin: Theme.insetMD
                             text: Math.round(root.sendProgress) + "%"
                             color: Theme.textTertiary
                             font.pixelSize: Theme.fontSizeMD

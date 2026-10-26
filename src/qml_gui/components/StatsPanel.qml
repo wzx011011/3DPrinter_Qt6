@@ -124,7 +124,7 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 3
+                    Layout.topMargin: 2
                 }
 
                 Repeater {
@@ -180,7 +180,7 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 3
+                    Layout.topMargin: 2
                 }
 
                 Repeater {
@@ -236,7 +236,7 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 3
+                    Layout.topMargin: 2
                 }
 
                 Repeater {
@@ -288,7 +288,7 @@ Item {
                     color: Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
-                    Layout.topMargin: 3
+                    Layout.topMargin: 2
                 }
 
                 RowLayout {

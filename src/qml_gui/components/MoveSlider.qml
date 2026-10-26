@@ -77,7 +77,7 @@ Item {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 height: 6
-                anchors.topMargin: 15
+                anchors.topMargin: Theme.insetLG
 
                 Rectangle {
                     anchors.fill: parent

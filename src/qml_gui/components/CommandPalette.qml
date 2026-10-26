@@ -112,7 +112,7 @@ Rectangle {
                     Rectangle {
                         anchors.fill: parent
                         radius: Theme.radiusSM
-                        color: listView.currentIndex === index ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
+                        color: listView.currentIndex === index ? Theme.tint(Theme.accent, 0.18)
                              : rowHover.containsMouse ? Theme.bgHover : "transparent"
                     }
                     Row {

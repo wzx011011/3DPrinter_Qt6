@@ -842,8 +842,8 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.topMargin: 12
-                anchors.leftMargin: 20
-                anchors.rightMargin: 20
+                anchors.leftMargin: Theme.insetXL
+                anchors.rightMargin: Theme.insetXL
                 height: noPrinterCol.implicitHeight + 24
                 radius: Theme.radiusLG
                 color: Theme.bgSurface
@@ -1189,7 +1189,7 @@ Item {
                                 Image {
                                     visible: index === 4 && root.monitorVm.selectedUnreadHmsCount > 0
                                     anchors.left: tabText.right
-                                    anchors.leftMargin: 3
+                                    anchors.leftMargin: 2
                                     anchors.top: tabText.top
                                     width: 7; height: 8
                                     source: "qrc:/qml/assets/icons/monitor_hms_new.svg"
@@ -2048,8 +2048,8 @@ Item {
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 10
-                                        anchors.rightMargin: 10
+                                        anchors.leftMargin: Theme.insetMD
+                                        anchors.rightMargin: Theme.insetMD
                                         spacing: 8
 
                                         ColumnLayout {
@@ -2186,7 +2186,7 @@ Item {
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: "\u21BB"
-                                                    color: "white"
+                                                    color: Theme.textOnAccent
                                                     font.pixelSize: Theme.fontSizeXXL
                                                     RotationAnimation on rotation {
                                                         from: 0; to: 360
@@ -2261,7 +2261,7 @@ Item {
                                                 Text {
                                                     id: recordingLabel
                                                     text: qsTr("REC")
-                                                    color: "white"
+                                                    color: Theme.textOnAccent
                                                     font.pixelSize: Theme.fontSizeSM
                                                     font.bold: true
                                                 }
@@ -2290,7 +2290,7 @@ Item {
                                                 Text {
                                                     id: timelapseLabel
                                                     text: qsTr("延时摄影")
-                                                    color: "white"
+                                                    color: Theme.textOnAccent
                                                     font.pixelSize: Theme.fontSizeSM
                                                     font.bold: true
                                                 }
@@ -2705,7 +2705,7 @@ Dialog {
     }
 
     ColumnLayout {
-        spacing: 10
+        spacing: 8
         TextField {
             id: lanRenameInput
             Layout.preferredWidth: 260

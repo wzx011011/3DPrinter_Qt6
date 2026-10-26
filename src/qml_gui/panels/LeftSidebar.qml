@@ -372,7 +372,7 @@ Rectangle {
                         radius: Theme.radiusSM
                         color: root.filamentColor(filamentPixelRow.index)
                         border.width: 1
-                        border.color: Qt.lighter(root.filamentColor(filamentPixelRow.index), 1.25)
+                        border.color: Qt.lighter(root.filamentColor(filamentPixelRow.index), 1.25)  // style-exempt: dynamic data-color op
 
                         Text {
                             anchors.centerIn: parent
@@ -555,7 +555,7 @@ Rectangle {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 6
-                spacing: 3
+                spacing: 2
 
                 Text {
                     text: qsTr("切片信息")

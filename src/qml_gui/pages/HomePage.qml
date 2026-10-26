@@ -459,8 +459,8 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18
-                anchors.rightMargin: 18
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
                 spacing: Theme.spacingXL
 
                 Rectangle {
@@ -864,7 +864,7 @@ Item {
                 Row {
                     id: tipsCollapseControl
                     anchors.left: parent.left
-                    anchors.leftMargin: 10
+                    anchors.leftMargin: Theme.insetMD
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 4
 

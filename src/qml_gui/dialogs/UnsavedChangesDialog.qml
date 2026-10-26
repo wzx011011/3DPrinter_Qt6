@@ -175,9 +175,9 @@ CxDialog {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
-      anchors.topMargin: 20
-      anchors.leftMargin: 20
-      anchors.rightMargin: 20
+      anchors.topMargin: Theme.insetXL
+      anchors.leftMargin: Theme.insetXL
+      anchors.rightMargin: Theme.insetXL
       spacing: 0
 
       // m_action_line (:1263-1280): two sentences, preset-name aware, split
@@ -228,8 +228,8 @@ CxDialog {
 
             Text {
               Layout.fillWidth: true
-              Layout.topMargin: 5
-              Layout.bottomMargin: 5
+              Layout.topMargin: Theme.insetSM
+              Layout.bottomMargin: Theme.insetSM
               text: qsTr("设置")
               color: Theme.textPrimary
               font.pixelSize: Theme.fontSize13
@@ -243,8 +243,8 @@ CxDialog {
             }
             Text {
               Layout.preferredWidth: root.colValueWidth
-              Layout.topMargin: 5
-              Layout.bottomMargin: 5
+              Layout.topMargin: Theme.insetSM
+              Layout.bottomMargin: Theme.insetSM
               text: qsTr("旧值")
               color: Theme.textPrimary
               font.pixelSize: Theme.fontSize13
@@ -258,8 +258,8 @@ CxDialog {
             }
             Text {
               Layout.preferredWidth: root.colValueWidth
-              Layout.topMargin: 5
-              Layout.bottomMargin: 5
+              Layout.topMargin: Theme.insetSM
+              Layout.bottomMargin: Theme.insetSM
               text: qsTr("新值")
               color: Theme.textPrimary
               font.pixelSize: Theme.fontSize13
@@ -309,9 +309,9 @@ CxDialog {
                   visible: diffRow.isCategory
                   anchors.verticalCenter: parent.verticalCenter
                   anchors.left: parent.left
-                  anchors.leftMargin: 23
+                  anchors.leftMargin: 24
                   anchors.right: parent.right
-                  anchors.rightMargin: 23
+                  anchors.rightMargin: 24
                   text: diffRow.modelData.text
                   color: Theme.textPrimary
                   font.pixelSize: Theme.fontSize13
@@ -327,7 +327,7 @@ CxDialog {
                   anchors.left: parent.left
                   anchors.leftMargin: 37
                   anchors.right: parent.right
-                  anchors.rightMargin: 23
+                  anchors.rightMargin: 24
                   text: diffRow.modelData.text
                   color: Theme.textSecondary
                   font.pixelSize: Theme.fontSize13
@@ -349,7 +349,7 @@ CxDialog {
                   // three columns stay upstream-aligned.
                   CxCheckBox {
                     anchors.left: parent.left
-                    anchors.leftMargin: 23
+                    anchors.leftMargin: 24
                     anchors.verticalCenter: parent.verticalCenter
                     checked: diffRow.modelData.key !== ""
                       && root.checkedKeys.indexOf(diffRow.modelData.key) >= 0
@@ -400,7 +400,7 @@ CxDialog {
       // "cancel" (openDialog default + CxDialog reject).
       RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: 15
+        Layout.topMargin: Theme.insetLG
         spacing: Theme.spacingMD
 
         // Help hyperlink, shown exactly for preset switches

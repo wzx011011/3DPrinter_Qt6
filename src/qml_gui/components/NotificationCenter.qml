@@ -317,7 +317,7 @@ Item {
                         visible: card.expanded && msgMeasure.lineCount > 3
                         x: parent.width - 1.8 * root.notifLineHeight
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 5
+                        anchors.bottomMargin: Theme.insetSM
                         width: 22; height: 22
                         source: minMA.containsMouse
                                 ? "qrc:/qml/assets/icons/notification_minimalize_hover.svg"

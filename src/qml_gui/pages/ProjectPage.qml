@@ -123,8 +123,8 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
                 spacing: Theme.spacingSM
 
                 // PAGE-01: Project action buttons mapped to upstream MainFrame project actions.

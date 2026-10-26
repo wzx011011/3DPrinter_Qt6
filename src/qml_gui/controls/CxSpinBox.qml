@@ -109,7 +109,7 @@ SpinBox {
             id: suffixText
             visible: root.suffix !== ""
             anchors.right: parent.right
-            anchors.rightMargin: 5  // SpinInput.cpp:205 label drawn at size.x - labelSize.x - 5
+            anchors.rightMargin: Theme.insetSM  // SpinInput.cpp:205 label drawn at size.x - labelSize.x - 5
             anchors.verticalCenter: parent.verticalCenter
             text: root.suffix
             color: Theme.textTertiary

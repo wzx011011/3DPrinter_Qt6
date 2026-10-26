@@ -126,7 +126,7 @@ Rectangle {
         id: suffixText
         visible: editor.suffix !== ""
         anchors.right: parent.right
-        anchors.rightMargin: 5
+        anchors.rightMargin: Theme.insetSM
         anchors.verticalCenter: parent.verticalCenter
         text: editor.suffix
         color: Theme.textTertiary

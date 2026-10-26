@@ -532,8 +532,8 @@ CxDialog {
         // (ConfigWizard.cpp:2648/2705-2707).
         Rectangle {
             Layout.fillWidth: true
-            Layout.leftMargin: 10
-            Layout.rightMargin: 10
+            Layout.leftMargin: Theme.insetMD
+            Layout.rightMargin: Theme.insetMD
             Layout.preferredHeight: 1
             color: Theme.separator
         }
@@ -701,7 +701,7 @@ CxDialog {
                             // upstream printer_placeholder.png role
                             // (ConfigWizard.cpp:230-236).
                             Rectangle {
-                                Layout.bottomMargin: 20
+                                Layout.bottomMargin: Theme.insetXL
                                 Layout.preferredWidth: 120
                                 Layout.preferredHeight: 120
                                 color: Theme.bgInset

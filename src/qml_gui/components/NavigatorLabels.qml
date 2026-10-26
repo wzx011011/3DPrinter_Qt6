@@ -63,7 +63,7 @@ Item {
             // solid-color AddText calls (face ImGuizmo.cpp:2965, axis 3054)
             // with no stroke or shadow.
             color: Theme.textPrimary
-            font.pixelSize: 13
+            font.pixelSize: Theme.fontSize13
         }
     }
 }

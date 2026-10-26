@@ -819,7 +819,7 @@ Item {
                                             }
                                             Text {
                                                 text: qsTr("%1").arg(modelData)
-                                                color: "white"
+                                                color: Theme.textOnAccent
                                                 font.pixelSize: Theme.fontSizeXS
                                                 font.bold: true
                                                 Layout.alignment: Qt.AlignVCenter
@@ -1079,7 +1079,7 @@ Item {
                                                             }
                                                             Text {
                                                                 text: qsTr("%1").arg(modelData)
-                                                                color: "white"
+                                                                color: Theme.textOnAccent
                                                                 font.pixelSize: Theme.fontSizeXS
                                                                 font.bold: true
                                                                 Layout.alignment: Qt.AlignVCenter
@@ -1464,7 +1464,7 @@ Item {
         width: 36
         height: 36
         radius: Theme.radiusHero  // clamps to width/2: full circle
-        color: actionHover.hovered ? Theme.bgHover : Qt.rgba(0.10, 0.10, 0.12, 0.82)
+        color: actionHover.hovered ? Theme.bgHover : Theme.glassPanel
         border.width: 1
         border.color: plateActionButton.checked || actionHover.hovered
                           ? Theme.accent : Theme.borderSubtle
@@ -2253,7 +2253,7 @@ Item {
         Rectangle {
             anchors.bottom: parent.bottom
             anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottomMargin: 10
+            anchors.bottomMargin: Theme.insetMD
             width: warningContent.implicitWidth + 28
             height: warningContent.implicitHeight + 16
             radius: Theme.radiusLG
@@ -3607,7 +3607,7 @@ Item {
                                 root.editorVm && root.editorVm.mmuSelectedExtruder === index ? c : c + "66"
                             }
                             border.width: root.editorVm && root.editorVm.mmuSelectedExtruder === index ? 2 : 0
-                            border.color: "white"
+                            border.color: Theme.textOnAccent
                             Text {
                                 anchors.centerIn: parent
                                 text: index + 1
@@ -4403,7 +4403,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 52
             anchors.left: parent.left
-            anchors.leftMargin: 14
+            anchors.leftMargin: 12
             height: infoRow.implicitHeight + 10
             width: infoRow.implicitWidth + 16
             radius: Theme.radiusSM

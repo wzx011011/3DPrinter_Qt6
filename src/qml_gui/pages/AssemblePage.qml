@@ -358,7 +358,7 @@ Item {
     AbstractButton {
         id: backPill
         anchors.top: assembleViewport.top
-        anchors.topMargin: 18
+        anchors.topMargin: 16
         anchors.left: collapseToggle.right
         anchors.leftMargin: 16
         implicitWidth: pillLabel.implicitWidth + 28
@@ -806,7 +806,7 @@ Item {
     Rectangle {
         id: bottomBar
         anchors.bottom: assembleViewport.bottom
-        anchors.bottomMargin: 10
+        anchors.bottomMargin: Theme.insetMD
         anchors.horizontalCenter: assembleViewport.horizontalCenter
         width: controlRow.implicitWidth + 24
         height: 38
@@ -897,8 +897,8 @@ Item {
         id: assemblyInfoBox
         anchors.right: assembleViewport.right
         anchors.bottom: assembleViewport.bottom
-        anchors.rightMargin: 10
-        anchors.bottomMargin: 10
+        anchors.rightMargin: Theme.insetMD
+        anchors.bottomMargin: Theme.insetMD
         width: infoColumn.implicitWidth + 24
         height: infoColumn.implicitHeight + 16
         radius: Theme.radiusLG

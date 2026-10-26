@@ -226,11 +226,11 @@ Item {
             anchors.right: parent.right
             anchors.top: parent.top
             height: 36
-            anchors.leftMargin: 5
+            anchors.leftMargin: Theme.insetSM
             anchors.rightMargin: 0
             // topbar-13: upstream spaces the title tools with AddSpacer(10)
             // between save/undo/redo/calib (BBLTopbar.cpp:293-319).
-            spacing: 10
+            spacing: 10  // style-exempt: upstream-measured AddSpacer(10)
 
             // ── LEFT GROUP ───────────────────────────────────────────────
             // Logo (对齐上游 ID_LOGO)
@@ -255,7 +255,7 @@ Item {
             // logo (prepare_ref.png column sample x59). Upstream carries only
             // the post-dropdown separator (BBLTopbar.cpp:286-288), but the
             // ref wins, so all three title-bar dividers are restored.
-            TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 10 }
+            TitleBarDivider { Layout.leftMargin: Theme.insetSM; Layout.rightMargin: Theme.insetMD }
 
             // [File ▾] 按钮 (对齐上游 ID_TOP_FILE_MENU)
             Rectangle {
@@ -315,7 +315,7 @@ Item {
                 }
             }
 
-            TitleBarDivider { Layout.leftMargin: 5; Layout.rightMargin: 5 }
+            TitleBarDivider { Layout.leftMargin: Theme.insetSM; Layout.rightMargin: Theme.insetSM }
 
             // Save 按钮 (对齐上游 wxID_SAVE) — Phase 51 SHELL-03: canSave gate (disabled while slicing)
             // topbar-13: 28px hit target with the upstream 18px icon size.
@@ -549,7 +549,7 @@ Item {
             // BBLTopbar.cpp:275-363 has no bell tool, but the ref wins. The
             // [▾] menu entry still emits the same bellClicked() signal
             // (main.qml owns the popup).
-            TitleBarDivider { Layout.leftMargin: 10; Layout.rightMargin: 10 }
+            TitleBarDivider { Layout.leftMargin: Theme.insetMD; Layout.rightMargin: Theme.insetMD }
 
             // Bell icon (notification center)
             Item {
@@ -571,7 +571,7 @@ Item {
                 Rectangle {
                     visible: Backend.unreadHistoryCount > 0
                     anchors.top: bellButton.top; anchors.topMargin: 2
-                    anchors.left: bellButton.left; anchors.leftMargin: 18
+                    anchors.left: bellButton.left; anchors.leftMargin: 16
                     width: 8; height: 8; radius: Theme.radiusSM
                     color: Theme.statusError
                     z: 1

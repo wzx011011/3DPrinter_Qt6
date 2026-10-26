@@ -27,9 +27,7 @@ TextField {
                 // semantics, adapted to the OWzx accent).
                 const a = Theme.accent
                 const b = Theme.bgPanel
-                return Qt.rgba(b.r + (a.r - b.r) * 0.1,
-                               b.g + (a.g - b.g) * 0.1,
-                               b.b + (a.b - b.b) * 0.1, 1)
+                return Theme.blend(b, a, 0.1)
             }
             return Theme.bgPanel
         }

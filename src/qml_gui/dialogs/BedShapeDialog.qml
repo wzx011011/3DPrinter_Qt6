@@ -473,7 +473,7 @@ CxDialog {
                 antialiasing: true
                 // Circle
                 ShapePath {
-                    fillColor: "#1418C75E"
+                    fillColor: Theme.bedShapeFill
                     strokeColor: Theme.accent
                     strokeWidth: 2
                     PathSvg {
@@ -488,7 +488,7 @@ CxDialog {
                 }
                 // Rounded rectangle
                 ShapePath {
-                    fillColor: "#1418C75E"
+                    fillColor: Theme.bedShapeFill
                     strokeColor: Theme.accent
                     strokeWidth: 2
                     PathSvg {
@@ -502,7 +502,7 @@ CxDialog {
                 // loaded, dashed placeholder rect while empty (upstream
                 // m_loaded_shape semantics).
                 ShapePath {
-                    fillColor: previewPane.hasOutline ? "#1418C75E" : "#0F566070"
+                    fillColor: previewPane.hasOutline ? Theme.bedShapeFill : Theme.bedShapeFillAlt
                     strokeColor: previewPane.hasOutline ? Theme.accent : Theme.textDisabled
                     strokeWidth: 2
                     dashPattern: [4, 3]
@@ -522,7 +522,7 @@ CxDialog {
                 visible: previewPane.shapeType === 0
                 text: previewPane.bedW.toFixed(0) + "mm"
                 color: Theme.textTertiary
-                font.pixelSize: 9
+                font.pixelSize: Theme.fontSizeXS
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: previewPane.ry - height - 2
             }
@@ -530,7 +530,7 @@ CxDialog {
                 visible: previewPane.shapeType === 0
                 text: previewPane.bedD.toFixed(0) + "mm"
                 color: Theme.textTertiary
-                font.pixelSize: 9
+                font.pixelSize: Theme.fontSizeXS
                 x: previewPane.rx - width - 2
                 y: previewPane.oy
                 transform: Rotation { origin.x: 0; origin.y: 0; angle: -90 }
@@ -539,7 +539,7 @@ CxDialog {
                 visible: previewPane.shapeType === 2 && !previewPane.hasOutline
                 text: qsTr("从 STL 导入")
                 color: Theme.textDisabled
-                font.pixelSize: 11
+                font.pixelSize: Theme.fontSizeSM
                 anchors.centerIn: parent
             }
         }

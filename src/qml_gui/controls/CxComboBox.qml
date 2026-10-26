@@ -30,9 +30,7 @@ ComboBox {
                 // dark #283232 -- adapted to the OWzx accent).
                 const a = Theme.accent
                 const b = Theme.bgPanel
-                return Qt.rgba(b.r + (a.r - b.r) * 0.1,
-                               b.g + (a.g - b.g) * 0.1,
-                               b.b + (a.b - b.b) * 0.1, 1)
+                return Theme.blend(b, a, 0.1)
             }
             return Theme.bgPanel
         }
@@ -119,8 +117,8 @@ ComboBox {
             // solid fill (StateColor.cpp:50-51: checked item #BFE1DE = 25%
             // accent, hovered item #E5F0EE = 10%).
             color: !comboItem.enabled ? "transparent"
-                 : highlighted ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
-                 : comboItem.hovered ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.1)
+                 : highlighted ? Theme.tint(Theme.accent, 0.25)
+                 : comboItem.hovered ? Theme.tint(Theme.accent, 0.1)
                  : "transparent"
         }
         contentItem: Text {

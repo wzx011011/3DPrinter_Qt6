@@ -474,9 +474,9 @@ Item {
                             Layout.preferredWidth: statusLbl.implicitWidth + 16
                             radius: Theme.radiusXL
                             color: {
-                                if (root.calibrationVm.selectedStatus === 1) return Qt.rgba(0x3b, 0x9e, 0xff, 0.15)
-                                if (root.calibrationVm.selectedStatus === 2) return Qt.rgba(0x18, 0xc7, 0x5e, 0.15)
-                                if (root.calibrationVm.selectedStatus === 3) return Qt.rgba(0xe0, 0x40, 0x40, 0.15)
+                                if (root.calibrationVm.selectedStatus === 1) return Theme.tint(Theme.caliInfoBlue, 0.15)
+                                if (root.calibrationVm.selectedStatus === 2) return Theme.tint(Theme.borderFocus, 0.15)
+                                if (root.calibrationVm.selectedStatus === 3) return Theme.tint(Theme.markerRed, 0.15)
                                 return "transparent"
                             }
 
@@ -520,7 +520,7 @@ Item {
                                  && !root.calibrationVm.calibItemStartable(root.calibrationVm.selectedIndex)
                         Layout.fillWidth: true
                         Layout.preferredHeight: unavailableText.implicitHeight + 20
-                        color: Qt.rgba(0.96, 0.65, 0.14, 0.12)
+                        color: Theme.tint(Theme.statusWarning, 0.12)
                         radius: Theme.radiusMD
                         border.color: Theme.statusWarning
                         border.width: 1
@@ -593,8 +593,8 @@ Item {
                                                                                   : Theme.textTertiary
                                             font.pixelSize: Theme.fontSizeSM
                                             font.bold: stepItem.modelData.state !== 0
-                                            Layout.leftMargin: 15
-                                            Layout.rightMargin: 15
+                                            Layout.leftMargin: Theme.insetLG
+                                            Layout.rightMargin: Theme.insetLG
                                         }
 
                                         // 1px connector line
@@ -887,8 +887,8 @@ Item {
 
                                         ColumnLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: 10
-                                            anchors.rightMargin: 10
+                                            anchors.leftMargin: Theme.insetMD
+                                            anchors.rightMargin: Theme.insetMD
                                             anchors.topMargin: 8
                                             spacing: 6
 
@@ -929,7 +929,7 @@ Item {
 
                                                 Text {
                                                     anchors.left: parent.left
-                                                    anchors.leftMargin: 10
+                                                    anchors.leftMargin: Theme.insetMD
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     text: root.calibrationVm.selectedFilamentPreset
                                                     color: Theme.textPrimary

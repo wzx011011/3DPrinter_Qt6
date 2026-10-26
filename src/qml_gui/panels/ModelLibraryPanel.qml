@@ -202,7 +202,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.right: parent.right
         anchors.margins: 6
-        width: 26; height: 26; radius: 13
+        width: 26; height: 26; radius: width / 2
         color: closeMA.containsMouse ? Theme.bgHover : "transparent"
         Text { anchors.centerIn: parent; text: "✕"; color: Theme.textSecondary }
         MouseArea {
