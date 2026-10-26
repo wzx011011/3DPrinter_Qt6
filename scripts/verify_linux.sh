@@ -19,6 +19,15 @@ export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 LOGDIR="${LOGDIR:-/tmp/owzx_linux_gate}"
 mkdir -p "$LOGDIR"
 
+# Style-literal ratchet gate (2026-10-25 UI 一致性批次): off-scale spacing /
+# radius, raw hex/named colors, raw font sizes, Qt.rgba-family calls may only
+# go down vs docs/style-baseline/allowed.json. Fail fast before the suites.
+if ! python3 tools/style_literal_gate.py; then
+  echo "----------------------------------------"
+  echo "Linux 门禁: style-literal ratchet FAILED（见上方明细）"
+  exit 2
+fi
+
 # QCoreApplication 系套件: 不接受 -platform（会打印 usage 并退出 1）
 CORE_ONLY="CliTests QmlUiAuditTests"
 
