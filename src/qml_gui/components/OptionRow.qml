@@ -176,7 +176,14 @@ Item {
     property string oTip: ""
     property string oUnit: ""
     property string oSidetext: ""
-    readonly property string displayUnit: root.oSidetext !== "" ? root.oSidetext : root.oUnit
+    readonly property string displayUnit: {
+        var st = root.oSidetext !== "" ? root.oSidetext : root.oUnit
+        // Schema sidetexts arrive in English ("mm or %"); the known set is
+        // translated inline — everything else passes through untouched.
+        var map = { "mm or %": qsTr("mm 或 %"), "mm/s or %": qsTr("mm/s 或 %"),
+                    "mm/s² or %": qsTr("mm/s² 或 %") }
+        return map[st] !== undefined ? map[st] : st
+    }
     property bool oNullable: false
     property bool oIsVector: false
     property var oEnumLabels: []
@@ -210,9 +217,10 @@ Item {
     readonly property bool hasBounds: root.isNumeric && root.oMax > root.oMin
 
     readonly property int headerHeight: root.showGroupHeader ? (root.compact ? 28 : 32) : 0
-    // G3: R11 compact row rhythm is 30px (was 34).
+    // Compact row rhythm 26px (2026-10-26 pixel audit: upstream runs a
+    // 13px label on a 26px pitch — exactly 2x — vs our previous 30px).
     readonly property int rowHeight:
-        root.compact ? (root.oType === "string" ? 48 : 30)
+        root.compact ? (root.oType === "string" ? 48 : 26)
         : root.oType === "string" ? 70
         : 44
     readonly property int contentHeight: root.rowHeight
@@ -221,20 +229,13 @@ Item {
         root.compact
         ? Math.max(root.compactEnumWidth, root.compactFieldWidth + 76)
         : 230
-    // BUILDGATE restore (2026-09-24): the fixed state-indicator lane is back
-    // (settingsOptionRowsRestorePhase86ControlContract locks its ids; the
-    // hover tooltip below keeps summarizing the same metadata).
-    readonly property int metadataLaneWidth: root.compact ? 88 : 112
-    // Badge count currently rendered in the lane. Four simultaneous badges
-    // (~120px of implicit widths) overflow the fixed 88px compact lane, so
-    // the bounds badge stands down on crowded rows -- its interval stays
-    // available in the row tooltip (metadataSummary below).
-    readonly property int metadataBadgeCount:
-        (root.valueSource !== "" ? 1 : 0)
-        + (root.oRO ? 1 : 0)
-        + (root.oNullable ? 1 : 0)
-        + (root.oIsVector ? 1 : 0)
-        + (root.hasBounds ? 1 : 0)
+    // State-indicator lane, 2026-10-26 pixel-audit pass: only RO stays as
+    // a badge (sparse by nature). Source / inherit / vector / bounds folded
+    // into the hover tooltip (metadataSummary) — they rendered as two
+    // always-on badges per row in the compact sidebar, which upstream does
+    // not show at all, and the fixed lane squeezed the value field against
+    // the panel edge.
+    readonly property int metadataLaneWidth: root.compact ? 30 : 44
     // Row metadata (value source / RO / inherit / vector / bounds) that used
     // to render as an inline badge lane now folds into the hover tooltip
     // (ref layout: label + single field only).
@@ -273,7 +274,7 @@ Item {
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: root.compact ? 6 : 14
-            anchors.rightMargin: root.compact ? 10 : 18
+            anchors.rightMargin: root.compact ? 16 : 18
             spacing: Theme.spacingXS  // upstream StaticLine: icon + 5px + title + line
 
             // Upstream OptionsGroup renders its title through StaticLine with
@@ -364,44 +365,15 @@ Item {
                 Layout.fillHeight: true
                 spacing: 4
 
-                CxBadge {
-                    id: sourceBadge
-                    visible: root.valueSource !== ""
-                    label: root.displayValueSource(root.valueSource)
-                    colorToken: Theme.textTertiary
-                    fillToken: Theme.bgInset
-                }
-
+                // RO only: sparse by nature (readonly rows are rare).
+                // Source/inherit/vector/bounds metadata lives in the row
+                // tooltip (metadataSummary) — see metadataLaneWidth above.
                 CxBadge {
                     id: readOnlyBadge
                     visible: root.oRO
                     label: "RO"
                     colorToken: Theme.textDisabled
                     fillToken: Theme.bgPanel
-                }
-
-                CxBadge {
-                    id: nullableBadge
-                    visible: root.oNullable
-                    label: "Inh"
-                    colorToken: Theme.statusInfo
-                    fillToken: Theme.bgInset
-                }
-
-                CxBadge {
-                    id: vectorBadge
-                    visible: root.oIsVector
-                    label: "E"
-                    colorToken: Theme.accent
-                    fillToken: Theme.bgInset
-                }
-
-                CxBadge {
-                    id: boundsBadge
-                    visible: root.hasBounds && root.metadataBadgeCount <= 3
-                    label: "rng"
-                    colorToken: Theme.textTertiary
-                    fillToken: Theme.bgInset
                 }
             }
 

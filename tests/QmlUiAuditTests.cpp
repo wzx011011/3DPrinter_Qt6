@@ -4794,16 +4794,18 @@ void QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
              qPrintable(QStringLiteral("OptionRow missing Phase 86 range/color token: %1").arg(token)));
   }
 
+  // 2026-10-26 pixel-audit: the badge lane collapsed to RO-only (source /
+  // inherit / vector / bounds badges removed — that metadata lives in the
+  // row tooltip via metadataSummary, and the always-on badges squeezed the
+  // value field against the panel edge). The contract now locks the slimmed
+  // lane: container, dirty dot, RO badge, lane width, control column.
   const QStringList stateTokens = {
       QStringLiteral("metadataLane"),
       QStringLiteral("dirtyBadge"),
-      QStringLiteral("sourceBadge"),
       QStringLiteral("readOnlyBadge"),
-      QStringLiteral("nullableBadge"),
-      QStringLiteral("vectorBadge"),
-      QStringLiteral("boundsBadge"),
       QStringLiteral("readonly property int metadataLaneWidth"),
-      QStringLiteral("readonly property int controlColumnWidth")
+      QStringLiteral("readonly property int controlColumnWidth"),
+      QStringLiteral("readonly property string metadataSummary")
   };
   for (const QString &token : stateTokens) {
     QVERIFY2(optionRow.contains(token),
@@ -11603,15 +11605,18 @@ void QmlUiAuditTests::previewCompletionSourceAudit()
   // dwfq-9606ed09-1): the thumbnail is the property-ized
   // editorVm.currentPlateThumbnailBase64 (NOTIFY plateChanged) -- the former
   // Connections-onStateChanged re-invocation of the Q_INVOKABLE is gone.
-  // With no cached thumbnail the plate color stands in -- never a fabricated
-  // mock image (THUMBVERIFY-01 contract).
+  // With no cached thumbnail the 2026-10-26 pixel-audit fallback stands in:
+  // a mini bed render (slab + grid) — never a fabricated mock image
+  // (THUMBVERIFY-01 contract; the former flat plateThumbnailColor block
+  // read as a broken paint).
   const QString editorVmHeaderForPreview =
       readSource(QStringLiteral("src/core/viewmodels/EditorViewModel.h"));
   QVERIFY2(previewPage.contains(QStringLiteral("currentPlateThumbnailBase64"))
-               && previewPage.contains(QStringLiteral("plateThumbnailColor(")),
+               && previewPage.contains(QStringLiteral("miniBed"))
+               && previewPage.contains(QStringLiteral("plateThumbBase64.length === 0")),
            "PREV-LEFT: PreviewPage must bind the property-ized current-plate"
-           " thumbnail (plateChanged cluster) and fall back to the plate"
-           " color when no thumbnail is cached");
+           " thumbnail (plateChanged cluster) and fall back to the mini bed"
+           " render when no thumbnail is cached");
   QVERIFY2(editorVmHeaderForPreview.contains(
                QStringLiteral("Q_PROPERTY(QString currentPlateThumbnailBase64 READ currentPlateThumbnailBase64 NOTIFY plateChanged)")),
            "PREV-LEFT: EditorViewModel must expose the property-ized"
