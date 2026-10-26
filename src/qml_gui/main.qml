@@ -514,19 +514,23 @@ ApplicationWindow {
     // "remember my choice" checkbox (Plater.cpp:11125-11140 persists
     // save_project_choise); a remembered discard makes every dirty guard
     // proceed without prompting.
-    Dialog {
+    // 2026-10-26: was the one bare Dialog in the shell — it rendered the
+    // Basic-style white sheet (near-white body text invisible on it) and,
+    // once the buttons became CxButton, its fixed 180px height overflowed
+    // under CxDialog's 44px header with the button row straddling the
+    // bottom edge. Now the standard CxDialog chrome (ConfirmDialog idiom),
+    // content-sized: no fixed height, the Column carries the implicit size.
+    CxDialog {
         id: newProjectDialog
-        title: qsTr("新建项目")
-        modal: true
-        anchors.centerIn: parent
-        width: 360
-        height: 180
+        dialogTitle: qsTr("新建项目")
+        width: 380
+        height: 200
         padding: Theme.spacingXL
 
         Column {
             anchors.fill: parent
-            spacing: 16
-            Label {
+            spacing: Theme.spacingLG
+            Text {
                 text: qsTr("将创建新项目，当前未保存的更改将丢失。\n是否继续？")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSize13
@@ -539,7 +543,7 @@ ApplicationWindow {
             }
             Row {
                 anchors.right: parent.right
-                spacing: 8
+                spacing: Theme.spacingMD
                 CxButton {
                     cxStyle: CxButton.Style.Secondary
                     width: 80
