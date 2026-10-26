@@ -1,15 +1,8 @@
-<!-- 2026-10-25 UI-consistency: toolbar family (40px solid two-tone) version of
-     the Tabler outline icons that were rendering thin strokes among solid
-     silhouettes on the floating action strip. Semantics: neutral = the object
-     body, accent = the action delta (add/remove instance, split apart). -->
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-  <path d="M9,12 18,16.5 9,20 0,16.5 Z" style="fill:#2b3436"/>
-  <path d="M0,16.5 9,20 9,28 0,23.5 Z" style="fill:#2b3436"/>
-  <path d="M18,16.5 18,23.5 9,28 9,20 Z" style="fill:#2b3436" opacity="0.72"/>
-  <path d="M31,12 40,16.5 31,20 22,16.5 Z" style="fill:#2b3436"/>
-  <path d="M22,16.5 31,20 31,28 22,23.5 Z" style="fill:#2b3436"/>
-  <path d="M40,16.5 40,23.5 31,28 31,20 Z" style="fill:#2b3436" opacity="0.72"/>
-  <path d="M17,20 h4 l-3,-4 h3 l4,4 -4,4 h-3 l3,-4 Z" style="fill:#009688"/>
-  <path d="M23,20 h-4 l3,-4 h-3 l-4,4 4,4 h3 l-3,-4 Z" style="fill:#009688"/>
-
+<!-- 2026-10-26 pixel-audit: unified 1.5px outline family (24 grid,
+     round caps) for the floating action strip — states ride the stroke
+     color (dark/=normal #c9c9c9, accent/=selected #18c75e, base=light
+     theme #2b3436), replacing the mixed solid two-tone set. -->
+<!-- borrowed layout: see dark/ variant note -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="#2b3436" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+  <rect x="3" y="6" width="6" height="12"/><rect x="15" y="6" width="6" height="12"/><path d="M10.5 12h1M12.5 12h1"/>
 </svg>

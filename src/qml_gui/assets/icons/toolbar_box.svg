@@ -1,6 +1,8 @@
-<!-- 2026-10-25 UI-consistency: toolbar-scale solid isometric cube in the toolbar_* two-tone family (base #009688/#2b3436, dark #18c75e/#c9c9c9, accent all-green). Replaces the 24px Tabler outline box.svg as the GLToolbar generic-tool fallback so MmuSegmentation/FuzzySkin stop rendering an outline+light-blue icon among solid silhouettes. box.svg itself stays for small-context consumers (object list / topbar / monitor). -->
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-  <path d="M20,5 35,13 20,21 5,13 Z" style="fill:#009688"/>
-  <path d="M5,13 20,21 20,35 5,27 Z" style="fill:#2b3436"/>
-  <path d="M35,13 35,27 20,35 20,21 Z" style="fill:#2b3436" opacity="0.72"/>
+<!-- 2026-10-26 pixel-audit: unified 1.5px outline family (24 grid,
+     round caps) for the floating action strip — states ride the stroke
+     color (dark/=normal #c9c9c9, accent/=selected #18c75e, base=light
+     theme #2b3436), replacing the mixed solid two-tone set. -->
+<!-- borrowed layout: see dark/ variant note -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="#2b3436" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+  <path d="M12 2l9 5v10l-9 5-9-5V7l9-5zM12 12l9-5M12 12L3 7M12 12v10"/>
 </svg>

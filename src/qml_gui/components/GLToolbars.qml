@@ -323,8 +323,11 @@ Item {
         property string iconName: ""
 
         cxStyle: CxIconButton.Style.Ghost
+        bareBorder: true
         buttonSize: root.targetToolbarButtonSize
-        iconSize: 24
+        // 2026-10-26 pixel audit: 28px on the 40px box (upstream strip
+        // proportions); the outline family reads at this size.
+        iconSize: 28
         iconSource: root.iconBase + iconName
     }
 
@@ -342,8 +345,9 @@ Item {
         readonly property bool toolActive: root.viewport3d
                                            && root.viewport3d.gizmoMode === toolId
         cxStyle: CxIconButton.Style.Ghost
+        bareBorder: true
         buttonSize: root.targetToolbarButtonSize
-        iconSize: 20
+        iconSize: 28
         iconSource: root.iconForTool(toolId, toolActive)
         enabled: root.canUseGizmo(toolId)
         toolTipText: root.gizmoTip(textTip, toolId)

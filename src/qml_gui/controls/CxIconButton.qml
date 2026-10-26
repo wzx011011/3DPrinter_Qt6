@@ -17,6 +17,10 @@ ToolButton {
     property bool selected: false
     property int buttonSize: Theme.iconButtonSizeMD
     property int iconSize: 16
+    // 2026-10-26 pixel audit: the floating top strip renders bare icons
+    // (upstream draws per-button boxes only on the right gizmo rail and on
+    // hover/selection) — opt out of the persistent Ghost box.
+    property bool bareBorder: false
 
     implicitWidth: buttonSize
     implicitHeight: buttonSize
@@ -76,10 +80,11 @@ ToolButton {
                 return root.hovered ? Theme.chromeBorder : "transparent"
             if (root.cxStyle === CxIconButton.Style.Ghost)
                 // U09 (G3): enabled Ghost carries a persistent 1px rounded
-                // box (ref ≈#464749; borderSubtle is the nearest border
-                // token, Δ ≈ +11/channel -- converges with the R1 border
-                // batch), strengthening to borderDefault on hover.
-                return root.hovered ? Theme.borderDefault : Theme.borderSubtle
+                // box (ref ≈#464749) — unless the host opts out (top strip,
+                // bareBorder) or is hovered (strengthens to borderDefault).
+                if (!root.bareBorder || root.hovered)
+                    return root.hovered ? Theme.borderDefault : Theme.borderSubtle
+                return "transparent"
             return Theme.borderSubtle
         }
         Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
