@@ -1335,6 +1335,47 @@ static const char *kFilamentKeys[] = {
 
 // Assign page/group from the tier-specific mapping table.
 // Called AFTER loadSchemaFromKeys populates m_options but BEFORE endResetModel().
+
+// zh_CN group labels for the printer/filament tier maps above (2026-10-26
+// i18n batch). Source: upstream OrcaSlicer_zh_CN.po, same policy as
+// OptionLabelTable — static data, never tr(). Process-tier groups arrive
+// in Chinese from the preset schema and pass through unchanged.
+static QString zhGroupLabel(const QString &group)
+{
+  static const QHash<QString, QString> map = {
+      {QStringLiteral("Acceleration limitation"), QStringLiteral("加速度限制")},
+      {QStringLiteral("Advanced"), QStringLiteral("高级")},
+      {QStringLiteral("Basic information"), QStringLiteral("基础信息")},
+      {QStringLiteral("Bed temperature"), QStringLiteral("热床温度")},
+      {QStringLiteral("Before layer change G-code"), QStringLiteral("换层前G-code")},
+      {QStringLiteral("Change extrusion role G-code"), QStringLiteral("挤出类型更换G-code")},
+      {QStringLiteral("Change filament G-code"), QStringLiteral("耗材丝更换G-code")},
+      {QStringLiteral("Cooling Fan"), QStringLiteral("冷却风扇")},
+      {QStringLiteral("Cooling for specific layer"), QStringLiteral("特定层冷却")},
+      {QStringLiteral("Filament end G-code"), QStringLiteral("耗材丝结束G-code")},
+      {QStringLiteral("Filament start G-code"), QStringLiteral("耗材丝起始G-code")},
+      {QStringLiteral("Flow ratio and Pressure Advance"), QStringLiteral("流量和压力提前")},
+      {QStringLiteral("Jerk limitation"), QStringLiteral("抖动限制")},
+      {QStringLiteral("Layer change G-code"), QStringLiteral("换层G-code")},
+      {QStringLiteral("Machine end G-code"), QStringLiteral("打印机结束G-code")},
+      {QStringLiteral("Machine start G-code"), QStringLiteral("打印机起始G-code")},
+      {QStringLiteral("Notes"), QStringLiteral("注释")},
+      {QStringLiteral("Part cooling fan"), QStringLiteral("部件冷却风扇")},
+      {QStringLiteral("Pause G-code"), QStringLiteral("暂停 G-code")},
+      {QStringLiteral("Print chamber temperature"), QStringLiteral("打印仓温度")},
+      {QStringLiteral("Print temperature"), QStringLiteral("打印温度")},
+      {QStringLiteral("Printable space"), QStringLiteral("可打印区域")},
+      {QStringLiteral("Printing by object G-code"), QStringLiteral("逐件打印G-code")},
+      {QStringLiteral("Retraction"), QStringLiteral("回抽")},
+      {QStringLiteral("Size"), QStringLiteral("大小")},
+      {QStringLiteral("Speed limitation"), QStringLiteral("速度限制")},
+      {QStringLiteral("Template Custom G-code"), QStringLiteral("模板自定义G-code")},
+      {QStringLiteral("Timelapse G-code"), QStringLiteral("延时摄影G-code")},
+      {QStringLiteral("Volumetric speed limitation"), QStringLiteral("体积流量限制")},
+  };
+  return map.value(group, group);
+}
+
 static void assignPageGroupForTier(ConfigOptionModel *model, const QHash<QString, QPair<QString, QString>> &pageGroupMap)
 {
   for (int i = 0; i < model->rowCount(); ++i)
@@ -1345,7 +1386,7 @@ static void assignPageGroupForTier(ConfigOptionModel *model, const QHash<QString
     {
       QModelIndex idx = model->index(i, 0);
       model->setData(idx, it.value().first, ConfigOptionModel::PageRole);
-      model->setData(idx, it.value().second, ConfigOptionModel::GroupRole);
+      model->setData(idx, zhGroupLabel(it.value().second), ConfigOptionModel::GroupRole);
     }
   }
 }
