@@ -542,16 +542,43 @@ Item {
                                 asynchronous: true
                             }
 
-                            // Thumbnail fallback: the plate color block (same
-                            // accessor the Prepare plate cards use as fallback).
-                            Rectangle {
+                            // Thumbnail fallback: a mini bed render (plate
+                            // slab + 15mm-style grid), matching the upstream
+                            // plate-selector language. The previous flat
+                            // plateThumbnailColor block read as a broken
+                            // paint (2026-10-26 pixel-audit catch).
+                            Item {
                                 anchors.fill: parent
                                 anchors.margins: 4
                                 visible: plateSummaryCard.plateThumbBase64.length === 0
-                                color: root.editorVm
-                                    ? root.editorVm.plateThumbnailColor(plateIndex)
-                                    : Theme.bgPanel
-                                radius: Theme.radiusSM
+
+                                Rectangle {
+                                    id: miniBed
+                                    anchors.fill: parent
+                                    radius: Theme.radiusSM
+                                    color: Theme.bgCard
+                                    border.width: 1
+                                    border.color: Theme.borderSubtle
+                                }
+                                Canvas {
+                                    anchors.fill: parent
+                                    antialiasing: false
+                                    onPaint: {
+                                        const ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.strokeStyle = Theme.tint(Theme.textTertiary, 0.35)
+                                        ctx.lineWidth = 1
+                                        const pitch = 11
+                                        ctx.beginPath()
+                                        for (let gx = 0.5; gx < width; gx += pitch) {
+                                            ctx.moveTo(gx, 0); ctx.lineTo(gx, height)
+                                        }
+                                        for (let gy = 0.5; gy < height; gy += pitch) {
+                                            ctx.moveTo(0, gy); ctx.lineTo(width, gy)
+                                        }
+                                        ctx.stroke()
+                                    }
+                                }
                             }
 
                             // Plate number badge embedded INSIDE the card's
@@ -618,7 +645,13 @@ Item {
                 id: rightPanel
                 Layout.preferredWidth: root.rightPanelWidth
                 Layout.fillHeight: true
-                color: Theme.bgFloating
+                // Opaque, matching upstream's solid side panel: the previous
+                // translucent bgFloating rendered as a flat #5e5f8b band in
+                // this spot (2026-10-26 pixel-audit catch) — translucent
+                // layering over the viewport passes an unmixed clear color
+                // through and reads as a wrong-colored dead zone when the
+                // panel content is collapsed.
+                color: Theme.bgSurface
                 border.width: 1
                 border.color: Theme.borderDefault
                 clip: true
