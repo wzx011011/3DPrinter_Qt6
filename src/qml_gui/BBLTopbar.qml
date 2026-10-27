@@ -77,6 +77,10 @@ Item {
     signal windowMinimizeRequested()
     signal windowMaximizeRequested()
     signal windowCloseRequested()
+    // topbar-14 (StateColor.cpp:28): group backing panel, pinned dark —
+    // darkModeColorFor(#3B4446) = #2D2D30 regardless of app theme.
+    readonly property color groupBackingColor: "#2d5a8c"  // style-exempt: upstream-measured topbar-14
+
     signal titleBarDragStarted()
     signal titleBarDoubleClicked()
 
@@ -705,7 +709,12 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: sliceGroupRow.implicitWidth
                     implicitHeight: 24
-                    color: Theme.surfaceDeep
+                    // topbar-14 group backing: upstream darkModeColorFor
+                    // (#3B4446) = #2D2D30, pinned DARK in both app themes
+                    // (the top chrome is dark in light mode too). The former
+                    // Theme.surfaceDeep flipped WHITE in light mode — white
+                    // boxes on the dark bar (2026-10-26 user catch).
+                    color: root.groupBackingColor
                     enabled: Backend.editorViewModel && Backend.editorViewModel.canRequestSlice
                     ToolTip.visible: sliceMouse.containsMouse && prepareSliceButton.toolTipText.length > 0
                     ToolTip.text: prepareSliceButton.toolTipText
@@ -767,7 +776,12 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     implicitWidth: exportGroupRow.implicitWidth
                     implicitHeight: 24
-                    color: Theme.surfaceDeep
+                    // topbar-14 group backing: upstream darkModeColorFor
+                    // (#3B4446) = #2D2D30, pinned DARK in both app themes
+                    // (the top chrome is dark in light mode too). The former
+                    // Theme.surfaceDeep flipped WHITE in light mode — white
+                    // boxes on the dark bar (2026-10-26 user catch).
+                    color: root.groupBackingColor
                     enabled: Backend.editorViewModel && Backend.editorViewModel.canExportGCode
                     ToolTip.visible: exportMouse.containsMouse && prepareExportGcodeButton.toolTipText.length > 0
                     ToolTip.text: prepareExportGcodeButton.toolTipText
