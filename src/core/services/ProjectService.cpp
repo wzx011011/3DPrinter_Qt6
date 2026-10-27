@@ -1214,22 +1214,35 @@ bool ProjectService::loadFile(const QString &filePath)
 
       const Slic3r::LoadStrategy loadStrategy =
           Slic3r::LoadStrategy::AddDefaultInstances | Slic3r::LoadStrategy::LoadModel;
+      // TEMP-PROF (import breakdown): remove after the 27s-import investigation
+      const auto prof_t0 = std::chrono::steady_clock::now();
+      auto prof_mark = [&prof_t0](const char *what) {
+        const double ms = std::chrono::duration<double, std::milli>(
+                              std::chrono::steady_clock::now() - prof_t0)
+                              .count();
+        qInfo("[import-prof] %-42s %10.0f ms", what, ms);
+      };
+      prof_mark("start");
       Slic3r::Model loaded = isStepModelPath(localPath)
           ? readStepModel(localPath, loadStrategy)
           : Slic3r::Model::read_from_file(localPath.toStdString(),
                                           nullptr,
                                           nullptr,
                                           loadStrategy,
+
                                           &plateDataList,
                                           nullptr,
                                           nullptr,
                                           nullptr,
                                           progressFn);
+      prof_mark("read_from_file done");
       *loadedModel = std::move(loaded);
+      prof_mark("model moved");
       // MP8: the bed geometry comes from the archive's project_settings
       // overlay (narrow miniz read), not a LoadConfig parse.
       if (!plateDataList.empty())
         extractBedGeometryFrom3mf(localPath, loadedBedWidthMm, loadedBedDepthMm);
+      prof_mark("bed geometry done");
 
       if (!loadedModel->objects.empty())
       {
