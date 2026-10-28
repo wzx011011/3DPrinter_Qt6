@@ -369,6 +369,8 @@ QtObject {
     readonly property color markerRed:        "#d94040"    // plate error / calibration fail
     readonly property color markerYellow:     "#cccc00"    // preview data marker
     readonly property color caliInfoBlue:     "#3b9eff"    // calibration in-progress row tint base
+    readonly property color tipGlassText:     "#f5f5f5"    // primary text on the pinned-dark glass overlays
+    readonly property color tipGlassTextDim:  "#c9c9c9"    // secondary text on dark glass
     readonly property color bedShapeFill:     "#1418c75e"  // bed-shape accent fill @8% (AARRGGBB)
     readonly property color bedShapeFillAlt:  "#0f566070"  // bed-shape inactive fill (AARRGGBB)
 

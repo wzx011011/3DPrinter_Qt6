@@ -476,7 +476,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "</>"
-                            color: Theme.textPrimary
+                            color: Theme.tipGlassText
                             font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
@@ -605,7 +605,7 @@ Item {
                                     text: root.editorVm
                                         ? qsTr("盘 %1").arg(plateIndex + 1)
                                         : qsTr("盘")
-                                    color: Theme.textPrimary
+                                    color: Theme.tipGlassText
                                     font.pixelSize: Theme.fontSizeXS
                                 }
                             }
@@ -628,7 +628,7 @@ Item {
                         anchors.centerIn: parent
                         width: parent.width - 18
                         text: root.previewVm ? root.previewVm.previewStatusText : qsTr("请先切片或载入 G-code")
-                        color: Theme.textSecondary
+                        color: Theme.tipGlassText
                         font.pixelSize: Theme.fontSizeMD
                         elide: Text.ElideRight
                         horizontalAlignment: Text.AlignHCenter

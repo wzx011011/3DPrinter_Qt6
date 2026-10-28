@@ -50,6 +50,9 @@ Rectangle {
     width: contentColumn.implicitWidth + 20
     height: contentColumn.implicitHeight + 20
     radius: Theme.radiusLG                    // upstream WindowRounding 8.0f*m_scale (:341)
+    // Text inside uses the PINNED-light tipGlassText* tokens: this overlay is
+    // dark glass in BOTH themes (upstream keeps dark tooltips on light too) —
+    // theme-flipping textPrimary went near-black on it in light mode.
     color: Theme.tipGlassBg           // upstream SetNextWindowBgAlpha(0.8f) (:343)
     border.width: 0              // upstream ImGuiCol_Border fully transparent (:339)
     opacity: visible ? 0.94 : 0
@@ -193,7 +196,7 @@ Rectangle {
                         text: modelData
                         readOnly: true
                         selectByMouse: true
-                        color: Theme.textPrimary
+                        color: Theme.tipGlassText
                         selectionColor: Theme.selectionColor
                         selectedTextColor: Theme.selectionText
                         font.pixelSize: Theme.fontSizeSM
@@ -215,7 +218,7 @@ Rectangle {
                 height: showHideLabel.implicitHeight + 6
                 radius: Theme.radiusSM
                 color: !profileButtonRow.profileDataAvailable
-                       ? Theme.textDisabled
+                       ? Theme.tipGlassTextDim
                        : (showHideArea.containsMouse ? Theme.accentLight : Theme.accent)
                 opacity: !profileButtonRow.profileDataAvailable ? 0.45 : 1
                 Label {
@@ -235,7 +238,7 @@ Rectangle {
             }
             Label {
                 text: qsTr("Actual speed profile")
-                color: Theme.textPrimary
+                color: Theme.tipGlassText
                 font.pixelSize: Theme.fontSizeSM
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -274,7 +277,7 @@ Rectangle {
                         if (!ctx)
                             return;
                         ctx.reset();
-                        ctx.strokeStyle = Theme.textPrimary;
+                        ctx.strokeStyle = Theme.tipGlassText;
                         ctx.lineWidth = 1.5;
                         ctx.lineCap = "round";
                         ctx.lineJoin = "round";
@@ -326,7 +329,7 @@ Rectangle {
                             spacing: 0
                             Label {
                                 text: modelData.axis + " "
-                                color: Theme.textTertiary
+                                color: Theme.tipGlassTextDim
                                 font: root.monoFont
                             }
                             // U12: selectable coordinate value (read-only
@@ -337,7 +340,7 @@ Rectangle {
                                 text: modelData.value
                                 readOnly: true
                                 selectByMouse: true
-                                color: Theme.textPrimary
+                                color: Theme.tipGlassText
                                 selectionColor: Theme.selectionColor
                                 selectedTextColor: Theme.selectionText
                                 font: root.monoFont
@@ -359,7 +362,7 @@ Rectangle {
                         text: root.vm ? qsTr("Speed: %1").arg(Math.round(root.vm.toolFeedrate / 60)) : ""
                         readOnly: true
                         selectByMouse: true
-                        color: Theme.textPrimary
+                        color: Theme.tipGlassText
                         selectionColor: Theme.selectionColor
                         selectedTextColor: Theme.selectionText
                         font: root.monoFont
@@ -372,7 +375,7 @@ Rectangle {
                         text: root.vm ? root.vm.toolDetailText : ""
                         readOnly: true
                         selectByMouse: true
-                        color: Theme.textPrimary
+                        color: Theme.tipGlassText
                         selectionColor: Theme.selectionColor
                         selectedTextColor: Theme.selectionText
                         font: root.monoFont
@@ -453,7 +456,7 @@ Rectangle {
                         // segment in the brand accent.
                         ctx.lineWidth = 2;
                         for (let n = 0; n < data.length - 1; ++n) {
-                            ctx.strokeStyle = n === root.plotHoverId ? Theme.accent : Theme.textSecondary;
+                            ctx.strokeStyle = n === root.plotHoverId ? Theme.accent : Theme.tipGlassTextDim;
                             ctx.beginPath();
                             ctx.moveTo(toX(data[n].pos), toY(data[n].speed));
                             ctx.lineTo(toX(data[n + 1].pos), toY(data[n + 1].speed));
@@ -495,12 +498,12 @@ Rectangle {
                     Label {
                         width: root.profileCol0Width
                         text: qsTr("Position (mm)")
-                        color: Theme.textSecondary
+                        color: Theme.tipGlassTextDim
                         font: root.monoFont
                     }
                     Label {
                         text: qsTr("Speed (mm/s)")
-                        color: Theme.textSecondary
+                        color: Theme.tipGlassTextDim
                         font: root.monoFont
                     }
                 }
@@ -531,12 +534,12 @@ Rectangle {
                                         id: profilePosLabel
                                         width: root.profileCol0Width
                                         text: modelData.pos.toFixed(3)
-                                        color: rowHovered ? Theme.accent : Theme.textPrimary
+                                        color: rowHovered ? Theme.accent : Theme.tipGlassText
                                         font: root.monoFont
                                     }
                                     Label {
                                         text: modelData.speed.toFixed(1)
-                                        color: rowHovered ? Theme.accent : Theme.textPrimary
+                                        color: rowHovered ? Theme.accent : Theme.tipGlassText
                                         font: root.monoFont
                                     }
                                 }
