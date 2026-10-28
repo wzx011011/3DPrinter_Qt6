@@ -79,7 +79,9 @@ Item {
     signal windowCloseRequested()
     // topbar-14 (StateColor.cpp:28): group backing panel, pinned dark —
     // darkModeColorFor(#3B4446) = #2D2D30 regardless of app theme.
-    readonly property color groupBackingColor: "#2d5a8c"  // style-exempt: upstream-measured topbar-14
+    // 2026-10-27/28: group 背板整体透明 —— 上游按钮直接坐在 tab 条上无独立
+    // 背板；此前 #2d5a8c 为热更新实验残留色，在深色条上呈现为突兀蓝盒。
+    readonly property color groupBackingColor: "transparent"
 
     signal titleBarDragStarted()
     signal titleBarDoubleClicked()
