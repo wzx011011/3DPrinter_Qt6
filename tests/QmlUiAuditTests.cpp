@@ -3667,9 +3667,12 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   }
 
   // PREPSB-04: ParamsPanel pages filter through the per-page C++ proxy.
+  // 11688fc wired the simple/advanced toggle to settingsVm.paramsAdvancedMode
+  // (user-selectable), replacing the hardwired true — the proxy contract
+  // itself (per-page C++ ConfigOptionFilterProxy) is unchanged.
   QVERIFY2(sidebar.contains(QStringLiteral("ConfigOptionFilterProxy"))
                && sidebar.contains(QStringLiteral("searchText: root.paramsSearchText"))
-               && sidebar.contains(QStringLiteral("advancedMode: true")),
+               && sidebar.contains(QStringLiteral("advancedMode: root.paramsAdvancedMode")),
            "LeftSidebar pages must filter through the per-page C++ ConfigOptionFilterProxy");
   QVERIFY2(!sidebar.contains(QStringLiteral("computePageIndices"))
                && !sidebar.contains(QStringLiteral("rebuildParamsFilter")),

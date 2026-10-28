@@ -1,8 +1,4 @@
-<!-- 2026-10-26 pixel-audit: unified 1.5px outline family (24 grid,
-     round caps) for the floating action strip — states ride the stroke
-     color (dark/=normal #c9c9c9, accent/=selected #18c75e, base=light
-     theme #2b3436), replacing the mixed solid two-tone set. -->
-<!-- borrowed layout: see dark/ variant note -->
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="#2b3436" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
-  <rect x="4" y="4" width="11" height="11" rx="1"/><path d="M18.5 14v8M14.5 18h8"/>
+<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <rect x="10" y="10" width="12" height="12" stroke="#17CC5F" stroke-width="2" fill="none"/>
+  <rect x="16" y="16" width="12" height="12" stroke="#17CC5F" stroke-width="2" fill="none"/>
 </svg>

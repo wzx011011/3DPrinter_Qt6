@@ -117,6 +117,8 @@
         <file>assets/icons/toolbar_orient.svg</file>
         <file>assets/icons/toolbar_arrange.svg</file>
         <file>assets/icons/toolbar_variable_layer_height.svg</file>
+        <file>assets/icons/toolbar_fuzzy_skin_paint.svg</file>
+        <file>assets/icons/toolbar_mmu_segmentation.svg</file>
         <file>assets/icons/toolbar_move.svg</file>
         <file>assets/icons/toolbar_rotate.svg</file>
         <file>assets/icons/toolbar_scale.svg</file>
@@ -141,6 +143,8 @@
         <file>assets/icons/dark/toolbar_orient.svg</file>
         <file>assets/icons/dark/toolbar_arrange.svg</file>
         <file>assets/icons/dark/toolbar_variable_layer_height.svg</file>
+        <file>assets/icons/dark/toolbar_fuzzy_skin_paint.svg</file>
+        <file>assets/icons/dark/toolbar_mmu_segmentation.svg</file>
         <file>assets/icons/dark/toolbar_move.svg</file>
         <file>assets/icons/dark/toolbar_rotate.svg</file>
         <file>assets/icons/dark/toolbar_scale.svg</file>
@@ -171,6 +175,8 @@
         <file>assets/icons/accent/toolbar_orient.svg</file>
         <file>assets/icons/accent/toolbar_arrange.svg</file>
         <file>assets/icons/accent/toolbar_variable_layer_height.svg</file>
+        <file>assets/icons/accent/toolbar_fuzzy_skin_paint.svg</file>
+        <file>assets/icons/accent/toolbar_mmu_segmentation.svg</file>
         <file>assets/icons/accent/toolbar_move.svg</file>
         <file>assets/icons/accent/toolbar_rotate.svg</file>
         <file>assets/icons/accent/toolbar_scale.svg</file>

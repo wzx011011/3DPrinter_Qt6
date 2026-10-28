@@ -67,15 +67,12 @@ Item {
     }
 
     // vp-3 (TOOLICONS): one dedicated icon per tool, using the upstream
-    // gizmo assets (GLGizmosManager.cpp:206-224: toolbar_move/rotate/scale/
-    // flatten/cut/support/seam/meshboolean/measure/text). Only the upstream
-    // selectable set keeps buttons (see the gizmo row below); the OWzx-only
-    // modes (Hollow/FaceDetector/Drill/AdvancedCut) lost their toolbar
-    // entries in the 2026-10-09 upstream alignment and no longer need
-    // toolbar icons here. MmuSegmentation and (since P3) FuzzySkin have no
-    // dedicated case and take the generic box.svg fallback below -- their
-    // upstream assets (toolbar_fuzzy_skin_paint.svg) are not embedded in
-    // qml_assets.qrc yet.
+    // gizmo assets VERBATIM from third_party/OrcaSlicer/resources/images
+    // (2026-10-27 user ruling: "直接拿orca的来用" — the hand-drawn outline
+    // family was rejected). base/ = upstream X.svg (light), dark/ = upstream
+    // X_dark.svg, accent/ = X_dark recolored monochrome brand-green (active
+    // gizmo state per the TBLC ruling). MmuSegmentation/FuzzySkin map to
+    // their dedicated upstream art (mmu_segmentation/fuzzy_skin_paint).
     function iconForTool(toolId, accentVariant) {
         const base = accentVariant
                 ? "qrc:/qml/assets/icons/accent/"
@@ -101,6 +98,13 @@ Item {
             return base + "toolbar_text.svg"
         case GLViewport.GizmoMeasure:
             return base + "toolbar_measure.svg"
+        case GLViewport.GizmoMmuSegmentation:
+            // 2026-10-27: upstream's own assets (resources/images) replace
+            // the generic box fallback — MmuSegmentation and FuzzySkin both
+            // have dedicated upstream art.
+            return base + "toolbar_mmu_segmentation.svg"
+        case GLViewport.GizmoFuzzySkin:
+            return base + "toolbar_fuzzy_skin_paint.svg"
         default:
             return base + "toolbar_box.svg"
         }
