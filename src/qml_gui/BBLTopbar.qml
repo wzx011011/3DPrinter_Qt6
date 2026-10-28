@@ -703,6 +703,16 @@ Item {
                 // upstream SideButton three-state colors (SideButton.cpp:
                 // 29-46) mapped onto the OWzx accent ramp (slice-7); disabled
                 // is #818183 bg + #E0E0E0 text (slice-4/topbar-14).
+                // slice-4/topbar-14 上游钉色：禁用态深灰在双主题下恒定
+                // （原 controlDisabledBg 随主题翻浅，在深色 tab 条上发白 —
+                // 2026-10-27 用户像素对比）。
+                QtObject {
+                    id: sliceExportColors
+                    // style-exempt: slice-4 upstream-pinned disabled colors
+                    readonly property color disabledBg: "#818183"  // style-exempt: slice-4
+                    readonly property color disabledText: "#e0e0e0"  // style-exempt: slice-4
+                }
+
                 Rectangle {
                     id: prepareSliceButton
                     property string toolTipText: Backend.editorViewModel ? Backend.editorViewModel.sliceActionHint : qsTr("Backend unavailable")
@@ -723,14 +733,18 @@ Item {
                     Row {
                         id: sliceGroupRow
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.spacingXXS
+                        spacing: 1  // Orca chevron 与 pill 间 1-2px 细缝（用户裁定）
 
                         // Chevron block: upstream keeps the option button
                         // accent-colored and always enabled
                         // (MainFrame.cpp:1938, 2478-2482 -- 24x24, 14px icon).
                         Rectangle {
-                            width: 24; height: 24; radius: Theme.radiusXL
-                            color: Theme.accent
+                            width: 24; height: 24
+                            // Orca 形状：无缝一体胶囊 —— chevron 只圆外侧，
+                            // 右缘拉直；启用时深一档绿与 pill 成双色调
+                            radius: 0
+                            topLeftRadius: 12; bottomLeftRadius: 12
+                            color: enabled ? Theme.accentDark : Theme.accent
                             Image {
                                 anchors.centerIn: parent
                                 width: 14; height: 14
@@ -741,9 +755,11 @@ Item {
 
                         Rectangle {
                             id: slicePill
-                            height: 24; radius: Theme.radiusXL
+                            height: 24
+                            radius: 0
+                            topRightRadius: 12; bottomRightRadius: 12
                             width: sliceLabel.implicitWidth + 40
-                            color: !prepareSliceButton.enabled ? Theme.controlDisabledBg
+                            color: !prepareSliceButton.enabled ? sliceExportColors.disabledBg  // topbar-14/slice-4: #818183 pinned dark
                                  : sliceMouse.pressed ? Theme.accentDark
                                  : sliceMouse.containsMouse ? Theme.accentLight
                                  : Theme.accent
@@ -752,7 +768,7 @@ Item {
                                 id: sliceLabel
                                 anchors.centerIn: parent
                                 text: qsTr("切片单盘")
-                                color: prepareSliceButton.enabled ? Theme.textOnAccent : Theme.controlDisabledText
+                                color: prepareSliceButton.enabled ? Theme.textOnAccent : sliceExportColors.disabledText
                                 font.pixelSize: Theme.fontSizeLG
                             }
 
@@ -790,11 +806,15 @@ Item {
                     Row {
                         id: exportGroupRow
                         anchors.verticalCenter: parent.verticalCenter
-                        spacing: Theme.spacingXXS
+                        spacing: 1  // Orca chevron 与 pill 间 1-2px 细缝（用户裁定）
 
                         Rectangle {
-                            width: 24; height: 24; radius: Theme.radiusXL
-                            color: Theme.accent
+                            width: 24; height: 24
+                            // Orca 形状：无缝一体胶囊 —— chevron 只圆外侧，
+                            // 右缘拉直；启用时深一档绿与 pill 成双色调
+                            radius: 0
+                            topLeftRadius: 12; bottomLeftRadius: 12
+                            color: enabled ? Theme.accentDark : Theme.accent
                             Image {
                                 anchors.centerIn: parent
                                 width: 14; height: 14
@@ -805,9 +825,11 @@ Item {
 
                         Rectangle {
                             id: exportPill
-                            height: 24; radius: Theme.radiusXL
+                            height: 24
+                            radius: 0
+                            topRightRadius: 12; bottomRightRadius: 12
                             width: exportLabel.implicitWidth + 40
-                            color: !prepareExportGcodeButton.enabled ? Theme.controlDisabledBg
+                            color: !prepareExportGcodeButton.enabled ? sliceExportColors.disabledBg
                                  : exportMouse.pressed ? Theme.accentDark
                                  : exportMouse.containsMouse ? Theme.accentLight
                                  : Theme.accent
@@ -816,7 +838,7 @@ Item {
                                 id: exportLabel
                                 anchors.centerIn: parent
                                 text: qsTr("导出G-code文件")
-                                color: prepareExportGcodeButton.enabled ? Theme.textOnAccent : Theme.controlDisabledText
+                                color: prepareExportGcodeButton.enabled ? Theme.textOnAccent : sliceExportColors.disabledText
                                 font.pixelSize: Theme.fontSizeLG
                             }
 
