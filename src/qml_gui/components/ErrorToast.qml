@@ -203,7 +203,11 @@ Item {
                                         : sev === 8 || sev === 9 ? Theme.bgTooltip
                                         : Theme.bgFloating
         // Block notifications force white text (push Text {1,1,1,1} :420).
-        readonly property color textColor: entry.isBlock ? Theme.textOnAccent : Theme.chromeText
+        // Non-block body uses textPrimary (content token): chromeText follows
+        // the TOP CHROME (white since the kLight recalibration) and went
+        // invisible on the pale hint/warning toasts in light mode
+        // (2026-10-27 user catch on the 你知道吗 tips card).
+        readonly property color textColor: entry.isBlock ? Theme.textOnAccent : Theme.textPrimary
         // Auto-dismiss uses user preference (in seconds)
         readonly property int autoDismissMs: Backend.autoDismissSec * 1000
 
