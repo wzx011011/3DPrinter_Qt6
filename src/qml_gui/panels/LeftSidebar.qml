@@ -52,6 +52,10 @@ Rectangle {
 
     property string paramsCurrentTab: "Quality"
     property string paramsSearchText: ""
+    // CP 工艺行同款：搜索框展开态 + 精简/完整模式开关（advancedMode=false 时
+    // 过滤代理剔除 optMode>=1 的进阶参数——upstream comSimple view）。
+    property bool paramsSearchOpen: false
+    property bool paramsAdvancedMode: UiSettingsStore.value("paramsAdvancedMode", "1") === "1"
     readonly property var paramsOptionModel: {
         if (!root.configVm) return null
         return root.configVm.printOptions
@@ -448,15 +452,53 @@ Rectangle {
         }
 
         PixelHeader {
+            id: processHeader
             Layout.fillWidth: true
             title: qsTr("工艺")
             iconSource: "qrc:/qml/assets/icons/list-details.svg"
             // Ref/upstream: Global|Objects scope pills sit inline in the
             // process title row (ParamsPanel.cpp:265-267,417).
             middleComponent: processScopePills
+            // CP 工艺行右侧按钮组（用户对照 2026-10-26）：搜索 / 精简-完整
+            // 开关 / 参数清单 / 连接。toggle 用 iconfont 无现成位图，以文字
+            // "简"/"全" 表达当前档位（按下切换）。
+            extraActions: [
+                { icon: "qrc:/qml/assets/icons/search.svg", tooltip: qsTr("搜索参数") },
+                { text: root.paramsAdvancedMode ? qsTr("全") : qsTr("简"),
+                  tooltip: root.paramsAdvancedMode
+                           ? qsTr("当前：完整模式（含进阶参数），点击切换精简")
+                           : qsTr("当前：精简模式，点击切换完整") },
+                { icon: "qrc:/qml/assets/icons/list-details.svg", tooltip: qsTr("参数清单") },
+                { icon: "qrc:/qml/assets/icons/send-2.svg", tooltip: qsTr("连接打印机") }
+            ]
+            onExtraActionTriggered: (index) => {
+                if (index === 0) {
+                    root.paramsSearchOpen = !root.paramsSearchOpen
+                    if (!root.paramsSearchOpen) root.paramsSearchText = ""
+                } else if (index === 1) {
+                    root.paramsAdvancedMode = !root.paramsAdvancedMode
+                    UiSettingsStore.setValue("paramsAdvancedMode",
+                                             root.paramsAdvancedMode ? "1" : "0")
+                } else if (index === 2) {
+                    paramsListDialog.open()
+                } else if (index === 3) {
+                    Backend.showPrintHostDialog()
+                }
+            }
             actionIcon: "qrc:/qml/assets/icons/settings.svg"
             actionToolTip: qsTr("工艺设置")
             onActionTriggered: Backend.forwardSettingsRequest("process")
+        }
+
+        // 搜索框（展开时出现在工艺行下方，绑定既有过滤代理的 searchText）
+        TextField {
+            visible: root.paramsSearchOpen
+            Layout.fillWidth: true
+            Layout.preferredHeight: 30
+            text: root.paramsSearchText
+            placeholderText: qsTr("搜索参数名称…")
+            font.pixelSize: Theme.fontSizeSM
+            onTextChanged: root.paramsSearchText = text
         }
 
         Rectangle {
@@ -786,7 +828,7 @@ Rectangle {
                                         sourceModel: root.paramsOptionModel
                                         page: paramsPageHost.pageKey
                                         searchText: root.paramsSearchText
-                                        advancedMode: true
+                                        advancedMode: root.paramsAdvancedMode
                                     }
 
                                     ScrollBar.vertical: ScrollBar {
@@ -1373,4 +1415,76 @@ Rectangle {
             wrapMode: TextEdit.NoWrap
         }
     }
+// CP 工艺行"参数清单"弹窗（收尾）：按当前过滤结果列出全部参数名与当前值，
+// 只读浏览——编辑仍在左侧参数页内进行（与 CP 的清单语义一致：快速核对）。
+Dialog {
+    id: paramsListDialog
+    anchors.centerIn: parent
+    modal: true
+    width: 420
+    height: 560
+    title: qsTr("参数清单")
+
+    background: Rectangle {
+        radius: Theme.radiusLG
+        color: Theme.bgPanel
+        border.color: Theme.borderSubtle
+    }
+
+    header: Label {
+        text: qsTr("参数清单")
+        color: Theme.textPrimary
+        font.bold: true
+        font.pixelSize: Theme.fontSizeLG
+        padding: 12
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 8
+
+        ListView {
+            id: paramsListview
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            spacing: 2
+
+            model: root.configVm ? root.configVm.printOptions : null
+
+            delegate: Rectangle {
+                width: paramsListview.width
+                height: 34
+                radius: Theme.radiusSM
+                color: index % 2 === 0 ? "transparent" : Theme.bgInset
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8
+                    anchors.rightMargin: 8
+                    spacing: 8
+                    Text {
+                        Layout.preferredWidth: 190
+                        text: optLabel
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        elide: Text.ElideRight
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: optValue === null ? "—" : String(optValue)
+                        color: Theme.textSecondary
+                        font.pixelSize: Theme.fontSizeSM
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+        }
+
+        CxButton {
+            Layout.alignment: Qt.AlignRight
+            text: qsTr("关闭")
+            onClicked: paramsListDialog.close()
+        }
+    }
+}
 }
