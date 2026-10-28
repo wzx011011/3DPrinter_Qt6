@@ -752,6 +752,19 @@ namespace
             }
           }
         }
+        // owzx-fix (LIST-PRESERVE): per-filament custom G-code templates
+        // (filament_start_gcode etc.) are multi-line strings whose content
+        // itself contains commas. The generic comma-join + deserialize
+        // round-trip shredded them into one mangled fragment (orphaned
+        // {else}, rc=156). ConfigOptionStrings takes the entries directly.
+        if (auto *stringsOpt = dynamic_cast<Slic3r::ConfigOptionStrings *>(opt))
+        {
+          stringsOpt->values.clear();
+          for (const auto &item : list)
+            stringsOpt->values.push_back(item.toString().toStdString());
+          setOk = true;
+          break;
+        }
         QStringList parts;
         for (const auto &item : list)
           parts << item.toString();
@@ -1262,6 +1275,49 @@ void SliceService::startSlice(const QString &projectName)
               "multicolor_method",
               new Slic3r::ConfigOptionBool(filamentDiameters &&
                                            filamentDiameters->size() > 1));
+        }
+      }
+
+      // owzx-fix (TOWER-CLAMP): 3MFs authored by CP carry wipe-tower
+      // positions computed for their own bed. After the MODEL-BED
+      // translation the engine validates the tower footprint against the
+      // configured bed and hard-fails when it pokes out (CP's GUI instead
+      // reclamps the tower into the bed). Clamp the saved tower position
+      // back inside the configured bed, keeping a small safety margin —
+      // this matches CP's GUI behavior and rescues edge-positioned towers
+      // (e.g. y=320 with a 40mm tower on a 350mm bed).
+      if (const auto *towerX =
+              config.option<Slic3r::ConfigOptionFloats>("wipe_tower_x", false);
+      towerX && !towerX->values.empty()) {
+        if (const auto *towerY =
+                config.option<Slic3r::ConfigOptionFloats>("wipe_tower_y", false);
+            towerY && towerY->values.size() == towerX->values.size()) {
+          if (const auto *bedPts =
+                  config.option<Slic3r::ConfigOptionPoints>("bed_shape", false);
+              bedPts && bedPts->values.size() >= 3) {
+            float bedW = 0.f, bedD = 0.f;
+            for (const auto &p : bedPts->values) {
+              bedW = std::max(bedW, static_cast<float>(p.x()));
+              bedD = std::max(bedD, static_cast<float>(p.y()));
+            }
+            float towerW = 60.f, towerD = 60.f;
+            if (const auto *ptw =
+                    config.option<Slic3r::ConfigOptionFloat>("prime_tower_width",
+                                                             false);
+                ptw && ptw->value > 0.f) {
+              towerW = ptw->value;
+              towerD = ptw->value;
+            }
+            constexpr float kMargin = 2.f;
+            const float maxX = std::max(0.f, bedW - towerW - kMargin);
+            const float maxY = std::max(0.f, bedD - towerD - kMargin);
+            auto *mutX = const_cast<Slic3r::ConfigOptionFloats *>(towerX);
+            auto *mutY = const_cast<Slic3r::ConfigOptionFloats *>(towerY);
+            for (auto &v : mutX->values)
+              v = std::clamp(v, static_cast<double>(kMargin), static_cast<double>(maxX));
+            for (auto &v : mutY->values)
+              v = std::clamp(v, static_cast<double>(kMargin), static_cast<double>(maxY));
+          }
         }
       }
 
