@@ -1,0 +1,20 @@
+diff --git a/src/libslic3r/GCode/OrderingStrategies.cpp b/src/libslic3r/GCode/OrderingStrategies.cpp
+index 2ba9ae54..3cf15481 100644
+--- a/src/libslic3r/GCode/OrderingStrategies.cpp
++++ b/src/libslic3r/GCode/OrderingStrategies.cpp
+@@ -135,8 +135,13 @@ bool tsp_remove_crossings(std::vector<size_t>& path, const Points& centers)
+     };
+ 
+     // Process crossings one at a time: find first, reverse it, restart scan.
+-    // Cap iterations to prevent infinite loops on collinear/overlapping segments.
+-    int max_iters = static_cast<int>(pn * pn);
++    // owzx-fix (TSP-CAP): the original pn*pn cap, combined with the O(pn^2)
++    // crossing scan per iteration, let degenerate collinear/overlapping
++    // inputs spin for hours at 100% CPU (O(pn^4) worst case — seen on a
++    // 2583-point multicolor path). 2-opt reversals converge within a few
++    // dozen iterations on real toolpaths; a fixed small cap bounds the
++    // runtime with negligible quality impact.
++    int max_iters = 128;
+     bool improved = false;
+     while (max_iters-- > 0) {
+         auto [ci, cj] = find_crossing();

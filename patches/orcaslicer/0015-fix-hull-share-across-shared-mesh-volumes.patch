@@ -1,0 +1,35 @@
+diff --git a/src/libslic3r/Format/bbs_3mf.cpp b/src/libslic3r/Format/bbs_3mf.cpp
+index e2091da1..584bebb6 100644
+--- a/src/libslic3r/Format/bbs_3mf.cpp
++++ b/src/libslic3r/Format/bbs_3mf.cpp
+@@ -5152,7 +5152,14 @@ void PlateData::parse_filament_info(GCodeProcessorResult *result)
+             if (has_transform)
+                 volume->source.transform = Slic3r::Geometry::Transformation(volume_matrix_to_object);
+ 
+-            volume->calculate_convex_hull();
++            // owzx-fix (HULL-SHARE): volumes sharing one mesh share the
++            // identical convex hull. Qhull on a 2M-triangle AMS mesh costs
++            // seconds per volume; multi-color models recompute it N times.
++            // Share the first volume's hull instead of recomputing.
++            if (shared_volume && shared_volume->get_convex_hull_shared_ptr())
++                volume->set_convex_hull(shared_volume->get_convex_hull_shared_ptr());
++            else
++                volume->calculate_convex_hull();
+ 
+             //set transform from 3mf
+             Slic3r::Geometry::Transformation comp_transformatino(sub_comp.transform);
+diff --git a/src/libslic3r/Model.hpp b/src/libslic3r/Model.hpp
+index 8da1340f..4d0ab894 100644
+--- a/src/libslic3r/Model.hpp
++++ b/src/libslic3r/Model.hpp
+@@ -968,6 +968,10 @@ public:
+     void                calculate_convex_hull();
+     const TriangleMesh& get_convex_hull() const;
+     const std::shared_ptr<const TriangleMesh>& get_convex_hull_shared_ptr() const { return m_convex_hull; }
++    // owzx-fix (HULL-SHARE): volumes sharing one mesh share the identical
++    // convex hull — lets the 3MF importer skip redundant Qhull runs
++    // (multi-color AMS models otherwise recompute the hull per volume).
++    void                set_convex_hull(const std::shared_ptr<const TriangleMesh> &hull) { m_convex_hull = hull; }
+     //BBS: add convex_hell_2d related logic
+     const Polygon& get_convex_hull_2d(const Transform3d &trafo_instance) const;
+     void invalidate_convex_hull_2d()
