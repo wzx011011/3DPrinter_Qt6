@@ -727,6 +727,12 @@ void CutCommand::setResult(int newObjectIndex, const QString &newObjectName)
   Q_UNUSED(newObjectIndex)
 }
 
+void CutCommand::setCutOptions(bool placeOnCut, bool cutToParts)
+{
+  m_placeOnCut = placeOnCut;
+  m_cutToParts = cutToParts;
+}
+
 void CutCommand::undo()
 {
   if (!m_service)
@@ -760,7 +766,8 @@ void CutCommand::redo()
   if (!m_service)
     return;
 
-  m_service->cutObject(m_srcObjectIndex, m_axis, m_position, m_keepMode);
+  m_service->cutObject(m_srcObjectIndex, m_axis, m_position, m_keepMode,
+                       m_placeOnCut, m_cutToParts);
   m_service->syncTransformsFromModel();
 
   if (m_viewModel)

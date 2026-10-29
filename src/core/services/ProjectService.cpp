@@ -5396,11 +5396,23 @@ namespace {
 // 2=lower). KeepAsParts is deliberately NOT set: it merges the pieces into one
 // object and, without KeepUpper, makes Cut::perform_with_plane dereference a
 // null "upper" object and spin forever (FB-R4-04).
-Slic3r::ModelObjectCutAttributes planeCutAttributes(int keepMode)
+Slic3r::ModelObjectCutAttributes planeCutAttributes(int keepMode, bool placeOnCut,
+                                                    bool cutAsParts)
 {
+  // RG-R4-02 (F8-e): the two upstream cut-panel switches ride the same
+  // attribute set (GLGizmoCut.cpp:3471-3476): "Cut to parts" raises
+  // KeepAsParts; "Place on cut" marks each KEPT half with
+  // PlaceOnCutUpper/Lower (the engine's post_process then rests that part's
+  // cut face on the plane).
   using MCA = Slic3r::ModelObjectCutAttribute;
+  // Assembled as one only_if chain: enum_bitmask's operator|= has never
+  // been instantiated anywhere in the engine and does not compile (the
+  // private int ctor result has no conversion back to m_bits).
   return Slic3r::only_if(keepMode == 0 || keepMode == 1, MCA::KeepUpper) |
-         Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower);
+         Slic3r::only_if(keepMode == 0 || keepMode == 2, MCA::KeepLower) |
+         Slic3r::only_if(cutAsParts, MCA::KeepAsParts) |
+         Slic3r::only_if(placeOnCut && (keepMode == 0 || keepMode == 1), MCA::PlaceOnCutUpper) |
+         Slic3r::only_if(placeOnCut && (keepMode == 0 || keepMode == 2), MCA::PlaceOnCutLower);
 }
 // Plater::apply_cut_object_to_model for the in-place object list: the cut
 // results are appended as NEW objects (placed side by side so the pieces do
@@ -5482,14 +5494,16 @@ int replaceObjectWithCutResults(ProjectService &svc, int objectIndex,
 }
 } // namespace
 #endif
-int ProjectService::cutObject(int objectIndex, int axis, double position, int keepMode)
+int ProjectService::cutObject(int objectIndex, int axis, double position, int keepMode,
+                              bool placeOnCut, bool cutAsParts)
 {
   // FB-R4-04: the former bare cut_mesh implementation ignored the instance
   // transform, left the uncut original in place for "keep upper", spawned an
   // empty mock object for "keep lower" and appended parts outside every
   // plate. The axis-aligned cut is exactly the upstream plane cut with a
   // zero tilt (see cutObjectWithRotation), so share that single code path.
-  return cutObjectWithRotation(objectIndex, axis, position, 0.f, 0.f, 0.f, keepMode);
+  return cutObjectWithRotation(objectIndex, axis, position, 0.f, 0.f, 0.f, keepMode,
+                               placeOnCut, cutAsParts);
 }
 int ProjectService::cutObjectWithGroove(int objectIndex, int axis, double position, int keepMode,
                                             float grooveDepth, float grooveWidth, float grooveFlapsAngle, float grooveAngle)
@@ -9068,7 +9082,10 @@ int ProjectService::cutObjectWithConnectors(int objectIndex, int axis, double po
     }
     Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * rotation_m;
 
-    const Slic3r::ModelObjectCutAttributes attributes = planeCutAttributes(keepMode);
+    // Connector path: the place-on-cut / to-parts switches ride the
+    // plain-cut chain only (the connector panel keeps its own flow).
+    const Slic3r::ModelObjectCutAttributes attributes =
+        planeCutAttributes(keepMode, false, false);
     const int instance_idx = 0;
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
     const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_plane();
@@ -9108,7 +9125,8 @@ int ProjectService::cutObjectWithConnectors(int objectIndex, int axis, double po
 int ProjectService::cutObjectWithRotation(int objectIndex, int axis,
                                               double position,
                                               float rotX, float rotY, float rotZ,
-                                              int keepMode)
+                                              int keepMode, bool placeOnCut,
+                                              bool cutAsParts)
 {
 #ifdef HAS_LIBSLIC3R
   if (!model_ || objectIndex < 0 || size_t(objectIndex) >= model_->objects.size()
@@ -9150,7 +9168,8 @@ int ProjectService::cutObjectWithRotation(int objectIndex, int axis,
     const Slic3r::Transform3d plane_rotation = tilt * rotation_m;
     Slic3r::Transform3d cut_matrix = Eigen::Translation3d(cut_translation) * plane_rotation;
 
-    const Slic3r::ModelObjectCutAttributes attributes = planeCutAttributes(keepMode);
+    const Slic3r::ModelObjectCutAttributes attributes =
+        planeCutAttributes(keepMode, placeOnCut, cutAsParts);
     const int instance_idx = 0;
     Slic3r::Cut cut(obj, instance_idx, cut_matrix, attributes);
     const Slic3r::ModelObjectPtrs &new_objects = cut.perform_with_plane();

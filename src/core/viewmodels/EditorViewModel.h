@@ -419,6 +419,10 @@ public:
   qreal cutPosition() const { return m_cutPosition; }
   void setCutPosition(qreal pos);
   int cutKeepMode() const { return m_cutKeepMode; }
+  bool cutPlaceOnCut() const { return m_cutPlaceOnCut; }
+  void setCutPlaceOnCut(bool on) { m_cutPlaceOnCut = on; emit stateChanged(); }
+  bool cutToParts() const { return m_cutToParts; }
+  void setCutToParts(bool on) { m_cutToParts = on; emit stateChanged(); }
   void setCutKeepMode(int mode);
   // Cut connector settings (对齐上游 GLGizmoCut connector)
   int cutMode() const;
@@ -1112,6 +1116,10 @@ public:
   Q_PROPERTY(int cutAxis READ cutAxis WRITE setCutAxis NOTIFY stateChanged)
   Q_PROPERTY(qreal cutPosition READ cutPosition WRITE setCutPosition NOTIFY stateChanged)
   Q_PROPERTY(int cutKeepMode READ cutKeepMode WRITE setCutKeepMode NOTIFY stateChanged)
+  // RG-R4-02 (F8-e): the two upstream cut-panel switches (GLGizmoCut.cpp
+  // :2830 "Place on cut" / :2848 "Cut to parts").
+  Q_PROPERTY(bool cutPlaceOnCut READ cutPlaceOnCut WRITE setCutPlaceOnCut NOTIFY stateChanged)
+  Q_PROPERTY(bool cutToParts READ cutToParts WRITE setCutToParts NOTIFY stateChanged)
   /// 切割连接器设置（对齐上游 GLGizmoCut connector type/shape/size）
   Q_PROPERTY(int cutMode READ cutMode WRITE setCutMode NOTIFY stateChanged)
   Q_PROPERTY(int connectorType READ connectorType WRITE setConnectorType NOTIFY stateChanged)
@@ -2436,6 +2444,9 @@ private:
   int m_cutAxis = 2;              ///< 0=X, 1=Y, 2=Z (默认沿 Z 轴切割)
   qreal m_cutPosition = 0.0;
   int m_cutKeepMode = 0;          ///< 0=全部保留, 1=保留上半, 2=保留下半
+  // RG-R4-02 (F8-e): upstream cut-panel switches.
+  bool m_cutPlaceOnCut = false;
+  bool m_cutToParts = false;
   /// Phase 240 (GIZ-03/GIZ-04): flatten hover highlight payload + interactive
   /// cut-plane tilt (upstream GLGizmoCut3D m_rotation).
   QByteArray m_flattenHoverData;

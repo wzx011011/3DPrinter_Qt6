@@ -718,6 +718,9 @@ private slots:
   void autoOrientUndoRestoresRotation();
   void orientAndFlattenRotateInstanceAndUndoRestoreWorldGeometry();
   void cutKeepModesReplaceSplitAndUndoRestore();
+  // RG-R4-02 (F8-e): "Cut to parts" merges the results back into ONE object;
+  // "Place on cut" rests the kept parts' cut faces on the plane.
+  void cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed();
   void embossAddsMillimetreTextOnceAndUndoRemovesIt();
   void splitUndoRestoresMergedObject();
   void importAndDropRideUndoStack();
@@ -11236,6 +11239,50 @@ void ViewModelSmokeTests::cutKeepModesReplaceSplitAndUndoRestore()
     }
   }
 }
+void ViewModelSmokeTests::cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed()
+{
+  // RG-R4-02 (F8-e): upstream GLGizmoCut "Cut to parts" (KeepAsParts) keeps
+  // a single object-list entry whose volumes are the cut halves, and "Place
+  // on cut" (PlaceOnCutUpper/Lower) rests the kept parts on the cut plane.
+  // The undo path must stay snapshot-based and object-count-stable.
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  UndoRedoManager undoManager;
+  editor.setUndoRedoManager(&undoManager);
+  QVERIFY(project.addPrimitiveToPlate(0) >= 0);
+  editor.rebuildAndNotify();
+  editor.selectObject(0);
+  editor.setCutToParts(true);
+  editor.setCutPlaceOnCut(true);
+  const auto bedBox = [&project](int index) {
+    const QVariantMap b = project.selectionWorldBoundingBox({index});
+    const auto v = [&b](const char *k) { return b.value(QLatin1String(k)).toDouble(); };
+    return QPair<double, double>{v("minY"), v("maxY")};  // the bed axis
+  };
+  QCOMPARE(project.modelCount(), 1);
+  editor.cutSelected(2, 0.0);  // void; the assertions below verify the result
+  // One object entry, more than one volume inside (upper+lower merged).
+  QCOMPARE(project.modelCount(), 1);
+  QVERIFY2(project.objectVolumeCount(0) >= 2,
+           qPrintable(QStringLiteral("volumes=%1")
+                          .arg(project.objectVolumeCount(0))));
+  // PlaceOnCut: the kept parts rest their cut faces on the plane, so the
+  // merged object spans the original 20 mm along the bed axis again
+  // (matching the keep-both non-place layout, one entry instead of two).
+  const auto bed = bedBox(0);
+  QVERIFY2(qAbs(bed.first) < 0.5 && qAbs(bed.second - 20.0) < 0.5,
+           qPrintable(QStringLiteral("bedY=[%1,%2]").arg(bed.first).arg(bed.second)));
+  // Undo restores the pre-cut single-volume object; redo re-merges.
+  QVERIFY(undoManager.canUndo());
+  undoManager.undo();
+  QCOMPARE(project.modelCount(), 1);
+  QCOMPARE(project.objectVolumeCount(0), 1);
+  undoManager.redo();
+  QCOMPARE(project.modelCount(), 1);
+  QVERIFY(project.objectVolumeCount(0) >= 2);
+}
+
 void ViewModelSmokeTests::embossAddsMillimetreTextOnceAndUndoRemovesIt()
 {
   // FB-R4-05/06: the emboss mesh was left in shape units (~1e6 per mm: a 2 mm
@@ -11356,6 +11403,7 @@ void ViewModelSmokeTests::orientAndFlattenRotateInstanceAndUndoRestoreWorldGeome
   QSKIP("FB-R4-02 orient requires HAS_LIBSLIC3R");
 }
 void ViewModelSmokeTests::cutKeepModesReplaceSplitAndUndoRestore() { QSKIP("FB-R4-04 cut requires libslic3r"); }
+void ViewModelSmokeTests::cutToPartsKeepsOneObjectAndPlaceOnCutRestsOnBed() { QSKIP("needs libslic3r"); }
 void ViewModelSmokeTests::embossAddsMillimetreTextOnceAndUndoRemovesIt() { QSKIP("needs libslic3r"); }
 void ViewModelSmokeTests::splitUndoRestoresMergedObject()
 {

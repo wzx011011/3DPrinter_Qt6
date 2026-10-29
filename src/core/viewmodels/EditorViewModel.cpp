@@ -3520,7 +3520,7 @@ bool EditorViewModel::cutSelectedWithRotation()
       [&]() {
         return projectService_->cutObjectWithRotation(srcIdx, m_cutAxis, m_cutPosition,
                                                       m_cutRotationX, m_cutRotationY, m_cutRotationZ,
-                                                      m_cutKeepMode);
+                                                      m_cutKeepMode, m_cutPlaceOnCut, m_cutToParts);
       },
       srcIdx, m_cutKeepMode);
 }
@@ -3817,12 +3817,16 @@ void EditorViewModel::cutSelected(int axis, double position)
   emit stateChanged();
 
 #ifdef HAS_LIBSLIC3R
-  runCutOperation([&]() { return projectService_->cutObject(srcIdx, axis, position, m_cutKeepMode); },
+  runCutOperation([&]() {
+                    return projectService_->cutObject(srcIdx, axis, position, m_cutKeepMode,
+                                                      m_cutPlaceOnCut, m_cutToParts);
+                  },
                   srcIdx, m_cutKeepMode);
   return;
 #endif
   // Capture undo command before cut (captures source mesh snapshot and object count)
   auto *cmd = new CutCommand(srcIdx, axis, position, m_cutKeepMode, projectService_, this);
+  cmd->setCutOptions(m_cutPlaceOnCut, m_cutToParts);
   // Mock mode: 将对象沿指定轴切割为上下两部分
   const int newIdx = projectService_->addObject(origName + tr("_upper"));
   if (newIdx >= 0)

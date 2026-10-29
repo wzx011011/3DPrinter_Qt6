@@ -365,6 +365,9 @@ public:
   CutCommand(int srcObjectIndex, int axis, double position, int keepMode,
              ProjectService *service, EditorViewModel *viewModel,
              QUndoCommand *parent = nullptr);
+  /// RG-R4-02 (F8-e): the two upstream cut-panel switches ride the redo
+  /// re-execution; undo stays snapshot-based so they need no extra state.
+  void setCutOptions(bool placeOnCut, bool cutToParts);
 
   /// Call after cut succeeds to record the new object index and its name.
   void setResult(int newObjectIndex, const QString &newObjectName);
@@ -377,6 +380,8 @@ private:
   int m_axis;
   double m_position;
   int m_keepMode;
+  bool m_placeOnCut = false;
+  bool m_cutToParts = false;
   int m_objectCountBefore;    ///< total object count before cut
   QByteArray m_srcMeshSnapshot;
   // Cut result object snapshot (for re-insertion on redo)

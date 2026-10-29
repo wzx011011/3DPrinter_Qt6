@@ -556,7 +556,12 @@ public:
   /// 切割对象（对齐上游 GLGizmoCut::perform_cut → cut_mesh）
   /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
   /// Returns the index of the new object created (≥0 on success, -1 on failure)
-  Q_INVOKABLE int cutObject(int objectIndex, int axis, double position, int keepMode);
+  /// RG-R4-02 (F8-e): placeOnCut rests each kept part's cut face on the cut
+  /// plane (engine PlaceOnCutUpper/Lower), cutAsParts keeps the results as
+  /// volumes of ONE object (engine KeepAsParts). Defaults keep the legacy
+  /// call sites intact.
+  Q_INVOKABLE int cutObject(int objectIndex, int axis, double position, int keepMode,
+                            bool placeOnCut = false, bool cutAsParts = false);
   /// 榫卯切割（对齐上游 GLGizmoCut::perform_cut → Cut::perform_with_groove）
   /// axis: 0=X, 1=Y, 2=Z; position: 切割平面位置(mm); keepMode: 0=all, 1=upper, 2=lower
   /// grooveDepth/width/flapsAngle/angle: 榫卯参数（对齐上游 Cut::Groove）
@@ -594,7 +599,8 @@ public:
   /// axis-aligned plane. Returns the new object index (>=0 on success).
   Q_INVOKABLE int cutObjectWithRotation(int objectIndex, int axis, double position,
                                         float rotX, float rotY, float rotZ,
-                                        int keepMode);
+                                        int keepMode,
+                                        bool placeOnCut = false, bool cutAsParts = false);
   /// 镜像对象（对齐上游 ModelInstance::set_mirror）
   Q_INVOKABLE bool mirrorObject(int objectIndex, int axis);
   /// 布尔运算（对齐上游 GLGizmoMeshBoolean::execute_mesh_boolean）

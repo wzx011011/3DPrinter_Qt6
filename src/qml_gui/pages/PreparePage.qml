@@ -3178,6 +3178,24 @@ Item {
                     }
                 }
 
+                // RG-R4-02 (F8-e): the two upstream cut-panel switches
+                // (GLGizmoCut.cpp:2830 "Place on cut" / :2848 "Cut to parts";
+                // zh labels from the upstream po).
+                Row {
+                    spacing: Theme.spacingLG
+                    Layout.alignment: Qt.AlignHCenter
+                    CxCheckBox {
+                        text: qsTr("切割面放置到热床")
+                        checked: root.editorVm && root.editorVm.cutPlaceOnCut
+                        onToggled: if (root.editorVm) root.editorVm.cutPlaceOnCut = checked
+                    }
+                    CxCheckBox {
+                        text: qsTr("切割为零件")
+                        checked: root.editorVm && root.editorVm.cutToParts
+                        onToggled: if (root.editorVm) root.editorVm.cutToParts = checked
+                    }
+                }
+
                 // 操作按钮 (X2: hand-drawn → CxButton)
                 Row {
                     spacing: 8
