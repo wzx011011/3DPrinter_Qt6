@@ -49,6 +49,9 @@ Item {
     signal exportAllGcodeRequested()
     signal exportProjectRequested()
     signal exportModelRequested()
+    // RG-R1-03/06: one STL per object (upstream "Export all objects as
+    // STLs...", GUI_Factories export menu) — FolderDialog lives in main.qml.
+    signal exportStlsRequested()
     signal undoRequested()
     signal redoRequested()
     // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): Edit-menu entries
@@ -1026,6 +1029,11 @@ Item {
                 enabled: Backend.canExport
                 text: qsTr("Export Model")
                 onTriggered: root.exportModelRequested()
+            }
+            CxMenuItem {
+                enabled: Backend.canExport && Backend.editorViewModel
+                text: qsTr("分别导出 STL...")
+                onTriggered: root.exportStlsRequested()
             }
             MenuSeparator {}
             // Phase 236 (DLG-01): Export Preset Bundle entry (upstream

@@ -164,6 +164,12 @@ Item {
         onClosed: viewport3d.layerEditingInputActive = false
     }
 
+    // RG-R15-01: the "L" plater accelerator opens the same variable-layer
+    // editor as the toolbar button (GLToolbars layersEditingRequested).
+    function openLayersEditing() {
+        objectLayersDialog.open()
+    }
+
     Connections {
         target: root.editorVm
         // Phase 174 (FEAT-01): opens the per-object settings override dialog.

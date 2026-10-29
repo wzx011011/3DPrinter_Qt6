@@ -1694,7 +1694,12 @@ void QmlUiAuditTests::importEntryPointsAdvertiseConsistentModelFormats()
              qPrintable(QStringLiteral("Project import dialog must advertise %1").arg(ext)));
   }
 
-  QVERIFY2(mainQml.contains(QStringLiteral("Backend.topbarImportModel(selectedFile.toString())")),
+  // FB-R1-03/04: the zip/gcode branches need a local path, so main.qml
+  // normalizes selectedFile.toLocalFile() once and every branch routes
+  // through that variable (topbarImportModel still the sink).
+  QVERIFY2(mainQml.contains(QStringLiteral("var modelPath = selectedFile.toLocalFile()")),
+           "Topbar import dialog must normalize the picked URL to a local path");
+  QVERIFY2(mainQml.contains(QStringLiteral("Backend.topbarImportModel(modelPath)")),
            "Topbar import dialog must route through BackendContext::topbarImportModel");
   QVERIFY2(preparePage.contains(QStringLiteral("root.editorVm.loadFile(selectedFile.toString())")),
            "Prepare import dialog must route through EditorViewModel::loadFile");
@@ -3602,8 +3607,12 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
   // a re-indented reintroduction while never matching `model: 53`.
   QVERIFY2(!QRegularExpression(QStringLiteral("model:\\s*5\\b")).match(sidebar).hasMatch(),
            "LeftSidebar must not use the hard-coded model: 5 filament slot count");
-  QVERIFY2(sidebar.contains(QStringLiteral("extruderCount")),
-           "LeftSidebar filament Repeater must bind to editorVm.extruderCount");
+  // F1 (R1C-10): the slot row count follows the project's filament slot
+  // count (configVm.filamentSlotCount, filaments_count semantics) — the
+  // printer preset's nozzle count was the wrong source and never followed
+  // project loads.
+  QVERIFY2(sidebar.contains(QStringLiteral("filamentSlotCount")),
+           "LeftSidebar filament rows must follow configVm.filamentSlotCount");
   QVERIFY2(sidebar.contains(QStringLiteral("Math.max(1,")),
            "LeftSidebar slot count must guard against 0 with Math.max(1, ...)");
 

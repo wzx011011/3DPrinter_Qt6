@@ -165,7 +165,11 @@ ApplicationWindow {
         onAccepted: {
             // Phase 236 (DLG-03): zip archives open the FileArchiveDialog tree
             // (upstream FileArchiveDialog) instead of a direct import.
-            var modelPath = selectedFile.toString()
+            // FB-R1-03/04: selectedFile is a file:// URL — the zip/gcode
+            // branches hand it to APIs that expect a local path, so normalize
+            // once here (topbarImportModel normalizes internally, the other
+            // two branches did not and silently no-op'd).
+            var modelPath = selectedFile.toLocalFile()
             if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".zip") {
                 fileArchiveDialog.invoke("openFor", modelPath)
                 return
@@ -177,7 +181,7 @@ ApplicationWindow {
                 Backend.openExternalGcode(modelPath)
                 return
             }
-            Backend.topbarImportModel(selectedFile.toString())
+            Backend.topbarImportModel(modelPath)
         }
         }
     }
@@ -697,6 +701,41 @@ ApplicationWindow {
         onActivated: Backend.editorViewModel.selectAllVisibleObjects()
     }
     Shortcut {
+        // Arrange all objects (upstream "A" -> evt.arrange / ESC-agnostic
+        // plater accelerator, KBShortcutsDialog.cpp plater list; RG-R15-01)
+        sequence: "A"
+        enabled: Backend.currentPage === Backend.tp3DEditor && Backend.editorViewModel
+                 && !root.textEditHoldFocus
+        onActivated: Backend.editorViewModel.arrangeAllObjects()
+    }
+    Shortcut {
+        // Layers editing (upstream "L" variable layer height, RG-R15-01)
+        sequence: "L"
+        enabled: Backend.currentPage === Backend.tp3DEditor && !root.textEditHoldFocus
+        onActivated: {
+            const p = root.preparePage()
+            if (p) p.openLayersEditing()
+        }
+    }
+    Shortcut {
+        // G-code window (upstream "C" edit gcode, KBShortcutsDialog.cpp
+        // preview list; RG-R15-01)
+        sequence: "C"
+        enabled: Backend.currentPage === Backend.tpPreview && !root.textEditHoldFocus
+        onActivated: Backend.showEditGCodeDialog()
+    }
+    Shortcut {
+        // Export (upstream Ctrl+Shift+E export G-code, KBShortcutsDialog.cpp
+        // global list; RG-R15-01)
+        sequence: "Ctrl+Shift+E"
+        enabled: (Backend.currentPage === Backend.tp3DEditor
+                  || Backend.currentPage === Backend.tpPreview) && !root.textEditHoldFocus
+        onActivated: {
+            const p = root.preparePage()
+            if (p) p.openExportDialog()
+        }
+    }
+    Shortcut {
         // Deselect all (upstream WXK_ESCAPE -> deselect_all,
         // GLCanvas3D.cpp:3234; KBShortcutsDialog.cpp:245)
         sequence: "Esc"
@@ -926,6 +965,7 @@ ApplicationWindow {
                 onExportAllGcodeRequested: exportAllGcodeDialog.open()
                 onExportProjectRequested: saveProjectAsDialog.open()
                 onExportModelRequested: exportModelDialog.open()
+                onExportStlsRequested: exportStlsFolderDialog.open()
                 onUndoRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.undoFromTopbar() }
                 onRedoRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.redoFromTopbar() }
                 // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the
@@ -1528,6 +1568,20 @@ ApplicationWindow {
             if (Backend.editorViewModel && selectedEntries.length > 0)
                 Backend.editorViewModel.importArchiveEntries(archivePath, selectedEntries)
         }
+        }
+    }
+
+    // RG-R1-03/06: "分别导出 STL" — select every object and let
+    // exportSelectedObjects(separateFiles=true) write one STL per object
+    // into the chosen directory (upstream "Export all objects as STLs").
+    FolderDialog {
+        id: exportStlsFolderDialog
+        onAccepted: {
+            const vm = Backend.editorViewModel
+            if (!vm || !selectedFolder)
+                return
+            vm.selectAllVisibleObjects()
+            vm.exportSelectedObjects(selectedFolder.toLocalFile(), true, false)
         }
     }
 

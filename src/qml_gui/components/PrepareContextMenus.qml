@@ -71,7 +71,8 @@ Item {
         enabled: root.ctxAvail("changeFilament")
         onAboutToShow: ++root.menuRefreshTick
         Instantiator {
-            model: root.editorVm ? root.editorVm.configFilamentCount() + 1 : 1
+            // index 0 = "Default" row, 1..N = the filament slots
+            model: root.configVm ? root.configVm.filamentSlotCount() + 1 : 1
             delegate: CxMenuItem {
                 id: filItem
                 required property int index
@@ -428,6 +429,30 @@ Item {
             text: qsTr("Clone") + "\t" + qsTr("Ctrl+") + "K"
             enabled: root.ctxAvail("duplicate")
             onTriggered: root.editorVm.duplicateSelectedObjects()
+        }
+        // R1A-12: move the selected object to another plate (upstream
+        // ObjectList "Extruder"-adjacent plate ops; API existed orphaned).
+        CxMenu {
+            title: qsTr("移动到盘")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount > 0
+                     && root.editorVm.plateCount > 1
+            onAboutToShow: ++root.menuRefreshTick
+            Instantiator {
+                model: root.editorVm ? root.editorVm.plateCount : 0
+                delegate: CxMenuItem {
+                    id: plateItem
+                    required property int index
+                    readonly property bool _isCurrent: root.editorVm
+                        && root.editorVm.contextPlateIndex === index
+                    text: qsTr("盘 %1").arg(index + 1)
+                    enabled: !_isCurrent
+                    onTriggered: if (root.editorVm)
+                        root.editorVm.moveSelectedObjectToPlate(index)
+                }
+                onObjectAdded: (index, object) => moveToPlateMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => moveToPlateMenu.removeItem(object)
+            }
+            id: moveToPlateMenu
         }
         // Fix Model / Simplify Model / Subdivision mesh (Lost color)
         // (:1473-1475; labels :963/:2103/:2111).
