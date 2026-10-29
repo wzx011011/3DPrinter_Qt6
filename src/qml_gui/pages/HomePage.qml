@@ -767,8 +767,11 @@ Item {
                 && typeof Backend !== "undefined"
                 ? (Backend.currentHintIndex() + 1) + "/" + Backend.hintCount() : ""
             // Expanded = content + 30px footer; collapsed = footer only
-            // (upstream DailyTips.cpp:293-299).
-            Layout.preferredHeight: expanded ? tipsColumn.height + 28 : 30
+            // (upstream DailyTips.cpp:293-299). The footer is bottom-anchored,
+            // so the height must cover top margin + column + footer — the old
+            // `+ 28` left the footer's 折叠 label painted over the body line.
+            Layout.preferredHeight: expanded
+                ? tipsColumn.height + 30 + Theme.spacingXL : 30
             radius: Theme.radiusXL
             color: Theme.bgElevated
             border.width: 1
