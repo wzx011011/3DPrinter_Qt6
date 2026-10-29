@@ -23,13 +23,19 @@ CxDialog {
 
     dialogTitle: qsTr("物理打印机")  // _L("Physical Printer") :55
 
-    anchors.centerIn: parent
+    // Centering comes from CxDialog (Overlay.overlay); the instance-level
+    // `anchors.centerIn: parent` override shadowed it and stuck the dialog
+    // at (0,0).
     // wxSize(45 * em, -1) = 450px wide at em=10 with content-driven height;
     // DPI min size 45x35em = 450x350 (:55, :795-796).
     width: 450
-    implicitHeight: bodyColumn.implicitHeight + 2 * 10
-                    + Theme.dialogHeaderHeight + Theme.dialogFooterHeight
-    padding: Theme.spacingMD  // BORDER_W = FromDIP(10) :52
+    // The ScrollView wrapper guarantees a transient under-estimate of the
+    // content height scrolls instead of clipping (round0 audit symptom).
+    // NOTE: no instance `padding` here — Dialog repurposes top padding for
+    // the header band, so an instance padding shoves the content under the
+    // header (round0/round1 symptom); insets live on the ScrollView margins.
+    implicitHeight: Math.max(350, bodyColumn.implicitHeight + 2 * Theme.spacingMD
+                    + Theme.dialogHeaderHeight + Theme.dialogFooterHeight)
 
     // Preset-service handle for the OK save (upstream OnOK writes the printer
     // preset, :792-797; OWzx routes through ConfigViewModel).
@@ -148,10 +154,17 @@ CxDialog {
             presetNameField.text = current
     }
 
-    contentItem: ColumnLayout {
-        id: bodyColumn
+    contentItem: ScrollView {
+        id: hostScroll
         anchors.fill: parent
-        spacing: Theme.spacingMD
+        anchors.margins: Theme.spacingMD
+        clip: true
+        contentWidth: availableWidth
+
+        ColumnLayout {
+            id: bodyColumn
+            width: hostScroll.availableWidth
+            spacing: Theme.spacingMD
 
         // ── Preset-name input block (input_sizer :69-95) ──────────────────
         Text {
@@ -475,6 +488,7 @@ CxDialog {
                 implicitHeight: 24
                 font.pixelSize: Theme.fontSizeSM
             }
+        }
         }
     }
 

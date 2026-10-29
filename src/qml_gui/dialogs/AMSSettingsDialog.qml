@@ -58,7 +58,9 @@ CxDialog {
 
     dialogTitle: qsTr("AMS 设置")
 
-    anchors.centerIn: parent
+    // Centering comes from CxDialog (Overlay.overlay); the instance-level
+    // `anchors.centerIn: parent` override shadowed it and stuck the dialog
+    // at (0,0).
     width: 500
     // 差距3: content-adaptive height (the old fixed 440 overflows once the five
     // upstream setting groups are present). Capped so the scroll area engages

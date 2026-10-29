@@ -1743,6 +1743,12 @@ public:
   /// missing-file red state (upstream #E14747 label branch,
   /// BedShapeDialog.cpp:334-341/:427-434). Accepts a local path or file URL.
   Q_INVOKABLE bool fileExists(const QString &path) const;
+  /// U02b (BEDSHAPE-DLG): existence probe that also honours the vendor-asset
+  /// fallback used by the bed render chain — a bare profile-bundled name
+  /// (bed_custom_texture / bed_custom_model) never loads directly but the
+  /// renderer falls back to the machine_model asset, so it must not paint
+  /// the missing-file red. kind: "texture" | "model".
+  Q_INVOKABLE bool bedAssetExists(const QString &kind, const QString &path) const;
   // v5.15 (BEDTEX): bed texture path from the selected printer preset.
   QUrl bedTextureUrl() const;
   // U02 (BEDSHAPE-DLG): bed model STL path (see the Q_PROPERTY comment).

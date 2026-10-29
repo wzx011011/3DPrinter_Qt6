@@ -12687,6 +12687,26 @@ bool EditorViewModel::fileExists(const QString &path) const
   return QFileInfo::exists(local);
 }
 
+bool EditorViewModel::bedAssetExists(const QString &kind, const QString &path) const
+{
+  // U02b: direct probe first, then the vendor-asset fallback by file name —
+  // the same resolution the bed render chain applies (bed-shape sync:
+  // bed_custom_texture falls back to bedTextureFile() when the raw value
+  // does not exist), so a seeded profile name is not "missing".
+  if (fileExists(path))
+    return true;
+  if (configViewModel_ == nullptr)
+    return false;
+  const QString resolved = (kind == QStringLiteral("model"))
+      ? configViewModel_->bedModelFile()
+      : configViewModel_->bedTextureFile();
+  if (resolved.isEmpty())
+    return false;
+  const QUrl url(path);
+  const QString local = url.isLocalFile() ? url.toLocalFile() : path;
+  return QFileInfo(resolved).fileName() == QFileInfo(local).fileName();
+}
+
 // ── Phase 100 (WTREAD-01): wipe-tower geometry readback from SliceService ──
 //
 // onWipeTowerGeometryReady applies the has_wipe_tower() gate (WTREAD-02): when

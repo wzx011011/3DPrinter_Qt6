@@ -493,12 +493,14 @@ CxDialog {
                 }
 
                 // Panel-bottom 192px brand logo (ConfigWizard.cpp:1644-1647).
+                // OWzx brand asset — the upstream OrcaSlicer bitmap leaked the
+                // Orca brand into the wizard (U02b audit R1B-17).
                 Image {
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
-                    source: "qrc:/qml/assets/icons/OrcaSlicer_192px_transparent.png"
+                    source: "qrc:/qml/assets/icons/owzx_horizontal_logo.svg"
                     sourceSize.width: 192
-                    sourceSize.height: 192
+                    sourceSize.height: 64
                     fillMode: Image.PreserveAspectFit
                 }
             }

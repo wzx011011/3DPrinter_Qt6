@@ -47,21 +47,17 @@ CxDialog {
 
     dialogTitle: qsTr("擦料塔设置")
 
-    anchors.centerIn: parent
-
     // 20px content gutter (upstream container padding: 20,
-    // WipingDialog.html:31) = 4px dialog padding + 16px content margins.
-    padding: Theme.spacingXS
-
-    // Adaptive width with a 450px floor (upstream clamps the applied size to
-    // a usable minimum, WipeTowerDialog.cpp:450-451).
-    width: Math.max(450, bodyColumn.implicitWidth
-                    + 2 * Theme.spacingXL + 2 * Theme.spacingXS)
-    // Adaptive height: Popup sizes from contentItem + header + footer; the
-    // matrix viewport itself is capped at 500px (WipeTowerDialog.cpp:431-433).
-    implicitHeight: bodyColumn.implicitHeight + 2 * Theme.spacingXL
-                    + 2 * Theme.spacingXS + Theme.dialogHeaderHeight
-                    + Theme.dialogFooterHeight
+    // WipingDialog.html:31) = 16px ScrollView margins (Dialog repurposes
+    // instance padding for the header band — see PrintHostDialog note).
+    width: 560
+    // The ScrollView wrapper (contentItem) guarantees a transient
+    // under-estimate of the content height scrolls instead of bleeding past
+    // the dialog border (round0 audit symptom); cap keeps it on-screen.
+    implicitHeight: Math.min(bodyColumn.implicitHeight
+                             + 2 * Theme.spacingXL + 2 * Theme.spacingXS
+                             + Theme.dialogHeaderHeight
+                             + Theme.dialogFooterHeight, 680)
 
     // ── Upstream constants ──
     // Flush multiplier valid range [0, 3] (WipeTowerDialog.cpp:199-200).
@@ -198,11 +194,17 @@ CxDialog {
     // editable here so the [min, 900] suggestion stays truthful.
     property real minFlushVolume: 80.0
 
-    contentItem: ColumnLayout {
-        id: bodyColumn
+    contentItem: ScrollView {
+        id: wipeScroll
         anchors.fill: parent
         anchors.margins: Theme.spacingXL
-        spacing: Theme.spacingMD
+        clip: true
+        contentWidth: availableWidth
+
+        ColumnLayout {
+            id: bodyColumn
+            width: wipeScroll.availableWidth
+            spacing: Theme.spacingMD
 
         // ── Auto-calc tip panel (WipingDialog.html:263-267, copy
         //    WipeTowerDialog.cpp:380) ──
@@ -217,7 +219,7 @@ CxDialog {
                 id: tipText
                 anchors.fill: parent
                 anchors.margins: Theme.spacingLG
-                text: qsTr("Orca would re-calculate your flushing volumes everytime the filaments color changed or filaments changed. You could disable the auto-calculate in Orca Slicer > Preferences")
+                text: qsTr("耗材颜色或数量变化时会自动重新计算冲洗体积；可在 偏好设置 中关闭自动计算。")
                 color: Theme.textSecondary
                 font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.Wrap
@@ -468,7 +470,7 @@ CxDialog {
 
             Text {
                 Layout.fillWidth: true
-                text: qsTr("Flushing volume (mm³) for each filament pair.")
+                text: qsTr("冲洗体积 (mm³) 按耗材对两两给出。")
                 color: Theme.textPrimary
                 font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.Wrap
@@ -479,7 +481,7 @@ CxDialog {
                 // [min, 900] window (updateVolumeRange, WipingDialog.html:
                 // 454-459); the panel turns red while a cell is out of range
                 // (html:659-666).
-                text: qsTr("Suggestion: Flushing Volume in range [%1, %2]")
+                text: qsTr("建议冲洗体积范围 [%1, %2]")
                     .arg(root.minFlushVolume.toFixed(0))
                     .arg(root.typicalMaxFlushVolume)
                 color: root.hasOutOfRangeCell ? Theme.statusError
@@ -549,11 +551,12 @@ CxDialog {
 
             Text {
                 Layout.fillWidth: true
-                text: qsTr("The multiplier should be in range [0.50, 3.00].")
+                text: qsTr("倍率应在 [0.50, 3.00] 范围内。")
                 color: Theme.textTertiary
                 font.pixelSize: Theme.fontSizeMD
                 wrapMode: Text.Wrap
             }
+        }
         }
     }
 

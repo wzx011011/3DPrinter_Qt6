@@ -11,9 +11,9 @@ CxDialog {
     closePolicy: Popup.CloseOnEscape
     dialogTitle: qsTr("固件升级")
 
-    anchors.centerIn: parent
+    anchors.centerIn: Overlay.overlay
     width: 460
-    height: 250
+    height: 210
 
     contentItem: ColumnLayout {
         anchors.fill: parent

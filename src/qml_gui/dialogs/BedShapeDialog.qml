@@ -58,8 +58,11 @@ CxDialog {
         const parts = ("" + p).split("/")
         return parts[parts.length - 1]
     }
-    function textureMissing(p) {
-        return p !== "" && root.editorVm && !root.editorVm.fileExists(p)
+    function textureMissing(p, kind) {
+        // U02b: honours the vendor-asset fallback — bare profile-bundled
+        // names render via bedTextureFile/bedModelFile (EditorViewModel), so
+        // they are seeded assets, not missing files.
+        return p !== "" && root.editorVm && !root.editorVm.bedAssetExists(kind || "texture", p)
     }
     function textureTip(p) {
         if (p === "") return ""
@@ -335,7 +338,7 @@ CxDialog {
                     Layout.fillWidth: true
                     elide: Text.ElideMiddle
                     text: root.textureName(root.customModel)
-                    color: root.textureMissing(root.customModel)
+                    color: root.textureMissing(root.customModel, "model") ? Theme.statusError : Theme.textSecondary
                         ? Theme.statusError : Theme.textSecondary
                     font.pixelSize: Theme.fontSizeSM
                     ToolTip.visible: root.customModel !== "" && mdlTipHover.hovered

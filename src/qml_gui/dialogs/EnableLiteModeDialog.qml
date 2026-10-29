@@ -17,15 +17,16 @@ CxDialog {
 
     dialogTitle: qsTr("预览模式设置")
 
-    anchors.centerIn: parent
+    // Centering comes from CxDialog (Overlay.overlay); the instance-level
+    // `anchors.centerIn: parent` override shadowed it and stuck the dialog
+    // at (0,0).
     width: 400
-    // U04 (revised in review): static heights clip this content — the former
-    // 280px viewport showed only 188px of ≈249px content, and even 320px
-    // leaves 224px (320 - header 44 - footer 52). Size from the body column
-    // like WipeTowerDialog.qml:60-65 so the toggle row can never clip behind
-    // the footer.
-    height: bodyColumn.implicitHeight + 2 * Theme.spacingXXL
-            + Theme.dialogHeaderHeight + Theme.dialogFooterHeight
+    // U04 (revised in review): static heights clip this content — size from
+    // the body column's implicit height. The ScrollView wrapper guarantees a
+    // transient under-estimate scrolls instead of clipping (round0 audit's
+    // title-clip symptom); the floor keeps the toggle row above the footer.
+    height: Math.max(340, bodyColumn.implicitHeight + 2 * Theme.spacingXXL
+            + Theme.dialogHeaderHeight + Theme.dialogFooterHeight)
 
     // Lite mode state (fork-only dialog: the pinned upstream has no
     // EnableLiteModeDialog and no gcode_preview_lite_mode config key — the
@@ -38,11 +39,17 @@ CxDialog {
         liteModeEnabled = Backend.gcodePreviewLiteMode
     }
 
-    contentItem: ColumnLayout {
-        id: bodyColumn
+    contentItem: ScrollView {
+        id: liteScroll
         anchors.fill: parent
         anchors.margins: Theme.spacingXXL
-        spacing: Theme.spacingLG
+        clip: true
+        contentWidth: availableWidth
+
+        ColumnLayout {
+            id: bodyColumn
+            width: liteScroll.availableWidth
+            spacing: Theme.spacingLG
         // Info icon + description
         RowLayout {
             Layout.fillWidth: true
@@ -157,6 +164,7 @@ CxDialog {
                 color: Theme.textTertiary
                 font.pixelSize: Theme.fontSizeXS
             }
+        }
         }
     }
 
