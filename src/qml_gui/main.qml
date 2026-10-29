@@ -158,6 +158,7 @@ ApplicationWindow {
             qsTr("OBJ 文件 (*.obj)"),
             qsTr("STEP 文件 (*.step *.stp)"),
             qsTr("AMF 文件 (*.amf)"),
+            qsTr("SVG 文件 (*.svg)"),
             qsTr("G-code 文件 (*.gcode)"),
             qsTr("压缩包 (*.zip)"),
             qsTr("所有文件 (*)")
@@ -179,6 +180,17 @@ ApplicationWindow {
             // Plater.cpp:10037-10058).
             if (modelPath.toLowerCase().substring(modelPath.length - 6) === ".gcode") {
                 Backend.openExternalGcode(modelPath)
+                return
+            }
+            // R1C-02: an .svg rides the SVG emboss flow (same routing as the
+            // drop handler) — import adds the volume to the selection or
+            // parks the path for the SVG gizmo panel.
+            if (modelPath.toLowerCase().substring(modelPath.length - 4) === ".svg") {
+                if (Backend.editorViewModel) {
+                    Backend.editorViewModel.svgFilePath = modelPath
+                    if (Backend.editorViewModel.hasSelection)
+                        Backend.editorViewModel.importSVG()
+                }
                 return
             }
             Backend.topbarImportModel(modelPath)

@@ -430,6 +430,14 @@ Item {
             enabled: root.ctxAvail("duplicate")
             onTriggered: root.editorVm.duplicateSelectedObjects()
         }
+        // R1C-03: scale the selection to fit the print volume (upstream
+        // "Scale selection to fit print volume", GUI_Factories.cpp:1279;
+        // API existed orphaned).
+        CxMenuItem {
+            text: qsTr("缩放至打印体积")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount > 0
+            onTriggered: root.editorVm.scaleSelectionToFitBed()
+        }
         // R1A-12: move the selected object to another plate (upstream
         // ObjectList "Extruder"-adjacent plate ops; API existed orphaned).
         CxMenu {
