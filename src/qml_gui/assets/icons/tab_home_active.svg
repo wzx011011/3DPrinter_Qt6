@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M1.5,7.5l8-5,8,5v9a1,1,0,0,1-1,1h-5v-6a1,1,0,0,0-1-1h-2a1,1,0,0,0-1,1v6h-5a1,1,0,0,1-1-1Z" style="fill:none;stroke:#fff;stroke-linecap:round;stroke-linejoin:round"/></svg>
+<!-- R1B-23: stroke moved off #fff — the only consumer is MonitorPage's
+     "返回主页" ghost button on the theme-following page background, where
+     white ink vanished in light mode. Upstream neutral icon ink
+     (resources/images/monitor_arrow.svg stroke #909090) stays legible on
+     both themes. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20"><path d="M1.5,7.5l8-5,8,5v9a1,1,0,0,1-1,1h-5v-6a1,1,0,0,0-1-1h-2a1,1,0,0,0-1,1v6h-5a1,1,0,0,1-1-1Z" style="fill:none;stroke:#909090;stroke-linecap:round;stroke-linejoin:round"/></svg>

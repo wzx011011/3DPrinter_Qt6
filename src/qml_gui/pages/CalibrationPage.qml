@@ -339,6 +339,7 @@ Item {
                                 model: root._calibItems
 
                                 delegate: Rectangle {
+                                    id: calibRow
                                     required property var modelData
                                     width: parent.width - 8
                                     x: 4
@@ -363,21 +364,33 @@ Item {
                                         return Theme.textDisabled                            // NotStarted
                                     }
 
+                                    // R1B-23: the dot anchors to the row edge
+                                    // instead of consuming Row-layout space —
+                                    // the old in-Row placement shifted the
+                                    // icon/text of every status-bearing row
+                                    // sideways vs. the plain rows, and its
+                                    // color binding walked one parent too far
+                                    // (parent.parent.parent = the Column, whose
+                                    // undefined statusColor left the dot at the
+                                    // Rectangle default white — invisible on
+                                    // the light surface, a floating white speck
+                                    // in dark).
+                                    Rectangle {
+                                        width: 6
+                                        height: 6
+                                        radius: Theme.radiusSM
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: Theme.spacingXXS
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        color: calibRow.statusColor
+                                        visible: calibRow.modelData.status !== 0 || !calibRow.modelData.startable
+                                    }
+
                                     Row {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.left: parent.left
                                         anchors.leftMargin: Theme.spacingLG
                                         spacing: Theme.spacingMD
-
-                                        // Status dot
-                                        Rectangle {
-                                            width: 6
-                                            height: 6
-                                            radius: Theme.radiusSM
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: parent.parent.parent.statusColor
-                                            visible: modelData.status !== 0 || !modelData.startable
-                                        }
 
                                         Text {
                                             text: modelData.icon || "\u2699"

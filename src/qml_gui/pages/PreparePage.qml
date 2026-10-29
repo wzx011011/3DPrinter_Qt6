@@ -2288,6 +2288,16 @@ Item {
         // Gradient overlay removed — was blocking GL FBO rendering
 
         // 支撑/缝线绘制信息面板（对齐上游 GLGizmoFdmSupports info panel）
+        // R1B-19: the strip pins to the upstream dark-glass window treatment
+        // in BOTH themes (ImGuiWrapper::COL_WINDOW_BACKGROUND {0.1,0.1,0.1,0.8},
+        // ImGuiWrapper.cpp:170 + :3453 — theme-independent, same family as
+        // tipGlassBg). The old Theme.bgFloating surface rendered pale-yellow
+        // in light / purple in dark: its hex literals store the alpha last
+        // (#f5f7fad9 / #4f4f51d9) but QML parses 8-digit hex as #AARRGGBB,
+        // so the blue byte lands in the alpha slot of the sampled pixel.
+        // The token fix belongs to the ThemeTokens table (RhiViewport.h,
+        // out of this wave's reach); the glass tokens below already carry
+        // the pinned values.
         Rectangle {
             id: transformMiniPanel
             anchors.top: parent.top
@@ -2296,9 +2306,9 @@ Item {
             width: transformMiniContent.implicitWidth + 24
             height: transformMiniContent.implicitHeight + 14
             radius: Theme.radiusMD
-            color: Theme.bgFloating
+            color: Theme.tipGlassBg
             border.width: 1
-            border.color: Theme.borderSubtle
+            border.color: Theme.tipGlassBorder
             visible: root.editorVm
                      && (viewport3d.gizmoMode === GLViewport.GizmoMove
                          || viewport3d.gizmoMode === GLViewport.GizmoRotate
@@ -2331,7 +2341,8 @@ Item {
                           : viewport3d.gizmoMode === GLViewport.GizmoRotate
                             ? qsTr("Rotate")
                             : qsTr("Scale")
-                    color: Theme.textPrimary
+                    // R1B-19: pinned-light text on the pinned-dark glass.
+                    color: Theme.tipGlassText
                     font.pixelSize: Theme.fontSizeSM
                     font.bold: true
                 }
@@ -2366,7 +2377,10 @@ Item {
                 TransformMetricField {
                     axisName: "Y"
                     sidebarField: viewport3d.gizmoMode === GLViewport.GizmoMove ? "position_y" : viewport3d.gizmoMode === GLViewport.GizmoRotate ? "rotation_y" : "scale_y"
-                    accentColor: Theme.textTertiary
+                    // R1B-19: the Y axis label sits on the pinned-dark glass —
+                    // use the pinned-light dim ink (theme-flipping textTertiary
+                    // went near-black on it in light mode).
+                    accentColor: Theme.tipGlassTextDim
                     decimals: viewport3d.gizmoMode === GLViewport.GizmoScale ? 2 : 1
                     value: {
                         if (viewport3d.gizmoMode === GLViewport.GizmoMove)
@@ -2416,7 +2430,8 @@ Item {
                 Text {
                     visible: viewport3d.gizmoMode === GLViewport.GizmoMove
                     text: root.settingsVm ? root.settingsVm.lengthUnitLabel() : "mm"
-                    color: Theme.textTertiary
+                    // R1B-19: pinned-light dim text on the pinned-dark glass.
+                    color: Theme.tipGlassTextDim
                     font.pixelSize: Theme.fontSizeXS
                 }
             }

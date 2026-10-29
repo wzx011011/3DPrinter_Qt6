@@ -1,5 +1,9 @@
 <!-- Source: Tabler Icons (MIT License) -->
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dce5f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<!-- R1B-15: stroke moved off the chrome ink #dce5f1 (only legible on dark
+     chrome) to the upstream neutral icon ink #909090 so the unselected
+     ghost button reads on the light page background too
+     (upstream pin: resources/images/monitor_arrow.svg stroke #909090). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#909090" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <path d="M13 5h8" />
   <path d="M13 9h5" />
   <path d="M13 15h8" />

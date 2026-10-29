@@ -295,9 +295,13 @@ CxDialog {
                     }
 
                     // Notification preferences（对齐上游 notification_manager preferences）
+                    // R1B-14: section titles live on the theme-following content
+                    // pane, so they take content tokens (textPrimary) — chromeText
+                    // is pinned near-white (#fefefe light row of ThemeTokens) and
+                    // only pairs with dark chrome panels (0ecf1da lesson).
                     Text {
                         text: qsTr("通知设置")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                         Layout.topMargin: 8
                     }
 
@@ -414,7 +418,7 @@ CxDialog {
                             Layout.preferredWidth: 200
                             onMoved: root.settingsVm.setFontSize(Math.round(value))
                         }
-                        Text { text: root.settingsVm.fontSize + "px"; color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM }
+                        Text { text: root.settingsVm.fontSize + "px"; color: Theme.textSecondary; font.pixelSize: Theme.fontSizeSM }
                     }
 
                     RowLayout {
@@ -471,7 +475,10 @@ CxDialog {
                                 }
                                 Text {
                                     text: modelData
-                                    color: root.settingsVm.languageIndex === index ? Theme.accent : Theme.chromeText
+                                    // R1B-14 class: unselected row sits on the
+                                    // light bgSurface card — content token, not
+                                    // the pinned-white chromeText.
+                                    color: root.settingsVm.languageIndex === index ? Theme.accent : Theme.textPrimary
                                     font.pixelSize: Theme.fontSize13
                                 }
                             }
@@ -492,7 +499,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("快捷键绑定")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
@@ -543,7 +550,7 @@ CxDialog {
                                         }
                                         Text {
                                             text: modelData.desc
-                                            color: Theme.chromeText; font.pixelSize: Theme.fontSizeSM
+                                            color: Theme.textPrimary; font.pixelSize: Theme.fontSizeSM
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
@@ -560,7 +567,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("默认打印机设置")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
@@ -668,7 +675,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("软件更新")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     // Current version info
@@ -681,7 +688,7 @@ CxDialog {
                             spacing: 4
                             Text {
                                 text: qsTr("当前版本：2.4.0-dev (Qt6 Edition)")
-                                color: Theme.chromeText; font.pixelSize: Theme.fontSizeMD
+                                color: Theme.textPrimary; font.pixelSize: Theme.fontSizeMD
                             }
                             Text {
                                 text: qsTr("上游基线：OrcaSlicer main branch")
@@ -775,7 +782,7 @@ CxDialog {
                     // SpeedLimitDialog.)
                     Text {
                         text: qsTr("工具与设备对话框")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     RowLayout {
@@ -871,7 +878,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("开发者选项")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
@@ -984,7 +991,7 @@ CxDialog {
 
                     Text {
                         text: qsTr("AI 助手")
-                        color: Theme.chromeText; font.pixelSize: Theme.fontSize13; font.bold: true
+                        color: Theme.textPrimary; font.pixelSize: Theme.fontSize13; font.bold: true
                     }
 
                     Text {
