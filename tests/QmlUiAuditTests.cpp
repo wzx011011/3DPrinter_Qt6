@@ -3706,6 +3706,24 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar object click must guard on a qualified selection before switching");
   QVERIFY2(sidebar.contains(QStringLiteral("onPendingUnsavedChangesRequested")),
            "LeftSidebar must listen to pendingUnsavedChangesRequested (dirty-preset scope/preset switches were silent no-ops)");
+
+  // 2026-10-29 Orca parity (ParamsPanel::set_active_tab + show_object_list),
+  // restored by user request after the revert: 对象 mode swaps the whole
+  // stack — the object tree shows above the params area at a FIXED slot
+  // (120px, internal scroll — the params top edge must never move), an
+  // object selection leads with the Frequent page, and a plate selection
+  // renders the single 盘参数设置 page in the SAME strip.
+  QVERIFY2(sidebar.contains(QStringLiteral("readonly property bool objectsMode"))
+               && sidebar.contains(QStringLiteral("visible: root.objectsMode")),
+           "LeftSidebar objects mode must show the object tree (Orca show_object_list)");
+  QVERIFY2(sidebar.contains(QStringLiteral("Layout.preferredHeight: root.objectsMode ? 120 : 0")),
+           "LeftSidebar tree slot must be a FIXED 120px (content-hugging slot made the params area jump)");
+  QVERIFY2(sidebar.contains(QStringLiteral("\"Frequent\""))
+               && sidebar.contains(QStringLiteral("盘参数设置"))
+               && sidebar.contains(QStringLiteral("visibleParamsTabs")),
+           "LeftSidebar objects mode must carry the Frequent page and the Plate page (TabPrintModel/TabPrintPlate)");
+  QVERIFY2(sidebar.contains(QStringLiteral("treeRowActivated")),
+           "LeftSidebar scope must follow the object-tree selection (Orca set_active_tab picks the model tab by selection type)");
 }
 
 // v5.16 Phase 235 (PSET2-01..08): preset system completion source audit.

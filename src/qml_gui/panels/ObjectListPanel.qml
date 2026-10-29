@@ -61,6 +61,12 @@ Rectangle {
 
     readonly property int rowHeight: 26
 
+    // Emitted after _selectRow routes a row click: the objects-mode params
+    // host follows the clicked NODE TYPE (Orca ParamsPanel::set_active_tab
+    // picks the model tab by selection type — plate row → plate settings,
+    // object row → the object page set).
+    signal treeRowActivated(int nodeType, int plateIndex, int sourceObjectIndex)
+
     color: Theme.bgElevated
     radius: Theme.radiusSM
     border.width: 1
@@ -568,5 +574,8 @@ Rectangle {
             if (row.plateIndex >= 0)
                 root.editorVm.setCurrentPlateIndex(row.plateIndex)
         }
+        // AFTER the selection call so settingsTarget*/currentPlateIndex are
+        // fresh when the params host re-targets the scope.
+        root.treeRowActivated(row.nodeType, row.plateIndex, row.sourceObjectIndex)
     }
 }

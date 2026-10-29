@@ -580,9 +580,26 @@ bool ConfigOptionModel::matchesPage(int row, const QString &page) const
     return false;
   if (page.isEmpty())
     return true;
+  // Orca objects-mode pages (Tab.cpp TabPrintModel::build / TabPrintPlate):
+  // the Frequent page is a fixed four-line whitelist and the Plate page the
+  // plate_keys whitelist — both cut across the category-derived pages, so
+  // they resolve by key set before the per-option page lookup.
+  static const QSet<QString> kFrequentKeys = {
+      QStringLiteral("layer_height"), QStringLiteral("sparse_infill_density"),
+      QStringLiteral("wall_loops"), QStringLiteral("enable_support")};
+  // Tab.cpp:94 plate_keys.
+  static const QSet<QString> kPlateKeys = {
+      QStringLiteral("curr_bed_type"), QStringLiteral("skirt_start_angle"),
+      QStringLiteral("print_sequence"), QStringLiteral("spiral_mode"),
+      QStringLiteral("first_layer_sequence_choice"),
+      QStringLiteral("other_layers_sequence_choice")};
+  const ConfigOption &o = m_options[row];
+  if (page == QLatin1String("Frequent"))
+    return kFrequentKeys.contains(o.key);
+  if (page == QLatin1String("Plate"))
+    return kPlateKeys.contains(o.key);
   // Same page resolution as filterIndicesByPage: explicit per-option page,
   // otherwise the legacy category-derived fallback.
-  const ConfigOption &o = m_options[row];
   const QString resolvedPage = o.page.isEmpty() ? pageForCategory(o.category) : o.page;
   return resolvedPage == page;
 }

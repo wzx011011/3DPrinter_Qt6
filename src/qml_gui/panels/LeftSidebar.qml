@@ -73,6 +73,66 @@ Rectangle {
         { key: "Others", label: qsTr("其他") }
     ]
 
+    // ── Orca objects mode (ParamsPanel::set_active_tab + show_object_list):
+    // the Global/Objects toggle swaps the whole params stack. 对象 = object
+    // tree above a model-config page set; 全局 = the standard process pages
+    // with no tree.
+    readonly property bool objectsMode: !!root.configVm && root.configVm.settingsScope !== "global"
+    // Plate page when the scope IS plate, object pages when the scope is
+    // object/volume — TabPrintPlate vs TabPrintObject. Scope-driven (not
+    // selection-driven): the tree selection re-targets the scope, and the
+    // page set follows it.
+    readonly property bool objectScopeActive: root.objectsMode
+        && !!root.configVm && root.configVm.settingsScope !== "plate"
+    readonly property var paramsPages: {
+        if (!root.objectsMode) return root.paramsTabs
+        if (root.objectScopeActive)
+            return [{ key: "Frequent", label: qsTr("常用") }].concat(root.paramsTabs)
+        return [{ key: "Plate", label: qsTr("盘参数设置") }]
+    }
+    // The tab strip mirrors the page set — plate mode shows its single
+    // 盘参数设置 tab as selected: the strip (and everything below it)
+    // never moves when the tree selection flips plate ↔ object.
+    readonly property var visibleParamsTabs: root.paramsPages
+    onObjectsModeChanged: {
+        paramsCurrentTab = root.objectsMode
+            ? (root.objectScopeActive ? "Frequent" : "Plate") : "Quality"
+    }
+    // The current tab must always name a page of the ACTIVE page set: a
+    // scope flip between plate and object swaps the set, so re-seat the tab
+    // (otherwise the host shows no page at all — every delegate is shifted
+    // out of the window).
+    onObjectScopeActiveChanged: {
+        paramsCurrentTab = root.objectScopeActive ? "Frequent"
+                                                  : "Plate"
+    }
+    function updateScopeForSelection(force) {
+        // force=true = the 对象 pill click (entering objects mode FROM
+        // global, when objectsMode is still false); selection-driven calls
+        // only re-target inside objects mode.
+        if (!root.configVm || !root.editorVm)
+            return
+        if (!root.objectsMode && !force)
+            return
+        if (root.editorVm.selectedObjectIndex >= 0
+            && root.editorVm.canOpenSelectionSettings) {
+            root.configVm.requestObjectScope(
+                root.editorVm.settingsTargetType,
+                root.editorVm.settingsTargetName,
+                root.editorVm.settingsTargetObjectIndex, -1)
+        } else if (root.editorVm.currentPlateIndex >= 0) {
+            root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
+        }
+    }
+    Connections {
+        // Selection drives the model page (Orca: part → layer → object →
+        // plate tab by selection type). null-safe target for the smoke
+        // harness (pages instantiate without a configVm/editorVm pair).
+        target: root.editorVm ? root.editorVm : null
+        function onSelectionChanged() { root.updateScopeForSelection() }
+        function onCurrentPlateIndexChanged() { root.updateScopeForSelection() }
+    }
+
 
     color: panelSurface
     radius: 0
@@ -763,11 +823,30 @@ Rectangle {
         ObjectListPanel {
             id: objectListPanel
             Layout.fillWidth: true
-            // Orca show_object_list(m_mode_region): the tree shows exactly
-            // in objects mode, above the params area (1:3 sizer weight,
-            // Plater.cpp:3243-3245).
-            visible: false
+            // Orca show_object_list(m_mode_region): the tree shows exactly in
+            // objects mode. FIXED slot (120px, scrolls inside) — the params
+            // area's top edge must never move when the tree content grows or
+            // a node expands.
+            visible: root.objectsMode
+            Layout.preferredHeight: root.objectsMode ? 120 : 0
+            Layout.maximumHeight: root.objectsMode ? 120 : 0
             editorVm: root.editorVm
+            // 盘与对象统一在对象按钮下：选中树的盘节点 → 盘参数设置，
+            // 选中模型节点 → 对象页集（用户对照 Orca 2026-10-29）。
+            onTreeRowActivated: function(nodeType, plateIndex, sourceObjectIndex) {
+                if (!root.objectsMode || !root.configVm || !root.editorVm)
+                    return
+                if (nodeType === objectListPanel.nodePlate && plateIndex >= 0) {
+                    root.configVm.requestPlateScope(plateIndex)
+                } else if (nodeType === objectListPanel.nodeObject
+                           && sourceObjectIndex >= 0
+                           && root.editorVm.canOpenSelectionSettings) {
+                    root.configVm.requestObjectScope(
+                        root.editorVm.settingsTargetType,
+                        root.editorVm.settingsTargetName,
+                        root.editorVm.settingsTargetObjectIndex, -1)
+                }
+            }
             onContextMenuResolved: function(family, menuX, menuY) {
                 root.objectListMenuRequested(family, menuX, menuY)
             }
@@ -804,7 +883,7 @@ Rectangle {
                     spacing: 0
 
                     Repeater {
-                        model: root.paramsTabs
+                        model: root.visibleParamsTabs
                         delegate: Item {
                             id: paramsTabDelegate
                             required property var modelData
@@ -897,7 +976,7 @@ Rectangle {
 
                         Repeater {
                             id: paramsPagesRepeater
-                            model: root.paramsTabs
+                            model: root.paramsPages
                             delegate: Item {
                                 id: paramsPageHost
                                 required property var modelData
@@ -925,10 +1004,26 @@ Rectangle {
                                         id: paramsPage
                                         anchors.fill: parent
                                         clip: true
+                                        // Objects mode routes the whole host
+                                        // at ONE page: Plate when the scope is
+                                        // plate, the clicked tab otherwise.
+                                        property string effectivePage:
+                                            root.objectsMode && !root.objectScopeActive
+                                            ? "Plate" : paramsPageHost.pageKey
                                         // Reference rhythm: 26px rows on a
                                         // 30px pitch (4px inter-row gap).
                                         spacing: 4
                                         cacheBuffer: 600
+                                        // Plate page leads with curr_bed_type
+                                        // (TabPrintPlate appends it before
+                                        // skirt_start_angle). A ListView
+                                        // header — page CONTENT, not page
+                                        // frame — so the list's top edge stays
+                                        // identical across modes; the same
+                                        // single source as the printer card
+                                        // cell (Q11-④).
+                                        header: paramsPage.effectivePage === "Plate"
+                                                ? plateBedHeader : null
                                         // Per-page C++ filter proxy (replaces
                                         // the QML-side index-array filter
                                         // orchestration). Tab flips only
@@ -938,9 +1033,42 @@ Rectangle {
                                         // now refreshes visible rows in place.
                                         model: ConfigOptionFilterProxy {
                                             sourceModel: root.paramsOptionModel
-                                            page: paramsPageHost.pageKey
+                                            page: paramsPage.effectivePage
                                             searchText: root.paramsSearchText
                                             advancedMode: root.paramsAdvancedMode
+                                        }
+
+                                        Component {
+                                            id: plateBedHeader
+                                            RowLayout {
+                                                width: paramsPage.width
+                                                height: 30
+                                                spacing: 8
+
+                                                Text {
+                                                    text: qsTr("热床类型")
+                                                    color: Theme.textPrimary
+                                                    font.pixelSize: Theme.fontSizeLG
+                                                    elide: Text.ElideRight
+                                                    Layout.leftMargin: Theme.insetXL
+                                                }
+
+                                                Item { Layout.fillWidth: true }
+
+                                                CxComboBox {
+                                                    Layout.preferredWidth: 150
+                                                    Layout.preferredHeight: 26
+                                                    Layout.rightMargin: Theme.insetMD
+                                                    font.pixelSize: Theme.fontSizeMD
+                                                    model: root.editorVm ? root.editorVm.bedTypeLabels : []
+                                                    enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
+                                                    currentIndex: root.editorVm ? root.editorVm.currentPlateBedType : 0
+                                                    onActivated: function(index) {
+                                                        if (root.editorVm && root.editorVm.currentPlateIndex >= 0)
+                                                            root.editorVm.setPlateBedType(root.editorVm.currentPlateIndex, index)
+                                                    }
+                                                }
+                                            }
                                         }
 
                                         ScrollBar.vertical: ScrollBar {
@@ -997,9 +1125,15 @@ Rectangle {
                                             // *accepted* row; indexing
                                             // neighbors by source row is wrong
                                             // under a filtered proxy.
+                                            // Frequent/Plate pages render
+                                            // their rows bare (Orca: a single
+                                            // heading, no per-group
+                                            // StaticLines).
                                             readonly property bool showGroupHeader:
                                                 optGroup !== ""
                                                 && (index === 0 || optGroup !== optPrevGroup)
+                                                && paramsPage.effectivePage !== "Frequent"
+                                                && paramsPage.effectivePage !== "Plate"
 
                                             width: paramsPage.width
                                             height: optRow.totalHeight
@@ -1355,10 +1489,11 @@ Rectangle {
         }
     }
 
-    // Scope pills live inside the process PixelHeader row (sidebar-5).
-    // BUILDGATE restore (2026-09-24): the plate pill is back — PREPSB-04
-    // (leftSidebarPresetControlsAreWiredAndHonest) locks the Global/Object/
-    // Plate scope set, and requestPlateScope stays on ConfigViewModel.
+    // Scope pills live inside the process PixelHeader row (sidebar-5):
+    // the Global/Object pair, joined capsule like the reference band. The
+    // PLATE scope is reached through the object tree's plate node
+    // (treeRowActivated → requestPlateScope) — PREPSB-04's plate wiring
+    // stays in this file without a third pill.
     // Scope pills live inside the process PixelHeader row (sidebar-5):
     // the Global/Object pair, joined capsule like the reference band. The
     // PLATE scope is reached through the object tree's plate node
@@ -1401,36 +1536,20 @@ Rectangle {
                     ScopeSegment {
                         text: qsTr("对象")
                         joined: true
-                        // The VM reverts an EMPTY targetName back to global
-                        // scope (activateObjectScope's empty-name branch), so
-                        // the old requestObjectScope("object", "", …) call was
-                        // a silent no-op. The pill stays clickable at all
-                        // times; a click without an exactly-one selection
-                        // raises an honest toast instead of switching — there
-                        // is no meaningful empty-object scope to switch to.
-                        selected: !!root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
-                        toolTipText: qsTr("编辑选中对象的参数")
+                        // 盘并入对象模式后，非全局即对象选中（盘参数
+                        // 设置也是对象模式的一页）。
+                        selected: !!root.configVm && root.configVm.settingsScope !== "global"
+                        toolTipText: qsTr("编辑选中对象/盘的参数")
+                        // Orca OnToggled: flipping to 对象 lands on the
+                        // model-config page the current selection implies —
+                        // an object → its Frequent/tabs, nothing → the plate
+                        // page. Never a dead click.
                         onClicked: {
-                            if (root.editorVm && root.editorVm.canOpenSelectionSettings && root.configVm) {
-                                root.configVm.requestObjectScope(
-                                    root.editorVm.settingsTargetType,
-                                    root.editorVm.settingsTargetName,
-                                    root.editorVm.settingsTargetObjectIndex, -1)
-                            } else {
-                                Backend.postError(qsTr("请先选中一个对象（单击选中），再编辑对象参数。"), 1)
-                            }
-                        }
-                    }
-
-                    ScopeSegment {
-                        text: qsTr("盘")
-                        joined: true
-                        // !! guard: same Qt 6.12 undefined-to-bool warning as above.
-                        selected: !!root.configVm && root.configVm.settingsScope === "plate"
-                        enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
-                        onClicked: {
-                            if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)
-                                root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
+                            if (!root.configVm)
+                                return
+                            if (root.configVm.settingsScope !== "global")
+                                return
+                            root.updateScopeForSelection(true)
                         }
                     }
                 }
