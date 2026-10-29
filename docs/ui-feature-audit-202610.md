@@ -238,3 +238,15 @@ F8 落地（9062efe，包含并行会话停滞近两天的在途渲染工作—�
 **收敛达成**：Round1（19 项 UI）+ 冲刺 F1-F7（多色链路/孤儿入口/文件链/校准条目/键集）+ F8（4 项渲染+吸附）全部落地并有截图/门禁证据；剩余 open 全部为"需硬件/需独立立项"类（六塔生成器族、切割开关、FB-P1-04 真机复认、Windows 回归），不阻塞收敛口径。
 
 12 笔本地提交（5d1cd93..9062efe）未推送，待用户指示。
+
+## 13. F4 六塔精确评估（2026-10-30 02:1x，修正 §10.2）
+
+**成本大幅下修**：CP5 fork 六塔不是"程序生成几何"——`Plater::calib_limit_speed`（Plater.cpp:18389-18463）的结构是 **加载自带 STL（resources/calib/limit_speed/limitSpeed.stl）+ 固定 config 覆盖（~40 行）+ 引擎 per-layer sweep**（`set_calib_params(params)`，与我们的 Tolerance Test loadOnly 同构 + 一步 config 段）。六塔 STL 资产齐备（limitSpeed/speedtower/accSpeedTower/fanSpeed/X_Y_Jerk.stl；xy_offset 是 gcode 对比型，形态不同）。
+
+**真正的硬点在引擎**：CP5 fork 给 OrcaSlicer 打了 CalibMode 扩展枚举（calib.hpp:27-35：Limit_Speed/Speed_Tower/X_Y_Jerk/Fan_Speed/Limit_Acceleration/Acceleration_Tower/Accel2Decel/Arc2Lerance）+ GCode/GCodeProcessor 的 per-layer config sweep 消费。我们子模块的上游 OrcaSlicer 枚举止于 Calib_Cornering。
+
+**移植路径（两选一，需用户拍板）**：
+1. `patches/orcaslicer/0017` 补丁：把 CP5 的枚举扩展 + GCode per-layer sweep（~300-500 行 C++）打进子模块（项目已有 0008-0016 补丁先例，属约定允许路径），加每塔 ~50 行服务端 load+config 段。合计约 1-2 天，风险=切片引擎核心，需全套门禁+切片回归。
+2. 不打引擎补丁：仅接入"Tolerance Test 式 load-only 六塔"（加载 STL+固定 config，无 per-layer sweep）——塔能打但失去逐层参数扫描意义，**不推荐**（形似神不似）。
+
+**建议**：路线 1，单独立项为下一战役首批（与本收敛战役解耦），由用户决定优先级。
