@@ -87,6 +87,14 @@ public:
   Q_INVOKABLE QVariant presetValue(const QString &presetName, const QString &key) const;
   /// 保存当前值到指定预设
   bool savePresetValues(const QString &presetName, const QHash<QString, QVariant> &values);
+  /// F1 (R1C-10): create a durable user preset from a (possibly read-only)
+  /// source preset with the given overrides applied — the "<name> (modified)"
+  /// derivation for system presets that savePresetValues must not touch.
+  bool deriveUserPresetFrom(const QString &sourceName, const QString &newName,
+                            const QHash<QString, QVariant> &overrides);
+  /// F1 (R1C-10): one preset's filament swatch colour (the per-preset half
+  /// of activeFilamentColours()).
+  QString filamentColourForPreset(const QString &presetName) const;
   /// 检查指定预设是否存在
   bool hasPreset(const QString &presetName) const;
   // v2.4 IO-04/05: 预设包导入导出（JSON 格式，简化版）

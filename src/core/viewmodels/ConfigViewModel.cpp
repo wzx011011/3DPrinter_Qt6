@@ -632,6 +632,55 @@ bool ConfigViewModel::saveCurrentPreset()
   return true;
 }
 
+int ConfigViewModel::filamentSlotCount() const
+{
+  return filamentSlotPresets_.size() + 1;
+}
+
+bool ConfigViewModel::setFilamentColourForSlot(int slot, const QString &colour)
+{
+  // F1 (R1C-10): see the header note. The colour lives on the slot's
+  // filament preset as default_filament_colour (coStrings, first entry is
+  // the swatch source — PresetService::activeFilamentColours reads it).
+  PresetService *svc = presetService();
+  if (!svc || slot < 0 || colour.isEmpty())
+    return false;
+  const QString presetName = filamentPresetForSlot(slot);
+  if (presetName.isEmpty())
+    return false;
+  QHash<QString, QVariant> values = svc->presetValues(presetName);
+  values.insert(QStringLiteral("default_filament_colour"), QStringList{colour});
+  if (!svc->savePresetValues(presetName, values)) {
+    // Read-only (system) preset: derive "<name> (modified)" as a durable
+    // user preset and re-point the slot to it (upstream marks the modified
+    // preset instead of writing the system one).
+    const QString derived = presetName + QStringLiteral(" (modified)");
+    QHash<QString, QVariant> overrides;
+    overrides.insert(QStringLiteral("default_filament_colour"), QStringList{colour});
+    if (!svc->deriveUserPresetFrom(presetName, derived, overrides))
+      return false;
+    if (!requestFilamentPresetForSlot(slot, derived))
+      return false;
+    refreshPresetLists();
+    if (derived == currentFilamentPreset_) {
+      filamentPresetValues_ = svc->presetValues(derived);
+      updateMergedPresetValues();
+      applyScopeValues();
+    }
+    emit stateChanged();
+    return true;
+  }
+  // Keep the viewmodel caches coherent (saveCurrentPreset pattern) when the
+  // edited slot holds the current filament preset.
+  if (presetName == currentFilamentPreset_) {
+    filamentPresetValues_ = values;
+    updateMergedPresetValues();
+    applyScopeValues();
+  }
+  emit stateChanged();
+  return true;
+}
+
 bool ConfigViewModel::isPresetDirty() const
 {
   const QString tier = normalizedTier(activePresetTier_);

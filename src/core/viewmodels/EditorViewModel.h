@@ -973,6 +973,9 @@ public:
   /// append_menu_item_change_filament GUI_Factories.cpp:1879-1961 +
   /// ObjectList::set_extruder_for_selected_items GUI_ObjectList.cpp:5622).
   /// extruder 0 = "Default"; 1..n = Filament n.
+  /// F1 (R1C-10): plater colour chip -> slot filament preset colour; syncs
+  /// the active-colour chain and notifies the swatch consumers.
+  Q_INVOKABLE bool setFilamentColourForSlot(int slot, const QString &colour);
   Q_INVOKABLE int configFilamentCount() const;
   Q_INVOKABLE int objectExtruderId(int objectIndex) const;
   Q_INVOKABLE void setExtruderForSelectedItems(int extruder);

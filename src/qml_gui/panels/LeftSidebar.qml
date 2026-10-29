@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import QtQuick.Controls
 import QtQuick.Layouts
 import OWzx
@@ -38,8 +39,23 @@ Rectangle {
     // update_multi_material_filament_presets slot-vector resize) so the
     // per-slot preset vector keeps matching the visible rows.
     property int filamentRowCount: 1
-    Component.onCompleted: {
-        filamentRowCount = Math.max(1, root.editorVm ? root.editorVm.extruderCount : 1)
+    // F1 (R1C-10): the row count follows the project's filament slot count
+    // (configVm.filamentSlotCount, filaments_count semantics) — the old
+    // one-shot seed from the printer preset's nozzle count showed a single
+    // row for multi-filament projects and never followed loads. The +/- buttons
+    // still mirror into configVm.setExtruderCount, so the re-seed converges.
+    Component.onCompleted: root.reseedFilamentRows()
+    function reseedFilamentRows() {
+        if (!root.configVm)
+            return
+        const n = Math.max(1, root.configVm.filamentSlotCount())
+        if (n !== filamentRowCount)
+            filamentRowCount = n
+    }
+    Connections {
+        // Guarded: the sidebar instantiates on pages without a ConfigViewModel.
+        target: root.configVm ? root.configVm : null
+        function onStateChanged() { root.reseedFilamentRows() }
     }
 
     readonly property int targetSidebarWidth: 392
@@ -515,6 +531,20 @@ Rectangle {
             collapsible: true
         }
 
+        // F1 (R1C-10): the slot colour chip opens the colour picker and
+        // writes the slot's filament preset colour (upstream Plater colour
+        // picker edits the preset's filament_colour).
+        ColorDialog {
+            id: filamentColourDialog
+            property int targetSlot: 0
+            title: qsTr("选择耗材颜色")
+            onAccepted: {
+                if (root.editorVm)
+                    root.editorVm.setFilamentColourForSlot(
+                        targetSlot, selectedColor.toString())
+            }
+        }
+
         Repeater {
             model: Math.max(1, root.filamentRowCount)
 
@@ -563,6 +593,17 @@ Rectangle {
                             color: Theme.textOnAccent
                             font.pixelSize: Theme.fontSizeXS
                             font.bold: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                filamentColourDialog.targetSlot = filamentPixelRow.index
+                                filamentColourDialog.selectedColor = root.filamentColor(filamentPixelRow.index)
+                                filamentColourDialog.open()
+                            }
                         }
                     }
 

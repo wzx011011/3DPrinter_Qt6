@@ -1307,6 +1307,30 @@ QStringList PresetService::materialsForVendor(const QString &vendor) const
   return result;
 }
 
+QString PresetService::filamentColourForPreset(const QString &presetName) const
+{
+  // F1 (R1C-10): the per-preset half of activeFilamentColours() — slot i's
+  // swatch reads ITS preset, not the library enumeration order.
+  const auto it = m_presetStore.constFind(presetName);
+  if (it == m_presetStore.constEnd())
+    return QStringLiteral("#F2754E");
+  const QVariant v = it.value().value(QStringLiteral("default_filament_colour"));
+  if (v.userType() == QMetaType::QStringList) {
+    const QStringList sl = v.toStringList();
+    return !sl.isEmpty() ? sl.first() : QStringLiteral("#F2754E");
+  }
+  if (v.userType() == QMetaType::QString)
+    return v.toString();
+  const QVariant v2 = it.value().value(QStringLiteral("filament_colour"));
+  if (v2.userType() == QMetaType::QStringList) {
+    const QStringList sl = v2.toStringList();
+    return !sl.isEmpty() ? sl.first() : QStringLiteral("#F2754E");
+  }
+  if (v2.userType() == QMetaType::QString)
+    return v2.toString();
+  return QStringLiteral("#F2754E");
+}
+
 QStringList PresetService::activeFilamentColours() const
 {
   // Phase 222 (FIL-COLOUR): enumerate all loaded filament presets and read
@@ -1323,26 +1347,7 @@ QStringList PresetService::activeFilamentColours() const
       colours.append(QStringLiteral("#F2754E"));
       continue;
     }
-    // default_filament_colour is coStrings (per-extruder); take the first
-    // entry, matching how upstream displays the swatch.
-    const QVariant v = it.value().value(QStringLiteral("default_filament_colour"));
-    if (v.userType() == QMetaType::QStringList) {
-      const QStringList sl = v.toStringList();
-      colours.append(!sl.isEmpty() ? sl.first() : QStringLiteral("#F2754E"));
-    } else if (v.userType() == QMetaType::QString) {
-      colours.append(v.toString());
-    } else {
-      // Also try filament_colour (some presets use it directly).
-      const QVariant v2 = it.value().value(QStringLiteral("filament_colour"));
-      if (v2.userType() == QMetaType::QStringList) {
-        const QStringList sl = v2.toStringList();
-        colours.append(!sl.isEmpty() ? sl.first() : QStringLiteral("#F2754E"));
-      } else if (v2.userType() == QMetaType::QString) {
-        colours.append(v2.toString());
-      } else {
-        colours.append(QStringLiteral("#F2754E"));
-      }
-    }
+    colours.append(filamentColourForPreset(name));
   }
   return colours;
 }
@@ -1564,6 +1569,33 @@ bool PresetService::savePresetValues(const QString &presetName, const QHash<QStr
   if (!writeUserPresetFile(presetCategory(presetName), presetName, values))
     return false;
   m_presetStore[presetName] = values;
+  return true;
+}
+
+bool PresetService::deriveUserPresetFrom(const QString &sourceName,
+                                         const QString &newName,
+                                         const QHash<QString, QVariant> &overrides)
+{
+  // F1 (R1C-10): system presets are read-only for savePresetValues; a user
+  // colour edit derives a durable "<name> (modified)" user preset carrying
+  // the source values plus the overrides, registered into the category
+  // enumeration so the lists and activeFilamentColours() see it.
+  if (!m_presetStore.contains(sourceName) || newName.isEmpty())
+    return false;
+  if (m_presetStore.contains(newName))
+    return false;
+  QHash<QString, QVariant> values = m_presetStore.value(sourceName);
+  for (auto it = overrides.constBegin(); it != overrides.constEnd(); ++it)
+    values.insert(it.key(), it.value());
+  const int category = presetCategory(sourceName);
+  if (!writeUserPresetFile(category, newName, values))
+    return false;
+  m_presetStore[newName] = values;
+  registerPresetMetadata(newName, category, false, false);
+  const QString inherits = m_presetInherits.value(sourceName);
+  if (!inherits.isEmpty())
+    m_presetInherits[newName] = inherits;
+  m_categoryPresets[category].append(newName);
   return true;
 }
 

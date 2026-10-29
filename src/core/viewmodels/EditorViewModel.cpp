@@ -4226,6 +4226,22 @@ QByteArray EditorViewModel::loadBedModelMesh(const QString &stlPath) const
 #endif
 }
 
+bool EditorViewModel::setFilamentColourForSlot(int slot, const QString &colour)
+{
+  // F1 (R1C-10): persist onto the slot's filament preset, then refresh the
+  // ProjectService active-colour mirror so extrudersColors()/swatches and
+  // the painted MMU faces pick the new colour up.
+  if (!configViewModel_)
+    return false;
+  const bool ok = configViewModel_->setFilamentColourForSlot(slot, colour);
+  if (!ok)
+    return false;
+  syncFilamentColours();
+  emit paintDataChanged();
+  emit stateChanged();
+  return true;
+}
+
 void EditorViewModel::syncFilamentColours()
 {
   // Phase 222 (FIL-COLOUR): read the active filament colours from
@@ -5698,11 +5714,24 @@ QVariantList EditorViewModel::extrudersColors() const
       "#9c27b0", "#4caf50", "#ff5722", "#607d8b",
   };
   const QStringList cfg = projectService_ ? projectService_->plateFilamentColours() : QStringList{};
+  // F1 (R1C-10): slot i's swatch reads slot i's preset colour — the
+  // library-enumeration order (cfg) has no per-slot meaning once slots carry
+  // their own (possibly derived) presets.
+  PresetService *presetSvc = configViewModel_ ? configViewModel_->presetService() : nullptr;
   QVariantList out;
   const int n = std::max(1, m_mmuExtruderCount);
   out.reserve(n);
-  for (int i = 0; i < n; ++i)
-    out.append(i < cfg.size() ? QVariant(cfg[i]) : QVariant(QString::fromUtf8(kCycle[size_t(i) % 8])));
+  for (int i = 0; i < n; ++i) {
+    QString c;
+    if (presetSvc) {
+      const QString slotPreset = configViewModel_->filamentPresetForSlot(i);
+      if (!slotPreset.isEmpty())
+        c = presetSvc->filamentColourForPreset(slotPreset);
+    }
+    if (c.isEmpty())
+      c = i < cfg.size() ? cfg[i] : QString::fromUtf8(kCycle[size_t(i) % 8]);
+    out.append(QVariant(c));
+  }
   return out;
 }
 #else

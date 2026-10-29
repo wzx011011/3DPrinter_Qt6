@@ -234,8 +234,17 @@ public:
   /// v5.16 (CIRC-04): per-slot filament preset selection (upstream
   /// PresetBundle::filament_presets vector semantics). Slot 0 mirrors the
   /// global current selection; slots 1..N hold their own preset.
+  /// F1 (R1C-10): the plater's filament slot count (slot vector + the
+  /// global slot 0) — the single source the sidebar rows and the
+  /// Change Filament menu model must follow (filaments_count semantics).
+  Q_INVOKABLE int filamentSlotCount() const;
   Q_INVOKABLE QString filamentPresetForSlot(int slot) const;
   Q_INVOKABLE bool requestFilamentPresetForSlot(int slot, const QString &name);
+  /// F1 (R1C-10): the plater colour chip writes the slot's filament preset
+  /// colour (upstream Plater colour picker edits the preset's
+  /// filament_colour, preset goes modified). Merges into the full preset
+  /// value set — savePresetValues replaces the store entry wholesale.
+  Q_INVOKABLE bool setFilamentColourForSlot(int slot, const QString &colour);
   Q_INVOKABLE bool isFilamentCompatibleForSlot(int slot) const;
   Q_INVOKABLE bool requestCurrentPrintPreset(const QString &name);
   Q_INVOKABLE bool saveCurrentPreset();
