@@ -32,6 +32,9 @@ struct CalibrationType
     bool        startable = false;
     QString     unavailableReason;
     int         calibMode = 0;
+    // F4a: load-only entries (Tolerance Test) bring in the bundled model
+    // without dispatching a calib slice.
+    bool        loadOnly = false;
     double      calibStart = 0.0;
     double      calibEnd = 0.0;
     double      calibStep = 0.0;

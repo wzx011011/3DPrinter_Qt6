@@ -240,6 +240,32 @@ void CalibrationServiceMock::buildMockData()
 
     CalibrationType bedLeveling;
     bedLeveling.id = "bed_leveling";
+    // F4a (R1C-01 partial): Tolerance Test — upstream MainFrame.cpp:3798-3805
+    // simply loads resources/calib/tolerance_test/CrealityToleranceTest.stl
+    // into a fresh calibration project (no sweep, manual interpretation).
+    // Ported as a load-only entry; the other six CP5 fork towers
+    // (Limit_Speed/Acceleration/Jitter/Dec_Acc/Fan/XY_Offset) need the
+    // CalibUtils fork generators and stay deferred (ledger §10.2).
+    CalibrationType toleranceTest;
+    toleranceTest.id = "tolerance_test";
+    toleranceTest.name = tr("Tolerance Test");
+    toleranceTest.icon = "";
+    toleranceTest.category = "slice";
+    toleranceTest.description = tr("Fit tolerance test model");
+    toleranceTest.longDesc = tr(
+        "Loads the upstream tolerance-test model for manual interpretation: "
+        "print it and check which clearance still moves freely to pick a "
+        "fit tolerance for printed assemblies.");
+    toleranceTest.previewLabel = tr("Tolerance test model");
+    toleranceTest.implemented = true;
+    toleranceTest.startable = true;
+    toleranceTest.loadOnly = true;
+    toleranceTest.steps = {
+        {"start",  tr("Introduction"), tr("Load the tolerance test model and print it as-is.")},
+        {"cali",   tr("Calibrate"),    tr("Print the loaded model, then check the clearances by hand.")},
+        {"finish", tr("Finish"),       tr("Pick the smallest clearance that still moves freely.")},
+    };
+
     bedLeveling.name = tr("Bed Leveling");
     bedLeveling.icon = "";
     bedLeveling.category = "hardware";
@@ -376,6 +402,7 @@ void CalibrationServiceMock::buildMockData()
 
     m_calibTypes = {
         flowDynamics, paPattern, paTower, flowRate, tempTower,
+        toleranceTest, // F4a: load-only upstream Tolerance Test
         bedLeveling, vibration,
         maxVolSpeed, vfaTower, retractionTune
     };
@@ -576,6 +603,21 @@ void CalibrationServiceMock::startCalibration(int itemIndex)
         // mutating the user's live workspace.
         qWarning("[Calib] calibration requires an empty workspace; live project preserved");
         emit calibrationFinished(false);
+        return;
+    }
+
+    // F4a: load-only entries (Tolerance Test) just bring in the bundled
+    // model — no calib params, no slice (upstream add_model semantics).
+    if (m_calibTypes[itemIndex].loadOnly) {
+        const QString qrc = QStringLiteral(":/qml/assets/calib/tolerance_test.stl");
+        const QString tempPath = extractQrcToTempFile(qrc);
+        if (tempPath.isEmpty() || !m_projectService || !m_projectService->loadFile(tempPath)) {
+            qWarning("[Calib] tolerance test model load failed");
+            emit calibrationFinished(false);
+            return;
+        }
+        setStatus(itemIndex, CalibrationStatus::Completed);
+        emit calibrationFinished(true);
         return;
     }
 

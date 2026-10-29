@@ -282,6 +282,7 @@
         <file>assets/fonts/HarmonyOS_Sans_SC_Regular.ttf</file>
         <file>assets/fonts/HarmonyOS_Sans_SC_Bold.ttf</file>
         <file>assets/calib/temperature_tower.stl</file>
+        <file>assets/calib/tolerance_test.stl</file>
         <file>assets/calib/VFA.stl</file>
         <file>assets/calib/retraction_tower.stl</file>
         <file>assets/calib/SpeedTestStructure.step</file>
