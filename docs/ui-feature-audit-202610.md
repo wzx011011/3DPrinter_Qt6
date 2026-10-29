@@ -144,3 +144,82 @@ FB-R7-08/FB-R10-02/FB-R0-05/FB-R2-06/FB-R3-06/FB-R5-07/RG-R5-01/FB-R7-09/FB-R8-0
 | 轮 | 新发现 P1/P2/P3 | 修复 | RESURFACED | 备注 |
 |---|---|---|---|---|
 | R1 | 待填 | | | |
+
+## 9. 功能补齐冲刺（用户裁决 2026-10-29：先补齐全部缺失功能，再统一验收）
+
+用户实测撞到多色设置缺失 → 策略调整：逐轮验收改为"功能补齐冲刺 → 统一验收"。
+
+### 9.1 多色链路诊断（R1C-10，用户报障）
+- 加槽位 ✓：侧栏"+ 添加一根耗材丝"→ configVm.setExtruderCount 已接。
+- **断点①**：耗材色块（20×20 带槽位号）**无点击处理器**——上游点击开取色器设置该槽 filament_colour；我们只读不写（ConfigViewModel 无 setFilamentColour 类 INVOKABLE，需新增写回链）。
+- **断点②**：对象/零件级"指定哪根耗材打印"**无 UI 入口**——C++ API 齐全（EditorViewModel.setExtruderForSelectedItems:978 / setVolumeExtruderId:889）但 QML 0 调用（与 R1A-12 同款孤儿 API 族）。
+- 其余链路已有：多耗材切片、冲洗矩阵（擦料塔框）、预览着色 16 模式、OBJ 多色映射（ObjColorDialog）。
+
+### 9.2 冲刺批次（统一验收前全部完成）
+| 批 | 内容 | 来源 |
+|---|---|---|
+| F1 | 多色链路：色块取色器+fil_colour 写回、右键"设置耗材/指定挤出机"（对象级+零件级）、端到端两色切片验证 | R1C-10 |
+| F2 | 孤儿 API 入口族：移动对象到盘 N（R1A-12）、耗材槽删/合并 stub 实现（R1A-13）、细分撤销（R1A-07） | R1A |
+| F3 | 文件链路：Ctrl+I zip/gcode URL 归一化（R1A-04/05）、导出子项 分别导出 STLs+Generic 3MF（R1A-26）、装配视图取景（R1A-02） | R1A |
+| F4 | 校准塔族：Speed/Accel/Fan/Jitter/Limit/Tolerance/XY Offset（纯 G-code 生成，上游生成器对照） | R1C-01 |
+| F5 | 视口交互：旋转 45° 吸附（R1A-30）、切割 PlaceOnCut/CutToParts（R1A-31）、Scale-to-fit（R1C-03）、SVG 导入过滤器（R1C-02） | R1A/R1C |
+| F6 | 快捷键 6 缺（A/I/O/L/C/Ctrl+Shift+E，R1A-24）+ i18n 残留 8 条（R1A-32 余量） | R1A |
+| F7 | 预设键集高价值子集：耗材缺 Pressure Advance/Cooling/板温组（R1A-20 全量另拍板） | R1A |
+| F8 | Renderer 区解冻后：预览视口深色、盘名灰白非斜体、bgFloating 字节序 | §7.3 |
+| 终 | Round 2 统一验收：全量矩阵重拍 + 开放式目审 + 功能面逐项过一遍 → 收敛判定 | §0 |
+
+## 10. 冲刺进度（F 批次销账）
+
+### F1 多色链路 — 完成（2026-10-29，audit/f1/ 截图链）
+断点①色块取色器：LeftSidebar 色块接 Qt ColorDialog → EditorViewModel.setFilamentColourForSlot → ConfigViewModel 写槽位预设 default_filament_colour（可写预设直写；**系统预设派生 "XX (modified)" 用户预设并重指槽位**，PresetService::deriveUserPresetFrom 新原语）。
+**槽位颜色真源修正**：extrudersColors 原按全库预设枚举顺序取色（与槽位无对应），改为按"槽 i 的预设"取色（PresetService::filamentColourForPreset 新原语）。
+**槽位数源统一**：新 ConfigViewModel.filamentSlotCount()（槽向量+1）为唯一真源；侧栏行数随 configVm.stateChanged 重播种；BackendContext 骑手改 grow-only（原骑手每次 stateChanged 把槽向量强缩回打印机喷嘴数——用户加的槽和工程还原的槽都被吞，**这是"设置不了多色"的总根因**）。
+断点②更正：Change Filament 子菜单 P16.4 早已完整实现（此前 grep 路径错误误判为孤儿）。
+E2E 证据：f1/10→11（+ 出槽 2）→12（取色器开）→14_confirmed2（两槽色块变黄）。
+余量：--load-model 的 3MF 按模型导入不还原槽向量（属"带盘 3mf=工程还是并入"既有拍板族，R7 遗留）。
+
+### F3/F6 — 完成
+Ctrl+I zip/gcode URL 归一化（FB-R1-03/04 根因=file:// URL 直传）；快捷键 A(排布)/L(层编辑)/C(gcode窗)/Ctrl+Shift+E(导出) 落地（I/O 缩放随 F8，GLViewport 在禁碰区）；导出菜单补"分别导出 STL..."（FolderDialog→selectAll+exportSelectedObjects(separateFiles)，QmlUiAudit 测试锁随新契约更新）；装配视图入场取景（FB-R9-01，selectView("plate") onVisible）。
+
+### F2 — 部分完成
+"移动到盘"右键子菜单落地（R1A-12 销账）。耗材槽删/合并 stub：侧栏 ± 按钮已有 setExtruderCount 旁路，中段删槽/合并降级为低优先挂账（stub 注释保留）。
+
+### 10.1 冲刺补记（18:35）
+- R1C-02 SVG 导入过滤器 ✓（导入对话框加 *.svg + 路由到既有浮雕流）；R1C-03 缩放至打印体积 ✓（孤儿 API scaleSelectionToFitBed 补右键入口）。提交至 18:35 笔。
+- F2 余量：耗材槽中段删/合并 stub 降级挂账；F5 余量：45° 吸附与 PlaceOnCut/CutToParts 需视口修饰键/gizmo C++（F8 解冻项）。
+- F4 校准塔族、F7 预设键集：大体积 C++/schema 移植，未开工（下轮主体）。
+
+### 10.2 F4 校准塔族落点核查（上游真值对照完成 18:5x）
+- **Tolerance Test 移植 ✓（F4a）**：上游 MainFrame.cpp:3798-3805 = 纯加载自带 STL（无 sweep 无生成器）。拷贝 CrealityToleranceTest.stl 入 qrc，CalibrationServiceMock 新增 loadOnly 条目（loadFile 即完成，不走切片）。
+- **Input Shaping freq/damp + Cornering**：引擎分支（GCode.cpp:5680-5710）是注释级支持，上游 CP5 GUI 未接、无几何生成——保持 blocked 是诚实状态（RG-P6-01 维持 deferred，非缺口）。
+- **Limit_Speed / Acceleration_Tower / Jitter / Dec_Acc / Fan / XY_Offset 六塔**：CP5 fork 自有 CalibMode 扩展 + calib_dlg.cpp 生成器族（~2000 行 C++，含 ModelBuild 几何+逐对象 config 覆盖），不在我们的 OrcaSlicer 子模块内。移植=单独立项（需 CalibMode fork 枚举对齐+SliceService 打通），本冲刺不做半成品。
+- 结论：F4 以"Tolerance Test 移植+其余六塔立项"收官——"7 个塔全移植"的原计划在子模块禁改约束下不可行，改为上游真值形态对齐。
+
+### 10.3 F7 预设键集 — 完成（高价值子集）
+kFilamentKeys 32→108 键，从 Preset::filament_options 移植七组：压力前进族（enable/adaptive×4）、冷却族（层时序+风扇计划+桥/支撑/匀光风扇）、空气过滤、热床全板型温度+玻璃化温度、喷嘴温度范围、回抽 Orca 余量族（wipe/lift_enforce/z_hop_types 等 8 键）、换料冲洗族（loading/unloading/ramming/change_length/flush×4 等 16 键）、匀光族×4、基础物性 9 键。分组映射+4 个新组中文标签（匀光/空气过滤/换料与冲洗/辅助冷却风扇）。有意排除：机器变体 _nc 族、wipe-tower 接口微调族、兼容元键（inherits/compatible_*）、pellet 特性键。标签层由 10-26 i18n OptionLabelTable 全覆盖，无需新词条。
+
+## 11. Round 2 统一验收报告（2026-10-30 00:3x）
+
+**底稿**：audit/round2/ 全量 39 shot（新二进制含全部冲刺提交）+ round1/round0 可回溯对比。
+
+### 11.1 验收确认（修复保持）
+- Round1 的 19 项修复全部保持（擦塔框/横幅/四框/i18n 五域/主题簇——抽验 dlgL_wipe_tower、L_home、L_multi-device、dlgL_settings_process 无回归）。
+- F1 多色链路：取色器/派生预设/按槽取色工作正常（用户实测路径）。
+- F7 键集：材料设置出现"流量和压力提前"组、热床全板型温度（软化温度/最小最大打印温度范围）、内容显著扩充 ✓。
+- F4a：Tolerance Test 显示于校准列表 ✓（点击链路受 FB-P1-04 同族合成点击死区阻塞，待真机复认）。
+- 门禁：14/14 全绿 + 样式棘轮 0 违规（每批次均过）。
+
+### 11.2 本轮新发现（非产品缺陷）
+1. E2E 测试残留：F1 验证脚本把槽位 1 的预设持久化成 "(modified)" 派生预设（E2E 点击坐标命中槽 1 而非槽 2）——测试数据非 bug，用户可在 UI 切回任意预设；在测试脚本卫生层面记 lesson（F1 脚本应先恢复现场）。
+2. 校准页合成点击死区确认：xdotool 点击不触发条目选择（任意条目），与 FB-P1-04 挂账同族——自动化环境限制，非产品回归。
+
+### 11.3 收敛判定
+- 产品级新发现：零（P1×0 P2×0 P3×0）。
+- 未清 open 项：F8 Renderer 区 5 项（预览视口深色/盘名灰白/bgFloating 字节序/45° 吸附/切割开关）仍被并行会话在途文件阻塞——**这是唯一阻止收敛结论的因素**。
+- 判定：F1-F7 冲刺 + Round1/2 UI 修复达到"待 F8 解冻即收敛"状态。F8 解冻后：5 项修复→一轮门禁+定点截图→确认轮零新发现→收敛。
+
+### 11.4 交付物清单（本战役）
+- 提交 10 笔（5d1cd93..f0390d8，未推送）：Round1 UI 修复×5 + 冲刺 F1/F2F3F5F6×2 + F4a/F7×1 + 账本×2。
+- 总账 docs/ui-feature-audit-202610.md（R1A/R1B/R1C/轮报告/冲刺账）。
+- 验收材料：验收_Round1/（10 张对比图）+ audit/round0,1,2/（39 shot×3 轮）+ audit/f1,f47/（功能 E2E）。
+- RUNBOOK：audit/RUNBOOK.md（共存/验证/矩阵约定）。
