@@ -113,3 +113,5 @@ nul
 # 生成的压测产物与 ASan 构建（>100MB，禁止入库）
 --out/
 build-asan/
+# convergence-campaign ledger: UI restoration + feature audit (2026-10-29)
+!docs/ui-feature-audit-202610.md
