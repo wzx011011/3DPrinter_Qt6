@@ -2946,8 +2946,20 @@ QVariantMap BackendContext::themeTokens() const
   map.insert(QStringLiteral("controlDisabledText"),
              color(palette.controlDisabledText));
   map.insert(QStringLiteral("severityColors"), severity);
+  map.insert(QStringLiteral("titleBandTop"), color(palette.titleBandTop));
+  map.insert(QStringLiteral("titleBandBottom"), color(palette.titleBandBottom));
+  map.insert(QStringLiteral("sidebarHairline"), color(palette.sidebarHairline));
+  map.insert(QStringLiteral("tabStripLine"), color(palette.tabStripLine));
+  map.insert(QStringLiteral("presetBorder"), color(palette.presetBorder));
+  map.insert(QStringLiteral("presetBorderHover"),
+             color(palette.presetBorderHover));
   map.insert(QStringLiteral("accent"), color(staticTokens.accent));
   map.insert(QStringLiteral("plateLabel"), color(staticTokens.plateLabel));
+  map.insert(QStringLiteral("sidebarAccent"),
+             color(staticTokens.sidebarAccent));
+  map.insert(QStringLiteral("presetFocusBg"),
+             color(staticTokens.presetFocusBg));
+  map.insert(QStringLiteral("presetDirty"), color(staticTokens.presetDirty));
   return map;
 }
 

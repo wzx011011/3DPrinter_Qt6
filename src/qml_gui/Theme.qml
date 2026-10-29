@@ -116,6 +116,24 @@ QtObject {
     // (replaces Qt.darker(accentSubtle, 1.2) at CxIconButton.qml:48).
     readonly property color accentSubtlePressed: tokens.accentSubtlePressed
 
+    // ── Prepare sidebar reference tokens (Orca Plater.cpp Sidebar)
+    // sidebarAccent = PanelColors bd_hover/bd_focus #009688 (theme-fixed
+    // upstream): section pills, params tab underline, preset card hover
+    // border, mode switch. presetFocusBg = the card's focused fill.
+    // presetDirty = the orange modified-preset marker (revert arrow +
+    // modified tab label).
+    readonly property color sidebarAccent:   tokens.sidebarAccent
+    readonly property color presetFocusBg:   tokens.presetFocusBg
+    readonly property color presetDirty:     tokens.presetDirty
+    // Section title band gradient (title_bg 248,248,248 → BackgroundColor2
+    // 0xF1F1F1), the params group hairline, and the tab strip baseline.
+    readonly property color titleBandTop:    tokens.titleBandTop
+    readonly property color titleBandBottom: tokens.titleBandBottom
+    readonly property color sidebarHairline: tokens.sidebarHairline
+    readonly property color tabStripLine:    tokens.tabStripLine
+    readonly property color presetBorder:        tokens.presetBorder
+    readonly property color presetBorderHover:   tokens.presetBorderHover
+
     // ── Text
     // ctl-1: near-white neutral grays (no blue cast).
     readonly property color textPrimary:     tokens.textPrimary

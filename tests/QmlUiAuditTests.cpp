@@ -3685,6 +3685,27 @@ void QmlUiAuditTests::leftSidebarPresetControlsAreWiredAndHonest()
            "LeftSidebar must have an Object scope toggle");
   QVERIFY2(sidebar.contains(QStringLiteral("requestPlateScope")),
            "LeftSidebar must have a Plate scope toggle");
+
+  // PREPSB-04b (2026-10-28 user report): the Object pill must carry a REAL
+  // selection target — ConfigViewModel::activateObjectScope reverts an
+  // empty targetName back to global scope, so the old
+  // requestObjectScope("object", "", …) call was a silent no-op. The pill
+  // must pass editorVm's settingsTarget* accessors and disable itself when
+  // nothing is selected.
+  QVERIFY2(sidebar.contains(QStringLiteral("requestObjectScope(\n")) ||
+               sidebar.contains(QStringLiteral("requestObjectScope(")),
+           "LeftSidebar object scope must route through requestObjectScope");
+  QVERIFY2(sidebar.contains(QStringLiteral("root.editorVm.settingsTargetType"))
+               && sidebar.contains(QStringLiteral("root.editorVm.settingsTargetName"))
+               && sidebar.contains(QStringLiteral("root.editorVm.settingsTargetObjectIndex")),
+           "LeftSidebar object scope must pass the real selection target (empty targetName silently reverts to global)");
+  // 2026-10-28 user feedback: the pill stays clickable at all times; the
+  // canOpenSelectionSettings check moves into the click guard, which raises
+  // an honest toast for the no-selection case instead of switching.
+  QVERIFY2(sidebar.contains(QStringLiteral("canOpenSelectionSettings")),
+           "LeftSidebar object click must guard on a qualified selection before switching");
+  QVERIFY2(sidebar.contains(QStringLiteral("onPendingUnsavedChangesRequested")),
+           "LeftSidebar must listen to pendingUnsavedChangesRequested (dirty-preset scope/preset switches were silent no-ops)");
 }
 
 // v5.16 Phase 235 (PSET2-01..08): preset system completion source audit.
@@ -4099,24 +4120,41 @@ void QmlUiAuditTests::prepareLeftSidebarMatchesPixelRestorationContract()
 
   const QStringList layoutTokens = {
     QStringLiteral("readonly property int targetSidebarWidth: 392"),
+    // 2026-10-28 reference restoration (Orca Plater.cpp Sidebar): the
+    // printer preset row is the CARD's main cell again — the Orca layout is
+    // [preset cell][nozzle-variant cell][bed-type cell] at 70x60 each
+    // (PRINTER_PANEL_SIZE, Plater.cpp:254), not the v5.14 compact row and
+    // not the retired 76px hero card with InfoTiles.
+    QStringLiteral("id: printerCardRow"),
     QStringLiteral("id: printerPresetRow"),
+    QStringLiteral("id: printerVariantCell"),
+    QStringLiteral("id: printerBedTypeRow"),
     QStringLiteral("id: filamentPixelRow"),
     QStringLiteral("id: processScopeBar"),
     QStringLiteral("id: processPresetRow"),
     QStringLiteral("id: paramsInlinePanel"),
     QStringLiteral("id: paramsTabDelegate"),
-    QStringLiteral("required property var modelData")
+    QStringLiteral("required property var modelData"),
+    // Sidebar accent + preset-card chrome tokens (Orca PanelColors).
+    QStringLiteral("Theme.sidebarAccent"),
+    QStringLiteral("Theme.presetBorder"),
+    QStringLiteral("Theme.titleBandTop"),
+    // Orca object-list parity: the section stays instantiated but hidden
+    // (Plater.cpp m_object_list Hide()).
+    QStringLiteral("visible: false")
   };
   for (const QString &token : layoutTokens) {
     QVERIFY2(leftSidebar.contains(token),
              qPrintable(QStringLiteral("Prepare left sidebar lost pixel-restoration token: %1").arg(token)));
   }
 
-  // v5.14: the 76px printer hero card (thumbnail + InfoTiles) was replaced by
-  // a compact preset row; the hero-card tokens must not return.
+  // The retired hero card stays retired: the restored Orca card cells carry
+  // no InfoTiles; the old ids must not return even though the card shape is
+  // back.
   QVERIFY2(!leftSidebar.contains(QStringLiteral("id: printerHeroCard"))
-               && !leftSidebar.contains(QStringLiteral("id: printerThumbnail")),
-           "v5.14: printer preset must stay a compact row (hero card removed for screenshot-truth density)");
+               && !leftSidebar.contains(QStringLiteral("id: printerThumbnail"))
+               && !leftSidebar.contains(QStringLiteral("InfoTile")),
+           "2026-10-28: printer card is the Orca three-cell preset card (no hero-card InfoTiles return)");
 
   // Phase 162 (TK-01): the sidebar palette was previously checked via specific
   // hex literals (#303236/#313337/#323438 -- the screenshot gray panel surface).

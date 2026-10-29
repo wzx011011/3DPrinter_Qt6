@@ -18,11 +18,18 @@ ComboBox {
     property string sectionPrefix: "—"
     property string disabledSuffix: " (不兼容)"
 
+    // Orca sidebar preset card (Plater.cpp:2545-2560): the CELL carries the
+    // #DBDBDB border and the combo paints none — the whole cell forwards its
+    // clicks into the combo. flat=true strips the chrome; hover/focus
+    // feedback stays with the hosting cell.
+    property bool frameless: false
+
     background: Rectangle {
         radius: Theme.radiusSM
         // ctl-12: flat base, same color as the hosting panel. Upstream reacts
         // to hover via the BORDER only (ComboBox.cpp:54-59), not the fill.
         color: {
+            if (root.frameless) return "transparent"
             if (!root.enabled) return Theme.bgPanel
             if (root.activeFocus) {
                 // ctl-10: focused combo picks up a ~10% accent tint over the
@@ -35,6 +42,7 @@ ComboBox {
             return Theme.bgPanel
         }
         border.color: {
+            if (root.frameless) return "transparent"
             if (!root.enabled) return Theme.borderSubtle
             // ctl-10 + Phase 170 (P0-2): focus uses the shared borderFocus
             // ring (same as CxTextField/CxButton); hover steps to the accent

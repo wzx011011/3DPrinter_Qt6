@@ -55,7 +55,7 @@ Rectangle {
     // CP 工艺行同款：搜索框展开态 + 精简/完整模式开关（advancedMode=false 时
     // 过滤代理剔除 optMode>=1 的进阶参数——upstream comSimple view）。
     property bool paramsSearchOpen: false
-    property bool paramsAdvancedMode: UiSettingsStore.value("paramsAdvancedMode", "1") === "1"
+    property bool paramsAdvancedMode: AppSettings.value("paramsAdvancedMode", "1") === "1"
     readonly property var paramsOptionModel: {
         if (!root.configVm) return null
         return root.configVm.printOptions
@@ -69,9 +69,10 @@ Rectangle {
         { key: "Strength", label: qsTr("强度") },
         { key: "Speed", label: qsTr("速度") },
         { key: "Support", label: qsTr("支撑") },
-        { key: "Multimaterial", label: qsTr("材料") },
+        { key: "Multimaterial", label: qsTr("多材料") },
         { key: "Others", label: qsTr("其他") }
     ]
+
 
     color: panelSurface
     radius: 0
@@ -81,261 +82,367 @@ Rectangle {
     // sidebar itself does not scroll as one column. Printer/filament/process
     // sections stay fixed; the params area fills the remaining height and
     // scrolls on its own.
+
+    // ── Prepare-sidebar reference restoration (Orca Plater.cpp Sidebar) ────
+    // Nozzle-variant cell (panel_nozzle_dia + combo_nozzle_dia,
+    // Plater.cpp:2652-2690): sibling printer presets that share the
+    // "<model> (<d> nozzle)" base name form the variant list; switching a
+    // variant = switching to that sibling preset. Name parsing stays QML-side
+    // (3-line regex); the preset SWITCH goes through the same
+    // requestCurrentPrinterPreset the printer combo uses.
+    function printerBaseName(name) {
+        var s = String(name)
+        var m = s.match(/^(.*) \([^()]* nozzle\)$/)
+        return m ? m[1] : s
+    }
+    function variantDiameterLabel(name) {
+        var m = String(name).match(/\(([^()]*) nozzle\)$/)
+        if (m) return m[1]
+        var v = root.configVm
+                ? root.configVm.wizardPresetValue(name, "nozzle_diameter") : null
+        return (v === null || v === undefined || v === "") ? "0.4" : String(v)
+    }
+    readonly property var printerVariantEntries: {
+        var out = []
+        if (!root.configVm) return out
+        var base = printerBaseName(root.configVm.currentPrinterPreset)
+        var names = root.configVm.printerPresetNames
+        for (var i = 0; i < names.length; i++) {
+            if (printerBaseName(names[i]) === base) out.push(names[i])
+        }
+        return out
+    }
+    readonly property string nozzleTypeLabelText: {
+        if (!root.configVm) return ""
+        var v = root.configVm.wizardPresetValue(
+                    root.configVm.currentPrinterPreset, "nozzle_type")
+        var map = { "brass": qsTr("黄铜"), "hardened": qsTr("硬化钢"),
+                    "steel": qsTr("不锈钢"), "bi_metal": qsTr("双金属") }
+        return map[String(v)] !== undefined ? map[String(v)]
+                                            : (v ? String(v) : "")
+    }
+    // Bed-type → thumbnail, indexed by the libslic3r BedType enum
+    // (btDefault=0..btSuperTack=6) — the same image table as upstream
+    // bed_type_thumbnails (Plater.cpp:320-327); btDefault follows the preset
+    // default and renders the generic textured-PEI tile.
+    readonly property var bedTypeThumbnails: [
+        "qrc:/qml/assets/icons/orca_bed_pei.png",
+        "qrc:/qml/assets/icons/orca_bed_cool.png",
+        "qrc:/qml/assets/icons/orca_bed_engineering.png",
+        "qrc:/qml/assets/icons/orca_bed_high_templ.png",
+        "qrc:/qml/assets/icons/orca_bed_pei.png",
+        "qrc:/qml/assets/icons/orca_bed_pei_cool.png",
+        "qrc:/qml/assets/icons/orca_bed_cool_supertack.png"
+    ]
+    // Preset-card cell chrome (Orca PanelColors, Plater.cpp:2537-2543):
+    // #DBDBDB resting border stepping to the #009688 sidebar accent on
+    // hover/focus.
+    component PresetCell: Rectangle {
+        default property alias content: cellInner.data
+        property alias hoverActive: cellHover.hovered
+        radius: Theme.radiusMD
+        color: cellHover.hovered ? Theme.presetFocusBg : Theme.bgElevated
+        border.width: 1
+        border.color: cellHover.hovered ? Theme.sidebarAccent
+                                        : Theme.presetBorder
+        Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+        HoverHandler { id: cellHover }
+        Item { id: cellInner; anchors.fill: parent }
+    }
+
     ColumnLayout {
         id: sidebarContent
         anchors.fill: parent
-        anchors.leftMargin: 8
-        anchors.rightMargin: 8
-        anchors.topMargin: 8
+        // Orca SidebarProps::ContentMargin (Plater.hpp:128) — 12px side
+        // inset for the section stack.
+        anchors.leftMargin: 12
+        anchors.rightMargin: 12
+        anchors.topMargin: 6
         anchors.bottomMargin: 8
-        spacing: 8
+        spacing: 6
 
+        // ── 打印机 title band (Plater.cpp:2460-2515) ─────────────────────
         PixelHeader {
             id: printerHeader
             Layout.fillWidth: true
             title: qsTr("打印机")
-            iconSource: "qrc:/qml/assets/icons/printer.svg"
-            // Upstream printer title row carries connect/sync/settings
-            // (Plater.cpp:2475-2495). The upstream monitor_signal_strong /
-            // printer_sync_not bitmaps are absent from the project icon set,
-            // so the registered send (same dialog as the row-level connect
-            // button) and rotate (sync) glyphs stand in.
+            iconSource: "qrc:/qml/assets/icons/orca_printer.svg"
+            // ORCA titlebar keeps connect + settings on the band
+            // (m_printer_connect / m_printer_setting, Plater.cpp:2475-2495);
+            // the sync glyph shows only with a live printer and has no mock
+            // data plane yet.
             extraActions: [
-                { icon: "qrc:/qml/assets/icons/send-2.svg", tooltip: qsTr("打印机连接") },
-                { icon: "qrc:/qml/assets/icons/rotate-2.svg", tooltip: qsTr("同步打印机信息") }
+                { icon: "qrc:/qml/assets/icons/orca_monitor_signal_strong.svg", tooltip: qsTr("打印机连接") }
             ]
             onExtraActionTriggered: (index) => {
                 if (index === 0)
                     Backend.showPrintHostDialog()
-                else if (index === 1 && Backend.monitorViewModel)
-                    Backend.monitorViewModel.refresh()
             }
-            actionIcon: "qrc:/qml/assets/icons/settings.svg"
+            actionIcon: "qrc:/qml/assets/icons/orca_settings.svg"
             actionToolTip: qsTr("打印机设置")
             onActionTriggered: Backend.forwardSettingsRequest("printer")
-            // Whole-bar fold toggle (upstream Plater.cpp:2515-2525); while
-            // folded the title carries the preset name (Plater.cpp:2518-2521).
             collapsible: true
             collapsedDetail: root.configVm ? root.configVm.currentPrinterPreset : ""
         }
 
-        // v5.14: compact preset row replaces the 76px hero card (screenshot
-        // truth shows preset selectors as dense single rows, matching the
-        // filament/process rows below). Hidden while the printer title bar
-        // is folded (upstream m_panel_printer_content toggle,
-        // Plater.cpp:2515-2525).
-        Rectangle {
-            id: printerPresetRow
+        // Printer preset card row (Plater.cpp:2540-2830): [photo+combo cell]
+        // [nozzle-variant cell] [bed-type cell], each a bordered PresetCell.
+        RowLayout {
+            id: printerCardRow
             Layout.fillWidth: true
-            Layout.preferredHeight: 38
+            Layout.preferredHeight: 60
+            spacing: 4
             visible: printerHeader.expanded
-            radius: Theme.radiusSM
-            color: root.sectionSurface
-            border.width: 1
-            border.color: root.dividerColor
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                anchors.topMargin: 4
-                anchors.bottomMargin: 4
-                spacing: 6
+            // Main preset cell: thumbnail + borderless combo + hover edit.
+            PresetCell {
+                id: printerPresetRow
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
-                Image {
-                    Layout.preferredWidth: 18
-                    Layout.preferredHeight: 18
-                    source: "qrc:/qml/assets/icons/printer.svg"
-                    fillMode: Image.PreserveAspectFit
-                    opacity: 0.8
+                MouseArea {
+                    anchors.fill: parent
+                    anchors.rightMargin: 24
+                    enabled: printerPresetCombo.enabled
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: printerPresetCombo.popup.open()
                 }
 
-                CxComboBox {
-                    Layout.fillWidth: true
-                    // Upstream preset combos are 30px tall
-                    // (PresetComboBoxes.cpp:828, Plater.cpp:2595).
-                    Layout.preferredHeight: 30
-                    font.pixelSize: Theme.fontSizeSM
-                    // v5.16 (PSET2-05): decorated list — section
-                    // separators + incompatibility gray-out.
-                    model: root.configVm ? root.configVm.decoratedPrinterPresetNames : []
-                    currentIndex: {
-                        if (!root.configVm) return -1
-                        return root.configVm.decoratedPrinterPresetNames.indexOf(root.configVm.currentPrinterPreset)
+                RowLayout {
+                    anchors.fill: parent
+                    spacing: 4
+
+                    Image {
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.leftMargin: Theme.insetMD
+                        // Upstream seeds the cell with "printer_placeholder"
+                        // (Plater.cpp:2587) and swaps in the printer model's
+                        // rendered image when the bundle carries one; the
+                        // flat preset store has no per-model renders yet, so
+                        // the same placeholder stands in.
+                        source: "qrc:/qml/assets/icons/orca_printer_placeholder.png"
+                        fillMode: Image.PreserveAspectFit
                     }
-                    onActivated: (i) => {
-                        if (!root.configVm) return
-                        if (i >= 0 && i < model.length)
-                            root.configVm.requestCurrentPrinterPreset(
-                                root.configVm.plainPresetName(model[i]))
+
+                    CxComboBox {
+                        id: printerPresetCombo
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
+                        frameless: true
+                        font.pixelSize: Theme.fontSizeMD
+                        model: root.configVm ? root.configVm.decoratedPrinterPresetNames : []
+                        currentIndex: {
+                            if (!root.configVm) return -1
+                            return root.configVm.decoratedPrinterPresetNames.indexOf(root.configVm.currentPrinterPreset)
+                        }
+                        onActivated: (i) => {
+                            if (!root.configVm) return
+                            if (i >= 0 && i < model.length)
+                                root.configVm.requestCurrentPrinterPreset(
+                                    root.configVm.plainPresetName(model[i]))
+                        }
+                    }
+
+                    // Dirty marker (PREPSB-03): the preset card surfaces
+                    // isPresetDirty — 8px accent dot with the compatibility
+                    // tooltip, matching the process row's marker.
+                    Rectangle {
+                        visible: !!root.configVm && root.configVm.isPresetDirty
+                        Layout.preferredWidth: 8
+                        Layout.preferredHeight: 8
+                        Layout.rightMargin: 2
+                        radius: Theme.radiusSM
+                        color: Theme.sidebarAccent
+                        ToolTip.text: qsTr("预设已修改（未保存）")
+                        ToolTip.visible: printerDirtyMA.containsMouse
+                        MouseArea { id: printerDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                    }
+
+                    // Hover-revealed edit button (Orca btn_edit_printer,
+                    // Plater.cpp:2551-2585 shows it only while the cell is
+                    // hovered; a disabled control never reports hovered, so
+                    // the gate is opacity-only).
+                    CxIconButton {
+                        buttonSize: 24
+                        iconSize: 14
+                        cxStyle: CxIconButton.Style.Surface
+                        opacity: (hovered || printerPresetRow.hoverActive) ? 1.0 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
+                        iconSource: "qrc:/qml/assets/icons/orca_edit.svg"
+                        toolTipText: qsTr("点击编辑预设")
+                        onClicked: root.editPreset(2, root.configVm ? root.configVm.currentPrinterPreset : "")
+                    }
+
+                    Item { Layout.rightMargin: 6; Layout.fillHeight: true }
+                }
+            }
+
+            // Nozzle-variant cell (panel_nozzle_dia, Plater.cpp:2652-2690):
+            // 变种 title, diameter combo, nozzle-type caption; 70x60.
+            PresetCell {
+                id: printerVariantCell
+                Layout.preferredWidth: 70
+                Layout.fillHeight: true
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.topMargin: 6
+                        text: qsTr("变种")
+                        color: Theme.textTertiary
+                        font.pixelSize: Theme.fontSizeXS
+                    }
+
+                    CxComboBox {
+                        id: variantCombo
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 2
+                        Layout.rightMargin: 2
+                        Layout.preferredHeight: 26
+                        frameless: true
+                        font.pixelSize: Theme.fontSizeMD
+                        font.bold: true
+                        model: {
+                            var out = []
+                            for (var i = 0; i < root.printerVariantEntries.length; i++)
+                                out.push(root.variantDiameterLabel(root.printerVariantEntries[i]))
+                            return out
+                        }
+                        currentIndex: {
+                            if (!root.configVm) return -1
+                            return root.printerVariantEntries.indexOf(root.configVm.currentPrinterPreset)
+                        }
+                        onActivated: (i) => {
+                            if (root.configVm && i >= 0 && i < root.printerVariantEntries.length)
+                                root.configVm.requestCurrentPrinterPreset(
+                                    root.printerVariantEntries[i])
+                        }
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.bottomMargin: 6
+                        text: root.nozzleTypeLabelText
+                        color: Theme.textTertiary
+                        font.pixelSize: Theme.fontSizeXS
+                        elide: Text.ElideRight
                     }
                 }
 
-                Rectangle {
-                    visible: !!root.configVm && root.configVm.isPresetDirty
-                    Layout.preferredWidth: 8
-                    Layout.preferredHeight: 8
-                    radius: Theme.radiusSM
-                    color: Theme.accent
-                    ToolTip.text: qsTr("预设已修改（未保存）")
-                    ToolTip.visible: printerDirtyMA.containsMouse
-                    MouseArea { id: printerDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: variantCombo.enabled && variantCombo.count > 1
+                    cursorShape: Qt.PointingHandCursor
+                    z: -1
+                    onClicked: variantCombo.popup.open()
+                }
+            }
+
+            // Bed-type cell (panel_printer_bed, Plater.cpp:2725-2800): an
+            // arrow-only combo over the bed thumbnail; the label source stays
+            // editorVm.bedTypeLabels and the write stays setPlateBedType
+            // (Q11-④ single-source contract).
+            PresetCell {
+                id: printerBedTypeRow
+                Layout.preferredWidth: 70
+                Layout.fillHeight: true
+
+                RowLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    CxComboBox {
+                        id: bedTypeCombo
+                        Layout.preferredWidth: 20
+                        Layout.preferredHeight: 26
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.leftMargin: 2
+                        frameless: true
+                        font.pixelSize: Theme.fontSizeXS
+                        model: root.editorVm ? root.editorVm.bedTypeLabels : []
+                        enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
+                        currentIndex: root.editorVm ? root.editorVm.currentPlateBedType : 0
+                        onActivated: function(index) {
+                            if (root.editorVm && root.editorVm.currentPlateIndex >= 0)
+                                root.editorVm.setPlateBedType(root.editorVm.currentPlateIndex, index)
+                        }
+                        // Honest scope disclosure: this writes the current
+                        // plate's curr_bed_type (the slice-effective value),
+                        // not an app-wide override.
+                        ToolTip.visible: bedTypeComboHover.hovered
+                        ToolTip.text: root.editorVm && currentIndex >= 0
+                                      ? root.editorVm.bedTypeLabels[currentIndex]
+                                      : ""
+                        ToolTip.delay: 400
+                        HoverHandler { id: bedTypeComboHover }
+                    }
+
+                    Image {
+                        Layout.preferredWidth: 40
+                        Layout.preferredHeight: 40
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.leftMargin: 2
+                        Layout.rightMargin: 2
+                        source: root.bedTypeThumbnails[
+                                  Math.min(Math.max(root.editorVm
+                                    ? root.editorVm.currentPlateBedType : 0, 0),
+                                    root.bedTypeThumbnails.length - 1)]
+                        fillMode: Image.PreserveAspectFit
+                    }
+
+                    Item { Layout.fillWidth: true }
                 }
 
-                // v5.16 (PSET2-07): per-row preset edit affordance
-                // (rename/delete, upstream preset combo right-click menu).
-                // Row actions reveal on hover (upstream hides the printer
-                // edit button until hover, Plater.cpp:2568-2570,2636-2646).
-                // X2: the private PixelIconButton copy (a CxIconButton
-                // clone) is gone -- these are system CxIconButtons; the
-                // hover-reveal is expressed on the instance (opacity only:
-                // a disabled control never reports hovered, so the click
-                // gate of the old copy collapses to invisibility+hover).
-                CxIconButton {
-                    buttonSize: 24
-                    iconSize: 13
-                    cxStyle: CxIconButton.Style.Surface
-                    opacity: hovered ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
-                    iconSource: "qrc:/qml/assets/icons/dots.svg"
-                    toolTipText: qsTr("预设操作")
-                    onClicked: root.editPreset(2, root.configVm ? root.configVm.currentPrinterPreset : "")
-                }
-
-                CxIconButton {
-                    buttonSize: 24
-                    iconSize: 13
-                    cxStyle: CxIconButton.Style.Surface
-                    opacity: hovered ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
-                    iconSource: "qrc:/qml/assets/icons/settings.svg"
-                    toolTipText: qsTr("编辑打印机预设")
-                    onClicked: Backend.forwardSettingsRequest("printer")
-                }
-
-                CxIconButton {
-                    buttonSize: 24
-                    iconSize: 13
-                    cxStyle: CxIconButton.Style.Surface
-                    opacity: hovered ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
-                    iconSource: "qrc:/qml/assets/icons/send-2.svg"
-                    toolTipText: qsTr("打印机连接")
-                    onClicked: Backend.showPrintHostDialog()
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: bedTypeCombo.enabled
+                    cursorShape: Qt.PointingHandCursor
+                    z: -1
+                    onClicked: bedTypeCombo.popup.open()
                 }
             }
         }
 
-        // Bed-type dropdown row under the printer preset row (reference
-        // image). Upstream semantics: the printer section carries a
-        // bed-surface card whose combo drives curr_bed_type
-        // (Plater.cpp:2716-2786 reset_bed_type_combox_choices; the selection
-        // handler at :12109-12140 writes the project config and invalidates
-        // slice results). Q11-④: the combo is real — bound to the current
-        // plate's curr_bed_type through the same EditorViewModel accessors
-        // the plate-settings dialog uses: setPlateBedType syncs the plate
-        // DynamicPrintConfig the slicer consumes
-        // (ProjectService::setPlateBedType) and invalidates the plate's
-        // slice result. Indices are the libslic3r BedType enum values
-        // (PrintConfig.hpp:404-412; 0 = btDefault = follow the project/
-        // preset default); the labels come from editorVm.bedTypeLabels —
-        // the single source shared with PreparePage's plate-settings combo.
-        // No local label copy: the previous hand tables were misaligned with
-        // the enum order and carried a fabricated 8th "自定义" value.
-        Rectangle {
-            id: printerBedTypeRow
-            Layout.fillWidth: true
-            Layout.preferredHeight: 38
-            visible: printerHeader.expanded
-            radius: Theme.radiusSM
-            color: root.sectionSurface
-            border.width: 1
-            border.color: root.dividerColor
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                anchors.topMargin: 4
-                anchors.bottomMargin: 4
-                spacing: 6
-
-                Image {
-                    Layout.preferredWidth: 18
-                    Layout.preferredHeight: 18
-                    // Upstream bed card thumbnail is "printer_placeholder"
-                    // (Plater.cpp:2727), absent from the project icon set;
-                    // the registered bed param glyph stands in.
-                    source: "qrc:/qml/assets/icons/param_bed_temp.svg"
-                    fillMode: Image.PreserveAspectFit
-                    opacity: 0.8
-                }
-
-                Text {
-                    text: qsTr("热床类型")
-                    color: root.mutedText
-                    font.pixelSize: Theme.fontSizeSM
-                    elide: Text.ElideRight
-                }
-
-                CxComboBox {
-                    id: bedTypeCombo
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 30
-                    font.pixelSize: Theme.fontSizeSM
-                    // Q11-④: single label source indexed by the libslic3r
-                    // BedType enum (contract on the EditorViewModel property).
-                    model: root.editorVm ? root.editorVm.bedTypeLabels : []
-                    enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
-                    currentIndex: root.editorVm ? root.editorVm.currentPlateBedType : 0
-                    onActivated: function(index) {
-                        if (root.editorVm && root.editorVm.currentPlateIndex >= 0)
-                            root.editorVm.setPlateBedType(root.editorVm.currentPlateIndex, index)
-                    }
-                    // Honest scope disclosure: this writes the current
-                    // plate's curr_bed_type (the slice-effective value), not
-                    // an app-wide override.
-                    ToolTip.visible: bedTypeComboHover.hovered
-                    ToolTip.text: qsTr("作用于当前盘的 curr_bed_type（切片实际消费）；0 = 跟随全局默认")
-                    ToolTip.delay: 400
-                    HoverHandler { id: bedTypeComboHover }
-                }
-            }
-        }
-
+        // ── 耗材丝 title band (Plater.cpp:2890-3040) ─────────────────────
         PixelHeader {
             id: filamentHeader
             Layout.fillWidth: true
             title: qsTr("耗材丝")
-            // Upstream filament titlebar leads with the spool glyph
-            // ("filament" ScalableButton, Plater.cpp:2913); spool.svg is
-            // absent from the project set, so the registered spool-family
-            // param icon stands in.
-            iconSource: "qrc:/qml/assets/icons/param_filament_for_features.svg"
-            // Upstream add/delete filament title-bar buttons, delete first
-            // (Plater.cpp:2989-2990); delete hides while a single filament
-            // remains (Plater.cpp:5395,2992).
+            iconSource: "qrc:/qml/assets/icons/orca_filament.svg"
+            // Upstream titlebar: add/delete slot buttons + flushing volumes
+            // (m_bpButton_add_filament / m_bpButton_del_filament /
+            // m_flushing_volume_btn, Plater.cpp:2984-3010; delete hides with
+            // a single filament, Plater.cpp:3013). Flushing volumes maps to
+            // the WipeTowerDialog (the WipingDialog.html port).
             extraActions: [
-                { icon: "qrc:/qml/assets/icons/minus.svg", tooltip: qsTr("删除最后一根耗材丝"),
-                  visible: root.filamentRowCount > 1 },
-                { icon: "qrc:/qml/assets/icons/plus.svg", tooltip: qsTr("添加一根耗材丝") }
+                { icon: "qrc:/qml/assets/icons/orca_add_filament.svg", tooltip: qsTr("添加一根耗材丝") },
+                { icon: "qrc:/qml/assets/icons/orca_flush_volumes.svg", tooltip: qsTr("冲刷体积") },
+                { icon: "qrc:/qml/assets/icons/orca_delete_filament.svg", tooltip: qsTr("删除最后一根耗材丝"),
+                  visible: root.filamentRowCount > 1 }
             ]
             onExtraActionTriggered: (index) => {
                 if (index === 0) {
-                    if (root.filamentRowCount > 1) {
-                        root.filamentRowCount -= 1
-                        if (root.configVm)
-                            root.configVm.setExtruderCount(root.filamentRowCount)
-                    }
-                } else if (index === 1) {
                     if (root.filamentRowCount < 64) { // MAXIMUM_EXTRUDER_NUMBER (libslic3r.h:65)
                         root.filamentRowCount += 1
                         if (root.configVm)
                             root.configVm.setExtruderCount(root.filamentRowCount)
                     }
+                } else if (index === 1) {
+                    Backend.showWipeTowerDialog()
+                } else if (index === 2) {
+                    if (root.filamentRowCount > 1) {
+                        root.filamentRowCount -= 1
+                        if (root.configVm)
+                            root.configVm.setExtruderCount(root.filamentRowCount)
+                    }
                 }
             }
-            actionIcon: "qrc:/qml/assets/icons/settings.svg"
+            actionIcon: "qrc:/qml/assets/icons/orca_settings.svg"
             actionToolTip: qsTr("耗材设置")
             onActionTriggered: Backend.forwardSettingsRequest("filament")
             // Whole-bar fold toggle (upstream Plater.cpp:2892-2911).
@@ -349,33 +456,36 @@ Rectangle {
                 id: filamentPixelRow
                 required property int index
                 Layout.fillWidth: true
-                Layout.preferredHeight: 38
+                Layout.preferredHeight: 30
                 // Folded with the filament section (upstream
                 // m_filament_area_wrapper toggle, Plater.cpp:2906-2908).
                 visible: filamentHeader.expanded
                 radius: Theme.radiusSM
-                color: root.sectionSurface
+                color: Theme.bgElevated
                 border.width: 1
                 // 2026-10-26 pixel audit: incompatibility keeps its 8px
                 // status dot + tooltip (below) and the combo's gray-out —
                 // the row border no longer double-alarms in red for what is
                 // a common resting state (upstream leaves the row clean).
-                border.color: root.dividerColor
+                border.color: filamentRowHover.hovered ? Theme.sidebarAccent : Theme.presetBorder
+                Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+                HoverHandler { id: filamentRowHover }
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 8
-                    anchors.rightMargin: 8
+                    anchors.leftMargin: 4
+                    anchors.rightMargin: 4
                     anchors.topMargin: 4
                     anchors.bottomMargin: 4
                     spacing: 6
 
-                    // Ref: the color chip carries the extruder number and sits
-                    // flush against the preset combo (upstream labels the
-                    // color picker with the slot number, Plater.cpp:3340-3342).
+                    // Color chip carries the extruder number, flush against
+                    // the preset combo (upstream labels the color picker with
+                    // the slot number, Plater.cpp:3340-3342).
                     Rectangle {
-                        Layout.preferredWidth: 22
-                        Layout.preferredHeight: 22
+                        Layout.preferredWidth: 20
+                        Layout.preferredHeight: 20
+                        Layout.alignment: Qt.AlignVCenter
                         radius: Theme.radiusSM
                         color: root.filamentColor(filamentPixelRow.index)
                         border.width: 1
@@ -385,15 +495,16 @@ Rectangle {
                             anchors.centerIn: parent
                             text: String(filamentPixelRow.index + 1)
                             color: Theme.textOnAccent
-                            font.pixelSize: Theme.fontSizeSM
+                            font.pixelSize: Theme.fontSizeXS
                             font.bold: true
                         }
                     }
 
                     CxComboBox {
+                        id: filamentCombo
                         Layout.fillWidth: true
                         Layout.preferredHeight: 30
-                        font.pixelSize: Theme.fontSizeSM
+                        font.pixelSize: Theme.fontSizeMD
                         // v5.16 (PSET2-05): decorated list — section
                         // separators + incompatibility gray-out.
                         model: root.configVm ? root.configVm.decoratedFilamentPresetNames : []
@@ -432,17 +543,13 @@ Rectangle {
                         MouseArea { id: filamentCompatMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                     }
 
-                    // Ref/upstream row tail keeps a single edit button
-                    // (Plater.cpp:3358,3382 "menu_filament" edit button).
-                    // The upstream menu_filament bitmap is absent from the
-                    // project set; the dots glyph (same affordance as the
-                    // printer row's preset menu) stands in.
-                    // X2: system CxIconButton (was the PixelIconButton copy).
+                    // Row tail edit button (upstream menu_filament,
+                    // Plater.cpp:3358,3382; the pencil glyph is Orca edit.svg).
                     CxIconButton {
                         buttonSize: 24
-                        iconSize: 13
+                        iconSize: 14
                         cxStyle: CxIconButton.Style.Surface
-                        iconSource: "qrc:/qml/assets/icons/dots.svg"
+                        iconSource: "qrc:/qml/assets/icons/orca_edit.svg"
                         toolTipText: qsTr("点击编辑预设")
                         onClicked: root.editPreset(1, root.configVm
                             ? root.configVm.filamentPresetForSlot(filamentPixelRow.index) : "")
@@ -451,77 +558,84 @@ Rectangle {
             }
         }
 
+        // ── 工艺 title band: process icon + Global/Objects pills +
+        //    visibility controls (ParamsPanel.cpp:255-300). ───────────────
         PixelHeader {
             id: processHeader
             Layout.fillWidth: true
             title: qsTr("工艺")
-            iconSource: "qrc:/qml/assets/icons/list-details.svg"
+            iconSource: "qrc:/qml/assets/icons/orca_process.svg"
             // Ref/upstream: Global|Objects scope pills sit inline in the
             // process title row (ParamsPanel.cpp:265-267,417).
             middleComponent: processScopePills
-            // CP 工艺行右侧按钮组（用户对照 2026-10-26）：搜索 / 精简-完整
-            // 开关 / 参数清单 / 连接。toggle 用 iconfont 无现成位图，以文字
-            // "简"/"全" 表达当前档位（按下切换）。
+            // ORCA row tail (ParamsPanel.cpp:271-297): advanced-visibility
+            // cycle icon, the mode switch, the object-settings table, and
+            // preset compare. The 简/全 toggle and the molecule icon drive
+            // the same paramsAdvancedMode (upstream m_mode_view +
+            // m_mode_icon both cycle settings visibility).
             extraActions: [
-                { icon: "qrc:/qml/assets/icons/search.svg", tooltip: qsTr("搜索参数") },
-                { text: root.paramsAdvancedMode ? qsTr("全") : qsTr("简"),
-                  tooltip: root.paramsAdvancedMode
-                           ? qsTr("当前：完整模式（含进阶参数），点击切换精简")
-                           : qsTr("当前：精简模式，点击切换完整") },
-                { icon: "qrc:/qml/assets/icons/list-details.svg", tooltip: qsTr("参数清单") },
-                { icon: "qrc:/qml/assets/icons/send-2.svg", tooltip: qsTr("连接打印机") }
+                { icon: "qrc:/qml/assets/icons/orca_advanced.svg", tooltip: qsTr("切换参数显示模式") },
+                { icon: "qrc:/qml/assets/icons/orca_table.svg", tooltip: qsTr("参数清单") },
+                { icon: "qrc:/qml/assets/icons/orca_compare.svg", tooltip: qsTr("比较预设") }
             ]
             onExtraActionTriggered: (index) => {
                 if (index === 0) {
-                    root.paramsSearchOpen = !root.paramsSearchOpen
-                    if (!root.paramsSearchOpen) root.paramsSearchText = ""
-                } else if (index === 1) {
                     root.paramsAdvancedMode = !root.paramsAdvancedMode
-                    UiSettingsStore.setValue("paramsAdvancedMode",
+                    AppSettings.setValue("paramsAdvancedMode",
                                              root.paramsAdvancedMode ? "1" : "0")
-                } else if (index === 2) {
+                } else if (index === 1) {
                     paramsListDialog.open()
-                } else if (index === 3) {
-                    Backend.showPrintHostDialog()
+                } else if (index === 2) {
+                    presetCompareDialog.open()
                 }
             }
-            actionIcon: "qrc:/qml/assets/icons/settings.svg"
+            actionIcon: "qrc:/qml/assets/icons/orca_settings.svg"
             actionToolTip: qsTr("工艺设置")
             onActionTriggered: Backend.forwardSettingsRequest("process")
         }
 
-        // 搜索框（展开时出现在工艺行下方，绑定既有过滤代理的 searchText）
-        TextField {
-            visible: root.paramsSearchOpen
-            Layout.fillWidth: true
-            Layout.preferredHeight: 30
-            text: root.paramsSearchText
-            placeholderText: qsTr("搜索参数名称…")
-            font.pixelSize: Theme.fontSizeSM
-            onTextChanged: root.paramsSearchText = text
-        }
-
+        // Process preset row (Plater.cpp Tab sidebar): revert arrow (dirty
+        // only), preset combo, save, search — ParamsPanel top-panel order.
         Rectangle {
             id: processPresetRow
             Layout.fillWidth: true
-            Layout.preferredHeight: 38
+            Layout.preferredHeight: 30
             radius: Theme.radiusSM
-            color: root.sectionSurface
+            color: Theme.bgElevated
             border.width: 1
-            border.color: root.dividerColor
+            border.color: processRowHover.hovered ? Theme.sidebarAccent : Theme.presetBorder
+            Behavior on border.color { ColorAnimation { duration: Theme.motionFast; easing.type: Theme.easingStandard } }
+            HoverHandler { id: processRowHover }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                anchors.topMargin: 4
-                anchors.bottomMargin: 4
-                spacing: 6
+                anchors.leftMargin: 4
+                anchors.rightMargin: 4
+                anchors.topMargin: 2
+                anchors.bottomMargin: 2
+                spacing: 2
+
+                // Modified-preset revert (Orca m_btn_reset shows only when
+                // the preset carries unsaved edits): re-selecting the current
+                // print preset re-merges the persisted preset values over the
+                // user overrides.
+                CxIconButton {
+                    buttonSize: 24
+                    iconSize: 14
+                    cxStyle: CxIconButton.Style.Surface
+                    visible: !!root.configVm && root.configVm.isPresetDirty
+                    iconSource: "qrc:/qml/assets/icons/orca_undo.svg"
+                    toolTipText: qsTr("放弃未保存的修改")
+                    onClicked: {
+                        if (root.configVm)
+                            root.configVm.setCurrentPrintPreset(root.configVm.currentPrintPreset)
+                    }
+                }
 
                 CxComboBox {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 30
-                    font.pixelSize: Theme.fontSizeSM
+                    Layout.preferredHeight: 26
+                    font.pixelSize: Theme.fontSizeMD
                     // v5.16 (PSET2-05): decorated list — section
                     // separators + incompatibility gray-out.
                     model: root.configVm ? root.configVm.decoratedPrintPresetNames : []
@@ -541,29 +655,27 @@ Rectangle {
                     Layout.preferredWidth: 8
                     Layout.preferredHeight: 8
                     radius: Theme.radiusSM
-                    color: Theme.accent
+                    color: Theme.sidebarAccent
                     ToolTip.text: qsTr("预设已修改（未保存）")
                     ToolTip.visible: processDirtyMA.containsMouse
                     MouseArea { id: processDirtyMA; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                 }
 
-                // Ref/upstream process preset row tail: copy + search icon
-                // pair; search opens the find dialog instead of a permanent
-                // search field. The upstream copy_menu bitmap is absent from
-                // the project set; the copy glyph stands in.
-                // X2: system CxIconButtons (was the PixelIconButton copy).
                 CxIconButton {
                     buttonSize: 24
-                    iconSize: 16
+                    iconSize: 14
                     cxStyle: CxIconButton.Style.Surface
-                    iconSource: "qrc:/qml/assets/icons/copy.svg"
-                    toolTipText: qsTr("预设操作")
-                    onClicked: root.editPreset(0, root.configVm ? root.configVm.currentPrintPreset : "")
+                    iconSource: "qrc:/qml/assets/icons/orca_save.svg"
+                    toolTipText: qsTr("保存当前工艺预设")
+                    onClicked: {
+                        if (root.configVm)
+                            root.configVm.saveCurrentPreset()
+                    }
                 }
 
                 CxIconButton {
                     buttonSize: 24
-                    iconSize: 16
+                    iconSize: 14
                     cxStyle: CxIconButton.Style.Surface
                     iconSource: "qrc:/qml/assets/icons/search.svg"
                     toolTipText: qsTr("搜索设置")
@@ -632,15 +744,17 @@ Rectangle {
             }
         }
 
-        // ── X6: object list panel (upstream Plater sidebar section) ─────────
-        // Upstream mounts the ObjectList inside the settings sidebar between
-        // the search bar and the params area (Plater.cpp:3234, 3243-3245,
-        // weight 1 vs the params' 3). The section header reuses this file's
-        // PixelHeader; the panel itself is the shared TreeView surface
-        // (see panels/ObjectListPanel.qml + docs/ui-reference/object-list-parity.md).
+        // ── X6: object list section (upstream Plater sidebar section) ──────
+        // ORCA hides the object list inside the settings sidebar
+        // (Plater.cpp:3241-3245: `m_object_list = new ObjectList(...);
+        // m_object_list->Hide()` — the reference sidebar renders params
+        // only). The section stays instantiated (rename entry point for the
+        // shared context menus) but out of the visible stack, exactly like
+        // upstream.
         PixelHeader {
             id: objectListHeader
             Layout.fillWidth: true
+            visible: false
             title: qsTr("对象列表")
             iconSource: "qrc:/qml/assets/icons/list-details.svg"
             collapsible: true
@@ -649,29 +763,24 @@ Rectangle {
         ObjectListPanel {
             id: objectListPanel
             Layout.fillWidth: true
-            // Upstream proportion: object list weight 1 vs params weight 3
-            // (Plater.cpp:3243-3245) -- the list takes a quarter of the
-            // shared remaining height, params the rest.
-            Layout.fillHeight: true
-            Layout.preferredHeight: sidebarContent.height / 4
-            Layout.minimumHeight: 96
-            visible: objectListHeader.expanded
+            // Orca show_object_list(m_mode_region): the tree shows exactly
+            // in objects mode, above the params area (1:3 sizer weight,
+            // Plater.cpp:3243-3245).
+            visible: false
             editorVm: root.editorVm
             onContextMenuResolved: function(family, menuX, menuY) {
                 root.objectListMenuRequested(family, menuX, menuY)
             }
         }
 
-        // Params area: full-height container outlined by a 1px accent border
-        // (ref layout), filling the sidebar remainder; only the option list
+        // Params area: fills the sidebar remainder; only the option list
         // scrolls (params-1/layout-6).
         //
         // The explicit preferredHeight is load-bearing: Qt Quick Layouts
         // splits space between fillHeight siblings in proportion to their
         // preferred sizes, so a plain Rectangle (implicitHeight 0) receives
-        // nothing against the object list's preferred quarter and collapses
-        // to a sliver. h/4 vs 3h/4 here encodes the upstream 1:3 sizer
-        // weights (Plater.cpp:3243-3245).
+        // nothing. With the object list hidden the params panel is the only
+        // fillHeight child and takes the whole remainder.
         Rectangle {
             id: paramsInlinePanel
             Layout.fillWidth: true
@@ -679,17 +788,20 @@ Rectangle {
             Layout.preferredHeight: sidebarContent.height * 3 / 4
             radius: 0
             color: "transparent"
-            border.width: 1
-            border.color: Theme.accent
+            border.width: 0
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: Theme.spacingXS
-                spacing: 4
+                anchors.margins: 0
+                spacing: 0
 
+                // Tab strip (TabCtrl.cpp:346-351): selected = textPrimary
+                // bold over a 3px #009688 underline, unselected =
+                // textSecondary, 58px slots, 1px #CECECE baseline.
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Theme.spacingXL
+                    Layout.leftMargin: 2
+                    spacing: 0
 
                     Repeater {
                         model: root.paramsTabs
@@ -697,25 +809,28 @@ Rectangle {
                             id: paramsTabDelegate
                             required property var modelData
                             readonly property bool selected: paramsTabDelegate.modelData.key === root.paramsCurrentTab
-                            implicitWidth: paramsTabLabel.implicitWidth + 8
-                            implicitHeight: 24
+                            implicitWidth: 58
+                            implicitHeight: 34
 
                             Text {
                                 id: paramsTabLabel
-                                anchors.centerIn: parent
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: 0
                                 text: paramsTabDelegate.modelData.label
-                                color: paramsTabDelegate.selected ? Theme.accent : Theme.textTertiary
+                                color: paramsTabDelegate.selected ? Theme.textPrimary : Theme.textSecondary
                                 font.pixelSize: Theme.fontSizeLG
                                 font.bold: paramsTabDelegate.selected
                             }
 
-                            // 3px selected underline (TabCtrl.cpp:346-351).
+                            // 3px selected underline, text-width
+                            // (TabCtrl.cpp:346-351).
                             Rectangle {
                                 visible: paramsTabDelegate.selected
                                 anchors.bottom: parent.bottom
-                                width: parent.width
+                                x: 0
+                                width: paramsTabLabel.implicitWidth
                                 height: 3
-                                color: Theme.accent
+                                color: Theme.sidebarAccent
                             }
 
                             MouseArea {
@@ -735,191 +850,192 @@ Rectangle {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
-                    color: Theme.bgPanel
+                    color: Theme.tabStripLine
                 }
 
-                // One persistent page per process tab (upstream Tab.cpp keeps
-                // a widget tree per page and only shows/hides it — pages are
-                // built once, never rebuilt on a switch). Each page loads on
-                // its first visit; a flip to an already-built page is a
-                // visibility change only, so repeated switching stays free.
-                Item {
-                    id: paramsPagesHost
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
+                    // One persistent page per process tab (upstream Tab.cpp
+                    // keeps a widget tree per page and only shows/hides it —
+                    // pages are built once, never rebuilt on a switch). Each
+                    // page loads on its first visit; a flip to an
+                    // already-built page is a visibility change only, so
+                    // repeated switching stays free.
+                    Item {
+                        id: paramsPagesHost
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
 
-                    // Prewarm: once the panel has painted, build the six
-                    // pages one per tick so the first click on any tab is a
-                    // flip instead of a ~350ms delegate build. A click racing
-                    // the prewarm still builds its own page on visit.
-                    property int prewarmIdx: 0
-                    Timer {
-                        id: prewarmDelay
-                        interval: 1200
-                        onTriggered: prewarmStep.restart()
-                    }
-                    Timer {
-                        id: prewarmStep
-                        // Step wider than one page build (~550ms with the
-                        // cacheBuffer rows) so a click landing mid-prewarm
-                        // queues behind at most one build.
-                        interval: 900
-                        repeat: true
-                        triggeredOnStart: true
-                        onTriggered: {
-                            if (paramsPagesHost.prewarmIdx >= paramsPagesRepeater.count) {
-                                stop()
-                                return
-                            }
-                            var page = paramsPagesRepeater.itemAt(paramsPagesHost.prewarmIdx)
-                            if (page) page.visited = true
-                            paramsPagesHost.prewarmIdx = paramsPagesHost.prewarmIdx + 1
+                        // Prewarm: once the panel has painted, build the six
+                        // pages one per tick so the first click on any tab is
+                        // a flip instead of a ~350ms delegate build. A click
+                        // racing the prewarm still builds its own page on
+                        // visit.
+                        property int prewarmIdx: 0
+                        Timer {
+                            id: prewarmDelay
+                            interval: 1200
+                            onTriggered: prewarmStep.restart()
                         }
-                    }
-                    Component.onCompleted: prewarmDelay.restart()
+                        Timer {
+                            id: prewarmStep
+                            // Step wider than one page build (~550ms with the
+                            // cacheBuffer rows) so a click landing mid-prewarm
+                            // queues behind at most one build.
+                            interval: 900
+                            repeat: true
+                            triggeredOnStart: true
+                            onTriggered: {
+                                if (paramsPagesHost.prewarmIdx >= paramsPagesRepeater.count) {
+                                    stop()
+                                    return
+                                }
+                                var page = paramsPagesRepeater.itemAt(paramsPagesHost.prewarmIdx)
+                                if (page) page.visited = true
+                                paramsPagesHost.prewarmIdx = paramsPagesHost.prewarmIdx + 1
+                            }
+                        }
+                        Component.onCompleted: prewarmDelay.restart()
 
-                    Repeater {
-                        id: paramsPagesRepeater
-                        model: root.paramsTabs
-                        delegate: Item {
-                            id: paramsPageHost
-                            required property var modelData
-                            readonly property string pageKey: paramsPageHost.modelData.key
-                            readonly property bool isCurrent: root.paramsCurrentTab === paramsPageHost.pageKey
-                            property bool visited: paramsPageHost.isCurrent
-                            onIsCurrentChanged: if (paramsPageHost.isCurrent) paramsPageHost.visited = true
-                            width: parent.width
-                            height: parent.height
-                            // QQuickItemView releases every delegate when the
-                            // view's effective visibility drops, so a
-                            // visible=false flip silently destroyed and
-                            // rebuilt the incoming page's rows on every
-                            // switch. Keep pages effectively visible and
-                            // shift the non-current ones out of the window
-                            // instead: the ListView's own clip keeps them
-                            // culled and unhittable, so a flip is a pure
-                            // reposition and revisits reuse the live rows.
-                            x: paramsPageHost.isCurrent ? 0 : -100000
+                        Repeater {
+                            id: paramsPagesRepeater
+                            model: root.paramsTabs
+                            delegate: Item {
+                                id: paramsPageHost
+                                required property var modelData
+                                readonly property string pageKey: paramsPageHost.modelData.key
+                                readonly property bool isCurrent: root.paramsCurrentTab === paramsPageHost.pageKey
+                                property bool visited: paramsPageHost.isCurrent
+                                onIsCurrentChanged: if (paramsPageHost.isCurrent) paramsPageHost.visited = true
+                                width: parent.width
+                                height: parent.height
+                                // QQuickItemView releases every delegate when
+                                // the view's effective visibility drops, so a
+                                // visible=false flip silently destroyed and
+                                // rebuilt the incoming page's rows on every
+                                // switch. Keep pages effectively visible and
+                                // shift the non-current ones out of the window
+                                // instead: the ListView's own clip keeps them
+                                // culled and unhittable, so a flip is a pure
+                                // reposition and revisits reuse the live rows.
+                                x: paramsPageHost.isCurrent ? 0 : -100000
 
-                            Loader {
-                                anchors.fill: parent
-                                active: paramsPageHost.visited
-                                sourceComponent: ListView {
-                                    id: paramsPage
+                                Loader {
                                     anchors.fill: parent
-                                    clip: true
-                                    spacing: 0
-                                    // cacheBuffer 0 was a stopgap from when a
-                                    // tab flip rebuilt every delegate; pages
-                                    // are persistent now, so pre-building rows
-                                    // past the viewport only costs prewarm
-                                    // time and keeps fast scrolling from
-                                    // building rows mid-flick.
-                                    cacheBuffer: 600
-                                    // Per-page C++ filter proxy (replaces the
-                                    // QML-side index-array filter
-                                    // orchestration). LeftSidebar is always
-                                    // advanced mode. Tab flips only toggle
-                                    // this page's visibility — no proxy input
-                                    // changes, so no re-filtering, and value
-                                    // dataChanged now refreshes visible rows
-                                    // in place.
-                                    model: ConfigOptionFilterProxy {
-                                        sourceModel: root.paramsOptionModel
-                                        page: paramsPageHost.pageKey
-                                        searchText: root.paramsSearchText
-                                        advancedMode: root.paramsAdvancedMode
-                                    }
-
-                                    ScrollBar.vertical: ScrollBar {
-                                        visible: paramsPage.contentHeight > paramsPage.height
-                                        // 2026-10-26 light-mode catch: the bare
-                                        // Basic bar clipped at the panel border
-                                        // (read as a stray "Y") — CxScrollView's
-                                        // themed bar, inset 3px.
-                                        anchors.top: paramsPage.top
-                                        anchors.bottom: paramsPage.bottom
-                                        anchors.right: paramsPage.right
-                                        anchors.rightMargin: Theme.spacingXS
-                                        background: Rectangle {
-                                            implicitWidth: 8
-                                            radius: Theme.radiusSM
-                                            color: Theme.scrollBarTrackColor
-                                        }
-                                        contentItem: Rectangle {
-                                            implicitWidth: 8
-                                            implicitHeight: 100
-                                            radius: Theme.radiusSM
-                                            opacity: parent.active ? 1.0 : 0.5
-                                            color: Theme.scrollBarColor
-                                            Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
-                                        }
-                                    }
-
-                                    delegate: Item {
-                                        id: paramsDelegate
-                                        required property int index
-                                        required property int optIdx
-                                        required property string optGroup
-                                        required property string optPrevGroup
-                                        required property string optType
-                                        required property string optKey
-                                        required property string displayLabel
-                                        required property var optValue
-                                        required property double optMin
-                                        required property double optMax
-                                        required property double optStep
-                                        required property bool optReadonly
-                                        required property bool optDirty
-                                        required property string optTooltip
-                                        required property string optUnit
-                                        required property string optSidetext
-                                        required property bool optNullable
-                                        required property bool optIsVector
-                                        required property var optEnumLabels
-                                        required property string valueSource
-
-                                        // optPrevGroup is the proxy-fed
-                                        // GroupRole of the previous *accepted*
-                                        // row; indexing neighbors by source
-                                        // row is wrong under a filtered proxy.
-                                        readonly property bool showGroupHeader:
-                                            optGroup !== ""
-                                            && (index === 0 || optGroup !== optPrevGroup)
-
-                                        width: paramsPage.width
-                                        height: optRow.totalHeight
-
-                                        OptionRow {
-                                            id: optRow
-                                            anchors.left: parent.left
-                                            anchors.right: parent.right
-                                            optionModel: root.paramsOptionModel
-                                            optIdx: paramsDelegate.optIdx
-                                            rowIndex: paramsDelegate.index
+                                    active: paramsPageHost.visited
+                                    sourceComponent: ListView {
+                                        id: paramsPage
+                                        anchors.fill: parent
+                                        clip: true
+                                        // Reference rhythm: 26px rows on a
+                                        // 30px pitch (4px inter-row gap).
+                                        spacing: 4
+                                        cacheBuffer: 600
+                                        // Per-page C++ filter proxy (replaces
+                                        // the QML-side index-array filter
+                                        // orchestration). Tab flips only
+                                        // toggle this page's visibility — no
+                                        // proxy input changes, so no
+                                        // re-filtering, and value dataChanged
+                                        // now refreshes visible rows in place.
+                                        model: ConfigOptionFilterProxy {
+                                            sourceModel: root.paramsOptionModel
+                                            page: paramsPageHost.pageKey
                                             searchText: root.paramsSearchText
-                                            showGroupHeader: paramsDelegate.showGroupHeader
-                                            oGroup: paramsDelegate.optGroup
-                                            compact: true
-                                            compactLabelWidth: 150
-                                            compactFieldWidth: 86
-                                            compactEnumWidth: 132
-                                            valueSource: paramsDelegate.valueSource
-                                            oType: paramsDelegate.optType
-                                            oKey: paramsDelegate.optKey
-                                            oLabel: paramsDelegate.displayLabel
-                                            oVal: paramsDelegate.optValue
-                                            oMin: paramsDelegate.optMin
-                                            oMax: paramsDelegate.optMax
-                                            oStep: paramsDelegate.optStep
-                                            oRO: paramsDelegate.optReadonly
-                                            oDirty: paramsDelegate.optDirty
-                                            oTip: paramsDelegate.optTooltip
-                                            oUnit: paramsDelegate.optUnit
-                                            oSidetext: paramsDelegate.optSidetext
-                                            oNullable: paramsDelegate.optNullable
-                                            oIsVector: paramsDelegate.optIsVector
-                                            oEnumLabels: paramsDelegate.optEnumLabels
+                                            advancedMode: root.paramsAdvancedMode
+                                        }
+
+                                        ScrollBar.vertical: ScrollBar {
+                                            visible: paramsPage.contentHeight > paramsPage.height
+                                            // 2026-10-26 light-mode catch: the
+                                            // bare Basic bar clipped at the
+                                            // panel border (read as a stray
+                                            // "Y") — CxScrollView's themed bar,
+                                            // inset 3px.
+                                            anchors.top: paramsPage.top
+                                            anchors.bottom: paramsPage.bottom
+                                            anchors.right: paramsPage.right
+                                            anchors.rightMargin: Theme.spacingXS
+                                            background: Rectangle {
+                                                implicitWidth: 8
+                                                radius: Theme.radiusSM
+                                                color: Theme.scrollBarTrackColor
+                                            }
+                                            contentItem: Rectangle {
+                                                implicitWidth: 8
+                                                implicitHeight: 100
+                                                radius: Theme.radiusSM
+                                                opacity: parent.active ? 1.0 : 0.5
+                                                color: Theme.scrollBarColor
+                                                Behavior on opacity { NumberAnimation { duration: Theme.motionFast } }
+                                            }
+                                        }
+
+                                        delegate: Item {
+                                            id: paramsDelegate
+                                            required property int index
+                                            required property int optIdx
+                                            required property string optGroup
+                                            required property string optPrevGroup
+                                            required property string optType
+                                            required property string optKey
+                                            required property string displayLabel
+                                            required property var optValue
+                                            required property double optMin
+                                            required property double optMax
+                                            required property double optStep
+                                            required property bool optReadonly
+                                            required property bool optDirty
+                                            required property string optTooltip
+                                            required property string optUnit
+                                            required property string optSidetext
+                                            required property bool optNullable
+                                            required property bool optIsVector
+                                            required property var optEnumLabels
+                                            required property string valueSource
+
+                                            // optPrevGroup is the proxy-fed
+                                            // GroupRole of the previous
+                                            // *accepted* row; indexing
+                                            // neighbors by source row is wrong
+                                            // under a filtered proxy.
+                                            readonly property bool showGroupHeader:
+                                                optGroup !== ""
+                                                && (index === 0 || optGroup !== optPrevGroup)
+
+                                            width: paramsPage.width
+                                            height: optRow.totalHeight
+
+                                            OptionRow {
+                                                id: optRow
+                                                anchors.left: parent.left
+                                                anchors.right: parent.right
+                                                optionModel: root.paramsOptionModel
+                                                optIdx: paramsDelegate.optIdx
+                                                rowIndex: paramsDelegate.index
+                                                searchText: root.paramsSearchText
+                                                showGroupHeader: paramsDelegate.showGroupHeader
+                                                oGroup: paramsDelegate.optGroup
+                                                compact: true
+                                                compactIndent: 20
+                                                compactLabelWidth: 150
+                                                compactFieldWidth: 120
+                                                compactEnumWidth: 150
+                                                valueSource: paramsDelegate.valueSource
+                                                oType: paramsDelegate.optType
+                                                oKey: paramsDelegate.optKey
+                                                oLabel: paramsDelegate.displayLabel
+                                                oVal: paramsDelegate.optValue
+                                                oMin: paramsDelegate.optMin
+                                                oMax: paramsDelegate.optMax
+                                                oStep: paramsDelegate.optStep
+                                                oRO: paramsDelegate.optReadonly
+                                                oDirty: paramsDelegate.optDirty
+                                                oTip: paramsDelegate.optTooltip
+                                                oUnit: paramsDelegate.optUnit
+                                                oSidetext: paramsDelegate.optSidetext
+                                                oNullable: paramsDelegate.optNullable
+                                                oIsVector: paramsDelegate.optIsVector
+                                                oEnumLabels: paramsDelegate.optEnumLabels
+                                            }
                                         }
                                     }
                                 }
@@ -928,9 +1044,7 @@ Rectangle {
                     }
                 }
             }
-        }
     }
-
     // ── preset search dialog (sidebar-9/layout-8) ──────────────────────────
     // Upstream keeps the sidebar search bar hidden (Plater.cpp:3246-3247);
     // searching happens through a dialog instead of a permanent field.
@@ -999,6 +1113,63 @@ Rectangle {
                         cxStyle: CxButton.Style.Primary
                         onClicked: paramsSearchDialog.accept()
                     }
+                }
+            }
+        }
+    }
+
+    // Preset compare (Orca ParamsPanel m_compare_btn, ParamsPanel.cpp:291):
+    // self-contained diff dialog over comparePresetsDetailed; scoped here so
+    // the sidebar compare icon reaches it without opening SettingsDialog
+    // (which carries its own scoped instance for the settings-side entry).
+    PresetDiffDialog {
+        id: presetCompareDialog
+        configVm: root.configVm
+    }
+
+    // Dirty-preset guard for sidebar actions (2026-10-28 user report):
+    // queuePendingAction blocks scope/preset switches while the preset
+    // carries unsaved edits and emits pendingUnsavedChangesRequested — the
+    // settings dialog listens, the sidebar did not, so the pills looked
+    // dead the moment a value was modified. Same single-modal gate
+    // (beginUnsavedDialog) keeps the two listeners from doubling up.
+    Connections {
+        // null-safe target: pages instantiate the sidebar without a configVm
+        // in the smoke harness, and a null Connections target is legal while
+        // an undefined one warns.
+        target: root.configVm ? root.configVm : null
+        function onPendingUnsavedChangesRequested() {
+            if (root.configVm && root.configVm.beginUnsavedDialog()
+                && sidebarUnsavedLoader.item)
+                sidebarUnsavedLoader.item.openDialog()
+        }
+    }
+
+    Loader {
+        id: sidebarUnsavedLoader
+        active: !!root.configVm
+        sourceComponent: UnsavedChangesDialog {
+            id: sidebarUnsavedDialog
+            configVm: root.configVm
+            presetTier: root.configVm ? root.configVm.activePresetTier : "print"
+
+            onAccepted: {
+                if (!root.configVm)
+                    return
+                if (sidebarUnsavedDialog.action === "save") {
+                    root.configVm.requestSavePendingChanges()
+                } else if (sidebarUnsavedDialog.action === "discard") {
+                    root.configVm.requestDiscardPendingChanges()
+                } else if (sidebarUnsavedDialog.action === "transfer") {
+                    root.configVm.transferPendingChanges(sidebarUnsavedDialog.checkedKeys)
+                }
+                root.configVm.endUnsavedDialog()
+            }
+
+            onRejected: {
+                if (root.configVm) {
+                    root.configVm.requestCancelPendingChanges()
+                    root.configVm.endUnsavedDialog()
                 }
             }
         }
@@ -1188,45 +1359,100 @@ Rectangle {
     // BUILDGATE restore (2026-09-24): the plate pill is back — PREPSB-04
     // (leftSidebarPresetControlsAreWiredAndHonest) locks the Global/Object/
     // Plate scope set, and requestPlateScope stays on ConfigViewModel.
+    // Scope pills live inside the process PixelHeader row (sidebar-5):
+    // the Global/Object pair, joined capsule like the reference band. The
+    // PLATE scope is reached through the object tree's plate node
+    // (treeRowActivated → requestPlateScope) — PREPSB-04's plate wiring
+    // stays in this file without a third pill.
     Component {
         id: processScopePills
         RowLayout {
             id: processScopeBar
-            spacing: 6
+            spacing: 0
 
-            ScopeSegment {
-                text: qsTr("全局")
-                // M2.5/G3 fix (2026-10-14, Qt 6.12): bare `a && b` yields
-                // undefined when a is undefined, and Qt 6.12 now WARNS on
-                // assigning undefined to a bool property ("Unable to assign
-                // [undefined] to bool") — surfaced by
-                // QmlSmokeTests::pagesInstantiate(AssemblePage) where
-                // root.configVm is undefined. `!!` forces the guard to a real
-                // boolean so the expression is bool in every branch.
-                selected: !!root.configVm && root.configVm.settingsScope === "global"
-                onClicked: if (root.configVm) root.configVm.requestGlobalScope()
-            }
+            // Joined capsule track (Orca SwitchButton): #E7E7E7 rounded
+            // rail; the selected segment paints the accent capsule inside.
+            Rectangle {
+                id: scopeTrack
+                Layout.preferredHeight: 24
+                Layout.minimumWidth: scopeRow.implicitWidth + 8
+                radius: 12
+                color: Theme.bgInset
 
-            ScopeSegment {
-                text: qsTr("对象")
-                selected: !!root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
-                onClicked: {
-                    if (root.editorVm && root.editorVm.selectedObjectIndex >= 0 && root.configVm) {
-                        root.configVm.requestObjectScope("object", "",
-                            root.editorVm.selectedObjectIndex, -1)
+                RowLayout {
+                    id: scopeRow
+                    anchors.centerIn: parent
+                    spacing: 0
+
+                    ScopeSegment {
+                        text: qsTr("全局")
+                        joined: true
+                        // M2.5/G3 fix (2026-10-14, Qt 6.12): bare `a && b` yields
+                        // undefined when a is undefined, and Qt 6.12 now WARNS on
+                        // assigning undefined to a bool property ("Unable to assign
+                        // [undefined] to bool") — surfaced by
+                        // QmlSmokeTests::pagesInstantiate(AssemblePage) where
+                        // root.configVm is undefined. `!!` forces the guard to a real
+                        // boolean so the expression is bool in every branch.
+                        selected: !!root.configVm && root.configVm.settingsScope === "global"
+                        onClicked: if (root.configVm) root.configVm.requestGlobalScope()
+                    }
+
+                    ScopeSegment {
+                        text: qsTr("对象")
+                        joined: true
+                        // The VM reverts an EMPTY targetName back to global
+                        // scope (activateObjectScope's empty-name branch), so
+                        // the old requestObjectScope("object", "", …) call was
+                        // a silent no-op. The pill stays clickable at all
+                        // times; a click without an exactly-one selection
+                        // raises an honest toast instead of switching — there
+                        // is no meaningful empty-object scope to switch to.
+                        selected: !!root.configVm && root.configVm.settingsScope !== "global" && root.configVm.settingsScope !== "plate"
+                        toolTipText: qsTr("编辑选中对象的参数")
+                        onClicked: {
+                            if (root.editorVm && root.editorVm.canOpenSelectionSettings && root.configVm) {
+                                root.configVm.requestObjectScope(
+                                    root.editorVm.settingsTargetType,
+                                    root.editorVm.settingsTargetName,
+                                    root.editorVm.settingsTargetObjectIndex, -1)
+                            } else {
+                                Backend.postError(qsTr("请先选中一个对象（单击选中），再编辑对象参数。"), 1)
+                            }
+                        }
+                    }
+
+                    ScopeSegment {
+                        text: qsTr("盘")
+                        joined: true
+                        // !! guard: same Qt 6.12 undefined-to-bool warning as above.
+                        selected: !!root.configVm && root.configVm.settingsScope === "plate"
+                        enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
+                        onClicked: {
+                            if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)
+                                root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
+                        }
                     }
                 }
             }
 
-            ScopeSegment {
-                text: qsTr("盘")
-                // !! guard: same Qt 6.12 undefined-to-bool warning as above.
-                selected: !!root.configVm && root.configVm.settingsScope === "plate"
-                enabled: root.editorVm && root.editorVm.currentPlateIndex >= 0
-                onClicked: {
-                    if (root.editorVm && root.editorVm.currentPlateIndex >= 0 && root.configVm)
-                        root.configVm.requestPlateScope(root.editorVm.currentPlateIndex)
+            // Mode switch (upstream ModeSwitchButton m_mode_view,
+            // ParamsPanel.cpp:281-284): 简 = simple view (advanced options
+            // filtered by the proxy), 全 = complete. Sits right of the scope
+            // pills like the reference band.
+            Item { Layout.preferredWidth: Theme.spacingMD }
+
+            CxSwitch {
+                Layout.preferredHeight: 20
+                checkedColor: Theme.sidebarAccent
+                checked: root.paramsAdvancedMode
+                onToggled: {
+                    root.paramsAdvancedMode = checked
+                    AppSettings.setValue("paramsAdvancedMode",
+                                             checked ? "1" : "0")
                 }
+                ToolTip.text: qsTr("精简/完整参数模式")
+                ToolTip.visible: hovered
             }
         }
     }
@@ -1256,10 +1482,12 @@ Rectangle {
     // Section header: 30px title bar (upstream filament title is
     // SetMinSize(-1, FromDIP(30)), Plater.cpp:2915, printer title 3*em) with
     // leading icon + title, optional inline middle content, then a
-    // right-aligned icon group (sidebar-3). Collapsible headers carry the
-    // upstream title-bar band (SetBackgroundColor(title_bg) #F8F8F8,
-    // Plater.cpp:2463,2891, dark-adjusted) and a 2px bottom separator shown
-    // while expanded (Plater.cpp:2527-2529).
+    // right-aligned icon group (sidebar-3). The band is the upstream
+    // title-bar gradient (SetBackgroundColor(title_bg) #F8F8F8 →
+    // BackgroundColor2 #F1F1F1, Plater.cpp:2449,2462-2463); expanded
+    // sections show no divider — the reference band sits flush on the white
+    // sidebar (the 2px white separator only paces folded sections, and the
+    // stack spacing already does that).
     component PixelHeader: Item {
         id: headerRoot
         property string title: ""
@@ -1278,21 +1506,13 @@ Rectangle {
 
         implicitHeight: 30
 
-        // Title-bar band.
+        // Title-bar band (vertical #F8F8F8 → #F1F1F1 gradient).
         Rectangle {
             anchors.fill: parent
-            color: root.sectionSurface
-        }
-
-        // 2px bottom separator; hidden together with the content while the
-        // section is folded (upstream separator->Show(isShown),
-        // Plater.cpp:2527-2529).
-        Rectangle {
-            anchors.bottom: parent.bottom
-            width: parent.width
-            height: 2
-            color: root.dividerColor
-            visible: headerRoot.collapsible && headerRoot.expanded
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Theme.titleBandTop }
+                GradientStop { position: 1.0; color: Theme.titleBandBottom }
+            }
         }
 
         // Whole-bar fold toggle. Declared before the row so the icon buttons
@@ -1307,6 +1527,8 @@ Rectangle {
 
         RowLayout {
             anchors.fill: parent
+            anchors.leftMargin: 8   // SidebarProps::TitlebarMargin (Plater.hpp:126)
+            anchors.rightMargin: 6
             spacing: 6
 
             Image {
@@ -1315,7 +1537,6 @@ Rectangle {
                 Layout.preferredWidth: 16
                 Layout.preferredHeight: 16
                 fillMode: Image.PreserveAspectFit
-                opacity: 0.85
             }
 
             Text {
@@ -1331,12 +1552,15 @@ Rectangle {
                 elide: Text.ElideRight
             }
 
-            Item { Layout.fillWidth: true }
-
+            // Inline middle content hugs the title (the reference 工艺 band
+            // renders the scope capsule right of the label); the stretch
+            // comes after it so the right-side icon group stays flush.
             Loader {
                 sourceComponent: headerRoot.middleComponent
                 Layout.alignment: Qt.AlignVCenter
             }
+
+            Item { Layout.fillWidth: true }
 
             Repeater {
                 model: headerRoot.extraActions
@@ -1380,6 +1604,11 @@ Rectangle {
     component ScopeSegment: CxButton {
         compact: true
         cxStyle: CxButton.Style.Segment
+        // Joined-capsule pills render the Orca #009688 sidebar accent, not
+        // the brand green; clicks must not leave a focus ring on the
+        // selected segment (the reference SwitchButton has none).
+        selectedColor: Theme.sidebarAccent
+        focusPolicy: Qt.TabFocus
     }
 
     // U14: one label/value pair of the persistent Sliced Info card. The row
@@ -1453,6 +1682,11 @@ Dialog {
             model: root.configVm ? root.configVm.printOptions : null
 
             delegate: Rectangle {
+                // pragma ComponentBehavior: Bound -- model roles must be
+                // declared, implicit lookups throw ReferenceError.
+                required property int index
+                required property string optLabel
+                required property var optValue
                 width: paramsListview.width
                 height: 34
                 radius: Theme.radiusSM

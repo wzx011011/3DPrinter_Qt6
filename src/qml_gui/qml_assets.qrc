@@ -288,5 +288,27 @@
         <file>assets/calib/flowrate-test-pass1.3mf</file>
         <file>assets/calib/flowrate-test-pass2.3mf</file>
         <file>assets/calib/tower_with_seam.stl</file>
+        <file>assets/icons/orca_edit.svg</file>
+        <file>assets/icons/orca_add_filament.svg</file>
+        <file>assets/icons/orca_delete_filament.svg</file>
+        <file>assets/icons/orca_flush_volumes.svg</file>
+        <file>assets/icons/orca_monitor_signal_strong.svg</file>
+        <file>assets/icons/orca_printer_sync_not.svg</file>
+        <file>assets/icons/orca_settings.svg</file>
+        <file>assets/icons/orca_filament.svg</file>
+        <file>assets/icons/orca_printer.svg</file>
+        <file>assets/icons/orca_process.svg</file>
+        <file>assets/icons/orca_advanced.svg</file>
+        <file>assets/icons/orca_compare.svg</file>
+        <file>assets/icons/orca_table.svg</file>
+        <file>assets/icons/orca_save.svg</file>
+        <file>assets/icons/orca_undo.svg</file>
+        <file>assets/icons/orca_printer_placeholder.png</file>
+        <file>assets/icons/orca_bed_cool.png</file>
+        <file>assets/icons/orca_bed_cool_supertack.png</file>
+        <file>assets/icons/orca_bed_engineering.png</file>
+        <file>assets/icons/orca_bed_high_templ.png</file>
+        <file>assets/icons/orca_bed_pei.png</file>
+        <file>assets/icons/orca_bed_pei_cool.png</file>
     </qresource>
 </RCC>

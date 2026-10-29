@@ -101,6 +101,18 @@ struct Palette
   const char *menuBackground;
   const char *controlDisabledBg;
   const char *controlDisabledText;
+  // Prepare-page sidebar section band (Plater.cpp:2449 title_bg gradient,
+  // SetBackgroundColor/BackgroundColor2) and its separators.
+  const char *titleBandTop;
+  const char *titleBandBottom;
+  const char *sidebarHairline;
+  const char *tabStripLine;
+  // Orca Sidebar PanelColors (Plater.cpp:2537-2543): preset card cell
+  // border, normal vs focused/hovered. bd_hover/bd_focus are NOT
+  // dark-adjusted upstream (#009688 both themes), so the normal border
+  // mirrors that treatment per theme.
+  const char *presetBorder;
+  const char *presetBorderHover;
   // Notification severity palette, indexed by NotificationLevel
   // (0=Info .. 9=Other; see BackendContext.h).
   const char *severityColors[10];
@@ -117,10 +129,21 @@ struct StaticTokens
 {
   const char *accent;
   const char *plateLabel;
+  // Orca sidebar accent (Plater.cpp PanelColors bd_hover/bd_focus #009688,
+  // darkModeColorFor-free upstream): section pills, tab underline, preset
+  // card hover/focus border, mode switch. Fixed across themes upstream.
+  const char *sidebarAccent;
+  // Orca preset-card focused background (Plater.cpp bg_focus #E5F0EE).
+  const char *presetFocusBg;
+  // Orca modified-preset / dirty-tab marker (#F54A45 family: the orange
+  // revert arrow left of the process preset combo and the orange tab
+  // label).
+  const char *presetDirty;
 };
 inline const StaticTokens &staticTokens()
 {
-  static constexpr StaticTokens kStatic{"#18c75e", "#18c75e"};
+  static constexpr StaticTokens kStatic{"#18c75e", "#18c75e", "#009688",
+                                        "#e5f0ee", "#f54a45"};
   return kStatic;
 }
 
@@ -138,6 +161,7 @@ inline const Palette &palette(bool dark)
       "#18c75e", "#f5a623", "#e04040", "#3b9eff", "#4a1c1c", "#3a3420",
       "#959595", "#7e7e80", "#171717",
       "#3f3f41", "#f5f5f5", "#2d2d31", "#8e8e83", "#56564f",
+      "#2f3034", "#2a2b2e", "#3a3a3c", "#4b4b4d", "#5a5a5c", "#009688",
       {"#18c75e", "#18c75e", "#c87840", "#f05545", "#e04848",
        "#58a6ff", "#7c6aef", "#7c6aef", "#3b9cf0", "#18c75e"}};
   // kLight recalibrated against the Creality Print 5.x reference shots
@@ -157,6 +181,7 @@ inline const Palette &palette(bool dark)
       "#0f9e48", "#b9790a", "#d13a3a", "#1e78d6", "#fbe9e9", "#faf0da",
       "#7e8080", "#5f6161", "#ebecee",
       "#c2c6cd", "#ffffff", "#ffffff", "#c6c8c0", "#6e7068",
+      "#f8f8f8", "#f1f1f1", "#eeeeee", "#cecece", "#dbdbdb", "#009688",
       {"#0f9e48", "#0f9e48", "#a05f28", "#d63c2c", "#c23a3a",
        "#2a7fd4", "#6355d6", "#6355d6", "#2379cc", "#0f9e48"}};
   return dark ? kDark : kLight;
@@ -634,6 +659,19 @@ public:
   void setBedTextureUrl(const QUrl &value);
   QByteArray bedModelMeshData() const { return m_bedModelMeshData; }
   void setBedModelMeshData(const QByteArray &value);
+  // PLATEICONS: raw size/top of the loaded bed model solid (same parse as
+  // the renderer's model upload). The renderer CENTERS the solid on the
+  // plate (offset = plateCenter - rawCenter, y -0.44), so the overlay quads
+  // anchor at plateCenter ± halfSize to clear vendor frame overhangs (K1
+  // Max sticks 15mm past the far print edge after centering).
+  struct BedModelBounds
+  {
+    float topY = 0.0f;   // raw top; drawn top = topY - 0.44 (sit offset)
+    float halfX = 0.0f;  // drawn extents: plateCenter ± half
+    float halfZ = 0.0f;
+    bool valid = false;
+  };
+  BedModelBounds bedModelBounds() const;
   QVariantList bedExcludeAreas() const { return m_bedExcludeAreas; }
   void setBedExcludeAreas(const QVariantList &value);
   float bedHeightToRod() const { return m_bedHeightToRod; }
@@ -1295,6 +1333,9 @@ private:
   // consumed by the renderer's DirtyBedModel channel key (with the per-
   // instance plate-offset keys).
   qint64 m_bedModelGeneration = 0;
+  // PLATEICONS: bedModelBounds() cache, keyed on the generation above.
+  mutable BedModelBounds m_bedModelBoundsCache;
+  mutable qint64 m_bedModelBoundsGen = -1;
   QVariantList m_bedExcludeAreas;
   float m_bedHeightToRod = 0.0f;
   float m_bedHeightToLid = 0.0f;

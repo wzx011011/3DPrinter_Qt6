@@ -6,6 +6,11 @@ import OWzx
 Switch {
     id: root
 
+    // Prepare-sidebar reference toggle (Orca ModeSwitchButton): the checked
+    // track renders the #009688 sidebar accent instead of the brand green.
+    // "transparent" keeps the default accent.
+    property color checkedColor: "transparent"
+
     // ctl-8: compact capsule per the design reference and the upstream toggle
     // bitmaps (toggle_on/off.svg are 24x14, rendered ~27x16 DIP; track rx4,
     // knob 10x10 rx3). Off track is neutral gray (upstream toggle_off.svg
@@ -21,7 +26,12 @@ Switch {
 
         color: {
             if (!root.enabled) return Theme.bgPanel
-            if (root.checked) return root.hovered ? Theme.accentLight : Theme.accent
+            if (root.checked) {
+                // checkedColor path is flat on hover — the knob shift carries
+                // the feedback (a lighter-blend here would trip the ratchet).
+                if (root.checkedColor.a > 0) return root.checkedColor
+                return root.hovered ? Theme.accentLight : Theme.accent
+            }
             return Theme.textDisabled
         }
         // Phase 170 (P0-2): keyboard focus ring, shared borderFocus contract.

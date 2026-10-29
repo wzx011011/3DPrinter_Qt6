@@ -16,6 +16,14 @@ Button {
     // on/off pill look, so the state lives on the shared control instead of
     // being re-drawn per page.
     property bool selected: false
+    // Prepare-sidebar reference pill (Orca ParamsPanel SwitchButton
+    // Global/Objects): the segment fill is the #009688 sidebar accent, not
+    // the brand green. "transparent" keeps the default accent.
+    property color selectedColor: "transparent"
+    // Joined capsule (Orca ParamsPanel SwitchButton Global/Objects): the
+    // segments sit on a shared track rectangle -- no per-segment chrome, the
+    // selected fill alone paints the capsule.
+    property bool joined: false
     // X2: optional leading icon (16px, same slot as CxIconButton). Lets
     // label+icon buttons (PrintHostDialog browse/test row, upstream
     // ButtonType::Parameter) come from the system instead of a private
@@ -90,7 +98,14 @@ Button {
             }
             if (root.cxStyle === CxButton.Style.Segment) {
                 if (d) return Theme.bgPanel
-                if (root.selected) return p ? Theme.accentDark : Theme.accent
+                if (root.joined && !root.selected) return "transparent"
+                if (root.selected) {
+                    // selectedColor path skips the pressed darkening — the
+                    // press feedback comes from _pressScale (a darker-blend
+                    // call here would trip the style-literal ratchet).
+                    if (root.selectedColor.a > 0) return root.selectedColor
+                    return p ? Theme.accentDark : Theme.accent
+                }
                 if (p) return Theme.bgPressed
                 if (h) return Theme.bgHover
                 return Theme.bgPanel
@@ -127,9 +142,11 @@ Button {
             if (root.cxStyle === CxButton.Style.Primary) return "transparent"
             if (root.cxStyle === CxButton.Style.Danger) return "transparent"
             if (root.cxStyle === CxButton.Style.Ghost) return root.hovered ? Theme.borderDefault : "transparent"
-            if (root.cxStyle === CxButton.Style.Segment)
-                return root.selected ? Theme.accent
+            if (root.cxStyle === CxButton.Style.Segment) {
+                if (root.joined && !root.selected) return "transparent"
+                return root.selected ? (root.selectedColor.a > 0 ? root.selectedColor : Theme.accent)
                                      : (root.hovered ? Theme.borderStrong : Theme.borderDefault)
+            }
             if (root.cxStyle === CxButton.Style.Chip)
                 return root.hovered ? Theme.borderStrong : Theme.borderDefault
             if (root.cxStyle === CxButton.Style.GhostDanger) return Theme.statusError

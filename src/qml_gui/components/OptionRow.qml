@@ -24,6 +24,9 @@ Item {
     property int compactLabelWidth: 112
     property int compactFieldWidth: 72
     property int compactEnumWidth: 112
+    // Reference sidebar rows (Orca prepare sidebar): labels indent deeper
+    // than the group icon column. Default keeps the settings-dialog inset.
+    property int compactIndent: 10
 
     function displayValueSource(sourceKey) {
         if (sourceKey === "default") return qsTr("默认")
@@ -273,7 +276,7 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: root.compact ? 6 : 14
+            anchors.leftMargin: root.compact ? 12 : 14
             anchors.rightMargin: root.compact ? 16 : 18
             spacing: Theme.spacingXS  // upstream StaticLine: icon + 5px + title + line
 
@@ -317,7 +320,7 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: root.compact ? 10 : 20
+            anchors.leftMargin: root.compact ? root.compactIndent : 20
             anchors.rightMargin: root.compact ? 10 : Theme.fontSizeLG
             spacing: root.compact ? 8 : 12
 
@@ -394,7 +397,10 @@ Item {
                     asynchronous: true
                     active: root.oType === "bool"
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
+                    // Reference sidebar: the checkbox sits at the field
+                    // column's LEFT edge (Orca renders bool rows the same
+                    // way), not hard against the panel edge.
+                    anchors.left: parent.left
                     // Explicit width: a bare Loader has no implicit size and
                     // the fill-anchored CxCheckBox collapsed to 0x0 — bool
                     // options rendered with no checkbox at all.
@@ -427,7 +433,7 @@ Item {
                                 visible: root.oType === "int" || root.oType === "percent"
                                 Layout.preferredWidth: root.compact ? root.compactFieldWidth : 90
                                 // G2: R11 compact field is 25px tall (was 24).
-                                Layout.preferredHeight: root.compact ? 25 : Theme.controlHeightSM
+                                Layout.preferredHeight: root.compact ? 26 : Theme.controlHeightSM
                                 value: root.clampNumber(root.oVal)
                                 from: Math.round(root.oMin)
                                 to: Math.round(root.oMax)
@@ -442,8 +448,9 @@ Item {
                                 visible: root.oType === "double"
                                 Layout.preferredWidth: root.compact ? root.compactFieldWidth : 120
                                 // G2: R11 compact field is 25px tall (was 24).
-                                Layout.preferredHeight: root.compact ? 25 : Theme.controlHeightSM
+                                Layout.preferredHeight: root.compact ? 26 : Theme.controlHeightSM
                                 decimals: root.oType === "int" || root.oType === "percent" ? 0 : 3
+                                valueAlignment: root.compact ? Text.AlignLeft : Text.AlignRight
                                 text: root.formattedNumber(root.oVal)
                                 // Unit lives inside the field, right-aligned
                                 // (upstream Field.cpp:923 combine_side_text).
@@ -583,7 +590,7 @@ Item {
                             CxTextField {
                                 Layout.fillWidth: true
                                 // G2: R11 compact field is 25px tall (was 24).
-                                Layout.preferredHeight: root.compact ? 25 : Theme.controlHeightSM
+                                Layout.preferredHeight: root.compact ? 26 : Theme.controlHeightSM
                                 text: typeof root.oVal === "string" ? root.oVal : ""
                                 enabled: !root.oRO
                                 onEditingFinished: root.optionModel.setValue(root.optIdx, text)

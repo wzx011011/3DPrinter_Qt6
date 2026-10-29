@@ -31,6 +31,10 @@ Rectangle {
     // (Field.cpp:923 m_combine_side_text = !m_opt.multiline), same approach as
     // CxSpinBox's suffix.
     property string suffix: ""
+    // Reference compact sidebar (Orca prepare sidebar): the value hugs the
+    // field's left edge with the sidetext at the right. The X2 default
+    // (right-aligned against the sidetext) stays for the settings dialog.
+    property int valueAlignment: Text.AlignRight
     // X2: optional bounds; the sentinels mean "unbounded" (the pre-X2
     // behavior -- every parseable value commits). Both are inclusive.
     property real minimumValue: -Number.MAX_VALUE
@@ -101,7 +105,7 @@ Rectangle {
         // dropped this line, silently re-aligning every option-row value
         // left (upstream Field renders the value right-aligned against the
         // sidetext, Field.cpp combine_side_text).
-        horizontalAlignment: Text.AlignRight
+        horizontalAlignment: root.valueAlignment
         // X2: invalid text turns red in-place as well, so the feedback
         // survives even when the border is covered by a neighbor.
         color: editor.error ? Theme.statusError : Theme.textPrimary
