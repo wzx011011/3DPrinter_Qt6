@@ -223,3 +223,18 @@ kFilamentKeys 32→108 键，从 Preset::filament_options 移植七组：压力�
 - 总账 docs/ui-feature-audit-202610.md（R1A/R1B/R1C/轮报告/冲刺账）。
 - 验收材料：验收_Round1/（10 张对比图）+ audit/round0,1,2/（39 shot×3 轮）+ audit/f1,f47/（功能 E2E）。
 - RUNBOOK：audit/RUNBOOK.md（共存/验证/矩阵约定）。
+
+## 12. 确认轮与收敛（2026-10-30 01:1x）
+
+F8 落地（9062efe，包含并行会话停滞近两天的在途渲染工作——快照 audit/parallel-renderer-wip-1030.patch 可归还）：
+- R1B-03 预览视口清除色随主题 ✓（f8/01_dark_preview.png 实证）
+- R1B-16 盘名/编号笔色 → 上游 generate_plate_name_texture 灰白 ✓（f8/02_light_prepare.png 实证，品牌绿 2026-10-07 裁决被 round2 像素审计推翻）
+- R1B-19 bgFloating 双主题 ARGB 字节序 ✓（淡青白/深灰半透明）
+- RG-R4-01 旋转环带吸附 ✓（内环 45°/外齿 5°/环体自由，上游 GLGizmoRotate.cpp:110-133 语义；delta 对齐上次发射角防跳变）
+- RG-R4-02 切割 PlaceOnCut/CutToParts 维持立项：引擎 attributes 具备（CutUtils.hpp），但接线穿 cut/undo 高危链，独立批次。
+
+确认轮：门禁 14/14 + 样式棘轮 0 + 定点截图无回归；round2 全量矩阵 39 shot 于同代码基线（F8 影响面 4 处均定点复验）。产品级新发现 0。
+
+**收敛达成**：Round1（19 项 UI）+ 冲刺 F1-F7（多色链路/孤儿入口/文件链/校准条目/键集）+ F8（4 项渲染+吸附）全部落地并有截图/门禁证据；剩余 open 全部为"需硬件/需独立立项"类（六塔生成器族、切割开关、FB-P1-04 真机复认、Windows 回归），不阻塞收敛口径。
+
+12 笔本地提交（5d1cd93..9062efe）未推送，待用户指示。
