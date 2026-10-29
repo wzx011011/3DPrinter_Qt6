@@ -1200,6 +1200,448 @@
         <source>Reset Parameters</source>
         <translation>重置参数</translation>
     </message>
+    <message>
+        <source>HARDWARE CALIBRATION</source>
+        <translation>硬件校准</translation>
+    </message>
+    <message>
+        <source>Flow 比率</source>
+        <translation>流量比例</translation>
+    </message>
+    <message>
+        <source>Filament Flow Ratio</source>
+        <translation>流量比例</translation>
+    </message>
+    <message>
+        <source>Filament Flow Ratio（挤出流量比率），校准结果微调起点，范围 0.500 ~ 1.500</source>
+        <translation>流量比例（挤出流量比率），校准结果微调起点，范围 0.500 ~ 1.500</translation>
+    </message>
+    <message>
+        <source>Fine Calibration (Pass 2)</source>
+        <translation>精校准（第二遍）</translation>
+    </message>
+</context>
+<context>
+    <name>CalibrationServiceMock</name>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="97"/>
+        <source>Flow Dynamics</source>
+        <translation>动态流量</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="98"/>
+        <source>Pressure Advance line calibration</source>
+        <translation>压力提前（PA）线校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="99"/>
+        <source>Pressure Advance test pattern</source>
+        <translation>压力提前测试图案</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="100"/>
+        <source>PA Pattern</source>
+        <translation>V形模式</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="101"/>
+        <source>Pressure Advance pattern calibration</source>
+        <translation>压力提前图案校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="102"/>
+        <source>Pressure Advance pattern (in-code)</source>
+        <translation>压力提前图案（代码内置）</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="103"/>
+        <source>PA Tower</source>
+        <translation>PA塔</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="104"/>
+        <source>Pressure Advance tower calibration</source>
+        <translation>压力提前塔校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="105"/>
+        <source>Pressure Advance tower</source>
+        <translation>压力提前塔</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="106"/>
+        <source>Flow Rate</source>
+        <translation>流量比例</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="107"/>
+        <source>Extrusion flow rate calibration</source>
+        <translation>挤出流量校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="108"/>
+        <source>Flow rate test pattern</source>
+        <translation>流量测试图案</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="109"/>
+        <source>Temp Tower</source>
+        <translation>温度塔</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="110"/>
+        <source>Temperature tower calibration</source>
+        <translation>温度塔校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="111"/>
+        <source>Temperature tower test pattern</source>
+        <translation>温度塔测试图案</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="112"/>
+        <source>Bed Leveling</source>
+        <translation>热床调平</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="113"/>
+        <source>Auto bed leveling calibration</source>
+        <translation>自动热床调平校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="114"/>
+        <source>Bed height map</source>
+        <translation>热床高度网格</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="115"/>
+        <source>Blocked: requires live printer hardware calibration support.</source>
+        <translation>需要连接真实打印机才能进行硬件校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="116"/>
+        <source>Vibration Compensation</source>
+        <translation>振动补偿</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="117"/>
+        <source>Input shaping / resonance test</source>
+        <translation>输入整形/共振测试</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="118"/>
+        <source>Frequency response chart</source>
+        <translation>频率响应图</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="119"/>
+        <source>Blocked: requires live printer resonance measurement support.</source>
+        <translation>需要连接真实打印机才能进行共振检测。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="120"/>
+        <source>Max Volumetric Speed</source>
+        <translation>最大容积速度</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="121"/>
+        <source>Maximum volumetric speed test</source>
+        <translation>最大容积速度测试</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="122"/>
+        <source>Speed tower test pattern</source>
+        <translation>速度塔测试图案</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="123"/>
+        <source>VFA Tower</source>
+        <translation>VFA塔</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="124"/>
+        <source>Volumetric flow artifact (VFA) test</source>
+        <translation>体积流量振纹（VFA）测试</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="125"/>
+        <source>VFA speed tower test pattern</source>
+        <translation>VFA速度塔测试图案</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="126"/>
+        <source>Retraction Tune</source>
+        <translation>回抽调谐</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="127"/>
+        <source>Retraction length tower test</source>
+        <translation>回抽长度塔测试</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="128"/>
+        <source>Retraction tower test pattern</source>
+        <translation>回抽塔测试图案</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="129"/>
+        <source>Introduction</source>
+        <translation>介绍</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="130"/>
+        <source>Select Filament</source>
+        <translation>选择耗材</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="131"/>
+        <source>Select Parameters</source>
+        <translation>选择参数</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="132"/>
+        <source>Calibrate</source>
+        <translation>校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="133"/>
+        <source>Coarse Calibration</source>
+        <translation>粗校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="134"/>
+        <source>Coarse Result</source>
+        <translation>粗校准结果</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="135"/>
+        <source>Fine Calibration</source>
+        <translation>精校准</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="136"/>
+        <source>Save Result</source>
+        <translation>保存结果</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="137"/>
+        <source>Apply Result</source>
+        <translation>应用结果</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="138"/>
+        <source>Complete</source>
+        <translation>完成</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="139"/>
+        <source>Leveling</source>
+        <translation>调平</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="140"/>
+        <source>Measure</source>
+        <translation>测量</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="141"/>
+        <source>Learn when and why to perform Flow Dynamics calibration.</source>
+        <translation>了解何时以及为何要进行动态流量校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="142"/>
+        <source>Choose the filament preset and nozzle diameter for calibration.</source>
+        <translation>选择校准所用的耗材预设和喷嘴直径。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="143"/>
+        <source>Send calibration job to printer. Wait for completion.</source>
+        <translation>将校准任务发送到打印机，等待完成。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="144"/>
+        <source>Review calibration result and save to preset.</source>
+        <translation>检查校准结果并保存到预设。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="145"/>
+        <source>Learn when to use the PA pattern calibration.</source>
+        <translation>了解何时使用压力提前图案校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="146"/>
+        <source>Choose filament and nozzle diameter.</source>
+        <translation>选择耗材丝和喷嘴直径。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="147"/>
+        <source>Generate the PA pattern and slice it.</source>
+        <translation>生成压力提前图案并切片。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="148"/>
+        <source>Pick the cleanest row and save its PA value to the preset.</source>
+        <translation>选出最干净的一行，并将其 PA 值保存到预设。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="149"/>
+        <source>Learn when to use the PA tower calibration.</source>
+        <translation>了解何时使用压力提前塔校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="150"/>
+        <source>Choose filament and the PA sweep range.</source>
+        <translation>选择耗材丝和 PA 扫描范围。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="151"/>
+        <source>Load the tower model and slice it.</source>
+        <translation>载入塔模型并切片。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="152"/>
+        <source>Read the best height band and save its PA value.</source>
+        <translation>读取最佳高度区间并保存其 PA 值。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="153"/>
+        <source>Learn when to use Flow Rate calibration.</source>
+        <translation>了解何时使用流量比例校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="154"/>
+        <source>Choose filament, bed type, and nozzle diameter.</source>
+        <translation>选择耗材丝、热床类型和喷嘴直径。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="155"/>
+        <source>Run coarse flow rate calibration pass.</source>
+        <translation>执行粗校准流量校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="156"/>
+        <source>Review coarse calibration result.</source>
+        <translation>检查粗校准结果。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="157"/>
+        <source>Run fine flow rate calibration pass.</source>
+        <translation>执行精校准流量校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="158"/>
+        <source>Review and save fine calibration result.</source>
+        <translation>检查并保存精校准结果。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="159"/>
+        <source>Learn when to use Temp Tower calibration.</source>
+        <translation>了解何时使用温度塔校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="160"/>
+        <source>Choose filament and temperature range.</source>
+        <translation>选择耗材丝和温度范围。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="161"/>
+        <source>Send temperature tower calibration to slicer.</source>
+        <translation>将温度塔校准发送到切片器。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="162"/>
+        <source>Review selected temperature and save result.</source>
+        <translation>确认所选温度并保存结果。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="163"/>
+        <source>Ensure build plate is clean and clear.</source>
+        <translation>请确保打印板清洁且无遮挡。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="164"/>
+        <source>Printer probes multiple points on the build plate.</source>
+        <translation>打印机将在打印板上探测多个点位。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="165"/>
+        <source>Review height map and confirm result.</source>
+        <translation>检查高度网格并确认结果。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="166"/>
+        <source>Learn about vibration compensation calibration.</source>
+        <translation>了解振动补偿校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="167"/>
+        <source>Printer performs resonance measurement.</source>
+        <translation>打印机将执行共振检测。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="168"/>
+        <source>Review resonance data and apply compensation.</source>
+        <translation>检查共振数据并应用补偿。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="169"/>
+        <source>Learn about max volumetric speed calibration.</source>
+        <translation>了解最大容积速度校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="170"/>
+        <source>Choose the speed sweep range.</source>
+        <translation>选择速度扫描范围。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="171"/>
+        <source>Send speed tower calibration to slicer.</source>
+        <translation>将速度塔校准发送到切片器。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="172"/>
+        <source>Review result and save to filament preset.</source>
+        <translation>检查结果并保存到耗材预设。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="173"/>
+        <source>Learn when to use VFA calibration.</source>
+        <translation>了解何时使用 VFA 校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="174"/>
+        <source>Send VFA tower calibration to slicer.</source>
+        <translation>将 VFA 塔校准发送到切片器。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="175"/>
+        <source>Review artifact-free speed and save result.</source>
+        <translation>检查无振纹的速度并保存结果。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="176"/>
+        <source>Learn when to use retraction calibration.</source>
+        <translation>了解何时使用回抽校准。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="177"/>
+        <source>Choose the retraction length range.</source>
+        <translation>选择回抽长度范围。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="178"/>
+        <source>Send retraction tower calibration to slicer.</source>
+        <translation>将回抽塔校准发送到切片器。</translation>
+    </message>
+    <message>
+        <location filename="../src/core/services/CalibrationServiceMock.cpp" line="179"/>
+        <source>Review cleanest retraction length and save result.</source>
+        <translation>检查最干净的回抽长度并保存结果。</translation>
+    </message>
+    <message>
+        <source>Set calibration range parameters.</source>
+        <translation>设置校准范围参数。</translation>
+    </message>
 </context>
 <context>
     <name>ConfigOption</name>
@@ -4255,15 +4697,15 @@
     </message>
     <message>
         <source>Device</source>
-        <translation type="vanished">设备</translation>
+        <translation>设备</translation>
     </message>
     <message>
         <source>Task Sending</source>
-        <translation type="vanished">任务发送中</translation>
+        <translation>正在发送的任务</translation>
     </message>
     <message>
         <source>Task Sent</source>
-        <translation type="vanished">任务已发送</translation>
+        <translation>已发送的任务</translation>
     </message>
     <message>
         <source>Search devices...</source>
@@ -4271,15 +4713,15 @@
     </message>
     <message>
         <source>Device Name</source>
-        <translation type="vanished">设备名称</translation>
+        <translation>设备名称</translation>
     </message>
     <message>
         <source>Status</source>
-        <translation type="vanished">状态</translation>
+        <translation>状态</translation>
     </message>
     <message>
         <source>Progress</source>
-        <translation type="vanished">进度</translation>
+        <translation>进度</translation>
     </message>
     <message>
         <source>Task</source>
@@ -4291,67 +4733,67 @@
     </message>
     <message>
         <source>Edit Printers</source>
-        <translation type="vanished">编辑打印机</translation>
+        <translation>编辑打印机</translation>
     </message>
     <message>
         <source>Task Name</source>
-        <translation type="vanished">任务名称</translation>
+        <translation>任务名称</translation>
     </message>
     <message>
         <source>Remaining</source>
-        <translation type="vanished">剩余</translation>
+        <translation>剩余</translation>
     </message>
     <message>
         <source>Actions</source>
-        <translation type="vanished">操作</translation>
+        <translation>操作</translation>
     </message>
     <message>
         <source>Please select the devices you would like to manage here (up to 6 devices)</source>
-        <translation type="vanished">请选择要在此管理的设备（最多 6 台）</translation>
+        <translation>请选择要在此管理的设备（最多 6 台）</translation>
     </message>
     <message>
         <source>Add</source>
-        <translation type="vanished">添加</translation>
+        <translation>添加</translation>
     </message>
     <message>
         <source>Offline</source>
-        <translation type="vanished">离线</translation>
+        <translation>离线</translation>
     </message>
     <message>
         <source>No task</source>
-        <translation type="vanished">无任务</translation>
+        <translation>没有任务</translation>
     </message>
     <message>
         <source>View</source>
-        <translation type="vanished">视图</translation>
+        <translation>视图</translation>
     </message>
     <message>
         <source>%1 selected</source>
-        <translation type="vanished">已选择 %1 项</translation>
+        <translation>已选择 %1 项</translation>
     </message>
     <message>
         <source>Send All</source>
-        <translation type="vanished">全部发送</translation>
+        <translation>全部发送</translation>
     </message>
     <message>
         <source>Send to Device</source>
-        <translation type="vanished">发送到设备</translation>
+        <translation>发送到设备</translation>
     </message>
     <message>
         <source>Stop All</source>
-        <translation type="vanished">全部停止</translation>
+        <translation>全部停止</translation>
     </message>
     <message>
         <source>Project Name</source>
-        <translation type="vanished">项目名称</translation>
+        <translation>项目名称</translation>
     </message>
     <message>
         <source>Printer</source>
-        <translation type="vanished">打印机</translation>
+        <translation>打印机</translation>
     </message>
     <message>
         <source>Send Time</source>
-        <translation type="vanished">发送时间</translation>
+        <translation>发送时间</translation>
     </message>
     <message>
         <source>No sending tasks</source>
@@ -4359,7 +4801,7 @@
     </message>
     <message>
         <source>Cancel</source>
-        <translation type="vanished">取消</translation>
+        <translation>取消</translation>
     </message>
     <message>
         <source>Retry</source>
@@ -4379,39 +4821,216 @@
     </message>
     <message>
         <source>Paused</source>
-        <translation type="vanished">已暂停</translation>
+        <translation>已暂停</translation>
     </message>
     <message>
         <source>Pause</source>
-        <translation type="vanished">暂停</translation>
+        <translation>暂停</translation>
     </message>
     <message>
         <source>Resume</source>
-        <translation type="vanished">继续</translation>
+        <translation>继续</translation>
     </message>
     <message>
         <source>Stop</source>
-        <translation type="vanished">停止</translation>
+        <translation>停止</translation>
     </message>
     <message>
         <source>Select Device to Send</source>
-        <translation type="vanished">选择发送目标设备</translation>
+        <translation>选择发送目标设备</translation>
     </message>
     <message>
         <source>Task:</source>
-        <translation type="vanished">任务：</translation>
+        <translation>任务：</translation>
     </message>
     <message>
         <source>Select task...</source>
-        <translation type="vanished">选择任务...</translation>
+        <translation>选择任务...</translation>
     </message>
     <message>
         <source>Online Devices:</source>
-        <translation type="vanished">在线设备：</translation>
+        <translation>在线设备：</translation>
     </message>
     <message>
         <source>Send</source>
-        <translation type="vanished">发送</translation>
+        <translation>发送</translation>
+    </message>
+    <message>
+        <source>Device Status</source>
+        <translation>设备状态</translation>
+    </message>
+    <message>
+        <source>Go</source>
+        <translation>跳转</translation>
+    </message>
+</context>
+<context>
+    <name>MultiMachineViewModel</name>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="5"/>
+        <source>Idle</source>
+        <translation>空闲</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="6"/>
+        <source>Printing Finish</source>
+        <translation>打印成功</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="7"/>
+        <source>Printing Failed</source>
+        <translation>打印失败</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="8"/>
+        <source>Printing</source>
+        <translation>打印中</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="9"/>
+        <source>Printing Pause</source>
+        <translation>打印暂停</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="10"/>
+        <source>Prepare</source>
+        <translation>准备</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="11"/>
+        <source>Slicing</source>
+        <translation>正在切片</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="12"/>
+        <source>Syncing</source>
+        <translation>同步中</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="13"/>
+        <source>Pending</source>
+        <translation>等待中</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="14"/>
+        <source>Sending</source>
+        <translation>发送中</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="15"/>
+        <source>Sending Finish</source>
+        <translation>发送成功</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="16"/>
+        <source>Sending Cancel</source>
+        <translation>取消发送</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="17"/>
+        <source>Sending Failed</source>
+        <translation>发送失败</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="18"/>
+        <source>Print Success</source>
+        <translation>打印成功</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="19"/>
+        <source>Print Failed</source>
+        <translation>打印失败</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="20"/>
+        <source>Removed</source>
+        <translation>移除</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="21"/>
+        <source>Unknown</source>
+        <translation>未知</translation>
+    </message>
+    <message>
+        <location filename="../src/core/viewmodels/MultiMachineViewModel.cpp" line="22"/>
+        <source>No task</source>
+        <translation>没有任务</translation>
+    </message>
+    <message>
+        <source>Edit Printers dialog (mock)</source>
+        <translation>编辑打印机对话框（模拟）</translation>
+    </message>
+    <message>
+        <source>Maximum 6 printers allowed</source>
+        <translation>最多允许 6 台打印机</translation>
+    </message>
+    <message>
+        <source>Device added (mock)</source>
+        <translation>设备已添加（模拟）</translation>
+    </message>
+    <message>
+        <source>Device removed: %1</source>
+        <translation>设备已移除：%1</translation>
+    </message>
+    <message>
+        <source>Device renamed to: %1</source>
+        <translation>设备已重命名为：%1</translation>
+    </message>
+    <message>
+        <source>Task cancelled: %1</source>
+        <translation>任务已取消：%1</translation>
+    </message>
+    <message>
+        <source>All selected tasks cancelled</source>
+        <translation>已取消所有选中任务</translation>
+    </message>
+    <message>
+        <source>Cloud task paused: %1</source>
+        <translation>云任务已暂停：%1</translation>
+    </message>
+    <message>
+        <source>Cloud task resumed: %1</source>
+        <translation>云任务已恢复：%1</translation>
+    </message>
+    <message>
+        <source>Cloud task stopped: %1</source>
+        <translation>云任务已停止：%1</translation>
+    </message>
+    <message>
+        <source>All selected cloud tasks paused</source>
+        <translation>已暂停所有选中的云任务</translation>
+    </message>
+    <message>
+        <source>All selected cloud tasks resumed</source>
+        <translation>已恢复所有选中的云任务</translation>
+    </message>
+    <message>
+        <source>All selected cloud tasks stopped</source>
+        <translation>已停止所有选中的云任务</translation>
+    </message>
+    <message>
+        <source>No online devices available</source>
+        <translation>没有在线设备</translation>
+    </message>
+    <message>
+        <source>Sending %1 tasks to %2...</source>
+        <translation>正在发送 %1 个任务到 %2...</translation>
+    </message>
+    <message>
+        <source>Retry queued: %1</source>
+        <translation>已加入重试队列：%1</translation>
+    </message>
+    <message>
+        <source>Connection status refreshed</source>
+        <translation>连接状态已刷新</translation>
+    </message>
+    <message>
+        <source>Sending task to %1...</source>
+        <translation>正在发送任务到 %1...</translation>
+    </message>
+    <message>
+        <source>Task sent to %1</source>
+        <translation>任务已发送到 %1</translation>
     </message>
 </context>
 <context>
@@ -5843,6 +6462,564 @@
         <location filename="../src/qml_gui/pages/PreferencesPage.qml" line="843"/>
         <source>应用</source>
         <translation>应用</translation>
+    </message>
+</context>
+<context>
+    <name>PrepareContextMenus</name>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="70"/>
+        <source>Set Filament for selected items</source>
+        <translation>设置所选项的耗材丝</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="70"/>
+        <source>Change Filament</source>
+        <translation>更换耗材丝</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="91"/>
+        <source>Default</source>
+        <translation>缺省</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="97"/>
+        <source>Filament %1</source>
+        <translation>耗材 %1</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="114"/>
+        <source>Flush Options</source>
+        <translation>换料冲刷选项</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="123"/>
+        <source>Flush into objects' infill</source>
+        <translation>冲刷到对象的填充</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="132"/>
+        <source>Flush into this object</source>
+        <translation>冲刷到这个对象</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="141"/>
+        <source>Flush into objects' support</source>
+        <translation>冲刷到对象的支撑</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="153"/>
+        <source>Change Type</source>
+        <translation>更改类型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="162"/>
+        <source>Part</source>
+        <translation>零件</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="171"/>
+        <source>Negative Part</source>
+        <translation>负零件</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="180"/>
+        <source>Modifier</source>
+        <translation>修改器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="197"/>
+        <source>Support Blocker</source>
+        <translation>支撑去除器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="211"/>
+        <source>Support Enforcer</source>
+        <translation>支撑添加器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="225"/>
+        <source>Convert from Inches</source>
+        <translation>从英寸转换</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="226"/>
+        <source>Restore to Inch</source>
+        <translation>恢复到英寸</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="227"/>
+        <source>Convert from Meters</source>
+        <translation>从米转换</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="228"/>
+        <source>Restore to Meter</source>
+        <translation>恢复到米</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="246"/>
+        <source>Add Part</source>
+        <translation>添加部件</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="247"/>
+        <source>Add Negative Part</source>
+        <translation>添加负零件</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="248"/>
+        <source>Add Modifier</source>
+        <translation>添加修改器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="249"/>
+        <source>Add Support Blocker</source>
+        <translation>添加支撑屏蔽器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="250"/>
+        <source>Add Support Enforcer</source>
+        <translation>添加支撑生成器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="254"/>
+        <source>Load...</source>
+        <translation>加载...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="264"/>
+        <source>Cube</source>
+        <translation>立方体</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="265"/>
+        <source>Cylinder</source>
+        <translation>圆柱体</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="266"/>
+        <source>Sphere</source>
+        <translation>球</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="268"/>
+        <source>Cone</source>
+        <translation>锥体</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="271"/>
+        <source>Cone is not available as an in-object primitive in this build</source>
+        <translation>本版本不支持在对象内添加锥体基本体</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="275"/>
+        <source>Disc</source>
+        <translation>圆盘</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="278"/>
+        <source>Disc is not available as an in-object primitive in this build</source>
+        <translation>本版本不支持在对象内添加圆盘基本体</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="281"/>
+        <source>Torus</source>
+        <translation>环面</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="287"/>
+        <source>Text</source>
+        <translation>文字浮雕</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="294"/>
+        <source>SVG</source>
+        <translation>SVG矢量图</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="323"/>
+        <source>Add Primitive</source>
+        <translation>添加标准模型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="349"/>
+        <source>Add Handy models</source>
+        <translation>添加实用模型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="350"/>
+        <source>Orca Cube</source>
+        <translation>Orca方块</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="351"/>
+        <source>OrcaSliced Combo</source>
+        <translation>OrcaSliced 复合模型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="352"/>
+        <source>Orca Badge</source>
+        <translation>Orca 徽章</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="353"/>
+        <source>Orca Tolerance Test</source>
+        <translation>Orca误差测试</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="354"/>
+        <source>3DBenchy</source>
+        <translation>小船</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="355"/>
+        <source>Cali Cat</source>
+        <translation>卡利猫</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="356"/>
+        <source>Autodesk FDM Test</source>
+        <translation>欧特克FDM测试</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="357"/>
+        <source>Voron Cube</source>
+        <translation>Voron方块</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="358"/>
+        <source>Stanford Bunny</source>
+        <translation>斯坦福兔子</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="359"/>
+        <source>Orca String Hell</source>
+        <translation>Orca拉丝地狱</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="362"/>
+        <source>Add Models</source>
+        <translation>添加模型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="370"/>
+        <source>Show Labels</source>
+        <translation>显示标签</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="385"/>
+        <source>Rename</source>
+        <translation>重命名</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="392"/>
+        <source>Add instance</source>
+        <translation>增加实例</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="397"/>
+        <source>Remove instance</source>
+        <translation>移除实例</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="402"/>
+        <source>Set number of instances...</source>
+        <translation>设置实例数量...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="407"/>
+        <source>Fill bed with instances...</source>
+        <translation>用实例铺满打印板...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="418"/>
+        <source>Set as Individual Objects</source>
+        <translation>设置为独立对象</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="419"/>
+        <source>Set as An Individual Object</source>
+        <translation>设置为独立对象</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="428"/>
+        <source>Clone</source>
+        <translation>克隆</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="435"/>
+        <source>Fix Model</source>
+        <translation>修复模型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="440"/>
+        <source>Simplify Model</source>
+        <translation>简化模型</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="446"/>
+        <source>Subdivision mesh</source>
+        <translation>细分网格</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="446"/>
+        <source>(Lost color)</source>
+        <translation>（丢失的颜色）</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="454"/>
+        <source>Mesh boolean</source>
+        <translation>网格布尔操作</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="459"/>
+        <source>Center</source>
+        <translation>居中</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="464"/>
+        <source>Drop</source>
+        <translation>下降</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="471"/>
+        <source>Split</source>
+        <translation>拆分</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="474"/>
+        <source>To Objects</source>
+        <translation>拆分到对象</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="479"/>
+        <source>To Parts</source>
+        <translation>到零件</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="485"/>
+        <source>Mirror</source>
+        <translation>镜像</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="487"/>
+        <source>Along X Axis</source>
+        <translation>沿 X 轴</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="488"/>
+        <source>Along Y Axis</source>
+        <translation>沿 Y 轴</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="489"/>
+        <source>Along Z Axis</source>
+        <translation>沿 Z 轴</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="494"/>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="494"/>
+        <source>Del</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="507"/>
+        <source>Height Range Modifier</source>
+        <translation>高度范围修改器</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="520"/>
+        <source>Printable</source>
+        <translation>可打印的</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="534"/>
+        <source>Auto Drop</source>
+        <translation>自动落板</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="536"/>
+        <source>Per-selection auto drop is not available in this build</source>
+        <translation>本版本不支持按所选对象自动落板</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="543"/>
+        <source>Edit Process Settings</source>
+        <translation>编辑工艺参数</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="548"/>
+        <source>Copy process settings</source>
+        <translation>复制工艺参数</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="553"/>
+        <source>Paste process settings</source>
+        <translation>粘贴工艺参数</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="558"/>
+        <source>Edit in Parameter Table</source>
+        <translation>在参数表格中编辑</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="564"/>
+        <source>Reload from disk</source>
+        <translation>从磁盘重新加载</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="570"/>
+        <source>Replace 3D file...</source>
+        <translation>替换 3D 文件...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="575"/>
+        <source>Replace all with 3D files...</source>
+        <translation>全部替换为 3D 文件...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="580"/>
+        <source>Export as one STL...</source>
+        <translation>导出为一个STL...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="585"/>
+        <source>Export as one DRC...</source>
+        <translation>作为一个 DRC 导出...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="597"/>
+        <source>Invalidate cut info</source>
+        <translation>解除切割关系</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="663"/>
+        <source>Assemble</source>
+        <translation>组合</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="671"/>
+        <source>Assemble the selected objects into an object with single part</source>
+        <translation>组合所选对象为一个单零件对象</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="691"/>
+        <source>Mesh boolean operations including union and subtraction</source>
+        <translation>包括并集和差集的网格布尔运算</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="759"/>
+        <source>Edit text</source>
+        <translation>编辑文字</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="824"/>
+        <source>Edit SVG</source>
+        <translation>编辑SVG</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="966"/>
+        <source>Export as STLs...</source>
+        <translation>导出为多个STL...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="976"/>
+        <source>Export as DRCs...</source>
+        <translation>导出为 DRC...</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="988"/>
+        <source>Select All</source>
+        <translation>全选</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="996"/>
+        <source>Select All Plates</source>
+        <translation>全选所有打印板</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1004"/>
+        <source>Delete All</source>
+        <translation>删除所有</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1012"/>
+        <source>Arrange</source>
+        <translation>摆放全部</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1020"/>
+        <source>Reload All</source>
+        <translation>重新加载</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1028"/>
+        <source>Auto Rotate</source>
+        <translation>自动朝向</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1036"/>
+        <source>Delete Plate</source>
+        <translation>删除盘</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1098"/>
+        <source>Unlock</source>
+        <translation>解锁</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1098"/>
+        <source>Lock</source>
+        <translation>锁定</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1104"/>
+        <source>Edit Plate Name</source>
+        <translation>编辑盘名</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1113"/>
+        <source>Paste</source>
+        <translation>粘贴</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1121"/>
+        <source>Set plate unprintable</source>
+        <translation>设为不可打印</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1121"/>
+        <source>Set plate printable</source>
+        <translation>设为可打印</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1128"/>
+        <source>Clone plate</source>
+        <translation>克隆盘</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1133"/>
+        <source>Move plate left</source>
+        <translation>左移盘</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1139"/>
+        <source>Move plate right</source>
+        <translation>右移盘</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1151"/>
+        <source>Set number of instances</source>
+        <translation>设置实例数量</translation>
+    </message>
+    <message>
+        <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="1205"/>
+        <source>Select a model file to import as a part</source>
+        <translation>选择要作为零件导入的模型文件</translation>
     </message>
 </context>
 <context>
@@ -8222,6 +9399,158 @@
         <location filename="../src/qml_gui/dialogs/SettingsDialog.qml" line="486"/>
         <source>No options</source>
         <translation>无选项</translation>
+    </message>
+    <message>
+        <source>Quality</source>
+        <translation>质量</translation>
+    </message>
+    <message>
+        <source>Strength</source>
+        <translation>强度</translation>
+    </message>
+    <message>
+        <source>Speed</source>
+        <translation>速度</translation>
+    </message>
+    <message>
+        <source>Support</source>
+        <translation>支撑</translation>
+    </message>
+    <message>
+        <source>Multimaterial</source>
+        <translation>材料</translation>
+    </message>
+    <message>
+        <source>Others</source>
+        <translation>其他</translation>
+    </message>
+    <message>
+        <source>Layer height</source>
+        <translation>层高</translation>
+    </message>
+    <message>
+        <source>Line width</source>
+        <translation>线宽</translation>
+    </message>
+    <message>
+        <source>Seam</source>
+        <translation>接缝</translation>
+    </message>
+    <message>
+        <source>Precision</source>
+        <translation>精度</translation>
+    </message>
+    <message>
+        <source>Ironing</source>
+        <translation>熨烫</translation>
+    </message>
+    <message>
+        <source>Wall generator</source>
+        <translation>墙生成器</translation>
+    </message>
+    <message>
+        <source>Walls and surfaces</source>
+        <translation>墙壁和表面</translation>
+    </message>
+    <message>
+        <source>Bridging</source>
+        <translation>搭桥</translation>
+    </message>
+    <message>
+        <source>Overhangs</source>
+        <translation>悬垂</translation>
+    </message>
+    <message>
+        <source>Walls</source>
+        <translation>墙</translation>
+    </message>
+    <message>
+        <source>Top/bottom shells</source>
+        <translation>顶部/底部外壳</translation>
+    </message>
+    <message>
+        <source>Infill</source>
+        <translation>填充</translation>
+    </message>
+    <message>
+        <source>Advanced</source>
+        <translation>高级</translation>
+    </message>
+    <message>
+        <source>Initial layer speed</source>
+        <translation>首层速度</translation>
+    </message>
+    <message>
+        <source>Other layers speed</source>
+        <translation>其他层速度</translation>
+    </message>
+    <message>
+        <source>Overhang speed</source>
+        <translation>悬垂速度</translation>
+    </message>
+    <message>
+        <source>Travel speed</source>
+        <translation>空驶速度</translation>
+    </message>
+    <message>
+        <source>Acceleration</source>
+        <translation>加速度</translation>
+    </message>
+    <message>
+        <source>Jerk(XY)</source>
+        <translation>抖动（XY轴）</translation>
+    </message>
+    <message>
+        <source>Raft</source>
+        <translation>筏层</translation>
+    </message>
+    <message>
+        <source>Support filament</source>
+        <translation>支撑耗材</translation>
+    </message>
+    <message>
+        <source>Tree supports</source>
+        <translation>树状支撑</translation>
+    </message>
+    <message>
+        <source>Prime tower</source>
+        <translation>擦拭塔</translation>
+    </message>
+    <message>
+        <source>Filament for Features</source>
+        <translation>耗材丝类型选项</translation>
+    </message>
+    <message>
+        <source>Ooze prevention</source>
+        <translation>喷嘴预热</translation>
+    </message>
+    <message>
+        <source>Flush options</source>
+        <translation>换料冲刷选项</translation>
+    </message>
+    <message>
+        <source>Skirt</source>
+        <translation>裙边</translation>
+    </message>
+    <message>
+        <source>Special mode</source>
+        <translation>特殊模式</translation>
+    </message>
+    <message>
+        <source>G-code output</source>
+        <translation>G-code 输出</translation>
+    </message>
+    <message>
+        <source>Post-processing Scripts</source>
+        <translation>后处理脚本</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>注释</translation>
+    </message>
+    <message>
+        <source>%1 of %2</source>
+        <translation>第 %1 / %2 个</translation>
     </message>
 </context>
 <context>

@@ -167,7 +167,10 @@ QString MultiMachineViewModel::machineModel(int i) const {
 }
 QString MultiMachineViewModel::machineStatus(int i) const {
   if (auto *e = filteredMachineAt(m_machineEntries, m_currentPage, m_pageSize, i))
-    return QString(deviceStatusText(e->statusInt));
+    // R1B-10: device status labels are user-visible; translate through this
+    // QObject's context (zh_CN.ts "MultiMachineViewModel"). tr() is static,
+    // so the runtime const char* from the table below resolves fine.
+    return tr(deviceStatusText(e->statusInt));
   return {};
 }
 int MultiMachineViewModel::machineStatusInt(int i) const {
@@ -193,8 +196,8 @@ QString MultiMachineViewModel::machineIp(int i) const {
 }
 QString MultiMachineViewModel::machineTaskName(int i) const {
   if (auto *e = filteredMachineAt(m_machineEntries, m_currentPage, m_pageSize, i))
-    return e->taskName.isEmpty() ? QStringLiteral("No task") : e->taskName;
-  return QStringLiteral("No task");
+    return e->taskName.isEmpty() ? tr("No task") : e->taskName;
+  return tr("No task");
 }
 
 // ──────────────────────────────────────────────
@@ -280,7 +283,8 @@ int MultiMachineViewModel::localTaskStatus(int i) const {
   return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].status : 0;
 }
 QString MultiMachineViewModel::localTaskStatusText(int i) const {
-  return (i >= 0 && i < m_localTasks.size()) ? QString(localTaskStatusTextFn(m_localTasks[i].status)) : QString{};
+  return (i >= 0 && i < m_localTasks.size())
+             ? tr(localTaskStatusTextFn(m_localTasks[i].status)) : QString{};
 }
 int MultiMachineViewModel::localTaskProgress(int i) const {
   return (i >= 0 && i < m_localTasks.size()) ? m_localTasks[i].progress : 0;
@@ -311,7 +315,8 @@ int MultiMachineViewModel::cloudTaskStatus(int i) const {
   return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].status : 0;
 }
 QString MultiMachineViewModel::cloudTaskStatusText(int i) const {
-  return (i >= 0 && i < m_cloudTasks.size()) ? QString(cloudTaskStatusTextFn(m_cloudTasks[i].status)) : QString{};
+  return (i >= 0 && i < m_cloudTasks.size())
+             ? tr(cloudTaskStatusTextFn(m_cloudTasks[i].status)) : QString{};
 }
 int MultiMachineViewModel::cloudTaskProgress(int i) const {
   return (i >= 0 && i < m_cloudTasks.size()) ? m_cloudTasks[i].progress : 0;

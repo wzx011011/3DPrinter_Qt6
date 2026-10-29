@@ -168,9 +168,14 @@ Item {
                     font.bold: true
                 }
 
+                // R1B-13: localize the toolbar combo too -- the raw VM English
+                // names stay in viewModes() (ViewModelSmokeTests lock), the
+                // presentation layer shows localizedViewModeNames (same index
+                // order), so the legend header and this combo use the same
+                // "走线类型" wording.
                 CxComboBox {
                     Layout.preferredWidth: 204
-                    model: root.previewVm ? root.previewVm.viewModes : []
+                    model: root.localizedViewModeNames
                     currentIndex: root.previewVm ? root.previewVm.viewModeIndex : 0
                     onActivated: if (root.previewVm) root.previewVm.setViewModeIndex(currentIndex)
                 }
@@ -573,7 +578,14 @@ Item {
                                     onPaint: {
                                         const ctx = getContext("2d")
                                         ctx.clearRect(0, 0, width, height)
-                                        ctx.strokeStyle = Theme.tint(Theme.textTertiary, 0.35)
+                                        // R1B-20: border-series ink (was
+                                        // textTertiary@35% — washed out on the
+                                        // light card and barely above the dark
+                                        // card). borderStrong is the strongest
+                                        // theme-following border rung; the
+                                        // Connections above already repaints
+                                        // on theme flips.
+                                        ctx.strokeStyle = Theme.borderStrong
                                         ctx.lineWidth = 1
                                         const pitch = 11
                                         ctx.beginPath()

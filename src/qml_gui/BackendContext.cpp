@@ -165,6 +165,12 @@ BackendContext::BackendContext(QObject *parent)
   const QByteArray compareMode = qgetenv("OWZX_VISUAL_COMPARE_MODE");
   visualCompareMode_ = (compareMode == "1" || compareMode.compare("true", Qt::CaseInsensitive) == 0);
 
+  // U03 (CALI18N-01): services constructed below bake tr() results into their
+  // wizard/entry tables (CalibrationServiceMock names at :168+), so the
+  // persisted language must be installed BEFORE any of them exist; the S6
+  // sync point calls applyLanguage() again later, which is idempotent.
+  applyLanguage(QSettings().value(QStringLiteral("languageIndex"), 0).toInt());
+
   calibrationService_ = new CalibrationServiceMock(this);
   presetService_ = new PresetService(this);
   // feature/lan-printers L2：Device/Backend 装配开关（Cloud/Backend 先例）。

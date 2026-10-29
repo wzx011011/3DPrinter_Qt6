@@ -176,8 +176,14 @@ Rectangle {
         if (!root.configVm) return ""
         var v = root.configVm.wizardPresetValue(
                     root.configVm.currentPrinterPreset, "nozzle_type")
-        var map = { "brass": qsTr("黄铜"), "hardened": qsTr("硬化钢"),
-                    "steel": qsTr("不锈钢"), "bi_metal": qsTr("双金属") }
+        // R1B-24: schema enum values -> Chinese (upstream NozzleType enum,
+        // PrintConfig.cpp: hardened_steel/stainless_steel/tungsten_carbide/
+        // brass/undefine; zh terms per OrcaSlicer_zh_CN.po "Hardened steel"
+        // -> 硬化钢 etc). Unmapped values fall back to the raw string.
+        var map = { "brass": qsTr("黄铜"), "hardened_steel": qsTr("硬化钢"),
+                    "hardened": qsTr("硬化钢"), "stainless_steel": qsTr("不锈钢"),
+                    "steel": qsTr("不锈钢"), "tungsten_carbide": qsTr("碳化钨"),
+                    "undefine": qsTr("未定义"), "bi_metal": qsTr("双金属") }
         return map[String(v)] !== undefined ? map[String(v)]
                                             : (v ? String(v) : "")
     }
