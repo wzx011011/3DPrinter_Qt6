@@ -397,9 +397,19 @@ BackendContext::BackendContext(QObject *parent)
   // to the extruder count (upstream update_multi_material_filament_presets).
   // setExtruderCount no-ops when the count is unchanged, so riding
   // stateChanged is cheap.
-  configViewModel_->setExtruderCount(editorViewModel_->extruderCount());
-  connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
+  // F1 (R1C-10): the printer preset's nozzle count is the physical
+  // ceiling, not the plater's filament slot count. The previous rider
+  // forced the slot vector back to the nozzle count on every state change,
+  // collapsing user-added slots and project-restored multi-filament slots
+  // (a 2-filament 3MF presented one sidebar row and Change Filament
+  // offered one entry). Grow-only: a multi-nozzle preset grows the slot
+  // vector; nothing shrinks it but the user's delete button.
+  if (editorViewModel_->extruderCount() > configViewModel_->filamentSlotCount())
     configViewModel_->setExtruderCount(editorViewModel_->extruderCount());
+  connect(editorViewModel_, &EditorViewModel::stateChanged, this, [this]() {
+    const int nozzleCount = editorViewModel_->extruderCount();
+    if (nozzleCount > configViewModel_->filamentSlotCount())
+      configViewModel_->setExtruderCount(nozzleCount);
   });
   homeViewModel_ = new HomeViewModel(cloudService_, this);
   settingsViewModel_ = new SettingsViewModel(this);
