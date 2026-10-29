@@ -32,6 +32,25 @@ public:
   // the gizmo geometry builders so they can produce vertices without pulling
   // in this heavy header). Alias kept for call-site compatibility.
   using Vertex = GizmoVertex;
+  // P15.8 (BOLDGRID) v2: GPU transport for the screen-space bolder grid
+  // lines — both scene-space endpoints plus the (end, side) corner and the
+  // baked color, 13 floats. The bold_line vertex shader expands these into
+  // a constant-width pixel strip (upstream dashed_thick_lines GS contract).
+  // `spacing` is the line's own grid pitch in mm (fine 10 / bolder 50), used
+  // by the vertex shader to fade the set out when the projected line spacing
+  // drops under the pixel budget (the grazing-angle strobe fix).
+  struct BoldLineVertex
+  {
+    float p0x, p0y, p0z;
+    float p1x, p1y, p1z;
+    float end;
+    float side;
+    float r, g, b, a;
+    float spacing;
+    // QRhi vertex attributes have no Float1 format, so the spacing rides a
+    // Float2 slot with this padding member.
+    float pad = 0.0f;
+  };
   struct PreviewDrawRange
   {
     quint32 firstVertex = 0;
@@ -74,6 +93,9 @@ private:
                       bool enableBlending = false,
                       QRhiShaderResourceBindings *srb = nullptr,
                       bool enableDepthTest = true);
+  // P15.8 (BOLDGRID) v2: screen-space bolder grid lines (own shader pair +
+  // blended pipeline + param UBO; see ensureBoldLinePipeline definition).
+  bool ensureBoldLinePipeline();
   bool uploadSceneBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadBedBuffers(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
   bool uploadModelBuffer(QRhiResourceUpdateBatch *updates, quint32 dirtyFlags);
@@ -266,9 +288,17 @@ private:
   // v5.16 (BEDBOTTOM): grid-only lines for below-horizon camera views
   // (upstream PartPlate::render_grid(true) LINE_BOTTOM_COLOR).
   std::unique_ptr<QRhiBuffer> m_bedBottomLineBuffer;
-  // P15.8 (BOLDGRID): every-5th grid line as ~2px flat quads (upstream
-  // render_grid second bolder draw, PartPlate.cpp:909-911).
+  // P15.8 (BOLDGRID): every-5th grid lines; the renderer expands each
+  // PrepareSceneData::BoldLine to a screen-space strip in the bold_line
+  // vertex shader (upstream render_grid second bolder draw,
+  // PartPlate.cpp:909-911).
   std::unique_ptr<QRhiBuffer> m_bedBoldFillBuffer;
+  // P15.8 (BOLDGRID) v3: fine grid lines share the bolder set's screen-space
+  // strip pipeline (60% alpha keeps the hierarchy); the 1px bed line buffer
+  // keeps only the border/contour. The thumbnail pass (separate Vertex-layout
+  // pipeline) draws the fine grid as plain 1px lines from its own buffer.
+  std::unique_ptr<QRhiBuffer> m_bedFineStripBuffer;
+  std::unique_ptr<QRhiBuffer> m_thumbnailBedFineBuffer;
   // P15.5 (SINK): white bed-plane contour bands of sinking batches
   // (upstream GLVolume::SinkingContours, 3DScene.cpp:108-161).
   std::unique_ptr<QRhiBuffer> m_sinkingContourBuffer;
@@ -310,6 +340,14 @@ private:
   // and enable source-alpha blending so baked vertex alpha is visible.
   std::unique_ptr<QRhiGraphicsPipeline> m_translucentFillPipeline;
   std::unique_ptr<QRhiGraphicsPipeline> m_translucentLinePipeline;
+  // P15.8 (BOLDGRID) v2: screen-space bolder grid lines. Own pipeline (own
+  // shader pair, blended, depth write off) + SRB: binding 0 = shared camera
+  // UBO, binding 1 = bold line params (viewport px size, core width, aa
+  // radius) written by uploadCameraUniform so resizes stay in sync.
+  std::unique_ptr<QRhiGraphicsPipeline> m_boldLinePipeline;
+  std::unique_ptr<QRhiShaderResourceBindings> m_boldLineSrb;
+  std::unique_ptr<QRhiBuffer> m_boldLineParamBuffer;
+  quint32 m_boldLineParamBufferBytes = 0;
   // v5.15 (BEDTEX): textured print-bed quad. Mirrors upstream PartPlate
   // render_logo_texture — the printer profile's bed_texture image drawn over
   // the plate background/grid, blended, depth test+write off. Separate SRB
@@ -497,6 +535,8 @@ private:
   quint32 m_bedBottomLineBufferBytes = 0;
   // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES): derived bed geometry buffers.
   quint32 m_bedBoldFillBufferBytes = 0;
+  quint32 m_bedFineStripBufferBytes = 0;
+  quint32 m_thumbnailBedFineBufferBytes = 0;
   quint32 m_sinkingContourBufferBytes = 0;
   quint32 m_bedAxesVertexBufferBytes = 0;
   quint32 m_bedAxesNormalBufferBytes = 0;
@@ -514,6 +554,8 @@ private:
   quint32 m_bedLineVertexCount = 0;
   quint32 m_bedBottomLineVertexCount = 0;
   quint32 m_bedBoldFillVertexCount = 0;
+  quint32 m_bedFineStripVertexCount = 0;
+  quint32 m_thumbnailBedFineVertexCount = 0;
   quint32 m_sinkingContourVertexCount = 0;
   quint32 m_bedAxesVertexCount = 0;
   // P15.5 (SINK): upload gates for the derived bed buffers.

@@ -307,7 +307,47 @@ void RhiViewport::setBedModelMeshData(const QByteArray &value)
     return;
   m_bedModelMeshData = value;
   ++m_bedModelGeneration;
+  // PLATEICONS: the overlay quads bake their lift from the model top height,
+  // which this mesh defines — rebuild them or the name band stays at the
+  // pre-mesh 0.2mm lift and drowns inside the vendor frame solid.
+  refreshPlateIconQuads();
   update();
+}
+
+RhiViewport::BedModelBounds RhiViewport::bedModelBounds() const
+{
+  // PLATEICONS: same parse as the renderer's model upload (the stream is
+  // [u32 count][x, height, depth] float triples, see
+  // EditorViewModel::loadBedModelMesh). Returns the RAW half-extents + top;
+  // the renderer centers the solid on the plate with a -0.44 y sit offset,
+  // so the caller anchors at plateCenter ± half and lifts above topY-0.44.
+  if (m_bedModelBoundsGen != m_bedModelGeneration) {
+    m_bedModelBoundsGen = m_bedModelGeneration;
+    m_bedModelBoundsCache = {};
+    const QByteArray &data = m_bedModelMeshData;
+    if (data.size() >= 4) {
+      quint32 count = 0;
+      std::memcpy(&count, data.constData(), sizeof(count));
+      const qsizetype avail = (data.size() - 4) / 12;
+      count = quint32(qMin<qsizetype>(count, avail));
+      const float *verts = reinterpret_cast<const float *>(data.constData() + 4);
+      float minX = 0.0f, maxX = 0.0f, minZ = 0.0f, maxZ = 0.0f;
+      for (quint32 i = 0; i < count; ++i) {
+        const float x = verts[i * 3];
+        const float height = verts[i * 3 + 1];
+        const float z = verts[i * 3 + 2];
+        m_bedModelBoundsCache.topY = qMax(m_bedModelBoundsCache.topY, height);
+        minX = qMin(minX, x);
+        maxX = qMax(maxX, x);
+        minZ = qMin(minZ, z);
+        maxZ = qMax(maxZ, z);
+      }
+      m_bedModelBoundsCache.halfX = (maxX - minX) * 0.5f;
+      m_bedModelBoundsCache.halfZ = (maxZ - minZ) * 0.5f;
+      m_bedModelBoundsCache.valid = count > 0;
+    }
+  }
+  return m_bedModelBoundsCache;
 }
 
 // v5.16 (EXCLAREA): exclude polygons reshape the bed fill geometry, so they
@@ -1363,13 +1403,28 @@ QString plateDisplayName(const QVariantMap &plateState)
   return name.isEmpty() ? QStringLiteral("Untitled") : name;
 }
 
+// The vertical window sampled by the name quad, in atlas pixels: the FULL
+// font line height (ascent + descent). The quad used to sample exactly
+// kNameFontPixelSize rows, but the raster font's ascent alone exceeds that,
+// so every glyph's baseline landed below the window and the letters shaved
+// a few pixels off their bottoms (the "text still slightly cut" report).
+int nameWindowPx()
+{
+  QFont font;
+  font.setPixelSize(kNameFontPixelSize);
+  return QFontMetrics(font).height();
+}
+
 PlateNameMetrics plateNameMetrics(const QVariantMap &plateState, float bedWidth)
 {
   const QString displayName = plateDisplayName(plateState);
   QFont font;
   font.setPixelSize(kNameFontPixelSize);
-  const int textPixels = QFontMetrics(font).horizontalAdvance(displayName);
-  const float aspect = float(textPixels) / float(kNameFontPixelSize);
+  const QFontMetrics fm(font);
+  const int textPixels = fm.horizontalAdvance(displayName);
+  // Aspect uses the same full-line window the quad samples (see
+  // nameWindowPx) so the world width tracks the rasterized ink box.
+  const float aspect = float(textPixels) / float(nameWindowPx());
   return PlateNameMetrics{textPixels, aspect,
                           qMin(aspect * kNameWorldHeight, bedWidth * 0.35f)};
 }
@@ -1390,8 +1445,10 @@ void rasterSvgCell(QImage &atlas, int col, int row, const QString &path)
     qWarning("[PLATEICONS] missing icon asset: %s", qPrintable(path));
     return;
   }
-  // 6px inset so the rounded frame breathes inside the cell.
-  const QRect target = cell.adjusted(6, 6, -6, -6);
+  // 10px inset so the rounded frame breathes inside the cell AND deep mip
+  // levels stop bleeding the neighbor tile (mip 3 scales 128px cells to
+  // 16px, where the old 6px inset thinned to under a pixel).
+  const QRect target = cell.adjusted(10, 10, -10, -10);
   QPainter painter(&atlas);
   svg.render(&painter, target);
   painter.end();
@@ -1454,6 +1511,14 @@ void RhiViewport::refreshPlateIconQuads()
   QVector<Vert> verts;
   const float f = PrepareSceneData::plateIconScale(m_bedDepth);
   const float uvStep = float(kIconCell) / float(kIconAtlasSize);
+  // All overlay quads ride above the loaded bed model solid (drawn top =
+  // raw top - 0.44 sit offset, matching uploadBedModelMesh), and the
+  // far-edge/right bands anchor beyond the model's frame overhang — a fixed
+  // 0.2mm lift + print-area anchor let vendor frames bury the name band
+  // while the camera moved.
+  const RhiViewport::BedModelBounds model = bedModelBounds();
+  const float modelDrawnTop = model.valid ? model.topY - 0.44f : 0.0f;
+  const float overlayLift = modelDrawnTop + 0.2f;
 
   const auto appendQuad = [&](const PrepareSceneData::PlateIconRect &rect,
                               const IconCellRef &cell) {
@@ -1461,7 +1526,7 @@ void RhiViewport::refreshPlateIconQuads()
     const float v0 = float(cell.row) * uvStep;
     const float u1 = u0 + uvStep;
     const float v1 = v0 + uvStep;
-    const float lift = 0.03f;  // above the 0.02 bed texture quad
+    const float lift = overlayLift;
     verts.append(Vert{rect.x0, lift, rect.z0, u0, v0});
     verts.append(Vert{rect.x1, lift, rect.z0, u1, v0});
     verts.append(Vert{rect.x1, lift, rect.z1, u1, v1});
@@ -1474,6 +1539,20 @@ void RhiViewport::refreshPlateIconQuads()
     const QVariantMap state = m_plateIconStates.value(p).toMap();
     const bool locked = state.value(QStringLiteral("locked")).toBool();
     const bool changed = state.value(QStringLiteral("custom")).toBool();
+
+    // Per-plate model anchors: the renderer centers the solid on each plate,
+    // so the drawn overhang is plateCenter ± halfSize (plus a 2mm standoff).
+    float plateOffX = 0.0f;
+    float plateOffY = 0.0f;
+    PrepareSceneData::plateGridOffset(p, plateCount, m_bedWidth, m_bedDepth,
+                                      plateOffX, plateOffY);
+    const float farZ = -(m_bedOriginY + m_bedDepth) + plateOffY;
+    const float minX = m_bedOriginX + plateOffX;
+    const bool hasModel = model.valid;
+    const float rightAnchor = hasModel ? minX + m_bedWidth * 0.5f + model.halfX + 2.0f
+                                       : std::numeric_limits<float>::quiet_NaN();
+    const float farAnchor = hasModel ? farZ + m_bedDepth * 0.5f - model.halfZ - 2.0f
+                                     : std::numeric_limits<float>::quiet_NaN();
 
     for (int icon = 0; icon <= int(PrepareSceneData::PlateIconId::MoveFront); ++icon) {
       IconCellRef cell;
@@ -1488,11 +1567,18 @@ void RhiViewport::refreshPlateIconQuads()
         cell = columnCell(icon, p == m_hoverPlateIndex && m_hoverPlateIconId == icon);
         break;
       }
-      appendQuad(PrepareSceneData::plateIconRect(p, plateCount, icon,
-                                                 m_bedWidth, m_bedDepth,
-                                                 m_bedOriginX,
-                                                 -(m_bedOriginY + m_bedDepth)),
-                 cell);
+      PrepareSceneData::PlateIconRect rect =
+          PrepareSceneData::plateIconRect(p, plateCount, icon,
+                                          m_bedWidth, m_bedDepth,
+                                          m_bedOriginX,
+                                          -(m_bedOriginY + m_bedDepth));
+      if (model.valid && rightAnchor > rect.x1) {
+        // Clear the model's right-side frame overhang.
+        const float shift = rightAnchor - rect.x1;
+        rect.x0 += shift;
+        rect.x1 += shift;
+      }
+      appendQuad(rect, cell);
     }
 
     // Rename pencil (hoverable) sits right of the plate-name text, so the
@@ -1501,35 +1587,44 @@ void RhiViewport::refreshPlateIconQuads()
     // plateIconAt pencil hit test).
     const PlateNameMetrics nameMetrics = plateNameMetrics(state, m_bedWidth);
 
-    float plateOffX = 0.0f;
-    float plateOffY = 0.0f;
-    PrepareSceneData::plateGridOffset(p, plateCount, m_bedWidth, m_bedDepth,
-                                      plateOffX, plateOffY);
-    const float farZ = -(m_bedOriginY + m_bedDepth) + plateOffY;
-    const float minX = m_bedOriginX + plateOffX;
-
     const bool pencilHover = p == m_hoverPlateIndex
                              && m_hoverPlateIconId == int(PrepareSceneData::PlateIconId::NameEdit);
-    appendQuad(PrepareSceneData::plateNameEditRect(p, plateCount,
-                                                   nameMetrics.worldWidth,
-                                                   m_bedWidth, m_bedDepth,
-                                                   m_bedOriginX, -(m_bedOriginY + m_bedDepth)),
-               IconCellRef{pencilHover ? 5 : 4, 2});
+    PrepareSceneData::PlateIconRect pencilRect =
+        PrepareSceneData::plateNameEditRect(p, plateCount,
+                                            nameMetrics.worldWidth,
+                                            m_bedWidth, m_bedDepth,
+                                            m_bedOriginX, -(m_bedOriginY + m_bedDepth));
+    if (model.valid && farAnchor < pencilRect.z1) {
+      // Clear the model's far-side frame overhang (shared band with the name).
+      const float shift = farAnchor - pencilRect.z1;
+      pencilRect.z0 += shift;
+      pencilRect.z1 += shift;
+    }
+    appendQuad(pencilRect, IconCellRef{pencilHover ? 5 : 4, 2});
 
     // Plate-name text quad at the far-left corner; the uv window maps the
-    // exact pixel bounds of the drawn text so the aspect holds.
+    // exact pixel bounds of the drawn text so the aspect holds. The text
+    // hangs OUTSIDE the far edge (upstream grows the name quad outward from
+    // bed_ext[3]), above the plate, in the gutter.
     {
       const float pxU = float(nameCellCol(p) * kIconCell + kNameCellTextInset);
       const float pxV = float(nameCellRow(p) * kIconCell + kNameCellTextInset);
       const float u0 = pxU / float(kIconAtlasSize);
       const float v0 = pxV / float(kIconAtlasSize);
       const float u1 = u0 + float(nameMetrics.textPixels) / float(kIconAtlasSize);
-      const float v1 = v0 + float(kNameFontPixelSize) / float(kIconAtlasSize);
-      const float worldH = kNameWorldHeight;
+      // Full font line height — matches the rasterized band exactly so no
+      // ink falls outside the sampled window (glyph bottoms were shaved).
+      const float v1 = v0 + float(nameWindowPx()) / float(kIconAtlasSize);
+      // Keep the on-screen glyph scale unchanged: the taller window maps to
+      // a proportionally taller world band.
+      const float worldH = kNameWorldHeight * float(nameWindowPx()) / float(kNameFontPixelSize);
       const float worldW = nameMetrics.aspect * worldH;
-      const float lift = 0.03f;
+      const float lift = overlayLift;
       const float x0 = minX + kNameTextInset * f;
-      const float z0 = farZ + kNameTextInset * f;
+      float z1 = farZ - kNameTextInset * f;
+      if (model.valid)
+        z1 = qMin(z1, farAnchor);
+      const float z0 = z1 - worldH;
       verts.append(Vert{x0, lift, z0, u0, v0});
       verts.append(Vert{x0 + worldW, lift, z0, u1, v0});
       verts.append(Vert{x0 + worldW, lift, z0 + worldH, u1, v1});
@@ -1541,10 +1636,16 @@ void RhiViewport::refreshPlateIconQuads()
     // Index badge at the near-right corner (not pickable upstream). Badge
     // cells flow multi-row (Q2): kMaxPlateCount exceeds one 16-cell atlas
     // row, and badgeCellRef keeps the quad UV inside the rasterized cells.
-    appendQuad(PrepareSceneData::plateIndexBadgeRect(p, plateCount, m_bedWidth,
-                                                     m_bedDepth, m_bedOriginX,
-                                                     -(m_bedOriginY + m_bedDepth)),
-               badgeCellRef(p));
+    PrepareSceneData::PlateIconRect badgeRect =
+        PrepareSceneData::plateIndexBadgeRect(p, plateCount, m_bedWidth,
+                                              m_bedDepth, m_bedOriginX,
+                                              -(m_bedOriginY + m_bedDepth));
+    if (model.valid && rightAnchor > badgeRect.x1) {
+      const float shift = rightAnchor - badgeRect.x1;
+      badgeRect.x0 += shift;
+      badgeRect.x1 += shift;
+    }
+    appendQuad(badgeRect, badgeCellRef(p));
   }
 
   m_plateIconQuadBytes.resize(verts.size() * int(sizeof(Vert)));
@@ -1593,11 +1694,13 @@ void RhiViewport::buildPlateIconAtlas()
   for (int slot = 0; slot < 6; ++slot)
     rasterSvgCell(m_plateIconAtlas, slot, 2, iconSvgPath(extraIcons[slot] + variant));
 
-  // Label pen for the index badge + plate name text: the brand token
-  // (upstream rasterizes both with #f2754e, PartPlate.cpp:2578/:4401;
-  // OWzx keeps the brand green via ThemeTokens, never a site literal).
-  const QColor labelColor(
-      QLatin1String(ThemeTokens::staticTokens().plateLabel));
+  // Label pen for the index badge + plate name text: upstream rasterizes
+  // both with the theme-dependent gray of generate_plate_name_texture
+  // (PartPlate.cpp:2141-2145 -- light {125,125,130} / dark {203,203,203},
+  // upright); the former brand-green token (#18c75e) was the 2026-10-07
+  // brand ruling superseded by the round2 pixel audit against the Orca
+  // reference (R1B-16).
+  const QColor labelColor(dark ? QColor(203, 203, 203) : QColor(125, 125, 130));
 
   for (int p = 0; p < m_plateCount; ++p) {
     const QVariantMap state = m_plateIconStates.value(p).toMap();
@@ -1619,7 +1722,11 @@ void RhiViewport::buildPlateIconAtlas()
     idxPainter.end();
 
     // Plate name (kNameCellSpan-wide block per plate, rows below the
-    // badges; same cell helpers the quad UV window resolves through).
+    // badges; same cell helpers the quad UV window resolves through). The
+    // band height equals the quad's sampled window (nameWindowPx = full
+    // font line height) so no ink can fall outside the window: the raster
+    // font's ascent alone exceeds kNameFontPixelSize, and the old 72px
+    // window shaved every glyph's bottom.
     QPainter namePainter(&m_plateIconAtlas);
     QFont nameFont;
     nameFont.setPixelSize(kNameFontPixelSize);
@@ -1628,7 +1735,7 @@ void RhiViewport::buildPlateIconAtlas()
     namePainter.drawText(QRect(nameCellCol(p) * kIconCell + kNameCellTextInset,
                                nameCellRow(p) * kIconCell + kNameCellTextInset,
                                kNameCellSpan * kIconCell - 2 * kNameCellTextInset,
-                               kIconCell - 2 * kNameCellTextInset),
+                               nameWindowPx()),
                          Qt::AlignLeft | Qt::AlignVCenter, displayName);
     namePainter.end();
   }
@@ -2100,6 +2207,7 @@ void RhiViewport::mousePressEvent(QMouseEvent *event)
             float(event->position().x()), float(event->position().y()), axis,
             viewSize, m_camera.projMatrix(aspect), m_camera.viewMatrix(),
             m_gizmoDragCenter, m_gizmoRotateStartAngle);
+        m_gizmoRotateSnappedAngle = m_gizmoRotateStartAngle;
       }
       else
       {
@@ -2283,9 +2391,24 @@ void RhiViewport::mouseMoveEvent(QMouseEvent *event)
           float(event->position().x()), float(event->position().y()),
           m_gizmoAxis, viewSize, m_camera.projMatrix(aspect),
           m_camera.viewMatrix(), m_gizmoDragCenter, m_gizmoRotateStartAngle);
-      const float deltaAngle = currentAngle - m_gizmoRotateStartAngle;
+      // RG-R4-01: band-based snapping mirrors upstream GLGizmoRotate::on_drag
+      // -- inner band steps 45 degrees, the outer tooth steps 5 degrees, the
+      // ring body stays free. The emitted delta always runs against the last
+      // EMITTED (possibly quantized) angle so re-entering a band never jumps.
+      float targetAngle = currentAngle;
+      const int band = GizmoMath::rotateSnapBand(
+          float(event->position().x()), float(event->position().y()),
+          m_gizmoAxis, viewSize, m_camera.projMatrix(aspect),
+          m_camera.viewMatrix(), m_gizmoDragCenter, m_camera.eye());
+      if (band == 1)
+        targetAngle = float(M_PI / 4.0) * std::round(currentAngle / float(M_PI / 4.0));
+      else if (band == 2)
+        targetAngle = float(M_PI / 36.0) * std::round(currentAngle / float(M_PI / 36.0));
+      const float deltaAngle = targetAngle - m_gizmoRotateSnappedAngle;
+      m_gizmoRotateSnappedAngle = targetAngle;
       m_gizmoRotateStartAngle = currentAngle;
-      emit gizmoRotateRequested(m_gizmoAxis, deltaAngle);
+      if (deltaAngle != 0.0f)
+        emit gizmoRotateRequested(m_gizmoAxis, deltaAngle);
     }
     else
     {

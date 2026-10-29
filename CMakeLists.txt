@@ -501,9 +501,24 @@ endif()
             src/qml_gui/Renderer/shaders/rhi_gizmo.vert
             src/qml_gui/Renderer/shaders/rhi_gizmo.frag
             src/qml_gui/Renderer/shaders/bed_texture.vert
-            src/qml_gui/Renderer/shaders/bed_texture.frag
             src/qml_gui/Renderer/shaders/model_lit.vert
             src/qml_gui/Renderer/shaders/model_lit.frag
+            src/qml_gui/Renderer/shaders/bold_line.vert
+            src/qml_gui/Renderer/shaders/bold_line.frag
+    )
+    # BEDTEX-AF: the anisotropic bed-texture sampler needs GLSL 130+ features
+    # (textureLod/textureSize/dFdx), so it ships without the legacy 100es/120
+    # GLSL variants. On GLES2-only contexts the channel degrades gracefully
+    # (loadShader -> invalid -> the plate keeps fill+grid without the photo).
+    qt_add_shaders(OWzxSlicer "rhi_viewport_shaders_modern"
+        PREFIX
+            "/rhi_viewport/shaders"
+        BASE
+            "src/qml_gui/Renderer/shaders"
+        GLSL
+            150
+        FILES
+            src/qml_gui/Renderer/shaders/bed_texture.frag
     )
     if(MSVC)
         # G-12 followup (2026-09-05), premise corrected 2026-10-08: the deps

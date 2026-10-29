@@ -221,7 +221,10 @@ void PrepareSceneDataTests::bedGeometryUsesDimensionsAndGridIntervals()
   QVERIFY(scene.bedLineVertices().size() > 0);
   QCOMPARE(scene.fineGridSpacingMm(), 10.0f);
   QCOMPARE(scene.coarseGridSpacingMm(), 50.0f);
-  QVERIFY(scene.bedLineVertices().size() > scene.bedFillVertices().size());
+  // v3 (BOLDGRID): the 1px line set keeps only the border; the grid rides
+  // the strip records, so the combined count dominates the fill fan.
+  QVERIFY(scene.bedLineVertices().size() + scene.bedFineLines().size()
+          > scene.bedFillVertices().size());
 }
 
 void PrepareSceneDataTests::dirtyFlagsAreConsumedOnlyOnRequest()
@@ -291,11 +294,12 @@ void PrepareSceneDataTests::invalidBedDimensionsDoNotGenerateUnboundedBuffers()
   PrepareSceneData scene;
   scene.setBed(1000000.0f, -5.0f, 0.0f, 0.0f, 0, 1000000.0f);
 
-  // P15.8 (BOLDGRID): the every-5th-line bolder quads share the fill buffer,
-  // so the fill bound accounts for them (2000mm clamped bed -> ~200 fine
-  // lines of which ~40 are bold quads).
+  // P15.8 (BOLDGRID): the bolder lines are strip records and (v3) the fine
+  // grid left the 1px set, so the clamped bed must keep every line bound
+  // (2000mm clamped bed -> ~200 fine lines of which ~40 are bolder records).
   QVERIFY(scene.bedFillVertices().size() <= 1000);
   QVERIFY(scene.bedLineVertices().size() < 2000);
+  QVERIFY(scene.bedFineLines().size() < 500);
   QVERIFY(scene.bedWidth() <= 2000.0f);
   QVERIFY(scene.bedDepth() <= 2000.0f);
 }
@@ -619,8 +623,9 @@ void PrepareSceneDataTests::modelColorsFollowUpstreamVolumeSemantics()
 
 // P15.8 (BOLDGRID): upstream calc_gridlines bolds every 5th grid line
 // (PartPlate.cpp:483/496) and render_grid draws the bolder set a second time
-// at 2px (PartPlate.cpp:909-911). The QRhi transport stores the bolder lines
-// as flat quads in the plate line color; X bold lines leave the fine set
+// as a constant ~2px screen-space strip (PartPlate.cpp:909-911). The QRhi
+// transport stores one record per bolder line (the renderer's bold_line
+// pipeline does the screen-space expansion); X bold lines leave the fine set
 // (exclusive) while Y bold lines stay in it too (PartPlate.cpp:478-500).
 void PrepareSceneDataTests::bolderGridQuadsFollowEveryFifthLine()
 {
@@ -628,38 +633,42 @@ void PrepareSceneDataTests::bolderGridQuadsFollowEveryFifthLine()
   scene.setBed(220.0f, 220.0f, 0.0f, 0.0f, 0, 220.0f);
   scene.setPlateContext(0, 1, {});
 
-  const auto &bold = scene.bedBoldLineVertices();
-  // 4 bold x-lines (x = 50/100/150/200) + 4 bold y-lines, 6 quad verts each.
-  QCOMPARE(bold.size(), qsizetype(8 * 6));
+  const auto &bold = scene.bedBoldLines();
+  // 4 bold x-lines (x = 50/100/150/200) + 4 bold y-lines, one record each.
+  QCOMPARE(bold.size(), qsizetype(8));
 
-  // Every bold vertex uses the selected-plate line color and is opaque.
+  // Every bold line uses the selected-plate line color and is opaque.
   for (const auto &v : bold) {
     QVERIFY2(qFuzzyCompare(v.r, 0.5294f) && qFuzzyCompare(v.g, 0.5451f)
                  && qFuzzyCompare(v.b, 0.5333f) && qFuzzyCompare(v.a, 1.0f),
              "bolder grid must use LINE_TOP_SEL_COLOR");
   }
 
-  // Bold x quad sits around x=50 spanning the plate depth.
+  // Bold x line sits at x=50 spanning the bed depth; AXES-ROT negates the
+  // scene y, so the depth axis runs -220..0 (slic3r y=0 edge at scene z=0).
   bool foundBoldX50 = false;
   for (const auto &v : bold) {
-    if (v.x > 49.0f && v.x < 51.0f && v.y >= -0.5f && v.y <= 220.5f)
+    if (qFuzzyCompare(v.x0, 50.0f) && qFuzzyCompare(v.x1, 50.0f)
+        && qFuzzyCompare(v.y0, -220.0f) && qFuzzyCompare(v.y1, 0.0f))
       foundBoldX50 = true;
   }
-  QVERIFY2(foundBoldX50, "bolder x quad expected at x = 50 (5th grid line)");
+  QVERIFY2(foundBoldX50, "bolder x line expected at x = 50 (5th grid line)");
 
   // X bold lines are exclusive to the bolder set: no fine line at x = 50,
   // while the fine x = 10 line stays; Y bold lines remain in the fine set
-  // too (upstream y-loop pushes every line into axes_lines).
+  // too (upstream y-loop pushes every line into axes_lines). v3: fine grid
+  // lines are BoldLine records in bedFineLines (60% alpha); the 1px
+  // bedLineVertices keep only the border.
   auto fineHasX = [&scene](float x) {
-    for (const auto &v : scene.bedLineVertices()) {
-      if (qFuzzyCompare(v.x, x))
+    for (const auto &v : scene.bedFineLines()) {
+      if (qFuzzyCompare(v.x0, x) && qFuzzyCompare(v.x1, x))
         return true;
     }
     return false;
   };
   auto fineHasY = [&scene](float y) {
-    for (const auto &v : scene.bedLineVertices()) {
-      if (qFuzzyCompare(v.y, y))
+    for (const auto &v : scene.bedFineLines()) {
+      if (qFuzzyCompare(v.y0, y) && qFuzzyCompare(v.y1, y))
         return true;
     }
     return false;
@@ -668,6 +677,11 @@ void PrepareSceneDataTests::bolderGridQuadsFollowEveryFifthLine()
   QVERIFY2(fineHasX(10.0f), "x = 10 stays a fine line");
   // AXES-ROT: y grid lines land on negated scene Z.
   QVERIFY2(fineHasY(-50.0f), "y bold line stays in the fine set (inclusive y rule)");
+  // Fine grid records carry 60% alpha; the bolder set stays opaque.
+  for (const auto &v : scene.bedFineLines()) {
+    QVERIFY2(qFuzzyCompare(v.a, 0.6f), "fine grid strips ride at 60% alpha");
+    break;
+  }
 }
 
 // P15.6 (CIRCLEBED): circular plates fan-fill the boundary polygon and clip
@@ -702,12 +716,14 @@ void PrepareSceneDataTests::roundBedBuildsFanFillWithClippedGrid()
            "circle fill must use the selected plate color");
 
   // Grid chords exist and stay inside the circle; the bolder set is present
-  // (every 5th line) and the boundary chords close the contour.
-  QVERIFY2(scene.bedLineVertices().size() > 0, "circle border/grid lines must exist");
-  QVERIFY2(scene.bedBoldLineVertices().size() > 0, "circle bolder grid must exist");
-  for (const auto &v : scene.bedLineVertices()) {
-    const float dx = v.x - cx;
-    const float dz = v.y - cz;
+  // (every 5th line) and the boundary chords close the contour. v3: the fine
+  // chords are strip records; the 1px set keeps only the boundary contour.
+  QVERIFY2(scene.bedLineVertices().size() > 0, "circle border contour must exist");
+  QVERIFY2(scene.bedBoldLines().size() > 0, "circle bolder grid must exist");
+  QVERIFY2(scene.bedFineLines().size() > 0, "circle fine grid must exist");
+  for (const auto &v : scene.bedFineLines()) {
+    const float dx = v.x0 - cx;
+    const float dz = v.y0 - cz;
     QVERIFY2(dx * dx + dz * dz <= (radius + 1.0f) * (radius + 1.0f),
              "circle grid chords must be clipped to the bed circle");
   }

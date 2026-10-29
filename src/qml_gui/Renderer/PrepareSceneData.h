@@ -79,6 +79,24 @@ public:
     float a = 1.0f;
   };
 
+  // P15.8 (BOLDGRID): one bolder grid line in bed space. The renderer
+  // expands each record into a screen-space strip in the bold_line vertex
+  // shader (upstream dashed_thick_lines geometry shader contract); the
+  // source carries only the line geometry.
+  struct BoldLine
+  {
+    float x0 = 0.0f;
+    float y0 = 0.0f;
+    float x1 = 0.0f;
+    float y1 = 0.0f;
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
+    float a = 1.0f;
+
+    bool operator==(const BoldLine &other) const;
+  };
+
   struct ModelBounds
   {
     float minX = 0.0f;
@@ -491,10 +509,20 @@ public:
   // (upstream PartPlate::render_grid(true) draws the grid in
   // LINE_BOTTOM_COLOR while render_background/render_logo are skipped).
   const QList<Vertex> &bedBottomLineVertices() const;
-  // P15.8 (BOLDGRID): every-5th grid line as ~2px-wide flat quads in the
-  // plate line color (upstream render_grid draws the bolder line set a
-  // second time with glLineWidth(2), PartPlate.cpp:909-911).
-  const QList<Vertex> &bedBoldLineVertices() const;
+  // P15.8 (BOLDGRID): every-5th grid line, one record per line in the plate
+  // line color; the renderer expands it to a constant ~2px screen-space
+  // strip (upstream render_grid draws the bolder line set a second time with
+  // glLineWidth(2), PartPlate.cpp:909-911).
+  const QList<BoldLine> &bedBoldLines() const;
+  // P15.8 (BOLDGRID) v3: fine grid line records (same record format as the
+  // bolder set, 60% alpha). The renderer expands these through the same
+  // screen-space strip pipeline so the grid stops crawling while the camera
+  // orbits; the 1px bedLineVertices keep only the border/contour.
+  const QList<BoldLine> &bedFineLines() const;
+  // BEDAUDIT v4: border/contour records (never-fade spacing) — the bed
+  // outline also rides the analytic-AA strip pipeline; the 1px line buffer
+  // keeps serving the thumbnail pass.
+  const QList<BoldLine> &bedEdgeLines() const;
   // P15.5 (SINK): white bed-plane contour bands of sinking batches
   // (upstream GLVolume::SinkingContours, 3DScene.cpp:108-161), split into
   // per-batch ranges so the renderer can draw hovered/displaced ranges
@@ -611,8 +639,14 @@ private:
   QList<Vertex> m_bedFillVertices;
   QList<Vertex> m_bedLineVertices;
   QList<Vertex> m_bedBottomLineVertices;
-  // P15.8 (BOLDGRID): every-5th grid line flat quads (Triangles).
-  QList<Vertex> m_bedBoldLineVertices;
+  // P15.8 (BOLDGRID): every-5th grid line records (screen-space expanded by
+  // the renderer's bold_line pipeline).
+  QList<BoldLine> m_bedBoldLines;
+  // P15.8 (BOLDGRID) v3: fine grid line records (same screen-space strip
+  // transport as the bolder set, at 60% alpha).
+  QList<BoldLine> m_bedFineLines;
+  // BEDAUDIT v4: border/contour records (never-fade).
+  QList<BoldLine> m_bedEdgeLines;
   // P15.5 (SINK): white contour bands (Triangles) + per-batch ranges.
   QList<ModelVertex> m_sinkingContourVertices;
   QList<SinkingContourRange> m_sinkingContourRanges;

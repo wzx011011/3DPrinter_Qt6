@@ -639,9 +639,13 @@ void RhiViewportRenderer::synchronize(QQuickRhiItem *item)
   // anyVolumeOutside error-red swap applies to MODEL volumes only
   // (_is_any_volume_outside); a gcode-only session has no volumes, and its
   // presentation macro legitimately travels past the plate edge, so the
-  // preview background stays light unconditionally.
+  // preview background keeps the plain surface (never the error-red swap).
+  // F8 (R1B-03): the preview viewport follows the theme like the prepare
+  // viewport — the unconditional light pin predated the dark theme and left
+  // a glaring light canvas in dark mode.
   if (m_canvasType == RhiViewport::CanvasPreview)
-    m_clearColor = QColor(231, 231, 231);
+    m_clearColor = ThemeState::instance().isDark() ? QColor(54, 54, 56)
+                                                   : QColor(231, 231, 231);
   else if (m_prepareScene.anyVolumeOutside())
     m_clearColor = QColor(int(0.753f * 255.0f), int(0.192f * 255.0f), int(0.039f * 255.0f));
   else if (!ThemeState::instance().isDark())
@@ -1285,6 +1289,9 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   // Guard widened to != CanvasPreview; the CanvasPreview draw block below
   // stays strictly == CanvasPreview. Mirrors Plater.cpp:7322.
   if (m_canvasType != RhiViewport::CanvasPreview && ensurePipelines()) {
+    // Best-effort: the strip draws guard on m_boldLinePipeline, so a bold
+    // pipeline failure must not take the whole bed pass down with it.
+    ensureBoldLinePipeline();
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
                                  float(renderTarget()->pixelSize().height())));
     setSrb(cb, m_srb.get());
@@ -1298,18 +1305,34 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
-    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown && m_bedLineBuffer
+        && m_bedLineVertexCount > 0 && !m_boldLinePipeline) {
+      // Fallback only: the 1px hardware-line draw when the strip pipeline
+      // failed to build (see the BEDAUDIT v4 note in uploadBedBuffers).
       setPipeline(cb, m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
+    // P15.8 (BOLDGRID) v3: the fine grid + border/contour ride the
+    // screen-space strip pipeline (analytic AA kills the thin-line crawl
+    // while the camera orbits). The 1px bed line buffer is thumbnail-only
+    // now; on the main pass its content arrives through the edge records.
+    if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown
+        && m_bedFineStripBuffer && m_bedFineStripVertexCount > 0
+        && m_boldLinePipeline) {
+      setPipeline(cb, m_boldLinePipeline.get(), m_boldLineSrb.get());
+      const QRhiCommandBuffer::VertexInput fineBinding(m_bedFineStripBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &fineBinding);
+      cb->draw(m_bedFineStripVertexCount);
+    }
     // P15.8 (BOLDGRID): the every-5th-line bolder set draws after the fine
     // grid, mirroring the upstream render_grid second pass
     // (PartPlate.cpp:892-912: 1px fine then 2px bolder, same line color).
     if (m_prepareScene.showBed() && !paintGizmoHidesPlate && lookingDown
-        && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0) {
-      setPipeline(cb, m_fillPipeline.get());
+        && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0
+        && m_boldLinePipeline) {
+      setPipeline(cb, m_boldLinePipeline.get(), m_boldLineSrb.get());
       const QRhiCommandBuffer::VertexInput boldBinding(m_bedBoldFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &boldBinding);
       cb->draw(m_bedBoldFillVertexCount);
@@ -1451,6 +1474,7 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
   // segment payload is being replaced. Segment drawing keeps its own
   // non-empty guard below.
   if (m_canvasType == RhiViewport::CanvasPreview && ensurePipelines()) {
+    ensureBoldLinePipeline();
     m_previewFrameTimer.start();
     // Camera uniform was already uploaded before beginPass (BUG-V31-1 fix).
     cb->setViewport(QRhiViewport(0, 0, float(renderTarget()->pixelSize().width()),
@@ -1469,17 +1493,31 @@ void RhiViewportRenderer::render(QRhiCommandBuffer *cb)
       cb->setVertexInput(0, 1, &fillBinding);
       cb->draw(m_bedFillVertexCount);
     }
-    if (m_prepareScene.showBed() && lookingDown && m_bedLineBuffer && m_bedLineVertexCount > 0) {
+    if (m_prepareScene.showBed() && lookingDown && m_bedLineBuffer
+        && m_bedLineVertexCount > 0 && !m_boldLinePipeline) {
+      // BEDAUDIT v4: fallback only — border/contour normally arrive through
+      // the never-fade strip records (hard 1px lines strobe at grazing
+      // angles); the 1px buffer keeps serving the thumbnail pass.
       setPipeline(cb, m_linePipeline.get());
       const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
       cb->setVertexInput(0, 1, &lineBinding);
       cb->draw(m_bedLineVertexCount);
     }
+    // P15.8 (BOLDGRID) v3: fine grid strips in the preview bed too.
+    if (m_prepareScene.showBed() && lookingDown
+        && m_bedFineStripBuffer && m_bedFineStripVertexCount > 0
+        && m_boldLinePipeline) {
+      setPipeline(cb, m_boldLinePipeline.get(), m_boldLineSrb.get());
+      const QRhiCommandBuffer::VertexInput fineBinding(m_bedFineStripBuffer.get(), 0);
+      cb->setVertexInput(0, 1, &fineBinding);
+      cb->draw(m_bedFineStripVertexCount);
+    }
     // P15.8 (BOLDGRID): bolder grid hierarchy in the preview bed too
     // (upstream GCodeViewer::_render_bed renders the same PartPlate grid).
     if (m_prepareScene.showBed() && lookingDown
-        && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0) {
-      setPipeline(cb, m_fillPipeline.get());
+        && m_bedBoldFillBuffer && m_bedBoldFillVertexCount > 0
+        && m_boldLinePipeline) {
+      setPipeline(cb, m_boldLinePipeline.get(), m_boldLineSrb.get());
       const QRhiCommandBuffer::VertexInput boldBinding(m_bedBoldFillBuffer.get(), 0);
       cb->setVertexInput(0, 1, &boldBinding);
       cb->draw(m_bedBoldFillVertexCount);
@@ -1662,6 +1700,11 @@ void RhiViewportRenderer::releaseRenderPassDependentResources()
   m_fillPipeline.reset();
   m_translucentFillPipeline.reset();
   m_translucentLinePipeline.reset();
+  // P15.8 (BOLDGRID) v2: screen-space bold-line pipeline + param UBO.
+  m_boldLinePipeline.reset();
+  m_boldLineSrb.reset();
+  m_boldLineParamBuffer.reset();
+  m_boldLineParamBufferBytes = 0;
   // P15.5 (SINK): depth-test-off contour clone.
   m_sinkingAlwaysPipeline.reset();
   m_bedTexturePipeline.reset();
@@ -1691,6 +1734,11 @@ void RhiViewportRenderer::releaseResources()
   m_fillPipeline.reset();
   m_translucentFillPipeline.reset();
   m_translucentLinePipeline.reset();
+  // P15.8 (BOLDGRID) v2: screen-space bold-line pipeline + param UBO.
+  m_boldLinePipeline.reset();
+  m_boldLineSrb.reset();
+  m_boldLineParamBuffer.reset();
+  m_boldLineParamBufferBytes = 0;
   // P15.5 (SINK): depth-test-off contour clone.
   m_sinkingAlwaysPipeline.reset();
   // v5.15 (BEDTEX/MODELLIT): bed texture + lit model resources.
@@ -1772,6 +1820,9 @@ void RhiViewportRenderer::releaseResources()
   m_bedBottomLineBuffer.reset();
   // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES): derived bed buffers.
   m_bedBoldFillBuffer.reset();
+  // P15.8 (BOLDGRID) v3: fine strip + thumbnail fine line buffers.
+  m_bedFineStripBuffer.reset();
+  m_thumbnailBedFineBuffer.reset();
   m_sinkingContourBuffer.reset();
   m_bedAxesVertexBuffer.reset();
   m_bedAxesNormalBuffer.reset();
@@ -1815,10 +1866,14 @@ void RhiViewportRenderer::releaseResources()
   m_bedBottomLineBufferBytes = 0;
   // P15.8 (BOLDGRID)/P15.5 (SINK)/P15.7 (AXES)
   m_bedBoldFillBufferBytes = 0;
+  m_bedFineStripBufferBytes = 0;
+  m_thumbnailBedFineBufferBytes = 0;
   m_sinkingContourBufferBytes = 0;
   m_bedAxesVertexBufferBytes = 0;
   m_bedAxesNormalBufferBytes = 0;
   m_bedBoldFillVertexCount = 0;
+  m_bedFineStripVertexCount = 0;
+  m_thumbnailBedFineVertexCount = 0;
   m_sinkingContourVertexCount = 0;
   m_bedAxesVertexCount = 0;
   m_bedBoldFillBufferUploaded = false;
@@ -2062,6 +2117,16 @@ void RhiViewportRenderer::renderThumbnailPass(QRhiCommandBuffer *cb)
     const QRhiCommandBuffer::VertexInput lineBinding(m_bedLineBuffer.get(), 0);
     cb->setVertexInput(0, 1, &lineBinding);
     cb->draw(m_bedLineVertexCount);
+  }
+  // P15.8 (BOLDGRID) v3: the fine grid left the 1px bed line buffer (it rides
+  // the screen-space strip pipeline on the main pass); thumbnails draw it
+  // from their own 1px list so the small render keeps the full grid.
+  if (m_prepareScene.showBed() && m_thumbnailBedFineBuffer
+      && m_thumbnailBedFineVertexCount > 0) {
+    setPipeline(cb, m_thumbnailLinePipeline.get());
+    const QRhiCommandBuffer::VertexInput fineBinding(m_thumbnailBedFineBuffer.get(), 0);
+    cb->setVertexInput(0, 1, &fineBinding);
+    cb->draw(m_thumbnailBedFineVertexCount);
   }
   // Model mesh (triangles) — the actual rendered scene, not just a clear color.
   if (m_thumbnailVariant == ThumbnailPicking) {
@@ -2317,6 +2382,85 @@ bool RhiViewportRenderer::ensurePipeline(std::unique_ptr<QRhiGraphicsPipeline> &
   return true;
 }
 
+// P15.8 (BOLDGRID) v2: screen-space bolder grid lines. Upstream render_grid
+// runs the bolder set through the dashed_thick_lines geometry shader
+// (PartPlate.cpp:1039-1052): a constant-width screen-space strip with an
+// analytic alpha feather, so the line is ~2px at any zoom/orbit. QRhi has no
+// geometry stage, so the expansion lives in the bold_line vertex shader and
+// this pipeline carries its own shader pair, a blended/no-depth-write state
+// (the feather is translucent) and a dedicated SRB: binding 0 = the shared
+// camera UBO (MVP), binding 1 = the bold params UBO (viewport px size, core
+// width, aa radius) that uploadCameraUniform keeps in sync.
+bool RhiViewportRenderer::ensureBoldLinePipeline()
+{
+  if (m_boldLinePipeline)
+    return true;
+  if (m_pipelineFailed || rhi() == nullptr || renderTarget() == nullptr
+      || !m_cameraUniformBuffer)
+    return false;
+
+  QShader vertexShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/bold_line.vert.qsb"));
+  QShader fragmentShader = loadShader(QStringLiteral(":/rhi_viewport/shaders/bold_line.frag.qsb"));
+  if (!vertexShader.isValid() || !fragmentShader.isValid())
+    return false;
+
+  if (!m_boldLineParamBuffer
+      && !ensureBuffer(m_boldLineParamBuffer, 256, m_boldLineParamBufferBytes,
+                       QRhiBuffer::UniformBuffer)) {
+    m_boldLineParamBufferBytes = 0;
+    return false;
+  }
+  if (!m_boldLineSrb) {
+    m_boldLineSrb.reset(rhi()->newShaderResourceBindings());
+    m_boldLineSrb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(
+            0, QRhiShaderResourceBinding::VertexStage, m_cameraUniformBuffer.get()),
+        QRhiShaderResourceBinding::uniformBuffer(
+            1, QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage,
+            m_boldLineParamBuffer.get()),
+    });
+    if (!m_boldLineSrb->create()) {
+      m_boldLineSrb.reset();
+      return false;
+    }
+  }
+
+  QRhiVertexInputLayout inputLayout;
+  inputLayout.setBindings({QRhiVertexInputBinding(sizeof(BoldLineVertex))});
+  inputLayout.setAttributes({
+      QRhiVertexInputAttribute(0, 0, QRhiVertexInputAttribute::Float3, offsetof(BoldLineVertex, p0x)),
+      QRhiVertexInputAttribute(0, 1, QRhiVertexInputAttribute::Float3, offsetof(BoldLineVertex, p1x)),
+      QRhiVertexInputAttribute(0, 2, QRhiVertexInputAttribute::Float2, offsetof(BoldLineVertex, end)),
+      QRhiVertexInputAttribute(0, 3, QRhiVertexInputAttribute::Float4, offsetof(BoldLineVertex, r)),
+      QRhiVertexInputAttribute(0, 4, QRhiVertexInputAttribute::Float2, offsetof(BoldLineVertex, spacing)),
+  });
+
+  m_renderPassDescriptor = renderTarget()->renderPassDescriptor();
+  m_boldLinePipeline.reset(rhi()->newGraphicsPipeline());
+  m_boldLinePipeline->setTopology(QRhiGraphicsPipeline::Triangles);
+  m_boldLinePipeline->setShaderStages({
+      QRhiShaderStage(QRhiShaderStage::Vertex, vertexShader),
+      QRhiShaderStage(QRhiShaderStage::Fragment, fragmentShader),
+  });
+  m_boldLinePipeline->setShaderResourceBindings(m_boldLineSrb.get());
+  m_boldLinePipeline->setVertexInputLayout(inputLayout);
+  m_boldLinePipeline->setRenderPassDescriptor(m_renderPassDescriptor);
+  m_boldLinePipeline->setDepthTest(true);
+  m_boldLinePipeline->setDepthWrite(false);
+  QRhiGraphicsPipeline::TargetBlend blend;
+  blend.enable = true;
+  blend.srcColor = QRhiGraphicsPipeline::SrcAlpha;
+  blend.dstColor = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  blend.srcAlpha = QRhiGraphicsPipeline::One;
+  blend.dstAlpha = QRhiGraphicsPipeline::OneMinusSrcAlpha;
+  m_boldLinePipeline->setTargetBlends({blend});
+  if (!m_boldLinePipeline->create()) {
+    m_boldLinePipeline.reset();
+    return false;
+  }
+  return true;
+}
+
 // ── v5.16 (BEDTYPE-TEX): BBL bed-type texture part tables ───────────────────
 // Ported verbatim from upstream PartPlateList::init_bed_type_info /
 // init_cali_texture_info (PartPlate.cpp:5505-5575): per-bed-type overlay
@@ -2530,9 +2674,12 @@ bool RhiViewportRenderer::uploadBedTexture(QRhiResourceUpdateBatch *updates)
   // QRhi texture uploads keep the image's top row at v=0, so v grows with
   // the bed's +depth axis (image top edge maps to the bed's top edge).
   // PREVIEW-BEDTEX: the hover height rides the loaded bed-model top surface
-  // (+0.02mm) instead of a fixed 0.02 -- vendor bed STLs put their print
-  // face up to ~0.3 above the ground plane, which used to bury the quad.
-  const float hoverY = m_bedModelTopY + 0.02f;
+  // (+0.1mm) instead of a fixed offset -- vendor bed STLs put their print
+  // face up to ~0.3 above the ground plane, which used to bury the quad. The
+  // lift was raised from 0.02 to 0.1mm: at glancing orbit angles the 24-bit
+  // depth precision at bed distance is in that range, and the texture quad
+  // used to z-fight the bed-model top face (the rotating shimmer report).
+  const float hoverY = m_bedModelTopY + 0.1f;
   const auto append = [&](float x, float z, float u, float v) {
     quad.append(BedTextureVertex{x, hoverY, z, u, v});
   };
@@ -2602,8 +2749,14 @@ quint32 RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
               m_plateIconAtlasPending.size());
       bool ready = true;
       if (decision.recreateTexture) {
+        // MipMapped: the icon quads minify hard while the camera orbits, and
+        // bed_texture.frag's manual anisotropic sampling (textureLod) falls
+        // back to level 0 on a mipless texture — the high-contrast white
+        // tiles then crawl/strobe. Upstream renders the icons from GLTexture
+        // svg loads built with use_mipmaps=true.
         m_plateIconTexture.reset(rhi()->newTexture(
-            QRhiTexture::RGBA8, m_plateIconAtlasPending.size()));
+            QRhiTexture::RGBA8, m_plateIconAtlasPending.size(),
+            1, QRhiTexture::MipMapped | QRhiTexture::UsedWithGenerateMips));
         if (!m_plateIconTexture->create()) {
           m_plateIconTexture.reset();
           // Texture loss invalidates the resident pixels too.
@@ -2611,7 +2764,7 @@ quint32 RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
           ready = false;
         } else {
           m_plateIconSampler.reset(rhi()->newSampler(
-              QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+              QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::Linear,
               QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
           if (!m_plateIconSampler->create()) {
             m_plateIconSampler.reset();
@@ -2627,6 +2780,9 @@ quint32 RhiViewportRenderer::uploadPlateIcons(QRhiResourceUpdateBatch *updates)
       if (ready) {
         if (m_plateIconTexture && decision.uploadPixels) {
           updates->uploadTexture(m_plateIconTexture.get(), m_plateIconAtlasPending);
+          // Rebuild the chain for every freshly resident atlas so the
+          // anisotropic icon sampling has real LODs to walk.
+          updates->generateMips(m_plateIconTexture.get());
           m_plateIconAtlasUploadedKey = m_plateIconAtlasCacheKey;
         }
         m_plateIconAtlasUploadPending = false;
@@ -2722,9 +2878,13 @@ bool RhiViewportRenderer::ensurePlateIconPipeline()
   m_plateIconPipeline->setShaderResourceBindings(m_plateIconSrb.get());
   m_plateIconPipeline->setVertexInputLayout(inputLayout);
   m_plateIconPipeline->setRenderPassDescriptor(renderTarget()->renderPassDescriptor());
-  // Upstream render_icons keeps the depth test on and the depth mask off
-  // (PartPlate.cpp:1146-1149), so objects in front occlude the icons.
-  m_plateIconPipeline->setDepthTest(true);
+  // Depth test OFF (2026-10-28 user ruling): the overlay band lives outside
+  // the bed, but at grazing angles the vendor frame's far wall/screws
+  // (K1 Max) still depth-occluded the name text's lower half. Upstream
+  // keeps the test on (PartPlate.cpp:1146-1149) but its flat Creality beds
+  // never expose the difference; nothing printable can sit in front of the
+  // out-of-bed band, so drawing it HUD-style over the solid is safe.
+  m_plateIconPipeline->setDepthTest(false);
   m_plateIconPipeline->setDepthWrite(false);
   QRhiGraphicsPipeline::TargetBlend blend;
   blend.enable = true;
@@ -3032,9 +3192,14 @@ bool RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
       painter.end();
 
       gpu = new BedTypePartGpu;
-      gpu->texture.reset(rhi()->newTexture(QRhiTexture::RGBA8, image.size()));
+      // MipMapped for the same reason as the plate icon atlas: these strips
+      // minify at glancing angles and bed_texture.frag's textureLod-based
+      // anisotropic sampling needs a real LOD chain.
+      gpu->texture.reset(rhi()->newTexture(
+          QRhiTexture::RGBA8, image.size(),
+          1, QRhiTexture::MipMapped | QRhiTexture::UsedWithGenerateMips));
       gpu->sampler.reset(rhi()->newSampler(
-          QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+          QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::Linear,
           QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
       if (!gpu->texture->create() || !gpu->sampler->create()) {
         delete gpu;
@@ -3091,11 +3256,13 @@ bool RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
         continue;
       }
       updates->uploadTexture(gpu->texture.get(), image);
+      updates->generateMips(gpu->texture.get());
       m_bedTypePartGpu.insert(path, gpu);
     }
 
     if (gpu->vertexCount == 0) {
-      // Quad for this part (y = 0.02, upstream GROUND_Z + 0.02).
+      // Quad for this part (y = GROUND_Z + 0.1, lifted from the upstream
+      // 0.02 with the bed texture quad — same z-fight margin fix).
       struct BedTextureVertex { float x, y, z, u, v; };
       const float leftX = plateLeft + def.x;
       const float rightX = leftX + def.w;
@@ -3104,7 +3271,7 @@ bool RhiViewportRenderer::prepareBedTypeParts(QRhiResourceUpdateBatch *updates)
       QVector<BedTextureVertex> quad;
       quad.reserve(6);
       const auto append = [&quad](float x, float z, float u, float v) {
-        quad.append(BedTextureVertex{x, 0.02f, z, u, v});
+        quad.append(BedTextureVertex{x, 0.1f, z, u, v});
       };
       append(leftX, topZ, 0.f, 0.f);
       append(rightX, topZ, 1.f, 0.f);
@@ -3329,8 +3496,57 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   const QVector<Vertex> lineVertices = buildSceneVertices(m_prepareScene.bedLineVertices());
   // v5.16 (BEDBOTTOM): grid-only line set for below-horizon views.
   const QVector<Vertex> bottomLineVertices = buildSceneVertices(m_prepareScene.bedBottomLineVertices());
-  // P15.8 (BOLDGRID): every-5th grid line as ~2px quads.
-  const QVector<Vertex> boldVertices = buildSceneVertices(m_prepareScene.bedBoldLineVertices());
+  // P15.8 (BOLDGRID) v2/v3: expand each BoldLine record into the six
+  // BoldLineVertex corners the bold_line vertex shader expands to a
+  // constant-width screen-space strip. Endpoints use the same bed->scene
+  // mapping as buildSceneVertices (x, 0, y). Both the bolder set (100%
+  // alpha) and the fine grid (60% alpha) take this transport so the grid
+  // stops crawling while the camera orbits. `spacing` carries the set's own
+  // grid pitch so the vertex shader can fade it out once the projected line
+  // spacing undersamples the pixel grid (grazing-angle strobe).
+  const auto expandStrips = [](const QList<PrepareSceneData::BoldLine> &source,
+                               float spacingMm) {
+    // 0.05mm lift: the strips used to sit exactly on the y=0 fill plane and
+    // passed depth only by rasterization luck (draw order + compare Less);
+    // a small positive offset makes the layering deterministic while staying
+    // far under the texture quad and the vendor frame solid.
+    const float stripY = 0.05f;
+    QVector<BoldLineVertex> strips;
+    strips.reserve(source.size() * 6);
+    for (const PrepareSceneData::BoldLine &line : source) {
+      const auto corner = [&](float end, float side) {
+        return BoldLineVertex{line.x0, stripY, line.y0,
+                              line.x1, stripY, line.y1,
+                              end, side,
+                              line.r, line.g, line.b, line.a,
+                              spacingMm};
+      };
+      // Two triangles per line (no pipeline culling; winding is irrelevant).
+      strips.append(corner(0.0f, -1.0f));
+      strips.append(corner(0.0f, 1.0f));
+      strips.append(corner(1.0f, 1.0f));
+      strips.append(corner(0.0f, -1.0f));
+      strips.append(corner(1.0f, 1.0f));
+      strips.append(corner(1.0f, -1.0f));
+    }
+    return strips;
+  };
+  QVector<BoldLineVertex> boldVertices =
+      expandStrips(m_prepareScene.bedBoldLines(), m_prepareScene.coarseGridSpacingMm());
+  QVector<BoldLineVertex> fineStripVertices =
+      expandStrips(m_prepareScene.bedFineLines(), m_prepareScene.fineGridSpacingMm());
+  // BEDAUDIT v4: border/contour ride the same pipeline with a never-fade
+  // spacing (the projected spacing can never undersample 1e6mm).
+  fineStripVertices += expandStrips(m_prepareScene.bedEdgeLines(), 1.0e6f);
+  // The thumbnail pass renders through its own Vertex-layout line pipeline,
+  // so it gets the fine grid as a plain 1px line list.
+  QList<PrepareSceneData::Vertex> fineThumbSource;
+  fineThumbSource.reserve(m_prepareScene.bedFineLines().size() * 2);
+  for (const PrepareSceneData::BoldLine &line : m_prepareScene.bedFineLines()) {
+    fineThumbSource.append(PrepareSceneData::Vertex{line.x0, line.y0, line.r, line.g, line.b, line.a});
+    fineThumbSource.append(PrepareSceneData::Vertex{line.x1, line.y1, line.r, line.g, line.b, line.a});
+  }
+  const QVector<Vertex> fineThumbVertices = buildSceneVertices(fineThumbSource);
   // v5.16 (HTLIMIT): ModelVertex and Vertex share the 7-float layout; the
   // limit lines carry their height in y directly.
   const QList<PrepareSceneData::ModelVertex> &limitSource =
@@ -3355,7 +3571,9 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   const quint32 fillBytes = quint32(fillVertices.size() * int(sizeof(Vertex)));
   const quint32 lineBytes = quint32(lineVertices.size() * int(sizeof(Vertex)));
   const quint32 bottomLineBytes = quint32(bottomLineVertices.size() * int(sizeof(Vertex)));
-  const quint32 boldBytes = quint32(boldVertices.size() * int(sizeof(Vertex)));
+  const quint32 boldBytes = quint32(boldVertices.size() * int(sizeof(BoldLineVertex)));
+  const quint32 fineStripBytes = quint32(fineStripVertices.size() * int(sizeof(BoldLineVertex)));
+  const quint32 fineThumbBytes = quint32(fineThumbVertices.size() * int(sizeof(Vertex)));
   const quint32 sinkingBytes = quint32(sinkingVertices.size() * int(sizeof(Vertex)));
   const quint32 axesBytes = quint32(axesVertices.size() * int(sizeof(Vertex)));
   const quint32 limitBytes = quint32(limitVertices.size() * int(sizeof(Vertex)));
@@ -3364,6 +3582,8 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
       || !ensureBuffer(m_bedLineBuffer, lineBytes, m_bedLineBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedBottomLineBuffer, bottomLineBytes, m_bedBottomLineBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedBoldFillBuffer, boldBytes, m_bedBoldFillBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_bedFineStripBuffer, fineStripBytes, m_bedFineStripBufferBytes, QRhiBuffer::VertexBuffer)
+      || !ensureBuffer(m_thumbnailBedFineBuffer, fineThumbBytes, m_thumbnailBedFineBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_sinkingContourBuffer, sinkingBytes, m_sinkingContourBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedAxesVertexBuffer, axesBytes, m_bedAxesVertexBufferBytes, QRhiBuffer::VertexBuffer)
       || !ensureBuffer(m_bedLimitBuffer, limitBytes, m_bedLimitBufferBytes, QRhiBuffer::VertexBuffer))
@@ -3373,9 +3593,8 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
   m_bedLineVertexCount = quint32(lineVertices.size());
   m_bedBottomLineVertexCount = quint32(bottomLineVertices.size());
   m_bedBoldFillVertexCount = quint32(boldVertices.size());
-  m_sinkingContourVertexCount = quint32(sinkingVertices.size());
-  m_bedAxesVertexCount = quint32(axesVertices.size());
-  m_bedLimitVertexCount = quint32(limitVertices.size());
+  m_bedFineStripVertexCount = quint32(fineStripVertices.size());
+  m_thumbnailBedFineVertexCount = quint32(fineThumbVertices.size());
   if (m_bedFillBuffer && fillBytes > 0) {
     updates->uploadStaticBuffer(m_bedFillBuffer.get(),
                                 0,
@@ -3399,6 +3618,18 @@ bool RhiViewportRenderer::uploadBedBuffers(QRhiResourceUpdateBatch *updates, qui
                                 0,
                                 boldBytes,
                                 boldVertices.constData());
+  }
+  if (m_bedFineStripBuffer && fineStripBytes > 0) {
+    updates->uploadStaticBuffer(m_bedFineStripBuffer.get(),
+                                0,
+                                fineStripBytes,
+                                fineStripVertices.constData());
+  }
+  if (m_thumbnailBedFineBuffer && fineThumbBytes > 0) {
+    updates->uploadStaticBuffer(m_thumbnailBedFineBuffer.get(),
+                                0,
+                                fineThumbBytes,
+                                fineThumbVertices.constData());
   }
   if (m_sinkingContourBuffer && sinkingBytes > 0) {
     updates->uploadStaticBuffer(m_sinkingContourBuffer.get(),
@@ -4359,6 +4590,23 @@ bool RhiViewportRenderer::uploadCameraUniform(QRhiResourceUpdateBatch *updates, 
   updates->updateDynamicBuffer(m_cameraUniformBuffer.get(), 0,
                                192, &packed);
   rhiTrace("seamB-packed");
+
+  // P15.8 (BOLDGRID) v2: bold-line params ride the camera gate — a viewport
+  // resize always changes the projection, so the pixel size stays fresh with
+  // the same dirty channel. Values mirror upstream render_grid: width
+  // uniform 0.25 clamps to the 1px core, aa_radius 0.5
+  // (PartPlate.cpp:1045, dashed_thick_lines.gs).
+  if (ensureBuffer(m_boldLineParamBuffer, 256, m_boldLineParamBufferBytes,
+                   QRhiBuffer::UniformBuffer)) {
+    const float boldParams[4] = {
+        float(renderTarget()->pixelSize().width()),
+        float(renderTarget()->pixelSize().height()),
+        1.0f,  // core width (px)
+        0.5f,  // aa radius (px)
+    };
+    updates->updateDynamicBuffer(m_boldLineParamBuffer.get(), 0,
+                                 sizeof(boldParams), boldParams);
+  }
 
   // SHADER-PORT v6: the lit pipeline is shared by model volumes, the bed
   // frame STL and the origin axes, but upstream binds different shaders (and

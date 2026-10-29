@@ -152,7 +152,7 @@ inline const Palette &palette(bool dark)
   static const Palette kDark{
       "#2f3034", "#3a3a3c", "#4b4b4d", "#3a3a3c",
       "#2d2d31", "#36363b", "#3e3e45", "#000000",
-      "#4b4b4d", "#262628", "#4f4f51d9", "#555557", "#5f5f61", "#343436",
+      "#4b4b4d", "#262628", "#d94f4f51", "#555557", "#5f5f61", "#343436",
       "#0e6636", "#0a4d28",
       "#f5f5f5", "#c9c9c9", "#a3a3a3", "#6f6f6f", "#ababab",
       "#5a5a5c", "#525254", "#666668", "#565658", "#6e6e70",
@@ -172,7 +172,7 @@ inline const Palette &palette(bool dark)
   static const Palette kLight{
       "#e7e7e7", "#ffffff", "#ffffff", "#ffffff",
       "#ffffff", "#eef1f4", "#d8dbe0", "#d5d8dd",
-      "#ffffff", "#e3e6ea", "#f5f7fad9", "#e7eaee", "#dde1e6", "#fbfcfd",
+      "#ffffff", "#e3e6ea", "#d9f5f7fa", "#e7eaee", "#dde1e6", "#fbfcfd",
       "#dcf5e7", "#c3ecd5",
       "#1b1d21", "#4d5157", "#6b7075", "#9a9fa6", "#7f858d",
       "#c5c9d0", "#d3d6db", "#b3b8c0", "#c8ccd2", "#a3a9b1",
@@ -1580,5 +1580,8 @@ private:
   bool m_gizmoDragging = false;
   float m_gizmoDragStartT = 0.f;
   float m_gizmoRotateStartAngle = 0.f;
+  // RG-R4-01: last emitted (possibly snap-quantized) rotate angle, so band
+  // re-entry never re-emits a jump.
+  float m_gizmoRotateSnappedAngle = 0.f;
   QVector3D m_gizmoDragCenter;
 };

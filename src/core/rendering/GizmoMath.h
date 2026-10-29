@@ -94,6 +94,19 @@ public:
       const QMatrix4x4 &projMatrix, const QMatrix4x4 &viewMatrix,
       const QVector3D &gizmoCenter, float rotateStartAngle);
 
+  // RG-R4-01: which rotate-snap band the cursor sits in, mirroring upstream
+  // GLGizmoRotate::on_drag (GLGizmoRotate.cpp:110-133): the cursor's world
+  // distance from the gizmo center selects the band -- inner ring
+  // [R/3, 2R/3] snaps coarse (45 deg steps, SnapRegionsCount = 8), the outer
+  // tooth [R, R + tooth] snaps fine (5 deg steps, ScaleStepsCount = 72), and
+  // everything else (ring body included) stays free. R = the drawn ring
+  // radius: kRotateMajorR * gizmoWorldScale(center, eye).
+  // Returns 0 = free, 1 = coarse, 2 = fine.
+  static int rotateSnapBand(
+      float sx, float sy, int axis, const QSize &viewSize,
+      const QMatrix4x4 &projMatrix, const QMatrix4x4 &viewMatrix,
+      const QVector3D &gizmoCenter, const QVector3D &cameraEye);
+
   // S4 (audit 2026-10-10 ch.4): the single source of the gizmo world scale
   //   max(distance(gizmoCenter, cameraEye) * 0.15, 5.0)
   // The gizmo shader maps gizmo-local units to world as

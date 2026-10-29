@@ -242,6 +242,39 @@ float GizmoMath::computeRotateAngle(float sx, float sy, int axis,
                     QVector3D::dotProduct(ref, v));
 }
 
+int GizmoMath::rotateSnapBand(
+    float sx, float sy, int axis, const QSize &viewSize,
+    const QMatrix4x4 &projMatrix, const QMatrix4x4 &viewMatrix,
+    const QVector3D &gizmoCenter, const QVector3D &cameraEye)
+{
+  // RG-R4-01: see the header note. Same plane projection as
+  // computeRotateAngle, plus the cursor's radial distance from the center
+  // against the drawn ring radius (kRotateMajorR is the geometry constant
+  // behind GizmoGeometry::buildRotateGizmoVertices).
+  QVector3D planeNormal;
+  if (axis == 1) planeNormal = QVector3D(1, 0, 0);
+  else if (axis == 2) planeNormal = QVector3D(0, 1, 0);
+  else planeNormal = QVector3D(0, 0, 1);
+
+  auto [orig, dir] = computeRay(sx, sy, viewSize, projMatrix, viewMatrix);
+  float denom = QVector3D::dotProduct(dir, planeNormal);
+  if (std::abs(denom) < 1e-6f)
+    return 0; // ray parallel to the plane: cannot classify
+
+  float t = QVector3D::dotProduct(gizmoCenter - orig, planeNormal) / denom;
+  QVector3D hit = orig + t * dir;
+  const float len = (hit - gizmoCenter).length();
+
+  constexpr float kRingR = 0.7f;             // GizmoGeometry kRotateMajorR
+  const float r = kRingR * gizmoWorldScale(gizmoCenter, cameraEye);
+  constexpr float kScaleLongTooth = 0.1f;    // upstream ScaleLongTooth (percent of radius)
+  if (r / 3.0f <= len && len <= 2.0f * r / 3.0f)
+    return 1; // coarse band: 45-degree steps
+  if (r <= len && len <= r + r * kScaleLongTooth)
+    return 2; // fine tooth: 5-degree steps
+  return 0;
+}
+
 // ===========================================================================
 // gizmoWorldScale  -- S4 single source of the gizmo world scale
 //

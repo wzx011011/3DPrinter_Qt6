@@ -64,9 +64,10 @@ namespace
   constexpr float kLineBottomA = 0.4f;
   // P15.8 (BOLDGRID): upstream calc_gridlines bolds every 5th grid line
   // (PartPlate.cpp:483/496 count % 5) and render_grid draws the bold set a
-  // second time with glLineWidth(2) (PartPlate.cpp:909). QRhi has no line
-  // width, so the bold lines are flat quads ~0.5mm wide (2px at the typical
-  // bed-view zoom).
+  // second time as a constant ~2px screen-space strip (glLineWidth(2) on
+  // compatibility profile, dashed_thick_lines on core). The renderer's
+  // bold_line pipeline owns that expansion; this half width only offsets the
+  // bottom-view twin lines.
   constexpr int kBoldEveryNth = 5;
   constexpr float kBoldHalfWidthMm = 0.25f;
   // P15.5 (SINK): upstream GLVolume::SinkingContours (3DScene.cpp:108-161).
@@ -145,6 +146,18 @@ bool PrepareSceneData::Vertex::operator==(const Vertex &other) const
 {
   return qFuzzyCompare(x, other.x)
       && qFuzzyCompare(y, other.y)
+      && qFuzzyCompare(r, other.r)
+      && qFuzzyCompare(g, other.g)
+      && qFuzzyCompare(b, other.b)
+      && qFuzzyCompare(a, other.a);
+}
+
+bool PrepareSceneData::BoldLine::operator==(const BoldLine &other) const
+{
+  return qFuzzyCompare(x0, other.x0)
+      && qFuzzyCompare(y0, other.y0)
+      && qFuzzyCompare(x1, other.x1)
+      && qFuzzyCompare(y1, other.y1)
       && qFuzzyCompare(r, other.r)
       && qFuzzyCompare(g, other.g)
       && qFuzzyCompare(b, other.b)
@@ -869,11 +882,27 @@ const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedBottomLineVertices()
   return m_bedBottomLineVertices;
 }
 
-const QList<PrepareSceneData::Vertex> &PrepareSceneData::bedBoldLineVertices() const
+const QList<PrepareSceneData::BoldLine> &PrepareSceneData::bedBoldLines() const
 {
-  // P15.8 (BOLDGRID): every-5th grid line as ~2px quads
-  // (upstream render_grid second bolder draw, PartPlate.cpp:909-911).
-  return m_bedBoldLineVertices;
+  // P15.8 (BOLDGRID): every-5th grid line; the renderer expands each record
+  // to a constant ~2px screen-space strip (upstream render_grid second
+  // bolder draw, PartPlate.cpp:909-911).
+  return m_bedBoldLines;
+}
+
+const QList<PrepareSceneData::BoldLine> &PrepareSceneData::bedFineLines() const
+{
+  // P15.8 (BOLDGRID) v3: fine grid lines share the bolder set's screen-space
+  // strip transport (60% alpha keeps the line hierarchy).
+  return m_bedFineLines;
+}
+
+const QList<PrepareSceneData::BoldLine> &PrepareSceneData::bedEdgeLines() const
+{
+  // BEDAUDIT v4: border/contour records — never-fade spacing so the outline
+  // keeps full alpha at any angle (upstream m_gridlines carries the border
+  // in the same 1px draw, unfaded).
+  return m_bedEdgeLines;
 }
 
 const QList<PrepareSceneData::ModelVertex> &PrepareSceneData::sinkingContourVertices() const
@@ -1064,14 +1093,13 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateIconRect(
   // slic3r y-range [p.y - size, p.y] maps to z [top, top + size] with
   // top = farZ + gap_top + slot*(size+gap_y).
   const float top = farZ + (kIconGapTop + float(slot) * (size + kIconGapY)) * f;
-  // The column hugs the INSIDE of the plate's right edge. Upstream hangs
-  // it just outside the bed extents (gap_left beyond bed_ext max), but the
-  // Qt6 viewport does not rasterize quads past the bed-fill boundary
-  // (investigated 2026-10-10: correct vertices, correct upload, no pixels
-  // for x > bedWidth) -- and hugging the inner edge keeps the printable
-  // strip clear for models, honoring the 2026-10-10 user ruling.
-  rect.x0 = maxX - kIconGapLeft * f - size;
-  rect.x1 = maxX - kIconGapLeft * f;
+  // Upstream hangs the column just OUTSIDE the bed extents (gap_left beyond
+  // bed_ext max, PartPlate.cpp:684-688), so the printable area stays clear
+  // (the 2026-10-25 user ruling). The old "quads past the bed fill do not
+  // rasterize" finding was a coplanar-depth misdiagnosis — the icon quads
+  // now ride at +0.2mm and render fine outside the fill.
+  rect.x0 = maxX + kIconGapLeft * f;
+  rect.x1 = rect.x0 + size;
   rect.z0 = top;
   rect.z1 = top + size;
   return rect;
@@ -1091,12 +1119,13 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateNameEditRect(
   plateGridOffset(plateIndex, plateCount, bedWidth, bedDepth, offsetX, offsetY);
   // Pencil = name width + text offset Y right of the far-left corner
   // (PartPlate.cpp:660-663: p = bed min corner + (name_width, offset_y)).
+  // Both name text and pencil sit OUTSIDE the plate, beyond the far edge
+  // (PartPlate renders them at bed_ext[3] growing outward from the sheet).
   rect.x0 = originX + offsetX + nameWidthWorldUnits + kTextOffsetY * f;
   rect.x1 = rect.x0 + size;
-  // The pencil hangs just below the far edge, on the plate (the rendered
-  // reference shows the pencil inside the plate outline beside the name).
-  rect.z0 = originY + offsetY + kTextOffsetY * f;
-  rect.z1 = rect.z0 + size;
+  const float farZ = originY + offsetY;
+  rect.z1 = farZ - kTextOffsetY * f;
+  rect.z0 = rect.z1 - size;
   return rect;
 }
 
@@ -1112,12 +1141,14 @@ PrepareSceneData::PlateIconRect PrepareSceneData::plateIndexBadgeRect(
   float offsetX = 0.0f;
   float offsetY = 0.0f;
   plateGridOffset(plateIndex, plateCount, bedWidth, bedDepth, offsetX, offsetY);
-  // calc_vertex_for_number #else branch (PartPlate.cpp:685-695): at the
-  // near-right corner, inset by the text offsets on both axes. slic3r
-  // measures the badge upward from the near edge (+Y = far = -z here).
+  // calc_vertex_for_number #else branch (PartPlate.cpp:685-695): the badge
+  // hangs OUTSIDE the plate's near-right corner, in the gutter (the 01 in
+  // the upstream reference sits right of the plate edge). x grows past the
+  // right edge; slic3r measures the badge upward from the near edge
+  // (+Y = far = -z here), so the z band stays inset at the near edge.
   const float nearZ = originY + offsetY + bedDepth;
-  rect.x0 = originX + offsetX + bedWidth - kIconGapLeft * f - size + kTextOffsetX1 * f;
-  rect.x1 = originX + offsetX + bedWidth - kIconGapLeft * f - kTextOffsetX2 * f;
+  rect.x0 = originX + offsetX + bedWidth + kIconGapLeft * f + kTextOffsetX1 * f;
+  rect.x1 = originX + offsetX + bedWidth + kIconGapLeft * f + size - kTextOffsetX2 * f;
   rect.z0 = nearZ - (size - kTextOffsetY * f);
   rect.z1 = nearZ - kTextOffsetY * f;
   return rect;
@@ -1169,7 +1200,9 @@ void PrepareSceneData::rebuildBedGeometry()
   m_bedFillVertices.clear();
   m_bedLineVertices.clear();
   m_bedBottomLineVertices.clear();
-  m_bedBoldLineVertices.clear();
+  m_bedBoldLines.clear();
+  m_bedFineLines.clear();
+  m_bedEdgeLines.clear();
   m_bedLimitVertices.clear();
   m_bedAxesVertices.clear();
 
@@ -1271,7 +1304,8 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
       if (bold) {
         appendBoldLine(x, cz - half, x, cz + half, lineR, lineG, lineB);
       } else {
-        appendLine(x, cz - half, x, cz + half, lineR, lineG, lineB, 0.6f);
+        // v3: fine chords take the screen-space strip set (60% alpha).
+        m_bedFineLines.append(BoldLine{x, cz - half, x, cz + half, lineR, lineG, lineB, 0.6f});
         appendBottomLine(x, cz - half, x, cz + half);
       }
     }
@@ -1284,7 +1318,7 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
         continue;
       const float half = std::sqrt(radius * radius - dy * dy);
       const bool bold = (k % kBoldEveryNth) == 0;
-      appendLine(cx - half, y, cx + half, y, lineR, lineG, lineB, 0.6f);
+      m_bedFineLines.append(BoldLine{cx - half, y, cx + half, y, lineR, lineG, lineB, 0.6f});
       appendBottomLine(cx - half, y, cx + half, y);
       if (bold)
         appendBoldLine(cx - half, y, cx + half, y, lineR, lineG, lineB);
@@ -1313,13 +1347,16 @@ void PrepareSceneData::rebuildPlateGeometry(int plateRow, int plateCol,
     if (gridIndex % kBoldEveryNth == 0) {
       appendBoldLine(x, top, x, bottom, lineR, lineG, lineB);
     } else {
-      appendLine(x, top, x, bottom, lineR, lineG, lineB, 0.6f);
+      // v3 (BOLDGRID): fine grid lines take the screen-space strip set
+      // (60% alpha keeps the bolder hierarchy; the 1px line set keeps only
+      // the border).
+      m_bedFineLines.append(BoldLine{x, top, x, bottom, lineR, lineG, lineB, 0.6f});
       appendBottomLine(x, top, x, bottom);
     }
   }
   gridIndex = 1;
   for (float y = top + gridStep; y < bottom; y += gridStep, ++gridIndex) {
-    appendLine(left, y, right, y, lineR, lineG, lineB, 0.6f);
+    m_bedFineLines.append(BoldLine{left, y, right, y, lineR, lineG, lineB, 0.6f});
     appendBottomLine(left, y, right, y);
     if (gridIndex % kBoldEveryNth == 0)
       appendBoldLine(left, y, right, y, lineR, lineG, lineB);
@@ -1533,6 +1570,11 @@ void PrepareSceneData::appendLine(float x1, float y1, float x2, float y2, float 
 {
   m_bedLineVertices.append(Vertex{x1, y1, r, g, b, a});
   m_bedLineVertices.append(Vertex{x2, y2, r, g, b, a});
+  // BEDAUDIT v4: callers of this sink are the border/contour chords only
+  // (the grid moved to fine/bold strip records), so mirror every edge into
+  // the never-fade strip set — a hard 1px hardware line strobes at grazing
+  // angles exactly like the grid did.
+  m_bedEdgeLines.append(BoldLine{x1, y1, x2, y2, r, g, b, a});
 }
 
 void PrepareSceneData::appendBottomLine(float x1, float y1, float x2, float y2)
@@ -1546,32 +1588,25 @@ void PrepareSceneData::appendBottomLine(float x1, float y1, float x2, float y2)
 void PrepareSceneData::appendBoldLine(float x1, float y1, float x2, float y2, float r, float g, float b)
 {
   // P15.8 (BOLDGRID): upstream draws the every-5th-line set a second time
-  // with glLineWidth(2.0f * scale) (PartPlate.cpp:909-911). QRhi pipelines
-  // have no line width, so the bolder line is a flat 0.5mm quad (two
-  // triangles) perpendicular to the line direction — ~2px at the typical
-  // bed-view zoom. The bottom-view twin uses two parallel 1px lines in
+  // with glLineWidth(2.0f * scale) (PartPlate.cpp:909-911); on core profile
+  // that goes through the dashed_thick_lines geometry shader — a constant
+  // ~2px screen-space strip. The port stores one line record here and the
+  // renderer's bold_line pipeline does the screen-space expansion, so the
+  // pixel width no longer swings with zoom/orbit (the old 0.5mm world-space
+  // quad did). The bottom-view twin uses two parallel 1px lines in
   // LINE_BOTTOM_COLOR (render_grid draws the same bolder set from below).
   const float dx = x2 - x1;
   const float dy = y2 - y1;
   const float len = std::sqrt(dx * dx + dy * dy);
   if (len <= 1e-6f)
     return;
-  const float nx = -dy / len * kBoldHalfWidthMm;
-  const float ny = dx / len * kBoldHalfWidthMm;
-  const float a1x = x1 + nx, a1y = y1 + ny;
-  const float a2x = x2 + nx, a2y = y2 + ny;
-  const float b1x = x1 - nx, b1y = y1 - ny;
-  const float b2x = x2 - nx, b2y = y2 - ny;
-  m_bedBoldLineVertices.append(Vertex{a1x, a1y, r, g, b, 1.0f});
-  m_bedBoldLineVertices.append(Vertex{a2x, a2y, r, g, b, 1.0f});
-  m_bedBoldLineVertices.append(Vertex{b2x, b2y, r, g, b, 1.0f});
-  m_bedBoldLineVertices.append(Vertex{a1x, a1y, r, g, b, 1.0f});
-  m_bedBoldLineVertices.append(Vertex{b2x, b2y, r, g, b, 1.0f});
-  m_bedBoldLineVertices.append(Vertex{b1x, b1y, r, g, b, 1.0f});
+  m_bedBoldLines.append(BoldLine{x1, y1, x2, y2, r, g, b, 1.0f});
   // Bottom view: same bolder hierarchy in LINE_BOTTOM_COLOR as two parallel
   // 1px lines offset by the quad half width.
-  appendBottomLine(a1x, a1y, a2x, a2y);
-  appendBottomLine(b1x, b1y, b2x, b2y);
+  const float nx = -dy / len * kBoldHalfWidthMm;
+  const float ny = dx / len * kBoldHalfWidthMm;
+  appendBottomLine(x1 + nx, y1 + ny, x2 + nx, y2 + ny);
+  appendBottomLine(x1 - nx, y1 - ny, x2 - nx, y2 - ny);
 }
 
 void PrepareSceneData::appendRectFill(float left, float top, float right, float bottom,
