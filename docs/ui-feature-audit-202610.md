@@ -191,8 +191,8 @@ Ctrl+I zip/gcode URL 归一化（FB-R1-03/04 根因=file:// URL 直传）；快�
 
 ### 10.2 F4 校准塔族落点核查（上游真值对照完成 18:5x）
 - **Tolerance Test 移植 ✓（F4a）**：上游 MainFrame.cpp:3798-3805 = 纯加载自带 STL（无 sweep 无生成器）。拷贝 CrealityToleranceTest.stl 入 qrc，CalibrationServiceMock 新增 loadOnly 条目（loadFile 即完成，不走切片）。
-- **Input Shaping freq/damp + Cornering**：引擎分支（GCode.cpp:5680-5710）是注释级支持，上游 CP5 GUI 未接、无几何生成——保持 blocked 是诚实状态（RG-P6-01 维持 deferred，非缺口）。
-- **Limit_Speed / Acceleration_Tower / Jitter / Dec_Acc / Fan / XY_Offset 六塔**：CP5 fork 自有 CalibMode 扩展 + calib_dlg.cpp 生成器族（~2000 行 C++，含 ModelBuild 几何+逐对象 config 覆盖），不在我们的 OrcaSlicer 子模块内。移植=单独立项（需 CalibMode fork 枚举对齐+SliceService 打通），本冲刺不做半成品。
+- **Input Shaping freq/damp + Cornering**：引擎分支（GCode.cpp:5680-5710）是注释级支持，上游参照检出（v7 Beta） GUI 未接、无几何生成——保持 blocked 是诚实状态（RG-P6-01 维持 deferred，非缺口）。
+- **Limit_Speed / Acceleration_Tower / Jitter / Dec_Acc / Fan / XY_Offset 六塔**：参照检出（v7 Beta） 自有 CalibMode 扩展 + calib_dlg.cpp 生成器族（~2000 行 C++，含 ModelBuild 几何+逐对象 config 覆盖），不在我们的 OrcaSlicer 子模块内。移植=单独立项（需 CalibMode fork 枚举对齐+SliceService 打通），本冲刺不做半成品。
 - 结论：F4 以"Tolerance Test 移植+其余六塔立项"收官——"7 个塔全移植"的原计划在子模块禁改约束下不可行，改为上游真值形态对齐。
 
 ### 10.3 F7 预设键集 — 完成（高价值子集）
@@ -241,17 +241,19 @@ F8 落地（9062efe，包含并行会话停滞近两天的在途渲染工作—�
 
 ## 13. F4 六塔精确评估（2026-10-30 02:1x，修正 §10.2）
 
-**成本大幅下修**：CP5 fork 六塔不是"程序生成几何"——`Plater::calib_limit_speed`（Plater.cpp:18389-18463）的结构是 **加载自带 STL（resources/calib/limit_speed/limitSpeed.stl）+ 固定 config 覆盖（~40 行）+ 引擎 per-layer sweep**（`set_calib_params(params)`，与我们的 Tolerance Test loadOnly 同构 + 一步 config 段）。六塔 STL 资产齐备（limitSpeed/speedtower/accSpeedTower/fanSpeed/X_Y_Jerk.stl；xy_offset 是 gcode 对比型，形态不同）。
+**成本大幅下修**：参照检出（v7 Beta） 六塔不是"程序生成几何"——`Plater::calib_limit_speed`（Plater.cpp:18389-18463）的结构是 **加载自带 STL（resources/calib/limit_speed/limitSpeed.stl）+ 固定 config 覆盖（~40 行）+ 引擎 per-layer sweep**（`set_calib_params(params)`，与我们的 Tolerance Test loadOnly 同构 + 一步 config 段）。六塔 STL 资产齐备（limitSpeed/speedtower/accSpeedTower/fanSpeed/X_Y_Jerk.stl；xy_offset 是 gcode 对比型，形态不同）。
 
-**真正的硬点在引擎**：CP5 fork 给 OrcaSlicer 打了 CalibMode 扩展枚举（calib.hpp:27-35：Limit_Speed/Speed_Tower/X_Y_Jerk/Fan_Speed/Limit_Acceleration/Acceleration_Tower/Accel2Decel/Arc2Lerance）+ GCode/GCodeProcessor 的 per-layer config sweep 消费。我们子模块的上游 OrcaSlicer 枚举止于 Calib_Cornering。
+**真正的硬点在引擎**：参照检出（v7 Beta） 给 OrcaSlicer 打了 CalibMode 扩展枚举（calib.hpp:27-35：Limit_Speed/Speed_Tower/X_Y_Jerk/Fan_Speed/Limit_Acceleration/Acceleration_Tower/Accel2Decel/Arc2Lerance）+ GCode/GCodeProcessor 的 per-layer config sweep 消费。我们子模块的上游 OrcaSlicer 枚举止于 Calib_Cornering。
 
 **移植路径（两选一，需用户拍板）**：
-1. `patches/orcaslicer/0017` 补丁：把 CP5 的枚举扩展 + GCode per-layer sweep（~300-500 行 C++）打进子模块（项目已有 0008-0016 补丁先例，属约定允许路径），加每塔 ~50 行服务端 load+config 段。合计约 1-2 天，风险=切片引擎核心，需全套门禁+切片回归。
+1. `patches/orcaslicer/0017` 补丁：把参照检出（v7 Beta）的枚举扩展 + GCode per-layer sweep（~300-500 行 C++）打进子模块（项目已有 0008-0016 补丁先例，属约定允许路径），加每塔 ~50 行服务端 load+config 段。合计约 1-2 天，风险=切片引擎核心，需全套门禁+切片回归。
 2. 不打引擎补丁：仅接入"Tolerance Test 式 load-only 六塔"（加载 STL+固定 config，无 per-layer sweep）——塔能打但失去逐层参数扫描意义，**不推荐**（形似神不似）。
 
 **建议**：路线 1，单独立项为下一战役首批（与本收敛战役解耦），由用户决定优先级。
 
 ## 14. Track A 接口差距测试 — 机器扫描（2026-10-30 10:4x）
+
+> **版本勘误（2026-10-30，用户质询触发）**：`/tmp/creality-print` 检出的 version.inc 实为 `CREALITYPRINT_VERSION "7.0.0.0" Beta`（release-260930 分支）——**不是 CP5**，比市面 CP6 还新的代码线。全项目历史文档的"CP5"均为误称，本文档已批量更正为"参照检出（v7 Beta）"。轨道 B 的参考版即从此检出构建（对齐最新官方线，无过时问题）。
 
 方法：正则收集全部 Q_INVOKABLE（1060 个去重）× QML 全文调用交叉 → 460 个 QML 零调用 → 噪音过滤（模型 role 访问器/通知管道/网络栈内部）→ **138 功能孤儿候选** → 人工复筛出**真功能孤儿 ~20 项**（能力已实现且经单测，QML 无入口；明细 audit/api-orphans-curated.txt）。
 
@@ -268,7 +270,7 @@ F8 落地（9062efe，包含并行会话停滞近两天的在途渲染工作—�
 
 机制修正说明：交互流审计（flow-audit.sh）首版失败根因 = `xdotool mousemove --window` 在 frameless 窗口上坐标换算失效，改绝对坐标后 ctx 菜单 17 项点击生效；该基建保留（UI 轮可用），本轮按用户方向转向接口/功能差距。
 
-**轨道 B（切片 G-code 对比）**：基建已有（owzx-cli + C3DBaseline/wzx_harness）；缺对照基准——需构建 CP5 参考版或取得官方金标 G-code，**待拍板**。
+**轨道 B（切片 G-code 对比）**：基建已有（owzx-cli + C3DBaseline/wzx_harness）；缺对照基准——需构建参照检出（v7 Beta）参考版或取得官方金标 G-code，**待拍板**。
 
 ## 15. Track A 接线批次 + 新发现 FB-TA-01（2026-10-30 11:5x）
 
