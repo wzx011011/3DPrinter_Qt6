@@ -1,0 +1,22 @@
+# 功能孤儿（能力已实现且经测试，QML 无任何入口）— Track A 机器扫描 2026-10-30
+# 判据: Q_INVOKABLE 存在 + 单测/C++ 链路证实可用 + QML 全文零调用
+# 已接销账: moveSelectedObjectToPlate(F3) scaleSelectionToFitBed(F3)
+arrayObject                       # 阵列对象（上游右键 阵列）
+arraySelectedObject               # 阵列选中
+fillBedWithCopies                 # 填充热床（上游 Fill bed）
+mirrorObject                      # 镜像对象（对象级；与 gizmo 镜像是否同能力待交叉验证）
+resetObjectTransform              # 重置变换（上游 Reset transformation）
+toggleSelectedObjectsVisibility   # 批量切换选中可见性
+estimatePrintTimeForObject        # 单对象打印时间估算
+appendObjectDrainHoles 族          # 排水孔（append/clear/objectDrainHoles，上游 Drain hole）
+booleanCombineObjectVolumes       # 布尔合并（与右键布尔菜单 meshBoolean 是否双实现待交叉验证）
+cutObjectWithGroove               # 榫卯切割（高级切割面板接线待交叉验证）
+cutObjectWithConnectors           # 连接器切割（同上）
+layerTimeAt / layerTimeCumulative # 预览层时间曲线
+playAnimation / pauseAnimation    # 打印过程模拟动画
+requestFitAllPlates               # 多盘全适配视图
+exportPlateGCodeToPath            # 单盘导出到指定路径
+exportAllPlateGCodeToDirectory    # 全盘导出到目录（与菜单 Export All 的 API 待交叉验证）
+addVolumeToObject / deleteVolume / deleteObjectVolume # 零件级增删（对象列表零件编辑）
+autoMatchFilament                 # 自动匹配耗材（AMS 语义）
+deleteFilamentSlot / mergeFilamentSlots # 已知 stub（F2 降级项）

@@ -115,3 +115,6 @@ nul
 build-asan/
 # convergence-campaign ledger: UI restoration + feature audit (2026-10-29)
 !docs/ui-feature-audit-202610.md
+# Track A API-surface gap scan orphan lists (2026-10-30)
+!docs/api-orphans-raw-20261030.txt
+!docs/api-orphans-curated-20261030.txt
