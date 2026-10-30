@@ -269,3 +269,17 @@ F8 落地（9062efe，包含并行会话停滞近两天的在途渲染工作—�
 机制修正说明：交互流审计（flow-audit.sh）首版失败根因 = `xdotool mousemove --window` 在 frameless 窗口上坐标换算失效，改绝对坐标后 ctx 菜单 17 项点击生效；该基建保留（UI 轮可用），本轮按用户方向转向接口/功能差距。
 
 **轨道 B（切片 G-code 对比）**：基建已有（owzx-cli + C3DBaseline/wzx_harness）；缺对照基准——需构建 CP5 参考版或取得官方金标 G-code，**待拍板**。
+
+## 15. Track A 接线批次 + 新发现 FB-TA-01（2026-10-30 11:5x）
+
+接线三笔（构建 14/14 绿）：
+1. 右键**铺满打印板**（fillBedWithCopies；与既有"用实例铺满打印板..."对话框版的区别=一键直接铺，两者共存）
+2. 导出菜单 **Export as one DRC / DRCs**（SaveFile/FolderDialog → exportSelectedObjects drcFormat，上游 po 用词）
+3. 镜像右键子菜单三条 **zh_CN.ts 补译**（沿 X/Y 轴镜像——源串 Along X/Y/Z Axis 一直无词条显示英文）
+
+**FB-TA-01（P2 性能缺陷，新发现）**：fillBedWithCopies 对小对象铺满 >300s 卡 UI——循环逐实例+每次全板重排（EditorViewModel.cpp:9111-9124，上限 1000）。常驻测试已写但因超时转 QSKIP，待排布批量化后启用。交互审计的价值实证：这正是"点了才知道"的缺陷。
+
+### 15.1 Track A 接线验证修正（12:1x）
+- 填满打印板菜单项实证存在（audit/ta/01）；与既有"用实例铺满打印板..."对话框版共存（一键直铺 vs 对话框配置，语义不同）。
+- 镜像子菜单 Along X/Y/Z Axis 三条 zh_CN.ts 补译后 14/14 绿（228 用例，QSKIP 版 fillBed 测试计入）。
+- 14 笔提交 5d1cd93..5497df0 未推送（新增 1 笔 Track A 接线）。
