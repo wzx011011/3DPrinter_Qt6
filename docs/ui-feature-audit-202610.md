@@ -250,3 +250,22 @@ F8 落地（9062efe，包含并行会话停滞近两天的在途渲染工作—�
 2. 不打引擎补丁：仅接入"Tolerance Test 式 load-only 六塔"（加载 STL+固定 config，无 per-layer sweep）——塔能打但失去逐层参数扫描意义，**不推荐**（形似神不似）。
 
 **建议**：路线 1，单独立项为下一战役首批（与本收敛战役解耦），由用户决定优先级。
+
+## 14. Track A 接口差距测试 — 机器扫描（2026-10-30 10:4x）
+
+方法：正则收集全部 Q_INVOKABLE（1060 个去重）× QML 全文调用交叉 → 460 个 QML 零调用 → 噪音过滤（模型 role 访问器/通知管道/网络栈内部）→ **138 功能孤儿候选** → 人工复筛出**真功能孤儿 ~20 项**（能力已实现且经单测，QML 无入口；明细 audit/api-orphans-curated.txt）。
+
+**新高价值确认孤儿**（此前账本未记）：
+1. 阵列 arrayObject/arraySelectedObject（上游右键 阵列）
+2. 填充热床 fillBedWithCopies（上游 Fill bed）
+3. 镜像对象 mirrorObject（对象级）
+4. 重置变换 resetObjectTransform
+5. 批量可见性 toggleSelectedObjectsVisibility
+6. 排水孔三件套（上游 Drain hole）
+7. 层时间曲线 + 打印过程动画（layerTimeAt/Cumulative、play/pauseAnimation——上游预览层时间功能）
+8. 多盘全适配 requestFitAllPlates
+9. 榫卯/连接器切割（cutObjectWithGroove/WithConnectors——高级切割面板接线待交叉验证）
+
+机制修正说明：交互流审计（flow-audit.sh）首版失败根因 = `xdotool mousemove --window` 在 frameless 窗口上坐标换算失效，改绝对坐标后 ctx 菜单 17 项点击生效；该基建保留（UI 轮可用），本轮按用户方向转向接口/功能差距。
+
+**轨道 B（切片 G-code 对比）**：基建已有（owzx-cli + C3DBaseline/wzx_harness）；缺对照基准——需构建 CP5 参考版或取得官方金标 G-code，**待拍板**。
