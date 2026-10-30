@@ -978,6 +978,8 @@ ApplicationWindow {
                 onExportProjectRequested: saveProjectAsDialog.open()
                 onExportModelRequested: exportModelDialog.open()
                 onExportStlsRequested: exportStlsFolderDialog.open()
+                onExportOneDrcRequested: exportOneDrcDialog.open()
+                onExportDrcsRequested: exportDrcsFolderDialog.open()
                 onUndoRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.undoFromTopbar() }
                 onRedoRequested: if (Backend.currentPage === Backend.tp3DEditor) { const p = root.preparePage(); if (p) p.redoFromTopbar() }
                 // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): the
@@ -1580,6 +1582,31 @@ ApplicationWindow {
             if (Backend.editorViewModel && selectedEntries.length > 0)
                 Backend.editorViewModel.importArchiveEntries(archivePath, selectedEntries)
         }
+        }
+    }
+
+    // Track A: upstream "Export as one DRC" / "Export as DRCs" — the mesh
+    // export already carries a drcFormat switch (Draco-compressed mesh).
+    FileDialog {
+        id: exportOneDrcDialog
+        title: qsTr("Export as one DRC")
+        fileMode: FileDialog.SaveFile
+        nameFilters: [qsTr("DRC (*.drc)")]
+        defaultSuffix: "drc"
+        onAccepted: {
+            const vm = Backend.editorViewModel
+            if (vm && selectedFile)
+                vm.exportSelectedObjects(selectedFile.toLocalFile(), false, true)
+        }
+    }
+    FolderDialog {
+        id: exportDrcsFolderDialog
+        onAccepted: {
+            const vm = Backend.editorViewModel
+            if (!vm || !selectedFolder)
+                return
+            vm.selectAllVisibleObjects()
+            vm.exportSelectedObjects(selectedFolder.toLocalFile(), true, true)
         }
     }
 

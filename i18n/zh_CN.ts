@@ -270,6 +270,14 @@
 </context>
 <context>
     <name>BBLTopbar</name>
+        <message>
+        <source>Export as one DRC...</source>
+        <translation>作为一个 DRC 导出...</translation>
+    </message>
+    <message>
+        <source>Export as DRCs...</source>
+        <translation>导出为 DRC...</translation>
+    </message>
     <message>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="59"/>
         <location filename="../src/qml_gui/BBLTopbar.qml" line="307"/>
@@ -6466,6 +6474,21 @@
 </context>
 <context>
     <name>PrepareContextMenus</name>
+    <message>
+        <location line="+0"/>
+        <source>Along X Axis</source>
+        <translation>沿 X 轴镜像</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Along Y Axis</source>
+        <translation>沿 Y 轴镜像</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Along Z Axis</source>
+        <translation>沿 Z 轴镜像</translation>
+    </message>
     <message>
         <location filename="../src/qml_gui/components/PrepareContextMenus.qml" line="70"/>
         <source>Set Filament for selected items</source>

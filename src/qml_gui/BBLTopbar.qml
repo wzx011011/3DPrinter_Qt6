@@ -52,6 +52,10 @@ Item {
     // RG-R1-03/06: one STL per object (upstream "Export all objects as
     // STLs...", GUI_Factories export menu) — FolderDialog lives in main.qml.
     signal exportStlsRequested()
+    // Track A: upstream "Export as one DRC" / "Export as DRCs" (object
+    // right-click export family) surfaced in the Export menu.
+    signal exportOneDrcRequested()
+    signal exportDrcsRequested()
     signal undoRequested()
     signal redoRequested()
     // MENU-EDIT-EXPAND (upstream MainFrame.cpp:2400-2467): Edit-menu entries
@@ -1034,6 +1038,18 @@ Item {
                 enabled: Backend.canExport && Backend.editorViewModel
                 text: qsTr("分别导出 STL...")
                 onTriggered: root.exportStlsRequested()
+            }
+            // Track A: upstream object-export family "Export as one DRC" /
+            // "Export as DRCs" (Draco-compressed mesh).
+            CxMenuItem {
+                enabled: Backend.canExport && Backend.editorViewModel
+                text: qsTr("Export as one DRC...")
+                onTriggered: root.exportOneDrcRequested()
+            }
+            CxMenuItem {
+                enabled: Backend.canExport && Backend.editorViewModel
+                text: qsTr("Export as DRCs...")
+                onTriggered: root.exportDrcsRequested()
             }
             MenuSeparator {}
             // Phase 236 (DLG-01): Export Preset Bundle entry (upstream

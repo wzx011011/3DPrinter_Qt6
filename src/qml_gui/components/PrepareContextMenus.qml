@@ -438,6 +438,14 @@ Item {
             enabled: root.editorVm && root.editorVm.selectedObjectCount > 0
             onTriggered: root.editorVm.scaleSelectionToFitBed()
         }
+        // Track A: 填充热床 (upstream "Fill bed with copies",
+        // GUI_Factories.cpp:903) — fills the remaining bed area with copies
+        // of the single selected object.
+        CxMenuItem {
+            text: qsTr("铺满打印板")
+            enabled: root.editorVm && root.editorVm.selectedObjectCount === 1
+            onTriggered: root.editorVm.fillBedWithCopies()
+        }
         // R1A-12: move the selected object to another plate (upstream
         // ObjectList "Extruder"-adjacent plate ops; API existed orphaned).
         CxMenu {
