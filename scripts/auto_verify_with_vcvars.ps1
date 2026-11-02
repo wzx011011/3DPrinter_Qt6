@@ -447,7 +447,7 @@ function Invoke-NinjaTarget([string]$Target, [bool]$Required = $true) {
   }
 
   Write-Stage 'Build' ("Building target " + $Target)
-  ninja -j6 $Target
+  ninja -j10 $Target
   if ($LASTEXITCODE -ne 0) {
     Fail-Stage 'Build' ("Target build failed: " + $Target + " (exit code " + $LASTEXITCODE + ")") $LASTEXITCODE
   }

@@ -11157,7 +11157,7 @@ void ViewModelSmokeTests::orientAndFlattenRotateInstanceAndUndoRestoreWorldGeome
                      float(b.value(QStringLiteral("maxY")).toDouble() - b.value(QStringLiteral("minY")).toDouble()),
                      float(b.value(QStringLiteral("maxZ")).toDouble() - b.value(QStringLiteral("minZ")).toDouble()));
   };
-  const auto near = [](const QVector3D &a, const QVector3D &b) {
+  const auto isNear = [](const QVector3D &a, const QVector3D &b) {
     return (a - b).length() < 1e-3f;
   };
   const QVector3D sizeBefore = worldSize();
@@ -11170,16 +11170,16 @@ void ViewModelSmokeTests::orientAndFlattenRotateInstanceAndUndoRestoreWorldGeome
     const QVector3D rotAfter = project.objectRotation(0);
     const QVector3D sizeAfter = worldSize();
     QVERIFY2(rotAfter != rotBefore, "orient/flatten must change the instance rotation");
-    QVERIFY2(!near(sizeAfter, sizeBefore), "orient/flatten must change the world box of a tilted cube");
+    QVERIFY2(!isNear(sizeAfter, sizeBefore), "orient/flatten must change the world box of a tilted cube");
     QVERIFY(undoManager.canUndo());
     undoManager.undo();
     QCOMPARE(project.objectRotation(0), rotBefore);
-    QVERIFY2(near(worldSize(), sizeBefore),
+    QVERIFY2(isNear(worldSize(), sizeBefore),
              "undo must restore the world geometry, not only the Euler readout");
     undoManager.redo();
-    QVERIFY(near(worldSize(), sizeAfter));
+    QVERIFY(isNear(worldSize(), sizeAfter));
     undoManager.undo();
-    QVERIFY(near(worldSize(), sizeBefore));
+    QVERIFY(isNear(worldSize(), sizeBefore));
   }
 }
 void ViewModelSmokeTests::cutKeepModesReplaceSplitAndUndoRestore()
