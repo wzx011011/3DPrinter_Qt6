@@ -89,39 +89,17 @@ ApplicationWindow {
             "Post-processing Scripts": qsTr("Post-processing Scripts"),
             "Notes": qsTr("Notes")
         }
-        return labels[sourceKey] || sourceKey
+        return labels[sourceKey] || (optionModel ? optionModel.hierarchyLabel(sourceKey) : sourceKey)
     }
 
-    // Tab pages per tier. The label is visual text; key stays aligned with upstream page ids.
-    // v5.16 (PSET2-08): only tabs with real option-model sources are listed.
-    // The printer "Material"/"Extruder" pages and the filament "Overrides"/
-    // "Multimaterial"/"Dependencies" pages have no keys assigned by
-    // ConfigOptionModel's printer/filament page-group maps (kMachineKeys /
-    // kFilamentKeys never map those page names), so they rendered zero rows.
-    // Extruder/Overrides/Multimaterial need the per-extruder (multi-nozzle)
-    // model — deferred to that scope. Dependencies would map
-    // compatible_printers, which is not in kFilamentKeys/kMachineKeys
-    // (it stays a preset-level compatibility field, not an edited row).
+    // Tab pages per tier, in upstream order: ConfigOptionModel carries the
+    // TabPrint / TabFilament / TabPrinter page -> group -> option hierarchy
+    // (Tab.cpp at the pin) for whichever tier the dialog shows.
     readonly property var tabPages: {
-        if (presetTier === "printer") return [
-            { key: "Basic information", label: qsTr("基础信息") },
-            { key: "Machine G-code", label: qsTr("打印机G-code") },
-            { key: "Motion ability", label: qsTr("移动能力") },
-            { key: "Notes", label: qsTr("注释") }
-        ]
-        if (presetTier === "filament") return [
-            { key: "Filament", label: qsTr("耗材丝") },
-            { key: "Cooling", label: qsTr("冷却") },
-            { key: "Advanced", label: qsTr("高级") },
-            { key: "Notes", label: qsTr("注释") }
-        ]
-        if (presetTier === "print") {
-            var processPages = optionModel ? optionModel.processPageNames() : []
-            return processPages.map(function(page) {
-                return { key: page, label: root.processDisplayLabel(page) }
-            })
-        }
-        return []
+        var pages = optionModel ? optionModel.processPageNames() : []
+        return pages.map(function(page) {
+            return { key: page, label: root.processDisplayLabel(page) }
+        })
     }
 
     // Current preset names list per tier (v5.16 PSET2-05: decorated lists —
@@ -531,7 +509,6 @@ ApplicationWindow {
                 id: processTabStrip
                 Layout.fillWidth: true
                 height: 38
-                visible: root.presetTier === "print"
                 color: Theme.bgPanel
 
                 TabBar {
@@ -628,55 +605,6 @@ ApplicationWindow {
                 }
             }
 
-            // 2. Non-Process tab strip
-            Rectangle {
-                id: genericTabStrip
-                Layout.fillWidth: true
-                height: 38
-                visible: root.presetTier !== "print"
-                color: Theme.bgPanel
-
-                RowLayout {
-                    anchors.fill: parent
-                    spacing: Theme.spacingXS
-                    Repeater {
-                        model: root.tabPages
-
-                        delegate: Rectangle {
-                            required property var modelData
-                            required property int index
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            color: tabHov.hovered ? Theme.bgHover : "transparent"
-
-                            Rectangle {
-                                anchors.bottom: parent.bottom
-                                width: parent.width
-                                height: 2
-                                color: root.activeTab === modelData.key ? Theme.accent : "transparent"
-                            }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                // G4: active tab label is white (R12); the accent
-                                // stays on the 2px underline below.
-                                color: root.activeTab === modelData.key ? Theme.textPrimary : Theme.textSecondary
-                                font.pixelSize: Theme.fontSizeSM
-                                font.bold: root.activeTab === modelData.key
-                                elide: Text.ElideRight
-                            }
-
-                            HoverHandler { id: tabHov }
-
-                            TapHandler {
-                                onTapped: root.activeTab = modelData.key
-                            }
-                        }
-                    }
-                }
-            }
-
             // 3. Main content area
             RowLayout {
                 Layout.fillWidth: true
@@ -696,7 +624,6 @@ ApplicationWindow {
                         ListView {
                             id: processOptionListComponent
                             anchors.fill: parent
-                            visible: root.presetTier === "print"
                             clip: true
                             model: root.optionModel && root.activeTab !== ""
                                    ? root.optionModel.processGroupsForPage(root.activeTab) : []
@@ -851,105 +778,6 @@ ApplicationWindow {
                         }
                     }
 
-                    // G6: styled scroll chrome comes from CxScrollView (U01 token
-                    // values); the bare ScrollBar.vertical overrides are gone.
-                    CxScrollView {
-                        anchors.fill: parent
-
-                        ListView {
-                            id: genericOptionListComponent
-                            anchors.fill: parent
-                            visible: root.presetTier !== "print"
-                            clip: true
-                            // print tier skips the page filter (all pages shown in
-                            // one list), matching the legacy filterOptionIndices
-                            // page-skip; printer/filament narrow by active tab.
-                            model: ConfigOptionFilterProxy {
-                                id: genericListProxy
-                                sourceModel: root.optionModel
-                                page: root.presetTier !== "print" ? root.activeTab : ""
-                                searchText: root.searchText
-                                advancedMode: root.advancedMode
-                            }
-                            // G3: R11 row rhythm — 30px rows touch (pitch 30, was 34+4=38).
-                            spacing: 0
-
-                            // Empty state
-                            Text {
-                                anchors.centerIn: parent
-                                visible: genericListProxy.count === 0
-                                text: root.searchText !== "" ? qsTr("No matching options")
-                                                             : qsTr("No options")
-                                color: Theme.textDisabled
-                                font.pixelSize: Theme.fontSizeMD
-                            }
-
-                            delegate: Item {
-                                id: optDelegate
-                                required property int index
-                                required property int optIdx
-                                required property string optGroup
-                                required property string optPrevGroup
-                                required property string optType
-                                required property string optKey
-                                required property string displayLabel
-                                required property var optValue
-                                required property double optMin
-                                required property double optMax
-                                required property double optStep
-                                required property bool optReadonly
-                                required property bool optDirty
-                                required property string optTooltip
-                                required property string optUnit
-                                required property string optSidetext
-                                required property bool optNullable
-                                required property bool optIsVector
-                                required property var optEnumLabels
-                                required property string valueSource
-
-                                // Show group header when group changes
-                                readonly property bool showGroupHeader:
-                                    optGroup !== "" && (index === 0 || optGroup !== optPrevGroup)
-
-                                width: genericOptionListComponent.width
-                                height: optRow.totalHeight
-
-                                // OptionRow inlined in the delegate (not via Loader/Component)
-                                // so its bindings resolve the delegate's scope (optDelegate).
-                                OptionRow {
-                                    id: optRow
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    optionModel: root.optionModel
-                                    optIdx: optDelegate.optIdx
-                                    rowIndex: optDelegate.index
-                                    searchText: root.searchText
-                                    showGroupHeader: optDelegate.showGroupHeader
-                                    oGroup: optDelegate.optGroup
-                                    compact: true
-                                    compactLabelWidth: 210
-                                    compactFieldWidth: 119
-                                    compactEnumWidth: 190
-                                    valueSource: optDelegate.valueSource
-                                    oType: optDelegate.optType
-                                    oKey: optDelegate.optKey
-                                    oLabel: optDelegate.displayLabel
-                                    oVal: optDelegate.optValue
-                                    oMin: optDelegate.optMin
-                                    oMax: optDelegate.optMax
-                                    oStep: optDelegate.optStep
-                                    oRO: optDelegate.optReadonly
-                                    oDirty: optDelegate.optDirty
-                                    oTip: optDelegate.optTooltip
-                                    oUnit: optDelegate.optUnit
-                                    oSidetext: optDelegate.optSidetext
-                                    oNullable: optDelegate.optNullable
-                                    oIsVector: optDelegate.optIsVector
-                                    oEnumLabels: optDelegate.optEnumLabels
-                                }
-                            }
-                        }
-                    }
                 }
             }
 

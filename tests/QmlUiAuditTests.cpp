@@ -4739,36 +4739,26 @@ void QmlUiAuditTests::settingsDialogRestoresPhase85ShellContract()
   const QString settingsDialog = readSource(QStringLiteral("src/qml_gui/dialogs/SettingsDialog.qml"));
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
 
-  // v5.16 (PSET2-08) update: the five permanently-empty tabs (printer
-  // 材料/挤出机, filament 参数覆盖/多材料/依赖) were intentionally removed
-  // because kMachineKeys/kFilamentKeys never map options to those pages
-  // (multi-nozzle scope). The contract now asserts the KEPT labels and that
-  // the removed tab labels are gone from the tab bar.
+  // Window titles per tier stay the restored Phase 85 labels. Page tabs are
+  // no longer a hand-written per-tier list: every tier takes its pages from
+  // ConfigOptionModel's upstream Tab.cpp hierarchy (2026-11-03), so the
+  // Extruder / Setting Overrides / Multimaterial / Dependencies pages that
+  // PSET2-08 had to hide (no keys mapped) are real pages again.
   const QStringList restoredLabels = {
       QStringLiteral("qsTr(\"打印机设置\")"),
       QStringLiteral("qsTr(\"材料设置\")"),
       QStringLiteral("qsTr(\"工艺设置\")"),
-      QStringLiteral("qsTr(\"基础信息\")"),
-      QStringLiteral("qsTr(\"打印机G-code\")"),
-      QStringLiteral("qsTr(\"移动能力\")"),
-      QStringLiteral("qsTr(\"注释\")"),
-      QStringLiteral("qsTr(\"耗材丝\")"),
-      QStringLiteral("qsTr(\"冷却\")"),
-      QStringLiteral("qsTr(\"高级\")"),
   };
   for (const QString &label : restoredLabels) {
     QVERIFY2(settingsDialog.contains(label),
              qPrintable(QStringLiteral("SettingsDialog missing restored Phase 85 label: %1").arg(label)));
   }
-  const QStringList removedEmptyTabs = {
-      QStringLiteral("qsTr(\"材料\")"),
-      QStringLiteral("qsTr(\"挤出机\")"),
-      QStringLiteral("qsTr(\"参数覆盖\")"),
-      QStringLiteral("qsTr(\"依赖\")"),
-  };
-  for (const QString &label : removedEmptyTabs) {
-    QVERIFY2(!settingsDialog.contains(label),
-             qPrintable(QStringLiteral("PSET2-08: empty settings tab must stay removed: %1").arg(label)));
+  QVERIFY2(settingsDialog.contains(QStringLiteral("var pages = optionModel ? optionModel.processPageNames() : []")),
+           "Settings page tabs must come from the model's upstream hierarchy for every tier");
+  for (const QString &hardcoded : {QStringLiteral("key: \"Basic information\""), QStringLiteral("key: \"Filament\""),
+                                   QStringLiteral("key: \"Machine G-code\""), QStringLiteral("key: \"Cooling\"")}) {
+    QVERIFY2(!settingsDialog.contains(hardcoded),
+             qPrintable(QStringLiteral("Hand-written settings tab must not return: %1").arg(hardcoded)));
   }
 
   const QStringList oldShellTokens = {
@@ -4880,8 +4870,10 @@ void QmlUiAuditTests::settingsOptionRowsRestorePhase86ControlContract()
              qPrintable(QStringLiteral("OptionRow missing fixed state-indicator token: %1").arg(token)));
   }
 
-  QVERIFY2(settingsDialog.contains(QStringLiteral("showGroupHeader: optDelegate.showGroupHeader"))
-               && settingsDialog.contains(QStringLiteral("oGroup: optDelegate.optGroup"))
+  // One grouped list serves every tier: group headers are drawn by the
+  // group delegate, so rows pass showGroupHeader: false plus their group.
+  QVERIFY2(settingsDialog.contains(QStringLiteral("showGroupHeader: false"))
+               && settingsDialog.contains(QStringLiteral("oGroup: processGroupDelegate.groupName"))
                && settingsDialog.contains(QStringLiteral("compactLabelWidth:"))
                && settingsDialog.contains(QStringLiteral("compactFieldWidth:"))
                && settingsDialog.contains(QStringLiteral("compactEnumWidth:"))
@@ -10466,21 +10458,28 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
   QVERIFY2(!settingsDialog.isEmpty(), "Unable to read SettingsDialog.qml");
   QVERIFY2(!qrc.isEmpty(), "Unable to read qml.qrc");
 
-  const int processContractStart = settingsDialog.indexOf(QStringLiteral("if (presetTier === \"print\") {"));
+  // 2026-11-03: Print, Filament and Printer share one tab strip and one
+  // grouped list, both driven by the model's upstream hierarchy; the generic
+  // flat list / second tab strip are gone.
+  const int processContractStart = settingsDialog.indexOf(QStringLiteral("readonly property var tabPages: {"));
   const int processTabsStart = settingsDialog.indexOf(QStringLiteral("id: processTabStrip"));
-  const int genericTabsStart = settingsDialog.indexOf(QStringLiteral("id: genericTabStrip"));
   const int processListStart = settingsDialog.indexOf(QStringLiteral("id: processOptionListComponent"));
-  const int genericListStart = settingsDialog.indexOf(QStringLiteral("id: genericOptionListComponent"));
+  const int processListEnd = settingsDialog.indexOf(QStringLiteral("// SETPRINT-FOOTER"));
   QVERIFY(processContractStart >= 0);
   QVERIFY(processTabsStart > processContractStart);
-  QVERIFY(genericTabsStart > processTabsStart);
-  QVERIFY(processListStart > genericTabsStart);
-  QVERIFY(genericListStart > processListStart);
+  QVERIFY(processListStart > processTabsStart);
+  QVERIFY(processListEnd > processListStart);
+  QVERIFY2(!settingsDialog.contains(QStringLiteral("genericTabStrip"))
+               && !settingsDialog.contains(QStringLiteral("genericOptionListComponent")),
+           "The flat per-tier list and its tab strip must not return");
 
   const QString processContract = settingsDialog.mid(processContractStart, processTabsStart - processContractStart);
-  const QString processTabs = settingsDialog.mid(processTabsStart, genericTabsStart - processTabsStart);
-  const QString processList = settingsDialog.mid(processListStart, genericListStart - processListStart);
+  const QString processTabs = settingsDialog.mid(processTabsStart, processListStart - processTabsStart);
+  const QString processList = settingsDialog.mid(processListStart, processListEnd - processListStart);
   const QString processBranch = processTabs + processList;
+  QVERIFY2(!processTabs.contains(QStringLiteral("visible: root.presetTier === \"print\""))
+               && !processList.contains(QStringLiteral("visible: root.presetTier === \"print\"")),
+           "The hierarchy tab strip and list serve every tier");
 
   QVERIFY2(processContract.contains(QStringLiteral("processPageNames()"))
                && processContract.contains(QStringLiteral("processDisplayLabel(page)"))
@@ -10532,11 +10531,13 @@ void QmlUiAuditTests::processSettingsConsumesSourceMappedHierarchy()
            "Process hierarchy must not add sidebar or decorative disclosure controls");
   QVERIFY2(!qrc.contains(QStringLiteral("components/GroupNavSidebar.qml")),
            "GroupNavSidebar must remain outside qml.qrc");
+  // Printer and Material tiers stay (window titles, preset lists) and now
+  // ride the same upstream-hierarchy route as Print.
   QVERIFY2(settingsDialog.contains(QStringLiteral("presetTier === \"printer\""))
                && settingsDialog.contains(QStringLiteral("presetTier === \"filament\""))
-               && settingsDialog.contains(QStringLiteral("id: genericTabStrip"))
-               && settingsDialog.contains(QStringLiteral("id: genericOptionListComponent")),
-           "Printer and Material must retain their existing hierarchy route");
+               && !settingsDialog.contains(QStringLiteral("id: genericTabStrip"))
+               && !settingsDialog.contains(QStringLiteral("id: genericOptionListComponent")),
+           "Printer and Material must use the shared upstream-hierarchy route");
 }
 
 

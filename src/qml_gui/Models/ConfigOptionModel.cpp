@@ -930,219 +930,6 @@ namespace
     }
   }
 
-  // ── Static page-to-group mapping tables ────────────────────────────
-  // Upstream Tab.cpp:2311-2788 (TabPrint::build), 3892-4216 (TabFilament::build),
-  // 4438-4900 (TabPrinter::build_fff). Each entry maps option_key -> (page, group).
-  // These are derived from upstream new_optgroup / append_single_option_line calls.
-  // Options not in the table will appear under an "Other" bucket in the dialog.
-
-  // Upstream: Tab.cpp:4438-4900 (TabPrinter::build_fff)
-  static const QHash<QString, QPair<QString, QString>> &kPrinterPageGroupMap()
-  {
-    static const QHash<QString, QPair<QString, QString>> m = {
-      // Page: "Basic information" - Groups: Printable space, Advanced, Cooling Fan, Extruder Clearance, Adaptive bed mesh, Accessory
-      {QStringLiteral("printable_area"),        {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("printable_height"),      {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("bed_exclude_area"),       {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("z_offset"),               {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("preferred_orientation"),  {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("nozzle_volume"),          {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("best_object_pos"),        {QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("support_multi_bed_types"),{QStringLiteral("Basic information"), QStringLiteral("Printable space")}},
-      {QStringLiteral("printer_structure"),      {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("gcode_flavor"),           {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("use_relative_e_distances"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("use_firmware_retraction"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("machine_load_filament_time"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("machine_unload_filament_time"),{QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("nozzle_type"),            {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("nozzle_hrc"),             {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("disable_m73"),            {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("thumbnails"),             {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("time_cost"),              {QStringLiteral("Basic information"), QStringLiteral("Advanced")}},
-      {QStringLiteral("auxiliary_fan"),           {QStringLiteral("Basic information"), QStringLiteral("Cooling Fan")}},
-      {QStringLiteral("support_chamber_temp_control"),{QStringLiteral("Basic information"), QStringLiteral("Cooling Fan")}},
-      {QStringLiteral("support_air_filtration"),{QStringLiteral("Basic information"), QStringLiteral("Cooling Fan")}},
-      // Page: "Machine G-code" - Groups: File header G-code, Machine start/end G-code, etc.
-      {QStringLiteral("machine_start_gcode"),     {QStringLiteral("Machine G-code"), QStringLiteral("Machine start G-code")}},
-      {QStringLiteral("machine_end_gcode"),      {QStringLiteral("Machine G-code"), QStringLiteral("Machine end G-code")}},
-      {QStringLiteral("before_layer_change_gcode"),{QStringLiteral("Machine G-code"), QStringLiteral("Before layer change G-code")}},
-      {QStringLiteral("layer_change_gcode"),     {QStringLiteral("Machine G-code"), QStringLiteral("Layer change G-code")}},
-      {QStringLiteral("time_lapse_gcode"),       {QStringLiteral("Machine G-code"), QStringLiteral("Timelapse G-code")}},
-      {QStringLiteral("change_filament_gcode"),  {QStringLiteral("Machine G-code"), QStringLiteral("Change filament G-code")}},
-      {QStringLiteral("change_extrusion_role_gcode"),{QStringLiteral("Machine G-code"), QStringLiteral("Change extrusion role G-code")}},
-      {QStringLiteral("machine_pause_gcode"),    {QStringLiteral("Machine G-code"), QStringLiteral("Pause G-code")}},
-      {QStringLiteral("template_custom_gcode"),  {QStringLiteral("Machine G-code"), QStringLiteral("Template Custom G-code")}},
-      {QStringLiteral("printing_by_object_gcode"),{QStringLiteral("Machine G-code"), QStringLiteral("Printing by object G-code")}},
-      // Page: "Notes" - Groups: Notes
-      {QStringLiteral("printer_notes"),          {QStringLiteral("Notes"), QStringLiteral("Notes")}},
-      // Page: "Motion ability" - Groups: Advanced, Resonance Compensation, Speed limitation, Acceleration limitation, Jerk limitation
-      {QStringLiteral("emit_machine_limits_to_gcode"),{QStringLiteral("Motion ability"), QStringLiteral("Advanced")}},
-      {QStringLiteral("machine_max_speed_x"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
-      {QStringLiteral("machine_max_speed_y"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
-      {QStringLiteral("machine_max_speed_z"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
-      {QStringLiteral("machine_max_speed_e"),    {QStringLiteral("Motion ability"), QStringLiteral("Speed limitation")}},
-      {QStringLiteral("machine_max_acceleration_x"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_acceleration_y"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_acceleration_z"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_acceleration_e"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_acceleration_extruding"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_acceleration_retracting"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_acceleration_travel"),{QStringLiteral("Motion ability"), QStringLiteral("Acceleration limitation")}},
-      {QStringLiteral("machine_max_jerk_x"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
-      {QStringLiteral("machine_max_jerk_y"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
-      {QStringLiteral("machine_max_jerk_z"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
-      {QStringLiteral("machine_max_jerk_e"),     {QStringLiteral("Motion ability"), QStringLiteral("Jerk limitation")}},
-      // Extruder pages - Groups: Size, Retraction
-      {QStringLiteral("nozzle_diameter"),         {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
-      {QStringLiteral("min_layer_height"),       {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
-      {QStringLiteral("max_layer_height"),       {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
-      {QStringLiteral("extruder_offset"),        {QStringLiteral("Motion ability"), QStringLiteral("Size")}},
-      {QStringLiteral("retraction_length"),      {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retract_restart_extra"),  {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("z_hop"),                  {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("z_hop_types"),            {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retraction_speed"),       {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("deretraction_speed"),     {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retraction_minimum_travel"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retract_when_changing_layer"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("wipe"),                   {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("wipe_distance"),          {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retract_before_wipe"),     {QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retract_length_toolchange"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("retract_restart_extra_toolchange"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      {QStringLiteral("long_retractions_when_cut"),{QStringLiteral("Motion ability"), QStringLiteral("Retraction")}},
-      // Extruder Clearance (for multi-extruder printers)
-      // These aren't actual option keys but are relevant groups
-    };
-    return m;
-  }
-
-  // Upstream: Tab.cpp:3892-4216 (TabFilament::build)
-  static const QHash<QString, QPair<QString, QString>> &kFilamentPageGroupMap()
-  {
-    static const QHash<QString, QPair<QString, QString>> m = {
-      // Page: "Filament" - Groups: Basic information, Flow ratio and Pressure Advance, etc.
-      {QStringLiteral("filament_type"),           {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_vendor"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_colour"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_density"),        {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_cost"),           {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_flow_ratio"),     {QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("filament_max_volumetric_speed"),{QStringLiteral("Filament"), QStringLiteral("Volumetric speed limitation")}},
-      // Temperature groups
-      {QStringLiteral("nozzle_temperature"),      {QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
-      {QStringLiteral("nozzle_temperature_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
-      {QStringLiteral("hot_plate_temp"),          {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("hot_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("cool_plate_temp"),         {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("chamber_temperature"),     {QStringLiteral("Filament"), QStringLiteral("Print chamber temperature")}},
-      // Page: "Cooling"
-      {QStringLiteral("fan_cooling_layer_time"),   {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("slow_down_min_speed"),     {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("fan_min_speed"),           {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("fan_max_speed"),           {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("overhang_fan_speed"),     {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("close_fan_the_first_x_layers"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      // Retraction
-      {QStringLiteral("filament_retraction_length"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      // ── F7 groups for the ported upstream keys ──
-      {QStringLiteral("enable_pressure_advance"),  {QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("pressure_advance"),         {QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("adaptive_pressure_advance"),{QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("adaptive_pressure_advance_model"),{QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("adaptive_pressure_advance_overhangs"),{QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("adaptive_pressure_advance_bridges"),{QStringLiteral("Filament"), QStringLiteral("Flow ratio and Pressure Advance")}},
-      {QStringLiteral("filament_diameter"),        {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_soluble"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_is_support"),      {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_printable"),       {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_extruder_compatibility"),{QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_shrink"),          {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_shrinkage_compensation_z"),{QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("filament_minimal_purge_on_wipe_tower"),{QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("idle_temperature"),         {QStringLiteral("Filament"), QStringLiteral("Basic information")}},
-      {QStringLiteral("cool_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("textured_cool_plate_temp"), {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("textured_cool_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("eng_plate_temp"),           {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("eng_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("textured_plate_temp"),      {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("textured_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("supertack_plate_temp"),     {QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("supertack_plate_temp_initial_layer"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("temperature_vitrification"),{QStringLiteral("Filament"), QStringLiteral("Bed temperature")}},
-      {QStringLiteral("nozzle_temperature_range_low"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
-      {QStringLiteral("nozzle_temperature_range_high"),{QStringLiteral("Filament"), QStringLiteral("Print temperature")}},
-      {QStringLiteral("slow_down_layer_time"),     {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("slow_down_for_layer_cooling"),{QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("dont_slow_down_outer_wall"),{QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("reduce_fan_stop_start_freq"),{QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("full_fan_speed_layer"),     {QStringLiteral("Cooling"), QStringLiteral("Cooling for specific layer")}},
-      {QStringLiteral("initial_layer_fan_speed"),  {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("first_x_layer_fan_speed"),  {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("additional_fan_full_speed_layer"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("close_additional_fan_first_x_layers"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("enable_overhang_bridge_fan"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("overhang_fan_threshold"),   {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("support_material_interface_fan_speed"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("internal_bridge_fan_speed"),{QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("ironing_fan_speed"),        {QStringLiteral("Cooling"), QStringLiteral("Part cooling fan")}},
-      {QStringLiteral("additional_cooling_fan_speed"),{QStringLiteral("Cooling"), QStringLiteral("Auxiliary part cooling fan")}},
-      {QStringLiteral("activate_air_filtration"),  {QStringLiteral("Cooling"), QStringLiteral("Air filtration")}},
-      {QStringLiteral("activate_air_filtration_during_print"),{QStringLiteral("Cooling"), QStringLiteral("Air filtration")}},
-      {QStringLiteral("activate_air_filtration_on_completion"),{QStringLiteral("Cooling"), QStringLiteral("Air filtration")}},
-      {QStringLiteral("during_print_exhaust_fan_speed"),{QStringLiteral("Cooling"), QStringLiteral("Air filtration")}},
-      {QStringLiteral("complete_print_exhaust_fan_speed"),{QStringLiteral("Cooling"), QStringLiteral("Air filtration")}},
-      {QStringLiteral("filament_retract_after_wipe"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_before_wipe"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_lift_enforce"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_when_changing_layer"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retraction_minimum_travel"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_wipe"),            {QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_wipe_distance"),   {QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_z_hop_types"),     {QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_loading_speed"),   {QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_loading_speed_start"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_unloading_speed"), {QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_unloading_speed_start"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_toolchange_delay"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_cooling_moves"),   {QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_cooling_initial_speed"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_cooling_final_speed"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_ramming_parameters"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_change_length"),   {QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_flush_volumetric_speed"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_flush_temp"),      {QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_flush_temp_fast"), {QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_cooling_before_tower"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_long_retractions_when_cut"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_retraction_distances_when_cut"),{QStringLiteral("Filament"), QStringLiteral("Toolchange and flush")}},
-      {QStringLiteral("filament_ironing_flow"),    {QStringLiteral("Filament"), QStringLiteral("Ironing")}},
-      {QStringLiteral("filament_ironing_spacing"), {QStringLiteral("Filament"), QStringLiteral("Ironing")}},
-      {QStringLiteral("filament_ironing_inset"),   {QStringLiteral("Filament"), QStringLiteral("Ironing")}},
-      {QStringLiteral("filament_ironing_speed"),   {QStringLiteral("Filament"), QStringLiteral("Ironing")}},
-      {QStringLiteral("filament_retraction_speed"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_deretraction_speed"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_z_hop"),          {QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_restart_extra"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_length_toolchange"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_restart_extra_toolchange"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_lift_above"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      {QStringLiteral("filament_retract_lift_below"),{QStringLiteral("Filament"), QStringLiteral("Retraction")}},
-      // Page: "Advanced"
-      {QStringLiteral("filament_start_gcode"),    {QStringLiteral("Advanced"), QStringLiteral("Filament start G-code")}},
-      {QStringLiteral("filament_end_gcode"),      {QStringLiteral("Advanced"), QStringLiteral("Filament end G-code")}},
-      // R6: upstream key is filament_change_extrusion_role_gcode
-      // (PrintConfig.cpp:7350, TabFilament::build Tab.cpp:4548); the former
-      // "filament_change_gcode" entry named a key that has no def and was
-      // silently dropped by loadSchemaFromKeys.
-      {QStringLiteral("filament_change_extrusion_role_gcode"),{QStringLiteral("Advanced"), QStringLiteral("Change extrusion role G-code")}},
-      // Page: "Notes"
-      {QStringLiteral("filament_notes"),          {QStringLiteral("Notes"), QStringLiteral("Notes")}},
-    };
-    return m;
-  }
 
 #endif // HAS_LIBSLIC3R
 
@@ -1193,7 +980,7 @@ namespace
         {QStringLiteral("Speed"), {
             {QStringLiteral("First layer speed"), processKeys({"initial_layer_speed", "initial_layer_infill_speed", "initial_layer_travel_speed", "slow_down_layers"})},
             {QStringLiteral("Other layers speed"), processKeys({"outer_wall_speed", "inner_wall_speed", "small_perimeter_speed", "small_perimeter_threshold", "sparse_infill_speed", "internal_solid_infill_speed", "top_surface_speed", "gap_infill_speed", "ironing_speed", "support_speed", "support_interface_speed", "small_support_perimeter_speed", "small_support_perimeter_threshold"})},
-            {QStringLiteral("Overhang speed"), processKeys({"overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed", "enable_overhang_speed", "slowdown_for_curled_perimeters"})},
+            {QStringLiteral("Overhang speed"), processKeys({"enable_overhang_speed", "slowdown_for_curled_perimeters", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed"})},
             {QStringLiteral("Travel speed"), processKeys({"travel_speed"})},
             {QStringLiteral("Acceleration"), processKeys({"default_acceleration", "outer_wall_acceleration", "inner_wall_acceleration", "bridge_acceleration", "sparse_infill_acceleration", "internal_solid_infill_acceleration", "initial_layer_acceleration", "initial_layer_travel_acceleration", "top_surface_acceleration", "travel_acceleration", "accel_to_decel_enable", "accel_to_decel_factor"})},
             {QStringLiteral("Junction Deviation"), processKeys({"default_junction_deviation"})},
@@ -1220,19 +1007,133 @@ namespace
             {QStringLiteral("Brim"), processKeys({"brim_type", "brim_width", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length", "brim_ears_outer_only"})},
             {QStringLiteral("Special mode"), processKeys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio", "timelapse_type", "enable_wrapping_detection"})},
             {QStringLiteral("Fuzzy skin"), processKeys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
-            {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object"})},
+            {QStringLiteral("G-code output"), processKeys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
+            {QStringLiteral("Change extrusion role G-code"), processKeys({"process_change_extrusion_role_gcode"})},
             // Upstream 0a3724ed2f: shared "plugin_config_overrides" was removed in
             // favor of per-tab keys (PrintConfig.cpp:1093-1095 migration note);
             // TabPrint::build hosts print_plugin_config_overrides (Tab.cpp:3126).
             {QStringLiteral("Plugin Configuration"), processKeys({"print_plugin_config_overrides"})},
+            {QStringLiteral("Notes"), processKeys({"notes"})},
         }},
     };
     return definitions;
   }
 
-  static const ProcessGroupDefinition *processGroupDefinition(const QString &page, const QString &group)
+  // Source: third_party/OrcaSlicer/src/slic3r/GUI/Tab.cpp TabFilament::build + add_filament_overrides_page (pin 0a3724ed2f); generated by build/tmp_edits/ui_cmp/gen_tiers.py
+  static const QList<ProcessPageDefinition> &filamentPageDefinitions()
   {
-    for (const ProcessPageDefinition &pageDefinition : processPageDefinitions()) {
+    static const QList<ProcessPageDefinition> definitions = {
+        {QStringLiteral("Filament"), {
+            {QStringLiteral("Basic information"), processKeys({"filament_type", "filament_vendor", "filament_soluble", "filament_is_support", "filament_change_length", "default_filament_colour", "filament_diameter", "filament_adhesiveness_category", "filament_density", "filament_shrink", "filament_shrinkage_compensation_z", "filament_cost", "temperature_vitrification", "idle_temperature", "nozzle_temperature_range_low", "nozzle_temperature_range_high"})},
+            {QStringLiteral("Flow ratio and Pressure Advance"), processKeys({"pellet_flow_coefficient", "filament_flow_ratio", "enable_pressure_advance", "pressure_advance", "adaptive_pressure_advance", "adaptive_pressure_advance_overhangs", "adaptive_pressure_advance_bridges", "adaptive_pressure_advance_model"})},
+            {QStringLiteral("Print chamber temperature"), processKeys({"activate_chamber_temp_control", "chamber_temperature", "chamber_minimal_temperature"})},
+            {QStringLiteral("Print temperature"), processKeys({"nozzle_temperature_initial_layer", "nozzle_temperature"})},
+            {QStringLiteral("Bed temperature"), processKeys({"supertack_plate_temp_initial_layer", "supertack_plate_temp", "cool_plate_temp_initial_layer", "cool_plate_temp", "textured_cool_plate_temp_initial_layer", "textured_cool_plate_temp", "eng_plate_temp_initial_layer", "eng_plate_temp", "hot_plate_temp_initial_layer", "hot_plate_temp", "textured_plate_temp_initial_layer", "textured_plate_temp"})},
+            {QStringLiteral("Volumetric speed limitation"), processKeys({"filament_adaptive_volumetric_speed", "filament_max_volumetric_speed"})},
+        }},
+        {QStringLiteral("Cooling"), {
+            {QStringLiteral("Cooling for specific layer"), processKeys({"close_fan_the_first_x_layers", "initial_layer_fan_speed", "full_fan_speed_layer"})},
+            {QStringLiteral("Part cooling fan"), processKeys({"fan_min_speed", "fan_cooling_layer_time", "fan_max_speed", "slow_down_layer_time", "reduce_fan_stop_start_freq", "slow_down_for_layer_cooling", "dont_slow_down_outer_wall", "slow_down_min_speed", "enable_overhang_bridge_fan", "overhang_fan_threshold", "overhang_fan_speed", "internal_bridge_fan_speed", "support_material_interface_fan_speed", "ironing_fan_speed"})},
+            {QStringLiteral("Auxiliary part cooling fan"), processKeys({"additional_cooling_fan_speed"})},
+            {QStringLiteral("Exhaust fan"), processKeys({"activate_air_filtration", "activate_air_filtration_during_print", "during_print_exhaust_fan_speed", "activate_air_filtration_on_completion", "complete_print_exhaust_fan_speed"})},
+        }},
+        {QStringLiteral("Setting Overrides"), {
+            {QStringLiteral("Retraction"), processKeys({"filament_retraction_length", "filament_z_hop", "filament_z_hop_types", "filament_retract_lift_above", "filament_retract_lift_below", "filament_retract_lift_enforce", "filament_retraction_speed", "filament_deretraction_speed", "filament_retract_restart_extra", "filament_retraction_minimum_travel", "filament_retract_when_changing_layer", "filament_wipe", "filament_wipe_distance", "filament_retract_before_wipe", "filament_retract_after_wipe", "filament_long_retractions_when_cut", "filament_retraction_distances_when_cut"})},
+            {QStringLiteral("Retraction when switching material"), processKeys({"filament_retract_length_toolchange", "filament_retract_restart_extra_toolchange"})},
+            {QStringLiteral("Ironing"), processKeys({"filament_ironing_flow", "filament_ironing_spacing", "filament_ironing_inset", "filament_ironing_speed"})},
+        }},
+        {QStringLiteral("Advanced"), {
+            {QStringLiteral("Filament start G-code"), processKeys({"filament_start_gcode"})},
+            {QStringLiteral("Change extrusion role G-code"), processKeys({"filament_change_extrusion_role_gcode"})},
+            {QStringLiteral("Filament end G-code"), processKeys({"filament_end_gcode"})},
+            {QStringLiteral("Plugin Configuration"), processKeys({"filament_plugin_config_overrides"})},
+        }},
+        {QStringLiteral("Multimaterial"), {
+            {QStringLiteral("Wipe tower parameters"), processKeys({"filament_minimal_purge_on_wipe_tower", "filament_tower_interface_pre_extrusion_dist", "filament_tower_interface_pre_extrusion_length", "filament_tower_ironing_area", "filament_tower_interface_purge_volume", "filament_tower_interface_print_temp"})},
+            {QStringLiteral("Multi Filament"), processKeys({"long_retractions_when_ec", "retraction_distances_when_ec"})},
+            {QStringLiteral("Tool change parameters with single extruder MM printers"), processKeys({"filament_loading_speed_start", "filament_loading_speed", "filament_unloading_speed_start", "filament_unloading_speed", "filament_toolchange_delay", "filament_cooling_moves", "filament_cooling_initial_speed", "filament_cooling_final_speed", "filament_stamping_loading_speed", "filament_stamping_distance", "filament_ramming_parameters"})},
+            {QStringLiteral("Tool change parameters with multi extruder MM printers"), processKeys({"filament_multitool_ramming", "filament_multitool_ramming_volume", "filament_multitool_ramming_flow"})},
+        }},
+        {QStringLiteral("Dependencies"), {
+            {QStringLiteral("Compatible printers"), processKeys({"compatible_printers_condition"})},
+            {QStringLiteral("Compatible process profiles"), processKeys({"compatible_prints_condition"})},
+        }},
+        {QStringLiteral("Notes"), {
+            {QStringLiteral("Notes"), processKeys({"filament_notes"})},
+        }},
+    };
+    return definitions;
+  }
+  // Source: Tab.cpp TabPrinter::build_fff + build_kinematics_page + build_unregular_pages (pin 0a3724ed2f; Marlin/Klipper page order, single extruder page)
+  static const QList<ProcessPageDefinition> &printerPageDefinitions()
+  {
+    static const QList<ProcessPageDefinition> definitions = {
+        {QStringLiteral("Basic information"), {
+            {QStringLiteral("Printable space"), processKeys({"printable_area", "parallel_printheads_count", "bed_exclude_area", "printable_height", "support_multi_bed_types", "best_object_pos", "z_offset", "preferred_orientation"})},
+            {QStringLiteral("Advanced"), processKeys({"printer_structure", "gcode_flavor", "gcode_skip_config_block", "pellet_modded_printer", "bbl_use_printhost", "use_3mf", "scan_first_layer", "enable_power_loss_recovery", "disable_m73", "thumbnails", "use_relative_e_distances", "use_firmware_retraction", "time_cost"})},
+            {QStringLiteral("Plugin Configuration"), processKeys({"printer_plugin_config_overrides"})},
+            {QStringLiteral("Cooling Fan"), processKeys({"fan_speedup_time", "fan_speedup_overhangs", "fan_kickstart", "part_cooling_fan_min_pwm"})},
+            {QStringLiteral("Extruder Clearance"), processKeys({"extruder_clearance_radius", "extruder_clearance_height_to_rod", "extruder_clearance_height_to_lid"})},
+            {QStringLiteral("Adaptive bed mesh"), processKeys({"bed_mesh_min", "bed_mesh_max", "bed_mesh_probe_distance", "adaptive_bed_mesh_margin"})},
+            {QStringLiteral("Accessory"), processKeys({"nozzle_type", "nozzle_hrc", "auxiliary_fan", "fan_direction", "support_chamber_temp_control", "support_air_filtration", "cooling_filter_enabled"})},
+        }},
+        {QStringLiteral("Machine G-code"), {
+            {QStringLiteral("File header G-code"), processKeys({"file_start_gcode"})},
+            {QStringLiteral("Machine start G-code"), processKeys({"machine_start_gcode"})},
+            {QStringLiteral("Machine end G-code"), processKeys({"machine_end_gcode"})},
+            {QStringLiteral("Printing by object G-code"), processKeys({"printing_by_object_gcode"})},
+            {QStringLiteral("Before layer change G-code"), processKeys({"before_layer_change_gcode"})},
+            {QStringLiteral("Layer change G-code"), processKeys({"layer_change_gcode"})},
+            {QStringLiteral("Timelapse G-code"), processKeys({"time_lapse_gcode"})},
+            {QStringLiteral("Clumping Detection G-code"), processKeys({"wrapping_detection_gcode"})},
+            {QStringLiteral("Change filament G-code"), processKeys({"change_filament_gcode"})},
+            {QStringLiteral("Change extrusion role G-code"), processKeys({"change_extrusion_role_gcode"})},
+            {QStringLiteral("Pause G-code"), processKeys({"machine_pause_gcode"})},
+            {QStringLiteral("Template Custom G-code"), processKeys({"template_custom_gcode"})},
+        }},
+        {QStringLiteral("Motion ability"), {
+            {QStringLiteral("Advanced"), processKeys({"emit_machine_limits_to_gcode"})},
+            {QStringLiteral("Resonance Compensation"), processKeys({"resonance_avoidance", "min_resonance_avoidance_speed", "max_resonance_avoidance_speed", "input_shaping_emit", "input_shaping_type", "input_shaping_freq_x", "input_shaping_freq_y", "input_shaping_damp_x", "input_shaping_damp_y"})},
+            {QStringLiteral("Speed limitation"), processKeys({"machine_max_speed_x", "machine_max_speed_y", "machine_max_speed_z", "machine_max_speed_e"})},
+            {QStringLiteral("Acceleration limitation"), processKeys({"machine_max_acceleration_x", "machine_max_acceleration_y", "machine_max_acceleration_z", "machine_max_acceleration_e", "machine_max_acceleration_extruding", "machine_max_acceleration_retracting", "machine_max_acceleration_travel"})},
+            {QStringLiteral("Jerk limitation"), processKeys({"machine_max_junction_deviation", "machine_max_jerk_x", "machine_max_jerk_y", "machine_max_jerk_z", "machine_max_jerk_e"})},
+        }},
+        {QStringLiteral("Extruder"), {
+            {QStringLiteral("Basic information"), processKeys({"nozzle_diameter", "nozzle_volume", "extruder_printable_height", "extruder_printable_area"})},
+            {QStringLiteral("Layer height limits"), processKeys({"min_layer_height", "max_layer_height"})},
+            {QStringLiteral("Position"), processKeys({"extruder_offset"})},
+            {QStringLiteral("Retraction"), processKeys({"retraction_length", "retract_restart_extra", "retraction_speed", "deretraction_speed", "retraction_minimum_travel", "retract_when_changing_layer", "wipe", "wipe_distance", "retract_before_wipe", "retract_after_wipe"})},
+            {QStringLiteral("Z-Hop"), processKeys({"retract_lift_enforce", "z_hop_types", "z_hop", "travel_slope", "retract_lift_above", "retract_lift_below"})},
+            {QStringLiteral("Retraction when switching material"), processKeys({"retract_length_toolchange", "retract_restart_extra_toolchange", "long_retractions_when_cut", "retraction_distances_when_cut"})},
+        }},
+        {QStringLiteral("Multimaterial"), {
+            {QStringLiteral("Single extruder multi-material setup"), processKeys({"single_extruder_multi_material", "manual_filament_change", "bed_temperature_formula"})},
+            {QStringLiteral("Wipe tower"), processKeys({"wipe_tower_type", "purge_in_prime_tower", "enable_filament_ramming", "tool_change_on_wipe_tower", "wait_for_temp_on_wipe_tower"})},
+            {QStringLiteral("Single extruder multi-material parameters"), processKeys({"cooling_tube_retraction", "cooling_tube_length", "parking_pos_retraction", "extra_loading_move", "high_current_on_filament_swap"})},
+            {QStringLiteral("Advanced"), processKeys({"machine_load_filament_time", "machine_unload_filament_time", "machine_tool_change_time"})},
+        }},
+        {QStringLiteral("Notes"), {
+            {QStringLiteral("Notes"), processKeys({"printer_notes"})},
+        }},
+    };
+    return definitions;
+  }
+  // Hierarchy per settings tier: 0 = Print (process), 1 = Filament, 2 = Printer.
+  // compatible_printers / compatible_prints (upstream checklist widgets) are
+  // not listed: OptionRow has no checklist editor yet.
+  static const QList<ProcessPageDefinition> &hierarchyDefinitions(int tier)
+  {
+    if (tier == 1)
+      return filamentPageDefinitions();
+    if (tier == 2)
+      return printerPageDefinitions();
+    return processPageDefinitions();
+  }
+
+  static const ProcessGroupDefinition *processGroupDefinition(const QList<ProcessPageDefinition> &definitions,
+                                                              const QString &page, const QString &group)
+  {
+    for (const ProcessPageDefinition &pageDefinition : definitions) {
       if (pageDefinition.name != page)
         continue;
       for (const ProcessGroupDefinition &groupDefinition : pageDefinition.groups) {
@@ -1296,18 +1197,18 @@ namespace
         QStringLiteral("inherits"),
         // overhang_speed_classic was removed from print_options() upstream.
         QStringLiteral("wiping_volumes_extruders"),
-        // 8b93cc5df source-truth additions: print_options() entries upstream
-        // keeps out of TabPrint::build (consumed by other tabs, the slicing
-        // pipeline, or as machine-side metadata).
-        QStringLiteral("filename_format"),
-        QStringLiteral("notes"),
+        // print_options() entries with no Qt editor row. At pin 0a3724ed2f
+        // upstream TabPrint::build does show post_process (multi-line script
+        // list) and slicing_pipeline_plugin (plugin picker); OptionRow has no
+        // list / plugin-picker editor yet, so they stay off the page (tracked
+        // gap). filename_format, notes and process_change_extrusion_role_gcode
+        // are on the Others page.
         QStringLiteral("post_process"),
         QStringLiteral("prime_tower_flat_ironing"),
         QStringLiteral("print_extruder_id"),
         QStringLiteral("print_extruder_variant"),
         QStringLiteral("plugins"),
         QStringLiteral("slicing_pipeline_plugin"),
-        QStringLiteral("process_change_extrusion_role_gcode"),
         QStringLiteral("calib_flowrate_topinfill_special_order"),
     };
     return keys;
@@ -1343,135 +1244,7 @@ namespace
     return errors;
   }
 
-static const char *kMachineKeys[] = {
-  // Page: 基础信息 — 打印空间
-  "printable_area", "bed_exclude_area", "printable_height",
-  "support_multi_bed_types", "nozzle_volume", "best_object_pos",
-  "z_offset", "preferred_orientation",
-  // Page: 基础信息 — 高级
-  "printer_structure", "gcode_flavor", "use_relative_e_distances",
-  "use_firmware_retraction", "machine_load_filament_time",
-  "machine_unload_filament_time", "nozzle_type", "nozzle_hrc",
-  "disable_m73", "thumbnails", "time_cost",
-  "auxiliary_fan", "support_chamber_temp_control",
-  "support_air_filtration",
-  // Page: 打印机G-code
-  "machine_start_gcode", "machine_end_gcode",
-  "before_layer_change_gcode", "layer_change_gcode",
-  "time_lapse_gcode", "change_filament_gcode",
-  "change_extrusion_role_gcode", "machine_pause_gcode",
-  "template_custom_gcode", "printing_by_object_gcode",
-  // Page: 运动能力
-  "emit_machine_limits_to_gcode",
-  "machine_max_speed_x", "machine_max_speed_y",
-  "machine_max_speed_z", "machine_max_speed_e",
-  "machine_max_acceleration_x", "machine_max_acceleration_y",
-  "machine_max_acceleration_z", "machine_max_acceleration_e",
-  "machine_max_acceleration_extruding",
-  "machine_max_acceleration_retracting",
-  "machine_max_acceleration_travel",
-  "machine_max_jerk_x", "machine_max_jerk_y",
-  "machine_max_jerk_z", "machine_max_jerk_e",
-  // Page: 挤出机
-  "nozzle_diameter", "min_layer_height", "max_layer_height",
-  "extruder_offset", "retraction_length", "retract_restart_extra",
-  "z_hop", "z_hop_types", "retraction_speed", "deretraction_speed",
-  "retraction_minimum_travel", "retract_when_changing_layer",
-  "wipe", "wipe_distance", "retract_before_wipe",
-  "retract_length_toolchange", "retract_restart_extra_toolchange",
-  "long_retractions_when_cut",
-  // Page: 多材料
-  "single_extruder_multi_material", "extruders_count",
-  "manual_filament_change",
-  "cooling_tube_retraction", "cooling_tube_length",
-  "parking_pos_retraction", "extra_loading_move",
-  "enable_filament_ramming",
-  // Page: 注释
-  "printer_notes",
-  nullptr
-};
 
-// Filament config keys (对齐上游 TabFilament)
-static const char *kFilamentKeys[] = {
-  // Basic
-  "filament_type", "filament_vendor", "filament_colour",
-  "filament_density", "filament_cost",
-  // Temperature
-  "nozzle_temperature", "nozzle_temperature_initial_layer",
-  "hot_plate_temp", "hot_plate_temp_initial_layer",
-  "chamber_temperature", "cool_plate_temp",
-  // Cooling
-  "fan_cooling_layer_time", "slow_down_min_speed",
-  "fan_min_speed", "fan_max_speed",
-  "overhang_fan_speed", "close_fan_the_first_x_layers",
-  // Speed / Quality
-  "filament_max_volumetric_speed", "filament_flow_ratio",
-  "filament_retract_lift_above",
-  "filament_retract_lift_below",
-  // Retraction
-  "filament_retraction_length", "filament_retraction_speed",
-  "filament_deretraction_speed", "filament_z_hop",
-  "filament_retract_restart_extra",
-  "filament_retract_length_toolchange",
-  "filament_retract_restart_extra_toolchange",
-  // G-code
-  "filament_start_gcode", "filament_end_gcode",
-  "filament_change_extrusion_role_gcode",
-  // Notes
-  "filament_notes",
-
-  // ── F7 (RG-R6-02): high-value upstream filament keys, ported in groups
-  // from Preset::filament_options (machine-variant _nc keys, wipe-tower
-  // interface tuning, compatibility meta keys and pellet filaments stay
-  // deferred). Labels come from the OptionLabelTable i18n layer.
-  // Pressure Advance (Flow ratio and Pressure Advance group)
-  "enable_pressure_advance", "pressure_advance",
-  "adaptive_pressure_advance", "adaptive_pressure_advance_model",
-  "adaptive_pressure_advance_overhangs", "adaptive_pressure_advance_bridges",
-  // Cooling — layer timing and fan schedule
-  "slow_down_layer_time", "slow_down_for_layer_cooling",
-  "dont_slow_down_outer_wall", "reduce_fan_stop_start_freq",
-  "full_fan_speed_layer", "initial_layer_fan_speed", "first_x_layer_fan_speed",
-  "additional_fan_full_speed_layer", "close_additional_fan_first_x_layers",
-  "enable_overhang_bridge_fan", "overhang_fan_threshold",
-  "support_material_interface_fan_speed", "internal_bridge_fan_speed",
-  "ironing_fan_speed", "additional_cooling_fan_speed",
-  // Air filtration
-  "activate_air_filtration", "activate_air_filtration_during_print",
-  "activate_air_filtration_on_completion", "during_print_exhaust_fan_speed",
-  "complete_print_exhaust_fan_speed",
-  // Bed temperature — remaining plate types + vitrification
-  "cool_plate_temp_initial_layer", "textured_cool_plate_temp",
-  "textured_cool_plate_temp_initial_layer", "eng_plate_temp",
-  "eng_plate_temp_initial_layer", "textured_plate_temp",
-  "textured_plate_temp_initial_layer", "supertack_plate_temp",
-  "supertack_plate_temp_initial_layer", "temperature_vitrification",
-  // Print temperature — preset validity range
-  "nozzle_temperature_range_low", "nozzle_temperature_range_high",
-  // Retraction — Orca override family remainder
-  "filament_retract_after_wipe", "filament_retract_before_wipe",
-  "filament_retract_lift_enforce", "filament_retract_when_changing_layer",
-  "filament_retraction_minimum_travel", "filament_wipe",
-  "filament_wipe_distance", "filament_z_hop_types",
-  // Basic material properties
-  "filament_diameter", "filament_soluble", "filament_is_support",
-  "filament_printable", "filament_extruder_compatibility",
-  "filament_shrink", "filament_shrinkage_compensation_z",
-  "filament_minimal_purge_on_wipe_tower", "idle_temperature",
-  // Toolchange / flush
-  "filament_loading_speed", "filament_loading_speed_start",
-  "filament_unloading_speed", "filament_unloading_speed_start",
-  "filament_toolchange_delay", "filament_cooling_moves",
-  "filament_cooling_initial_speed", "filament_cooling_final_speed",
-  "filament_ramming_parameters", "filament_change_length",
-  "filament_flush_volumetric_speed", "filament_flush_temp",
-  "filament_flush_temp_fast", "filament_cooling_before_tower",
-  "filament_long_retractions_when_cut", "filament_retraction_distances_when_cut",
-  // Ironing
-  "filament_ironing_flow", "filament_ironing_spacing",
-  "filament_ironing_inset", "filament_ironing_speed",
-  nullptr
-};
 
 #endif // HAS_LIBSLIC3R
 
@@ -1663,6 +1436,37 @@ static QString zhEnumLabel(const QString &label)
 static QString zhGroupLabel(const QString &group)
 {
   static const QHash<QString, QString> map = {
+      // Upstream tab hierarchy pages/groups (zh_CN strings from
+      // OrcaSlicer localization/i18n/zh_CN/OrcaSlicer_zh_CN.po).
+      {QStringLiteral("Accessory"), QStringLiteral("配件")},
+      {QStringLiteral("Adaptive bed mesh"), QStringLiteral("自适应网床")},
+      {QStringLiteral("Clumping Detection G-code"), QStringLiteral("结块检测 G-code")},
+      {QStringLiteral("Compatible printers"), QStringLiteral("兼容打印机")},
+      {QStringLiteral("Compatible process profiles"), QStringLiteral("兼容的切片配置")},
+      {QStringLiteral("Cooling"), QStringLiteral("冷却")},
+      {QStringLiteral("Dependencies"), QStringLiteral("依赖")},
+      {QStringLiteral("Exhaust fan"), QStringLiteral("排气风扇")},
+      {QStringLiteral("Extruder"), QStringLiteral("挤出机")},
+      {QStringLiteral("Extruder Clearance"), QStringLiteral("挤出机避让空间")},
+      {QStringLiteral("Filament"), QStringLiteral("耗材丝")},
+      {QStringLiteral("File header G-code"), QStringLiteral("文件头 G-code")},
+      {QStringLiteral("Layer height limits"), QStringLiteral("层高限制")},
+      {QStringLiteral("Machine G-code"), QStringLiteral("打印机G-code")},
+      {QStringLiteral("Motion ability"), QStringLiteral("移动能力")},
+      {QStringLiteral("Multi Filament"), QStringLiteral("复丝")},
+      {QStringLiteral("Multimaterial"), QStringLiteral("材料")},
+      {QStringLiteral("Plugin Configuration"), QStringLiteral("插件配置")},
+      {QStringLiteral("Position"), QStringLiteral("位置")},
+      {QStringLiteral("Resonance Compensation"), QStringLiteral("共振补偿")},
+      {QStringLiteral("Retraction when switching material"), QStringLiteral("切换材料时的回抽量")},
+      {QStringLiteral("Setting Overrides"), QStringLiteral("参数覆盖")},
+      {QStringLiteral("Single extruder multi-material parameters"), QStringLiteral("单挤出机多材料参数")},
+      {QStringLiteral("Single extruder multi-material setup"), QStringLiteral("设置单挤出机多材料")},
+      {QStringLiteral("Tool change parameters with multi extruder MM printers"), QStringLiteral("多挤出机多材料打印机的换色参数")},
+      {QStringLiteral("Tool change parameters with single extruder MM printers"), QStringLiteral("单挤出机多材料打印机的换色参数")},
+      {QStringLiteral("Wipe tower"), QStringLiteral("擦拭塔")},
+      {QStringLiteral("Wipe tower parameters"), QStringLiteral("擦拭塔参数")},
+      {QStringLiteral("Z-Hop"), QStringLiteral("Z轴抬升")},
       {QStringLiteral("Acceleration limitation"), QStringLiteral("加速度限制")},
       {QStringLiteral("Advanced"), QStringLiteral("高级")},
       {QStringLiteral("Basic information"), QStringLiteral("基础信息")},
@@ -1701,26 +1505,17 @@ static QString zhGroupLabel(const QString &group)
   return map.value(group, group);
 }
 
-static void assignPageGroupForTier(ConfigOptionModel *model, const QHash<QString, QPair<QString, QString>> &pageGroupMap)
+QString ConfigOptionModel::hierarchyLabel(const QString &name) const
 {
-  for (int i = 0; i < model->rowCount(); ++i)
-  {
-    const QString key = model->optKey(i);
-    const auto it = pageGroupMap.constFind(key);
-    if (it != pageGroupMap.cend())
-    {
-      QModelIndex idx = model->index(i, 0);
-      model->setData(idx, it.value().first, ConfigOptionModel::PageRole);
-      model->setData(idx, zhGroupLabel(it.value().second), ConfigOptionModel::GroupRole);
-    }
-  }
+  return zhGroupLabel(name);
 }
 
 QStringList ConfigOptionModel::processPageNames() const
 {
   QStringList result;
-  result.reserve(processPageDefinitions().size());
-  for (const ProcessPageDefinition &definition : processPageDefinitions())
+  const QList<ProcessPageDefinition> &definitions = hierarchyDefinitions(m_hierarchyTier);
+  result.reserve(definitions.size());
+  for (const ProcessPageDefinition &definition : definitions)
     result.append(definition.name);
   return result;
 }
@@ -1728,7 +1523,7 @@ QStringList ConfigOptionModel::processPageNames() const
 QStringList ConfigOptionModel::processGroupsForPage(const QString &page) const
 {
   QStringList result;
-  for (const ProcessPageDefinition &pageDefinition : processPageDefinitions()) {
+  for (const ProcessPageDefinition &pageDefinition : hierarchyDefinitions(m_hierarchyTier)) {
     if (pageDefinition.name != page)
       continue;
     result.reserve(pageDefinition.groups.size());
@@ -1743,7 +1538,7 @@ QList<int> ConfigOptionModel::orderedProcessIndicesForGroup(const QList<int> &ca
                                                             const QString &page,
                                                             const QString &group) const
 {
-  const ProcessGroupDefinition *definition = processGroupDefinition(page, group);
+  const ProcessGroupDefinition *definition = processGroupDefinition(hierarchyDefinitions(m_hierarchyTier), page, group);
   if (!definition)
     return {};
 
@@ -1781,7 +1576,7 @@ int ConfigOptionModel::processProjectedRowCount(const QString &page, const QStri
       continue;
     if (!matchesPage(i, page))
       continue;
-    const ProcessGroupDefinition *definition = processGroupDefinition(page, m_options[i].group);
+    const ProcessGroupDefinition *definition = processGroupDefinition(hierarchyDefinitions(m_hierarchyTier), page, m_options[i].group);
     if (!definition || !definition->optionKeys.contains(m_options[i].key))
       continue;
     ++count;
@@ -1795,7 +1590,7 @@ int ConfigOptionModel::processOptionRank(const QString &page, const QString &gro
   // rows outside the manifest sort last.
   if (row < 0 || row >= m_options.size())
     return INT_MAX;
-  const ProcessGroupDefinition *definition = processGroupDefinition(page, group);
+  const ProcessGroupDefinition *definition = processGroupDefinition(hierarchyDefinitions(m_hierarchyTier), page, group);
   if (!definition)
     return INT_MAX;
   const int rank = definition->optionKeys.indexOf(m_options[row].key);
@@ -1813,7 +1608,11 @@ QStringList ConfigOptionModel::processMappingErrors() const
 
 void ConfigOptionModel::assignProcessHierarchyMetadata()
 {
-  const auto &lookup = processPageGroupLookup();
+  QHash<QString, QPair<QString, QString>> lookup;
+  for (const ProcessPageDefinition &pageDefinition : hierarchyDefinitions(m_hierarchyTier))
+    for (const ProcessGroupDefinition &groupDefinition : pageDefinition.groups)
+      for (const QString &key : groupDefinition.optionKeys)
+        lookup.insert(key, qMakePair(pageDefinition.name, groupDefinition.name));
   for (ConfigOption &option : m_options) {
     const auto location = lookup.constFind(option.key);
     if (location == lookup.cend())
@@ -1915,18 +1714,33 @@ void ConfigOptionModel::loadFromUpstreamSchema()
   assignProcessHierarchyMetadata();
 }
 
+void ConfigOptionModel::loadTierSchema(int tier)
+{
+  // Rows follow the upstream tab hierarchy (page -> group -> option order) of
+  // the tier; the same grouped projection the Print tier uses renders them.
+  m_hierarchyTier = tier;
+  QVector<QByteArray> encodedKeys;
+  for (const ProcessPageDefinition &pageDefinition : hierarchyDefinitions(tier))
+    for (const ProcessGroupDefinition &groupDefinition : pageDefinition.groups)
+      for (const QString &key : groupDefinition.optionKeys)
+        encodedKeys.append(key.toUtf8());
+  QVector<const char *> keyPointers;
+  keyPointers.reserve(encodedKeys.size() + 1);
+  for (const QByteArray &key : encodedKeys)
+    keyPointers.append(key.constData());
+  keyPointers.append(nullptr);
+  loadSchemaFromKeys(keyPointers.constData());
+  assignProcessHierarchyMetadata();
+}
+
 void ConfigOptionModel::loadMachineSchema()
 {
-  loadSchemaFromKeys(kMachineKeys);
-  // Upstream: Tab.cpp:4438-4900 (TabPrinter::build_fff) - assign page/group metadata
-  assignPageGroupForTier(this, kPrinterPageGroupMap());
+  loadTierSchema(2);
 }
 
 void ConfigOptionModel::loadFilamentSchema()
 {
-  loadSchemaFromKeys(kFilamentKeys);
-  // Upstream: Tab.cpp:3892-4216 (TabFilament::build) - assign page/group metadata
-  assignPageGroupForTier(this, kFilamentPageGroupMap());
+  loadTierSchema(1);
 }
 
 #endif // HAS_LIBSLIC3R

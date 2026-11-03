@@ -150,6 +150,10 @@ public:
   Q_INVOKABLE QVariantList indicesForCategory(const QString &category) const;
   /// Returns list of unique page names (对齐上游 Tab::Page)
   Q_INVOKABLE QStringList pageNames() const;
+  /// Localised page/group label for the active tier's hierarchy.
+  Q_INVOKABLE QString hierarchyLabel(const QString &name) const;
+  /// Page names of the active tier's upstream hierarchy (Print, Filament or
+  /// Printer tab), in upstream order.
   Q_INVOKABLE QStringList processPageNames() const;
   Q_INVOKABLE QStringList processGroupsForPage(const QString &page) const;
   Q_INVOKABLE QStringList processMappingErrors() const;
@@ -203,6 +207,8 @@ public:
   void loadMachineSchema();
   // Load filament-specific config keys (material params).
   void loadFilamentSchema();
+  // Load a tier (0 Print, 1 Filament, 2 Printer) from its upstream hierarchy.
+  void loadTierSchema(int tier);
   // Generic schema loader driven by a key array.
   void loadSchemaFromKeys(const char *const keys[]);
 #endif
@@ -226,4 +232,5 @@ private:
   QSet<QString> m_dirtyKeys; ///< 被修改过的选项 key
   QHash<QString, QString> m_valueSourceByKey; ///< valueSource mirror (see setValueSources)
   int m_dataVersion = 0;
+  int m_hierarchyTier = 0; ///< 0 Print, 1 Filament, 2 Printer (hierarchyDefinitions)
 };

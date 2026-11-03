@@ -359,6 +359,7 @@ private slots:
   void testUpstreamDefaultsContainVectorKeys();
   void testMachineOptionsLoaded();
   void testFilamentOptionsLoaded();
+  void printerAndFilamentTabsFollowUpstreamHierarchy();
   // v5.16 Phase 236 (DLG-02): WipeTowerDialog OK persists the flush matrix
   // under the upstream flush_volumes_matrix key and calculateFlushMatrix
   // round-trips the saved values.
@@ -1449,6 +1450,63 @@ void ViewModelSmokeTests::testFilamentOptionsLoaded()
            "nozzle_temperature missing from filament options");
   QVERIFY2(filamentOpts->indexOfKey(QStringLiteral("fan_max_speed")) >= 0,
            "fan_max_speed missing from filament options");
+}
+
+// TabPrinter (build_fff + kinematics + extruder + multimaterial pages) and
+// TabFilament (incl. the Setting Overrides page) at the pin: page order and
+// representative group placements, including options that used to be missing
+// from the Qt editor entirely.
+void ViewModelSmokeTests::printerAndFilamentTabsFollowUpstreamHierarchy()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *printer = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  auto *filament = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(printer);
+  QVERIFY(filament);
+
+  QCOMPARE(printer->processPageNames(),
+           (QStringList{"Basic information", "Machine G-code", "Motion ability", "Extruder",
+                        "Multimaterial", "Notes"}));
+  QCOMPARE(filament->processPageNames(),
+           (QStringList{"Filament", "Cooling", "Setting Overrides", "Advanced", "Multimaterial",
+                        "Dependencies", "Notes"}));
+  QCOMPARE(printer->processGroupsForPage(QStringLiteral("Extruder")),
+           (QStringList{"Basic information", "Layer height limits", "Position", "Retraction",
+                        "Z-Hop", "Retraction when switching material"}));
+
+  auto placedIn = [](ConfigOptionModel *m, const char *key, const char *page, const char *group) {
+    const int row = m->indexOfKey(QString::fromLatin1(key));
+    return row >= 0 && m->optPage(row) == QLatin1String(page) && m->optGroup(row) == QLatin1String(group);
+  };
+  QVERIFY(placedIn(printer, "printable_area", "Basic information", "Printable space"));
+  QVERIFY(placedIn(printer, "extruder_clearance_radius", "Basic information", "Extruder Clearance"));
+  QVERIFY(placedIn(printer, "bed_mesh_probe_distance", "Basic information", "Adaptive bed mesh"));
+  QVERIFY(placedIn(printer, "input_shaping_type", "Motion ability", "Resonance Compensation"));
+  QVERIFY(placedIn(printer, "file_start_gcode", "Machine G-code", "File header G-code"));
+  QVERIFY(placedIn(printer, "retraction_length", "Extruder", "Retraction"));
+  QVERIFY(placedIn(printer, "cooling_tube_length", "Multimaterial", "Single extruder multi-material parameters"));
+  QVERIFY(placedIn(filament, "filament_retraction_length", "Setting Overrides", "Retraction"));
+  QVERIFY(placedIn(filament, "filament_ironing_flow", "Setting Overrides", "Ironing"));
+  QVERIFY(placedIn(filament, "during_print_exhaust_fan_speed", "Cooling", "Exhaust fan"));
+  QVERIFY(placedIn(filament, "filament_multitool_ramming", "Multimaterial",
+                   "Tool change parameters with multi extruder MM printers"));
+  QVERIFY(placedIn(filament, "compatible_printers_condition", "Dependencies", "Compatible printers"));
+  // Commented out of TabFilament::build upstream -> not an editor row.
+  QCOMPARE(filament->indexOfKey(QStringLiteral("filament_flush_temp")), -1);
+
+  // Rows within a group follow upstream order.
+  QList<int> all;
+  for (int i = 0; i < printer->rowCount(); ++i)
+    all.append(i);
+  const QList<int> ordered =
+      printer->orderedProcessIndicesForGroup(all, QStringLiteral("Extruder"), QStringLiteral("Z-Hop"));
+  QStringList keys;
+  for (int row : ordered)
+    keys.append(printer->optKey(row));
+  QCOMPARE(keys, (QStringList{"retract_lift_enforce", "z_hop_types", "z_hop", "travel_slope",
+                              "retract_lift_above", "retract_lift_below"}));
 }
 
 // Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.
@@ -7861,12 +7919,14 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
            "Printer pageNames() must contain 'Basic information' (TabPrinter)");
   QVERIFY2(printerPages.contains(QStringLiteral("Notes")),
            "Printer pageNames() must contain 'Notes' (TabPrinter)");
-  // 2026-10-26 i18n: GroupRole carries zh labels (zhGroupLabel, po-sourced).
+  // GroupRole carries the canonical upstream group key on every tier; the
+  // zh label is applied at display time (hierarchyLabel / zhGroupLabel).
   QStringList printerGroups = machineOpts->groupNames();
-  QVERIFY2(printerGroups.contains(QStringLiteral("可打印区域")),
-           "Printer groupNames() must contain '可打印区域' (Printable space, TabPrinter)");
-  QVERIFY2(printerGroups.contains(QStringLiteral("回抽")),
-           "Printer groupNames() must contain at least one retraction group");
+  QVERIFY2(printerGroups.contains(QStringLiteral("Printable space")),
+           "Printer groupNames() must contain 'Printable space' (TabPrinter)");
+  QVERIFY2(printerGroups.contains(QStringLiteral("Retraction")),
+           "Printer groupNames() must contain the extruder Retraction group");
+  QCOMPARE(machineOpts->hierarchyLabel(QStringLiteral("Printable space")), QStringLiteral("可打印区域"));
 
   // Filament tier: page names from TabFilament::build
   auto *filamentOpts = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
@@ -7878,8 +7938,8 @@ void ViewModelSmokeTests::testTabsAndGroupNavPerTier()
   QVERIFY2(filamentPages.contains(QStringLiteral("Cooling")),
            "Filament pageNames() must contain 'Cooling' (TabFilament)");
   QStringList filamentGroups = filamentOpts->groupNames();
-  QVERIFY2(filamentGroups.contains(QStringLiteral("打印温度")),
-           "Filament groupNames() must contain '打印温度' (Print temperature, TabFilament)");
+  QVERIFY2(filamentGroups.contains(QStringLiteral("Print temperature")),
+           "Filament groupNames() must contain 'Print temperature' (TabFilament)");
 
   // Print tier: page names from TabPrint::build
   auto *printOpts = qobject_cast<ConfigOptionModel *>(config.printOptions());
@@ -9423,7 +9483,10 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
   // the 0a3724ed2f baseline: Layer height +enable_mixed_color_sublayer :2641,
   // Infill +sparse_infill_smooth_factor :2803, Brim +brim_ears_outer_only
   // :3057, Plugin Configuration print_plugin_config_overrides :3126 -- the
-  // shared "plugin_config_overrides" was removed, PrintConfig.cpp:1093-1095),
+  // shared "plugin_config_overrides" was removed, PrintConfig.cpp:1093-1095;
+  // Overhang speed order :2862-2875, G-code output filename_format :3094,
+  // Change extrusion role G-code :3099, Notes :3128; post_process and
+  // slicing_pipeline_plugin have no Qt editor yet),
   // mirrored by ConfigOptionModel::processPageDefinitions().
   const QList<ExpectedGroup> expected = {
       {QStringLiteral("Quality"), QStringLiteral("Layer height"), keys({"layer_height", "initial_layer_print_height", "enable_mixed_color_sublayer"})},
@@ -9442,7 +9505,7 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
       {QStringLiteral("Strength"), QStringLiteral("Advanced"), keys({"align_infill_direction_to_model", "extra_solid_infills", "bridge_angle", "internal_bridge_angle", "relative_bridge_angle", "minimum_sparse_infill_area", "infill_combination", "infill_combination_max_layer_height", "detect_narrow_internal_solid_infill", "ensure_vertical_shell_thickness"})},
       {QStringLiteral("Speed"), QStringLiteral("First layer speed"), keys({"initial_layer_speed", "initial_layer_infill_speed", "initial_layer_travel_speed", "slow_down_layers"})},
       {QStringLiteral("Speed"), QStringLiteral("Other layers speed"), keys({"outer_wall_speed", "inner_wall_speed", "small_perimeter_speed", "small_perimeter_threshold", "sparse_infill_speed", "internal_solid_infill_speed", "top_surface_speed", "gap_infill_speed", "ironing_speed", "support_speed", "support_interface_speed", "small_support_perimeter_speed", "small_support_perimeter_threshold"})},
-      {QStringLiteral("Speed"), QStringLiteral("Overhang speed"), keys({"overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed", "enable_overhang_speed", "slowdown_for_curled_perimeters"})},
+      {QStringLiteral("Speed"), QStringLiteral("Overhang speed"), keys({"enable_overhang_speed", "slowdown_for_curled_perimeters", "overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed", "bridge_speed", "internal_bridge_speed"})},
       {QStringLiteral("Speed"), QStringLiteral("Travel speed"), keys({"travel_speed"})},
       {QStringLiteral("Speed"), QStringLiteral("Acceleration"), keys({"default_acceleration", "outer_wall_acceleration", "inner_wall_acceleration", "bridge_acceleration", "sparse_infill_acceleration", "internal_solid_infill_acceleration", "initial_layer_acceleration", "initial_layer_travel_acceleration", "top_surface_acceleration", "travel_acceleration", "accel_to_decel_enable", "accel_to_decel_factor"})},
       {QStringLiteral("Speed"), QStringLiteral("Junction Deviation"), keys({"default_junction_deviation"})},
@@ -9463,8 +9526,10 @@ void ViewModelSmokeTests::sourceMappedProcessHierarchyMatchesTabPrint()
       {QStringLiteral("Others"), QStringLiteral("Brim"), keys({"brim_type", "brim_width", "brim_object_gap", "brim_flow_ratio", "brim_use_efc_outline", "combine_brims", "brim_ears_max_angle", "brim_ears_detection_length", "brim_ears_outer_only"})},
       {QStringLiteral("Others"), QStringLiteral("Special mode"), keys({"slicing_mode", "print_sequence", "print_order", "spiral_mode", "spiral_mode_smooth", "spiral_mode_max_xy_smoothing", "spiral_starting_flow_ratio", "spiral_finishing_flow_ratio", "timelapse_type", "enable_wrapping_detection"})},
       {QStringLiteral("Others"), QStringLiteral("Fuzzy skin"), keys({"fuzzy_skin", "fuzzy_skin_mode", "fuzzy_skin_noise_type", "fuzzy_skin_point_distance", "fuzzy_skin_thickness", "fuzzy_skin_scale", "fuzzy_skin_octaves", "fuzzy_skin_persistence", "fuzzy_skin_ripples_per_layer", "fuzzy_skin_ripple_offset", "fuzzy_skin_layers_between_ripple_offset", "fuzzy_skin_first_layer"})},
-      {QStringLiteral("Others"), QStringLiteral("G-code output"), keys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object"})},
+      {QStringLiteral("Others"), QStringLiteral("G-code output"), keys({"reduce_infill_retraction", "gcode_add_line_number", "gcode_comments", "gcode_label_objects", "exclude_object", "filename_format"})},
+      {QStringLiteral("Others"), QStringLiteral("Change extrusion role G-code"), keys({"process_change_extrusion_role_gcode"})},
       {QStringLiteral("Others"), QStringLiteral("Plugin Configuration"), keys({"print_plugin_config_overrides"})},
+      {QStringLiteral("Others"), QStringLiteral("Notes"), keys({"notes"})},
   };
 
 

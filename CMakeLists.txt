@@ -629,6 +629,12 @@ if(BUILD_TESTING)
     )
 
     qt_add_executable(ViewModelSmokeTests tests/ViewModelSmokeTests.cpp)
+    # The ~12k-line test TU at /O2 needs more compiler heap than this machine
+    # reliably has while other workloads (WSL) hold memory: cl C1060 "out of
+    # heap space". Tests do not need optimisation; /Od keeps the compile small.
+    if(MSVC)
+        set_source_files_properties(tests/ViewModelSmokeTests.cpp PROPERTIES COMPILE_OPTIONS "/Od;/Ob0")
+    endif()
     # AUTOMOC fix (v3.0 retrospective): single-file tests with cpp-internal
     # Q_OBJECT have weak moc dependency tracking — adding a new slot to the
     # .cpp doesn't reliably re-run AUTOMOC, so the test binary uses stale moc
