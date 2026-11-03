@@ -1124,6 +1124,8 @@ Rectangle {
                                             required property bool optReadonly
                                             required property bool optEnabled
                                             required property bool optMultiline
+                                            required property string optLineHead
+                                            required property string optLineLabel
                                             required property bool optDirty
                                             required property string optTooltip
                                             required property string optUnit
@@ -1169,7 +1171,9 @@ Rectangle {
                                                 valueSource: paramsDelegate.valueSource
                                                 oType: paramsDelegate.optType
                                                 oKey: paramsDelegate.optKey
-                                                oLabel: paramsDelegate.displayLabel
+                                                oLabel: paramsDelegate.optLineHead !== "" ? paramsDelegate.optLineLabel : paramsDelegate.displayLabel
+                                                lineHead: paramsDelegate.optLineHead
+                                                lineViewMode: root.paramsViewMode
                                                 oVal: paramsDelegate.optValue
                                                 oMin: paramsDelegate.optMin
                                                 oMax: paramsDelegate.optMax

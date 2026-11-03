@@ -89,6 +89,7 @@ qt_add_qml_module(owzx_qml
         components/ToolPositionTooltip.qml
         components/NotificationCenter.qml
         components/ModeSwitch.qml
+        components/OptionLineFields.qml
         components/OptionRow.qml
         components/GLToolbars.qml
         components/PrepareContextMenus.qml
@@ -124,6 +125,7 @@ qt_add_qml_module(owzx_qml
         dialogs/BedShapeDialog.qml
         dialogs/EditGCodeDialog.qml
         dialogs/AccessCodeInputDialog.qml
+        dialogs/PluginsConfigDialog.qml
         dialogs/AMSSettingsDialog.qml
         dialogs/FirmwareDialog.qml
         dialogs/WipeTowerDialog.qml

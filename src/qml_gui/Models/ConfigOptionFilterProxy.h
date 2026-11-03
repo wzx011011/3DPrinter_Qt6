@@ -38,6 +38,9 @@ class ConfigOptionFilterProxy : public QSortFilterProxyModel
   // Upstream view mode (0 Simple .. 3 Develop, ConfigViewModel::viewMode).
   // -1 (default) falls back to advancedMode (true = Expert, false = Simple).
   Q_PROPERTY(int viewMode READ viewMode WRITE setViewMode NOTIFY viewModeChanged)
+  // When set, the proxy lists the members of this upstream multi-option
+  // line (head key) in append_option order instead of page/group rows.
+  Q_PROPERTY(QString lineHead READ lineHead WRITE setLineHead NOTIFY lineHeadChanged)
   // Option group ("Layer height"/"Line width"/...); empty = no group filter.
   Q_PROPERTY(QString group READ group WRITE setGroup NOTIFY groupChanged)
   // When true, rows sort by the upstream process manifest order
@@ -58,6 +61,8 @@ public:
   void setAdvancedMode(bool advancedMode);
   int viewMode() const { return m_viewMode; }
   void setViewMode(int viewMode);
+  QString lineHead() const { return m_lineHead; }
+  void setLineHead(const QString &lineHead);
   QString group() const { return m_group; }
   void setGroup(const QString &group);
   bool upstreamProcessOrder() const { return m_upstreamProcessOrder; }
@@ -72,6 +77,7 @@ signals:
   void searchTextChanged();
   void advancedModeChanged();
   void viewModeChanged();
+  void lineHeadChanged();
   void groupChanged();
   void upstreamProcessOrderChanged();
   void countChanged();
@@ -88,6 +94,7 @@ private:
   QString m_searchText;
   bool m_advancedMode = false;
   int m_viewMode = -1;
+  QString m_lineHead;
   QMetaObject::Connection m_toggleConnection;
   QString m_group;
   bool m_upstreamProcessOrder = false;

@@ -3914,7 +3914,9 @@ void QmlUiAuditTests::calibrationAndParameterControlsUseHonestLocalSemantics()
                && optionRow.contains(QStringLiteral("text: root.formattedNumber(root.oMax)")),
            "W1C: range bounds must be displayed as validation limits");
   QVERIFY2(!optionRow.contains(QStringLiteral("onCommit: root.optionModel.setValue(root.optIdx, valueText)"))
-               && optionRow.contains(QStringLiteral("ToolTip.text: qsTr(\"Edit the color value in the field\")")),
+               // Colour is one upstream ColourPicker button writing through
+               // the model (no second free-text editor beside a swatch).
+               && optionRow.contains(QStringLiteral("root.optionModel.setColour(root.optIdx")),
            "W1C: range/color chrome must not masquerade as duplicate writable controls");
   // S7: whitespace-tolerant absence — any empty `onClicked: { }` handler
   // (any indentation) marks an inert control, not just the exact 28-space
@@ -10984,6 +10986,7 @@ void QmlUiAuditTests::dialogReachabilitySourceAudit()
       {QStringLiteral("ExportPresetBundleDialog.qml"), QStringLiteral("showExportPresetBundleDialog()")},
       {QStringLiteral("FilamentGroupPopup.qml"), QStringLiteral("openForCurrentPlate()")},
       {QStringLiteral("SettingsDialog.qml"), QStringLiteral("forwardSettingsRequest(")},
+      {QStringLiteral("PluginsConfigDialog.qml"), QStringLiteral("pluginsDialogLoader.item.openWith(")},
       {QStringLiteral("NetworkTestDialog.qml"), QStringLiteral("networkTestDialog.open()")},
       {QStringLiteral("TroubleshootDialog.qml"), QStringLiteral("troubleshootDialog.open()")},
       {QStringLiteral("SelectMachineDialog.qml"), QStringLiteral("selectMachineDialog.open()")},

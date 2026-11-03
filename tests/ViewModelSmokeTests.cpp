@@ -69,6 +69,7 @@
 #include "core/viewmodels/ProjectViewModel.h"
 #include "core/viewmodels/SettingsViewModel.h"
 #include "qml_gui/BackendContext.h"
+#include "qml_gui/Models/ConfigOptionFilterProxy.h"
 #include "qml_gui/Models/ConfigOptionModel.h"
 #include "qml_gui/Renderer/PrepareSceneData.h"
 // SEL-MODIFIERS-RECT: static projection/containment helpers (pure, no QRhi
@@ -362,9 +363,14 @@ private slots:
   void testFilamentOptionsLoaded();
   void printerAndFilamentTabsFollowUpstreamHierarchy();
   void optionToggleRulesFollowUpstream();
+  void optionToggleRulesForceDependentValues();
   void optionModelViewModeAndToggleFilter();
   void configViewModelAppliesToggleRules();
   void pointOptionsParseAndFormat();
+  void optionLinesFollowUpstreamTabLines();
+  void enumOptionsResolveKeysAndWriteKeys();
+  void pluginConfigOverridesDocument();
+  void colourOptionsUseGuiTypeColor();
   // v5.16 Phase 236 (DLG-02): WipeTowerDialog OK persists the flush matrix
   // under the upstream flush_volumes_matrix key and calculateFlushMatrix
   // round-trips the saved values.
@@ -1588,6 +1594,64 @@ void ViewModelSmokeTests::optionToggleRulesFollowUpstream()
   QVERIFY(!r.disabled.contains(QStringLiteral("pressure_advance")));
 }
 
+// The upstream toggle functions also rewrite dependent values
+// (ConfigManipulation apply(), TabFilament/TabPrinter load_config) and ask
+// about the firmware-retraction / wipe conflict; ConfigViewModel writes the
+// forced values back into the global preset values.
+void ViewModelSmokeTests::optionToggleRulesForceDependentValues()
+{
+  QHash<QString, QVariant> print;
+  QHash<QString, QVariant> printer;
+  QHash<QString, QVariant> filament;
+  OptionToggleRules::Context ctx;
+  ctx.print = [&print](const QString &k) { return print.value(k); };
+  ctx.printer = [&printer](const QString &k) { return printer.value(k); };
+  ctx.filament = [&filament](const QString &k) { return filament.value(k); };
+
+  print.insert(QStringLiteral("max_volumetric_extrusion_rate_slope"), 5);
+  print.insert(QStringLiteral("enable_arc_fitting"), QStringLiteral("1"));
+  print.insert(QStringLiteral("max_volumetric_extrusion_rate_slope_segment_length"), 0.2);
+  print.insert(QStringLiteral("sparse_infill_density"), QStringLiteral("15%"));
+  print.insert(QStringLiteral("sparse_infill_pattern"), QStringLiteral("line"));
+  print.insert(QStringLiteral("fill_multiline"), 3);
+  OptionToggleRules::Result r = OptionToggleRules::printToggles(ctx);
+  QCOMPARE(r.forced.value(QStringLiteral("enable_arc_fitting")), QVariant(false));
+  QCOMPARE(r.forced.value(QStringLiteral("max_volumetric_extrusion_rate_slope_segment_length")).toDouble(), 1.0);
+  QCOMPARE(r.forced.value(QStringLiteral("fill_multiline")).toInt(), 1);
+
+  // Already-consistent values are not rewritten.
+  print.insert(QStringLiteral("enable_arc_fitting"), false);
+  print.insert(QStringLiteral("max_volumetric_extrusion_rate_slope_segment_length"), 3);
+  print.insert(QStringLiteral("fill_multiline"), 1);
+  QVERIFY(OptionToggleRules::printToggles(ctx).forced.isEmpty());
+
+  filament.insert(QStringLiteral("close_fan_the_first_x_layers"), QVariantList{2});
+  filament.insert(QStringLiteral("initial_layer_fan_speed"), QVariantList{30});
+  r = OptionToggleRules::filamentToggles(ctx);
+  QCOMPARE(r.forced.value(QStringLiteral("initial_layer_fan_speed")).toList(), QVariantList{-1});
+
+  printer.insert(QStringLiteral("use_firmware_retraction"), true);
+  printer.insert(QStringLiteral("retraction_length"), QVariantList{0.8});
+  printer.insert(QStringLiteral("wipe"), QVariantList{QStringLiteral("1")});
+  printer.insert(QStringLiteral("retract_before_wipe"), QVariantList{QStringLiteral("70%")});
+  QVERIFY(OptionToggleRules::printerToggles(ctx).firmwareRetractionConflict);
+  printer.insert(QStringLiteral("retract_before_wipe"), QVariantList{QStringLiteral("100%")});
+  QVERIFY(!OptionToggleRules::printerToggles(ctx).firmwareRetractionConflict);
+
+  // ConfigViewModel applies forced values to the global print values.
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *printModel = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printModel);
+  const int arcRow = printModel->indexOfKey(QStringLiteral("enable_arc_fitting"));
+  const int slopeRow = printModel->indexOfKey(QStringLiteral("max_volumetric_extrusion_rate_slope"));
+  QVERIFY(arcRow >= 0 && slopeRow >= 0);
+  printModel->setValue(arcRow, true);
+  printModel->setValue(slopeRow, 5.0);
+  QCOMPARE(printModel->optValue(arcRow), QVariant(false));
+}
+
 // Upstream OptionsGroup::is_visible: a line shows when def mode <= view mode
 // (Simple 0 / Advanced 1 / Expert 2 / Develop 3); toggle_line hides it.
 void ViewModelSmokeTests::optionModelViewModeAndToggleFilter()
@@ -1681,6 +1745,155 @@ void ViewModelSmokeTests::pointOptionsParseAndFormat()
   QCOMPARE(printer->pointCoord(printer->optValue(posRow), 0), 0.5);
   printer->setPointCoord(posRow, 1, 0.25);
   QCOMPARE(printer->optValue(posRow).toString(), QStringLiteral("0.5x0.25"));
+}
+
+// Upstream multi-option lines (Tab.cpp `Line` + append_option): the head row
+// renders the line, members never stand alone, hiding any member hides the
+// line, and a lineHead proxy lists the members in append_option order.
+void ViewModelSmokeTests::optionLinesFollowUpstreamTabLines()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *printer = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  auto *filament = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  auto *print = qobject_cast<ConfigOptionModel *>(config.printOptions());
+  QVERIFY(printer && filament && print);
+
+  const int timeRow = printer->indexOfKey(QStringLiteral("fan_speedup_time"));
+  const int overhangsRow = printer->indexOfKey(QStringLiteral("fan_speedup_overhangs"));
+  QVERIFY(timeRow >= 0 && overhangsRow >= 0);
+  QCOMPARE(printer->data(printer->index(timeRow), ConfigOptionModel::LineHeadRole).toString(),
+           QStringLiteral("fan_speedup_time"));
+  QCOMPARE(printer->data(printer->index(overhangsRow), ConfigOptionModel::LineHeadRole).toString(),
+           QStringLiteral("fan_speedup_time"));
+  QCOMPARE(printer->data(printer->index(timeRow), ConfigOptionModel::LineLabelRole).toString(),
+           QStringLiteral("风扇响应时间"));
+  QCOMPARE(printer->data(printer->index(overhangsRow), ConfigOptionModel::SubLabelRole).toString(),
+           QStringLiteral("仅悬垂"));
+  QVERIFY(printer->matchesFilter(timeRow, QString(), 3));
+  QVERIFY(!printer->matchesFilter(overhangsRow, QString(), 3)); // rendered inside the head
+  // Searching a member's label finds the line (its head row).
+  QVERIFY(printer->matchesFilter(timeRow, QStringLiteral("fan_speedup_overhangs"), 3));
+
+  ConfigOptionFilterProxy members;
+  members.setSourceModel(printer);
+  members.setViewMode(3);
+  members.setLineHead(QStringLiteral("fan_speedup_time"));
+  QCOMPARE(members.rowCount(), 2);
+  QCOMPARE(members.data(members.index(0, 0), ConfigOptionModel::KeyRole).toString(), QStringLiteral("fan_speedup_time"));
+  QCOMPARE(members.data(members.index(1, 0), ConfigOptionModel::KeyRole).toString(), QStringLiteral("fan_speedup_overhangs"));
+
+  // toggle_line on a non-head member hides the whole line (Tab::get_line).
+  const int duringRow = filament->indexOfKey(QStringLiteral("activate_air_filtration_during_print"));
+  QVERIFY(duringRow >= 0);
+  filament->setToggleState({QStringLiteral("during_print_exhaust_fan_speed")}, {});
+  QVERIFY(!filament->matchesFilter(duringRow, QString(), 3));
+  filament->setToggleState({}, {});
+  QVERIFY(filament->matchesFilter(duringRow, QString(), 3));
+
+  // Four-member print line keeps append_option order.
+  ConfigOptionFilterProxy overhang;
+  overhang.setSourceModel(print);
+  overhang.setViewMode(3);
+  overhang.setLineHead(QStringLiteral("overhang_1_4_speed"));
+  QCOMPARE(overhang.rowCount(), 4);
+  QCOMPARE(overhang.data(overhang.index(3, 0), ConfigOptionModel::KeyRole).toString(), QStringLiteral("overhang_4_4_speed"));
+  QCOMPARE(overhang.data(overhang.index(1, 0), ConfigOptionModel::SubLabelRole).toString(), QStringLiteral("25%"));
+}
+
+// Enum combos: preset JSON stores enum keys ("klipper"); the combo row must
+// resolve from the key (it showed the first entry, Marlin(legacy), for a
+// Klipper printer), and an edit must write the key back -- an int index never
+// deserializes into a ConfigOptionEnum.
+void ViewModelSmokeTests::enumOptionsResolveKeysAndWriteKeys()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *printer = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(printer);
+  const int row = printer->indexOfKey(QStringLiteral("gcode_flavor"));
+  QVERIFY(row >= 0);
+  const QStringList labels = printer->optEnumLabelsList(row);
+  const int klipper = printer->enumIndexOf(row, QStringLiteral("klipper"));
+  QVERIFY(klipper > 0);
+  QCOMPARE(printer->enumIndexOf(row, QVariantList{QStringLiteral("klipper")}), klipper);
+  QCOMPARE(printer->enumIndexOf(row, klipper), klipper);
+  QCOMPARE(printer->enumIndexOf(row, labels.at(klipper)), klipper);
+
+  printer->setEnumIndex(row, klipper);
+  QCOMPARE(printer->optValue(row).toString(), QStringLiteral("klipper"));
+}
+
+// *_plugin_config_overrides (upstream GUIType::plugin_config): a "配置 (N)"
+// button over the JSON array document (PluginConfig parse/serialize):
+// entries round-trip, cap_config edits validate as JSON objects, removing
+// the last entry stores "" and unparseable text is reported, never rewritten.
+void ViewModelSmokeTests::pluginConfigOverridesDocument()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *printer = qobject_cast<ConfigOptionModel *>(config.machineOptions());
+  QVERIFY(printer);
+  const int row = printer->indexOfKey(QStringLiteral("printer_plugin_config_overrides"));
+  QVERIFY(row >= 0);
+  QCOMPARE(printer->optType(row), QStringLiteral("plugin_config"));
+
+  const QString raw = QStringLiteral(
+      "[{\"plugin_key\":\"p1\",\"capability\":\"cap\",\"capability_type\":\"gcode_post\","
+      "\"plugin_version\":\"1.0\",\"cap_config\":{\"a\":1}},{\"opaque\":true}]");
+  QCOMPARE(printer->pluginOverrideCount(raw), 2);
+  QCOMPARE(printer->pluginOverrideCount(QString()), 0);
+  const QVariantList entries = printer->pluginOverrideEntries(raw);
+  QCOMPARE(entries.size(), 2);
+  QCOMPARE(entries.first().toMap().value(QStringLiteral("capability")).toString(), QStringLiteral("cap"));
+
+  QVariantMap bad = printer->pluginOverrideSetConfig(raw, 0, QStringLiteral("{not json"));
+  QVERIFY(!bad.value(QStringLiteral("ok")).toBool());
+  QCOMPARE(bad.value(QStringLiteral("text")).toString(), raw);
+
+  QVariantMap good = printer->pluginOverrideSetConfig(raw, 0, QStringLiteral("{\"a\": 2}"));
+  QVERIFY(good.value(QStringLiteral("ok")).toBool());
+  const QString edited = good.value(QStringLiteral("text")).toString();
+  QVERIFY(edited.contains(QStringLiteral("\"a\":2")));
+  QVERIFY(edited.contains(QStringLiteral("\"opaque\":true"))); // opaque entries kept
+  QVERIFY(printer->pluginOverridesEqual(raw, QStringLiteral(" ") + raw));
+  QVERIFY(!printer->pluginOverridesEqual(raw, edited));
+
+  QString removed = printer->pluginOverrideRemove(edited, 1);
+  removed = printer->pluginOverrideRemove(removed, 0);
+  QCOMPARE(removed, QString());
+
+  QVERIFY(!printer->pluginOverridesError(QStringLiteral("{\"x\":1}")).isEmpty());
+  QCOMPARE(printer->pluginOverrideCount(QStringLiteral("{\"x\":1}")), 0);
+}
+
+// Colour options follow upstream GUIType::color (ColourPicker), not a key
+// substring: typed "color", the first vector element is the shown colour,
+// edits keep the vector, "" is the undefined colour (right-click reset).
+void ViewModelSmokeTests::colourOptionsUseGuiTypeColor()
+{
+  PresetService preset;
+  ProjectService project;
+  ConfigViewModel config(&preset, &project);
+  auto *filament = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(filament);
+  const int row = filament->indexOfKey(QStringLiteral("default_filament_colour"));
+  QVERIFY(row >= 0);
+  QCOMPARE(filament->optType(row), QStringLiteral("color"));
+
+  QCOMPARE(filament->colourOf(QVariantList{QStringLiteral("#FF8000"), QStringLiteral("#000000")}),
+           QStringLiteral("#FF8000"));
+  QCOMPARE(filament->colourOf(QStringLiteral("not a colour")), QString());
+
+  filament->setValue(row, QVariantList{QStringLiteral("#FFFFFF"), QStringLiteral("#000000")});
+  filament->setColour(row, QStringLiteral("#00AE42"));
+  QCOMPARE(filament->optValue(row).toList(),
+           (QVariantList{QStringLiteral("#00AE42"), QStringLiteral("#000000")}));
+  filament->setColour(row, QString());
+  QCOMPARE(filament->colourOf(filament->optValue(row)), QString());
 }
 
 // Phase 199 (WIZ-01): vendor/model enumeration for the ConfigWizard.

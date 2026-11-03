@@ -19,6 +19,7 @@ struct ConfigOption
   double max = 0;
   double step = 1;
   QStringList enumLabels{};
+  QStringList enumValues{}; // upstream ConfigOptionDef::enum_values (preset keys), same order as enumLabels
   QString category{}; // "质量" | "填充" | "速度" | "温度" | "支撑" | "底座" | "冷却" | "回退" | "其他"
   QString group{};   // 对齐上游 ConfigOptionsGroup — 子分组标题
   QString page{};     // 对齐上游 Tab Page — 顶层页面 (Quality/Strength/Speed/Support/Other) (empty = auto-detect)
@@ -93,7 +94,13 @@ public:
     // and pushed through setToggleState().
     EnabledRole,        // optEnabled: field editable (toggle_field)
     LineVisibleRole,    // optLineVisible: line shown (toggle_line)
-    MultilineRole       // optMultiline: ConfigOptionDef::multiline string editor
+    MultilineRole,      // optMultiline: ConfigOptionDef::multiline string editor
+    // Upstream multi-option Line (Tab.cpp `Line line = {...};
+    // line.append_option(...)`): the first member is the line head and
+    // renders the whole line; the other members only appear inside it.
+    LineHeadRole,       // optLineHead: head key of the line this option belongs to ("" = single-option line)
+    LineLabelRole,      // optLineLabel: zh line label (head rows only)
+    SubLabelRole        // optSubLabel: zh per-option label inside a line (ConfigOptionDef::label)
   };
   Q_ENUM(Roles)
 
@@ -151,6 +158,36 @@ public:
 
   /// Upstream optgroup icon name for a group title ("" when none).
   Q_INVOKABLE QString groupIconName(const QString &group) const;
+
+  /// Combo index for an enum value in any stored form: preset key
+  /// ("klipper"), upstream label, or a row index written by older edits.
+  Q_INVOKABLE int enumIndexOf(int row, const QVariant &value) const;
+  /// Writes the enum_values key for a combo index -- the form preset JSON
+  /// and set_deserialize use (an int index never deserializes into an enum).
+  Q_INVOKABLE void setEnumIndex(int row, int index);
+
+  // ── Plugin capability overrides (upstream GUIType::plugin_config) ──────
+  // Wrappers over core PluginOverrides for PluginsConfigDialog.qml; the
+  // dialog edits a working copy of the option's JSON text.
+  Q_INVOKABLE int pluginOverrideCount(const QVariant &raw) const;
+  /// [{pluginKey, capability, capabilityType, configText}] for each entry.
+  Q_INVOKABLE QVariantList pluginOverrideEntries(const QVariant &raw) const;
+  Q_INVOKABLE QString pluginOverridesError(const QVariant &raw) const;
+  /// {ok, text, error}: replaces entry `index`'s cap_config.
+  Q_INVOKABLE QVariantMap pluginOverrideSetConfig(const QString &raw, int index, const QString &configText) const;
+  /// Text without entry `index` ("" once no override remains).
+  Q_INVOKABLE QString pluginOverrideRemove(const QString &raw, int index) const;
+  /// Semantic equality: whitespace / formatting differences do not dirty the preset.
+  Q_INVOKABLE bool pluginOverridesEqual(const QString &a, const QString &b) const;
+  /// Upstream preset_type_title: "工艺插件" / "材料插件" / "打印机插件".
+  Q_INVOKABLE QString pluginConfigTitle() const;
+
+  // ── Colour options (upstream GUIType::color / ColourPicker) ───────────
+  /// "#RRGGBB" of the (first) colour, "" when undefined.
+  Q_INVOKABLE QString colourOf(const QVariant &value) const;
+  /// Writes the colour ("" = undefined); vector options keep their other
+  /// elements (per-extruder / per-filament colours).
+  Q_INVOKABLE void setColour(int row, const QString &colour);
 
   // ── Point options (upstream coPoint / coPoints) ─────────────────────────
   // Values arrive either as preset-JSON lists of "XxY" strings or as the
@@ -211,6 +248,15 @@ public:
   /// toggleVisibilityChanged when the hidden set changed.
   void setToggleState(const QSet<QString> &hiddenKeys, const QSet<QString> &disabledKeys);
   bool isLineHidden(const QString &key) const { return m_hiddenKeys.contains(key); }
+
+  /// Line membership (see LineHeadRole). A member that is not the head never
+  /// passes matchesFilter: the head row renders it.
+  QString lineHeadForKey(const QString &key) const { return m_lineHeadByKey.value(key); }
+  /// Rows of one line in upstream append_option order, filtered by the view
+  /// mode (a member above the mode is hidden inside the line).
+  bool matchesLineMember(int row, const QString &headKey, int viewMode) const;
+  int lineMemberRank(int row) const;
+  Q_INVOKABLE QStringList lineMemberKeys(const QString &headKey) const { return m_lineMembersByHead.value(headKey); }
   bool isFieldDisabled(const QString &key) const { return m_disabledKeys.contains(key); }
   /// Page match: empty page always matches; option page falls back to
   /// pageForCategory when unset (same as filterIndicesByPage).
@@ -272,6 +318,9 @@ private:
   QHash<QString, QVariant> m_referenceValues;
   QSet<QString> m_dirtyKeys; ///< 被修改过的选项 key
   QSet<QString> m_hiddenKeys;   ///< toggle_line(false) keys
+  QHash<QString, QString> m_lineHeadByKey;          ///< member key -> head key
+  QHash<QString, QStringList> m_lineMembersByHead;  ///< head key -> members (head first)
+  QHash<QString, QString> m_lineLabelByHead;        ///< head key -> zh line label
   QSet<QString> m_disabledKeys; ///< toggle_field(false) keys
   QHash<QString, QString> m_valueSourceByKey; ///< valueSource mirror (see setValueSources)
   int m_dataVersion = 0;

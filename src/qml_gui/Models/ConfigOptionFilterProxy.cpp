@@ -41,6 +41,16 @@ ConfigOptionFilterProxy::ConfigOptionFilterProxy(QObject *parent)
   });
 }
 
+void ConfigOptionFilterProxy::setLineHead(const QString &lineHead)
+{
+  if (m_lineHead == lineHead)
+    return;
+  m_lineHead = lineHead;
+  emit lineHeadChanged();
+  invalidate();
+  refreshSorting();
+}
+
 void ConfigOptionFilterProxy::setViewMode(int viewMode)
 {
   if (m_viewMode == viewMode)
@@ -133,6 +143,8 @@ bool ConfigOptionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex 
   if (!model)
     return true;
   const int mode = m_viewMode >= 0 ? m_viewMode : (m_advancedMode ? 2 : 0);
+  if (!m_lineHead.isEmpty())
+    return model->matchesLineMember(sourceRow, m_lineHead, mode);
   return model->matchesFilter(sourceRow, m_searchText, mode)
       && model->matchesPage(sourceRow, m_page)
       && model->matchesGroup(sourceRow, m_group);
@@ -143,6 +155,11 @@ bool ConfigOptionFilterProxy::lessThan(const QModelIndex &sourceLeft, const QMod
   // Upstream process manifest order. QSortFilterProxyModel reads sort-role
   // data from the *source* model, which does not know the proxy's page/group,
   // so the rank is computed here instead of through a sort role.
+  if (!m_lineHead.isEmpty())
+  {
+    if (ConfigOptionModel *model = optionModel())
+      return model->lineMemberRank(sourceLeft.row()) < model->lineMemberRank(sourceRight.row());
+  }
   if (m_upstreamProcessOrder)
   {
     if (ConfigOptionModel *model = optionModel())
@@ -165,7 +182,7 @@ ConfigOptionModel *ConfigOptionFilterProxy::optionModel() const
 
 void ConfigOptionFilterProxy::refreshSorting()
 {
-  if (m_upstreamProcessOrder && optionModel())
+  if ((m_upstreamProcessOrder || !m_lineHead.isEmpty()) && optionModel())
     sort(0, Qt::AscendingOrder);
   else
     sort(-1); // source row order

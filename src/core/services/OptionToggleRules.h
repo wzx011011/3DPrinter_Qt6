@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QSet>
 #include <QString>
 #include <QVariant>
@@ -17,11 +18,11 @@
 // option models. Upstream calls run in order and a later call on the same key
 // overrides an earlier one, so the result sets are built the same way.
 //
-// Not ported (value side effects / dialogs, not visibility): the forced value
-// rewrites inside the upstream functions (enable_arc_fitting off,
-// fill_multiline = 1, overhang_reverse_threshold = 0, initial_layer_fan_speed
-// = -1, the firmware-retraction wipe dialog) and the filament
-// "Setting Overrides" page checkboxes (update_filament_overrides_page).
+// The same upstream functions also rewrite values (apply(config, &new_conf)
+// / load_config): those land in Result::forced, keyed for the tier the
+// function edits, and the caller writes them back. The firmware-retraction
+// wipe conflict (TabPrinter::toggle_options MessageDialog) is reported via
+// Result::firmwareRetractionConflict for the caller to ask about.
 namespace OptionToggleRules
 {
 using Lookup = std::function<QVariant(const QString &key)>;
@@ -40,6 +41,10 @@ struct Result
 {
   QSet<QString> hidden;   ///< toggle_line(key, false)
   QSet<QString> disabled; ///< toggle_field / toggle_option(key, false)
+  /// Upstream value rewrites (only keys whose value actually changes).
+  QHash<QString, QVariant> forced;
+  /// use_firmware_retraction && wipe && retract_before_wipe < 100%.
+  bool firmwareRetractionConflict = false;
 };
 
 Result printToggles(const Context &ctx);

@@ -213,6 +213,10 @@ Result printToggles(const Context &ctx)
   t.field("enable_arc_fitting", !have_volumetric_extrusion_rate_slope);
   t.line("max_volumetric_extrusion_rate_slope_segment_length", have_volumetric_extrusion_rate_slope);
   t.line("extrusion_rate_smoothing_external_perimeter_only", have_volumetric_extrusion_rate_slope);
+  if (have_volumetric_extrusion_rate_slope && config.b("enable_arc_fitting"))
+    result.forced.insert(QStringLiteral("enable_arc_fitting"), false);
+  if (config.f("max_volumetric_extrusion_rate_slope_segment_length") < 0.5)
+    result.forced.insert(QStringLiteral("max_volumetric_extrusion_rate_slope_segment_length"), 1.0);
 
   const bool have_perimeters = config.i("wall_loops") > 0;
   for (auto el : {"extra_perimeters_on_overhangs", "ensure_vertical_shell_thickness", "detect_thin_wall", "detect_overhang_wall",
@@ -249,6 +253,9 @@ Result printToggles(const Context &ctx)
   if (have_infill)
   {
     t.field("fill_multiline", have_multiline_infill_pattern);
+    // Patterns without multiline support pin fill_multiline to 1.
+    if (!have_multiline_infill_pattern && config.i("fill_multiline") != 1)
+      result.forced.insert(QStringLiteral("fill_multiline"), 1);
     const bool infill_anchor = pattern != ipLine;
     t.field("infill_anchor_max", infill_anchor);
     const bool has_infill_anchors = infill_anchor && config.f("infill_anchor_max") > 0;
@@ -566,6 +573,8 @@ Result printToggles(const Context &ctx)
   t.line("overhang_reverse", allow_overhang_reverse);
   t.line("overhang_reverse_internal_only", allow_overhang_reverse && has_overhang_reverse);
   const bool has_overhang_reverse_internal_only = config.b("overhang_reverse_internal_only");
+  if (has_overhang_reverse_internal_only && config.f("overhang_reverse_threshold") != 0.0)
+    result.forced.insert(QStringLiteral("overhang_reverse_threshold"), QStringLiteral("0%"));
   t.line("overhang_reverse_threshold", has_detect_overhang_wall && allow_overhang_reverse && has_overhang_reverse &&
                                            !has_overhang_reverse_internal_only);
   t.line("timelapse_type", is_BBL_Printer);
@@ -648,6 +657,8 @@ Result printerToggles(const Context &ctx)
       t.field(el, supports_wipe_tower_2);
 
     const bool bSEMM = config.b("single_extruder_multi_material");
+    if (!bSEMM && config.b("manual_filament_change"))
+      result.forced.insert(QStringLiteral("manual_filament_change"), false);
     t.field("extruders_count", !bSEMM);
     t.field("manual_filament_change", bSEMM);
     t.field("purge_in_prime_tower", bSEMM && supports_wipe_tower_2);
@@ -688,6 +699,8 @@ Result printerToggles(const Context &ctx)
     const double retract_after_wipe = config.f("retract_after_wipe");
     t.field("retract_before_wipe", wipe && std::abs(retract_after_wipe - 100.) > 1e-6);
     t.field("retract_after_wipe", wipe && std::abs(retract_before_wipe - 100.) > 1e-6);
+    if (use_firmware_retraction && wipe && retract_before_wipe < 100.0)
+      result.firmwareRetractionConflict = true;
     t.field("wipe_distance", wipe);
 
     const bool have_multiple_extruders = true; // upstream: hard-wired true
@@ -766,7 +779,28 @@ Result filamentToggles(const Context &ctx)
     for (auto el : {"overhang_fan_speed", "overhang_fan_threshold", "internal_bridge_fan_speed"})
       t.field(el, has_enable_overhang_bridge_fan);
     t.field("dont_slow_down_outer_wall", config.b("slow_down_for_layer_cooling"));
-    t.line("initial_layer_fan_speed", config.i("close_fan_the_first_x_layers") <= 0);
+    const bool initial_layer_fan_speed_enabled = config.i("close_fan_the_first_x_layers") <= 0;
+    t.line("initial_layer_fan_speed", initial_layer_fan_speed_enabled);
+    // The gate forces every entry to -1 so the cooling buffer never takes
+    // the first-layer override branch.
+    if (!initial_layer_fan_speed_enabled && ctx.filament)
+    {
+      const QVariant current = ctx.filament(QStringLiteral("initial_layer_fan_speed"));
+      const QVariantList values = current.typeId() == QMetaType::QVariantList ? current.toList()
+                                  : current.isValid() ? QVariantList{current} : QVariantList{};
+      bool needsReset = false;
+      for (const QVariant &v : values)
+        // An absent value is the def default (-1), already consistent.
+        if (v.isValid() && v.toString().trimmed() != QLatin1String("-1"))
+          needsReset = true;
+      if (needsReset)
+      {
+        QVariantList reset;
+        for (qsizetype i = 0; i < qMax<qsizetype>(1, values.size()); ++i)
+          reset.append(-1);
+        result.forced.insert(QStringLiteral("initial_layer_fan_speed"), reset);
+      }
+    }
     t.line("additional_cooling_fan_speed", printer_cfg.b("auxiliary_fan"));
 
     const bool support_air_filtration = printer_cfg.b("support_air_filtration");

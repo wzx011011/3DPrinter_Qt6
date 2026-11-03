@@ -550,9 +550,15 @@ public:
   /// Upstream m_mode_icon: cycle Simple -> Advanced -> Expert (no-op in
   /// developer mode, Tab.cpp:430-437).
   Q_INVOKABLE void cycleUserMode();
+  /// Upstream TabPrinter firmware-retraction prompt answer: yes = wipe off
+  /// and retract_before_wipe 100%, no = use_firmware_retraction off.
+  Q_INVOKABLE void resolveFirmwareRetractionConflict(bool setRetractBeforeWipeTo100);
 
 signals:
   void viewModeChanged();
+  /// Raised after a printer edit leaves use_firmware_retraction + wipe +
+  /// retract_before_wipe < 100% (Tab.cpp:6200-6222 MessageDialog).
+  void firmwareRetractionConflict();
   void stateChanged();
   void sliceAffectingConfigChanged();
   void pendingUnsavedChangesRequested();
@@ -643,6 +649,8 @@ private:
   int settingsTargetVolumeIndex_ = -1;
   int settingsTargetPlateIndex_ = -1;
   bool applyingScopeValues_ = false;
+  bool applyingForcedValues_ = false;
+  bool firmwareRetractionConflict_ = false;
   QHash<QString, QVariant> globalOptionValues_;
   QSet<QString> scopedWritableKeys_;
 

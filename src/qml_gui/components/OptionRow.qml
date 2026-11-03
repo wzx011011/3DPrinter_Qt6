@@ -7,6 +7,7 @@ import QtQuick
 pragma ComponentBehavior: Bound
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import OWzx
 
 Item {
@@ -125,6 +126,20 @@ Item {
         return icons[group] || ""
     }
 
+    // Preset JSON stores bools as "1"/"0" (read back as 1/0) and vector
+    // bools as lists; QML edits write true/false. All read the same way.
+    function boolValue(value) {
+        if (Array.isArray(value) || (value && typeof value === "object" && value.length !== undefined))
+            value = value.length > 0 ? value[0] : false
+        if (typeof value === "boolean")
+            return value
+        if (typeof value === "number")
+            return value !== 0
+        if (typeof value === "string")
+            return value === "1" || value.toLowerCase() === "true"
+        return false
+    }
+
     function normalizedNumber(value, fallbackValue) {
         if (typeof value === "number")
             return value
@@ -193,6 +208,14 @@ Item {
     // Upstream ConfigOptionDef::multiline: G-code / notes / post-process
     // use a multi-line editor; every other string is one line.
     property bool oMultiline: false
+    // Upstream multi-option Line: when lineHead is set this row is the line
+    // head -- oLabel carries the line label and the control cell renders
+    // every member (OptionLineFields). inlineMember marks the per-member
+    // field instances inside a line (no label column, no badge lane).
+    property string lineHead: ""
+    property int lineViewMode: 0
+    property bool inlineMember: false
+    readonly property bool isLine: root.lineHead !== ""
     readonly property bool isMultilineString: root.oType === "string" && root.oMultiline
     property bool oNullable: false
     property bool oIsVector: false
@@ -210,9 +233,9 @@ Item {
             || root.oKey === "fan_max_speed"
             || root.oKey === "nozzle_temperature_range"
             || root.oLabel.toLowerCase().indexOf("range") >= 0)
-    readonly property bool isColorLike:
-        root.oKey.toLowerCase().indexOf("colour") >= 0
-        || root.oKey.toLowerCase().indexOf("color") >= 0
+    // Upstream GUIType::color options (extruder_colour,
+    // default_filament_colour, ...): typed "color" by the model.
+    readonly property bool isColorLike: root.oType === "color"
     // Phase 236 (DLG-01): keys whose value is edited in a dedicated dialog
     // rather than the inline field — G-code fields (machine_start_gcode,
     // machine_end_gcode, ...) open EditGCodeDialog; the bed geometry keys
@@ -233,7 +256,8 @@ Item {
     // Compact row rhythm 26px (2026-10-26 pixel audit: upstream runs a
     // 13px label on a 26px pitch — exactly 2x — vs our previous 30px).
     readonly property int rowHeight:
-        root.compact ? (root.isMultilineString ? 48 : 26)
+        root.isLine ? Math.max(26, lineFieldsLoader.item ? lineFieldsLoader.item.implicitHeight : 26)
+        : root.compact ? (root.isMultilineString ? 48 : 26)
         : root.isMultilineString ? 70
         : 44
     readonly property int contentHeight: root.rowHeight
@@ -332,11 +356,12 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: root.compact ? root.compactIndent : 20
-            anchors.rightMargin: root.compact ? 10 : Theme.fontSizeLG
-            spacing: root.compact ? 8 : 12
+            anchors.leftMargin: root.inlineMember ? 0 : root.compact ? root.compactIndent : 20
+            anchors.rightMargin: root.inlineMember ? 0 : root.compact ? 10 : Theme.fontSizeLG
+            spacing: root.inlineMember ? 0 : root.compact ? 8 : 12
 
             Item {
+                visible: !root.inlineMember
                 Layout.preferredWidth: root.compact ? root.compactLabelWidth : 180
                 Layout.fillHeight: true
 
@@ -374,6 +399,7 @@ Item {
             // these ids even though the summary also folds into the tooltip.
             RowLayout {
                 id: metadataLane
+                visible: !root.inlineMember
                 Layout.preferredWidth: root.metadataLaneWidth
                 Layout.minimumWidth: root.metadataLaneWidth
                 Layout.maximumWidth: root.metadataLaneWidth
@@ -407,7 +433,7 @@ Item {
                 // (label + badges) paints first and controls fill in after.
                 Loader {
                     asynchronous: true
-                    active: root.oType === "bool"
+                    active: root.oType === "bool" && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     // Reference sidebar: the checkbox sits at the field
                     // column's LEFT edge (Orca renders bool rows the same
@@ -422,7 +448,7 @@ Item {
                         CxCheckBox {
                             anchors.fill: parent
                             text: ""
-                            checked: root.oVal === true || root.oVal === "true"
+                            checked: root.boolValue(root.oVal)
                             enabled: !root.oRO && root.oEnabled
                             onToggled: root.optionModel.setValue(root.optIdx, checked)
                         }
@@ -432,7 +458,7 @@ Item {
                 Loader {
                     id: numericLoader
                     asynchronous: true
-                    active: root.isNumeric
+                    active: root.isNumeric && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     // Upstream OptionsGroup grid: every field starts at the
                     // same column right after the label (bool, number and
@@ -492,7 +518,7 @@ Item {
                     // rendered overlapped ("最小 0 mm" wrapped under the
                     // spinbox). The range already lives in the row tooltip
                     // (metadataSummary) — wide settings rows keep it.
-                    active: root.isRangeLike && !root.compact
+                    active: root.isRangeLike && !root.compact && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: numericLoader.right
                     anchors.right: parent.right
@@ -556,7 +582,7 @@ Item {
 
                 Loader {
                     asynchronous: true
-                    active: root.oType === "enum"
+                    active: root.oType === "enum" && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     width: Math.min(parent.width, root.compact ? root.compactEnumWidth : 160)
@@ -568,55 +594,81 @@ Item {
                             anchors.fill: parent
                             enabled: !root.oRO && root.oEnabled
                             model: root.oEnumLabels
-                            currentIndex: typeof root.oVal === "number" ? root.oVal : 0
-                            onActivated: (i) => root.optionModel.setValue(root.optIdx, i)
+                            // Preset enums are key strings ("klipper"); the model
+                            // maps any stored form to the combo row and writes
+                            // the key back (upstream preset / deserialize form).
+                            currentIndex: root.optionModel ? root.optionModel.enumIndexOf(root.optIdx, root.oVal) : 0
+                            onActivated: (i) => root.optionModel.setEnumIndex(root.optIdx, i)
                         }
                     }
                 }
 
+                // Upstream ColourPicker (Field.cpp, GUIType::color): a
+                // button filled with the colour -- click opens the colour
+                // dialog, right click resets to undefined (transparent with
+                // the #F1754E diagonal, ColourPicker::set_undef_value).
                 Loader {
                     asynchronous: true
-                    active: root.oType === "string" && root.isColorLike
+                    active: root.isColorLike && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
-                    width: Math.min(parent.width, root.controlColumnWidth)
+                    width: root.compact ? root.compactFieldWidth : 120
                     height: root.fieldHeight
                     sourceComponent: Component {
-                        RowLayout {
-                            anchors.fill: parent
-                            spacing: 6
+                        Rectangle {
+                            id: colorSwatchButton
+                            readonly property string colourText: root.optionModel
+                                ? root.optionModel.colourOf(root.oVal) : ""
+                            readonly property bool defined: colorSwatchButton.colourText !== ""
+                            radius: Theme.radiusSM
+                            border.color: colourArea.containsMouse ? Theme.accent : Theme.borderInput
+                            border.width: 1
+                            color: Theme.bgInput
+                            opacity: root.oRO || !root.oEnabled ? 0.5 : 1.0
 
                             Rectangle {
-                                id: colorSwatchButton
-                                Layout.preferredWidth: root.compact ? 24 : 28
-                                Layout.preferredHeight: root.compact ? 24 : 28
-                                color: "transparent"
-
-                                Rectangle {
-                                    id: colorSwatch
-                                    anchors.centerIn: parent
-                                    width: 14
-                                    height: 14
-                                    radius: Theme.radiusXS
-                                    color: (typeof root.oVal === "string" && root.oVal.length > 0)
-                                           ? root.oVal : Theme.accent
-                                    border.color: Theme.borderDefault
-                                    border.width: 1
-                                }
-
-                                HoverHandler { id: colorSwatchHover }
-                                ToolTip.visible: colorSwatchHover.hovered
-                                ToolTip.text: qsTr("Edit the color value in the field")
-                                ToolTip.delay: 500
+                                id: colorSwatch
+                                anchors.fill: parent
+                                anchors.margins: 3
+                                radius: Theme.radiusXS
+                                color: colorSwatchButton.defined ? colorSwatchButton.colourText : "transparent"
                             }
 
-                            CxTextField {
-                                Layout.fillWidth: true
-                                // G2: R11 compact field is 25px tall (was 24).
-                                Layout.preferredHeight: root.compact ? 26 : Theme.controlHeightSM
-                                text: typeof root.oVal === "string" ? root.oVal : ""
+                            // Undefined colour: one diagonal stroke.
+                            Rectangle {
+                                visible: !colorSwatchButton.defined
+                                anchors.centerIn: parent
+                                width: Math.sqrt(parent.width * parent.width + parent.height * parent.height) - 6
+                                height: 1
+                                color: "#F1754E"
+                                rotation: -Math.atan2(parent.height, parent.width) * 180 / Math.PI
+                            }
+
+                            MouseArea {
+                                id: colourArea
+                                anchors.fill: parent
+                                hoverEnabled: true
                                 enabled: !root.oRO && root.oEnabled
-                                onEditingFinished: root.optionModel.setValue(root.optIdx, text)
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: (mouse) => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        root.optionModel.setColour(root.optIdx, "")
+                                    } else {
+                                        colourDialog.selectedColor = colorSwatchButton.defined ? colorSwatchButton.colourText : "white"
+                                        colourDialog.open()
+                                    }
+                                }
+                            }
+
+                            ToolTip.visible: colourArea.containsMouse
+                            ToolTip.delay: 500
+                            ToolTip.text: colorSwatchButton.defined ? colorSwatchButton.colourText : qsTr("未定义")
+
+                            ColorDialog {
+                                id: colourDialog
+                                title: root.oLabel
+                                onAccepted: root.optionModel.setColour(root.optIdx, selectedColor.toString().toUpperCase())
                             }
                         }
                     }
@@ -624,7 +676,7 @@ Item {
 
                 Loader {
                     asynchronous: true
-                    active: root.oType === "string" && !root.isColorLike && !root.isMultilineString
+                    active: root.oType === "string" && !root.isColorLike && !root.isMultilineString && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: parent.right
@@ -641,7 +693,7 @@ Item {
 
                 Loader {
                     asynchronous: true
-                    active: root.isMultilineString && !root.isColorLike
+                    active: root.isMultilineString && !root.isColorLike && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.right: parent.right
@@ -667,7 +719,7 @@ Item {
                 // write back through the model's point helpers.
                 Loader {
                     asynchronous: true
-                    active: root.oType === "point"
+                    active: root.oType === "point" && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     width: Math.min(parent.width, root.controlColumnWidth + 60)
@@ -705,7 +757,7 @@ Item {
                 // is the "Set..." button that opens the bed shape dialog.
                 Loader {
                     asynchronous: true
-                    active: root.oType === "points"
+                    active: root.oType === "points" && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     width: root.isBedShapeOption ? implicitWidth : parent.width
@@ -739,6 +791,68 @@ Item {
                     }
                 }
 
+                // Upstream PluginConfigField: "配置" / "配置 (N)" button
+                // opening the preset's plugin capability override editor.
+                Loader {
+                    asynchronous: true
+                    active: root.oType === "plugin_config" && !root.isLine
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    height: root.fieldHeight
+                    sourceComponent: Component {
+                        CxButton {
+                            readonly property int overrideCount: root.optionModel
+                                ? root.optionModel.pluginOverrideCount(root.oVal) : 0
+                            compact: true
+                            cxStyle: CxButton.Style.Secondary
+                            text: overrideCount > 0 ? qsTr("配置 (%1)").arg(overrideCount) : qsTr("配置")
+                            toolTipText: root.oTip
+                            enabled: !root.oRO && root.oEnabled
+                            onClicked: {
+                                pluginsDialogLoader.active = true
+                                pluginsDialogLoader.item.openWith(
+                                    typeof root.oVal === "string" ? root.oVal : "")
+                            }
+                        }
+                    }
+                }
+
+                Loader {
+                    id: pluginsDialogLoader
+                    active: false
+                    sourceComponent: Component {
+                        PluginsConfigDialog {
+                            optionModel: root.optionModel
+                            onFinished: (text) => {
+                                const current = typeof root.oVal === "string" ? root.oVal : ""
+                                if (root.optionModel && !root.optionModel.pluginOverridesEqual(current, text))
+                                    root.optionModel.setValue(root.optIdx, text)
+                            }
+                        }
+                    }
+                }
+
+                // Multi-option line: every member's field, loaded by URL so
+                // OptionRow does not statically instantiate itself through
+                // OptionLineFields.
+                Loader {
+                    id: lineFieldsLoader
+                    active: root.isLine
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    height: item ? item.implicitHeight : 26
+                    source: root.isLine ? Qt.resolvedUrl("OptionLineFields.qml") : ""
+                    onLoaded: {
+                        item.optionModel = Qt.binding(() => root.optionModel)
+                        item.headKey = Qt.binding(() => root.lineHead)
+                        item.viewMode = Qt.binding(() => root.lineViewMode)
+                        item.availableWidth = Qt.binding(() => lineFieldsLoader.width)
+                        item.fieldWidth = Qt.binding(() => root.compactFieldWidth)
+                        item.enumWidth = Qt.binding(() => root.compactEnumWidth)
+                    }
+                }
+
                 // Phase 236 (DLG-01): whole-option editor affordance. The
                 // "edit" button next to G-code / bed-shape rows requests the
                 // dedicated dialog from BackendContext, which routes the
@@ -749,7 +863,7 @@ Item {
                     // Coexists with the string cluster (textarea gives it the
                     // 34px right margin above), hence the z lift.
                     asynchronous: true
-                    active: root.hasTrailingDialogAction
+                    active: root.hasTrailingDialogAction && !root.isLine
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: parent.right
                     anchors.rightMargin: 2

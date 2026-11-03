@@ -42,6 +42,14 @@ ApplicationWindow {
         return qsTr("Settings")
     }
 
+    // Upstream TabPrinter::toggle_options firmware-retraction prompt
+    // (Tab.cpp:6200-6222), asked from the printer settings window.
+    Connections {
+        target: root.configVm
+        enabled: root.presetTier === "printer"
+        function onFirmwareRetractionConflict() { firmwareRetractionDialog.open() }
+    }
+
     // Internal state
     property string activeTab: ""
     property string searchText: ""
@@ -746,6 +754,8 @@ ApplicationWindow {
                                             required property bool optReadonly
                                             required property bool optEnabled
                                             required property bool optMultiline
+                                            required property string optLineHead
+                                            required property string optLineLabel
                                             required property bool optDirty
                                             required property string optTooltip
                                             required property string optUnit
@@ -775,7 +785,9 @@ ApplicationWindow {
                                                 valueSource: processOptionDelegate.valueSource
                                                 oType: processOptionDelegate.optType
                                                 oKey: processOptionDelegate.optKey
-                                                oLabel: processOptionDelegate.displayLabel
+                                                oLabel: processOptionDelegate.optLineHead !== "" ? processOptionDelegate.optLineLabel : processOptionDelegate.displayLabel
+                                                lineHead: processOptionDelegate.optLineHead
+                                                lineViewMode: root.viewMode
                                                 oVal: processOptionDelegate.optValue
                                                 oMin: processOptionDelegate.optMin
                                                 oMax: processOptionDelegate.optMax
@@ -806,5 +818,18 @@ ApplicationWindow {
             // Saving is the preset-row save icon; closing the window runs
             // the dirty-gated UnsavedChangesDialog (onClosing).
         }
+    }
+
+    // Declared last: the unsaved-changes dialog keeps the first
+    // accept/reject handlers in this file (source audit order).
+    ConfirmDialog {
+        id: firmwareRetractionDialog
+        dialogTitle: qsTr("固件回抽")
+        message: qsTr("使用固件回抽模式时，“擦拭前回抽”选项只能为 100%。\n\n是否将其设置为 100% 以启用固件回抽？")
+        confirmText: qsTr("是")
+        cancelText: qsTr("否")
+        destructive: false
+        onAccepted: if (root.configVm) root.configVm.resolveFirmwareRetractionConflict(true)
+        onRejected: if (root.configVm) root.configVm.resolveFirmwareRetractionConflict(false)
     }
 }

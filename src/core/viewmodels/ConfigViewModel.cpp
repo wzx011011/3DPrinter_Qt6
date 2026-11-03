@@ -2486,15 +2486,34 @@ void ConfigViewModel::applyToggleRules(const QHash<QString, QVariant> &scopeValu
   {
     const OptionToggleRules::Result print = OptionToggleRules::printToggles(ctx);
     printOptions_->setToggleState(print.hidden, print.disabled);
+    const OptionToggleRules::Result printer = OptionToggleRules::printerToggles(ctx);
     if (machineOptions_)
-    {
-      const OptionToggleRules::Result printer = OptionToggleRules::printerToggles(ctx);
       machineOptions_->setToggleState(printer.hidden, printer.disabled);
-    }
+    const OptionToggleRules::Result filament = OptionToggleRules::filamentToggles(ctx);
     if (filamentOptions_)
-    {
-      const OptionToggleRules::Result filament = OptionToggleRules::filamentToggles(ctx);
       filamentOptions_->setToggleState(filament.hidden, filament.disabled);
+    firmwareRetractionConflict_ = printer.firmwareRetractionConflict;
+
+    // Upstream apply(config, &new_conf) / load_config: the same functions
+    // rewrite dependent values. Only the global preset values are edited
+    // (object / plate overrides keep their own values), and only once per
+    // pass -- the re-apply below re-runs the rules on the new values.
+    if (ctx.isGlobalConfig && !applyingForcedValues_
+        && (!print.forced.isEmpty() || !printer.forced.isEmpty() || !filament.forced.isEmpty()))
+    {
+      for (auto it = print.forced.cbegin(); it != print.forced.cend(); ++it)
+        printPresetValues_.insert(it.key(), it.value());
+      for (auto it = printer.forced.cbegin(); it != printer.forced.cend(); ++it)
+        printerPresetValues_.insert(it.key(), it.value());
+      for (auto it = filament.forced.cbegin(); it != filament.forced.cend(); ++it)
+        filamentPresetValues_.insert(it.key(), it.value());
+      applyingForcedValues_ = true;
+      updateMergedPresetValues();
+      const bool wasApplying = applyingScopeValues_;
+      applyingScopeValues_ = false;
+      applyScopeValues();
+      applyingScopeValues_ = wasApplying;
+      applyingForcedValues_ = false;
     }
   }
   catch (const std::exception &e)
@@ -2517,6 +2536,7 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
       tier = QStringLiteral("filament");
     else if (sender() == printOptions_)
       tier = QStringLiteral("print");
+    const bool printerEdit = tier == QStringLiteral("printer");
     if (tier == QStringLiteral("printer"))
       printerPresetValues_.insert(key, value);
     else if (tier == QStringLiteral("filament"))
@@ -2527,6 +2547,10 @@ void ConfigViewModel::handleOptionValueChanged(const QString &key, const QVarian
     applyScopeValues();
     emit stateChanged();
     emit sliceAffectingConfigChanged();
+    // Upstream asks while the printer's Extruder page is being edited, not
+    // on preset load.
+    if (printerEdit && firmwareRetractionConflict_)
+      emit firmwareRetractionConflict();
     return;
   }
 
@@ -3675,6 +3699,32 @@ void ConfigViewModel::setDeveloperMode(bool on)
     return;
   developerMode_ = on;
   emit viewModeChanged();
+}
+
+void ConfigViewModel::resolveFirmwareRetractionConflict(bool setRetractBeforeWipeTo100)
+{
+  const QHash<QString, QVariant> printer = effectivePresetValuesForTier(QStringLiteral("printer"));
+  const auto sized = [&printer](const char *key, const QVariant &value) {
+    const QVariant current = printer.value(QString::fromLatin1(key));
+    const qsizetype n = current.typeId() == QMetaType::QVariantList ? qMax<qsizetype>(1, current.toList().size()) : 1;
+    QVariantList list;
+    for (qsizetype i = 0; i < n; ++i)
+      list.append(value);
+    return QVariant(list);
+  };
+  if (setRetractBeforeWipeTo100)
+  {
+    printerPresetValues_.insert(QStringLiteral("wipe"), sized("wipe", false));
+    printerPresetValues_.insert(QStringLiteral("retract_before_wipe"), sized("retract_before_wipe", QStringLiteral("100%")));
+  }
+  else
+  {
+    printerPresetValues_.insert(QStringLiteral("use_firmware_retraction"), false);
+  }
+  updateMergedPresetValues();
+  applyScopeValues();
+  emit stateChanged();
+  emit sliceAffectingConfigChanged();
 }
 
 void ConfigViewModel::cycleUserMode()

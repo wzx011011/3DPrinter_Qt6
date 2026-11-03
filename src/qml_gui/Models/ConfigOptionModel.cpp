@@ -1,9 +1,13 @@
 #include "ConfigOptionModel.h"
 
+#include "core/services/PluginOverrides.h"
 #include "core/util/PrintableArea.h"
 #include "qml_gui/Models/OptionLabelTable.h"
 
 #include <QByteArray>
+#include <QColor>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QDebug>
 #include <QPair>
 #include <QVector>
@@ -15,6 +19,15 @@
 #include <libslic3r/Config.hpp>
 #include <libslic3r/Preset.hpp>
 #endif
+
+namespace
+{
+  // Defined with the line table below (upstream multi-option lines).
+  static const QHash<QString, QString> &lineSubLabels();
+} // namespace
+
+// Defined with the zh enum-label table below.
+static QString zhEnumLabel(const QString &label);
 
 ConfigOptionModel::ConfigOptionModel(QObject *parent)
     : QAbstractListModel(parent)
@@ -130,6 +143,12 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
     return !m_hiddenKeys.contains(o.key);
   case MultilineRole:
     return o.multiline;
+  case LineHeadRole:
+    return m_lineHeadByKey.value(o.key);
+  case LineLabelRole:
+    return m_lineLabelByHead.value(o.key);
+  case SubLabelRole:
+    return lineSubLabels().value(o.key, OptionLabelTable::rowLabels().value(o.key, o.label));
   default:
     return {};
   }
@@ -186,6 +205,9 @@ QHash<int, QByteArray> ConfigOptionModel::roleNames() const
       {EnabledRole, "optEnabled"},
       {LineVisibleRole, "optLineVisible"},
       {MultilineRole, "optMultiline"},
+      {LineHeadRole, "optLineHead"},
+      {LineLabelRole, "optLineLabel"},
+      {SubLabelRole, "optSubLabel"},
   };
 }
 
@@ -558,22 +580,39 @@ bool ConfigOptionModel::matchesFilter(int row, const QString &needle, int viewMo
   // Same semantics as the search arm of ConfigViewModel::filterOptionIndices:
   // needles >= 2 chars use the fuzzy score (>= 60), shorter needles substring;
   // fields are optLabel + optKey, both lowered.
+  // A non-head line member is rendered inside its head row.
+  const QString lineHead = m_lineHeadByKey.value(o.key);
+  if (!lineHead.isEmpty() && lineHead != o.key)
+    return false;
+  const QStringList lineMembers = lineHead.isEmpty() ? QStringList{o.key} : m_lineMembersByHead.value(lineHead);
+
   const QString loweredNeedle = needle.toLower();
   if (!loweredNeedle.isEmpty())
   {
     const bool useFuzzy = loweredNeedle.length() >= 2;
     bool matched = false;
-    if (useFuzzy)
+    // A line matches when any of its options does (upstream search lands on
+    // the line that holds the option).
+    for (const QString &memberKey : lineMembers)
     {
-      int score = 0;
-      matched = fuzzyMatch(loweredNeedle, o.label.toLower(), score);
-      if (!matched)
-        matched = fuzzyMatch(loweredNeedle, o.key.toLower(), score);
-    }
-    else
-    {
-      matched = o.label.toLower().contains(loweredNeedle) ||
-                o.key.toLower().contains(loweredNeedle);
+      const int memberRow = memberKey == o.key ? row : findIndex(memberKey);
+      if (memberRow < 0)
+        continue;
+      const ConfigOption &m = m_options[memberRow];
+      if (useFuzzy)
+      {
+        int score = 0;
+        matched = fuzzyMatch(loweredNeedle, m.label.toLower(), score);
+        if (!matched)
+          matched = fuzzyMatch(loweredNeedle, m.key.toLower(), score);
+      }
+      else
+      {
+        matched = m.label.toLower().contains(loweredNeedle) ||
+                  m.key.toLower().contains(loweredNeedle);
+      }
+      if (matched)
+        break;
     }
     if (!matched)
       return false;
@@ -586,9 +625,12 @@ bool ConfigOptionModel::matchesFilter(int row, const QString &needle, int viewMo
   if (o.mode > viewMode)
     return false;
 
-  // toggle_line(false): the dependency rules hid the whole line.
-  if (m_hiddenKeys.contains(o.key))
-    return false;
+  // toggle_line(false): the dependency rules hid the whole line. Upstream
+  // get_line(key) returns the Line holding the option, so hiding any member
+  // hides the line.
+  for (const QString &memberKey : lineMembers)
+    if (m_hiddenKeys.contains(memberKey))
+      return false;
 
   return true;
 }
@@ -892,6 +934,150 @@ QString ConfigOptionModel::groupIconName(const QString &group) const
   return icons.value(group);
 }
 
+int ConfigOptionModel::pluginOverrideCount(const QVariant &raw) const
+{
+  return PluginOverrides::count(raw.toString());
+}
+
+QVariantList ConfigOptionModel::pluginOverrideEntries(const QVariant &raw) const
+{
+  PluginOverrides::Document document;
+  QString error;
+  QVariantList out;
+  if (!PluginOverrides::parse(raw.toString(), document, error))
+    return out;
+  for (const QJsonObject &entry : document.entries)
+  {
+    QVariantMap row;
+    row.insert(QStringLiteral("pluginKey"), PluginOverrides::pluginKey(entry));
+    row.insert(QStringLiteral("capability"), PluginOverrides::capability(entry));
+    row.insert(QStringLiteral("capabilityType"), PluginOverrides::capabilityType(entry));
+    row.insert(QStringLiteral("configText"),
+               QString::fromUtf8(QJsonDocument(PluginOverrides::capConfig(entry)).toJson(QJsonDocument::Indented)));
+    out.append(row);
+  }
+  return out;
+}
+
+QString ConfigOptionModel::pluginOverridesError(const QVariant &raw) const
+{
+  PluginOverrides::Document document;
+  QString error;
+  PluginOverrides::parse(raw.toString(), document, error);
+  return error;
+}
+
+QVariantMap ConfigOptionModel::pluginOverrideSetConfig(const QString &raw, int index, const QString &configText) const
+{
+  QVariantMap result;
+  PluginOverrides::Document document;
+  QString error;
+  bool ok = PluginOverrides::parse(raw, document, error) &&
+            PluginOverrides::setCapConfig(document, index, configText, error);
+  result.insert(QStringLiteral("ok"), ok);
+  result.insert(QStringLiteral("text"), ok ? PluginOverrides::serialize(document) : raw);
+  result.insert(QStringLiteral("error"), error);
+  return result;
+}
+
+QString ConfigOptionModel::pluginOverrideRemove(const QString &raw, int index) const
+{
+  PluginOverrides::Document document;
+  QString error;
+  if (!PluginOverrides::parse(raw, document, error) || !PluginOverrides::remove(document, index))
+    return raw;
+  return PluginOverrides::serialize(document);
+}
+
+bool ConfigOptionModel::pluginOverridesEqual(const QString &a, const QString &b) const
+{
+  PluginOverrides::Document da, db;
+  QString ea, eb;
+  if (!PluginOverrides::parse(a, da, ea) || !PluginOverrides::parse(b, db, eb))
+    return a == b;
+  return PluginOverrides::serialize(da) == PluginOverrides::serialize(db);
+}
+
+QString ConfigOptionModel::pluginConfigTitle() const
+{
+  return m_hierarchyTier == 1 ? QStringLiteral("材料插件")
+       : m_hierarchyTier == 2 ? QStringLiteral("打印机插件")
+                              : QStringLiteral("工艺插件");
+}
+
+QString ConfigOptionModel::colourOf(const QVariant &value) const
+{
+  QVariant v = value;
+  if (v.typeId() == QMetaType::QVariantList || v.typeId() == QMetaType::QStringList)
+  {
+    const QVariantList list = v.toList();
+    v = list.isEmpty() ? QVariant() : list.first();
+  }
+  const QString text = v.toString().trimmed();
+  return QColor::isValidColorName(text) ? text : QString();
+}
+
+void ConfigOptionModel::setColour(int row, const QString &colour)
+{
+  if (row < 0 || row >= m_options.size())
+    return;
+  const QVariant current = m_options[row].value;
+  if (current.typeId() == QMetaType::QVariantList || current.typeId() == QMetaType::QStringList)
+  {
+    QVariantList list = current.toList();
+    if (list.isEmpty())
+      list.append(colour);
+    else
+      list[0] = colour;
+    writeValue(row, list);
+    return;
+  }
+  writeValue(row, colour);
+}
+
+int ConfigOptionModel::enumIndexOf(int row, const QVariant &value) const
+{
+  if (row < 0 || row >= m_options.size())
+    return 0;
+  const ConfigOption &o = m_options[row];
+  QVariant v = value;
+  if (v.typeId() == QMetaType::QVariantList || v.typeId() == QMetaType::QStringList)
+  {
+    const QVariantList list = v.toList();
+    v = list.isEmpty() ? QVariant() : list.first();
+  }
+  if (v.typeId() == QMetaType::QString)
+  {
+    const QString text = v.toString();
+    int index = o.enumValues.indexOf(text);
+    if (index < 0)
+      index = o.enumLabels.indexOf(text);
+    if (index < 0)
+      index = o.enumLabels.indexOf(zhEnumLabel(text)); // English def label (extractDefault)
+    if (index >= 0)
+      return index;
+    bool isNumber = false;
+    const int numeric = text.toInt(&isNumber);
+    if (isNumber && numeric >= 0 && numeric < o.enumLabels.size())
+      return numeric;
+    return 0;
+  }
+  bool ok = false;
+  const int numeric = v.toInt(&ok);
+  return ok && numeric >= 0 && numeric < o.enumLabels.size() ? numeric : 0;
+}
+
+void ConfigOptionModel::setEnumIndex(int row, int index)
+{
+  if (row < 0 || row >= m_options.size())
+    return;
+  const ConfigOption &o = m_options[row];
+  if (index >= 0 && index < o.enumValues.size())
+    writeValue(row, o.enumValues.at(index));
+  else
+    writeValue(row, index);
+}
+
 QList<QPointF> ConfigOptionModel::parsePoints(const QVariant &value)
 {
   // Shared preset-point normalization (owzx::flatPointCoords).
@@ -1153,6 +1339,101 @@ namespace
     QString name;
     QList<ProcessGroupDefinition> groups;
   };
+
+  // Upstream multi-option lines (Tab.cpp, pin 0a3724ed2f): `Line line =
+  // {label, tooltip}; line.append_option(...)`. label is the line's zh text
+  // (OrcaSlicer_zh_CN.po); keys in append_option order, the first is the
+  // head. The Motion-ability Normal/Silent columns are not lines here
+  // (single machine-limit column).
+  struct OptionLineDefinition
+  {
+    QString label;
+    QStringList keys;
+  };
+
+  static const QList<OptionLineDefinition> &lineDefinitions(int tier)
+  {
+    // TabPrint::build (Tab.cpp:2866-2877)
+    static const QList<OptionLineDefinition> print = {
+        {QStringLiteral("悬垂速度"), {QStringLiteral("overhang_1_4_speed"), QStringLiteral("overhang_2_4_speed"),
+                                    QStringLiteral("overhang_3_4_speed"), QStringLiteral("overhang_4_4_speed")}},
+        {QStringLiteral("桥接"), {QStringLiteral("bridge_speed"), QStringLiteral("internal_bridge_speed")}},
+    };
+    // TabFilament::build (Tab.cpp:4309-4523)
+    static const QList<OptionLineDefinition> filament = {
+        {QStringLiteral("建议喷嘴温度"), {QStringLiteral("nozzle_temperature_range_low"), QStringLiteral("nozzle_temperature_range_high")}},
+        {QStringLiteral("机箱温度"), {QStringLiteral("chamber_temperature"), QStringLiteral("chamber_minimal_temperature")}},
+        {QStringLiteral("喷嘴"), {QStringLiteral("nozzle_temperature_initial_layer"), QStringLiteral("nozzle_temperature")}},
+        {QStringLiteral("低温打印板（超强粘附）"), {QStringLiteral("supertack_plate_temp_initial_layer"), QStringLiteral("supertack_plate_temp")}},
+        {QStringLiteral("低温打印热床"), {QStringLiteral("cool_plate_temp_initial_layer"), QStringLiteral("cool_plate_temp")}},
+        {QStringLiteral("纹理的低温打印床"), {QStringLiteral("textured_cool_plate_temp_initial_layer"), QStringLiteral("textured_cool_plate_temp")}},
+        {QStringLiteral("工程材料热床"), {QStringLiteral("eng_plate_temp_initial_layer"), QStringLiteral("eng_plate_temp")}},
+        {QStringLiteral("光滑PEI板/高温板"), {QStringLiteral("hot_plate_temp_initial_layer"), QStringLiteral("hot_plate_temp")}},
+        {QStringLiteral("纹理PEI热床"), {QStringLiteral("textured_plate_temp_initial_layer"), QStringLiteral("textured_plate_temp")}},
+        {QStringLiteral("最小风扇速度阈值"), {QStringLiteral("fan_min_speed"), QStringLiteral("fan_cooling_layer_time")}},
+        {QStringLiteral("最大风扇速度阈值"), {QStringLiteral("fan_max_speed"), QStringLiteral("slow_down_layer_time")}},
+        {QStringLiteral("打印中"), {QStringLiteral("activate_air_filtration_during_print"), QStringLiteral("during_print_exhaust_fan_speed")}},
+        {QStringLiteral("完成打印"), {QStringLiteral("activate_air_filtration_on_completion"), QStringLiteral("complete_print_exhaust_fan_speed")}},
+    };
+    // TabPrinter::build_fff / build_kinematics_page (Tab.cpp:5113, 5427-5446)
+    static const QList<OptionLineDefinition> printer = {
+        {QStringLiteral("风扇响应时间"), {QStringLiteral("fan_speedup_time"), QStringLiteral("fan_speedup_overhangs")}},
+        {QStringLiteral("共振规避速度"), {QStringLiteral("min_resonance_avoidance_speed"), QStringLiteral("max_resonance_avoidance_speed")}},
+        {QStringLiteral("频率"), {QStringLiteral("input_shaping_freq_x"), QStringLiteral("input_shaping_freq_y")}},
+        {QStringLiteral("阻尼"), {QStringLiteral("input_shaping_damp_x"), QStringLiteral("input_shaping_damp_y")}},
+    };
+    return tier == 1 ? filament : tier == 2 ? printer : print;
+  }
+
+  // Per-option labels inside a line: ConfigOptionDef::label through the zh
+  // po (chamber Target/Minimal are the label overrides Tab.cpp:4357-4362
+  // sets; the air-filtration checkboxes carry no label).
+  static const QHash<QString, QString> &lineSubLabels()
+  {
+    static const QHash<QString, QString> labels = {
+        {QStringLiteral("overhang_1_4_speed"), QStringLiteral("10%")},
+        {QStringLiteral("overhang_2_4_speed"), QStringLiteral("25%")},
+        {QStringLiteral("overhang_3_4_speed"), QStringLiteral("50%")},
+        {QStringLiteral("overhang_4_4_speed"), QStringLiteral("75%")},
+        {QStringLiteral("bridge_speed"), QStringLiteral("外部")},
+        {QStringLiteral("internal_bridge_speed"), QStringLiteral("内部")},
+        {QStringLiteral("nozzle_temperature_range_low"), QStringLiteral("最小")},
+        {QStringLiteral("nozzle_temperature_range_high"), QStringLiteral("最大")},
+        {QStringLiteral("chamber_temperature"), QStringLiteral("目标")},
+        {QStringLiteral("chamber_minimal_temperature"), QStringLiteral("最低")},
+        {QStringLiteral("nozzle_temperature_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("nozzle_temperature"), QStringLiteral("其它层")},
+        {QStringLiteral("supertack_plate_temp_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("supertack_plate_temp"), QStringLiteral("其它层")},
+        {QStringLiteral("cool_plate_temp_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("cool_plate_temp"), QStringLiteral("其它层")},
+        {QStringLiteral("textured_cool_plate_temp_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("textured_cool_plate_temp"), QStringLiteral("其它层")},
+        {QStringLiteral("eng_plate_temp_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("eng_plate_temp"), QStringLiteral("其它层")},
+        {QStringLiteral("hot_plate_temp_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("hot_plate_temp"), QStringLiteral("其它层")},
+        {QStringLiteral("textured_plate_temp_initial_layer"), QStringLiteral("首层")},
+        {QStringLiteral("textured_plate_temp"), QStringLiteral("其它层")},
+        {QStringLiteral("fan_min_speed"), QStringLiteral("风扇速度")},
+        {QStringLiteral("fan_cooling_layer_time"), QStringLiteral("层时间")},
+        {QStringLiteral("fan_max_speed"), QStringLiteral("风扇速度")},
+        {QStringLiteral("slow_down_layer_time"), QStringLiteral("层时间")},
+        {QStringLiteral("activate_air_filtration_during_print"), QString()},
+        {QStringLiteral("during_print_exhaust_fan_speed"), QStringLiteral("风扇速度")},
+        {QStringLiteral("activate_air_filtration_on_completion"), QString()},
+        {QStringLiteral("complete_print_exhaust_fan_speed"), QStringLiteral("风扇速度")},
+        {QStringLiteral("fan_speedup_time"), QString()},
+        {QStringLiteral("fan_speedup_overhangs"), QStringLiteral("仅悬垂")},
+        {QStringLiteral("min_resonance_avoidance_speed"), QStringLiteral("最小")},
+        {QStringLiteral("max_resonance_avoidance_speed"), QStringLiteral("最大")},
+        {QStringLiteral("input_shaping_freq_x"), QStringLiteral("X")},
+        {QStringLiteral("input_shaping_freq_y"), QStringLiteral("Y")},
+        {QStringLiteral("input_shaping_damp_x"), QStringLiteral("X")},
+        {QStringLiteral("input_shaping_damp_y"), QStringLiteral("Y")},
+    };
+    return labels;
+  }
 
   static QStringList processKeys(std::initializer_list<const char *> keys)
   {
@@ -1823,8 +2104,44 @@ QStringList ConfigOptionModel::processMappingErrors() const
 #endif
 }
 
+bool ConfigOptionModel::matchesLineMember(int row, const QString &headKey, int viewMode) const
+{
+  if (row < 0 || row >= m_options.size() || headKey.isEmpty())
+    return false;
+  const ConfigOption &o = m_options[row];
+  return m_lineHeadByKey.value(o.key) == headKey && o.mode <= viewMode;
+}
+
+int ConfigOptionModel::lineMemberRank(int row) const
+{
+  if (row < 0 || row >= m_options.size())
+    return INT_MAX;
+  const QString &key = m_options[row].key;
+  const int rank = m_lineMembersByHead.value(m_lineHeadByKey.value(key)).indexOf(key);
+  return rank >= 0 ? rank : INT_MAX;
+}
+
 void ConfigOptionModel::assignProcessHierarchyMetadata()
 {
+  m_lineHeadByKey.clear();
+  m_lineMembersByHead.clear();
+  m_lineLabelByHead.clear();
+  for (const OptionLineDefinition &line : lineDefinitions(m_hierarchyTier))
+  {
+    const QString head = line.keys.first();
+    if (findIndex(head) < 0)
+      continue;
+    QStringList members;
+    for (const QString &key : line.keys)
+      if (findIndex(key) >= 0)
+      {
+        m_lineHeadByKey.insert(key, head);
+        members.append(key);
+      }
+    m_lineMembersByHead.insert(head, members);
+    m_lineLabelByHead.insert(head, line.label);
+  }
+
   QHash<QString, QPair<QString, QString>> lookup;
   for (const ProcessPageDefinition &pageDefinition : hierarchyDefinitions(m_hierarchyTier))
     for (const ProcessGroupDefinition &groupDefinition : pageDefinition.groups)
@@ -1866,6 +2183,13 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
     // per-extruder vectors) for every coPoints option except the polygon
     // keys, which Field.cpp edits as one "XxY, XxY, ..." text line
     // (OptionsGroup.cpp:1174-1183); printable_area is the Set... button.
+    // Upstream GUIType::plugin_config: PluginConfigField, a "配置 (N)"
+    // button opening PluginsConfigDialog (Field.cpp PluginConfigField).
+    if (opt->gui_type == Slic3r::ConfigOptionDef::GUIType::plugin_config)
+      entry.type = QStringLiteral("plugin_config");
+    // Upstream GUIType::color: ColourPicker button.
+    if (opt->gui_type == Slic3r::ConfigOptionDef::GUIType::color)
+      entry.type = QStringLiteral("color");
     if (opt->type == Slic3r::coPoints
         && opt->opt_key != "printable_area" && opt->opt_key != "bed_exclude_area"
         && opt->opt_key != "wrapping_exclude_area")
@@ -1885,7 +2209,10 @@ void ConfigOptionModel::loadSchemaFromKeys(const char *const keys[])
 
     // Enum labels — translated at the model boundary (zhEnumLabel).
     for (size_t i = 0; i < opt->enum_labels.size() && i < opt->enum_values.size(); ++i)
+    {
       entry.enumLabels.append(zhEnumLabel(QString::fromUtf8(opt->enum_labels[i].c_str())));
+      entry.enumValues.append(QString::fromUtf8(opt->enum_values[i].c_str()));
+    }
 
     // Tooltip from upstream (对齐上游 ConfigOptionDef::tooltip)
     if (!opt->tooltip.empty())
