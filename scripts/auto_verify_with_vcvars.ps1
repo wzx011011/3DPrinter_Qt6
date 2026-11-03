@@ -598,8 +598,10 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[QmlLint] qmllint gate passed" -ForegroundColor Green
 
-# Deploy Qt runtime DLLs if not already present
-if (-not (Test-Path './Qt6Core.dll')) {
+# Deploy Qt runtime DLLs on every run: windeployqt skips up-to-date files,
+# and gating on Qt6Core.dll left Qt modules linked later (Qt6WebSockets)
+# undeployed, so the exe failed to start outside the Qt PATH.
+if ($true) {
   Write-Stage 'Deploy' ("Deploying Qt runtime DLLs from " + $qtRoot)
   $windeployqt = Join-Path $qtRoot 'bin\windeployqt.exe'
   if (-not (Test-Path $windeployqt)) {
