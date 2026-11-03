@@ -364,6 +364,8 @@ private slots:
   void printerAndFilamentTabsFollowUpstreamHierarchy();
   void optionToggleRulesFollowUpstream();
   void optionToggleRulesForceDependentValues();
+  void filamentSettingOverridesFollowUpstream();
+  void objectListPlateLabelsOutsideAndSearch();
   void optionModelViewModeAndToggleFilter();
   void configViewModelAppliesToggleRules();
   void pointOptionsParseAndFormat();
@@ -1650,6 +1652,105 @@ void ViewModelSmokeTests::optionToggleRulesForceDependentValues()
   printModel->setValue(arcRow, true);
   printModel->setValue(slopeRow, 5.0);
   QCOMPARE(printModel->optValue(arcRow), QVariant(false));
+}
+
+// Filament "Setting Overrides" (TabFilament::add/update_filament_overrides_page):
+// a nil filament_* value is an unchecked override that shows the printer's
+// value; the retraction checkboxes need a retraction length; checking writes
+// the inherited value, unchecking writes nil.
+void ViewModelSmokeTests::filamentSettingOverridesFollowUpstream()
+{
+  QHash<QString, QVariant> print;
+  QHash<QString, QVariant> printer;
+  QHash<QString, QVariant> filament;
+  OptionToggleRules::Context ctx;
+  ctx.print = [&print](const QString &k) { return print.value(k); };
+  ctx.printer = [&printer](const QString &k) { return printer.value(k); };
+  ctx.filament = [&filament](const QString &k) { return filament.value(k); };
+
+  printer.insert(QStringLiteral("z_hop"), QVariantList{QStringLiteral("0.4")});
+  filament.insert(QStringLiteral("filament_retraction_length"), QVariantList{QStringLiteral("nil")});
+  filament.insert(QStringLiteral("filament_z_hop"), QVariantList{QStringLiteral("nil")});
+  OptionToggleRules::Result r = OptionToggleRules::filamentToggles(ctx);
+  QVERIFY(r.overrides.contains(QStringLiteral("filament_z_hop")));
+  QVERIFY(!r.overrides.value(QStringLiteral("filament_z_hop")).checked);
+  QCOMPARE(r.overrides.value(QStringLiteral("filament_z_hop")).inheritedValue.toList(),
+           QVariantList{QStringLiteral("0.4")});
+  QVERIFY(r.disabled.contains(QStringLiteral("filament_z_hop")));
+
+  filament.insert(QStringLiteral("filament_z_hop"), QVariantList{0.6});
+  r = OptionToggleRules::filamentToggles(ctx);
+  QVERIFY(r.overrides.value(QStringLiteral("filament_z_hop")).checked);
+  QVERIFY(!r.disabled.contains(QStringLiteral("filament_z_hop")));
+
+  // Retraction length 0 disables every other retraction checkbox.
+  filament.insert(QStringLiteral("filament_retraction_length"), QVariantList{0.0});
+  r = OptionToggleRules::filamentToggles(ctx);
+  QVERIFY(!r.overrides.value(QStringLiteral("filament_z_hop")).checkEnabled);
+  QVERIFY(r.overrides.value(QStringLiteral("filament_retraction_length")).checkEnabled);
+
+  // Model write path.
+  PresetService presetService;
+  ProjectService project;
+  ConfigViewModel config(&presetService, &project);
+  auto *model = qobject_cast<ConfigOptionModel *>(config.filamentOptions());
+  QVERIFY(model);
+  const int row = model->indexOfKey(QStringLiteral("filament_z_hop"));
+  QVERIFY(row >= 0);
+  QVERIFY(model->data(model->index(row), ConfigOptionModel::OverrideRole).toInt() > 0);
+  model->setOverrideChecked(row, false);
+  QCOMPARE(model->optValue(row).toList(), QVariantList{QStringLiteral("nil")});
+  QCOMPARE(model->data(model->index(row), ConfigOptionModel::OverrideRole).toInt(), 2);
+  model->setOverrideChecked(row, true);
+  QVERIFY(model->optValue(row).toList().first().toString() != QStringLiteral("nil"));
+  QCOMPARE(model->data(model->index(row), ConfigOptionModel::OverrideRole).toInt(), 1);
+}
+
+// Object list parity (ObjectDataViewModel): plate rows read "盘 N" (+ the
+// custom name in parentheses), the "盘外" group is always present
+// (AddOutsidePlate), and searchNodes lists "plate:object" paths with the
+// matched text in bold (SearchObjectDialog).
+void ViewModelSmokeTests::objectListPlateLabelsOutsideAndSearch()
+{
+  ProjectService project;
+  SliceService slice(&project);
+  EditorViewModel editor(&project, &slice);
+  QVERIFY(editor.addPrimitiveToPlate(0));
+  editor.rebuildAndNotify();
+  SceneTreeModel *tree = editor.sceneTreeModel();
+  QVERIFY(tree);
+
+  QCOMPARE(tree->rowCount(), project.plateCount() + 1);
+  const QModelIndex plate0 = tree->index(0, 0);
+  QCOMPARE(plate0.data(Qt::DisplayRole).toString(), QStringLiteral("盘 1"));
+  const QModelIndex outside = tree->index(tree->rowCount() - 1, 0);
+  QCOMPARE(outside.data(Qt::DisplayRole).toString(), QStringLiteral("盘外"));
+  QCOMPARE(tree->rowCount(outside), 0); // shown even while empty
+
+  QVERIFY(editor.renamePlate(0, QStringLiteral("Front")));
+  QCOMPARE(tree->index(0, 0).data(Qt::DisplayRole).toString(), QStringLiteral("盘 1 (Front)"));
+  QCOMPARE(tree->index(0, 0).data(Qt::EditRole).toString(), QStringLiteral("Front"));
+
+  const QString objectName = project.objectNames().value(0);
+  QVERIFY(!objectName.isEmpty());
+  const QVariantList all = tree->searchNodes(QString());
+  QVERIFY(all.size() >= 3); // plate, object, outside (+ children)
+  const QVariantList hits = tree->searchNodes(objectName.left(2));
+  bool foundObject = false;
+  for (const QVariant &hit : hits)
+  {
+    const QVariantMap entry = hit.toMap();
+    if (entry.value(QStringLiteral("nodeType")).toInt() == int(SceneTreeModel::NodeObject))
+    {
+      foundObject = true;
+      QCOMPARE(entry.value(QStringLiteral("plain")).toString(),
+               QStringLiteral("盘 1 (Front):") + objectName);
+      QVERIFY(entry.value(QStringLiteral("text")).toString().contains(QStringLiteral("<b>")));
+      QCOMPARE(entry.value(QStringLiteral("sourceObjectIndex")).toInt(), 0);
+    }
+  }
+  QVERIFY(foundObject);
+  QVERIFY(tree->searchNodes(QStringLiteral("zzz-no-match")).isEmpty());
 }
 
 // Upstream OptionsGroup::is_visible: a line shows when def mode <= view mode
@@ -11567,7 +11668,8 @@ void ViewModelSmokeTests::sceneTreeModelMirrorsUpstreamObjectDataViewModel()
   QVERIFY(tree != nullptr);
 
   // Root = plates (upstream ObjectDataViewModel root level, itPlate).
-  QCOMPARE(tree->rowCount(), project.plateCount());
+  // + the always-present Outside group (AddOutsidePlate).
+  QCOMPARE(tree->rowCount(), project.plateCount() + 1);
   QVERIFY(tree->rowCount() >= 2);
 
   const QModelIndex plate0 = tree->index(0, 0);

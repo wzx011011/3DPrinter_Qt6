@@ -592,6 +592,22 @@ Item {
     }
 
     // 平板设置对话框（对齐上游 PlateSettingsDialog）
+    // Plate settings dialog: the canvas plate gear and the sidebar plate
+    // page's "Customize" layer sequence both open it.
+    function openPlateSettings(plateIndex) {
+        if (!root.editorVm)
+            return
+        // plateIndex is a `required property`: pass it as an initial
+        // property or creation fails (null dialog). No dialog.closed
+        // re-probe -- the write path reaches viewportArea.plateIconStates via
+        // the plateChanged cluster.
+        var dialog = plateSettingsDialogComp.createObject(root, {
+            plateIndex: plateIndex,
+            plateName: root.editorVm.plateName(plateIndex)
+        })
+        dialog.open()
+    }
+
     Component {
         id: plateSettingsDialogComp
         Dialog {
@@ -1526,6 +1542,9 @@ Item {
                 onObjectListMenuRequested: function(family, menuX, menuY) {
                     prepareContextMenus.openResolved(family, menuX, menuY)
                 }
+                onPlateSettingsRequested: function(plateIndex) {
+                    root.openPlateSettings(plateIndex)
+                }
                 visible: root.leftPanelVisible
             }
 
@@ -1611,19 +1630,8 @@ Item {
                         root.editorVm.togglePlateLocked(plateIndex)
                         break
                     case GLViewport.PlateIconSettings:  // plate settings (picking id 5)
-                    {
-                        // plateIndex is a `required property`: pass it as an
-                        // initial property or creation fails (null dialog).
-                        var dialog = plateSettingsDialogComp.createObject(root, {
-                            plateIndex: plateIndex,
-                            plateName: root.editorVm.plateName(plateIndex)
-                        })
-                        // S1: no dialog.closed re-probe -- the plate settings
-                        // write path reaches viewportArea.plateIconStates via
-                        // the plateChanged cluster.
-                        dialog.open()
+                        root.openPlateSettings(plateIndex)
                         break
-                    }
                     case GLViewport.PlateIconMoveFront:  // move front (picking id 7)
                         if (plateIndex > 0)
                             root.editorVm.movePlate(plateIndex, 0)

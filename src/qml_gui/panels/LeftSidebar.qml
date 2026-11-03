@@ -24,6 +24,9 @@ Rectangle {
     // sidebar bubbles it up so PreparePage can popup the same
     // PrepareContextMenus instance the canvas uses.
     signal objectListMenuRequested(int family, real menuX, real menuY)
+    // Upstream TabPrintPlate "Customize" layer sequence opens the plate
+    // settings dialog (EVT_OPEN_PLATESETTINGSDIALOG, Tab.cpp:3763-3803).
+    signal plateSettingsRequested(int plateIndex)
 
     /// X6: entry point for the shared menus' Rename item (upstream
     /// append_menu_item_rename -> obj_list()->rename_item()); forwarded to
@@ -1035,6 +1038,10 @@ Rectangle {
                                         // cell (Q11-④).
                                         header: paramsPage.effectivePage === "Plate"
                                                 ? plateBedHeader : null
+                                        // TabPrintPlate::build ends with the two
+                                        // filament-order choices (Tab.cpp:3680-3681).
+                                        footer: paramsPage.effectivePage === "Plate"
+                                                ? plateSequenceFooter : null
                                         // Per-page C++ filter proxy (replaces
                                         // the QML-side index-array filter
                                         // orchestration). Tab flips only
@@ -1047,6 +1054,65 @@ Rectangle {
                                             page: paramsPage.effectivePage
                                             searchText: root.paramsSearchText
                                             viewMode: root.paramsViewMode
+                                        }
+
+                                        Component {
+                                            id: plateSequenceFooter
+                                            Column {
+                                                width: paramsPage.width
+                                                topPadding: 4
+                                                spacing: 4
+
+                                                Repeater {
+                                                    // first_layer_sequence_choice /
+                                                    // other_layers_sequence_choice
+                                                    // (LayerSeq: Auto / Customize).
+                                                    model: [qsTr("首层耗材打印顺序"), qsTr("其他层的耗材打印顺序")]
+                                                    delegate: RowLayout {
+                                                        id: seqRow
+                                                        required property string modelData
+                                                        required property int index
+                                                        width: paramsPage.width
+                                                        height: 26
+                                                        spacing: 8
+
+                                                        Text {
+                                                            text: seqRow.modelData
+                                                            color: Theme.textPrimary
+                                                            font.pixelSize: Theme.fontSizeLG
+                                                            elide: Text.ElideRight
+                                                            Layout.leftMargin: Theme.insetXL
+                                                            Layout.fillWidth: true
+                                                        }
+
+                                                        CxComboBox {
+                                                            Layout.preferredWidth: 150
+                                                            Layout.preferredHeight: 26
+                                                            Layout.rightMargin: Theme.insetMD
+                                                            font.pixelSize: Theme.fontSizeMD
+                                                            model: [qsTr("自动"), qsTr("自定义")]
+                                                            readonly property int plate: root.editorVm ? root.editorVm.currentPlateIndex : -1
+                                                            enabled: plate >= 0
+                                                            // projectName re-reads on the VM stateChanged
+                                                            // the setters emit.
+                                                            currentIndex: !root.editorVm || plate < 0 ? 0
+                                                                : (root.editorVm.projectName,
+                                                                   seqRow.index === 0 ? root.editorVm.plateFirstLayerSeqChoice(plate)
+                                                                                      : root.editorVm.plateOtherLayersSeqChoice(plate))
+                                                            onActivated: function(choice) {
+                                                                if (!root.editorVm || plate < 0)
+                                                                    return
+                                                                if (seqRow.index === 0)
+                                                                    root.editorVm.setPlateFirstLayerSeqChoice(plate, choice)
+                                                                else
+                                                                    root.editorVm.setPlateOtherLayersSeqChoice(plate, choice)
+                                                                if (choice === 1)
+                                                                    root.plateSettingsRequested(plate)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
 
                                         Component {

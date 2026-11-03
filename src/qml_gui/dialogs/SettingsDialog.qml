@@ -756,6 +756,9 @@ ApplicationWindow {
                                             required property bool optMultiline
                                             required property string optLineHead
                                             required property string optLineLabel
+                                            required property int optOverride
+                                            required property bool optOverrideEnabled
+                                            required property var optInheritedValue
                                             required property bool optDirty
                                             required property string optTooltip
                                             required property string optUnit
@@ -788,7 +791,12 @@ ApplicationWindow {
                                                 oLabel: processOptionDelegate.optLineHead !== "" ? processOptionDelegate.optLineLabel : processOptionDelegate.displayLabel
                                                 lineHead: processOptionDelegate.optLineHead
                                                 lineViewMode: root.viewMode
-                                                oVal: processOptionDelegate.optValue
+                                                // Override off: show the inherited value.
+                                                oVal: processOptionDelegate.optOverride === 2
+                                                      ? processOptionDelegate.optInheritedValue
+                                                      : processOptionDelegate.optValue
+                                                oOverride: processOptionDelegate.optOverride
+                                                oOverrideEnabled: processOptionDelegate.optOverrideEnabled
                                                 oMin: processOptionDelegate.optMin
                                                 oMax: processOptionDelegate.optMax
                                                 oStep: processOptionDelegate.optStep

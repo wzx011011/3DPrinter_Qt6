@@ -2491,7 +2491,15 @@ void ConfigViewModel::applyToggleRules(const QHash<QString, QVariant> &scopeValu
       machineOptions_->setToggleState(printer.hidden, printer.disabled);
     const OptionToggleRules::Result filament = OptionToggleRules::filamentToggles(ctx);
     if (filamentOptions_)
+    {
       filamentOptions_->setToggleState(filament.hidden, filament.disabled);
+      QHash<QString, QVariantMap> overrides;
+      for (auto it = filament.overrides.cbegin(); it != filament.overrides.cend(); ++it)
+        overrides.insert(it.key(), QVariantMap{{QStringLiteral("checked"), it->checked},
+                                               {QStringLiteral("checkEnabled"), it->checkEnabled},
+                                               {QStringLiteral("inheritedValue"), it->inheritedValue}});
+      filamentOptions_->setOverrideStates(overrides);
+    }
     firmwareRetractionConflict_ = printer.firmwareRetractionConflict;
 
     // Upstream apply(config, &new_conf) / load_config: the same functions

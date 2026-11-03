@@ -213,6 +213,66 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
+        // Upstream sidebar search bar over the object list (Plater.cpp:
+        // 3195-3229): focusing it pops the SearchObjectDialog result list.
+        CxTextField {
+            id: objectSearchField
+            Layout.fillWidth: true
+            Layout.margins: 2
+            placeholderText: qsTr("搜索盘、模型和零件。")
+            onActiveFocusChanged: if (activeFocus) objectSearchPopup.open()
+            onTextChanged: if (activeFocus && !objectSearchPopup.opened) objectSearchPopup.open()
+        }
+
+        Popup {
+            id: objectSearchPopup
+            y: objectSearchField.y + objectSearchField.height
+            x: objectSearchField.x
+            width: objectSearchField.width
+            height: Math.min(360, Math.max(40, searchResults.contentHeight + 12))
+            padding: 6
+            closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+            onClosed: objectSearchField.text = "" // upstream resets on exit
+            readonly property var results: opened && root.editorVm && root.editorVm.sceneTreeModel
+                                           ? root.editorVm.sceneTreeModel.searchNodes(objectSearchField.text) : []
+            background: Rectangle {
+                color: Theme.bgElevated
+                border.color: Theme.borderInput
+                radius: Theme.radiusSM
+            }
+            contentItem: ListView {
+                id: searchResults
+                clip: true
+                model: objectSearchPopup.results
+                delegate: Rectangle {
+                    id: searchRow
+                    required property var modelData
+                    width: searchResults.width
+                    height: 24
+                    color: searchRowArea.containsMouse ? Theme.bgPanel : "transparent"
+                    Text {
+                        anchors.fill: parent
+                        anchors.leftMargin: 6
+                        verticalAlignment: Text.AlignVCenter
+                        textFormat: Text.StyledText
+                        text: searchRow.modelData.text
+                        color: Theme.textPrimary
+                        font.pixelSize: Theme.fontSizeSM
+                        elide: Text.ElideRight
+                    }
+                    MouseArea {
+                        id: searchRowArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            root._selectRow(searchRow.modelData, 0)
+                            objectSearchPopup.close()
+                        }
+                    }
+                }
+            }
+        }
+
         TreeView {
             id: treeView
             Layout.fillWidth: true

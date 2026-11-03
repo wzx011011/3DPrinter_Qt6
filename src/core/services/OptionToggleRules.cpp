@@ -861,6 +861,83 @@ Result filamentToggles(const Context &ctx)
     t.field("filament_adaptive_volumetric_speed", config.s("volumetric_speed_coefficients") != QLatin1String("0 0 0 0 0 0"));
   }
 
+  // Setting Overrides (TabFilament::update_filament_overrides_page,
+  // Tab.cpp): a filament_* value of nil means "use the printer's value".
+  {
+    const auto isNil = [&ctx](const QString &key) {
+      QVariant v = ctx.filament ? ctx.filament(key) : QVariant();
+      if (v.typeId() == QMetaType::QVariantList || v.typeId() == QMetaType::QStringList)
+      {
+        const QVariantList list = v.toList();
+        v = list.isEmpty() ? QVariant() : list.first();
+      }
+      if (!v.isValid())
+        return true; // nullable defaults are nil
+      if (v.typeId() == QMetaType::Double && std::isnan(v.toDouble()))
+        return true;
+      const QString text = v.toString().trimmed().toLower();
+      return text.isEmpty() || text == QLatin1String("nil");
+    };
+    const auto inherited = [](const Lookup &lookup, const QString &key) {
+      return lookup ? lookup(key.mid(int(qstrlen("filament_")))) : QVariant();
+    };
+
+    const QStringList retractionKeys = {
+        QStringLiteral("filament_retraction_length"), QStringLiteral("filament_z_hop"),
+        QStringLiteral("filament_z_hop_types"), QStringLiteral("filament_retract_lift_above"),
+        QStringLiteral("filament_retract_lift_below"), QStringLiteral("filament_retract_lift_enforce"),
+        QStringLiteral("filament_retraction_speed"), QStringLiteral("filament_deretraction_speed"),
+        QStringLiteral("filament_retract_restart_extra"), QStringLiteral("filament_retract_length_toolchange"),
+        QStringLiteral("filament_retract_restart_extra_toolchange"), QStringLiteral("filament_retraction_minimum_travel"),
+        QStringLiteral("filament_retract_when_changing_layer"), QStringLiteral("filament_wipe"),
+        QStringLiteral("filament_wipe_distance"), QStringLiteral("filament_retract_before_wipe"),
+        QStringLiteral("filament_retract_after_wipe"), QStringLiteral("filament_long_retractions_when_cut"),
+        QStringLiteral("filament_retraction_distances_when_cut")};
+
+    const bool have_retract_length = isNil(QStringLiteral("filament_retraction_length")) ||
+                                     config.f("filament_retraction_length") > 0;
+    // LongRectrationLevel::EnableFilament
+    const bool machine_enabled = printer_cfg.i("enable_long_retraction_when_cut") == 2;
+    const bool filament_long_retractions = config.b("filament_long_retractions_when_cut");
+
+    for (const QString &key : retractionKeys)
+    {
+      OverrideState state;
+      state.checkEnabled = key == QLatin1String("filament_retraction_length") || have_retract_length;
+      state.checked = state.checkEnabled && !isNil(key);
+      state.inheritedValue = inherited(ctx.printer, key);
+      result.overrides.insert(key, state);
+
+      const QByteArray k = key.toLatin1();
+      if (key == QLatin1String("filament_long_retractions_when_cut"))
+      {
+        t.line(k.constData(), machine_enabled);
+        t.field(k.constData(), state.checked && machine_enabled);
+      }
+      else if (key == QLatin1String("filament_retraction_distances_when_cut"))
+      {
+        t.line(k.constData(), filament_long_retractions && machine_enabled);
+        t.field(k.constData(), state.checked && filament_long_retractions && machine_enabled);
+      }
+      else
+      {
+        t.field(k.constData(), state.checked);
+      }
+    }
+
+    // Ironing overrides fall back to the process value.
+    for (const QString &key : {QStringLiteral("filament_ironing_flow"), QStringLiteral("filament_ironing_spacing"),
+                               QStringLiteral("filament_ironing_inset"), QStringLiteral("filament_ironing_speed")})
+    {
+      OverrideState state;
+      state.checked = !isNil(key);
+      state.inheritedValue = inherited(ctx.print, key);
+      result.overrides.insert(key, state);
+      const QByteArray k = key.toLatin1();
+      t.field(k.constData(), state.checked);
+    }
+  }
+
   // Multimaterial
   {
     for (auto el : {"filament_minimal_purge_on_wipe_tower", "filament_loading_speed_start", "filament_loading_speed",

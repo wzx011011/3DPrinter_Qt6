@@ -100,7 +100,11 @@ public:
     // renders the whole line; the other members only appear inside it.
     LineHeadRole,       // optLineHead: head key of the line this option belongs to ("" = single-option line)
     LineLabelRole,      // optLineLabel: zh line label (head rows only)
-    SubLabelRole        // optSubLabel: zh per-option label inside a line (ConfigOptionDef::label)
+    SubLabelRole,       // optSubLabel: zh per-option label inside a line (ConfigOptionDef::label)
+    // Filament "Setting Overrides" near-label checkbox (OptionToggleRules).
+    OverrideRole,       // optOverride: 0 = no checkbox, 1 = override on, 2 = off (value inherited)
+    OverrideEnabledRole,// optOverrideEnabled: checkbox enabled
+    InheritedValueRole  // optInheritedValue: printer / process value shown while off
   };
   Q_ENUM(Roles)
 
@@ -258,6 +262,12 @@ public:
   int lineMemberRank(int row) const;
   Q_INVOKABLE QStringList lineMemberKeys(const QString &headKey) const { return m_lineMembersByHead.value(headKey); }
   bool isFieldDisabled(const QString &key) const { return m_disabledKeys.contains(key); }
+
+  /// Override rows: key -> {checked, checkEnabled, inheritedValue}.
+  void setOverrideStates(const QHash<QString, QVariantMap> &states);
+  /// Upstream override checkbox: on = the field starts from the inherited
+  /// value, off = the filament value becomes nil (inherit again).
+  Q_INVOKABLE void setOverrideChecked(int row, bool checked);
   /// Page match: empty page always matches; option page falls back to
   /// pageForCategory when unset (same as filterIndicesByPage).
   bool matchesPage(int row, const QString &page) const;
@@ -322,6 +332,7 @@ private:
   QHash<QString, QStringList> m_lineMembersByHead;  ///< head key -> members (head first)
   QHash<QString, QString> m_lineLabelByHead;        ///< head key -> zh line label
   QSet<QString> m_disabledKeys; ///< toggle_field(false) keys
+  QHash<QString, QVariantMap> m_overrideStates; ///< Setting Overrides rows
   QHash<QString, QString> m_valueSourceByKey; ///< valueSource mirror (see setValueSources)
   int m_dataVersion = 0;
   int m_hierarchyTier = 0; ///< 0 Print, 1 Filament, 2 Printer (hierarchyDefinitions)

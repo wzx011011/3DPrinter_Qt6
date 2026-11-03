@@ -34,6 +34,7 @@ Item {
     // X6: bubble the object-list panel's resolved context-menu request up to
     // PreparePage (which owns the shared PrepareContextMenus instance).
     signal objectListMenuRequested(int family, real menuX, real menuY)
+    signal plateSettingsRequested(int plateIndex)
 
     /// X6: forward the shared menus' Rename action to the object list.
     function beginObjectListRename() {
@@ -82,6 +83,9 @@ Item {
             onExportRequested: root.exportRequested()
             onObjectListMenuRequested: function(family, menuX, menuY) {
                 root.objectListMenuRequested(family, menuX, menuY)
+            }
+            onPlateSettingsRequested: function(plateIndex) {
+                root.plateSettingsRequested(plateIndex)
             }
         }
     }

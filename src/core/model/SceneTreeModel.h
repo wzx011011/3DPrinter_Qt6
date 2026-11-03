@@ -107,6 +107,13 @@ public:
   Q_INVOKABLE int plateIndexAt(const QModelIndex &index) const;
   Q_INVOKABLE int nodeTypeAt(const QModelIndex &index) const;
 
+  /// Upstream object-list search (ObjectDataViewModel::assembly_name +
+  /// search_object, Search::SearchObjectDialog): every node as a
+  /// "plate:object:part" path, case-insensitive substring match with the hits
+  /// in <b>. Each entry: {text (rich), plain, nodeType, plateIndex,
+  /// sourceObjectIndex, volumeIndex, instanceIndex}. Empty text lists all.
+  Q_INVOKABLE QVariantList searchNodes(const QString &text) const;
+
 private:
   struct Node
   {

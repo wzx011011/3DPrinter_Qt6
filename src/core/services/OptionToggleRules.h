@@ -37,6 +37,16 @@ struct Context
   bool isGlobalConfig = true; ///< false for object / volume / plate scope
 };
 
+/// Filament "Setting Overrides" row (TabFilament::add_filament_overrides_page
+/// near-label checkbox): checked = the filament carries its own value
+/// (not nil); unchecked rows show the inherited printer / process value.
+struct OverrideState
+{
+  bool checked = false;
+  bool checkEnabled = true;
+  QVariant inheritedValue;
+};
+
 struct Result
 {
   QSet<QString> hidden;   ///< toggle_line(key, false)
@@ -45,6 +55,8 @@ struct Result
   QHash<QString, QVariant> forced;
   /// use_firmware_retraction && wipe && retract_before_wipe < 100%.
   bool firmwareRetractionConflict = false;
+  /// Filament tier only: override rows keyed by filament_* option key.
+  QHash<QString, OverrideState> overrides;
 };
 
 Result printToggles(const Context &ctx);

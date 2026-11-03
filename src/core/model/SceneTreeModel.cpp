@@ -7,6 +7,9 @@
 #include "core/viewmodels/EditorViewModel.h"
 
 #include <QMetaEnum>
+#include <QVariantMap>
+
+#include <functional>
 
 namespace
 {
@@ -151,21 +154,18 @@ void SceneTreeModel::rebuild()
     // group after the plates (ObjectDataViewModel.cpp:539) so docked /
     // unprintable objects stay reachable in the list; without it they
     // vanish entirely. The synthetic group carries plateIndex -1.
+    // AddOutsidePlate runs unconditionally upstream: the group is shown
+    // even while empty.
     if (plateCount > 0)
     {
-      QList<int> outsideObjects;
+      Node *outsideNode = makeNode(NodePlate, m_root, m_root->children.size());
+      outsideNode->plateIndex = -1;
       for (int idx = 0; idx < m_service->modelCount(); ++idx)
-        if (m_service->plateIndexForObject(idx) < 0)
-          outsideObjects.append(idx);
-      if (!outsideObjects.isEmpty())
       {
-        Node *outsideNode = makeNode(NodePlate, m_root, m_root->children.size());
-        outsideNode->plateIndex = -1;
-        for (int sourceObjectIndex : outsideObjects)
-        {
-          Node *objectNode = makeNode(NodeObject, outsideNode, outsideNode->children.size());
-          buildObjectChildren(objectNode, sourceObjectIndex, -1);
-        }
+        if (m_service->plateIndexForObject(idx) >= 0)
+          continue;
+        Node *objectNode = makeNode(NodeObject, outsideNode, outsideNode->children.size());
+        buildObjectChildren(objectNode, idx, -1);
       }
     }
   }
@@ -277,8 +277,18 @@ QVariant SceneTreeModel::data(const QModelIndex &index, int role) const
       // MP6: the synthetic dock group (plateIndex -1) keeps upstream's
       // fixed label (_L("Outside"), ObjectDataViewModel.cpp:539).
       if (node->plateIndex < 0)
-        return QStringLiteral("Outside");
-      return m_viewModel ? m_viewModel->plateName(node->plateIndex) : QString();
+        return QStringLiteral("盘外"); // _L("Outside")
+      {
+        // Upstream AddPlate / SetCurSelectedPlateFullName: "Plate N" plus
+        // " (custom name)"; rename edits the custom name only.
+        const QString custom = m_viewModel ? m_viewModel->plateName(node->plateIndex) : QString();
+        if (role == Qt::EditRole)
+          return custom;
+        QString label = QStringLiteral("盘 %1").arg(node->plateIndex + 1);
+        if (!custom.isEmpty())
+          label += QStringLiteral(" (") + custom + QLatin1Char(')');
+        return label;
+      }
     case NodeObject:
       return m_service->objectNames().value(node->sourceObjectIndex);
     case NodeVolume:
@@ -456,4 +466,57 @@ int SceneTreeModel::nodeTypeAt(const QModelIndex &index) const
 {
   Node *node = nodeFor(index);
   return node ? int(node->type) : -1;
+}
+
+QVariantList SceneTreeModel::searchNodes(const QString &text) const
+{
+  QVariantList found;
+  if (!m_root)
+    return found;
+  const QString needle = text.toLower();
+
+  // assembly_name: plates list by name, children by "parent path:name".
+  std::function<void(Node *, const QString &)> walk = [&](Node *node, const QString &parentPath) {
+    const QString name = data(indexFor(node), Qt::DisplayRole).toString();
+    const QString path = node->type == NodePlate ? name : parentPath + QLatin1Char(':') + name;
+    QString rich;
+    bool matched = needle.isEmpty();
+    if (!needle.isEmpty())
+    {
+      const QString lower = path.toLower();
+      qsizetype from = 0;
+      qsizetype pos = lower.indexOf(needle, from);
+      while (pos >= 0)
+      {
+        matched = true;
+        rich += path.mid(from, pos - from).toHtmlEscaped() + QStringLiteral("<b>") +
+                path.mid(pos, needle.size()).toHtmlEscaped() + QStringLiteral("</b>");
+        from = pos + needle.size();
+        pos = lower.indexOf(needle, from);
+      }
+      rich += path.mid(from).toHtmlEscaped();
+    }
+    else
+    {
+      rich = path.toHtmlEscaped();
+    }
+    if (matched)
+    {
+      QVariantMap entry;
+      entry.insert(QStringLiteral("text"), rich);
+      entry.insert(QStringLiteral("plain"), path);
+      entry.insert(QStringLiteral("nodeType"), int(node->type));
+      entry.insert(QStringLiteral("plateIndex"), node->plateIndex);
+      entry.insert(QStringLiteral("sourceObjectIndex"), node->sourceObjectIndex);
+      entry.insert(QStringLiteral("volumeIndex"), node->volumeIndex);
+      entry.insert(QStringLiteral("instanceIndex"), node->instanceIndex);
+      found.append(entry);
+    }
+    const QString childPrefix = node->type == NodePlate ? name : path;
+    for (Node *child : node->children)
+      walk(child, childPrefix);
+  };
+  for (Node *plate : m_root->children)
+    walk(plate, QString());
+  return found;
 }

@@ -215,6 +215,10 @@ Item {
     property string lineHead: ""
     property int lineViewMode: 0
     property bool inlineMember: false
+    // Filament Setting Overrides: 0 = no checkbox, 1 = own value, 2 = the
+    // inherited printer / process value is shown (field disabled).
+    property int oOverride: 0
+    property bool oOverrideEnabled: true
     readonly property bool isLine: root.lineHead !== ""
     readonly property bool isMultilineString: root.oType === "string" && root.oMultiline
     property bool oNullable: false
@@ -368,6 +372,18 @@ Item {
                 RowLayout {
                     anchors.fill: parent
                     spacing: 6
+
+                    // Upstream near_label_widget checkbox of the override
+                    // lines (TabFilament::add_filament_overrides_page).
+                    CxCheckBox {
+                        visible: root.oOverride > 0
+                        Layout.preferredWidth: 20
+                        Layout.preferredHeight: 20
+                        text: ""
+                        checked: root.oOverride === 1
+                        enabled: root.oOverrideEnabled && !root.oRO
+                        onToggled: root.optionModel.setOverrideChecked(root.optIdx, checked)
+                    }
 
                     Rectangle {
                         id: dirtyBadge

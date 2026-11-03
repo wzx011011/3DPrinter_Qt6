@@ -147,6 +147,17 @@ QVariant ConfigOptionModel::data(const QModelIndex &index, int role) const
     return m_lineHeadByKey.value(o.key);
   case LineLabelRole:
     return m_lineLabelByHead.value(o.key);
+  case OverrideRole:
+  {
+    const auto it = m_overrideStates.constFind(o.key);
+    if (it == m_overrideStates.cend())
+      return 0;
+    return it->value(QStringLiteral("checked")).toBool() ? 1 : 2;
+  }
+  case OverrideEnabledRole:
+    return m_overrideStates.value(o.key).value(QStringLiteral("checkEnabled"), true);
+  case InheritedValueRole:
+    return m_overrideStates.value(o.key).value(QStringLiteral("inheritedValue"));
   case SubLabelRole:
     return lineSubLabels().value(o.key, OptionLabelTable::rowLabels().value(o.key, o.label));
   default:
@@ -208,6 +219,9 @@ QHash<int, QByteArray> ConfigOptionModel::roleNames() const
       {LineHeadRole, "optLineHead"},
       {LineLabelRole, "optLineLabel"},
       {SubLabelRole, "optSubLabel"},
+      {OverrideRole, "optOverride"},
+      {OverrideEnabledRole, "optOverrideEnabled"},
+      {InheritedValueRole, "optInheritedValue"},
   };
 }
 
@@ -2319,4 +2333,36 @@ void ConfigOptionModel::setToggleState(const QSet<QString> &hiddenKeys, const QS
   }
   if (visibilityChanged)
     emit toggleVisibilityChanged();
+}
+
+void ConfigOptionModel::setOverrideStates(const QHash<QString, QVariantMap> &states)
+{
+  if (states == m_overrideStates)
+    return;
+  const QHash<QString, QVariantMap> old = m_overrideStates;
+  m_overrideStates = states;
+  for (int i = 0; i < m_options.size(); ++i)
+  {
+    const QString &key = m_options[i].key;
+    if (old.value(key) != m_overrideStates.value(key))
+      emit dataChanged(index(i), index(i), {OverrideRole, OverrideEnabledRole, InheritedValueRole});
+  }
+}
+
+void ConfigOptionModel::setOverrideChecked(int row, bool checked)
+{
+  if (row < 0 || row >= m_options.size())
+    return;
+  const auto it = m_overrideStates.constFind(m_options[row].key);
+  if (it == m_overrideStates.cend())
+    return;
+  if (!checked)
+  {
+    // Upstream set_at_to_nil: the vector entry becomes nil.
+    writeValue(row, QVariantList{QStringLiteral("nil")});
+    return;
+  }
+  // set_last_meaningful_value: start from the inherited value.
+  const QVariant inheritedValue = it->value(QStringLiteral("inheritedValue"));
+  writeValue(row, inheritedValue.typeId() == QMetaType::QVariantList ? inheritedValue : QVariant(QVariantList{inheritedValue}));
 }
